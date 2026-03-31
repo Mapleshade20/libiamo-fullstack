@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Separator } from '$lib/components/ui/separator';
-	import * as Card from '$lib/components/ui/card';
+	import { enhance } from "$app/forms";
+	import { Button } from "$lib/components/ui/button";
+	import { Input } from "$lib/components/ui/input";
+	import { Label } from "$lib/components/ui/label";
+	import { Separator } from "$lib/components/ui/separator";
+	import * as Card from "$lib/components/ui/card";
 
-	let { form, data } = $props();
+	let { data, form } = $props();
 
 	const languages = [
-		{ value: 'en', label: 'English' },
-		{ value: 'es', label: 'Spanish' },
-		{ value: 'fr', label: 'French' }
+		{ value: "en", label: "English" },
+		{ value: "es", label: "Spanish" },
+		{ value: "fr", label: "French" },
 	];
 </script>
 
@@ -19,24 +19,67 @@
 	<h1 class="text-3xl font-bold">Profile</h1>
 
 	{#if form?.success}
-		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Profile updated.</p>
+		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">
+			Profile updated.
+		</p>
 	{/if}
+
+	<Card.Root>
+		<Card.Content class="pt-6">
+			<div class="flex items-center gap-6">
+				<img
+					src={data.avatarUrl}
+					alt="User Avatar"
+					class="h-24 w-24 rounded-full border border-gray-200 object-cover shadow-sm"
+				/>
+				<div class="space-y-1">
+					<h2 class="text-xl font-semibold">
+						{data.user.nickname || "Learner"}
+					</h2>
+					<p class="text-sm text-muted-foreground">
+						Your avatar is connected to your email via
+						<a
+							href="https://cravatar.cn"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-primary hover:underline font-medium"
+						>
+							Cravatar
+						</a>.
+					</p>
+					<p class="text-xs text-muted-foreground">
+						Want a custom image? Upload it at Cravatar and it will
+						sync here automatically!
+					</p>
+				</div>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Settings</Card.Title>
 		</Card.Header>
 		<Card.Content>
-			<form method="POST" action="?/updateProfile" use:enhance class="space-y-4">
+			<form
+				method="POST"
+				action="?/updateProfile"
+				use:enhance
+				class="space-y-4"
+			>
 				<div class="space-y-2">
 					<Label for="nickname">Nickname</Label>
 					<Input
 						id="nickname"
 						name="nickname"
-						value={form?.values?.nickname ?? data.user.nickname ?? ''}
+						value={form?.values?.nickname ??
+							data.user.nickname ??
+							""}
 					/>
 					{#if form?.errors?.nickname}
-						<p class="text-sm text-red-600">{form.errors.nickname[0]}</p>
+						<p class="text-sm text-red-600">
+							{form.errors.nickname[0]}
+						</p>
 					{/if}
 				</div>
 
@@ -45,7 +88,9 @@
 					<Input
 						id="timezone"
 						name="timezone"
-						value={form?.values?.timezone ?? data.user.timezone ?? ''}
+						value={form?.values?.timezone ??
+							data.user.timezone ??
+							""}
 						placeholder="e.g. America/New_York"
 					/>
 				</div>
@@ -55,7 +100,9 @@
 					<Input
 						id="nativeLanguage"
 						name="nativeLanguage"
-						value={form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? ''}
+						value={form?.values?.nativeLanguage ??
+							data.user.nativeLanguage ??
+							""}
 						placeholder="e.g. zh-CN, ja, ko"
 					/>
 				</div>
@@ -70,13 +117,21 @@
 			<Card.Title>Learning Language</Card.Title>
 		</Card.Header>
 		<Card.Content>
-			<form method="POST" action="?/switchLanguage" use:enhance class="flex items-center gap-3">
+			<form
+				method="POST"
+				action="?/switchLanguage"
+				use:enhance
+				class="flex items-center gap-3"
+			>
 				<select
 					name="language"
 					class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
 				>
 					{#each languages as lang}
-						<option value={lang.value} selected={data.user.activeLanguage === lang.value}>
+						<option
+							value={lang.value}
+							selected={data.user.activeLanguage === lang.value}
+						>
 							{lang.label}
 						</option>
 					{/each}
