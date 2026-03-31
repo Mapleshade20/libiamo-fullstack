@@ -30,3 +30,10 @@ pnpm build
 You can preview the production build with `pnpm preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+
+## User Avatars (Cravatar Integration)
+Libiamo uses [Cravatar](https://cravatar.cn) (a Gravatar alternative optimized for speed) to manage user avatars. 
+- **Zero Local Storage:** Avatars are dynamically generated based on the MD5 hash of the user's registered email address, saving significant server storage and database complexity.
+- **Default Fallbacks:** If a user hasn't uploaded a custom avatar to Cravatar, an automatic `identicon` (a visually unique geometric pattern) is generated.
+- **Global Sync:** Users can change their avatars globally across multiple platforms by updating it once on the Cravatar website.
