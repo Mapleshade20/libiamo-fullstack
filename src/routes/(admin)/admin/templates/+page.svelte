@@ -20,6 +20,7 @@
 			<option value="en" selected={data.filters.language === 'en'}>English</option>
 			<option value="es" selected={data.filters.language === 'es'}>Spanish</option>
 			<option value="fr" selected={data.filters.language === 'fr'}>French</option>
+			<option value="ja" selected={data.filters.language === 'ja'}>Japanese</option>
 		</select>
 		<select name="type" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">All types</option>
