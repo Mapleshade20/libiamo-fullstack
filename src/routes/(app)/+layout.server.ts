@@ -9,13 +9,12 @@ export const load: LayoutServerLoad = async (event) => {
 		return redirect(302, '/sign-in');
 	}
 
-	// 在全局 Layout 中计算头像 URL
 	const email = user.email?.trim().toLowerCase() || '';
 	const hash = crypto.createHash('md5').update(email).digest('hex');
-	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=200`;
+	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=400`;
 
 	return {
 		user,
-		avatarUrl // 传给前台
+		avatarUrl
 	};
 };

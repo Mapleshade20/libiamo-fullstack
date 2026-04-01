@@ -52,6 +52,8 @@ async function insertTask(
 			),
 			agentPromptResolved: tpl.agentPromptBase ? resolveSlots(tpl.agentPromptBase, slots) : null,
 			contextResolved: candidate.context ?? null
+		}).onConflictDoNothing({
+			target: [task.date, task.templateId]
 		});
 
 		await db

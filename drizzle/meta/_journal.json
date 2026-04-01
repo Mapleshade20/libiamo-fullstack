@@ -8,6 +8,13 @@
       "when": 1774967803739,
       "tag": "0000_sudden_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775056242395,
+      "tag": "0001_first_madripoor",
+      "breakpoints": true
     }
   ]
 }

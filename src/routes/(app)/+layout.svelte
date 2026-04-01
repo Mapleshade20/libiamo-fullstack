@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { enhance } from "$app/forms";
-	import { page } from "$app/stores";
-	import { Button } from "$lib/components/ui/button";
 
 	let { data, children } = $props();
 
@@ -23,7 +21,7 @@
 
 	const countryCodeMap: Record<string, string> = {
 		en: "gb",
-		ja: "jp"
+		ja: "jp",
 	};
 
 	function getFlagCode(lang: string): string {
@@ -33,7 +31,10 @@
 	let isOpen = $state(false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
 
-	function clickOutside(node: HTMLElement, exclude: (HTMLElement | undefined)[]) {
+	function clickOutside(
+		node: HTMLElement,
+		exclude: (HTMLElement | undefined)[],
+	) {
 		const handleClick = (event: MouseEvent) => {
 			const target = event.target as Node;
 			if (node.contains(target)) return;
@@ -46,7 +47,7 @@
 		return {
 			destroy() {
 				document.removeEventListener("click", handleClick);
-			}
+			},
 		};
 	}
 
@@ -78,9 +79,13 @@
 						<img
 							src={`${flagBaseUrl}${getFlagCode(data.user.activeLanguage)}.png`}
 							alt={data.user.activeLanguage}
-							class="h-5 w-5 rounded-full object-cover" 
+							class="h-5 w-5 rounded-full object-cover"
 						/>
-						<span>{languageLabelsShort[data.user.activeLanguage]}</span>
+						<span
+							>{languageLabelsShort[
+								data.user.activeLanguage
+							]}</span
+						>
 					</button>
 
 					{#if isOpen}
@@ -94,7 +99,7 @@
 								use:enhance={() => {
 									return async ({ result, update }) => {
 										isOpen = false;
-										await update(); 
+										await update();
 									};
 								}}
 							>
@@ -104,7 +109,8 @@
 											type="submit"
 											name="language"
 											value={lang}
-											class="flex w-full items-center gap-3 px-3 py-2 text-sm hover:bg-secondary transition-colors {data.user.activeLanguage === lang
+											class="flex w-full items-center gap-3 px-3 py-2 text-sm hover:bg-secondary transition-colors {data
+												.user.activeLanguage === lang
 												? 'bg-primary/10 text-primary font-semibold'
 												: 'text-foreground'}"
 										>
@@ -113,7 +119,11 @@
 												alt={lang}
 												class="h-4 w-4 rounded-sm object-cover"
 											/>
-											<span>{languageLabelsFull[lang]}</span>
+											<span
+												>{languageLabelsFull[
+													lang
+												]}</span
+											>
 										</button>
 									{/each}
 								</div>

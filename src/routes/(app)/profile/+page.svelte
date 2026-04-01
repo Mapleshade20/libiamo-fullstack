@@ -10,9 +10,9 @@
 
 	const languages = [
 		{ value: "en", label: "English" },
-		{ value: "es", label: "Spanish" },
-		{ value: "fr", label: "French" },
-		{ value: "ja", label: "Japanese" }
+		{ value: "es", label: "Español" },
+		{ value: "fr", label: "Français" },
+		{ value: "ja", label: "日本語" },
 	];
 </script>
 
@@ -65,7 +65,12 @@
 			<form
 				method="POST"
 				action="?/updateProfile"
-				use:enhance
+				use:enhance={() => {
+					// Prevent default form reset on success to keep input values
+					return async ({ update }) => {
+						await update({ reset: false });
+					};
+				}}
 				class="space-y-4"
 			>
 				<div class="space-y-2">

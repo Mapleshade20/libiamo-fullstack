@@ -7,17 +7,11 @@ import { db } from '$lib/server/db';
 import { task, template, userLearningProfile } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { LangCode } from '$lib/i18n';
-import crypto from 'node:crypto'; // 引入 crypto 计算 MD5
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user!; // 获取当前用户
+	const user = event.locals.user!;
 	const language = user.activeLanguage as LangCode;
 	const today = new Date();
-
-	// 生成 Cravatar 头像 URL
-	const email = user.email?.trim().toLowerCase() || '';
-	const hash = crypto.createHash('md5').update(email).digest('hex');
-	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=80`; // s=80 足够头像使用
 
 	await ensureTasksForDate(language, today);
 
@@ -56,10 +50,8 @@ export const load: PageServerLoad = async (event) => {
 		.innerJoin(template, eq(task.templateId, template.id))
 		.where(and(eq(task.language, language), eq(task.date, todayStr)));
 
-	// 将 user 和 avatarUrl 返回给前端
 	return {
 		user,
-		avatarUrl,
 		weeklyTasks,
 		dailyTasks,
 		language

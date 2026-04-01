@@ -5,11 +5,6 @@ import { profileSchema, switchLanguageSchema } from '$lib/schemas';
 import { db } from '$lib/server/db';
 import { userLearningProfile } from '$lib/server/db/schema';
 
-export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user!;
-	return { user };
-};
-
 export const actions: Actions = {
 	updateProfile: async (event) => {
 		const formData = await event.request.formData();
