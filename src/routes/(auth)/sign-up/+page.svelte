@@ -54,6 +54,7 @@
 					<option value="en" selected={form?.values?.activeLanguage === 'en'}>English</option>
 					<option value="es" selected={form?.values?.activeLanguage === 'es'}>Spanish</option>
 					<option value="fr" selected={form?.values?.activeLanguage === 'fr'}>French</option>
+					<option value="ja" selected={form?.values?.activeLanguage === 'ja'}>Japanese</option>
 				</select>
 				{#if form?.errors?.activeLanguage}
 					<p class="text-sm text-red-600">{form.errors.activeLanguage[0]}</p>

@@ -1,4 +1,4 @@
-export type LangCode = 'en' | 'es' | 'fr';
+export type LangCode = 'en' | 'es' | 'fr' | 'ja';
 
 const translations: Record<LangCode, Record<string, string>> = {
 	en: {
@@ -156,6 +156,56 @@ const translations: Record<LangCode, Record<string, string>> = {
 		'common.back': 'Retour',
 		'common.loading': 'Chargement...',
 		'common.error': "Quelque chose s'est mal passé."
+	},
+	ja: {
+		'nav.home': '任務ホール',
+		'nav.profile': 'プロフィール',
+		'nav.admin': '管理者',
+		'nav.signOut': 'サインアウト',
+
+		'hall.thisWeek': '今週',
+		'hall.today': '今日',
+		'hall.enter': '入る',
+		'hall.noTasks': 'まだ利用可能なタスクはありません。',
+		'hall.difficulty': '難易度',
+
+		'auth.signIn': 'サインイン',
+		'auth.signUp': '新規登録',
+		'auth.email': 'メールアドレス',
+		'auth.password': 'パスワード',
+		'auth.name': '氏名',
+		'auth.language': '言語',
+		'auth.forgotPassword': 'パスワードをお忘れですか？',
+		'auth.noAccount': 'アカウントをお持ちでない場合',
+		'auth.hasAccount': '既にアカウントをお持ちの場合',
+		'auth.resetPassword': 'パスワードの再設定',
+		'auth.newPassword': '新しいパスワード',
+		'auth.sendResetLink': 'リセットリンクを送信',
+		'auth.checkEmail': '認証リンクをメールで送信しました。確認してください。',
+		'auth.verifyFailed': 'メール認証に失敗しました。',
+		'auth.verified': 'メール認証が完了しました！サインインできます。',
+
+		'profile.title': 'プロフィール',
+		'profile.nickname': 'ニックネーム',
+		'profile.timezone': 'タイムゾーン',
+		'profile.nativeLanguage': '母国語',
+		'profile.save': '保存',
+		'profile.switchLanguage': '学習言語',
+
+		'admin.templates': 'テンプレート',
+		'admin.schedule': 'スケジュール',
+		'admin.newTemplate': '新規テンプレート',
+		'admin.editTemplate': 'テンプレートの編集',
+		'admin.scheduleTask': 'タスクの予定',
+
+		'common.save': '保存',
+		'common.cancel': 'キャンセル',
+		'common.delete': '削除',
+		'common.create': '作成',
+		'common.edit': '編集',
+		'common.back': '戻る',
+		'common.loading': '読み込み中...',
+		'common.error': '問題が発生しました。'
 	}
 };
 
