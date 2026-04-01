@@ -33,7 +33,7 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as 'en' | 'es' | 'fr')))
+		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as 'en' | 'es' | 'fr' | 'ja')))
 		.limit(1);
 
 	if (!result) {

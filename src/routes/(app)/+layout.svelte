@@ -5,17 +5,25 @@
 
 	let { data, children } = $props();
 
-	const languageLabels: Record<string, string> = {
+	const languageLabelsShort: Record<string, string> = {
 		en: "EN",
 		es: "ES",
 		fr: "FR",
+		ja: "JA",
+	};
+	const languageLabelsFull: Record<string, string> = {
+		en: "English",
+		es: "Español",
+		fr: "Français",
+		ja: "日本語",
 	};
 
-	const languages = ["en", "es", "fr"] as const;
+	const languages = ["en", "es", "fr", "ja"] as const;
 	const flagBaseUrl = "https://flagcdn.com/32x24/";
 
 	const countryCodeMap: Record<string, string> = {
 		en: "gb",
+		ja: "jp"
 	};
 
 	function getFlagCode(lang: string): string {
@@ -66,7 +74,7 @@
 							alt={data.user.activeLanguage}
 							class="h-5 w-5 rounded-full object-cover" 
 						/>
-						<span>{languageLabels[data.user.activeLanguage]}</span>
+						<span>{languageLabelsShort[data.user.activeLanguage]}</span>
 					</button>
 
 					{#if isOpen}
@@ -99,7 +107,7 @@
 												alt={lang}
 												class="h-4 w-4 rounded-sm object-cover"
 											/>
-											<span>{languageLabels[lang]}</span>
+											<span>{languageLabelsFull[lang]}</span>
 										</button>
 									{/each}
 								</div>

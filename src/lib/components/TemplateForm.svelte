@@ -55,6 +55,7 @@
 				<option value="en" selected={template.language === 'en'}>English</option>
 				<option value="es" selected={template.language === 'es'}>Spanish</option>
 				<option value="fr" selected={template.language === 'fr'}>French</option>
+				<option value="ja" selected={template.language === 'ja'}>Japanese</option>
 			</select>
 			{#if form?.errors?.language}<p class="text-sm text-red-600">{form.errors.language[0]}</p>{/if}
 		</div>

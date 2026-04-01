@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const languageCodeValues = ['en', 'es', 'fr'] as const;
+const languageCodeValues = ['en', 'es', 'fr', 'ja'] as const;
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const signInSchema = z.object({

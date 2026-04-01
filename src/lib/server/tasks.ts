@@ -66,7 +66,7 @@ async function insertTask(
 }
 
 export async function ensureTasksForDate(
-	language: 'en' | 'es' | 'fr',
+	language: 'en' | 'es' | 'fr' | 'ja',
 	today: Date
 ): Promise<void> {
 	const monday = getMondayOfWeek(today);
