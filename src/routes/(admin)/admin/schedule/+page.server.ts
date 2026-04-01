@@ -11,7 +11,8 @@ export const load: PageServerLoad = async (event) => {
 	const languageFilter = (event.url.searchParams.get('language') ?? 'en') as
 		| 'en'
 		| 'es'
-		| 'fr';
+		| 'fr'
+		| 'ja';
 
 	const scheduledTasks = await db
 		.select({

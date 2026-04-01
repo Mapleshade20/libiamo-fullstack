@@ -5,7 +5,7 @@ import { template } from '$lib/server/db/schema';
 import { eq, and, SQL } from 'drizzle-orm';
 
 export const load: PageServerLoad = async (event) => {
-	const language = event.url.searchParams.get('language') as 'en' | 'es' | 'fr' | null;
+	const language = event.url.searchParams.get('language') as 'en' | 'es' | 'fr' | 'ja' | null;
 	const type = event.url.searchParams.get('type');
 	const active = event.url.searchParams.get('active');
 
