@@ -21,7 +21,6 @@ Existing better-auth fields: id, name, email, emailVerified, image, createdAt, u
 Additional business fields:
   role             userRole      default 'learner'
   timezone         text          default 'UTC'
-  nickname         text          default 'new user'
   nativeLanguage   text          -- BCP 47 format (e.g. 'zh-CN', 'ja')
   gemsBalance      integer       default 0
   activeLanguage   languageCode  not null

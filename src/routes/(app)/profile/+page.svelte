@@ -33,7 +33,7 @@
 				/>
 				<div class="space-y-1">
 					<h2 class="text-xl font-semibold">
-						{data.user.nickname || "Learner"}
+						{data.user.name}
 					</h2>
 					<p class="text-sm text-muted-foreground">
 						Your avatar is connected to your email via
@@ -72,14 +72,14 @@
 				class="space-y-4"
 			>
 				<div class="space-y-2">
-					<Label for="nickname">Nickname</Label>
+					<Label for="name">Name</Label>
 					<Input
-						id="nickname"
-						name="nickname"
-						value={form?.values?.nickname ?? data.user.nickname ?? ''}
+						id="name"
+						name="name"
+						value={form?.values?.name ?? data.user.name ?? ''}
 					/>
-					{#if form?.errors?.nickname}
-						<p class="text-sm text-red-600">{form.errors.nickname[0]}</p>
+					{#if form?.errors?.name}
+						<p class="text-sm text-red-600">{form.errors.name[0]}</p>
 					{/if}
 				</div>
 

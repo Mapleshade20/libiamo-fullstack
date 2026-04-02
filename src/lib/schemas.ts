@@ -26,7 +26,7 @@ export const resetPasswordSchema = z.object({
 
 // ── App ──────────────────────────────────────────────────────────────
 export const profileSchema = z.object({
-	nickname: z.string().max(50).optional(),
+	name: z.string().max(50).optional(),
 	timezone: z.string().optional(),
 	nativeLanguage: z.string().optional()
 });

@@ -138,11 +138,11 @@
 				>
 					<img
 						src={data.avatarUrl}
-						alt={data.user.nickname || data.user.name}
+						alt={data.user.name}
 						class="h-7 w-7 rounded-full border border-border object-cover shadow-sm"
 					/>
 					<span class="hidden sm:inline">
-						{data.user.nickname || data.user.name}
+						{data.user.name}
 					</span>
 				</a>
 

@@ -34,7 +34,7 @@ const translations: Record<LangCode, Record<string, string>> = {
 
 		// Profile
 		'profile.title': 'Profile',
-		'profile.nickname': 'Nickname',
+		'profile.name': 'Name',
 		'profile.timezone': 'Timezone',
 		'profile.nativeLanguage': 'Native Language',
 		'profile.save': 'Save',
@@ -86,7 +86,7 @@ const translations: Record<LangCode, Record<string, string>> = {
 		'auth.verified': '¡Correo verificado! Ya puedes iniciar sesión.',
 
 		'profile.title': 'Perfil',
-		'profile.nickname': 'Apodo',
+		'profile.name': 'Nombre',
 		'profile.timezone': 'Zona Horaria',
 		'profile.nativeLanguage': 'Idioma Nativo',
 		'profile.save': 'Guardar',
@@ -136,7 +136,7 @@ const translations: Record<LangCode, Record<string, string>> = {
 		'auth.verified': 'E-mail vérifié ! Vous pouvez maintenant vous connecter.',
 
 		'profile.title': 'Profil',
-		'profile.nickname': 'Surnom',
+		'profile.name': 'Nom',
 		'profile.timezone': 'Fuseau Horaire',
 		'profile.nativeLanguage': 'Langue Maternelle',
 		'profile.save': 'Enregistrer',
@@ -186,7 +186,7 @@ const translations: Record<LangCode, Record<string, string>> = {
 		'auth.verified': 'メール認証が完了しました！サインインできます。',
 
 		'profile.title': 'プロフィール',
-		'profile.nickname': 'ニックネーム',
+		'profile.name': '氏名',
 		'profile.timezone': 'タイムゾーン',
 		'profile.nativeLanguage': '母国語',
 		'profile.save': '保存',

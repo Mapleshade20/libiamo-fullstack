@@ -37,7 +37,6 @@ export const auth = betterAuth({
 		additionalFields: {
 			role: { type: "string", defaultValue: "learner", input: false },
 			activeLanguage: { type: "string", required: true, input: true },
-			nickname: { type: "string", defaultValue: "new user", input: true },
 			timezone: { type: "string", defaultValue: "UTC", input: true },
 			nativeLanguage: { type: "string", required: false, input: true },
 			gemsBalance: { type: "number", defaultValue: 0, input: false },

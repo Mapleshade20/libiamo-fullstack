@@ -10,7 +10,6 @@ export const user = pgTable("user", {
   image: text("image"),
   role: userRoleEnum("role").default("learner").notNull(),
   timezone: text("timezone").default("UTC").notNull(),
-  nickname: text("nickname").default("new user").notNull(),
   nativeLanguage: text("native_language"),
   gemsBalance: integer("gems_balance").default(0).notNull(),
   activeLanguage: languageCodeEnum("active_language").notNull(),

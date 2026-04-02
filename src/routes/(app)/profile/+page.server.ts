@@ -9,7 +9,7 @@ export const actions: Actions = {
 	updateProfile: async (event) => {
 		const formData = await event.request.formData();
 		const raw = {
-			nickname: formData.get('nickname')?.toString() ?? undefined,
+			name: formData.get('name')?.toString() ?? undefined,
 			timezone: formData.get('timezone')?.toString() ?? undefined,
 			nativeLanguage: formData.get('nativeLanguage')?.toString() ?? undefined
 		};
