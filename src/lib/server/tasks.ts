@@ -38,33 +38,28 @@ async function insertTask(
 	const candidate = candidates[Math.floor(Math.random() * candidates.length)];
 	const slots = candidate.slots;
 
-	try {
-		await db.insert(task).values({
-			templateId: tpl.id,
-			language: tpl.language,
-			date: dateStr,
-			origin,
-			titleResolved: resolveSlots(tpl.titleBase, slots),
-			descriptionResolved: tpl.descriptionBase ? resolveSlots(tpl.descriptionBase, slots) : null,
-			objectivesResolved: resolveObjectives(
-				tpl.objectivesBase as { order: number; text: string }[] | null,
-				slots
-			),
-			agentPromptResolved: tpl.agentPromptBase ? resolveSlots(tpl.agentPromptBase, slots) : null,
-			contextResolved: candidate.context ?? null
-		}).onConflictDoNothing({
-			target: [task.date, task.templateId]
-		});
+	await db.insert(task).values({
+		templateId: tpl.id,
+		language: tpl.language,
+		date: dateStr,
+		origin,
+		titleResolved: resolveSlots(tpl.titleBase, slots),
+		descriptionResolved: tpl.descriptionBase ? resolveSlots(tpl.descriptionBase, slots) : null,
+		objectivesResolved: resolveObjectives(
+			tpl.objectivesBase as { order: number; text: string }[] | null,
+			slots
+		),
+		agentPromptResolved: tpl.agentPromptBase ? resolveSlots(tpl.agentPromptBase, slots) : null,
+		contextResolved: candidate.context ?? null
+	}).onConflictDoNothing({
+		target: [task.date, task.templateId]
+	});
 
-		await db
-			.update(template)
-			.set({ lastScheduledAt: new Date() })
-			.where(eq(template.id, tpl.id));
-	} catch (err: unknown) {
-		// Unique constraint violation (date + templateId) — treat as no-op
-		if (typeof err === 'object' && err !== null && 'code' in err && err.code === '23505') return;
-		throw err;
-	}
+	// Update template's lastScheduledAt to the given date
+	await db
+		.update(template)
+		.set({ lastScheduledAt: new Date(dateStr) })
+		.where(eq(template.id, tpl.id));
 }
 
 export async function ensureTasksForDate(
@@ -104,7 +99,11 @@ export async function ensureTasksForDate(
 			.limit(weeklyNeeded);
 
 		for (const tpl of templates) {
-			await insertTask(tpl, mondayStr, 'auto');
+			try {
+				await insertTask(tpl, mondayStr, 'auto');
+			} catch (e) {
+				console.error(`Failed to schedule weekly task for template ${tpl.id} on ${mondayStr}:`, e);
+			}
 		}
 	}
 
@@ -123,7 +122,11 @@ export async function ensureTasksForDate(
 			.limit(dailyNeeded);
 
 		for (const tpl of templates) {
-			await insertTask(tpl, todayStr, 'auto');
+			try {
+				await insertTask(tpl, todayStr, 'auto');
+			} catch (e) {
+				console.error(`Failed to schedule daily task for template ${tpl.id} on ${todayStr}:`, e);
+			}
 		}
 	}
 }
