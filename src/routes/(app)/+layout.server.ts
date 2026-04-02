@@ -9,9 +9,9 @@ export const load: LayoutServerLoad = async (event) => {
 		return redirect(302, '/sign-in');
 	}
 
-	const email = user.email?.trim().toLowerCase() || '';
+	const email = user.email?.toLowerCase() || '';
 	const hash = crypto.createHash('md5').update(email).digest('hex');
-	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=400`;
+	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=192`;
 
 	return {
 		user,
