@@ -35,5 +35,5 @@ You can preview the production build with `pnpm preview`.
 ## User Avatars (Cravatar Integration)
 Libiamo uses [Cravatar](https://cravatar.cn) (a Gravatar alternative optimized for speed) to manage user avatars. 
 - **Zero Local Storage:** Avatars are dynamically generated based on the MD5 hash of the user's registered email address, saving significant server storage and database complexity.
-- **Default Fallbacks:** If a user hasn't uploaded a custom avatar to Cravatar, an automatic `identicon` (a visually unique geometric pattern) is generated.
-- **Global Sync:** Users can change their avatars globally across multiple platforms by updating it once on the Cravatar website.
+- **Default Fallbacks:** If user's email doesn't have a linked avatar on Cravatar or Gravatar, an automatic `ident-icon` (a visually unique geometric pattern) is presented.
+- **Global Sync:** Users can change their avatars globally across multiple platforms by updating it once on Cravatar or Gravatar website.

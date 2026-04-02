@@ -47,7 +47,7 @@
 						</a>.
 					</p>
 					<p class="text-xs text-muted-foreground">
-						Want a custom image? Upload it at Cravatar and it will
+						Want a custom image? Upload it at Gravatar/Cravatar and it will
 						sync here automatically!
 					</p>
 				</div>

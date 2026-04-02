@@ -11,7 +11,7 @@ export const load: LayoutServerLoad = async (event) => {
 
 	const email = user.email?.toLowerCase() || '';
 	const hash = crypto.createHash('md5').update(email).digest('hex');
-	const avatarUrl = `https://cravatar.cn/avatar/${hash}?d=identicon&s=192`;
+	const avatarUrl = `https://cn.cravatar.com/avatar/${hash}?d=identicon&s=192`;
 
 	return {
 		user,
