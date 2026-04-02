@@ -24,6 +24,3 @@ vite.config.ts.timestamp-*
 
 # Docs
 !CLAUDE.md
-
-# Drizzle
-drizzle
