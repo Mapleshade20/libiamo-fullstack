@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { enhance } from "$app/forms";
-	import { Button } from "$lib/components/ui/button";
-	import { Input } from "$lib/components/ui/input";
-	import { Label } from "$lib/components/ui/label";
-	import { Separator } from "$lib/components/ui/separator";
-	import * as Card from "$lib/components/ui/card";
+	import { enhance } from '$app/forms';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { Separator } from '$lib/components/ui/separator';
+	import * as Card from '$lib/components/ui/card';
 
-	let { data, form } = $props();
+	let { form, data } = $props();
 
 	const languages = [
 		{ value: "en", label: "English" },
@@ -20,9 +20,7 @@
 	<h1 class="text-3xl font-bold">Profile</h1>
 
 	{#if form?.success}
-		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">
-			Profile updated.
-		</p>
+		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Profile updated.</p>
 	{/if}
 
 	<Card.Root>
@@ -78,14 +76,10 @@
 					<Input
 						id="nickname"
 						name="nickname"
-						value={form?.values?.nickname ??
-							data.user.nickname ??
-							""}
+						value={form?.values?.nickname ?? data.user.nickname ?? ''}
 					/>
 					{#if form?.errors?.nickname}
-						<p class="text-sm text-red-600">
-							{form.errors.nickname[0]}
-						</p>
+						<p class="text-sm text-red-600">{form.errors.nickname[0]}</p>
 					{/if}
 				</div>
 
@@ -94,9 +88,7 @@
 					<Input
 						id="timezone"
 						name="timezone"
-						value={form?.values?.timezone ??
-							data.user.timezone ??
-							""}
+						value={form?.values?.timezone ?? data.user.timezone ?? ''}
 						placeholder="e.g. America/New_York"
 					/>
 				</div>
@@ -106,9 +98,7 @@
 					<Input
 						id="nativeLanguage"
 						name="nativeLanguage"
-						value={form?.values?.nativeLanguage ??
-							data.user.nativeLanguage ??
-							""}
+						value={form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? ''}
 						placeholder="e.g. zh-CN, ja, ko"
 					/>
 				</div>
@@ -123,21 +113,13 @@
 			<Card.Title>Learning Language</Card.Title>
 		</Card.Header>
 		<Card.Content>
-			<form
-				method="POST"
-				action="?/switchLanguage"
-				use:enhance
-				class="flex items-center gap-3"
-			>
+			<form method="POST" action="?/switchLanguage" use:enhance class="flex items-center gap-3">
 				<select
 					name="language"
 					class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
 				>
 					{#each languages as lang}
-						<option
-							value={lang.value}
-							selected={data.user.activeLanguage === lang.value}
-						>
+						<option value={lang.value} selected={data.user.activeLanguage === lang.value}>
 							{lang.label}
 						</option>
 					{/each}

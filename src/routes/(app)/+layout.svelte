@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from "$app/forms";
 
-	let { data, children } = $props();
+	let { children, data } = $props();
 
 	const languageLabelsShort: Record<string, string> = {
 		en: "EN",
@@ -146,11 +146,8 @@
 					</span>
 				</a>
 
-				{#if data.user.role === "admin"}
-					<a
-						href="/admin/templates"
-						class="text-sm text-muted-foreground hover:text-foreground"
-					>
+				{#if data.user.role === 'admin'}
+					<a href="/admin/templates" class="text-sm text-muted-foreground hover:text-foreground">
 						Admin
 					</a>
 				{/if}

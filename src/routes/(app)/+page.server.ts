@@ -50,12 +50,7 @@ export const load: PageServerLoad = async (event) => {
 		.innerJoin(template, eq(task.templateId, template.id))
 		.where(and(eq(task.language, language), eq(task.date, todayStr)));
 
-	return {
-		user,
-		weeklyTasks,
-		dailyTasks,
-		language
-	};
+	return { weeklyTasks, dailyTasks, language };
 };
 
 export const actions: Actions = {
