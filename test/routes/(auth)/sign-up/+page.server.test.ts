@@ -124,7 +124,7 @@ describe("Sign-up +page.server", () => {
 			};
 			const event = createEvent(validData);
 
-			// 模拟注册成功
+			// mock successful sign-up response with new user id
 			vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({
 				user: { id: "new-user-id" },
 			} as any);
@@ -138,13 +138,13 @@ describe("Sign-up +page.server", () => {
 				expect(e.location).toBe("/verify?pending=1");
 			}
 
-			// 校验 auth API 是否带着正确数据被调用
+			// verify auth API was called with correct parameters
 			expect(auth.api.signUpEmail).toHaveBeenCalledWith({
 				body: validData,
 				headers: event.request.headers,
 			});
 
-			// 校验数据库插入
+			// mock db insertion
 			expect(mockInsert).toHaveBeenCalled();
 			expect(mockValues).toHaveBeenCalledWith({
 				userId: "new-user-id",
@@ -163,7 +163,7 @@ describe("Sign-up +page.server", () => {
 			};
 			const event = createEvent(validData);
 
-			// 模拟 API Error (如邮箱已注册)
+			// mock APIError
 			vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce(
 				new (await import("better-auth/api")).APIError("BAD_REQUEST", { message: "Email already in use" }),
 			);
@@ -185,7 +185,7 @@ describe("Sign-up +page.server", () => {
 			};
 			const event = createEvent(validData);
 
-			// 模拟未知错误
+			// mock unexpected error
 			vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce(new Error("Database offline"));
 
 			const result = (await actions.default(event)) as ActionFailure<any>;
@@ -204,7 +204,7 @@ describe("Sign-up +page.server", () => {
 			};
 			const event = createEvent(validData);
 
-			// 模拟不带 message 的 API Error (利用没有传 opts 来 fallback 我们 mock 里的 name )
+			// mock APIError with empty message to trigger fallback logic
 			const apiError = new (await import("better-auth/api")).APIError("BAD_REQUEST");
 			apiError.message = "";
 			vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce(apiError);
@@ -226,7 +226,7 @@ describe("Sign-up +page.server", () => {
 			};
 			const event = createEvent(validData);
 
-			// 模拟注册成功但未返回 user
+			// mock successful response but with null user
 			vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({
 				user: null,
 			} as any);
