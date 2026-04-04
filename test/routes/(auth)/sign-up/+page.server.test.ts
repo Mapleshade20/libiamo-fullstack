@@ -273,7 +273,7 @@ describe("Sign-up +page.server", () => {
 					formData: async () => {
 						const fd = {
 							// Return null for all keys to mimic absent fields.
-							get: (v: string) => null,
+							get: (_v: string) => null,
 						};
 						return fd;
 					},
