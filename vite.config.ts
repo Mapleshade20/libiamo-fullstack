@@ -9,6 +9,7 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text"],
 			provider: "v8",
+			include: ["src/routes/**/*.ts", "src/lib/server/*.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,
