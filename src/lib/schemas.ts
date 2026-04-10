@@ -11,8 +11,12 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
 	email: z.string().min(1, "Email is required").email("Invalid email"),
 	password: z.string().min(8, "Password must be at least 8 characters"),
+	confirmPassword: z.string().min(1, "Confirm password is required"),
 	name: z.string().min(1, "Name is required"),
 	activeLanguage: z.enum(languageCodeValues, { message: "Please select a language" }),
+}).refine((data) => data.password === data.confirmPassword, {
+	message: "Passwords do not match",
+	path: ["confirmPassword"],
 });
 
 export const forgotPasswordSchema = z.object({

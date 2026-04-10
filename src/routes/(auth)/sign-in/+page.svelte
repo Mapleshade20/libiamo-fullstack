@@ -4,8 +4,10 @@ import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
+import { Eye, EyeOff } from "lucide-svelte";
 
 let { form, data } = $props();
+let showPassword = $state(false);
 </script>
 
 <Card.Root>
@@ -30,7 +32,21 @@ let { form, data } = $props();
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input id="password" name="password" type="password" required />
+				<div class="relative">
+					<Input 
+						id="password" 
+						name="password" 
+						type={showPassword ? "text" : "password"} 
+						required 
+					/>
+					<button
+						type="button"
+						class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+						onclick={() => showPassword = !showPassword}
+					>
+						{#if showPassword} <EyeOff size={18} /> {:else} <Eye size={18} /> {/if}
+					</button>
+				</div>
 				{#if form?.errors?.password}
 					<p class="text-sm text-red-600">{form.errors.password[0]}</p>
 				{/if}

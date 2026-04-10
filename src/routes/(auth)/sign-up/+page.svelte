@@ -41,6 +41,14 @@ let { form } = $props();
 			</div>
 
 			<div class="space-y-2">
+				<Label for="confirmPassword">Confirm Password</Label>
+				<Input id="confirmPassword" name="confirmPassword" type="password" required />
+				{#if form?.errors?.confirmPassword}
+					<p class="text-sm text-red-600">{form.errors.confirmPassword[0]}</p>
+				{/if}
+			</div>
+
+			<div class="space-y-2">
 				<Label for="activeLanguage">I want to learn</Label>
 				<select
 					id="activeLanguage"

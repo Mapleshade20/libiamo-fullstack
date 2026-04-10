@@ -19,6 +19,7 @@ export const actions: Actions = {
 		const raw = {
 			email: formData.get("email")?.toString() ?? "",
 			password: formData.get("password")?.toString() ?? "",
+			confirmPassword: formData.get("confirmPassword")?.toString() ?? "",
 			name: formData.get("name")?.toString() ?? "",
 			activeLanguage: formData.get("activeLanguage")?.toString() ?? "",
 		};
