@@ -19,22 +19,39 @@ let { form, data } = $props();
 		</Card.Title>
 	</Card.Header>
 	<Card.Content>
-		{#if data.hasToken}
-			{#if form?.resetMessage}
-				<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.resetMessage}</p>
-			{/if}
-
-			<form method="POST" action="?/resetPassword" use:enhance class="space-y-4">
-				<input type="hidden" name="token" value={data.token}>
-				<div class="space-y-2">
-					<Label for="newPassword">New Password</Label>
-					<Input id="newPassword" name="newPassword" type="password" required />
-					{#if form?.resetErrors?.newPassword}
-						<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
-					{/if}
+		{#if data.hasToken || data.error}
+			{#if data.error || form?.resetMessage}
+				<div class="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+					<p class="text-sm text-red-700 font-medium">
+						{data.error === "INVALID_TOKEN" ? "Invalid or Expired Link" : "Error"}
+					</p>
+					<p class="text-sm text-red-600 mt-1">
+						{form?.resetMessage ?? "The reset link is invalid or has expired. Please request a new one."}
+					</p>
+					<a href="/forgot-password" class="mt-4 block text-sm underline text-blue-600 hover:text-blue-800">
+						Request a new reset link
+					</a>
 				</div>
-				<Button type="submit" class="w-full">Reset Password</Button>
-			</form>
+			{:else}
+				<form method="POST" action="?/resetPassword" use:enhance class="space-y-4">
+					<input type="hidden" name="token" value={data.token}>
+					<div class="space-y-2">
+						<Label for="newPassword">New Password</Label>
+						<Input id="newPassword" name="newPassword" type="password" required />
+						{#if form?.resetErrors?.newPassword}
+							<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
+						{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="confirmNewPassword">Confirm New Password</Label>
+						<Input id="confirmNewPassword" name="confirmNewPassword" type="password" required />
+						{#if form?.resetErrors?.confirmNewPassword}
+							<p class="text-sm text-red-600">{form.resetErrors.confirmNewPassword[0]}</p>
+						{/if}
+					</div>
+					<Button type="submit" class="w-full">Reset Password</Button>
+				</form>
+			{/if}
 		{:else if form?.emailSent}
 			<p class="text-center text-muted-foreground">If an account with that email exists, we've sent a reset link. Check your inbox.</p>
 		{:else}

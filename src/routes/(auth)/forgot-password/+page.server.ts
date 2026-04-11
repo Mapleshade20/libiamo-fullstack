@@ -6,7 +6,12 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const token = event.url.searchParams.get("token");
-	return { hasToken: !!token, token };
+	const error = event.url.searchParams.get("error");
+	return { 
+        hasToken: !!token, 
+        token,
+        error: error
+    };
 };
 
 export const actions: Actions = {
@@ -37,6 +42,7 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const raw = {
 			newPassword: formData.get("newPassword")?.toString() ?? "",
+			confirmNewPassword: formData.get("confirmNewPassword")?.toString() ?? "",
 			token: formData.get("token")?.toString() ?? "",
 		};
 
@@ -53,10 +59,8 @@ export const actions: Actions = {
 				},
 			});
 		} catch (error) {
-			if (error instanceof APIError) {
-				return fail(400, { resetMessage: error.message || "Reset failed" });
-			}
-			return fail(500, { resetMessage: "Unexpected error" });
+			const message = error instanceof APIError ? error.message : "The link is invalid or has expired. Please request a new one.";
+			return fail(400, { resetMessage: message });
 		}
 
 		return redirect(302, "/sign-in?reset=success");
