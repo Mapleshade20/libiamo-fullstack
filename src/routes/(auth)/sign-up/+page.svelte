@@ -8,11 +8,9 @@
 
 	let { form } = $props();
 
-	// 默认为 UTC，在客户端挂载后更新
 	let clientTimezone = $state("UTC");
 
 	onMount(() => {
-		// 自动获取当前设备的 IANA 时区（如 Asia/Shanghai）
 		clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	});
 </script>

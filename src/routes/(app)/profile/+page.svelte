@@ -9,25 +9,57 @@
 
 	let { form, data } = $props();
 
-	const allTimezones = Intl.supportedValuesOf("timeZone").map((tz) => {
-		try {
-			const parts = new Intl.DateTimeFormat("en-US", {
-				timeZone: tz,
-				timeZoneName: "shortOffset",
-			}).formatToParts(new Date());
+	const localeByLanguage = {
+		en: "en-US",
+		es: "es-ES",
+		fr: "fr-FR",
+		ja: "ja-JP",
+	} as const;
 
-			const offset =
-				parts.find((p) => p.type === "timeZoneName")?.value || "";
+	const allTimezones = $derived.by(() => {
+		const lang =
+			localeByLanguage[
+				data.user.activeLanguage as keyof typeof localeByLanguage
+			] ?? "en-US";
+		const rawTimezones = Intl.supportedValuesOf("timeZone");
 
-			const utcOffset = offset.replace("GMT", "UTC");
+		return rawTimezones.map((tz) => {
+			try {
+				const offsetParts = new Intl.DateTimeFormat(lang, {
+					timeZone: tz,
+					timeZoneName: "shortOffset",
+				}).formatToParts(new Date());
+				const utcOffset =
+					offsetParts
+						.find((p) => p.type === "timeZoneName")
+						?.value.replace("GMT", "UTC") || "";
 
-			return {
-				value: tz,
-				label: `${tz} (${utcOffset})`,
-			};
-		} catch (e) {
-			return { value: tz, label: tz };
-		}
+				const taipeiNameByLang: Record<string, string> = {
+					"en-US": "China Taipei Standard Time",
+					"es-ES": "Hora estándar de China Taipéi",
+					"fr-FR": "Heure normale de Chine Taipei",
+					"ja-JP": "中国台北標準時",
+				};
+
+				const localizedName =
+					tz === "Asia/Taipei"
+						? taipeiNameByLang[lang]
+						: new Intl.DateTimeFormat(lang, {
+								timeZone: tz,
+								timeZoneName: "long",
+							})
+								.formatToParts(new Date())
+								.find((p) => p.type === "timeZoneName")
+								?.value || tz;
+
+				return {
+					value: tz,
+					label: `${tz} (${localizedName}, ${utcOffset})`,
+				};
+			} catch (e) {
+				return { value: tz, label: tz };
+			}
+		});
 	});
 
 	const languages = [

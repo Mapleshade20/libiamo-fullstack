@@ -12,7 +12,11 @@ export function getMondayOfWeek(d: Date): Date {
 }
 
 export function toDateString(d: Date): string {
-	return d.toISOString().slice(0, 10);
+
+	const year = d.getFullYear();
+	const month = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
 }
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
@@ -52,7 +56,6 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 			target: [task.date, task.templateId],
 		});
 
-	// Update template's lastScheduledAt to the given date
 	await db
 		.update(template)
 		.set({ lastScheduledAt: new Date(dateStr) })
@@ -62,21 +65,13 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", today: Date): Promise<void> {
 	const monday = getMondayOfWeek(today);
 	const mondayStr = toDateString(monday);
-	const todayStr = toDateString(today);
 
-	// Count existing tasks
 	const [weeklyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
 		.where(and(eq(task.language, language), eq(task.date, mondayStr)));
 
-	const [dailyCount] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(task)
-		.where(and(eq(task.language, language), eq(task.date, todayStr)));
-
 	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
-	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
 
 	if (weeklyNeeded > 0) {
 		const templates = await db
@@ -94,27 +89,20 @@ export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", to
 			}
 		}
 	}
-
-	if (dailyNeeded > 0) {
-		const templates = await db
-			.select()
-			.from(template)
-			.where(and(eq(template.language, language), eq(template.duration, "daily"), eq(template.isActive, true)))
-			.orderBy(asc(template.lastScheduledAt))
-			.limit(dailyNeeded);
-
-		for (const tpl of templates) {
-			try {
-				await insertTask(tpl, todayStr, "auto");
-			} catch (e) {
-				console.error(`Failed to schedule daily task for template ${tpl.id} on ${todayStr}:`, e);
-			}
-		}
-	}
 }
 
 export async function scheduleTaskManually(templateId: number, dateStr: string): Promise<void> {
 	const [tpl] = await db.select().from(template).where(eq(template.id, templateId)).limit(1);
 	if (!tpl) throw new Error("Template not found");
-	await insertTask(tpl, dateStr, "manual");
+
+	let finalDateStr = dateStr;
+
+	if (tpl.duration === "weekly") {
+		const [y, m, d] = dateStr.split("-").map(Number);
+
+		const localDate = new Date(y, m - 1, d, 12, 0, 0);
+		finalDateStr = toDateString(getMondayOfWeek(localDate));
+	}
+
+	await insertTask(tpl, finalDateStr, "manual");
 }

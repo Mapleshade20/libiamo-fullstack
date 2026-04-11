@@ -1,14 +1,18 @@
 import { fail } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { scheduleManualSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
-import { scheduleTaskManually } from "$lib/server/tasks";
+import { scheduleTaskManually, getMondayOfWeek, toDateString } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const dateFilter = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
 	const languageFilter = (event.url.searchParams.get("language") ?? "en") as "en" | "es" | "fr" | "ja";
+
+	const [y, m, d] = dateFilter.split("-").map(Number);
+	const filterDateObj = new Date(y, m - 1, d, 12, 0, 0);
+	const mondayFilter = toDateString(getMondayOfWeek(filterDateObj));
 
 	const scheduledTasks = await db
 		.select({
@@ -23,7 +27,16 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.date, dateFilter), eq(task.language, languageFilter)))
+		.where(
+			and(
+				eq(task.language, languageFilter),
+				// 核心修复：查找指定日的 日任务，或指定日所在周(周一)的 周任务
+				or(
+					and(eq(template.duration, "daily"), eq(task.date, dateFilter)),
+					and(eq(template.duration, "weekly"), eq(task.date, mondayFilter))
+				)
+			)
+		)
 		.orderBy(task.id);
 
 	const activeTemplates = await db
@@ -53,7 +66,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			await scheduleTaskManually(result.data.templateId, result.data.date);
+			await scheduleTaskManually(Number(result.data.templateId), result.data.date);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to schedule task";
 			return fail(400, { message, values: raw });
@@ -61,4 +74,20 @@ export const actions: Actions = {
 
 		return { success: true };
 	},
+
+	deleteTask: async (event) => {
+		const formData = await event.request.formData();
+		const taskId = Number(formData.get("taskId"));
+
+		if (!taskId) {
+			return fail(400, { message: "Invalid task ID" });
+		}
+
+		try {
+			await db.delete(task).where(eq(task.id, taskId));
+			return { success: true, deleted: true };
+		} catch (err) {
+			return fail(500, { message: "Failed to delete task" });
+		}
+	}
 };

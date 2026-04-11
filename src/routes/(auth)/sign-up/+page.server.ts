@@ -21,6 +21,7 @@ export const actions: Actions = {
 			password: formData.get("password")?.toString() ?? "",
 			name: formData.get("name")?.toString() ?? "",
 			activeLanguage: formData.get("activeLanguage")?.toString() ?? "",
+			timezone: formData.get("timezone")?.toString() || "UTC",
 		};
 
 		const result = signUpSchema.safeParse(raw);
@@ -34,6 +35,7 @@ export const actions: Actions = {
 					email: result.data.email,
 					password: result.data.password,
 					name: result.data.name,
+					timezone: raw.timezone,
 					activeLanguage: result.data.activeLanguage,
 				},
 				headers: event.request.headers,
