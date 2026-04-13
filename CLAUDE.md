@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to agents when working with code in this repository.
 
 ## Commands
 
@@ -26,10 +26,9 @@ pnpm db:push      # push schema changes to DB (no migration file)
 
 ### Server-side Code (`src/lib/server/`)
 
-- `auth.ts` — better-auth instance with email/password, email verification, and additional user fields (`role`, `activeLanguage`, `timezone`, `nativeLanguage`, `gemsBalance`).
-- `db/index.ts` — exports `db` (Drizzle client connected via `DATABASE_URL`).
+- `auth.ts` — better-auth instance.
 - `db/schema.ts` — business tables: `userLearningProfile`, `template`, `task`. Imports and re-exports `auth.schema.ts` and `enums.ts`.
-- `db/auth.schema.ts` — **auto-generated** but manually added columns to user table.
+- `db/auth.schema.ts` — **auto-generated** with manually added columns to `user` table.
 - `email.ts` — nodemailer wrapper for sending transactional email.
 - `tasks.ts` — `ensureTasksForDate()` auto-schedules tasks on each page load by picking the least-recently-scheduled active templates. `scheduleTaskManually()` is used by the admin schedule page.
 
@@ -37,17 +36,13 @@ pnpm db:push      # push schema changes to DB (no migration file)
 
 `hooks.server.ts` calls `auth.api.getSession()` on every request and populates `event.locals.user` and `event.locals.session`. The `(app)` layout server redirects to `/sign-in` if no user. The `App.Locals` type is declared in `src/app.d.ts`.
 
-### Template → Task Pipeline
-
-Templates store base content with `{{slot}}` placeholders and a `candidates` JSONB array (each candidate has `slots` for substitution and optional `context`). When tasks are needed, a random candidate is picked, slots are resolved, and a `task` row is inserted. Weekly tasks are dated to the Monday of the current week; daily tasks are dated to today.
-
 ### i18n
 
 Custom `t(lang, key)` function in `src/lib/i18n.ts`. The user's `activeLanguage` field drives the language. No external i18n library.
 
 ### Validation
 
-All form data is validated with Zod schemas in `src/lib/schemas.ts` — auth schemas, `profileSchema`, `switchLanguageSchema`, `templateSchema`, `scheduleManualSchema`.
+All form data is validated with Zod schemas in `src/lib/schemas.ts`.
 
 ### UI
 
@@ -59,14 +54,13 @@ All form data is validated with Zod schemas in `src/lib/schemas.ts` — auth sch
 
 ### Svelte 5
 
-All `.svelte` files run in runes mode (`$state`, `$props`, `$derived`, etc.) — enforced globally in `svelte.config.js`. Do not use Svelte 4 reactive syntax (`$:`, `export let`).
+All `.svelte` files run in runes mode (`$state`, `$props`, `$derived`, etc.). Do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
 ## Important Notes for Claude
 
-- Code style: Tabs for indentation, not spaces. Double quotes for JS/TS strings.
-- During plan: Keep in mind that you should often use the ask for clarify tool to ask user when there are multiple good ways to implement the requested change. When introducing an external package is needed, analyze the pros and cons, ask the user and present alternatives.
-- Use `frontend-design@claude-plugins-official` skill to help with visual design.
+- Code style: Tabs for indentation, not spaces.
+- Use designer agent to help with visual design.
 - Before finish: Use `pnpm format` and `pnpm check` to ensure code quality before marking an edit session fully completed.
-- Use context7 mcp tool to look up documentation when getting stuck on problems. Only use it when it's very necessary.
+- Use context7 mcp tool to look up documentation when getting stuck on problems.
 - DB schema draft: See `docs/DB.md` for the full planned schema including tables not yet implemented.
 - Roadmap: See `docs/ROADMAP.md` for details of each phase. The LLM/practice-session layer is Phase A2 (not yet implemented).
