@@ -103,6 +103,7 @@ describe("Sign-up +page.server", () => {
 				email: "test@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "en",
 			};
 			const event = createEvent(validData);
@@ -114,7 +115,12 @@ describe("Sign-up +page.server", () => {
 			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
 
 			expect(auth.api.signUpEmail).toHaveBeenCalledWith({
-				body: validData,
+				body: {
+					email: validData.email,
+					password: validData.password,
+					name: validData.name,
+					activeLanguage: validData.activeLanguage,
+				},
 				headers: event.request.headers,
 			});
 
@@ -131,6 +137,7 @@ describe("Sign-up +page.server", () => {
 				email: "taken@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);
@@ -151,6 +158,7 @@ describe("Sign-up +page.server", () => {
 				email: "crash@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "fr",
 			};
 			const event = createEvent(validData);
@@ -168,6 +176,7 @@ describe("Sign-up +page.server", () => {
 				email: "nomessage@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);
@@ -188,6 +197,7 @@ describe("Sign-up +page.server", () => {
 				email: "test-nouser@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "en",
 			};
 			const event = createEvent(validData);
@@ -246,6 +256,7 @@ describe("Sign-up +page.server", () => {
 				email: "fallback@example.com",
 				name: "Test User",
 				password: "securePassword123!",
+				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);

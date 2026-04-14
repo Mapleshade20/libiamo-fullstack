@@ -57,6 +57,14 @@ describe("Forgot-password +page.server", () => {
 
 			expect(result).toEqual({ hasToken: true, token: "abc123" });
 		});
+
+		it("includes error when error query param exists", async () => {
+			const result = await load({
+				url: new URL("https://example.com/forgot-password?token=abc123&error=INVALID_TOKEN"),
+			} as any);
+
+			expect(result).toEqual({ hasToken: true, token: "abc123", error: "INVALID_TOKEN" });
+		});
 	});
 
 	describe("requestReset action", () => {
@@ -136,6 +144,7 @@ describe("Forgot-password +page.server", () => {
 				actions.resetPassword(
 					createEvent({
 						newPassword: "new-password-123",
+						confirmNewPassword: "new-password-123",
 						token: "reset-token",
 					}),
 				),
@@ -157,6 +166,7 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
+					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
@@ -173,6 +183,7 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
+					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
@@ -187,6 +198,7 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
+					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
