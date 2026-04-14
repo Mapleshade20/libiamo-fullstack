@@ -22,15 +22,15 @@ export const load: PageServerLoad = async (event) => {
 	const weeklyTasks = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
-			shortObjectiveResolved: task.shortObjectiveResolved,
-			descriptionResolved: task.descriptionResolved,
-			objectivesResolved: task.objectivesResolved,
+			title: task.title,
+			shortObjective: task.shortObjective,
+			description: task.description,
+			objectives: task.objectives,
 			date: task.date,
-			templateType: template.type,
+			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateDuration: template.duration,
+			templateCadence: template.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -39,15 +39,15 @@ export const load: PageServerLoad = async (event) => {
 	const dailyTasks = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
-			shortObjectiveResolved: task.shortObjectiveResolved,
-			descriptionResolved: task.descriptionResolved,
-			objectivesResolved: task.objectivesResolved,
+			title: task.title,
+			shortObjective: task.shortObjective,
+			description: task.description,
+			objectives: task.objectives,
 			date: task.date,
-			templateType: template.type,
+			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateDuration: template.duration,
+			templateCadence: template.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))

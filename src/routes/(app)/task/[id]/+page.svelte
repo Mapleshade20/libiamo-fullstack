@@ -3,13 +3,14 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Clock from "@lucide/svelte/icons/clock";
 import Gem from "@lucide/svelte/icons/gem";
 import Star from "@lucide/svelte/icons/star";
+import { marked } from "marked";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 
 let { data } = $props();
 let task = $derived(data.task);
 
-const objectives = $derived((task.objectivesResolved as { order: number; text: string }[] | null) ?? []);
+const objectives = $derived(task.objectives ?? []);
 
 const typeLabels: Record<string, string> = {
 	chat: "Chat",
@@ -45,32 +46,32 @@ function difficultyLabel(level: number): string {
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest"> {uiLabels[task.templateUi] ?? task.templateUi} </Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{typeLabels[task.templateType] ?? task.templateType}
+					{typeLabels[task.templateInteractionType] ?? task.templateInteractionType}
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{task.titleResolved}</h1>
+			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{task.title}</h1>
 		</div>
 
-		{#if task.descriptionResolved}
-			<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{task.descriptionResolved}</p>
+		{#if task.description}
+			<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
 				<h2 class="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Objectives</h2>
 				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground max-w-xl">
-					{#each objectives.sort((a, b) => a.order - b.order) as obj}
-						<li>{obj.text}</li>
+					{#each objectives as obj}
+						<li>{obj}</li>
 					{/each}
 				</ol>
 			</div>
 		{/if}
 
-		{#if task.bgKnowledgeHtml}
+		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html task.bgKnowledgeHtml}</div>
+				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html marked.parse(task.materialsMd)}</div>
 			</div>
 		{/if}
 

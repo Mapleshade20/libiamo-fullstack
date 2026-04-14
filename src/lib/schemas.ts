@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const languageCodeValues = ["en", "es", "fr", "ja"] as const;
+const uiVariantValues = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const signInSchema = z.object({
@@ -36,25 +37,11 @@ export const switchLanguageSchema = z.object({
 });
 
 // ── Admin ────────────────────────────────────────────────────────────
-function jsonField<T extends z.ZodType>(inner: T) {
-	return z
-		.string()
-		.transform((s, ctx) => {
-			try {
-				return JSON.parse(s);
-			} catch {
-				ctx.addIssue({ code: "custom", message: "Invalid JSON" });
-				return z.NEVER;
-			}
-		})
-		.pipe(inner);
-}
-
 export const templateSchema = z.object({
 	language: z.enum(languageCodeValues),
-	type: z.enum(["chat", "oneshot", "slow", "translate"]),
-	ui: z.enum(["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"]),
-	duration: z.enum(["weekly", "daily"]),
+	interactionType: z.enum(["chat", "oneshot", "slow", "translate"]),
+	ui: z.enum(uiVariantValues),
+	cadence: z.enum(["weekly", "daily"]),
 	difficulty: z.coerce.number().int().min(1).max(3),
 	maxTurns: z.coerce.number().int().min(0).optional(),
 	estimatedWords: z.coerce.number().int().min(0).optional(),
@@ -69,28 +56,125 @@ export const templateSchema = z.object({
 	shortObjectiveBase: z.string().optional(),
 	descriptionBase: z.string().optional(),
 	agentPromptBase: z.string().optional(),
-	bgKnowledgeHtml: z.string().optional(),
-	objectivesBase: jsonField(z.array(z.object({ order: z.number(), text: z.string() }))),
-	agentPersonaPool: jsonField(
-		z.array(
+	materialsMd: z.string().optional(),
+	// objectives: newline-separated string → string[]
+	objectivesBase: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+	// tags: comma-separated string → string[]
+	tags: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+});
+
+// ── Variant ───────────────────────────────────────────────────────────
+export const variantSchema = z.object({
+	slotValues: z.record(z.string(), z.string()).default({}),
+	openingState: z.record(z.string(), z.unknown()).default({}),
+	isActive: z.boolean().default(true),
+});
+
+// ── openingState per-UI schemas ───────────────────────────────────────
+const messageSchema = z.object({
+	sender: z.enum(["user", "agent"]),
+	text: z.string(),
+});
+
+export const imessageOpeningStateSchema = z.object({
+	previousMessages: z.array(messageSchema).default([]),
+});
+
+export const discordOpeningStateSchema = z.object({
+	serverName: z.string(),
+	channelName: z.string(),
+	previousMessages: z
+		.array(
 			z.object({
-				name: z.string(),
-				age: z.number().optional(),
-				personality: z.string().optional(),
-				background: z.string().optional(),
+				sender: z.enum(["user", "agent"]),
+				text: z.string(),
+				timestamp: z.string().optional(),
 			}),
-		),
-	),
-	candidates: jsonField(
-		z.array(
+		)
+		.default([]),
+});
+
+export const redditOpeningStateSchema = z.object({
+	post: z.object({
+		title: z.string(),
+		body: z.string(),
+		subreddit: z.string(),
+		author: z.string(),
+		votes: z.number().optional(),
+	}),
+	previousComments: z
+		.array(
 			z.object({
-				slots: z.record(z.string(), z.string()),
-				context: z.record(z.string(), z.unknown()).optional(),
+				author: z.string(),
+				text: z.string(),
+				votes: z.number().optional(),
 			}),
-		),
+		)
+		.optional(),
+});
+
+export const appleMailOpeningStateSchema = z.object({
+	emails: z.array(
+		z.object({
+			from: z.string(),
+			to: z.string(),
+			subject: z.string(),
+			body: z.string(),
+			date: z.string().optional(),
+		}),
 	),
 });
 
+export const ao3OpeningStateSchema = z.object({
+	workTitle: z.string(),
+	chapterTitle: z.string().optional(),
+	bodyExcerpt: z.string().optional(),
+	tags: z.array(z.string()).optional(),
+});
+
+export const translatorOpeningStateSchema = z.object({
+	sourceText: z.string(),
+});
+
+// ── validateOpeningState discriminated helper ─────────────────────────
+type UiVariant = (typeof uiVariantValues)[number];
+
+export function validateOpeningState(ui: UiVariant, data: unknown) {
+	switch (ui) {
+		case "imessage":
+			return imessageOpeningStateSchema.safeParse(data);
+		case "discord":
+			return discordOpeningStateSchema.safeParse(data);
+		case "reddit":
+			return redditOpeningStateSchema.safeParse(data);
+		case "apple_mail":
+			return appleMailOpeningStateSchema.safeParse(data);
+		case "ao3":
+			return ao3OpeningStateSchema.safeParse(data);
+		case "translator":
+			return translatorOpeningStateSchema.safeParse(data);
+	}
+}
+
+// ── Schedule ──────────────────────────────────────────────────────────
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),
 	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),

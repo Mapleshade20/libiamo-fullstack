@@ -58,6 +58,7 @@ const uiIcons: Record<string, Component> = {
 };
 </script>
 
+<!-- WARN: Biome 2.4.11 parser bug -->
 {#snippet taskCard(task: typeof data.dailyTasks[0])}
 	{@const Icon = uiIcons[task.templateUi] ?? MessageSquare}
 	<div
@@ -80,14 +81,14 @@ const uiIcons: Record<string, Component> = {
 						{/each}
 					</span>
 				</div>
-				<h3 class="font-serif text-xl text-foreground leading-tight">{task.titleResolved}</h3>
+				<h3 class="font-serif text-xl text-foreground leading-tight">{task.title}</h3>
 			</div>
 
 			<!-- Back -->
 			<div class="card-face card-back absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-xl">
 				<div class="pt-1">
 					<h4 class="font-serif text-base mb-3 text-foreground">Mission Objective</h4>
-					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjectiveResolved ?? "—"}</p>
+					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjective ?? "—"}</p>
 				</div>
 				<div class="space-y-2.5">
 					<a

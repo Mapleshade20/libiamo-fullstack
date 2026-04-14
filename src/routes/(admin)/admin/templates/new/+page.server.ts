@@ -1,8 +1,17 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { templateSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
-import { template } from "$lib/server/db/schema";
+import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions } from "./$types";
+
+function parseJson(raw: unknown): Record<string, unknown> {
+	if (typeof raw !== "string" || raw.trim() === "") return {};
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return {};
+	}
+}
 
 export const actions: Actions = {
 	default: async (event) => {
@@ -17,9 +26,25 @@ export const actions: Actions = {
 		const userId = event.locals.user?.id;
 		if (!userId) return fail(401);
 
-		await db.insert(template).values({
-			...result.data,
-			createdBy: userId,
+		const slotValues = parseJson(formData.get("firstVariantSlotValues"));
+		const openingState = parseJson(formData.get("firstVariantOpeningState"));
+
+		// Create template + first variant in a single transaction
+		await db.transaction(async (tx) => {
+			const [newTemplate] = await tx
+				.insert(template)
+				.values({
+					...result.data,
+					createdBy: userId,
+				})
+				.returning({ id: template.id });
+
+			await tx.insert(templateVariant).values({
+				templateId: newTemplate.id,
+				isActive: true,
+				slotValues,
+				openingState,
+			});
 		});
 
 		return redirect(302, "/admin/templates");

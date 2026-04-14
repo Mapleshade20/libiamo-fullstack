@@ -6,12 +6,12 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const language = event.url.searchParams.get("language") as "en" | "es" | "fr" | "ja" | null;
-	const type = event.url.searchParams.get("type");
+	const interactionType = event.url.searchParams.get("interactionType");
 	const active = event.url.searchParams.get("active");
 
 	const conditions: SQL[] = [];
 	if (language) conditions.push(eq(template.language, language));
-	if (type) conditions.push(eq(template.type, type as "chat" | "oneshot" | "slow" | "translate"));
+	if (interactionType) conditions.push(eq(template.interactionType, interactionType as "chat" | "oneshot" | "slow" | "translate"));
 	if (active === "true") conditions.push(eq(template.isActive, true));
 	if (active === "false") conditions.push(eq(template.isActive, false));
 
@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		templates,
-		filters: { language, type, active },
+		filters: { language, interactionType, active },
 	};
 };
 

@@ -16,5 +16,5 @@ let { form, data } = $props();
 		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Template saved.</p>
 	{/if}
 
-	<TemplateForm template={data.template} {form} action="?/save" submitLabel="Save Changes" />
+	<TemplateForm template={data.template} variants={data.variants} {form} action="?/save" submitLabel="Save Changes" />
 </div>

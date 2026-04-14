@@ -40,8 +40,8 @@ let { form, data } = $props();
 					<Table.Row>
 						<Table.Head>ID</Table.Head>
 						<Table.Head>Title</Table.Head>
-						<Table.Head>Type</Table.Head>
-						<Table.Head>Duration</Table.Head>
+						<Table.Head>Interaction Type</Table.Head>
+						<Table.Head>Cadence</Table.Head>
 						<Table.Head>Origin</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -49,9 +49,9 @@ let { form, data } = $props();
 					{#each data.scheduledTasks as t}
 						<Table.Row>
 							<Table.Cell>{t.id}</Table.Cell>
-							<Table.Cell>{t.titleResolved}</Table.Cell>
-							<Table.Cell>{t.templateType}</Table.Cell>
-							<Table.Cell>{t.templateDuration}</Table.Cell>
+							<Table.Cell>{t.title}</Table.Cell>
+							<Table.Cell>{t.templateInteractionType}</Table.Cell>
+							<Table.Cell>{t.templateCadence}</Table.Cell>
 							<Table.Cell> <Badge variant={t.origin === 'auto' ? 'secondary' : 'default'}>{t.origin}</Badge> </Table.Cell>
 						</Table.Row>
 					{/each}

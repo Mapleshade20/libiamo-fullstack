@@ -22,12 +22,12 @@ let { data } = $props();
 			<option value="fr" selected={data.filters.language === 'fr'}>French</option>
 			<option value="ja" selected={data.filters.language === 'ja'}>Japanese</option>
 		</select>
-		<select name="type" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+		<select name="interactionType" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">All types</option>
-			<option value="chat" selected={data.filters.type === 'chat'}>Chat</option>
-			<option value="oneshot" selected={data.filters.type === 'oneshot'}>Oneshot</option>
-			<option value="slow" selected={data.filters.type === 'slow'}>Slow</option>
-			<option value="translate" selected={data.filters.type === 'translate'}>Translate</option>
+			<option value="chat" selected={data.filters.interactionType === 'chat'}>Chat</option>
+			<option value="oneshot" selected={data.filters.interactionType === 'oneshot'}>Oneshot</option>
+			<option value="slow" selected={data.filters.interactionType === 'slow'}>Slow</option>
+			<option value="translate" selected={data.filters.interactionType === 'translate'}>Translate</option>
 		</select>
 		<select name="active" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">Active & Inactive</option>
@@ -44,8 +44,9 @@ let { data } = $props();
 				<Table.Head>ID</Table.Head>
 				<Table.Head>Title</Table.Head>
 				<Table.Head>Language</Table.Head>
-				<Table.Head>Type</Table.Head>
-				<Table.Head>Duration</Table.Head>
+				<Table.Head>Interaction Type</Table.Head>
+				<Table.Head>Cadence</Table.Head>
+				<Table.Head>Tags</Table.Head>
 				<Table.Head>Difficulty</Table.Head>
 				<Table.Head>Active</Table.Head>
 				<Table.Head>Actions</Table.Head>
@@ -57,8 +58,9 @@ let { data } = $props();
 					<Table.Cell>{tpl.id}</Table.Cell>
 					<Table.Cell class="max-w-[200px] truncate">{tpl.titleBase}</Table.Cell>
 					<Table.Cell><Badge variant="outline">{tpl.language.toUpperCase()}</Badge></Table.Cell>
-					<Table.Cell>{tpl.type}</Table.Cell>
-					<Table.Cell>{tpl.duration}</Table.Cell>
+					<Table.Cell>{tpl.interactionType}</Table.Cell>
+					<Table.Cell>{tpl.cadence}</Table.Cell>
+					<Table.Cell class="text-xs text-muted-foreground">{tpl.tags?.join(', ') ?? ''}</Table.Cell>
 					<Table.Cell>{tpl.difficulty}</Table.Cell>
 					<Table.Cell>
 						<form method="POST" action="?/toggleActive" use:enhance class="inline">

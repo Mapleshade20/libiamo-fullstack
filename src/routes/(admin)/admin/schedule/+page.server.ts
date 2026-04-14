@@ -13,13 +13,13 @@ export const load: PageServerLoad = async (event) => {
 	const scheduledTasks = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
+			title: task.title,
 			date: task.date,
 			origin: task.origin,
 			language: task.language,
 			templateTitle: template.titleBase,
-			templateType: template.type,
-			templateDuration: template.duration,
+			templateInteractionType: template.interactionType,
+			templateCadence: template.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))

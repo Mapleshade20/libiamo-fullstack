@@ -1,7 +1,7 @@
 import { error, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { task, template } from "$lib/server/db/schema";
+import { task, template, templateVariant } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -16,24 +16,24 @@ export const load: PageServerLoad = async (event) => {
 	const [result] = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
-			descriptionResolved: task.descriptionResolved,
-			objectivesResolved: task.objectivesResolved,
-			agentPromptResolved: task.agentPromptResolved,
-			contextResolved: task.contextResolved,
+			title: task.title,
+			description: task.description,
+			objectives: task.objectives,
 			date: task.date,
 			language: task.language,
-			templateType: template.type,
+			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			bgKnowledgeHtml: template.bgKnowledgeHtml,
+			materialsMd: template.materialsMd,
 			estimatedWords: template.estimatedWords,
 			maxTurns: template.maxTurns,
 			pointReward: template.pointReward,
 			gemReward: template.gemReward,
+			openingState: templateVariant.openingState,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
+		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
 		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as "en" | "es" | "fr" | "ja")))
 		.limit(1);
 

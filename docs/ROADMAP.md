@@ -23,30 +23,6 @@
 /task/[id]/session/[sessionId] — resume or review a past session
 /history — user's practice session history
 
-## Core Concepts
-
-Roles:
-- learner: browse tasks, view backgrounds, complete sessions
-- admin: manage templates, schedule tasks
-
-Template vs Task:
-- Template: reusable blueprint with {{slot}} placeholders and multiple candidates
-- Task: scheduled instance with slots resolved from a random candidate
-
-Scheduled Task amount:
-- weekly tasks: 3 tasks per week, date stored as Monday
-- daily tasks: 3 task per day
-
-Task types (how LLM is invoked):
-- chat: real-time multi-turn conversation
-- oneshot: single long response (e.g. AO3 comment)
-- slow: delayed replies (email, forum)
-- translate: translation exercise
-
-UI variants (frontend layout): reddit, apple_mail, discord, imessage, ao3, translator
-
-Auto-scheduling: when user loads tasks for a date with insufficient scheduled tasks, system auto-fills from active templates, prioritizing oldest lastScheduledAt.
-
 ## Phase A1 Scope
 
 - Auth: signup, login, email verification, password reset
