@@ -4,7 +4,8 @@ import { load } from "../../../../../src/routes/(app)/task/[id]/+page.server";
 const { mockLimit, mockSelect } = vi.hoisted(() => {
 	const mockLimit = vi.fn();
 	const mockWhere = vi.fn(() => ({ limit: mockLimit }));
-	const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
+	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
+	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin }));
 	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin }));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));
 	return { mockLimit, mockSelect };
@@ -47,7 +48,7 @@ describe("Task detail +page.server", () => {
 	it("returns task payload when found", async () => {
 		const row = {
 			id: 42,
-			titleResolved: "Task title",
+			title: "Task title",
 			templateUi: "discord",
 			pointReward: 10,
 		};

@@ -38,19 +38,20 @@ vi.mock("$lib/server/db", () => ({
 vi.mock("$lib/server/db/schema", () => ({
 	task: {
 		id: "id",
-		titleResolved: "titleResolved",
-		descriptionResolved: "descriptionResolved",
-		objectivesResolved: "objectivesResolved",
+		title: "title",
+		shortObjective: "shortObjective",
+		description: "description",
+		objectives: "objectives",
 		date: "date",
 		language: "language",
 		templateId: "templateId",
 	},
 	template: {
 		id: "id",
-		type: "type",
+		interactionType: "interactionType",
 		ui: "ui",
 		difficulty: "difficulty",
-		duration: "duration",
+		cadence: "cadence",
 	},
 	userLearningProfile: Symbol("userLearningProfile"),
 }));
@@ -74,8 +75,8 @@ describe("(app) home +page.server", () => {
 	});
 
 	it("loads weekly and daily tasks for active language", async () => {
-		const weeklyTasks = [{ id: 1, titleResolved: "Weekly" }];
-		const dailyTasks = [{ id: 2, titleResolved: "Daily" }];
+		const weeklyTasks = [{ id: 1, title: "Weekly" }];
+		const dailyTasks = [{ id: 2, title: "Daily" }];
 		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks);
 
 		const user = { id: "u1", activeLanguage: "en" };
