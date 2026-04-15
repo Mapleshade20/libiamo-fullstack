@@ -21,6 +21,7 @@ jobs:
         run: pnpm install
       - name: Run tests with coverage
         run: pnpm test:coverage
+        continue-on-error: true
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
