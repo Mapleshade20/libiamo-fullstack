@@ -1,17 +1,9 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { templateSchema } from "$lib/schemas";
+import { extractSlotNames, getMissingSlots, parseJsonField, parseSlotValues } from "$lib/admin/variant-helpers";
+import { templateSchema, validateOpeningState } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions } from "./$types";
-
-function parseJson(raw: unknown): Record<string, unknown> {
-	if (typeof raw !== "string" || raw.trim() === "") return {};
-	try {
-		return JSON.parse(raw);
-	} catch {
-		return {};
-	}
-}
 
 export const actions: Actions = {
 	default: async (event) => {
@@ -26,8 +18,34 @@ export const actions: Actions = {
 		const userId = event.locals.user?.id;
 		if (!userId) return fail(401);
 
-		const slotValues = parseJson(formData.get("firstVariantSlotValues"));
-		const openingState = parseJson(formData.get("firstVariantOpeningState"));
+		const slotValues = parseSlotValues(formData.get("firstVariantSlotValues"));
+		const openingState = parseJsonField(formData.get("firstVariantOpeningState"));
+
+		// Validate opening state against selected UI schema
+		const ui = result.data.ui;
+		const osValidation = validateOpeningState(ui, openingState);
+		if (!osValidation?.success) {
+			return fail(400, {
+				message: `Invalid opening state for ${ui}: ${osValidation?.error?.message ?? "validation failed"}`,
+				values: raw,
+			});
+		}
+
+		// Validate slot coverage
+		const requiredSlots = extractSlotNames({
+			titleBase: result.data.titleBase,
+			shortObjectiveBase: result.data.shortObjectiveBase ?? null,
+			descriptionBase: result.data.descriptionBase ?? null,
+			agentPromptBase: result.data.agentPromptBase ?? null,
+			objectivesBase: result.data.objectivesBase ?? null,
+		});
+		const missingSlots = getMissingSlots(slotValues, requiredSlots);
+		if (missingSlots.length > 0) {
+			return fail(400, {
+				message: `First variant is missing slot values: ${missingSlots.join(", ")}`,
+				values: raw,
+			});
+		}
 
 		// Create template + first variant in a single transaction
 		await db.transaction(async (tx) => {
@@ -43,7 +61,7 @@ export const actions: Actions = {
 				templateId: newTemplate.id,
 				isActive: true,
 				slotValues,
-				openingState,
+				openingState: osValidation.data,
 			});
 		});
 

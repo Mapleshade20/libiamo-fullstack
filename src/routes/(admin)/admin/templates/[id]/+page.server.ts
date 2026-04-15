@@ -1,18 +1,10 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { templateSchema } from "$lib/schemas";
+import { extractSlotNames, getMissingSlots, parseJsonField, parseSlotValues } from "$lib/admin/variant-helpers";
+import { templateSchema, validateOpeningState } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
-
-function parseJson(raw: unknown): Record<string, unknown> {
-	if (typeof raw !== "string" || raw.trim() === "") return {};
-	try {
-		return JSON.parse(raw);
-	} catch {
-		return {};
-	}
-}
 
 export const load: PageServerLoad = async (event) => {
 	const id = Number(event.params.id);
@@ -51,28 +43,79 @@ export const actions: Actions = {
 	addVariant: async (event) => {
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
-		const slotValues = parseJson(formData.get("slotValues"));
-		const openingState = parseJson(formData.get("openingState"));
+		const slotValues = parseSlotValues(formData.get("slotValues"));
+		const openingState = parseJsonField(formData.get("openingState"));
+
+		// Get template to know selected UI
+		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
+		if (!tpl) return fail(404, { message: "Template not found" });
+
+		// Validate opening state against selected UI schema
+		const osValidation = validateOpeningState(tpl.ui, openingState);
+		if (!osValidation?.success) {
+			return fail(400, {
+				message: `Invalid opening state for ${tpl.ui}: ${osValidation?.error?.message ?? "validation failed"}`,
+			});
+		}
+
+		// Validate slot coverage
+		const requiredSlots = extractSlotNames({
+			titleBase: tpl.titleBase,
+			shortObjectiveBase: tpl.shortObjectiveBase,
+			descriptionBase: tpl.descriptionBase,
+			agentPromptBase: tpl.agentPromptBase,
+			objectivesBase: tpl.objectivesBase,
+		});
+		const missingSlots = getMissingSlots(slotValues, requiredSlots);
+		if (missingSlots.length > 0) {
+			return fail(400, { message: `Variant is missing slot values: ${missingSlots.join(", ")}` });
+		}
 
 		await db.insert(templateVariant).values({
 			templateId: id,
 			isActive: true,
 			slotValues,
-			openingState,
+			openingState: osValidation.data,
 		});
 
 		return { addedVariant: true };
 	},
 
 	saveVariant: async (event) => {
+		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
 		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
 
-		const slotValues = parseJson(formData.get("slotValues"));
-		const openingState = parseJson(formData.get("openingState"));
+		const slotValues = parseSlotValues(formData.get("slotValues"));
+		const openingState = parseJsonField(formData.get("openingState"));
 
-		await db.update(templateVariant).set({ slotValues, openingState }).where(eq(templateVariant.id, variantId));
+		// Get template to know selected UI
+		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
+		if (!tpl) return fail(404, { message: "Template not found" });
+
+		// Validate opening state against selected UI schema
+		const osValidation = validateOpeningState(tpl.ui, openingState);
+		if (!osValidation?.success) {
+			return fail(400, {
+				message: `Invalid opening state for ${tpl.ui}: ${osValidation?.error?.message ?? "validation failed"}`,
+			});
+		}
+
+		// Validate slot coverage
+		const requiredSlots = extractSlotNames({
+			titleBase: tpl.titleBase,
+			shortObjectiveBase: tpl.shortObjectiveBase,
+			descriptionBase: tpl.descriptionBase,
+			agentPromptBase: tpl.agentPromptBase,
+			objectivesBase: tpl.objectivesBase,
+		});
+		const missingSlots = getMissingSlots(slotValues, requiredSlots);
+		if (missingSlots.length > 0) {
+			return fail(400, { message: `Variant is missing slot values: ${missingSlots.join(", ")}` });
+		}
+
+		await db.update(templateVariant).set({ slotValues, openingState: osValidation.data }).where(eq(templateVariant.id, variantId));
 
 		return { savedVariant: true };
 	},

@@ -2,6 +2,9 @@
 import { marked } from "marked";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
+import { extractSlotNames, getDefaultOpeningState, type UiVariant } from "$lib/admin/variant-helpers";
+import OpeningStateEditor from "$lib/components/OpeningStateEditor.svelte";
+import SlotEditor from "$lib/components/SlotEditor.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
@@ -49,6 +52,134 @@ let { template = {} as TemplateData, variants = [], form = null, action = "", su
 
 const isEditMode = $derived("id" in template);
 
+// ── Tracked form field values for slot extraction ────────────────
+let titleBase = $state(untrack(() => template.titleBase ?? ""));
+let shortObjectiveBase = $state(untrack(() => template.shortObjectiveBase ?? ""));
+let descriptionBase = $state(untrack(() => template.descriptionBase ?? ""));
+let agentPromptBase = $state(untrack(() => template.agentPromptBase ?? ""));
+let objectivesText = $state(untrack(() => (template.objectivesBase ?? []).join("\n")));
+
+$effect(() => {
+	titleBase = template.titleBase ?? "";
+	shortObjectiveBase = template.shortObjectiveBase ?? "";
+	descriptionBase = template.descriptionBase ?? "";
+	agentPromptBase = template.agentPromptBase ?? "";
+	objectivesText = (template.objectivesBase ?? []).join("\n");
+});
+
+// Parse objectives text to array for slot extraction
+const objectivesArray = $derived(
+	objectivesText
+		.split("\n")
+		.map((s) => s.trim())
+		.filter(Boolean),
+);
+
+// Live-extract required slots from all slot-supporting fields
+const requiredSlots = $derived(
+	extractSlotNames({
+		titleBase,
+		shortObjectiveBase,
+		descriptionBase,
+		agentPromptBase,
+		objectivesBase: objectivesArray,
+	}),
+);
+
+// ── UI variant tracking ──────────────────────────────────────────
+let selectedUi = $state<UiVariant>(untrack(() => (template.ui as UiVariant) ?? "reddit"));
+$effect(() => {
+	selectedUi = (template.ui as UiVariant) ?? "reddit";
+});
+
+// Markdown preview
+let showMdPreview = $state(false);
+let mdSource = $state(untrack(() => template.materialsMd ?? ""));
+$effect(() => {
+	mdSource = template.materialsMd ?? "";
+});
+let mdHtml = $derived(showMdPreview ? (marked(mdSource) as string) : "");
+
+// Tags: comma-separated
+let tagsValue = $derived((template.tags ?? []).join(", "));
+
+// ── Variant editing state (edit mode) ────────────────────────────
+let editingVariantId = $state<number | null>(null);
+let showAddVariant = $state(false);
+
+// Track draft state per variant for dirty detection
+type VariantDraft = {
+	slotValues: Record<string, string>;
+	openingState: Record<string, unknown>;
+	originalJson: string;
+};
+let variantDrafts = $state<Map<number, VariantDraft>>(new Map());
+
+// Initialize drafts from variants prop
+$effect(() => {
+	const newDrafts = new Map<number, VariantDraft>();
+	for (const v of variants) {
+		const sv = (v.slotValues ?? {}) as Record<string, string>;
+		const os = (v.openingState ?? {}) as Record<string, unknown>;
+		newDrafts.set(v.id, {
+			slotValues: { ...sv },
+			openingState: { ...os },
+			originalJson: JSON.stringify({ sv, os }),
+		});
+	}
+	variantDrafts = newDrafts;
+});
+
+function getVariantDraft(id: number): VariantDraft {
+	return variantDrafts.get(id) ?? { slotValues: {}, openingState: {}, originalJson: "{}" };
+}
+
+function isVariantDirty(id: number): boolean {
+	const draft = variantDrafts.get(id);
+	if (!draft) return false;
+	const currentJson = JSON.stringify({ sv: draft.slotValues, os: draft.openingState });
+	return currentJson !== draft.originalJson;
+}
+
+const dirtyVariantIds = $derived([...variantDrafts.keys()].filter((id) => isVariantDirty(id)));
+const hasDirtyVariants = $derived(dirtyVariantIds.length > 0);
+
+// Update draft slot values
+function updateDraftSlots(id: number, slots: Record<string, string>) {
+	const draft = getVariantDraft(id);
+	variantDrafts.set(id, { ...draft, slotValues: slots });
+	variantDrafts = new Map(variantDrafts);
+}
+
+// Update draft opening state
+function updateDraftOpeningState(id: number, state: Record<string, unknown>) {
+	const draft = getVariantDraft(id);
+	variantDrafts.set(id, { ...draft, openingState: state });
+	variantDrafts = new Map(variantDrafts);
+}
+
+// ── Create mode: first variant state ─────────────────────────────
+let firstVariantSlots = $state<Record<string, string>>({});
+let firstVariantOpeningState = $state<Record<string, unknown>>({});
+
+// Reset opening state when UI changes in create mode
+$effect(() => {
+	if (!isEditMode) {
+		firstVariantOpeningState = getDefaultOpeningState(selectedUi) as Record<string, unknown>;
+	}
+});
+
+// ── Add variant state ────────────────────────────────────────────
+let newVariantSlots = $state<Record<string, string>>({});
+let newVariantOpeningState = $state<Record<string, unknown>>({});
+
+// Reset when toggling add variant panel or UI changes
+$effect(() => {
+	if (showAddVariant) {
+		newVariantOpeningState = getDefaultOpeningState(selectedUi) as Record<string, unknown>;
+	}
+});
+
 function jsonStr(val: unknown): string {
 	if (!val || (typeof val === "object" && Object.keys(val as object).length === 0)) return "{}";
 	try {
@@ -57,25 +188,6 @@ function jsonStr(val: unknown): string {
 		return "{}";
 	}
 }
-
-// Markdown preview
-let showMdPreview = $state(false);
-// untrack: explicit non-reactive init; $effect handles re-sync when prop updates (e.g. after form save)
-let mdSource = $state(untrack(() => template.materialsMd ?? ""));
-$effect(() => {
-	mdSource = template.materialsMd ?? "";
-});
-let mdHtml = $derived(showMdPreview ? (marked(mdSource) as string) : "");
-
-// Objectives: one per line
-let objectivesValue = $derived((template.objectivesBase ?? []).join("\n"));
-
-// Tags: comma-separated
-let tagsValue = $derived((template.tags ?? []).join(", "));
-
-// Variant editing state
-let editingVariantId = $state<number | null>(null);
-let showAddVariant = $state(false);
 </script>
 
 <form method="POST" {action} use:enhance class="space-y-8">
@@ -90,10 +202,10 @@ let showAddVariant = $state(false);
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
 				<select id="language" name="language" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-					<option value="en" selected={template.language === 'en'}>English</option>
-					<option value="es" selected={template.language === 'es'}>Spanish</option>
-					<option value="fr" selected={template.language === 'fr'}>French</option>
-					<option value="ja" selected={template.language === 'ja'}>Japanese</option>
+					<option value="en" selected={template.language === "en"}>English</option>
+					<option value="es" selected={template.language === "es"}>Spanish</option>
+					<option value="fr" selected={template.language === "fr"}>French</option>
+					<option value="ja" selected={template.language === "ja"}>Japanese</option>
 				</select>
 				{#if form?.errors?.language}
 					<p class="text-sm text-red-600">{form.errors.language[0]}</p>
@@ -108,10 +220,10 @@ let showAddVariant = $state(false);
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					required
 				>
-					<option value="chat" selected={template.interactionType === 'chat'}>Chat</option>
-					<option value="oneshot" selected={template.interactionType === 'oneshot'}>Oneshot</option>
-					<option value="slow" selected={template.interactionType === 'slow'}>Slow Reply</option>
-					<option value="translate" selected={template.interactionType === 'translate'}>Translate</option>
+					<option value="chat" selected={template.interactionType === "chat"}>Chat</option>
+					<option value="oneshot" selected={template.interactionType === "oneshot"}>Oneshot</option>
+					<option value="slow" selected={template.interactionType === "slow"}>Slow Reply</option>
+					<option value="translate" selected={template.interactionType === "translate"}>Translate</option>
 				</select>
 				{#if form?.errors?.interactionType}
 					<p class="text-sm text-red-600">{form.errors.interactionType[0]}</p>
@@ -120,13 +232,19 @@ let showAddVariant = $state(false);
 
 			<div class="space-y-2">
 				<Label for="ui">UI Variant</Label>
-				<select id="ui" name="ui" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-					<option value="reddit" selected={template.ui === 'reddit'}>Reddit</option>
-					<option value="apple_mail" selected={template.ui === 'apple_mail'}>Apple Mail</option>
-					<option value="discord" selected={template.ui === 'discord'}>Discord</option>
-					<option value="imessage" selected={template.ui === 'imessage'}>iMessage</option>
-					<option value="ao3" selected={template.ui === 'ao3'}>AO3</option>
-					<option value="translator" selected={template.ui === 'translator'}>Translator</option>
+				<select
+					id="ui"
+					name="ui"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					required
+					bind:value={selectedUi}
+				>
+					<option value="reddit">Reddit</option>
+					<option value="apple_mail">Apple Mail</option>
+					<option value="discord">Discord</option>
+					<option value="imessage">iMessage</option>
+					<option value="ao3">AO3</option>
+					<option value="translator">Translator</option>
 				</select>
 				{#if form?.errors?.ui}
 					<p class="text-sm text-red-600">{form.errors.ui[0]}</p>
@@ -136,8 +254,8 @@ let showAddVariant = $state(false);
 			<div class="space-y-2">
 				<Label for="cadence">Cadence</Label>
 				<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-					<option value="weekly" selected={template.cadence === 'weekly'}>Weekly</option>
-					<option value="daily" selected={template.cadence === 'daily'}>Daily</option>
+					<option value="weekly" selected={template.cadence === "weekly"}>Weekly</option>
+					<option value="daily" selected={template.cadence === "daily"}>Daily</option>
 				</select>
 				{#if form?.errors?.cadence}
 					<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
@@ -154,12 +272,12 @@ let showAddVariant = $state(false);
 
 			<div class="space-y-2">
 				<Label for="maxTurns">Max Turns</Label>
-				<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ''} />
+				<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ""} />
 			</div>
 
 			<div class="space-y-2">
 				<Label for="estimatedWords">Estimated Words</Label>
-				<Input id="estimatedWords" name="estimatedWords" type="number" min="0" value={template.estimatedWords ?? ''} />
+				<Input id="estimatedWords" name="estimatedWords" type="number" min="0" value={template.estimatedWords ?? ""} />
 			</div>
 
 			<div class="space-y-2">
@@ -191,7 +309,7 @@ let showAddVariant = $state(false);
 
 		<div class="space-y-2">
 			<Label for="titleBase">Title (supports &#123;&#123;slot&#125;&#125; placeholders)</Label>
-			<Input id="titleBase" name="titleBase" value={template.titleBase ?? ''} required />
+			<Input id="titleBase" name="titleBase" bind:value={titleBase} required />
 			{#if form?.errors?.titleBase}
 				<p class="text-sm text-red-600">{form.errors.titleBase[0]}</p>
 			{/if}
@@ -199,17 +317,17 @@ let showAddVariant = $state(false);
 
 		<div class="space-y-2">
 			<Label for="shortObjectiveBase">Short Objective (1–2 sentences, shown on card)</Label>
-			<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} value={template.shortObjectiveBase ?? ''} />
+			<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} bind:value={shortObjectiveBase} />
 		</div>
 
 		<div class="space-y-2">
 			<Label for="descriptionBase">Description</Label>
-			<Textarea id="descriptionBase" name="descriptionBase" rows={3} value={template.descriptionBase ?? ''} />
+			<Textarea id="descriptionBase" name="descriptionBase" rows={3} bind:value={descriptionBase} />
 		</div>
 
 		<div class="space-y-2">
-			<Label for="agentPromptBase">Agent Prompt (MBTI persona prefix injected automatically at schedule time)</Label>
-			<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} value={template.agentPromptBase ?? ''} />
+			<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at schedule time) </Label>
+			<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
 		</div>
 
 		<div class="space-y-2">
@@ -218,7 +336,7 @@ let showAddVariant = $state(false);
 				id="objectivesBase"
 				name="objectivesBase"
 				rows={4}
-				value={objectivesValue}
+				bind:value={objectivesText}
 				placeholder="Give a convincing reason&#10;Do not over-explain&#10;Show you still value the friendship"
 			/>
 			{#if form?.errors?.objectivesBase}
@@ -240,7 +358,7 @@ let showAddVariant = $state(false);
 					onclick={() => (showMdPreview = !showMdPreview)}
 					class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
 				>
-					{showMdPreview ? 'Edit' : 'Preview'}
+					{showMdPreview ? "Edit" : "Preview"}
 				</button>
 			</div>
 			{#if showMdPreview}
@@ -257,9 +375,35 @@ let showAddVariant = $state(false);
 		</div>
 	</fieldset>
 
+	<!-- Create mode: First Variant (INSIDE the form) -->
+	{#if !isEditMode}
+		<fieldset class="space-y-4 rounded-md border border-input p-4">
+			<legend class="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">First Variant</legend>
+			<p class="text-xs text-muted-foreground">
+				Every template requires at least one active variant. Define the slot values and opening state below — they will be created together with the
+				template.
+			</p>
+
+			<div class="space-y-3">
+				<div class="space-y-2">
+					<Label>Slot Values</Label>
+					<SlotEditor bind:value={firstVariantSlots} {requiredSlots} name="firstVariantSlotValues" />
+				</div>
+
+				<div class="space-y-2">
+					<Label>Opening State</Label>
+					<OpeningStateEditor bind:value={firstVariantOpeningState} ui={selectedUi} name="firstVariantOpeningState" />
+				</div>
+			</div>
+		</fieldset>
+	{/if}
+
 	<!-- Submit -->
-	<div class="flex gap-3">
-		<Button type="submit">{submitLabel}</Button>
+	<div class="flex items-center gap-3">
+		{#if isEditMode && hasDirtyVariants}
+			<p class="text-sm text-amber-600">Unsaved variant changes (#{dirtyVariantIds.join(", #")}). Save variants before saving template.</p>
+		{/if}
+		<Button type="submit" disabled={isEditMode && hasDirtyVariants}>{submitLabel}</Button>
 		<Button href="/admin/templates" variant="outline">Cancel</Button>
 	</div>
 </form>
@@ -274,22 +418,29 @@ let showAddVariant = $state(false);
 				onclick={() => (showAddVariant = !showAddVariant)}
 				class="text-sm text-primary underline underline-offset-2 hover:opacity-80"
 			>
-				{showAddVariant ? 'Cancel' : '+ Add Variant'}
+				{showAddVariant ? "Cancel" : "+ Add Variant"}
 			</button>
 		</div>
 
 		<!-- Existing variants -->
 		{#each variants as v (v.id)}
+			{@const draft = getVariantDraft(v.id)}
+			{@const dirty = isVariantDirty(v.id)}
 			<div class="rounded-md border border-input p-4 space-y-3 {!v.isActive ? 'opacity-50' : ''}">
 				<div class="flex items-center justify-between">
-					<span class="text-sm font-medium">Variant #{v.id} {v.isActive ? '' : '(inactive)'}</span>
+					<span class="text-sm font-medium">
+						Variant #{v.id} {v.isActive ? "" : "(inactive)"}
+						{#if dirty}
+							<span class="ml-2 text-xs text-amber-600">(unsaved)</span>
+						{/if}
+					</span>
 					<div class="flex gap-2">
 						<button
 							type="button"
 							onclick={() => (editingVariantId = editingVariantId === v.id ? null : v.id)}
 							class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
 						>
-							{editingVariantId === v.id ? 'Close' : 'Edit'}
+							{editingVariantId === v.id ? "Close" : "Edit"}
 						</button>
 						{#if v.isActive}
 							<form method="POST" action="?/deactivateVariant" use:enhance>
@@ -301,27 +452,35 @@ let showAddVariant = $state(false);
 				</div>
 
 				{#if editingVariantId === v.id}
-					<form method="POST" action="?/saveVariant" use:enhance class="space-y-3">
+					<form method="POST" action="?/saveVariant" use:enhance class="space-y-4">
 						<input type="hidden" name="variantId" value={v.id}>
-						<div class="space-y-1">
-							<Label for="sv-{v.id}">Slot Values (JSON object)</Label>
-							<Textarea id="sv-{v.id}" name="slotValues" rows={3} value={jsonStr(v.slotValues)} />
+
+						<div class="space-y-2">
+							<Label>Slot Values</Label>
+							<SlotEditor value={draft.slotValues} {requiredSlots} name="slotValues" onchange={(slots) => updateDraftSlots(v.id, slots)} />
 						</div>
-						<div class="space-y-1">
-							<Label for="os-{v.id}">Opening State (JSON object)</Label>
-							<Textarea id="os-{v.id}" name="openingState" rows={5} value={jsonStr(v.openingState)} />
+
+						<div class="space-y-2">
+							<Label>Opening State</Label>
+							<OpeningStateEditor
+								value={draft.openingState}
+								ui={selectedUi}
+								name="openingState"
+								onchange={(state) => updateDraftOpeningState(v.id, state as Record<string, unknown>)}
+							/>
 						</div>
+
 						<Button type="submit" size="sm">Save Variant</Button>
 					</form>
 				{:else}
 					<div class="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
 						<div>
 							<span class="font-medium text-foreground">Slot Values:</span>
-							<pre class="mt-1 rounded bg-muted px-2 py-1 overflow-auto max-h-20">{jsonStr(v.slotValues)}</pre>
+							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(v.slotValues)}</pre>
 						</div>
 						<div>
 							<span class="font-medium text-foreground">Opening State:</span>
-							<pre class="mt-1 rounded bg-muted px-2 py-1 overflow-auto max-h-20">{jsonStr(v.openingState)}</pre>
+							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(v.openingState)}</pre>
 						</div>
 					</div>
 				{/if}
@@ -330,59 +489,22 @@ let showAddVariant = $state(false);
 
 		<!-- Add new variant -->
 		{#if showAddVariant}
-			<div class="rounded-md border border-dashed border-input p-4 space-y-3">
+			<div class="rounded-md border border-dashed border-input p-4 space-y-4">
 				<p class="text-sm font-medium">New Variant</p>
-				<form method="POST" action="?/addVariant" use:enhance class="space-y-3">
-					<div class="space-y-1">
-						<Label for="new-sv">Slot Values (JSON object)</Label>
-						<Textarea id="new-sv" name="slotValues" rows={3} value={"{}"} />
+				<form method="POST" action="?/addVariant" use:enhance class="space-y-4">
+					<div class="space-y-2">
+						<Label>Slot Values</Label>
+						<SlotEditor bind:value={newVariantSlots} {requiredSlots} name="slotValues" />
 					</div>
-					<div class="space-y-1">
-						<Label for="new-os">Opening State (JSON object)</Label>
-						<Textarea id="new-os" name="openingState" rows={5} value={"{}"} />
+
+					<div class="space-y-2">
+						<Label>Opening State</Label>
+						<OpeningStateEditor bind:value={newVariantOpeningState} ui={selectedUi} name="openingState" />
 					</div>
+
 					<Button type="submit" size="sm">Add Variant</Button>
 				</form>
 			</div>
 		{/if}
-	</div>
-{:else}
-	<!-- Create mode: first variant inline -->
-	<div class="mt-8 space-y-4">
-		<h2 class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">First Variant</h2>
-		<p class="text-xs text-muted-foreground">
-			Every template requires at least one active variant. Define the slot values and opening state for the first variant here — they will be created
-			together with the template in a single transaction.
-		</p>
-		<div class="rounded-md border border-input p-4 space-y-3">
-			<div class="space-y-1">
-				<Label for="firstVariantSlotValues">Slot Values (JSON object — leave <code class="rounded bg-muted px-1">{"{}"}</code> if no slots)</Label>
-				<!-- This field is inside a separate form submitted with the main template create -->
-			</div>
-		</div>
-		<p class="text-xs text-muted-foreground italic">Variant fields below are submitted as part of the template creation.</p>
-		<!-- These fields are submitted via the main template form -->
-		<div class="grid gap-4 sm:grid-cols-2">
-			<div class="space-y-2">
-				<Label for="firstVariantSlotValues">Slot Values (JSON)</Label>
-				<Textarea
-					id="firstVariantSlotValues"
-					name="firstVariantSlotValues"
-					rows={3}
-					value={"{}"}
-					placeholder="e.g. slot name:value pairs as JSON object"
-				/>
-			</div>
-			<div class="space-y-2">
-				<Label for="firstVariantOpeningState">Opening State (JSON)</Label>
-				<Textarea
-					id="firstVariantOpeningState"
-					name="firstVariantOpeningState"
-					rows={3}
-					value={"{}"}
-					placeholder="e.g. previousMessages array or source text as JSON object"
-				/>
-			</div>
-		</div>
 	</div>
 {/if}

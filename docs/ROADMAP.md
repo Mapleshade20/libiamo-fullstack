@@ -30,6 +30,11 @@
 - Task detail: view background material and objectives
 - Profile: update settings, switch active language
 - Admin - Templates: list, create, edit, soft-delete (isActive=false)
+  - Variant editor: slot-aware SlotEditor + per-UI OpeningStateEditor components
+  - Server-side validation: opening state validated against per-UI Zod schemas, slot coverage checked
+  - Dirty detection: unsaved variant changes block template save
+  - First variant created inline with template in create mode
+  - Helpers consolidated in `src/lib/admin/variant-helpers.ts` (parse, slot extraction, opening state transforms)
 - Admin - Scheduling: manual task scheduling, view scheduled tasks
 
 ## Phase A2 Scope
