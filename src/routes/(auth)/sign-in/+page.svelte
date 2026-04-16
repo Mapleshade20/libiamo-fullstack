@@ -1,10 +1,10 @@
 <script lang="ts">
+import { Eye, EyeOff } from "@lucide/svelte";
 import { enhance } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
-import { Eye, EyeOff } from "@lucide/svelte";
 
 let { form, data } = $props();
 let showPassword = $state(false);
