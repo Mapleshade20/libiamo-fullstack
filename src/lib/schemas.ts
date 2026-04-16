@@ -27,17 +27,23 @@ export const resetPasswordSchema = z.object({
 // ── App ──────────────────────────────────────────────────────────────
 export const profileSchema = z.object({
 	name: z.string().max(50).optional(),
-	timezone: z.string().optional().refine((tz) => {
-		if (!tz) return true;
-		try {
-			Intl.DateTimeFormat(undefined, { timeZone: tz });
-			return true;
-		} catch (e) {
-			return false;
-		}
-	}, {
-		message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai)."
-	}),
+	timezone: z
+		.string()
+		.optional()
+		.refine(
+			(tz) => {
+				if (!tz) return true;
+				try {
+					Intl.DateTimeFormat(undefined, { timeZone: tz });
+					return true;
+				} catch (_e) {
+					return false;
+				}
+			},
+			{
+				message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
+			},
+		),
 	nativeLanguage: z.string().optional(),
 });
 

@@ -29,7 +29,7 @@ export const load: PageServerLoad = async (event) => {
 		userLocalDateStr = new Date().toISOString().slice(0, 10);
 	}
 
-	// Create a "safe" Date object anchored at 12:00 UTC. 
+	// Create a "safe" Date object anchored at 12:00 UTC.
 	// This trick ensures that helper functions (like getMondayOfWeek) won't jump to the wrong day due to server-side timezone shifts.
 	const [year, month, day] = userLocalDateStr.split("-").map(Number);
 	const userTodayDateObj = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -80,7 +80,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		weeklyTasks,
 		dailyTasks,
-		language
+		language,
 	};
 };
 

@@ -1,63 +1,61 @@
 <script lang="ts">
-	import BookOpen from "@lucide/svelte/icons/book-open";
-	import Hash from "@lucide/svelte/icons/hash";
-	import Languages from "@lucide/svelte/icons/languages";
-	import Mail from "@lucide/svelte/icons/mail";
-	import MessageCircle from "@lucide/svelte/icons/message-circle";
-	import MessageSquare from "@lucide/svelte/icons/message-square";
-	import type { Component } from "svelte";
-	import { goto } from "$app/navigation";
-	import { type LangCode, t } from "$lib/i18n";
-	import { captureTaskEnterTransition } from "$lib/task-transition";
+import BookOpen from "@lucide/svelte/icons/book-open";
+import Hash from "@lucide/svelte/icons/hash";
+import Languages from "@lucide/svelte/icons/languages";
+import Mail from "@lucide/svelte/icons/mail";
+import MessageCircle from "@lucide/svelte/icons/message-circle";
+import MessageSquare from "@lucide/svelte/icons/message-square";
+import type { Component } from "svelte";
+import { goto } from "$app/navigation";
+import { type LangCode, t } from "$lib/i18n";
+import { captureTaskEnterTransition } from "$lib/task-transition";
 
-	let { data } = $props();
-	let lang = $derived(data.language as LangCode);
+let { data } = $props();
+let lang = $derived(data.language as LangCode);
 
-	let flippedId = $state<number | null>(null);
+let flippedId = $state<number | null>(null);
 
-	function toggleFlip(id: number) {
-		flippedId = flippedId === id ? null : id;
+function toggleFlip(id: number) {
+	flippedId = flippedId === id ? null : id;
+}
+
+async function enterTask(event: MouseEvent, taskId: number) {
+	event.preventDefault();
+	event.stopPropagation();
+
+	const link = event.currentTarget as HTMLAnchorElement;
+	const face = link.closest(".card-face") as HTMLElement | null;
+	const cardScene = link.closest(".card-scene") as HTMLElement | null;
+	const sourceEl = face ?? cardScene;
+
+	if (sourceEl) {
+		const rect = sourceEl.getBoundingClientRect();
+		const radius = Number.parseFloat(getComputedStyle(sourceEl).borderRadius) || 16;
+
+		captureTaskEnterTransition({
+			taskId,
+			href: link.href,
+			sourceRect: {
+				top: rect.top,
+				left: rect.left,
+				width: rect.width,
+				height: rect.height,
+			},
+			sourceRadius: radius,
+		});
 	}
 
-	async function enterTask(event: MouseEvent, taskId: number) {
-		event.preventDefault();
-		event.stopPropagation();
+	await goto(link.href);
+}
 
-		const link = event.currentTarget as HTMLAnchorElement;
-		const face = link.closest(".card-face") as HTMLElement | null;
-		const cardScene = link.closest(".card-scene") as HTMLElement | null;
-		const sourceEl = face ?? cardScene;
-
-		if (sourceEl) {
-			const rect = sourceEl.getBoundingClientRect();
-			const radius =
-				Number.parseFloat(getComputedStyle(sourceEl).borderRadius) ||
-				16;
-
-			captureTaskEnterTransition({
-				taskId,
-				href: link.href,
-				sourceRect: {
-					top: rect.top,
-					left: rect.left,
-					width: rect.width,
-					height: rect.height,
-				},
-				sourceRadius: radius,
-			});
-		}
-
-		await goto(link.href);
-	}
-
-	const uiIcons: Record<string, Component> = {
-		reddit: MessageSquare,
-		apple_mail: Mail,
-		discord: Hash,
-		imessage: MessageCircle,
-		ao3: BookOpen,
-		translator: Languages,
-	};
+const uiIcons: Record<string, Component> = {
+	reddit: MessageSquare,
+	apple_mail: Mail,
+	discord: Hash,
+	imessage: MessageCircle,
+	ao3: BookOpen,
+	translator: Languages,
+};
 </script>
 
 {#snippet taskCard(task: (typeof data.dailyTasks)[0])}
@@ -69,24 +67,13 @@
 		onclick={() => toggleFlip(task.id)}
 		onkeydown={(e) => e.key === "Enter" && toggleFlip(task.id)}
 	>
-		<div
-			class="card-inner w-full h-full"
-			class:is-flipped={flippedId === task.id}
-		>
+		<div class="card-inner w-full h-full" class:is-flipped={flippedId === task.id}>
 			<!-- Front -->
 			<div
 				class="card-face absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-sm transition-shadow duration-500 hover:shadow-xl"
 			>
 				<div class="flex justify-between items-center">
-					<div
-						class="p-2.5 rounded-full bg-background/60 border border-border"
-					>
-						<Icon
-							size={20}
-							strokeWidth={1}
-							class="text-foreground"
-						/>
-					</div>
+					<div class="p-2.5 rounded-full bg-background/60 border border-border"><Icon size={20} strokeWidth={1} class="text-foreground" /></div>
 					<span class="flex gap-0.5">
 						{#each Array.from({ length: 3 }, (_, i) => i < task.templateDifficulty) as filled}
 							<span
@@ -97,24 +84,14 @@
 						{/each}
 					</span>
 				</div>
-				<h3 class="font-serif text-xl text-foreground leading-tight">
-					{task.titleResolved}
-				</h3>
+				<h3 class="font-serif text-xl text-foreground leading-tight">{task.titleResolved}</h3>
 			</div>
 
 			<!-- Back -->
-			<div
-				class="card-face card-back absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-xl"
-			>
+			<div class="card-face card-back absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-xl">
 				<div class="pt-1">
-					<h4 class="font-serif text-base mb-3 text-foreground">
-						Mission Objective
-					</h4>
-					<p
-						class="text-sm text-muted-foreground leading-5 line-clamp-4"
-					>
-						{task.shortObjectiveResolved ?? "—"}
-					</p>
+					<h4 class="font-serif text-base mb-3 text-foreground">Mission Objective</h4>
+					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjectiveResolved ?? "—"}</p>
 				</div>
 				<div class="space-y-2.5">
 					<a
@@ -134,19 +111,15 @@
 	<!-- Greeting -->
 	<section>
 		<h2 class="font-serif text-3xl md:text-4xl text-gray-800 leading-tight">
-			Welcome back, {data.user.name}.<br />
-			<span class="text-gray-500 italic"
-				>Which world will you inhabit today?</span
-			>
+			Welcome back, {data.user.name}.<br>
+			<span class="text-gray-500 italic">Which world will you inhabit today?</span>
 		</h2>
 	</section>
 
 	<!-- Daily Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">
-				{t(lang, "hall.today")}
-			</h3>
+			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.today")}</h3>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.dailyTasks.length === 0}
@@ -163,9 +136,7 @@
 	<!-- Weekly Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">
-				{t(lang, "hall.thisWeek")}
-			</h3>
+			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.thisWeek")}</h3>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.weeklyTasks.length === 0}
@@ -181,25 +152,25 @@
 </div>
 
 <style>
-	.card-scene {
-		perspective: 1000px;
-	}
+.card-scene {
+	perspective: 1000px;
+}
 
-	.card-inner {
-		position: relative;
-		transform-style: preserve-3d;
-		transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
-	}
+.card-inner {
+	position: relative;
+	transform-style: preserve-3d;
+	transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+}
 
-	.card-inner.is-flipped {
-		transform: rotateY(180deg);
-	}
+.card-inner.is-flipped {
+	transform: rotateY(180deg);
+}
 
-	.card-face {
-		backface-visibility: hidden;
-	}
+.card-face {
+	backface-visibility: hidden;
+}
 
-	.card-back {
-		transform: rotateY(180deg);
-	}
+.card-back {
+	transform: rotateY(180deg);
+}
 </style>
