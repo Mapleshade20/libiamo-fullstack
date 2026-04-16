@@ -109,5 +109,6 @@ export const templateSchema = z.object({
 
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),
-	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+	// Allow standard date (YYYY-MM-DD) or ISO week format (YYYY-Www)
+	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$|^\d{4}-W\d{2}$/, "Date must be YYYY-MM-DD or YYYY-Www"),
 });
