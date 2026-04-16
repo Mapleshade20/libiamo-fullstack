@@ -27,7 +27,12 @@ export const load: PageServerLoad = async (event) => {
 		.orderBy(task.id);
 
 	const activeTemplates = await db
-		.select({ id: template.id, titleBase: template.titleBase, language: template.language })
+		.select({
+			id: template.id,
+			titleBase: template.titleBase,
+			language: template.language,
+			duration: template.duration, // Add duration to expose it to the UI
+		})
 		.from(template)
 		.where(eq(template.isActive, true))
 		.orderBy(template.id);

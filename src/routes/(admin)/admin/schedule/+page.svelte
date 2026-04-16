@@ -8,12 +8,15 @@ import { Label } from "$lib/components/ui/label";
 import * as Table from "$lib/components/ui/table";
 
 let { form, data } = $props();
+
+let selectedTemplateId = $state<number>(data.activeTemplates.length > 0 ? data.activeTemplates[0].id : 0);
+
+let selectedDuration = $derived(data.activeTemplates.find((t) => t.id === selectedTemplateId)?.duration ?? "daily");
 </script>
 
 <div class="space-y-8">
 	<h1 class="text-2xl font-bold">Schedule</h1>
 
-	<!-- Filters -->
 	<form method="GET" class="flex flex-wrap gap-3">
 		<div class="space-y-1">
 			<Label for="date">Date</Label>
@@ -31,7 +34,6 @@ let { form, data } = $props();
 		<div class="flex items-end"><Button type="submit" variant="secondary">View</Button></div>
 	</form>
 
-	<!-- Scheduled Tasks -->
 	<div>
 		<h2 class="mb-3 text-lg font-semibold">Tasks for {data.filters.date} ({data.filters.language.toUpperCase()})</h2>
 		{#if data.scheduledTasks.length > 0}
@@ -69,7 +71,6 @@ let { form, data } = $props();
 		{/if}
 	</div>
 
-	<!-- Schedule Form -->
 	<Card.Root>
 		<Card.Header> <Card.Title>Schedule Task Manually</Card.Title> </Card.Header>
 		<Card.Content>
@@ -83,7 +84,13 @@ let { form, data } = $props();
 			<form method="POST" action="?/schedule" use:enhance class="flex flex-wrap items-end gap-4">
 				<div class="space-y-1">
 					<Label for="templateId">Template</Label>
-					<select id="templateId" name="templateId" class="flex h-10 w-64 rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+					<select
+						id="templateId"
+						name="templateId"
+						bind:value={selectedTemplateId}
+						class="flex h-10 w-64 rounded-md border border-input bg-background px-3 py-2 text-sm"
+						required
+					>
 						{#each data.activeTemplates as tpl}
 							<option value={tpl.id}>{tpl.id} — {tpl.titleBase} ({tpl.language.toUpperCase()})</option>
 						{/each}
@@ -93,8 +100,12 @@ let { form, data } = $props();
 					{/if}
 				</div>
 				<div class="space-y-1">
-					<Label for="scheduleDate">Date</Label>
-					<Input id="scheduleDate" name="date" type="date" value={data.filters.date} required />
+					<Label for="scheduleDate">Date / Week</Label>
+					{#if selectedDuration === "weekly"}
+						<Input id="scheduleDate" name="date" type="week" lang="en" required />
+					{:else}
+						<Input id="scheduleDate" name="date" type="date" lang="en" value={data.filters.date} required />
+					{/if}
 					{#if form?.errors?.date}
 						<p class="text-sm text-red-600">{form.errors.date[0]}</p>
 					{/if}
