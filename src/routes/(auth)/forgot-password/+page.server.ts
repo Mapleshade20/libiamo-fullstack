@@ -42,7 +42,6 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const raw = {
 			newPassword: formData.get("newPassword")?.toString() ?? "",
-			confirmNewPassword: formData.get("confirmNewPassword")?.toString() ?? "",
 			token: formData.get("token")?.toString() ?? "",
 		};
 
