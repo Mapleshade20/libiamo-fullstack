@@ -26,7 +26,7 @@
 	},
 	"devDependencies": {
 		"@better-auth/cli": "latest",
-		"@biomejs/biome": "^2.4.11",
+		"@biomejs/biome": "2.4.10",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@internationalized/date": "^3.12.0",
 		"@lucide/svelte": "^1.7.0",
