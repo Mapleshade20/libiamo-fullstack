@@ -2,6 +2,23 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
 
+export function getMondayFromWeekString(weekStr: string): Date {
+	const [yearStr, weekPart] = weekStr.split("-W");
+	const year = parseInt(yearStr, 10);
+	const week = parseInt(weekPart, 10);
+
+	// In ISO-8601, January 4th is always in week 1.
+	const jan4 = new Date(year, 0, 4);
+	const dayOfJan4 = jan4.getDay() || 7; // Convert Sunday(0) to 7
+	const mondayOfWeek1 = new Date(year, 0, 4 - dayOfJan4 + 1);
+
+	// Calculate the target Monday by adding the week offset
+	const targetMonday = new Date(mondayOfWeek1);
+	targetMonday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
+
+	return targetMonday;
+}
+
 export function getMondayOfWeek(d: Date): Date {
 	const date = new Date(d);
 	const day = date.getDay();
@@ -116,5 +133,19 @@ export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", to
 export async function scheduleTaskManually(templateId: number, dateStr: string): Promise<void> {
 	const [tpl] = await db.select().from(template).where(eq(template.id, templateId)).limit(1);
 	if (!tpl) throw new Error("Template not found");
-	await insertTask(tpl, dateStr, "manual");
+
+	let targetDateStr = dateStr;
+
+	// If the input came from the week picker (YYYY-Www format)
+	if (dateStr.includes("-W")) {
+		const monday = getMondayFromWeekString(dateStr);
+		targetDateStr = toDateString(monday);
+	} else if (tpl.duration === "weekly") {
+		// Fallback: If a standard date was somehow submitted for a weekly template, snap it to Monday
+		const selectedDate = new Date(dateStr);
+		const monday = getMondayOfWeek(selectedDate);
+		targetDateStr = toDateString(monday);
+	}
+
+	await insertTask(tpl, targetDateStr, "manual");
 }
