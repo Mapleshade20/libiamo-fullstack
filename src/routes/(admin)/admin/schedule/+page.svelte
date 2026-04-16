@@ -11,29 +11,29 @@ import * as Table from "$lib/components/ui/table";
 
 let { form, data } = $props();
 
-// Derived state based on URL parameters returned by load function
 let mode = $derived(data.filters.mode);
 let rawDate = $derived(data.filters.rawDate);
 let language = $derived(data.filters.language);
 
-// State for manual scheduling form
-let selectedTemplateId = $state<number>(data.activeTemplates.length > 0 ? data.activeTemplates[0].id : 0);
+// Initialize safely without referencing reactive props directly to avoid Svelte 5 warnings
+let selectedTemplateId = $state<number>(0);
 
-// Sync template selection when switching global modes
+// Use effect to safely sync selectedTemplateId whenever activeTemplates changes
 $effect(() => {
-	if (data.activeTemplates.length > 0 && !data.activeTemplates.find((t) => t.id === selectedTemplateId)) {
-		selectedTemplateId = data.activeTemplates[0].id;
-	} else if (data.activeTemplates.length === 0) {
+	if (data.activeTemplates.length > 0) {
+		if (!data.activeTemplates.some((t) => t.id === selectedTemplateId)) {
+			selectedTemplateId = data.activeTemplates[0].id;
+		}
+	} else {
 		selectedTemplateId = 0;
 	}
 });
 
-// Trigger navigation to swap entire page context (clears specific date to get current day/week)
 function toggleMode(newMode: "daily" | "weekly") {
 	if (mode === newMode) return;
 	const url = new URL($page.url);
 	url.searchParams.set("mode", newMode);
-	url.searchParams.delete("date"); // Allow backend to gracefully fallback to current time
+	url.searchParams.delete("date");
 	goto(url.toString(), { keepFocus: true });
 }
 </script>

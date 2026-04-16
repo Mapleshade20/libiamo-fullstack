@@ -1,23 +1,6 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
-
-export function getMondayFromWeekString(weekStr: string): Date {
-	const [yearStr, weekPart] = weekStr.split("-W");
-	const year = parseInt(yearStr, 10);
-	const week = parseInt(weekPart, 10);
-
-	// In ISO-8601, January 4th is always in week 1.
-	const jan4 = new Date(year, 0, 4);
-	const dayOfJan4 = jan4.getDay() || 7; // Convert Sunday(0) to 7
-	const mondayOfWeek1 = new Date(year, 0, 4 - dayOfJan4 + 1);
-
-	// Calculate the target Monday by adding the week offset
-	const targetMonday = new Date(mondayOfWeek1);
-	targetMonday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
-
-	return targetMonday;
-}
 
 export function getMondayOfWeek(d: Date): Date {
 	const date = new Date(d);
@@ -26,6 +9,21 @@ export function getMondayOfWeek(d: Date): Date {
 	date.setDate(date.getDate() + diff);
 	date.setHours(0, 0, 0, 0);
 	return date;
+}
+
+export function getMondayFromWeekString(weekStr: string): Date {
+	const [yearStr, weekPart] = weekStr.split("-W");
+	const year = parseInt(yearStr, 10);
+	const week = parseInt(weekPart, 10);
+
+	// In ISO-8601, January 4th is always in week 1.
+	const jan4 = new Date(year, 0, 4);
+	const dayOfJan4 = jan4.getDay() || 7;
+	const mondayOfWeek1 = new Date(year, 0, 4 - dayOfJan4 + 1);
+
+	const targetMonday = new Date(mondayOfWeek1);
+	targetMonday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
+	return targetMonday;
 }
 
 export function toDateString(d: Date): string {
@@ -69,7 +67,7 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 			target: [task.date, task.templateId],
 		});
 
-	// Update template's lastScheduledAt to the given date
+	// Update template's lastScheduledAt to the given date to deprioritize it next time
 	await db
 		.update(template)
 		.set({ lastScheduledAt: new Date(dateStr) })
@@ -96,10 +94,22 @@ export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", to
 	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
 
 	if (weeklyNeeded > 0) {
+		// Fetch IDs of templates already scheduled for this week to avoid useless DB retry
+		const scheduledWeekly = await db
+			.select({ templateId: task.templateId })
+			.from(task)
+			.where(and(eq(task.date, mondayStr), eq(task.language, language)));
+		const scheduledIds = scheduledWeekly.map((t) => t.templateId);
+
+		const conditions = [eq(template.language, language), eq(template.duration, "weekly"), eq(template.isActive, true)];
+		if (scheduledIds.length > 0) {
+			conditions.push(notInArray(template.id, scheduledIds));
+		}
+
 		const templates = await db
 			.select()
 			.from(template)
-			.where(and(eq(template.language, language), eq(template.duration, "weekly"), eq(template.isActive, true)))
+			.where(and(...conditions))
 			.orderBy(asc(template.lastScheduledAt))
 			.limit(weeklyNeeded);
 
@@ -113,10 +123,22 @@ export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", to
 	}
 
 	if (dailyNeeded > 0) {
+		// Fetch IDs of templates already scheduled for today
+		const scheduledDaily = await db
+			.select({ templateId: task.templateId })
+			.from(task)
+			.where(and(eq(task.date, todayStr), eq(task.language, language)));
+		const scheduledIds = scheduledDaily.map((t) => t.templateId);
+
+		const conditions = [eq(template.language, language), eq(template.duration, "daily"), eq(template.isActive, true)];
+		if (scheduledIds.length > 0) {
+			conditions.push(notInArray(template.id, scheduledIds));
+		}
+
 		const templates = await db
 			.select()
 			.from(template)
-			.where(and(eq(template.language, language), eq(template.duration, "daily"), eq(template.isActive, true)))
+			.where(and(...conditions))
 			.orderBy(asc(template.lastScheduledAt))
 			.limit(dailyNeeded);
 
@@ -136,12 +158,11 @@ export async function scheduleTaskManually(templateId: number, dateStr: string):
 
 	let targetDateStr = dateStr;
 
-	// If the input came from the week picker (YYYY-Www format)
+	// Automatically snap to Monday if parsing a week string or a weekly template
 	if (dateStr.includes("-W")) {
 		const monday = getMondayFromWeekString(dateStr);
 		targetDateStr = toDateString(monday);
 	} else if (tpl.duration === "weekly") {
-		// Fallback: If a standard date was somehow submitted for a weekly template, snap it to Monday
 		const selectedDate = new Date(dateStr);
 		const monday = getMondayOfWeek(selectedDate);
 		targetDateStr = toDateString(monday);
