@@ -97,6 +97,7 @@ function buildTemplate(id: number, duration: "weekly" | "daily", overrides: Reco
 		duration,
 		isActive: true,
 		titleBase: "Hello {{name}}",
+		shortObjectiveBase: "Short {{topic}}",
 		descriptionBase: "Desc {{topic}}",
 		objectivesBase: [{ order: 1, text: "Talk about {{topic}}" }],
 		agentPromptBase: "Prompt {{topic}}",
@@ -214,6 +215,7 @@ describe("tasks helpers", () => {
 				templateId: 21,
 				origin: "manual",
 				titleResolved: "Hello Lina",
+				shortObjectiveResolved: "Short music",
 			}),
 		);
 		randomSpy.mockRestore();
@@ -232,6 +234,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([
 			buildTemplate(50, "daily", {
 				titleBase: "Hello {{missing}}",
+				shortObjectiveBase: null,
 				descriptionBase: null,
 				agentPromptBase: null,
 				objectivesBase: null,
@@ -244,6 +247,7 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				titleResolved: "Hello {{missing}}",
+				shortObjectiveResolved: null,
 				descriptionResolved: null,
 				agentPromptResolved: null,
 				objectivesResolved: null,

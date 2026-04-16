@@ -26,10 +26,13 @@ export const auth = betterAuth({
 		sendOnSignUp: true,
 		autoSignInAfterVerification: true,
 		sendVerificationEmail: async ({ user, url }) => {
+			const urlObj = new URL(url);
+			urlObj.searchParams.set("callbackURL", "/verify?success=1");
+			urlObj.searchParams.set("errorURL", "/verify"); // back to verify page when error
 			void sendEmail({
 				to: user.email,
 				subject: "Verify your email address",
-				text: `Click the link to verify your email: ${url}`,
+				text: `Click the link to verify your email: ${urlObj.toString()}`,
 			});
 		},
 	},

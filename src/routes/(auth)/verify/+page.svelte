@@ -19,6 +19,7 @@ let { data } = $props();
 			<div class="space-y-3 text-center">
 				<p class="text-red-600">Email verification failed.</p>
 				<p class="text-sm text-muted-foreground">The link may have expired. Please try signing up again.</p>
+				<Button href="/sign-up" variant="default">Sign Up</Button>
 			</div>
 		{:else if data.success}
 			<div class="space-y-3 text-center">

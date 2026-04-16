@@ -74,7 +74,7 @@ describe("auth server configuration", () => {
 		expect(mockSendEmail).toHaveBeenCalledWith({
 			to: "learner@example.com",
 			subject: "Verify your email address",
-			text: "Click the link to verify your email: https://example.com/verify-token",
+			text: "Click the link to verify your email: https://example.com/verify-token?callbackURL=%2Fverify%3Fsuccess%3D1&errorURL=%2Fverify",
 		});
 	});
 
