@@ -9,7 +9,7 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",
-			include: ["src/routes/**/*.ts", "src/lib/server/*.ts"],
+			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/markdown.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,

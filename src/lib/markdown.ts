@@ -1,14 +1,9 @@
-import { Marked } from "marked";
-
-const markdownRenderer = new Marked({
-	renderer: {
-		// Drop raw HTML so Markdown-authored content can't inject scripts into {@html}.
-		html() {
-			return "";
-		},
-	},
-});
+import DOMPurify from "isomorphic-dompurify";
+import { marked } from "marked";
 
 export function renderMarkdown(source: string): string {
-	return markdownRenderer.parse(source) as string;
+	const raw = marked.parse(source, { async: false });
+	return DOMPurify.sanitize(raw, {
+		ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z])/i,
+	});
 }
