@@ -16,44 +16,8 @@ const localeByLanguage = {
 	ja: "ja-JP",
 } as const;
 
-const allTimezones = $derived.by(() => {
-	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
-	const rawTimezones = Intl.supportedValuesOf("timeZone");
-
-	return rawTimezones.map((tz) => {
-		try {
-			const offsetParts = new Intl.DateTimeFormat(lang, {
-				timeZone: tz,
-				timeZoneName: "shortOffset",
-			}).formatToParts(new Date());
-			const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
-
-			const taipeiNameByLang: Record<string, string> = {
-				"en-US": "China Taipei Standard Time",
-				"es-ES": "Hora estándar de China Taipéi",
-				"fr-FR": "Heure normale de Chine Taipei",
-				"ja-JP": "中国台北標準時",
-			};
-
-			const localizedName =
-				tz === "Asia/Taipei"
-					? taipeiNameByLang[lang]
-					: new Intl.DateTimeFormat(lang, {
-							timeZone: tz,
-							timeZoneName: "long",
-						})
-							.formatToParts(new Date())
-							.find((p) => p.type === "timeZoneName")?.value || tz;
-
-			return {
-				value: tz,
-				label: `${tz} (${localizedName}, ${utcOffset})`,
-			};
-		} catch (e) {
-			return { value: tz, label: tz };
-		}
-	});
-});
+// Changed to $state to avoid heavy SSR execution. Populated on client side.
+let allTimezones = $state<{ value: string; label: string }[]>([]);
 
 const languages = [
 	{ value: "en", label: "English" },
@@ -71,7 +35,42 @@ $effect(() => {
 });
 
 onMount(() => {
+	// Detect user's current local timezone
 	detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+	// Build the complex timezone list only on the client side
+	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
+
+	try {
+		const rawTimezones = Intl.supportedValuesOf("timeZone");
+		allTimezones = rawTimezones.map((tz) => {
+			try {
+				const offsetParts = new Intl.DateTimeFormat(lang, {
+					timeZone: tz,
+					timeZoneName: "shortOffset",
+				}).formatToParts(new Date());
+				const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
+
+				const localizedName =
+					new Intl.DateTimeFormat(lang, {
+						timeZone: tz,
+						timeZoneName: "long",
+					})
+						.formatToParts(new Date())
+						.find((p) => p.type === "timeZoneName")?.value || tz;
+
+				return {
+					value: tz,
+					label: `${tz} (${localizedName}, ${utcOffset})`,
+				};
+			} catch (e) {
+				return { value: tz, label: tz };
+			}
+		});
+	} catch (e) {
+		// Fallback for older browsers that don't support supportedValuesOf
+		allTimezones = [];
+	}
 });
 
 function applyDetectedTimezone() {
@@ -94,7 +93,7 @@ function applyDetectedTimezone() {
 					<h2 class="text-xl font-semibold">{data.user.name}</h2>
 					<p class="text-sm text-muted-foreground">
 						Your avatar is connected to your email via
-						<a href="https://cravatar.cn" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline font-medium"> Cravatar </a>.
+						<a href="https://cravatar.cn" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline"> Cravatar </a>.
 					</p>
 					<p class="text-xs text-muted-foreground">Want a custom image? Upload it at Gravatar/Cravatar and it will sync here automatically!</p>
 				</div>
@@ -140,7 +139,7 @@ function applyDetectedTimezone() {
 					{#if detectedTimezone && timezoneInputValue !== detectedTimezone}
 						<div class="mt-1 text-xs text-muted-foreground">
 							Current local timezone: <span class="font-bold text-foreground">{detectedTimezone}</span>.
-							<button type="button" class="ml-1 text-black underline hover:no-underline font-medium" onclick={applyDetectedTimezone}>
+							<button type="button" class="ml-1 font-medium text-black underline hover:no-underline" onclick={applyDetectedTimezone}>
 								Use this instead
 							</button>
 						</div>
