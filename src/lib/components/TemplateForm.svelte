@@ -9,6 +9,7 @@ import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
+import { INTERACTION_TYPE_LABELS, INTERACTION_TYPES, LANGUAGE_CODES, LANGUAGE_LABELS, UI_VARIANT_LABELS, UI_VARIANTS } from "$lib/constants";
 
 type VariantData = {
 	id: number;
@@ -197,15 +198,14 @@ function jsonStr(val: unknown): string {
 
 	<!-- Section A: Metadata -->
 	<fieldset class="space-y-4">
-		<legend class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Metadata</legend>
+		<h2 class="uppercase tracking-widest text-muted-foreground">Metadata</h2>
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
 				<select id="language" name="language" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-					<option value="en" selected={template.language === "en"}>English</option>
-					<option value="es" selected={template.language === "es"}>Spanish</option>
-					<option value="fr" selected={template.language === "fr"}>French</option>
-					<option value="ja" selected={template.language === "ja"}>Japanese</option>
+					{#each LANGUAGE_CODES as code}
+						<option value={code} selected={template.language === code}>{LANGUAGE_LABELS[code]}</option>
+					{/each}
 				</select>
 				{#if form?.errors?.language}
 					<p class="text-sm text-red-600">{form.errors.language[0]}</p>
@@ -220,10 +220,9 @@ function jsonStr(val: unknown): string {
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					required
 				>
-					<option value="chat" selected={template.interactionType === "chat"}>Chat</option>
-					<option value="oneshot" selected={template.interactionType === "oneshot"}>Oneshot</option>
-					<option value="slow" selected={template.interactionType === "slow"}>Slow Reply</option>
-					<option value="translate" selected={template.interactionType === "translate"}>Translate</option>
+					{#each INTERACTION_TYPES as type}
+						<option value={type} selected={template.interactionType === type}>{INTERACTION_TYPE_LABELS[type]}</option>
+					{/each}
 				</select>
 				{#if form?.errors?.interactionType}
 					<p class="text-sm text-red-600">{form.errors.interactionType[0]}</p>
@@ -239,12 +238,9 @@ function jsonStr(val: unknown): string {
 					required
 					bind:value={selectedUi}
 				>
-					<option value="reddit">Reddit</option>
-					<option value="apple_mail">Apple Mail</option>
-					<option value="discord">Discord</option>
-					<option value="imessage">iMessage</option>
-					<option value="ao3">AO3</option>
-					<option value="translator">Translator</option>
+					{#each UI_VARIANTS as variant}
+						<option value={variant}>{UI_VARIANT_LABELS[variant]}</option>
+					{/each}
 				</select>
 				{#if form?.errors?.ui}
 					<p class="text-sm text-red-600">{form.errors.ui[0]}</p>
@@ -305,7 +301,7 @@ function jsonStr(val: unknown): string {
 
 	<!-- Section B: Content -->
 	<fieldset class="space-y-4">
-		<legend class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Content</legend>
+		<h2 class="uppercase tracking-widest text-muted-foreground">Content</h2>
 
 		<div class="space-y-2">
 			<Label for="titleBase">Title (supports &#123;&#123;slot&#125;&#125; placeholders)</Label>
@@ -378,7 +374,7 @@ function jsonStr(val: unknown): string {
 	<!-- Create mode: First Variant (INSIDE the form) -->
 	{#if !isEditMode}
 		<fieldset class="space-y-4 rounded-md border border-input p-4">
-			<legend class="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">First Variant</legend>
+			<h2 class="uppercase tracking-widest text-muted-foreground px-1">First Variant</h2>
 			<p class="text-xs text-muted-foreground">
 				Every template requires at least one active variant. Define the slot values and opening state below — they will be created together with the
 				template.
@@ -412,7 +408,7 @@ function jsonStr(val: unknown): string {
 {#if isEditMode}
 	<div class="mt-8 space-y-4">
 		<div class="flex items-center justify-between">
-			<h2 class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Variants</h2>
+			<h2 class="uppercase tracking-widest text-muted-foreground">Variants</h2>
 			<button
 				type="button"
 				onclick={() => (showAddVariant = !showAddVariant)}

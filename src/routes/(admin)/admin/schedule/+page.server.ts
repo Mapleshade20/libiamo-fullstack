@@ -1,5 +1,6 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
@@ -8,7 +9,7 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const dateFilter = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-	const languageFilter = (event.url.searchParams.get("language") ?? "en") as "en" | "es" | "fr" | "ja";
+	const languageFilter = (event.url.searchParams.get("language") ?? "en") as LanguageCode;
 
 	const scheduledTasks = await db
 		.select({

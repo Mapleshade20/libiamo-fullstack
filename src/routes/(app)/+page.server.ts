@@ -1,6 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import type { LangCode } from "$lib/i18n";
+import type { LanguageCode } from "$lib/i18n";
 import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
 import { db } from "$lib/server/db";
@@ -11,7 +11,7 @@ import type { Actions, PageServerLoad } from "./$types";
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) return redirect(302, "/sign-in");
-	const language = user.activeLanguage as LangCode;
+	const language = user.activeLanguage as LanguageCode;
 	const today = new Date();
 
 	await ensureTasksForDate(language, today);

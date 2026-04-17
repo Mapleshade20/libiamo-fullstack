@@ -7,11 +7,11 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { goto } from "$app/navigation";
-import { type LangCode, t } from "$lib/i18n";
+import { type LanguageCode, t } from "$lib/i18n";
 import { captureTaskEnterTransition } from "$lib/task-transition";
 
 let { data } = $props();
-let lang = $derived(data.language as LangCode);
+let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
 
@@ -107,10 +107,10 @@ const uiIcons: Record<string, Component> = {
 <div class="space-y-10">
 	<!-- Greeting -->
 	<section>
-		<h2 class="font-serif text-3xl md:text-4xl text-gray-800 leading-tight">
+		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
 			Welcome back, {data.user.name}.<br>
 			<span class="text-gray-500 italic">Which world will you inhabit today?</span>
-		</h2>
+		</h1>
 	</section>
 
 	<!-- Daily Quests -->

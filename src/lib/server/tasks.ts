@@ -1,4 +1,5 @@
 import { and, asc, eq, max, sql } from "drizzle-orm";
+import type { LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 
@@ -111,7 +112,7 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 
 // ── ensureTasksForDate ────────────────────────────────────────────────
 
-export async function ensureTasksForDate(language: "en" | "es" | "fr" | "ja", today: Date): Promise<void> {
+export async function ensureTasksForDate(language: LanguageCode, today: Date): Promise<void> {
 	const monday = getMondayOfWeek(today);
 	const mondayStr = toDateString(monday);
 	const todayStr = toDateString(today);

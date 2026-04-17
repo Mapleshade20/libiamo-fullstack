@@ -17,7 +17,7 @@ const languages = [
 </script>
 
 <div class="mx-auto max-w-2xl space-y-8">
-	<h1 class="text-3xl font-bold">Profile</h1>
+	<h1 class="text-3xl">Profile</h1>
 
 	{#if form?.success}
 		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Profile updated.</p>

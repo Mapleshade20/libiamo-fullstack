@@ -1,23 +1,21 @@
 import { z } from "zod";
-
-const languageCodeValues = ["en", "es", "fr", "ja"] as const;
-const uiVariantValues = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
+import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const signInSchema = z.object({
-	email: z.string().min(1, "Email is required").email("Invalid email"),
+	email: z.email("Invalid email"),
 	password: z.string().min(1, "Password is required"),
 });
 
 export const signUpSchema = z.object({
-	email: z.string().min(1, "Email is required").email("Invalid email"),
+	email: z.email("Invalid email"),
 	password: z.string().min(8, "Password must be at least 8 characters"),
 	name: z.string().min(1, "Name is required"),
-	activeLanguage: z.enum(languageCodeValues, { message: "Please select a language" }),
+	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
 });
 
 export const forgotPasswordSchema = z.object({
-	email: z.string().min(1, "Email is required").email("Invalid email"),
+	email: z.email("Invalid email"),
 });
 
 export const resetPasswordSchema = z.object({
@@ -33,15 +31,15 @@ export const profileSchema = z.object({
 });
 
 export const switchLanguageSchema = z.object({
-	language: z.enum(languageCodeValues, { message: "Invalid language" }),
+	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),
 });
 
 // ── Admin ────────────────────────────────────────────────────────────
 export const templateSchema = z.object({
-	language: z.enum(languageCodeValues),
-	interactionType: z.enum(["chat", "oneshot", "slow", "translate"]),
-	ui: z.enum(uiVariantValues),
-	cadence: z.enum(["weekly", "daily"]),
+	language: z.enum(LANGUAGE_CODES),
+	interactionType: z.enum(INTERACTION_TYPES),
+	ui: z.enum(UI_VARIANTS),
+	cadence: z.enum(CADENCES),
 	difficulty: z.coerce.number().int().min(1).max(3),
 	maxTurns: z.coerce.number().int().min(0).optional(),
 	estimatedWords: z.coerce.number().int().min(0).optional(),
@@ -90,7 +88,7 @@ export const variantSchema = z.object({
 
 // ── openingState per-UI schemas ───────────────────────────────────────
 const messageSchema = z.object({
-	sender: z.enum(["user", "agent"]),
+	sender: z.string(),
 	text: z.string(),
 });
 
@@ -104,7 +102,7 @@ export const discordOpeningStateSchema = z.object({
 	previousMessages: z
 		.array(
 			z.object({
-				sender: z.enum(["user", "agent"]),
+				sender: z.string(),
 				text: z.string(),
 				timestamp: z.string().optional(),
 			}),
@@ -138,7 +136,7 @@ export const appleMailOpeningStateSchema = z.object({
 			to: z.string(),
 			subject: z.string(),
 			body: z.string(),
-			date: z.string().optional(),
+			time: z.string().optional(),
 		}),
 	),
 });
@@ -148,30 +146,121 @@ export const ao3OpeningStateSchema = z.object({
 	chapterTitle: z.string().optional(),
 	bodyExcerpt: z.string().optional(),
 	tags: z.array(z.string()).optional(),
+	previousComments: z
+		.array(
+			z.object({
+				username: z.string(),
+				comment: z.string(),
+			}),
+		)
+		.optional(),
 });
 
 export const translatorOpeningStateSchema = z.object({
 	sourceText: z.string(),
 });
 
-// ── validateOpeningState discriminated helper ─────────────────────────
-type UiVariant = (typeof uiVariantValues)[number];
+// ── Opening state editor metadata ─────────────────────────────────────
+export type FieldDef =
+	| { type: "text"; key: string; label: string; placeholder?: string; required?: boolean }
+	| { type: "textarea"; key: string; label: string; rows?: number; placeholder?: string; required?: boolean }
+	| { type: "number"; key: string; label: string; placeholder?: string }
+	| { type: "message-list"; key: string; label: string; withTimestamp?: boolean }
+	| { type: "email-list"; key: string; label: string }
+	| {
+			type: "comment-list";
+			key: string;
+			label: string;
+			authorField?: string;
+			textField?: string;
+			authorPlaceholder?: string;
+			textPlaceholder?: string;
+			withVotes?: boolean;
+	  }
+	| { type: "group"; key: string; label: string; fields: FieldDef[] }
+	| { type: "row"; fields: FieldDef[] };
+
+export type OpeningStateEditorMeta = {
+	fields: FieldDef[];
+};
+
+// ── Schema registry keyed by UiVariant ────────────────────────────────
+
+export const openingStateSchemas = {
+	imessage: imessageOpeningStateSchema.meta({
+		fields: [{ type: "message-list", key: "previousMessages", label: "Previous Messages" }],
+	} satisfies OpeningStateEditorMeta),
+	discord: discordOpeningStateSchema.meta({
+		fields: [
+			{
+				type: "row",
+				fields: [
+					{ type: "text", key: "serverName", label: "Server Name", placeholder: "My Server" },
+					{ type: "text", key: "channelName", label: "Channel Name", placeholder: "general" },
+				],
+			},
+			{ type: "message-list", key: "previousMessages", label: "Previous Messages", withTimestamp: true },
+		],
+	} satisfies OpeningStateEditorMeta),
+	reddit: redditOpeningStateSchema.meta({
+		fields: [
+			{
+				type: "group",
+				key: "post",
+				label: "Post",
+				fields: [
+					{
+						type: "row",
+						fields: [
+							{ type: "text", key: "title", label: "Title" },
+							{ type: "text", key: "subreddit", label: "Subreddit", placeholder: "AskReddit" },
+						],
+					},
+					{
+						type: "row",
+						fields: [
+							{ type: "text", key: "author", label: "Author" },
+							{ type: "number", key: "votes", label: "Votes" },
+						],
+					},
+					{ type: "textarea", key: "body", label: "Body", rows: 3 },
+				],
+			},
+			{ type: "comment-list", key: "previousComments", label: "Previous Comments" },
+		],
+	} satisfies OpeningStateEditorMeta),
+	apple_mail: appleMailOpeningStateSchema.meta({
+		fields: [{ type: "email-list", key: "emails", label: "Emails" }],
+	} satisfies OpeningStateEditorMeta),
+	ao3: ao3OpeningStateSchema.meta({
+		fields: [
+			{ type: "text", key: "workTitle", label: "Work Title", required: true },
+			{ type: "text", key: "chapterTitle", label: "Chapter Title (optional)" },
+			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt (optional)", rows: 3 },
+			{ type: "text", key: "tags", label: "Tags (comma-separated)", placeholder: "Angst, Fluff, Slow Burn" },
+			{
+				type: "comment-list",
+				key: "previousComments",
+				label: "Previous Comments",
+				authorField: "username",
+				textField: "comment",
+				authorPlaceholder: "Username",
+				textPlaceholder: "Comment",
+				withVotes: false,
+			},
+		],
+	} satisfies OpeningStateEditorMeta),
+	translator: translatorOpeningStateSchema.meta({
+		fields: [{ type: "textarea", key: "sourceText", label: "Source Text", rows: 4, placeholder: "Text to translate...", required: true }],
+	} satisfies OpeningStateEditorMeta),
+} satisfies Record<UiVariant, z.ZodType>;
 
 export function validateOpeningState(ui: UiVariant, data: unknown) {
-	switch (ui) {
-		case "imessage":
-			return imessageOpeningStateSchema.safeParse(data);
-		case "discord":
-			return discordOpeningStateSchema.safeParse(data);
-		case "reddit":
-			return redditOpeningStateSchema.safeParse(data);
-		case "apple_mail":
-			return appleMailOpeningStateSchema.safeParse(data);
-		case "ao3":
-			return ao3OpeningStateSchema.safeParse(data);
-		case "translator":
-			return translatorOpeningStateSchema.safeParse(data);
-	}
+	return openingStateSchemas[ui].safeParse(data);
+}
+
+export function getEditorFields(ui: UiVariant): FieldDef[] {
+	return (openingStateSchemas[ui].meta() as OpeningStateEditorMeta | undefined)?.fields ?? [];
 }
 
 // ── Schedule ──────────────────────────────────────────────────────────

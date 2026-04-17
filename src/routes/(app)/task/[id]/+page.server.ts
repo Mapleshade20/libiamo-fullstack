@@ -1,5 +1,6 @@
 import { error, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import type { LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
@@ -34,7 +35,7 @@ export const load: PageServerLoad = async (event) => {
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
 		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
-		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as "en" | "es" | "fr" | "ja")))
+		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as LanguageCode)))
 		.limit(1);
 
 	if (!result) {

@@ -4,7 +4,9 @@ import {
 	appleMailOpeningStateSchema,
 	discordOpeningStateSchema,
 	forgotPasswordSchema,
+	getEditorFields,
 	imessageOpeningStateSchema,
+	openingStateSchemas,
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
@@ -131,17 +133,17 @@ describe("schemas", () => {
 
 	it("imessageOpeningStateSchema validates correctly", () => {
 		const result = imessageOpeningStateSchema.parse({
-			previousMessages: [{ sender: "user", text: "Hello" }],
+			previousMessages: [{ sender: "Alice", text: "Hello" }],
 		});
 		expect(result.previousMessages).toHaveLength(1);
-		expect(result.previousMessages[0].sender).toBe("user");
+		expect(result.previousMessages[0].sender).toBe("Alice");
 	});
 
 	it("discordOpeningStateSchema validates correctly", () => {
 		const result = discordOpeningStateSchema.parse({
 			serverName: "My Server",
 			channelName: "general",
-			previousMessages: [{ sender: "agent", text: "Hi", timestamp: "10:00" }],
+			previousMessages: [{ sender: "Bob", text: "Hi", timestamp: "10:00" }],
 		});
 		expect(result.serverName).toBe("My Server");
 		expect(result.previousMessages[0].timestamp).toBe("10:00");
@@ -165,7 +167,7 @@ describe("schemas", () => {
 
 	it("appleMailOpeningStateSchema validates correctly", () => {
 		const result = appleMailOpeningStateSchema.parse({
-			emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "Hello", date: "2026-04-14" }],
+			emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "Hello", time: "14:30" }],
 		});
 		expect(result.emails).toHaveLength(1);
 		expect(result.emails[0].subject).toBe("Hi");
@@ -175,10 +177,12 @@ describe("schemas", () => {
 		const result = ao3OpeningStateSchema.parse({
 			workTitle: "My Fic",
 			tags: ["fluff", "romance"],
+			previousComments: [{ username: "fan123", comment: "Great story!" }],
 		});
 		expect(result.workTitle).toBe("My Fic");
 		expect(result.tags).toEqual(["fluff", "romance"]);
 		expect(result.chapterTitle).toBeUndefined();
+		expect(result.previousComments?.[0].username).toBe("fan123");
 	});
 
 	it("translatorOpeningStateSchema validates correctly", () => {
@@ -219,5 +223,37 @@ describe("schemas", () => {
 	it("validateOpeningState returns failure for wrong shape", () => {
 		expect(validateOpeningState("discord", { serverName: "S" }).success).toBe(false);
 		expect(validateOpeningState("translator", {}).success).toBe(false);
+	});
+
+	// ── openingStateSchemas registry ────────────────────────────────────
+
+	it("openingStateSchemas covers all UI variants", () => {
+		const uis = ["imessage", "discord", "reddit", "apple_mail", "ao3", "translator"] as const;
+		for (const ui of uis) {
+			expect(openingStateSchemas[ui]).toBeDefined();
+			expect(typeof openingStateSchemas[ui].safeParse).toBe("function");
+		}
+	});
+
+	// ── getEditorFields helper ──────────────────────────────────────────
+
+	it("getEditorFields returns fields for each UI variant", () => {
+		expect(getEditorFields("imessage")).toHaveLength(1);
+		expect(getEditorFields("imessage")[0].type).toBe("message-list");
+
+		expect(getEditorFields("discord")).toHaveLength(2);
+		expect(getEditorFields("discord")[0].type).toBe("row");
+
+		expect(getEditorFields("reddit")).toHaveLength(2);
+		expect(getEditorFields("reddit")[0].type).toBe("group");
+		expect(getEditorFields("reddit")[1].type).toBe("comment-list");
+
+		expect(getEditorFields("apple_mail")).toHaveLength(1);
+		expect(getEditorFields("apple_mail")[0].type).toBe("email-list");
+
+		expect(getEditorFields("ao3")).toHaveLength(5);
+
+		expect(getEditorFields("translator")).toHaveLength(1);
+		expect(getEditorFields("translator")[0].type).toBe("textarea");
 	});
 });

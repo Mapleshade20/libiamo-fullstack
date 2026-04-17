@@ -82,21 +82,60 @@ Additional business fields:
 
 #### openingState examples by UI
 
-imessage / discord:
-  { "messages": [{ "role": "agent", "content": "Hey! I'm throwing a dinner party..." }] }
+```jsonc
+// imessage
+{
+  "previousMessages": [
+    { "sender": "Mom", "text": "Hey, are you coming home for dinner?" }
+  ]
+}
 
-reddit:
-  { "postTitle": "...", "postBody": "...", "commentThread": [...] }
+// discord
+{
+  "serverName": "Language Learners",
+  "channelName": "general",
+  "previousMessages": [
+    { "sender": "Alex", "text": "Has anyone tried the new grammar drills?", "timestamp": "10:00" }
+  ]
+}
 
-apple_mail:
-  { "subject": "...", "body": "...", "from": "..." }
+// reddit
+{
+  "post": {
+    "title": "What's the hardest part of learning Spanish?",
+    "body": "I've been studying for a year and still struggle with...",
+    "subreddit": "r/languagelearning",
+    "author": "curious_learner",
+    "votes": 42
+  },
+  "previousComments": [
+    { "author": "polyglot99", "text": "Subjunctive mood, hands down.", "votes": 15 }
+  ]
+}
 
-ao3:
-  { "chapterTitle": "...", "chapterText": "...", "authorNote": "..." }
+// apple_mail
+{
+  "emails": [
+    { "from": "boss@company.com", "to": "you@company.com", "subject": "Meeting Tomorrow", "body": "Hi, just a reminder...", "time": "14:30" }
+  ]
+}
 
-translator:
-  { "sourceText": "..." }
+// ao3
+{
+  "workTitle": "Across the Ocean",
+  "chapterTitle": "Chapter 3: First Day",
+  "bodyExcerpt": "The train arrived exactly on time...",
+  "tags": ["Slow Burn", "Romance", "Modern AU"],
+  "previousComments": [
+    { "username": "fan123", "comment": "Loving this story so far!" }
+  ]
+}
 
+// translator
+{
+  "sourceText": "Bonjour, comment allez-vous aujourd'hui ?"
+}
+```
 
 ### task (scheduled from a template+variant)
 

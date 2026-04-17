@@ -6,27 +6,12 @@ import Star from "@lucide/svelte/icons/star";
 import { marked } from "marked";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
+import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 
 let { data } = $props();
 let task = $derived(data.task);
 
 const objectives = $derived(task.objectives ?? []);
-
-const typeLabels: Record<string, string> = {
-	chat: "Chat",
-	oneshot: "One-shot",
-	slow: "Slow Reply",
-	translate: "Translate",
-};
-
-const uiLabels: Record<string, string> = {
-	reddit: "Reddit",
-	apple_mail: "Mail",
-	discord: "Discord",
-	imessage: "iMessage",
-	ao3: "AO3",
-	translator: "Translator",
-};
 
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
@@ -44,9 +29,11 @@ function difficultyLabel(level: number): string {
 	<div class="mt-12 flex-1 flex flex-col">
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest"> {uiLabels[task.templateUi] ?? task.templateUi} </Badge>
+				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
+					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
+				</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{typeLabels[task.templateInteractionType] ?? task.templateInteractionType}
+					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>

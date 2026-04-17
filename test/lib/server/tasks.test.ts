@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Cadence } from "$lib/constants";
 
 const { mockInsertTaskConflict, mockInsertTaskValues, mockInsertTask, mockSelect, countResultsQueue, templateResultsQueue, variantResultsQueue } =
 	vi.hoisted(() => {
@@ -92,7 +93,7 @@ vi.mock("$lib/server/db/schema", () => ({
 
 import { ensureTasksForDate, getMondayOfWeek, scheduleTaskManually, toDateString } from "../../../src/lib/server/tasks";
 
-function buildTemplate(id: number, cadence: "weekly" | "daily", overrides: Record<string, unknown> = {}) {
+function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, unknown> = {}) {
 	return {
 		id,
 		language: "en",

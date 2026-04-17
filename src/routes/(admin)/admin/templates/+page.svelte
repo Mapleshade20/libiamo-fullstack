@@ -3,13 +3,14 @@ import { enhance } from "$app/forms";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Table from "$lib/components/ui/table";
+import { INTERACTION_TYPE_LABELS, INTERACTION_TYPES, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { data } = $props();
 </script>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold">Templates</h1>
+		<h1>Templates</h1>
 		<Button href="/admin/templates/new">New Template</Button>
 	</div>
 
@@ -17,17 +18,15 @@ let { data } = $props();
 	<form method="GET" class="flex flex-wrap gap-3">
 		<select name="language" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">All languages</option>
-			<option value="en" selected={data.filters.language === 'en'}>English</option>
-			<option value="es" selected={data.filters.language === 'es'}>Spanish</option>
-			<option value="fr" selected={data.filters.language === 'fr'}>French</option>
-			<option value="ja" selected={data.filters.language === 'ja'}>Japanese</option>
+			{#each LANGUAGE_CODES as code}
+				<option value={code} selected={data.filters.language === code}>{LANGUAGE_LABELS[code]}</option>
+			{/each}
 		</select>
 		<select name="interactionType" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">All types</option>
-			<option value="chat" selected={data.filters.interactionType === 'chat'}>Chat</option>
-			<option value="oneshot" selected={data.filters.interactionType === 'oneshot'}>Oneshot</option>
-			<option value="slow" selected={data.filters.interactionType === 'slow'}>Slow</option>
-			<option value="translate" selected={data.filters.interactionType === 'translate'}>Translate</option>
+			{#each INTERACTION_TYPES as type}
+				<option value={type} selected={data.filters.interactionType === type}>{INTERACTION_TYPE_LABELS[type]}</option>
+			{/each}
 		</select>
 		<select name="active" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
 			<option value="">Active & Inactive</option>

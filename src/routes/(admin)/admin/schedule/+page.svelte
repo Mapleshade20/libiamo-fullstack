@@ -6,12 +6,13 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import * as Table from "$lib/components/ui/table";
+import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form, data } = $props();
 </script>
 
 <div class="space-y-8">
-	<h1 class="text-2xl font-bold">Schedule</h1>
+	<h1>Schedule</h1>
 
 	<!-- Filters -->
 	<form method="GET" class="flex flex-wrap gap-3">
@@ -22,10 +23,9 @@ let { form, data } = $props();
 		<div class="space-y-1">
 			<Label for="language">Language</Label>
 			<select id="language" name="language" class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
-				<option value="en" selected={data.filters.language === 'en'}>English</option>
-				<option value="es" selected={data.filters.language === 'es'}>Spanish</option>
-				<option value="fr" selected={data.filters.language === 'fr'}>French</option>
-				<option value="ja" selected={data.filters.language === 'ja'}>Japanese</option>
+				{#each LANGUAGE_CODES as code}
+					<option value={code} selected={data.filters.language === code}>{LANGUAGE_LABELS[code]}</option>
+				{/each}
 			</select>
 		</div>
 		<div class="flex items-end"><Button type="submit" variant="secondary">View</Button></div>

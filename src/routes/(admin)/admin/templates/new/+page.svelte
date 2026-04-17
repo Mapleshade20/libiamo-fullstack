@@ -5,6 +5,6 @@ let { form } = $props();
 </script>
 
 <div class="space-y-6">
-	<h1 class="text-2xl font-bold">New Template</h1>
+	<h1>New Template</h1>
 	<TemplateForm {form} submitLabel="Create Template" />
 </div>
