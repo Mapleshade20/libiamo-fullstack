@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { load } from "../../../src/routes/(app)/+layout.server";
+import { load } from "$routes/(app)/+layout.server";
 
 const ALICE_EMAIL_MD5 = "c160f8cc69a4f0bf2b0362752353d060";
 const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";

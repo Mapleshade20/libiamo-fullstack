@@ -7,11 +7,11 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { goto } from "$app/navigation";
-import { type LangCode, t } from "$lib/i18n";
+import { type LanguageCode, t } from "$lib/i18n";
 import { captureTaskEnterTransition } from "$lib/task-transition";
 
 let { data } = $props();
-let lang = $derived(data.language as LangCode);
+let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
 
@@ -58,7 +58,8 @@ const uiIcons: Record<string, Component> = {
 };
 </script>
 
-{#snippet taskCard(task: (typeof data.dailyTasks)[0])}
+<!-- WARN: Biome 2.4.11 parser bug -->
+{#snippet taskCard(task: typeof data.dailyTasks[0])}
 	{@const Icon = uiIcons[task.templateUi] ?? MessageSquare}
 	<div
 		class="card-scene h-56 w-full cursor-pointer transition-transform duration-[400ms] ease-out hover:scale-[1.02] hover:-translate-y-1"
@@ -84,14 +85,14 @@ const uiIcons: Record<string, Component> = {
 						{/each}
 					</span>
 				</div>
-				<h3 class="font-serif text-xl text-foreground leading-tight">{task.titleResolved}</h3>
+				<h3 class="font-serif text-xl text-foreground leading-tight">{task.title}</h3>
 			</div>
 
 			<!-- Back -->
 			<div class="card-face card-back absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-xl">
 				<div class="pt-1">
 					<h4 class="font-serif text-base mb-3 text-foreground">Mission Objective</h4>
-					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjectiveResolved ?? "—"}</p>
+					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjective ?? "—"}</p>
 				</div>
 				<div class="space-y-2.5">
 					<a
@@ -110,10 +111,10 @@ const uiIcons: Record<string, Component> = {
 <div class="space-y-10">
 	<!-- Greeting -->
 	<section>
-		<h2 class="font-serif text-3xl md:text-4xl text-gray-800 leading-tight">
+		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
 			Welcome back, {data.user.name}.<br>
 			<span class="text-gray-500 italic">Which world will you inhabit today?</span>
-		</h2>
+		</h1>
 	</section>
 
 	<!-- Daily Quests -->

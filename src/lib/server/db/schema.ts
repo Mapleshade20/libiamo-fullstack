@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { user } from "./auth.schema";
-import { languageCodeEnum, scheduleOriginEnum, taskDurationEnum, taskTypeEnum, uiVariantEnum } from "./enums";
+import { cadenceEnum, interactionTypeEnum, languageCodeEnum, scheduleOriginEnum, uiVariantEnum } from "./enums";
 
 // ── userLearningProfile ──────────────────────────────────────────────
 export const userLearningProfile = pgTable(
@@ -28,18 +28,17 @@ export const template = pgTable(
 		id: serial("id").primaryKey(),
 		isActive: boolean("is_active").default(true).notNull(),
 		language: languageCodeEnum("language").notNull(),
-		type: taskTypeEnum("type").notNull(),
+		interactionType: interactionTypeEnum("interaction_type").notNull(),
 		ui: uiVariantEnum("ui").notNull(),
-		duration: taskDurationEnum("duration").notNull(),
+		cadence: cadenceEnum("cadence").notNull(),
 
 		titleBase: text("title_base").notNull(),
 		shortObjectiveBase: text("short_objective_base"),
 		descriptionBase: text("description_base"),
-		objectivesBase: jsonb("objectives_base"),
+		objectivesBase: text("objectives_base").array(),
 		agentPromptBase: text("agent_prompt_base"),
-		agentPersonaPool: jsonb("agent_persona_pool"),
-		bgKnowledgeHtml: text("bg_knowledge_html"),
-		candidates: jsonb("candidates"),
+		materialsMd: text("materials_md"),
+		tags: text("tags").array().default(sql`'{}'`).notNull(),
 
 		maxTurns: integer("max_turns"),
 		estimatedWords: integer("estimated_words"),
@@ -47,7 +46,6 @@ export const template = pgTable(
 		pointReward: integer("point_reward").notNull(),
 		gemReward: integer("gem_reward").notNull(),
 
-		lastScheduledAt: timestamp("last_scheduled_at").defaultNow().notNull(),
 		createdBy: text("created_by").references(() => user.id),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -61,6 +59,26 @@ export const template = pgTable(
 	],
 );
 
+// ── templateVariant ───────────────────────────────────────────────────
+export const templateVariant = pgTable(
+	"template_variant",
+	{
+		id: serial("id").primaryKey(),
+		templateId: integer("template_id")
+			.notNull()
+			.references(() => template.id, { onDelete: "cascade" }),
+		isActive: boolean("is_active").default(true).notNull(),
+		slotValues: jsonb("slot_values").notNull().default(sql`'{}'`),
+		openingState: jsonb("opening_state").notNull().default(sql`'{}'`),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [index("template_variant_template_id_idx").on(t.templateId)],
+);
+
 // ── task ─────────────────────────────────────────────────────────────
 export const task = pgTable(
 	"task",
@@ -69,16 +87,18 @@ export const task = pgTable(
 		templateId: integer("template_id")
 			.notNull()
 			.references(() => template.id),
+		variantId: integer("variant_id")
+			.notNull()
+			.references(() => templateVariant.id),
 		language: languageCodeEnum("language").notNull(),
 		date: date("date").notNull(),
 		origin: scheduleOriginEnum("origin").notNull(),
 
-		titleResolved: text("title_resolved").notNull(),
-		shortObjectiveResolved: text("short_objective_resolved"),
-		descriptionResolved: text("description_resolved"),
-		objectivesResolved: jsonb("objectives_resolved"),
-		agentPromptResolved: text("agent_prompt_resolved"),
-		contextResolved: jsonb("context_resolved"),
+		title: text("title").notNull(),
+		shortObjective: text("short_objective"),
+		description: text("description"),
+		objectives: text("objectives").array(),
+		agentPrompt: text("agent_prompt"),
 
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
@@ -99,12 +119,25 @@ export const templateRelations = relations(template, ({ one, many }) => ({
 		references: [user.id],
 	}),
 	tasks: many(task),
+	variants: many(templateVariant),
+}));
+
+export const templateVariantRelations = relations(templateVariant, ({ one, many }) => ({
+	template: one(template, {
+		fields: [templateVariant.templateId],
+		references: [template.id],
+	}),
+	tasks: many(task),
 }));
 
 export const taskRelations = relations(task, ({ one }) => ({
 	template: one(template, {
 		fields: [task.templateId],
 		references: [template.id],
+	}),
+	variant: one(templateVariant, {
+		fields: [task.variantId],
+		references: [templateVariant.id],
 	}),
 }));
 
