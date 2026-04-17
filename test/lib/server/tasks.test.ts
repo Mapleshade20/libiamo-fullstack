@@ -240,12 +240,11 @@ describe("tasks helpers", () => {
 		randomSpy.mockRestore();
 	});
 
-	it("scheduleTaskManually returns early when template has no active variants", async () => {
+	it("scheduleTaskManually throws when template has no active variants", async () => {
 		templateResultsQueue.push([buildTemplate(40, "daily")]);
-		variantResultsQueue.push([]); // No active variants
+		variantResultsQueue.push([]);
 
-		await scheduleTaskManually(40, "2026-04-04");
-
+		await expect(scheduleTaskManually(40, "2026-04-04")).rejects.toThrow("no active variants available");
 		expect(mockInsertTask).not.toHaveBeenCalled();
 	});
 

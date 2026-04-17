@@ -81,7 +81,9 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 		.from(templateVariant)
 		.where(and(eq(templateVariant.templateId, tpl.id), eq(templateVariant.isActive, true)));
 
-	if (!variants || variants.length === 0) return;
+	if (!variants || variants.length === 0) {
+		throw new Error(`Cannot schedule task for template ${tpl.id} on ${dateStr}: no active variants available`);
+	}
 
 	// Select a random variant
 	const variant = variants[Math.floor(Math.random() * variants.length)];
