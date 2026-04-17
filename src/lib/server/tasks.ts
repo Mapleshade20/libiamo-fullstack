@@ -139,7 +139,7 @@ export async function ensureTasksForDate(language: LanguageCode, today: Date): P
 			.leftJoin(task, eq(task.templateId, template.id))
 			.where(and(eq(template.language, language), eq(template.cadence, "weekly"), eq(template.isActive, true)))
 			.groupBy(template.id)
-			.orderBy(asc(max(task.date)))
+			.orderBy(asc(max(task.date)).append(sql` nulls first`))
 			.limit(weeklyNeeded);
 
 		for (const { tpl } of templates) {
@@ -158,7 +158,7 @@ export async function ensureTasksForDate(language: LanguageCode, today: Date): P
 			.leftJoin(task, eq(task.templateId, template.id))
 			.where(and(eq(template.language, language), eq(template.cadence, "daily"), eq(template.isActive, true)))
 			.groupBy(template.id)
-			.orderBy(asc(max(task.date)))
+			.orderBy(asc(max(task.date)).append(sql` nulls first`))
 			.limit(dailyNeeded);
 
 		for (const { tpl } of templates) {
