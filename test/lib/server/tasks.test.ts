@@ -252,6 +252,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([
 			buildTemplate(50, "daily", {
 				titleBase: "Hello {{missing}}",
+				shortObjectiveBase: null,
 				descriptionBase: null,
 				agentPromptBase: null,
 				objectivesBase: null,
