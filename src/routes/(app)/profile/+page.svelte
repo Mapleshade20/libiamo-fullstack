@@ -65,7 +65,7 @@ onMount(() => {
 			}
 		});
 	} catch (e) {
-		// Fallback: keep the server-rendered list (already in allTimezones)
+		// Fallback: leave allTimezones empty so timezoneOptions continues using data.serverTimezones.
 	}
 });
 
