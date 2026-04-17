@@ -1,5 +1,6 @@
 <script lang="ts">
-import { Eye, EyeOff } from "@lucide/svelte";
+import Eye from "@lucide/svelte/icons/eye";
+import EyeOff from "@lucide/svelte/icons/eye-off";
 import { enhance } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -37,6 +38,8 @@ let showPassword = $state(false);
 					<button
 						type="button"
 						class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+						aria-label={showPassword ? "Hide password" : "Show password"}
+						aria-pressed={showPassword}
 						onclick={() => (showPassword = !showPassword)}
 					>
 						{#if showPassword}
