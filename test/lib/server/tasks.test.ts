@@ -100,7 +100,7 @@ function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, u
 		cadence,
 		isActive: true,
 		titleBase: "Hello {{name}}",
-		shortObjectiveBase: null,
+		shortObjectiveBase: "Short {{topic}}",
 		descriptionBase: "Desc {{topic}}",
 		objectivesBase: ["Talk about {{topic}}"],
 		agentPromptBase: "Prompt {{topic}}",
@@ -172,6 +172,7 @@ describe("tasks helpers", () => {
 				variantId: 1,
 				origin: "auto",
 				title: "Hello Lina",
+				shortObjective: "Short music",
 				description: "Desc music",
 				agentPrompt: expect.any(String),
 			}),
@@ -265,6 +266,7 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				title: "Hello {{missing}}",
+				shortObjective: null,
 				description: null,
 				agentPrompt: null,
 				objectives: null,
