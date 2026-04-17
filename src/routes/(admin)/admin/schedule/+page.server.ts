@@ -1,5 +1,6 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
@@ -50,7 +51,7 @@ export const actions: Actions = {
 
 		const result = scheduleManualSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: result.error.flatten().fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		try {

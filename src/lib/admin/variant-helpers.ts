@@ -14,7 +14,7 @@ import type {
 	translatorOpeningStateSchema,
 } from "$lib/schemas";
 
-export type { UiVariant };
+export type { UiVariant } from "$lib/constants";
 
 // ── Types ────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown } from "../../src/lib/markdown";
+import { renderMarkdown } from "$lib/markdown";
 
 describe("renderMarkdown", () => {
 	it("strips raw HTML while preserving markdown output", () => {

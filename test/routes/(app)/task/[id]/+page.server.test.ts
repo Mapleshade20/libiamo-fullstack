@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { load } from "../../../../../src/routes/(app)/task/[id]/+page.server";
+import { load } from "$routes/(app)/task/[id]/+page.server";
 
 const { mockLimit, mockSelect } = vi.hoisted(() => {
 	const mockLimit = vi.fn();

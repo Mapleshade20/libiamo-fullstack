@@ -14,7 +14,7 @@ import {
 	translatorOpeningStateSchema,
 	validateOpeningState,
 	variantSchema,
-} from "../../src/lib/schemas";
+} from "$lib/schemas";
 
 describe("schemas", () => {
 	it("validates sign-in and sign-up basic success cases", () => {

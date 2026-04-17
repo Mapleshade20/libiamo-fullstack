@@ -1,7 +1,8 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { extractSlotNames, getMissingSlots, parseJsonField, parseSlotValues } from "$lib/admin/variant-helpers";
-import { templateSchema, validateOpeningState } from "$lib/schemas";
+import { z } from "zod";
+import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
+import { templateSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
@@ -26,7 +27,7 @@ export const actions: Actions = {
 
 		const result = templateSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: result.error.flatten().fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		await db.update(template).set(result.data).where(eq(template.id, id));
@@ -43,39 +44,22 @@ export const actions: Actions = {
 	addVariant: async (event) => {
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
-		const slotValues = parseSlotValues(formData.get("slotValues"));
-		const openingState = parseJsonField(formData.get("openingState"));
+		const { slotValues, openingState } = parseVariantFormData(formData);
 
 		// Get template to know selected UI
 		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
 		if (!tpl) return fail(404, { message: "Template not found" });
 
-		// Validate opening state against selected UI schema
-		const osValidation = validateOpeningState(tpl.ui, openingState);
-		if (!osValidation?.success) {
-			return fail(400, {
-				message: `Invalid opening state for ${tpl.ui}: ${osValidation?.error?.message ?? "validation failed"}`,
-			});
-		}
-
-		// Validate slot coverage
-		const requiredSlots = extractSlotNames({
-			titleBase: tpl.titleBase,
-			shortObjectiveBase: tpl.shortObjectiveBase,
-			descriptionBase: tpl.descriptionBase,
-			agentPromptBase: tpl.agentPromptBase,
-			objectivesBase: tpl.objectivesBase,
-		});
-		const missingSlots = getMissingSlots(slotValues, requiredSlots);
-		if (missingSlots.length > 0) {
-			return fail(400, { message: `Variant is missing slot values: ${missingSlots.join(", ")}` });
+		const variantResult = prepareVariantPayload(tpl, slotValues, openingState);
+		if (variantResult.error) {
+			return fail(400, { message: variantResult.error });
 		}
 
 		await db.insert(templateVariant).values({
 			templateId: id,
 			isActive: true,
-			slotValues,
-			openingState: osValidation.data,
+			slotValues: variantResult.slotValues,
+			openingState: variantResult.openingState,
 		});
 
 		return { addedVariant: true };
@@ -87,32 +71,15 @@ export const actions: Actions = {
 		const variantId = Number(formData.get("variantId"));
 		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
 
-		const slotValues = parseSlotValues(formData.get("slotValues"));
-		const openingState = parseJsonField(formData.get("openingState"));
+		const { slotValues, openingState } = parseVariantFormData(formData);
 
 		// Get template to know selected UI
 		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
 		if (!tpl) return fail(404, { message: "Template not found" });
 
-		// Validate opening state against selected UI schema
-		const osValidation = validateOpeningState(tpl.ui, openingState);
-		if (!osValidation?.success) {
-			return fail(400, {
-				message: `Invalid opening state for ${tpl.ui}: ${osValidation?.error?.message ?? "validation failed"}`,
-			});
-		}
-
-		// Validate slot coverage
-		const requiredSlots = extractSlotNames({
-			titleBase: tpl.titleBase,
-			shortObjectiveBase: tpl.shortObjectiveBase,
-			descriptionBase: tpl.descriptionBase,
-			agentPromptBase: tpl.agentPromptBase,
-			objectivesBase: tpl.objectivesBase,
-		});
-		const missingSlots = getMissingSlots(slotValues, requiredSlots);
-		if (missingSlots.length > 0) {
-			return fail(400, { message: `Variant is missing slot values: ${missingSlots.join(", ")}` });
+		const variantResult = prepareVariantPayload(tpl, slotValues, openingState);
+		if (variantResult.error) {
+			return fail(400, { message: variantResult.error });
 		}
 
 		const [variant] = await db
@@ -124,7 +91,7 @@ export const actions: Actions = {
 
 		await db
 			.update(templateVariant)
-			.set({ slotValues, openingState: osValidation.data })
+			.set({ slotValues: variantResult.slotValues, openingState: variantResult.openingState })
 			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
 
 		return { savedVariant: true };
