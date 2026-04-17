@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
-import { actions } from "../../../../src/routes/(app)/profile/+page.server";
+import { actions } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
 const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {

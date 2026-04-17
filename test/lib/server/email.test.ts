@@ -24,7 +24,7 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { sendEmail } from "../../../src/lib/server/email";
+import { sendEmail } from "$lib/server/email";
 
 describe("sendEmail", () => {
 	beforeEach(() => {

@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
-import { actions, load } from "../../../../src/routes/(auth)/forgot-password/+page.server";
+import { actions, load } from "$routes/(auth)/forgot-password/+page.server";
 
 vi.mock("$lib/server/auth", () => ({
 	auth: {

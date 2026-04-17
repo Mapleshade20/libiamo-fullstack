@@ -45,7 +45,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("wires better-auth with required email verification settings", async () => {
-		await import("../../../src/lib/server/auth");
+		await import("$lib/server/auth");
 
 		expect(mockDrizzleAdapter).toHaveBeenCalledTimes(1);
 		expect(mockSveltekitCookies).toHaveBeenCalledTimes(1);
@@ -63,7 +63,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("sends verification email with expected content", async () => {
-		await import("../../../src/lib/server/auth");
+		await import("$lib/server/auth");
 
 		const config = mockBetterAuth.mock.calls[0]?.[0] as any;
 		await config.emailVerification.sendVerificationEmail({
@@ -81,7 +81,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("sends reset password email with expected content", async () => {
-		await import("../../../src/lib/server/auth");
+		await import("$lib/server/auth");
 
 		const config = mockBetterAuth.mock.calls[0]?.[0] as any;
 		await config.emailAndPassword.sendResetPassword({
