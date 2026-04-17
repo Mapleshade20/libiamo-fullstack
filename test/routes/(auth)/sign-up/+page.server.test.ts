@@ -104,6 +104,7 @@ describe("Sign-up +page.server", () => {
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "en",
+				timezone: "UTC",
 			};
 			const event = createEvent(validData);
 
