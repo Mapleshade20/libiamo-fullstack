@@ -26,6 +26,7 @@ Key areas:
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas in `src/lib/schemas.ts`.
+- Constants: `src/lib/constants.ts` — single source of truth for all enum values, types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`), and display labels. All other files import from here; never inline enum unions.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
