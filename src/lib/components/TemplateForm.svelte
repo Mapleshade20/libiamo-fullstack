@@ -443,6 +443,11 @@ function jsonStr(val: unknown): string {
 								<input type="hidden" name="variantId" value={v.id}>
 								<button type="submit" class="text-xs text-red-500 underline underline-offset-2 hover:opacity-80">Deactivate</button>
 							</form>
+						{:else}
+							<form method="POST" action="?/activateVariant" use:enhance>
+								<input type="hidden" name="variantId" value={v.id}>
+								<button type="submit" class="text-xs text-green-600 underline underline-offset-2 hover:opacity-80">Activate</button>
+							</form>
 						{/if}
 					</div>
 				</div>

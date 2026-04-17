@@ -130,6 +130,28 @@ export const actions: Actions = {
 		return { savedVariant: true };
 	},
 
+	activateVariant: async (event) => {
+		const id = Number(event.params.id);
+		const formData = await event.request.formData();
+		const variantId = Number(formData.get("variantId"));
+		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
+
+		const [variant] = await db
+			.select({ isActive: templateVariant.isActive })
+			.from(templateVariant)
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
+			.limit(1);
+		if (!variant) return fail(404, { message: "Variant not found" });
+		if (variant.isActive) return fail(400, { message: "Variant is already active" });
+
+		await db
+			.update(templateVariant)
+			.set({ isActive: true })
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
+
+		return { activated: true };
+	},
+
 	deactivateVariant: async (event) => {
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
