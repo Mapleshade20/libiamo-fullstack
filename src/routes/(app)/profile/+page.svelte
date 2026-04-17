@@ -6,6 +6,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
+import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form, data } = $props();
 
@@ -21,13 +22,6 @@ const localeByLanguage = {
 let allTimezones = $state<{ value: string; label: string }[]>([]);
 
 const timezoneOptions = $derived(allTimezones.length > 0 ? allTimezones : (data.serverTimezones ?? []));
-
-const languages = [
-	{ value: "en", label: "English" },
-	{ value: "es", label: "Español" },
-	{ value: "fr", label: "Français" },
-	{ value: "ja", label: "日本語" },
-];
 
 let timezoneInputValue = $state("");
 let detectedTimezone = $state("");
@@ -173,8 +167,8 @@ function applyDetectedTimezone() {
 		<Card.Content>
 			<form method="POST" action="?/switchLanguage" use:enhance class="flex items-center gap-3">
 				<select name="language" class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
-					{#each languages as lang}
-						<option value={lang.value} selected={data.user.activeLanguage === lang.value}>{lang.label}</option>
+					{#each LANGUAGE_CODES as lang}
+						<option value={lang} selected={data.user.activeLanguage === lang}>{LANGUAGE_LABELS[lang]}</option>
 					{/each}
 				</select>
 				<Button type="submit" variant="secondary">Switch</Button>
