@@ -115,7 +115,17 @@ export const actions: Actions = {
 			return fail(400, { message: `Variant is missing slot values: ${missingSlots.join(", ")}` });
 		}
 
-		await db.update(templateVariant).set({ slotValues, openingState: osValidation.data }).where(eq(templateVariant.id, variantId));
+		const [variant] = await db
+			.select({ id: templateVariant.id })
+			.from(templateVariant)
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
+			.limit(1);
+		if (!variant) return fail(404, { message: "Variant not found" });
+
+		await db
+			.update(templateVariant)
+			.set({ slotValues, openingState: osValidation.data })
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
 
 		return { savedVariant: true };
 	},
@@ -125,6 +135,14 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
 		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
+
+		const [variant] = await db
+			.select({ isActive: templateVariant.isActive })
+			.from(templateVariant)
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
+			.limit(1);
+		if (!variant) return fail(404, { message: "Variant not found" });
+		if (!variant.isActive) return fail(400, { message: "Variant is already inactive" });
 
 		// Enforce at-least-one-active-variant rule
 		const activeVariants = await db
@@ -136,7 +154,10 @@ export const actions: Actions = {
 			return fail(400, { message: "Cannot deactivate the last active variant. Add another variant first." });
 		}
 
-		await db.update(templateVariant).set({ isActive: false }).where(eq(templateVariant.id, variantId));
+		await db
+			.update(templateVariant)
+			.set({ isActive: false })
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
 
 		return { deactivated: true };
 	},

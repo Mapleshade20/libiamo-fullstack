@@ -1,5 +1,4 @@
 <script lang="ts">
-import { marked } from "marked";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { extractSlotNames, getDefaultOpeningState, type UiVariant } from "$lib/admin/variant-helpers";
@@ -10,6 +9,7 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
 import { INTERACTION_TYPE_LABELS, INTERACTION_TYPES, LANGUAGE_CODES, LANGUAGE_LABELS, UI_VARIANT_LABELS, UI_VARIANTS } from "$lib/constants";
+import { renderMarkdown } from "$lib/markdown";
 
 type VariantData = {
 	id: number;
@@ -99,7 +99,7 @@ let mdSource = $state(untrack(() => template.materialsMd ?? ""));
 $effect(() => {
 	mdSource = template.materialsMd ?? "";
 });
-let mdHtml = $derived(showMdPreview ? (marked(mdSource) as string) : "");
+let mdHtml = $derived(showMdPreview ? renderMarkdown(mdSource) : "");
 
 // Tags: comma-separated
 let tagsValue = $derived((template.tags ?? []).join(", "));

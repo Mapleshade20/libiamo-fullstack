@@ -3,10 +3,10 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Clock from "@lucide/svelte/icons/clock";
 import Gem from "@lucide/svelte/icons/gem";
 import Star from "@lucide/svelte/icons/star";
-import { marked } from "marked";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
+import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
 let task = $derived(data.task);
@@ -58,7 +58,7 @@ function difficultyLabel(level: number): string {
 		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html marked.parse(task.materialsMd)}</div>
+				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 

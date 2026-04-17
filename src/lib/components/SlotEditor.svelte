@@ -14,22 +14,45 @@ interface Props {
 	onchange?: (value: Record<string, string>) => void;
 }
 
-let { value = $bindable({}), requiredSlots, name, onchange }: Props = $props();
+type Row = { key: string; val: string };
 
-// Local rows state derived from value
-let rows = $state<Array<{ key: string; val: string }>>(Object.entries(value).map(([key, val]) => ({ key, val })));
+function rowsFromValue(value: Record<string, string>): Row[] {
+	return Object.entries(value ?? {}).map(([key, val]) => ({ key, val }));
+}
 
-// Sync rows back to value when they change
-$effect(() => {
+function valueFromRows(rows: Row[]): Record<string, string> {
 	const newValue: Record<string, string> = {};
 	for (const row of rows) {
 		if (row.key.trim()) {
 			newValue[row.key.trim()] = row.val;
 		}
 	}
+	return newValue;
+}
+
+let { value = $bindable({}), requiredSlots, name, onchange }: Props = $props();
+
+// Local rows state derived from value
+let rows = $state<Row[]>(rowsFromValue(value));
+
+// Track what we last pushed to parent so we can distinguish external value changes
+let lastSyncedJson = JSON.stringify(value ?? {});
+
+// Only sync external value changes → rows (not our own writes)
+$effect(() => {
+	const incoming = JSON.stringify(value ?? {});
+	if (incoming !== lastSyncedJson) {
+		lastSyncedJson = incoming;
+		rows = rowsFromValue(value);
+	}
+});
+
+function syncToParent() {
+	const newValue = valueFromRows(rows);
+	lastSyncedJson = JSON.stringify(newValue);
 	value = newValue;
 	onchange?.(newValue);
-});
+}
 
 // Check if a slot name is unused (not in requiredSlots)
 function isUnused(key: string): boolean {
@@ -48,20 +71,23 @@ function addRow() {
 
 function removeRow(index: number) {
 	rows = rows.filter((_, i) => i !== index);
+	syncToParent();
 }
 
 function updateKey(index: number, newKey: string) {
 	rows = rows.map((r, i) => (i === index ? { ...r, key: newKey } : r));
+	syncToParent();
 }
 
 function updateVal(index: number, newVal: string) {
 	rows = rows.map((r, i) => (i === index ? { ...r, val: newVal } : r));
+	syncToParent();
 }
 
-// Add missing required slots as pre-filled rows
 function addMissingSlots() {
 	const missing = getMissingRequired();
 	rows = [...rows, ...missing.map((key) => ({ key, val: "" }))];
+	syncToParent();
 }
 
 const missingRequired = $derived(getMissingRequired());
