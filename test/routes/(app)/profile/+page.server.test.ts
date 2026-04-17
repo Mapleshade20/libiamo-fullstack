@@ -79,6 +79,23 @@ describe("Profile +page.server actions", () => {
 		expect(result).toEqual({ success: true });
 	});
 
+	it("updateProfile normalizes blank timezone to undefined", async () => {
+		const event = createActionEvent({
+			name: "Alice",
+			timezone: "",
+		});
+
+		const result = await actions.updateProfile(event);
+
+		expect(auth.api.updateUser).toHaveBeenCalledWith({
+			body: {
+				name: "Alice",
+			},
+			headers: event.request.headers,
+		});
+		expect(result).toEqual({ success: true });
+	});
+
 	runSwitchLanguageActionSuite({
 		action: actions.switchLanguage,
 		updateUser: auth.api.updateUser as any,

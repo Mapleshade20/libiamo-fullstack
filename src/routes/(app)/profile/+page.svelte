@@ -16,8 +16,11 @@ const localeByLanguage = {
 	ja: "ja-JP",
 } as const;
 
-// Changed to $state to avoid heavy SSR execution. Populated on client side.
+// Start with server-rendered list (progressive enhancement fallback),
+// then replace with localized labels on the client.
 let allTimezones = $state<{ value: string; label: string }[]>([]);
+
+const timezoneOptions = $derived(allTimezones.length > 0 ? allTimezones : (data.serverTimezones ?? []));
 
 const languages = [
 	{ value: "en", label: "English" },
@@ -38,7 +41,7 @@ onMount(() => {
 	// Detect user's current local timezone
 	detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-	// Build the complex timezone list only on the client side
+	// Rebuild the list with localized labels on the client side
 	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
 
 	try {
@@ -68,8 +71,7 @@ onMount(() => {
 			}
 		});
 	} catch (e) {
-		// Fallback for older browsers that don't support supportedValuesOf
-		allTimezones = [];
+		// Fallback: keep the server-rendered list (already in allTimezones)
 	}
 });
 
@@ -131,7 +133,7 @@ function applyDetectedTimezone() {
 						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 					>
 						<option value="" disabled>Select your timezone</option>
-						{#each allTimezones as tz}
+						{#each timezoneOptions as tz}
 							<option value={tz.value}>{tz.label}</option>
 						{/each}
 					</select>
@@ -143,6 +145,9 @@ function applyDetectedTimezone() {
 								Use this instead
 							</button>
 						</div>
+					{/if}
+					{#if form?.errors?.timezone}
+						<p class="text-sm text-red-600">{form.errors.timezone[0]}</p>
 					{/if}
 				</div>
 

@@ -3,23 +3,26 @@ import { z } from "zod";
 const languageCodeValues = ["en", "es", "fr", "ja"] as const;
 
 // ── Auth ─────────────────────────────────────────────────────────────
-export const timezoneSchema = z
-	.string()
-	.optional()
-	.refine(
-		(tz) => {
-			if (!tz) return true;
-			try {
-				Intl.DateTimeFormat(undefined, { timeZone: tz });
-				return true;
-			} catch (_e) {
-				return false;
-			}
-		},
-		{
-			message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
-		},
-	);
+export const timezoneSchema = z.preprocess(
+	(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+	z
+		.string()
+		.optional()
+		.refine(
+			(tz) => {
+				if (!tz) return true;
+				try {
+					Intl.DateTimeFormat(undefined, { timeZone: tz });
+					return true;
+				} catch (_e) {
+					return false;
+				}
+			},
+			{
+				message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
+			},
+		),
+);
 
 export const signInSchema = z.object({
 	email: z.string().min(1, "Email is required").email("Invalid email"),
