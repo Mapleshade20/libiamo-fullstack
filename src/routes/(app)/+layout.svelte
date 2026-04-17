@@ -11,6 +11,9 @@ let overlayVisible = $state(false);
 let clearTimer: ReturnType<typeof setTimeout> | undefined = $state();
 let fadeTimer: ReturnType<typeof setTimeout> | undefined = $state();
 
+// Check if current route is a session page (fullscreen immersive mode)
+let isSessionPage = $derived(page.url.pathname.includes("/session"));
+
 function rectStyle(top: number, left: number, width: number, height: number, radius: number) {
 	return `top:${top}px;left:${left}px;width:${width}px;height:${height}px;border-radius:${radius}px;`;
 }
@@ -77,13 +80,24 @@ $effect(() => {
 </script>
 
 <div class="min-h-screen">
-	<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />
-	{#if overlayVisible}
+	{#if !isSessionPage}
+		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />
+	{/if}
+
+	{#if overlayVisible && !isSessionPage}
 		<div
 			aria-hidden="true"
 			class="pointer-events-none fixed z-40 border border-border bg-card shadow-[0_32px_90px_rgba(24,24,27,0.12)] transition-[top,left,width,height,border-radius,opacity] duration-[720ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
 			style="{overlayStyle}opacity:{overlayOpacity};"
 		></div>
 	{/if}
-	<main class="mx-auto max-w-5xl px-4 py-8 pt-24" style="view-transition-name: page-content">{@render children()}</main>
+
+	<main
+		class={isSessionPage
+			? "w-full h-screen"
+			: "mx-auto max-w-5xl px-4 py-8 pt-24"}
+		style={isSessionPage ? "" : "view-transition-name: page-content"}
+	>
+		{@render children()}
+	</main>
 </div>

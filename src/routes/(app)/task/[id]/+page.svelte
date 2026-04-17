@@ -83,16 +83,9 @@ function difficultyLabel(level: number): string {
 						{task.pointReward}
 						pts
 					</span>
-					<span class="flex items-center gap-1.5">
-						<Gem size={14} strokeWidth={1.5} />
-						{task.gemReward}
-						gems
-					</span>
-					{#if task.estimatedWords}
-						<span class="flex items-center gap-1.5"> <Clock size={14} strokeWidth={1.5} />~{task.estimatedWords} words </span>
-					{/if}
 				</div>
-				<Button disabled class="px-8">Start Practice</Button>
+
+				<Button class="px-8" href="/task/{task.id}/session">Start Practice</Button>
 			</div>
 		</div>
 	</div>
