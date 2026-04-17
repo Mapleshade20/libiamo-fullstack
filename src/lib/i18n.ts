@@ -1,6 +1,8 @@
-export type LangCode = "en" | "es" | "fr" | "ja";
+import type { LanguageCode } from "$lib/constants";
 
-const translations: Record<LangCode, Record<string, string>> = {
+export type { LanguageCode };
+
+const translations: Record<LanguageCode, Record<string, string>> = {
 	en: {
 		// Nav
 		"nav.home": "Quest Hall",
@@ -209,6 +211,6 @@ const translations: Record<LangCode, Record<string, string>> = {
 	},
 };
 
-export function t(lang: LangCode, key: string): string {
+export function t(lang: LanguageCode, key: string): string {
 	return translations[lang]?.[key] ?? translations.en[key] ?? key;
 }

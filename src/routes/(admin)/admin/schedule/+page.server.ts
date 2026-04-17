@@ -1,5 +1,7 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
@@ -8,18 +10,18 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const dateFilter = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-	const languageFilter = (event.url.searchParams.get("language") ?? "en") as "en" | "es" | "fr" | "ja";
+	const languageFilter = (event.url.searchParams.get("language") ?? "en") as LanguageCode;
 
 	const scheduledTasks = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
+			title: task.title,
 			date: task.date,
 			origin: task.origin,
 			language: task.language,
 			templateTitle: template.titleBase,
-			templateType: template.type,
-			templateDuration: template.duration,
+			templateInteractionType: template.interactionType,
+			templateCadence: template.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -49,7 +51,7 @@ export const actions: Actions = {
 
 		const result = scheduleManualSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: result.error.flatten().fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		try {

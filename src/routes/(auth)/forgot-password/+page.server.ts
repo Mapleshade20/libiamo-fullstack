@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
+import { z } from "zod";
 import { forgotPasswordSchema, resetPasswordSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
 import type { Actions, PageServerLoad } from "./$types";
@@ -16,7 +17,7 @@ export const actions: Actions = {
 
 		const result = forgotPasswordSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: result.error.flatten().fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		try {
@@ -42,7 +43,7 @@ export const actions: Actions = {
 
 		const result = resetPasswordSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { resetErrors: result.error.flatten().fieldErrors });
+			return fail(400, { resetErrors: z.flattenError(result.error).fieldErrors });
 		}
 
 		try {

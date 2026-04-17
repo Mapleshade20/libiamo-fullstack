@@ -5,7 +5,7 @@ let { children } = $props();
 <div class="flex min-h-screen items-center justify-center px-4">
 	<div class="w-full max-w-md space-y-8">
 		<div class="text-center">
-			<h1 class="text-3xl font-bold tracking-tight">Libiamo</h1>
+			<h1 class="text-3xl tracking-tight">Libiamo</h1>
 			<p class="mt-1 text-sm text-muted-foreground">Language through living conversation</p>
 		</div>
 		{@render children()}

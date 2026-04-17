@@ -1,73 +1,69 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Cadence } from "$lib/constants";
 
-const {
-	mockInsertTaskConflict,
-	mockInsertTaskValues,
-	mockInsertTask,
-	mockUpdateSet,
-	mockUpdate,
-	mockSelect,
-	countResultsQueue,
-	templateResultsQueue,
-} = vi.hoisted(() => {
-	const countResultsQueue: Array<Array<{ count: number }>> = [];
-	const templateResultsQueue: Array<any[]> = [];
+const { mockInsertTaskConflict, mockInsertTaskValues, mockInsertTask, mockSelect, countResultsQueue, templateResultsQueue, variantResultsQueue } =
+	vi.hoisted(() => {
+		const countResultsQueue: Array<Array<{ count: number }>> = [];
+		const templateResultsQueue: Array<any[]> = [];
+		const variantResultsQueue: Array<any[]> = [];
 
-	const mockInsertTaskConflict = vi.fn(async () => undefined);
-	const mockInsertTaskValues = vi.fn(() => ({ onConflictDoNothing: mockInsertTaskConflict }));
-	const mockInsertTask = vi.fn(() => ({ values: mockInsertTaskValues }));
+		const mockInsertTaskConflict = vi.fn(async () => undefined);
+		const mockInsertTaskValues = vi.fn(() => ({ onConflictDoNothing: mockInsertTaskConflict }));
+		const mockInsertTask = vi.fn(() => ({ values: mockInsertTaskValues }));
 
-	const mockUpdateWhere = vi.fn(async () => undefined);
-	const mockUpdateSet = vi.fn(() => ({ where: mockUpdateWhere }));
-	const mockUpdate = vi.fn(() => ({ set: mockUpdateSet }));
+		const readCountResult = async () => countResultsQueue.shift() ?? [{ count: 0 }];
+		const readTemplateResult = async () => templateResultsQueue.shift() ?? [];
+		const readVariantResult = async () => variantResultsQueue.shift() ?? [];
 
-	const readCountResult = async () => countResultsQueue.shift() ?? [{ count: 0 }];
-	const readTemplateResult = async () => templateResultsQueue.shift() ?? [];
-
-	const createTemplateWhereResult = () => ({
-		orderBy: () => ({
-			limit: readTemplateResult,
-		}),
-		limit: readTemplateResult,
-	});
-
-	const createTemplateFromResult = () => ({
-		where: createTemplateWhereResult,
-	});
-
-	const createCountFromResult = () => ({
-		where: readCountResult,
-	});
-
-	const mockSelect = vi.fn((selection?: unknown) => {
-		if (selection && typeof selection === "object" && "count" in selection) {
-			return {
-				from: createCountFromResult,
-			};
-		}
+		const mockSelect = vi.fn(() => ({
+			from: (table: Record<string, unknown>) => {
+				// templateVariant query: has slotValues property
+				if (table && "slotValues" in table) {
+					return {
+						where: readVariantResult,
+					};
+				}
+				// Task count query: has date but not cadence
+				if (table && "date" in table && !("cadence" in table)) {
+					return {
+						where: readCountResult,
+					};
+				}
+				// Template query: has cadence
+				return {
+					// ensureTasksForDate: select → from → leftJoin → where → groupBy → orderBy → limit
+					leftJoin: () => ({
+						where: () => ({
+							groupBy: () => ({
+								orderBy: () => ({
+									limit: readTemplateResult,
+								}),
+							}),
+						}),
+					}),
+					// scheduleTaskManually: select → from → where → limit
+					where: () => ({
+						limit: readTemplateResult,
+					}),
+				};
+			},
+		}));
 
 		return {
-			from: createTemplateFromResult,
+			mockInsertTaskConflict,
+			mockInsertTaskValues,
+			mockInsertTask,
+			mockSelect,
+			countResultsQueue,
+			templateResultsQueue,
+			variantResultsQueue,
 		};
 	});
-
-	return {
-		mockInsertTaskConflict,
-		mockInsertTaskValues,
-		mockInsertTask,
-		mockUpdateSet,
-		mockUpdate,
-		mockSelect,
-		countResultsQueue,
-		templateResultsQueue,
-	};
-});
 
 vi.mock("$lib/server/db", () => ({
 	db: {
 		select: mockSelect,
 		insert: mockInsertTask,
-		update: mockUpdate,
 	},
 }));
 
@@ -77,31 +73,48 @@ vi.mock("$lib/server/db/schema", () => ({
 		templateId: "templateId",
 		id: "id",
 		language: "language",
+		variantId: "variantId",
 	},
 	template: {
 		id: "id",
 		language: "language",
-		duration: "duration",
+		cadence: "cadence",
 		isActive: "isActive",
-		lastScheduledAt: "lastScheduledAt",
 		$inferSelect: {},
+	},
+	templateVariant: {
+		id: "id",
+		templateId: "templateId",
+		isActive: "isActive",
+		slotValues: "slotValues",
+		openingState: "openingState",
 	},
 }));
 
-import { ensureTasksForDate, getMondayOfWeek, scheduleTaskManually, toDateString } from "../../../src/lib/server/tasks";
+import { ensureTasksForDate, getMondayOfWeek, scheduleTaskManually, toDateString } from "$lib/server/tasks";
 
-function buildTemplate(id: number, duration: "weekly" | "daily", overrides: Record<string, unknown> = {}) {
+function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, unknown> = {}) {
 	return {
 		id,
 		language: "en",
-		duration,
+		cadence,
 		isActive: true,
 		titleBase: "Hello {{name}}",
 		shortObjectiveBase: "Short {{topic}}",
 		descriptionBase: "Desc {{topic}}",
-		objectivesBase: [{ order: 1, text: "Talk about {{topic}}" }],
+		objectivesBase: ["Talk about {{topic}}"],
 		agentPromptBase: "Prompt {{topic}}",
-		candidates: [{ slots: { name: "Lina", topic: "music" }, context: { mood: "happy" } }],
+		...overrides,
+	};
+}
+
+function buildVariant(id: number, templateId: number, overrides: Record<string, unknown> = {}) {
+	return {
+		id,
+		templateId,
+		isActive: true,
+		slotValues: { name: "Lina", topic: "music" },
+		openingState: {},
 		...overrides,
 	};
 }
@@ -111,6 +124,7 @@ describe("tasks helpers", () => {
 		vi.clearAllMocks();
 		countResultsQueue.length = 0;
 		templateResultsQueue.length = 0;
+		variantResultsQueue.length = 0;
 	});
 
 	afterEach(() => {
@@ -141,13 +155,13 @@ describe("tasks helpers", () => {
 		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
 
 		expect(mockInsertTask).not.toHaveBeenCalled();
-		expect(mockUpdate).not.toHaveBeenCalled();
 	});
 
 	it("ensureTasksForDate schedules missing weekly and daily tasks", async () => {
 		const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
 		countResultsQueue.push([{ count: 1 }], [{ count: 2 }]);
-		templateResultsQueue.push([buildTemplate(1, "weekly"), buildTemplate(2, "weekly")], [buildTemplate(3, "daily")]);
+		templateResultsQueue.push([{ tpl: buildTemplate(1, "weekly") }, { tpl: buildTemplate(2, "weekly") }], [{ tpl: buildTemplate(3, "daily") }]);
+		variantResultsQueue.push([buildVariant(1, 1)], [buildVariant(2, 2)], [buildVariant(3, 3)]);
 
 		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
 
@@ -155,21 +169,23 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				templateId: 1,
+				variantId: 1,
 				origin: "auto",
-				titleResolved: "Hello Lina",
-				descriptionResolved: "Desc music",
-				agentPromptResolved: "Prompt music",
+				title: "Hello Lina",
+				shortObjective: "Short music",
+				description: "Desc music",
+				agentPrompt: expect.any(String),
 			}),
 		);
 		expect(mockInsertTaskConflict).toHaveBeenCalledWith({ target: ["date", "templateId"] });
-		expect(mockUpdateSet).toHaveBeenCalled();
 		randomSpy.mockRestore();
 	});
 
 	it("ensureTasksForDate catches scheduling errors and continues", async () => {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		countResultsQueue.push([{ count: 2 }], [{ count: 3 }]);
-		templateResultsQueue.push([buildTemplate(11, "weekly")]);
+		templateResultsQueue.push([{ tpl: buildTemplate(11, "weekly") }]);
+		variantResultsQueue.push([buildVariant(1, 11)]);
 		mockInsertTaskConflict.mockRejectedValueOnce(new Error("insert failed"));
 
 		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
@@ -180,7 +196,8 @@ describe("tasks helpers", () => {
 	it("ensureTasksForDate catches daily scheduling errors", async () => {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		countResultsQueue.push([{ count: 3 }], [{ count: 2 }]);
-		templateResultsQueue.push([buildTemplate(12, "daily")]);
+		templateResultsQueue.push([{ tpl: buildTemplate(12, "daily") }]);
+		variantResultsQueue.push([buildVariant(1, 12)]);
 		mockInsertTaskConflict.mockRejectedValueOnce(new Error("daily insert failed"));
 
 		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
@@ -190,7 +207,8 @@ describe("tasks helpers", () => {
 
 	it("ensureTasksForDate handles missing count rows with defaults", async () => {
 		countResultsQueue.push([], []);
-		templateResultsQueue.push([buildTemplate(30, "weekly")], [buildTemplate(31, "daily")]);
+		templateResultsQueue.push([{ tpl: buildTemplate(30, "weekly") }], [{ tpl: buildTemplate(31, "daily") }]);
+		variantResultsQueue.push([buildVariant(1, 30)], [buildVariant(2, 31)]);
 
 		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
 
@@ -206,6 +224,7 @@ describe("tasks helpers", () => {
 	it("scheduleTaskManually inserts resolved task when template exists", async () => {
 		const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
 		templateResultsQueue.push([buildTemplate(21, "daily")]);
+		variantResultsQueue.push([buildVariant(1, 21)]);
 
 		await scheduleTaskManually(21, "2026-04-04");
 
@@ -213,21 +232,20 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				templateId: 21,
+				variantId: 1,
 				origin: "manual",
-				titleResolved: "Hello Lina",
-				shortObjectiveResolved: "Short music",
+				title: "Hello Lina",
 			}),
 		);
 		randomSpy.mockRestore();
 	});
 
-	it("scheduleTaskManually returns early when template has no candidates", async () => {
-		templateResultsQueue.push([buildTemplate(40, "daily", { candidates: [] })]);
+	it("scheduleTaskManually throws when template has no active variants", async () => {
+		templateResultsQueue.push([buildTemplate(40, "daily")]);
+		variantResultsQueue.push([]);
 
-		await scheduleTaskManually(40, "2026-04-04");
-
+		await expect(scheduleTaskManually(40, "2026-04-04")).rejects.toThrow("no active variants available");
 		expect(mockInsertTask).not.toHaveBeenCalled();
-		expect(mockUpdate).not.toHaveBeenCalled();
 	});
 
 	it("scheduleTaskManually resolves optional fields and unresolved slots correctly", async () => {
@@ -238,20 +256,19 @@ describe("tasks helpers", () => {
 				descriptionBase: null,
 				agentPromptBase: null,
 				objectivesBase: null,
-				candidates: [{ slots: { name: "Lina" } }],
 			}),
 		]);
+		variantResultsQueue.push([buildVariant(1, 50, { slotValues: { name: "Lina" } })]);
 
 		await scheduleTaskManually(50, "2026-04-04");
 
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
-				titleResolved: "Hello {{missing}}",
-				shortObjectiveResolved: null,
-				descriptionResolved: null,
-				agentPromptResolved: null,
-				objectivesResolved: null,
-				contextResolved: null,
+				title: "Hello {{missing}}",
+				shortObjective: null,
+				description: null,
+				agentPrompt: null,
+				objectives: null,
 			}),
 		);
 	});
