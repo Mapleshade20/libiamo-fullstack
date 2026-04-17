@@ -57,7 +57,7 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.duration, "weekly")));
+		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.cadence, "weekly")));
 
 	// Fetch today's tasks (comparing purely on the date string)
 	const dailyTasks = await db
@@ -75,7 +75,7 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(template.duration, "daily")));
+		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(template.cadence, "daily")));
 
 	return {
 		weeklyTasks,
