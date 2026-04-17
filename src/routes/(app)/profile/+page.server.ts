@@ -4,7 +4,62 @@ import { profileSchema, switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
 import { db } from "$lib/server/db";
 import { userLearningProfile } from "$lib/server/db/schema";
-import type { Actions } from "./$types";
+import type { Actions, PageServerLoad } from "./$types";
+
+/**
+ * Build timezone option list with UTC offset and long display name.
+ * Uses a single `now` per entry for both Intl.DateTimeFormat.formatToParts calls.
+ */
+function buildTimezoneList(): { value: string; label: string }[] {
+	try {
+		const raw = Intl.supportedValuesOf("timeZone");
+		return raw.map((tz) => {
+			try {
+				const now = new Date();
+
+				const offsetParts = new Intl.DateTimeFormat("en-US", {
+					timeZone: tz,
+					timeZoneName: "shortOffset",
+				}).formatToParts(now);
+				const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
+
+				const localizedName =
+					new Intl.DateTimeFormat("en-US", {
+						timeZone: tz,
+						timeZoneName: "long",
+					})
+						.formatToParts(now)
+						.find((p) => p.type === "timeZoneName")?.value || tz;
+
+				return {
+					value: tz,
+					label: `${tz} (${localizedName}, ${utcOffset})`,
+				};
+			} catch {
+				return { value: tz, label: tz };
+			}
+		});
+	} catch {
+		// Runtime doesn't support Intl.supportedValuesOf — return empty
+		return [];
+	}
+}
+
+// Memoize at module scope: Intl.supportedValuesOf("timeZone") is static.
+let _cachedTimezones: { value: string; label: string }[] | undefined;
+
+function getMemoizedTimezones(): { value: string; label: string }[] {
+	if (!_cachedTimezones) {
+		_cachedTimezones = buildTimezoneList();
+	}
+	return _cachedTimezones;
+}
+
+export const load: PageServerLoad = async () => {
+	return {
+		serverTimezones: getMemoizedTimezones(),
+	};
+};
 
 export const actions: Actions = {
 	updateProfile: async (event) => {

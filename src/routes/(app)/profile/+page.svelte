@@ -42,10 +42,12 @@ onMount(() => {
 		const rawTimezones = Intl.supportedValuesOf("timeZone");
 		allTimezones = rawTimezones.map((tz) => {
 			try {
+				const now = new Date();
+
 				const offsetParts = new Intl.DateTimeFormat(lang, {
 					timeZone: tz,
 					timeZoneName: "shortOffset",
-				}).formatToParts(new Date());
+				}).formatToParts(now);
 				const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
 
 				const localizedName =
@@ -53,18 +55,18 @@ onMount(() => {
 						timeZone: tz,
 						timeZoneName: "long",
 					})
-						.formatToParts(new Date())
+						.formatToParts(now)
 						.find((p) => p.type === "timeZoneName")?.value || tz;
 
 				return {
 					value: tz,
 					label: `${tz} (${localizedName}, ${utcOffset})`,
 				};
-			} catch (e) {
+			} catch {
 				return { value: tz, label: tz };
 			}
 		});
-	} catch (e) {
+	} catch {
 		// Fallback: leave allTimezones empty so timezoneOptions continues using data.serverTimezones.
 	}
 });
