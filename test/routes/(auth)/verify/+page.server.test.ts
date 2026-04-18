@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { load } from "../../../../src/routes/(auth)/verify/+page.server";
+import { load } from "$routes/(auth)/verify/+page.server";
 
 describe("Verify page +page.server", () => {
 	const createEvent = (query = "") =>

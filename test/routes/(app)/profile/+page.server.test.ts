@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
-import { actions } from "../../../../src/routes/(app)/profile/+page.server";
+import { actions } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
 const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
@@ -73,6 +73,23 @@ describe("Profile +page.server actions", () => {
 				name: "Alice",
 				timezone: "Asia/Shanghai",
 				nativeLanguage: "zh",
+			},
+			headers: event.request.headers,
+		});
+		expect(result).toEqual({ success: true });
+	});
+
+	it("updateProfile normalizes blank timezone to undefined", async () => {
+		const event = createActionEvent({
+			name: "Alice",
+			timezone: "",
+		});
+
+		const result = await actions.updateProfile(event);
+
+		expect(auth.api.updateUser).toHaveBeenCalledWith({
+			body: {
+				name: "Alice",
 			},
 			headers: event.request.headers,
 		});

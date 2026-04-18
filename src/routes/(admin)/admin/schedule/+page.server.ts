@@ -1,5 +1,7 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
@@ -21,12 +23,12 @@ export const load: PageServerLoad = async (event) => {
 	const mode = (event.url.searchParams.get("mode") ?? "daily") as "daily" | "weekly";
 
 	// 2. Safely resolve the raw date parameter, with fallbacks to avoid empty string errors
-	let rawDateParam = event.url.searchParams.get("date");
+	let rawDateParam = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
 	if (!rawDateParam) {
 		rawDateParam = mode === "weekly" ? getCurrentWeekString() : new Date().toISOString().slice(0, 10);
 	}
 
-	const languageFilter = (event.url.searchParams.get("language") ?? "en") as "en" | "es" | "fr" | "ja";
+	const languageFilter = (event.url.searchParams.get("language") ?? "en") as LanguageCode;
 
 	// 3. Resolve the actual DB filter date (convert week string to Monday's date)
 	let dateFilter = rawDateParam;
@@ -48,13 +50,13 @@ export const load: PageServerLoad = async (event) => {
 	const scheduledTasks = await db
 		.select({
 			id: task.id,
-			titleResolved: task.titleResolved,
+			title: task.title,
 			date: task.date,
 			origin: task.origin,
 			language: task.language,
 			templateTitle: template.titleBase,
-			templateType: template.type,
-			templateDuration: template.duration,
+			templateInteractionType: template.interactionType,
+			templateCadence: template.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -62,7 +64,7 @@ export const load: PageServerLoad = async (event) => {
 			and(
 				eq(task.date, dateFilter),
 				eq(task.language, languageFilter),
-				eq(template.duration, mode), // Scope query to daily or weekly tasks only
+				eq(template.cadence, mode), // Scope query to daily or weekly tasks only
 			),
 		)
 		.orderBy(task.id);
@@ -71,7 +73,7 @@ export const load: PageServerLoad = async (event) => {
 	const activeTemplates = await db
 		.select({ id: template.id, titleBase: template.titleBase, language: template.language })
 		.from(template)
-		.where(and(eq(template.isActive, true), eq(template.duration, mode))) // Filter templates by mode
+		.where(and(eq(template.isActive, true), eq(template.cadence, mode))) // Filter templates by mode
 		.orderBy(template.id);
 
 	return {
@@ -96,7 +98,7 @@ export const actions: Actions = {
 
 		const result = scheduleManualSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: result.error.flatten().fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		try {

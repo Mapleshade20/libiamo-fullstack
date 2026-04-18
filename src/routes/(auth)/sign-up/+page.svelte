@@ -5,6 +5,7 @@ import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
+import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form } = $props();
 
@@ -58,10 +59,9 @@ onMount(() => {
 					required
 				>
 					<option value="" disabled selected={!form?.values?.activeLanguage}>Select a language</option>
-					<option value="en" selected={form?.values?.activeLanguage === "en"}>English</option>
-					<option value="es" selected={form?.values?.activeLanguage === "es"}>Spanish</option>
-					<option value="fr" selected={form?.values?.activeLanguage === "fr"}>French</option>
-					<option value="ja" selected={form?.values?.activeLanguage === "ja"}>Japanese</option>
+					{#each LANGUAGE_CODES as code}
+						<option value={code} selected={form?.values?.activeLanguage === code}>{LANGUAGE_LABELS[code]}</option>
+					{/each}
 				</select>
 				{#if form?.errors?.activeLanguage}
 					<p class="text-sm text-red-600">{form.errors.activeLanguage[0]}</p>

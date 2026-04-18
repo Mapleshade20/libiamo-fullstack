@@ -32,10 +32,40 @@ You can preview the production build with `pnpm preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
 
+## Core Concepts
+
+Roles
+- learner: browse tasks, view background materials, and complete sessions
+- admin: create and manage templates and variants, and schedule tasks
+
+Template vs Template Variant vs Task
+- Template: the reusable content blueprint. Key columns now include:
+  - interactionType (enum: chat, oneshot, slow, translate)
+  - cadence (enum: weekly, daily)
+  - objectivesBase (text[] — ordered by array index)
+  - materialsMd (Markdown background material)
+  - tags
+
+- TemplateVariant: a new per-template row that holds variant-specific data used at scheduling and runtime:
+  - slotValues (jsonb): values that replace {{slot}} placeholders
+  - openingState (jsonb): UI-specific initial state validated by per-UI Zod schemas
+
+- Task: a scheduled instance created from a template + selected variant. Tasks record variantId and store resolved fields.
+
+Scheduling and recurrence
+- Amounts: the app schedules 3 weekly tasks (per-week, date normalized to Monday) and 3 daily tasks (per-day).
+- Auto-scheduling: when a user requests tasks for a date and the quota isn't met, the scheduler queries active templates and fills missing tasks. Instead of a denormalized lastScheduledAt column, templates are prioritized by their most recent task date so templates with no recent tasks are scheduled first.
+- Variant selection: when creating a task the system selects one active variant at random and resolves slots from variant.slotValues. Templates without explicit slots must still have at least one active variant.
+
+Persona & agent prompt
+- Persona selection moved to the application layer. At scheduling time a small MBTI-based persona prefix is prepended to a template's agentPromptBase and saved into the task.agentPrompt. The template no longer stores a persona pool.
+
+Validation and UI
+- Opening state shapes are validated in TypeScript with per-UI Zod schemas.
+- materialsMd is authored in Markdown and rendered at display time (use a safe renderer / sanitizer in production).
+
 ## Features
 
-### User Avatars (Cravatar Integration)
-Libiamo uses [Cravatar](https://cravatar.cn) (a Gravatar alternative optimized for speed) to manage user avatars.
-- **Zero Local Storage:** Avatars are dynamically generated based on the MD5 hash of the user's registered email address, saving significant server storage and database complexity.
-- **Default Fallbacks:** If user's email doesn't have a linked avatar on Cravatar or Gravatar, an automatic `ident-icon` (a visually unique geometric pattern) is presented.
-- **Global Sync:** Users can change their avatars globally across multiple platforms by updating it once on Cravatar or Gravatar website.
+### Profile Photo
+
+Libiamo uses [Cravatar](https://cravatar.cn) (a Gravatar mirror) to manage user profile photos. Users only need to create their profile on Gravatar and then it will be automatically synced here.

@@ -8,6 +8,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import * as Table from "$lib/components/ui/table";
+import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form, data } = $props();
 
@@ -80,11 +81,10 @@ function toggleMode(newMode: "daily" | "weekly") {
 
 		<div class="space-y-1">
 			<Label for="language">Language</Label>
-			<select id="language" name="language" class="flex h-10 w-32 rounded-md border border-input bg-background px-3 py-2 text-sm">
-				<option value="en" selected={language === "en"}>English</option>
-				<option value="es" selected={language === "es"}>Spanish</option>
-				<option value="fr" selected={language === "fr"}>French</option>
-				<option value="ja" selected={language === "ja"}>Japanese</option>
+			<select id="language" name="language" class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+				{#each LANGUAGE_CODES as code}
+					<option value={code} selected={data.filters.language === code}>{LANGUAGE_LABELS[code]}</option>
+				{/each}
 			</select>
 		</div>
 
@@ -99,7 +99,7 @@ function toggleMode(newMode: "daily" | "weekly") {
 					<Table.Row>
 						<Table.Head>ID</Table.Head>
 						<Table.Head>Title</Table.Head>
-						<Table.Head>Type</Table.Head>
+						<Table.Head>Interaction Type</Table.Head>
 						<Table.Head>Origin</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -107,8 +107,9 @@ function toggleMode(newMode: "daily" | "weekly") {
 					{#each data.scheduledTasks as t}
 						<Table.Row>
 							<Table.Cell>{t.id}</Table.Cell>
-							<Table.Cell>{t.titleResolved}</Table.Cell>
-							<Table.Cell>{t.templateType}</Table.Cell>
+							<Table.Cell>{t.title}</Table.Cell>
+							<Table.Cell>{t.templateInteractionType}</Table.Cell>
+							<Table.Cell>{t.templateCadence}</Table.Cell>
 							<Table.Cell>
 								<Badge
 									variant={t.origin === "auto"
@@ -124,9 +125,7 @@ function toggleMode(newMode: "daily" | "weekly") {
 		{:else}
 			<p class="text-muted-foreground">
 				No tasks scheduled for this
-				{mode === "daily"
-					? "date"
-					: "week"}.
+				{mode === "daily" ? "date" : "week"}.
 			</p>
 		{/if}
 	</div>
