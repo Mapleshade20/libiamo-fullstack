@@ -1,9 +1,9 @@
 import { fail } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as tasksModule from "../../../../../src/lib/server/tasks.ts";
-import { actions, load } from "../../../../../src/routes/(admin)/admin/schedule/+page.server.ts";
+import * as tasksModule from "$lib/server/tasks";
+import { actions, load } from "../../../../../src/routes/(admin)/admin/schedule/+page.server";
 
-vi.mock("../../../../src/lib/server/db.ts", () => {
+vi.mock("$lib/server/db", () => {
 	const mockQuery = {
 		from: vi.fn().mockReturnThis(),
 		innerJoin: vi.fn().mockReturnThis(),
@@ -16,6 +16,11 @@ vi.mock("../../../../src/lib/server/db.ts", () => {
 		},
 	};
 });
+
+vi.mock("$lib/server/db/schema", () => ({
+	task: { id: "id", title: "title", date: "date", origin: "origin", language: "language", templateId: "templateId" },
+	template: { id: "id", titleBase: "titleBase", interactionType: "interactionType", cadence: "cadence", isActive: "isActive", language: "language" },
+}));
 
 vi.mock("@sveltejs/kit", () => ({
 	fail: vi.fn((status, data) => ({ status, data })),
@@ -50,7 +55,6 @@ describe("Schedule Page Server", () => {
 			const result = (await load(event)) as any;
 
 			expect(result.filters.mode).toBe("weekly");
-
 			expect(result.filters.date).toBe("2024-01-01");
 		});
 
@@ -75,6 +79,7 @@ describe("Schedule Page Server", () => {
 		it("schedule action should fail on invalid form data", async () => {
 			const formData = new FormData();
 			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+
 			await actions.schedule(event);
 			expect(fail).toHaveBeenCalledWith(400, expect.any(Object));
 		});
@@ -86,6 +91,7 @@ describe("Schedule Page Server", () => {
 			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
 
 			const result = await actions.schedule(event);
+
 			expect(tasksModule.scheduleTaskManually).toHaveBeenCalledWith(1, "2024-01-01");
 			expect(result).toEqual({ success: true });
 		});
