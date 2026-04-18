@@ -252,7 +252,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([
 			buildTemplate(50, "daily", {
 				titleBase: "Hello {{missing}}",
-				shortObjectiveBase: null,
+				shortObjectiveBase: "Focus on {{topic}}",
 				descriptionBase: null,
 				agentPromptBase: null,
 				objectivesBase: null,
@@ -265,7 +265,7 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				title: "Hello {{missing}}",
-				shortObjective: null,
+				shortObjective: "Focus on {{topic}}",
 				description: null,
 				agentPrompt: null,
 				objectives: null,

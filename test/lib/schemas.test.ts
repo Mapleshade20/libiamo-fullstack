@@ -29,6 +29,7 @@ describe("schemas", () => {
 			signUpSchema.parse({
 				email: "new@example.com",
 				password: "password123",
+				confirmPassword: "password123",
 				name: "New User",
 				activeLanguage: "en",
 			}),

@@ -6,6 +6,17 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 
 let { form, data } = $props();
+
+let newPassword = $state("");
+let confirmNewPassword = $state("");
+let confirmNewPasswordError = $state("");
+
+// Clear mismatch error naturally when passwords match
+$effect(() => {
+	if (newPassword === confirmNewPassword && confirmNewPasswordError) {
+		confirmNewPasswordError = "";
+	}
+});
 </script>
 
 <Card.Root>
@@ -20,28 +31,60 @@ let { form, data } = $props();
 	</Card.Header>
 	<Card.Content>
 		{#if data.hasToken}
-			{#if form?.resetMessage}
-				<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.resetMessage}</p>
-			{/if}
-
-			<form method="POST" action="?/resetPassword" use:enhance class="space-y-4">
-				<input type="hidden" name="token" value={data.token}>
-				<div class="space-y-2">
-					<Label for="newPassword">New Password</Label>
-					<Input id="newPassword" name="newPassword" type="password" required />
-					{#if form?.resetErrors?.newPassword}
-						<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
-					{/if}
+			{#if data.error}
+				<!-- Invalid/expired token from URL — dedicated UX -->
+				<div class="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+					<p class="text-sm text-red-700 font-medium">Invalid or Expired Link</p>
+					<p class="text-sm text-red-600 mt-1">The reset link is invalid or has expired. Please request a new one.</p>
+					<a href="/forgot-password" class="mt-4 block text-sm underline text-blue-600 hover:text-blue-800"> Request a new reset link </a>
 				</div>
-				<Button type="submit" class="w-full">Reset Password</Button>
-			</form>
+			{:else}
+				<!-- Reset form — stays visible on retryable server errors -->
+				{#if form?.resetMessage}
+					<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.resetMessage}</p>
+				{/if}
+
+				<form
+					method="POST"
+					action="?/resetPassword"
+					use:enhance={({ cancel }) => {
+						if (newPassword !== confirmNewPassword) {
+							confirmNewPasswordError = "Passwords do not match";
+							cancel();
+							return;
+						}
+						confirmNewPasswordError = "";
+					}}
+					class="space-y-4"
+				>
+					<input type="hidden" name="token" value={data.token}>
+
+					<div class="space-y-2">
+						<Label for="newPassword">New Password</Label>
+						<Input id="newPassword" name="newPassword" type="password" bind:value={newPassword} required />
+						{#if form?.resetErrors?.newPassword}
+							<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
+						{/if}
+					</div>
+
+					<div class="space-y-2">
+						<Label for="confirmNewPassword">Confirm New Password</Label>
+						<Input id="confirmNewPassword" type="password" bind:value={confirmNewPassword} required />
+						{#if confirmNewPasswordError}
+							<p class="text-sm text-red-600">{confirmNewPasswordError}</p>
+						{/if}
+					</div>
+
+					<Button type="submit" class="w-full">Reset Password</Button>
+				</form>
+			{/if}
 		{:else if form?.emailSent}
 			<p class="text-center text-muted-foreground">If an account with that email exists, we've sent a reset link. Check your inbox.</p>
 		{:else}
 			<form method="POST" action="?/requestReset" use:enhance class="space-y-4">
 				<div class="space-y-2">
 					<Label for="email">Email</Label>
-					<Input id="email" name="email" type="email" value={form?.values?.email ?? ''} required />
+					<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required />
 					{#if form?.errors?.email}
 						<p class="text-sm text-red-600">{form.errors.email[0]}</p>
 					{/if}

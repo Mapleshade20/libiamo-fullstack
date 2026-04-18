@@ -9,10 +9,21 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form } = $props();
 
+let password = $state("");
+let confirmPassword = $state("");
+let confirmPasswordError = $state("");
+
 let clientTimezone = $state("UTC");
 
 onMount(() => {
 	clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+});
+
+// Clear mismatch error naturally when passwords match
+$effect(() => {
+	if (password === confirmPassword && confirmPasswordError) {
+		confirmPasswordError = "";
+	}
 });
 </script>
 
@@ -23,7 +34,18 @@ onMount(() => {
 			<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
 		{/if}
 
-		<form method="POST" use:enhance class="space-y-4">
+		<form
+			method="POST"
+			use:enhance={({ cancel }) => {
+				if (password !== confirmPassword) {
+					confirmPasswordError = "Passwords do not match";
+					cancel();
+					return;
+				}
+				confirmPasswordError = "";
+			}}
+			class="space-y-4"
+		>
 			<input type="hidden" name="timezone" value={clientTimezone}>
 
 			<div class="space-y-2">
@@ -44,9 +66,17 @@ onMount(() => {
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input id="password" name="password" type="password" required />
+				<Input id="password" name="password" type="password" bind:value={password} required />
 				{#if form?.errors?.password}
 					<p class="text-sm text-red-600">{form.errors.password[0]}</p>
+				{/if}
+			</div>
+
+			<div class="space-y-2">
+				<Label for="confirmPassword">Confirm Password</Label>
+				<Input id="confirmPassword" type="password" bind:value={confirmPassword} required />
+				{#if confirmPasswordError}
+					<p class="text-sm text-red-600">{confirmPasswordError}</p>
 				{/if}
 			</div>
 
@@ -72,6 +102,9 @@ onMount(() => {
 		</form>
 	</Card.Content>
 	<Card.Footer class="text-sm">
-		<p class="text-muted-foreground">Already have an account? <a href="/sign-in" class="font-medium text-foreground hover:underline">Sign In</a></p>
+		<p class="text-muted-foreground">
+			Already have an account?
+			<a href="/sign-in" class="font-medium text-foreground hover:underline">Sign In</a>
+		</p>
 	</Card.Footer>
 </Card.Root>
