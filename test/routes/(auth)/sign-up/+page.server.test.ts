@@ -103,7 +103,6 @@ describe("Sign-up +page.server", () => {
 				email: "test@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "en",
 				timezone: "UTC",
 			};
@@ -139,7 +138,6 @@ describe("Sign-up +page.server", () => {
 				email: "taken@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);
@@ -160,7 +158,6 @@ describe("Sign-up +page.server", () => {
 				email: "crash@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "fr",
 			};
 			const event = createEvent(validData);
@@ -178,7 +175,6 @@ describe("Sign-up +page.server", () => {
 				email: "nomessage@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);
@@ -199,7 +195,6 @@ describe("Sign-up +page.server", () => {
 				email: "test-nouser@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "en",
 			};
 			const event = createEvent(validData);
@@ -258,7 +253,6 @@ describe("Sign-up +page.server", () => {
 				email: "fallback@example.com",
 				name: "Test User",
 				password: "securePassword123!",
-				confirmPassword: "securePassword123!",
 				activeLanguage: "es",
 			};
 			const event = createEvent(validData);

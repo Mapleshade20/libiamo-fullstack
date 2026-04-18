@@ -144,7 +144,6 @@ describe("Forgot-password +page.server", () => {
 				actions.resetPassword(
 					createEvent({
 						newPassword: "new-password-123",
-						confirmNewPassword: "new-password-123",
 						token: "reset-token",
 					}),
 				),
@@ -166,7 +165,6 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
-					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
@@ -183,7 +181,6 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
-					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
@@ -198,7 +195,6 @@ describe("Forgot-password +page.server", () => {
 			const result = (await actions.resetPassword(
 				createEvent({
 					newPassword: "new-password-123",
-					confirmNewPassword: "new-password-123",
 					token: "reset-token",
 				}),
 			)) as ActionFailure<any>;
