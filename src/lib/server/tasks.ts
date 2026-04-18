@@ -133,6 +133,40 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 
 // ── ensureTasksForDate ────────────────────────────────────────────────
 
+async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "weekly", targetDateStr: string, neededCount: number) {
+	if (neededCount <= 0) return;
+
+	// Fetch IDs of templates already scheduled for this date to avoid useless DB retry
+	const scheduledTasks = await db
+		.select({ templateId: task.templateId })
+		.from(task)
+		.where(and(eq(task.date, targetDateStr), eq(task.language, language)));
+	const scheduledIds = scheduledTasks.map((t) => t.templateId);
+
+	const conditions = [eq(template.language, language), eq(template.cadence, cadence), eq(template.isActive, true)];
+
+	if (scheduledIds.length > 0) {
+		conditions.push(notInArray(template.id, scheduledIds));
+	}
+
+	const templates = await db
+		.select({ tpl: template })
+		.from(template)
+		.leftJoin(task, eq(task.templateId, template.id))
+		.where(and(...conditions))
+		.groupBy(template.id)
+		.orderBy(asc(max(task.date)).append(sql` nulls first`))
+		.limit(neededCount);
+
+	for (const { tpl } of templates) {
+		try {
+			await insertTask(tpl, targetDateStr, "auto");
+		} catch (e) {
+			console.error(`Failed to schedule ${cadence} task for template ${tpl.id} on ${targetDateStr}:`, e);
+		}
+	}
+}
+
 export async function ensureTasksForDate(language: LanguageCode, today: Date): Promise<void> {
 	const monday = getMondayOfWeek(today);
 	const mondayStr = toDateString(monday);
@@ -152,67 +186,8 @@ export async function ensureTasksForDate(language: LanguageCode, today: Date): P
 	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
 	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
 
-	if (weeklyNeeded > 0) {
-		// Fetch IDs of templates already scheduled for this week to avoid useless DB retry
-		const scheduledWeekly = await db
-			.select({ templateId: task.templateId })
-			.from(task)
-			.where(and(eq(task.date, mondayStr), eq(task.language, language)));
-		const scheduledIds = scheduledWeekly.map((t) => t.templateId);
-
-		const conditions = [eq(template.language, language), eq(template.cadence, "weekly"), eq(template.isActive, true)];
-		if (scheduledIds.length > 0) {
-			conditions.push(notInArray(template.id, scheduledIds));
-		}
-
-		const templates = await db
-			.select({ tpl: template })
-			.from(template)
-			.leftJoin(task, eq(task.templateId, template.id))
-			.where(and(eq(template.language, language), eq(template.cadence, "weekly"), eq(template.isActive, true)))
-			.groupBy(template.id)
-			.orderBy(asc(max(task.date)).append(sql` nulls first`))
-			.limit(weeklyNeeded);
-
-		for (const { tpl } of templates) {
-			try {
-				await insertTask(tpl, mondayStr, "auto");
-			} catch (e) {
-				console.error(`Failed to schedule weekly task for template ${tpl.id} on ${mondayStr}:`, e);
-			}
-		}
-	}
-
-	if (dailyNeeded > 0) {
-		// Fetch IDs of templates already scheduled for today
-		const scheduledDaily = await db
-			.select({ templateId: task.templateId })
-			.from(task)
-			.where(and(eq(task.date, todayStr), eq(task.language, language)));
-		const scheduledIds = scheduledDaily.map((t) => t.templateId);
-
-		const conditions = [eq(template.language, language), eq(template.cadence, "daily"), eq(template.isActive, true)];
-		if (scheduledIds.length > 0) {
-			conditions.push(notInArray(template.id, scheduledIds));
-		}
-
-		const templates = await db
-			.select({ tpl: template })
-			.from(template)
-			.leftJoin(task, eq(task.templateId, template.id))
-			.where(and(eq(template.language, language), eq(template.cadence, "daily"), eq(template.isActive, true)))
-			.groupBy(template.id)
-			.orderBy(asc(max(task.date)).append(sql` nulls first`))
-			.limit(dailyNeeded);
-
-		for (const { tpl } of templates) {
-			try {
-				await insertTask(tpl, todayStr, "auto");
-			} catch (e) {
-				console.error(`Failed to schedule daily task for template ${tpl.id} on ${todayStr}:`, e);
-			}
-		}
-	}
+	await scheduleAutoTasks(language, "weekly", mondayStr, weeklyNeeded);
+	await scheduleAutoTasks(language, "daily", todayStr, dailyNeeded);
 }
 
 // ── scheduleTaskManually ──────────────────────────────────────────────
