@@ -4,6 +4,7 @@ import X from "@lucide/svelte/icons/x";
 import { slide } from "svelte/transition";
 import { enhance } from "$app/forms";
 import { page } from "$app/state";
+import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 import WineGlassIcon from "./WineGlassIcon.svelte";
 
 interface NavItem {
@@ -77,20 +78,7 @@ $effect(() => {
 });
 
 // --- Language switcher ---
-const languageLabelsShort: Record<string, string> = {
-	en: "EN",
-	es: "ES",
-	fr: "FR",
-	ja: "JA",
-};
-const languageLabelsFull: Record<string, string> = {
-	en: "English",
-	es: "Español",
-	fr: "Français",
-	ja: "日本語",
-};
-const languages = ["en", "es", "fr", "ja"] as const;
-const flagBaseUrl = "https://flagcdn.com/32x24/";
+const flagBaseUrl = "https://flagcdn.com/w40/";
 const countryCodeMap: Record<string, string> = { en: "gb", ja: "jp" };
 
 function getFlagCode(lang: string): string {
@@ -201,8 +189,8 @@ function closeMobile() {
 						class="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors hover:bg-secondary"
 						aria-expanded={langOpen}
 					>
-						<img src={`${flagBaseUrl}${getFlagCode(user.activeLanguage)}.png`} alt={user.activeLanguage} class="h-5 w-5 rounded-full object-cover">
-						<span>{languageLabelsShort[user.activeLanguage]}</span>
+						<img src={`${flagBaseUrl}${getFlagCode(user.activeLanguage)}.webp`} alt={user.activeLanguage} class="h-5 w-5 rounded-full object-cover">
+						<span>{user.activeLanguage.toUpperCase()}</span>
 					</button>
 
 					{#if langOpen}
@@ -221,7 +209,7 @@ function closeMobile() {
 								}}
 							>
 								<div class="py-1">
-									{#each languages as lang}
+									{#each LANGUAGE_CODES as lang}
 										<button
 											type="submit"
 											name="language"
@@ -230,8 +218,8 @@ function closeMobile() {
 												? 'bg-primary/10 text-primary font-semibold'
 												: 'text-foreground'}"
 										>
-											<img src={`${flagBaseUrl}${getFlagCode(lang)}.png`} alt={lang} class="h-4 w-4 rounded-sm object-cover">
-											<span>{languageLabelsFull[lang]}</span>
+											<img src={`${flagBaseUrl}${getFlagCode(lang)}.webp`} alt={lang} class="h-4 w-4 rounded-sm object-cover">
+											<span>{LANGUAGE_LABELS[lang]}</span>
 										</button>
 									{/each}
 								</div>

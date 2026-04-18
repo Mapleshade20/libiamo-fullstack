@@ -2,6 +2,27 @@ import { z } from "zod";
 import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
 
 // ── Auth ─────────────────────────────────────────────────────────────
+export const timezoneSchema = z.preprocess(
+	(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+	z
+		.string()
+		.optional()
+		.refine(
+			(tz) => {
+				if (!tz) return true;
+				try {
+					Intl.DateTimeFormat(undefined, { timeZone: tz });
+					return true;
+				} catch {
+					return false;
+				}
+			},
+			{
+				message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
+			},
+		),
+);
+
 export const signInSchema = z.object({
 	email: z.email("Invalid email"),
 	password: z.string().min(1, "Password is required"),
@@ -12,6 +33,7 @@ export const signUpSchema = z.object({
 	password: z.string().min(8, "Password must be at least 8 characters"),
 	name: z.string().min(1, "Name is required"),
 	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
+	timezone: timezoneSchema,
 });
 
 export const forgotPasswordSchema = z.object({
@@ -26,7 +48,7 @@ export const resetPasswordSchema = z.object({
 // ── App ──────────────────────────────────────────────────────────────
 export const profileSchema = z.object({
 	name: z.string().max(50).optional(),
-	timezone: z.string().optional(),
+	timezone: timezoneSchema,
 	nativeLanguage: z.string().optional(),
 });
 

@@ -15,9 +15,9 @@ export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	en: "English",
-	es: "Spanish",
-	fr: "French",
-	ja: "Japanese",
+	es: "Español",
+	fr: "Français",
+	ja: "日本語",
 };
 
 export const INTERACTION_TYPES = ["chat", "oneshot", "slow", "translate"] as const;

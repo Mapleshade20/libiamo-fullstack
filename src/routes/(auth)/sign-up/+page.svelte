@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -12,10 +13,16 @@ let password = $state("");
 let confirmPassword = $state("");
 let confirmPasswordError = $state("");
 let suppressServerErrors = $state(false);
+
+let clientTimezone = $state("UTC");
+
+onMount(() => {
+	clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+});
 </script>
 
 <Card.Root>
-	<Card.Header> <Card.Title class="text-xl">Sign Up</Card.Title> </Card.Header>
+	<Card.Header><Card.Title class="text-xl">Sign Up</Card.Title></Card.Header>
 	<Card.Content>
 		{#if form?.message && !suppressServerErrors}
 			<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
@@ -40,6 +47,8 @@ let suppressServerErrors = $state(false);
 			}}
 			class="space-y-4"
 		>
+			<input type="hidden" name="timezone" value={clientTimezone}>
+
 			<div class="space-y-2">
 				<Label for="name">Name</Label>
 				<Input id="name" name="name" value={form?.values?.name ?? ""} required />

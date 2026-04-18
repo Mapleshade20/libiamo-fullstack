@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/+page.server";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
@@ -88,6 +88,57 @@ describe("(app) home +page.server", () => {
 			weeklyTasks,
 			dailyTasks,
 			language: "en",
+		});
+	});
+
+	// --- New tests for timezone logic ---
+	describe("timezone logic", () => {
+		beforeEach(() => {
+			// Lock system time to prevent flaky tests
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-04-17T10:00:00Z"));
+		});
+
+		afterEach(() => {
+			// Restore real timers after timezone tests
+			vi.useRealTimers();
+		});
+
+		it("should use UTC as default timezone if user.timezone is missing", async () => {
+			mockWhere.mockResolvedValue([]); // Prevent DB mock errors
+			const user = { id: "u1", activeLanguage: "en" }; // No timezone set
+
+			await load({ locals: { user } } as any);
+
+			// Expected safe date anchored at 12:00 UTC for 2026-04-17
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith(
+				"en",
+				new Date(Date.UTC(2026, 3, 17, 12, 0, 0)), // Month is 0-indexed (3 = April)
+			);
+		});
+
+		it("should calculate local date correctly based on valid user timezone (e.g., Asia/Tokyo)", async () => {
+			mockWhere.mockResolvedValue([]);
+			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
+
+			// Set system time to late UTC, which pushes Tokyo (UTC+9) into the next day
+			vi.setSystemTime(new Date("2026-04-17T20:00:00Z"));
+
+			await load({ locals: { user } } as any);
+
+			// Tokyo local date should be 2026-04-18
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", new Date(Date.UTC(2026, 3, 18, 12, 0, 0)));
+		});
+
+		it("should fallback to local toISOString if timezone is invalid and throws error", async () => {
+			mockWhere.mockResolvedValue([]);
+			const user = { id: "u1", activeLanguage: "en", timezone: "Invalid/Timezone" };
+
+			// System time is 2026-04-17T10:00:00Z
+			await load({ locals: { user } } as any);
+
+			// Fallback logic uses sliced ISO string, resulting in 2026-04-17
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", new Date(Date.UTC(2026, 3, 17, 12, 0, 0)));
 		});
 	});
 

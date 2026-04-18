@@ -77,7 +77,11 @@ const uiIcons: Record<string, Component> = {
 					<div class="p-2.5 rounded-full bg-background/60 border border-border"><Icon size={20} strokeWidth={1} class="text-foreground" /></div>
 					<span class="flex gap-0.5">
 						{#each Array.from({ length: 3 }, (_, i) => i < task.templateDifficulty) as filled}
-							<span class="inline-block h-2 w-2 rounded-full {filled ? 'bg-muted-foreground' : 'bg-border'}"></span>
+							<span
+								class="inline-block h-2 w-2 rounded-full {filled
+									? 'bg-muted-foreground'
+									: 'bg-border'}"
+							></span>
 						{/each}
 					</span>
 				</div>
