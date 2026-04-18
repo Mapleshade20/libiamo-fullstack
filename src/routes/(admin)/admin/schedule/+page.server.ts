@@ -20,11 +20,13 @@ function getCurrentWeekString(): string {
 
 export const load: PageServerLoad = async (event) => {
 	// 1. Establish global mode (defaults to daily)
-	const mode = (event.url.searchParams.get("mode") ?? "daily") as "daily" | "weekly";
-
+	const rawMode = event.url.searchParams.get("mode") ?? "daily";
+	const mode: "daily" | "weekly" = rawMode === "weekly" ? "weekly" : "daily";
 	// 2. Safely resolve the raw date parameter, with fallbacks to avoid empty string errors
 	let rawDateParam = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-	if (!rawDateParam) {
+	const isValidFormat = rawDateParam && (/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) || /^\d{4}-W\d{2}$/.test(rawDateParam));
+
+	if (!isValidFormat) {
 		rawDateParam = mode === "weekly" ? getCurrentWeekString() : new Date().toISOString().slice(0, 10);
 	}
 

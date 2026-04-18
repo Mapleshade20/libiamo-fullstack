@@ -288,6 +288,23 @@ export function getEditorFields(ui: UiVariant): FieldDef[] {
 // ── Schedule ──────────────────────────────────────────────────────────
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),
-	// Allow standard date (YYYY-MM-DD) or ISO week format (YYYY-Www)
-	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$|^\d{4}-W\d{2}$/, "Date must be YYYY-MM-DD or YYYY-Www"),
+	// Validate both ISO week formats and real calendar dates
+	date: z.string().refine((value) => {
+		const standardDateRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+		// Restrict weeks to valid ISO range: 01 to 53
+		const isoWeekRegex = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+
+		if (isoWeekRegex.test(value)) {
+			return true;
+		}
+		const match = value.match(standardDateRegex);
+		if (!match) {
+			return false;
+		}
+
+		// Ensure the date actually exists (e.g., prevent Feb 30th)
+		const [year, month, day] = value.split("-").map(Number);
+		const parsedDate = new Date(Date.UTC(year, month - 1, day));
+		return parsedDate.getUTCFullYear() === year && parsedDate.getUTCMonth() === month - 1 && parsedDate.getUTCDate() === day;
+	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
 });
