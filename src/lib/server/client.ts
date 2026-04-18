@@ -110,10 +110,10 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 }
 
 export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<ConversationTurnResult> {
-	if (!input.systemPrompt?.trim()) {
+	if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim()) {
 		throw new Error("systemPrompt is required");
 	}
-	if (!input.userMessage?.trim()) {
+	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
 		throw new Error("userMessage is required");
 	}
 	const requestMessages: ChatMessage[] = [];
@@ -127,7 +127,7 @@ export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<
 }
 
 export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<ConversationTurnResult> {
-	if (!input.userMessage?.trim()) {
+	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
 		throw new Error("userMessage is required");
 	}
 	if (!Array.isArray(input.history)) {
@@ -144,7 +144,7 @@ export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<Co
 		};
 	});
 
-	const systemPrompt = input.systemPrompt?.trim();
+	const systemPrompt = typeof input.systemPrompt === "string" ? input.systemPrompt.trim() : undefined;
 	if (systemPrompt) {
 		const systemIndex = history.findIndex((msg) => msg.role === "system");
 		if (systemIndex >= 0) {
