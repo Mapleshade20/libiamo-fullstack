@@ -13,11 +13,12 @@
 
 ```env
 # OpenAI-compatible API
-OPENAI_API_KEY="sk-sefz-tfLW-cSOJlQ5psfJA"
+OPENAI_API_KEY="sk-***"
 OPENAI_BASE_URL="https://api-ai.thucs.cn/v1"
 OPENAI_MODEL="qwen3-max"
-API_VERIFY_SSL="false"
 ```
+
+注意：示例中的 API Key 是占位符，禁止把真实密钥提交到仓库。
 
 
 ## 类型定义

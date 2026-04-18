@@ -12,7 +12,7 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { createMultiTurnChat, createSingleTurnChat } from "../../../src/lib/server/client";
+import { createMultiTurnChat, createSingleTurnChat } from "$lib/server/client";
 
 function createJsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -25,7 +25,7 @@ function createTextResponse(text: string, status = 200): Response {
 	return new Response(text, { status });
 }
 
-describe("session client", () => {
+describe("chat client wrappers", () => {
 	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 	beforeEach(() => {
@@ -207,6 +207,17 @@ describe("session client", () => {
 				createSingleTurnChat({
 					systemPrompt: "You are a tutor.",
 					userMessage: "   ",
+				}),
+			).rejects.toThrow("userMessage is required");
+		});
+
+		it("throws when single-turn userMessage content is non-string", async () => {
+			vi.stubGlobal("fetch", vi.fn());
+
+			await expect(
+				createSingleTurnChat({
+					systemPrompt: "You are a tutor.",
+					userMessage: 123 as unknown as string,
 				}),
 			).rejects.toThrow("userMessage is required");
 		});
@@ -453,6 +464,20 @@ describe("session client", () => {
 					history: [
 						{ role: "system", content: "persona" },
 						{ role: "assistant", content: "   " },
+					],
+					userMessage: "How are you?",
+				}),
+			).rejects.toThrow("each message.content must be a non-empty string");
+		});
+
+		it("throws when history contains non-string content", async () => {
+			vi.stubGlobal("fetch", vi.fn());
+
+			await expect(
+				createMultiTurnChat({
+					history: [
+						{ role: "system", content: "persona" },
+						{ role: "assistant", content: { bad: true } as unknown as string },
 					],
 					userMessage: "How are you?",
 				}),

@@ -53,7 +53,7 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 		if (!message || !["system", "user", "assistant"].includes(message.role)) {
 			throw new Error("each message.role must be one of: system, user, assistant");
 		}
-		if (!message.content?.trim()) {
+		if (typeof message.content !== "string" || !message.content.trim()) {
 			throw new Error("each message.content must be a non-empty string");
 		}
 	}
@@ -134,10 +134,15 @@ export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<Co
 		throw new Error("history must be an array");
 	}
 
-	const history = input.history.map((msg) => ({
-		role: msg.role,
-		content: msg.content?.trim() ?? "",
-	}));
+	const history = input.history.map((msg) => {
+		if (typeof msg.content !== "string") {
+			throw new Error("each message.content must be a non-empty string");
+		}
+		return {
+			role: msg.role,
+			content: msg.content.trim(),
+		};
+	});
 
 	const systemPrompt = input.systemPrompt?.trim();
 	if (systemPrompt) {
