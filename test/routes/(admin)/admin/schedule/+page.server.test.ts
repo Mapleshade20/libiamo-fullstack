@@ -61,6 +61,14 @@ describe("Schedule Page Server", () => {
 			expect(result.filters.mode).toBe("weekly");
 			expect(result.filters.rawDate).toContain("-W");
 		});
+
+		it("should recover if mode is daily but date is weekly formatted", async () => {
+			const event = createMockEvent({ mode: "daily", date: "2024-W01" });
+			const result = (await load(event)) as any;
+
+			expect(result.filters.mode).toBe("daily");
+			expect(result.filters.date).not.toContain("-W");
+		});
 	});
 
 	describe("Actions", () => {
@@ -80,6 +88,24 @@ describe("Schedule Page Server", () => {
 			const result = await actions.schedule(event);
 			expect(tasksModule.scheduleTaskManually).toHaveBeenCalledWith(1, "2024-01-01");
 			expect(result).toEqual({ success: true });
+		});
+
+		it("schedule action should catch errors and return fail 400", async () => {
+			const formData = new FormData();
+			formData.append("templateId", "1");
+			formData.append("date", "2024-01-01");
+			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+
+			vi.mocked(tasksModule.scheduleTaskManually).mockRejectedValueOnce(new Error("Database connection lost"));
+
+			await actions.schedule(event);
+
+			expect(fail).toHaveBeenCalledWith(
+				400,
+				expect.objectContaining({
+					message: "Database connection lost",
+				}),
+			);
 		});
 	});
 });
