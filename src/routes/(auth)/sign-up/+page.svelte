@@ -12,38 +12,37 @@ let { form } = $props();
 let password = $state("");
 let confirmPassword = $state("");
 let confirmPasswordError = $state("");
-let suppressServerErrors = $state(false);
 
 let clientTimezone = $state("UTC");
 
 onMount(() => {
 	clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 });
+
+// Clear mismatch error naturally when passwords match
+$effect(() => {
+	if (password === confirmPassword && confirmPasswordError) {
+		confirmPasswordError = "";
+	}
+});
 </script>
 
 <Card.Root>
 	<Card.Header><Card.Title class="text-xl">Sign Up</Card.Title></Card.Header>
 	<Card.Content>
-		{#if form?.message && !suppressServerErrors}
+		{#if form?.message}
 			<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
 		{/if}
 
 		<form
 			method="POST"
 			use:enhance={({ cancel }) => {
-				suppressServerErrors = true;
-
 				if (password !== confirmPassword) {
 					confirmPasswordError = "Passwords do not match";
 					cancel();
 					return;
 				}
 				confirmPasswordError = "";
-
-				return async ({ update }) => {
-					suppressServerErrors = false;
-					await update();
-				};
 			}}
 			class="space-y-4"
 		>
@@ -52,7 +51,7 @@ onMount(() => {
 			<div class="space-y-2">
 				<Label for="name">Name</Label>
 				<Input id="name" name="name" value={form?.values?.name ?? ""} required />
-				{#if form?.errors?.name && !suppressServerErrors}
+				{#if form?.errors?.name}
 					<p class="text-sm text-red-600">{form.errors.name[0]}</p>
 				{/if}
 			</div>
@@ -60,7 +59,7 @@ onMount(() => {
 			<div class="space-y-2">
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required />
-				{#if form?.errors?.email && !suppressServerErrors}
+				{#if form?.errors?.email}
 					<p class="text-sm text-red-600">{form.errors.email[0]}</p>
 				{/if}
 			</div>
@@ -68,7 +67,7 @@ onMount(() => {
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
 				<Input id="password" name="password" type="password" bind:value={password} required />
-				{#if form?.errors?.password && !suppressServerErrors}
+				{#if form?.errors?.password}
 					<p class="text-sm text-red-600">{form.errors.password[0]}</p>
 				{/if}
 			</div>
@@ -94,7 +93,7 @@ onMount(() => {
 						<option value={code} selected={form?.values?.activeLanguage === code}>{LANGUAGE_LABELS[code]}</option>
 					{/each}
 				</select>
-				{#if form?.errors?.activeLanguage && !suppressServerErrors}
+				{#if form?.errors?.activeLanguage}
 					<p class="text-sm text-red-600">{form.errors.activeLanguage[0]}</p>
 				{/if}
 			</div>

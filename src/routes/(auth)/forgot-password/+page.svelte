@@ -10,7 +10,13 @@ let { form, data } = $props();
 let newPassword = $state("");
 let confirmNewPassword = $state("");
 let confirmNewPasswordError = $state("");
-let suppressServerErrors = $state(false);
+
+// Clear mismatch error naturally when passwords match
+$effect(() => {
+	if (newPassword === confirmNewPassword && confirmNewPasswordError) {
+		confirmNewPasswordError = "";
+	}
+});
 </script>
 
 <Card.Root>
@@ -24,38 +30,30 @@ let suppressServerErrors = $state(false);
 		</Card.Title>
 	</Card.Header>
 	<Card.Content>
-		{#if data.hasToken || data.error}
-			{#if data.error || form?.resetMessage}
+		{#if data.hasToken}
+			{#if data.error}
+				<!-- Invalid/expired token from URL — dedicated UX -->
 				<div class="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
-					<p class="text-sm text-red-700 font-medium">
-						{data.error === "INVALID_TOKEN"
-							? "Invalid or Expired Link"
-							: "Error"}
-					</p>
-					<p class="text-sm text-red-600 mt-1">
-						{form?.resetMessage ??
-							"The reset link is invalid or has expired. Please request a new one."}
-					</p>
+					<p class="text-sm text-red-700 font-medium">Invalid or Expired Link</p>
+					<p class="text-sm text-red-600 mt-1">The reset link is invalid or has expired. Please request a new one.</p>
 					<a href="/forgot-password" class="mt-4 block text-sm underline text-blue-600 hover:text-blue-800"> Request a new reset link </a>
 				</div>
 			{:else}
+				<!-- Reset form — stays visible on retryable server errors -->
+				{#if form?.resetMessage}
+					<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.resetMessage}</p>
+				{/if}
+
 				<form
 					method="POST"
 					action="?/resetPassword"
 					use:enhance={({ cancel }) => {
-						suppressServerErrors = true;
-
 						if (newPassword !== confirmNewPassword) {
 							confirmNewPasswordError = "Passwords do not match";
 							cancel();
 							return;
 						}
 						confirmNewPasswordError = "";
-
-						return async ({ update }) => {
-							suppressServerErrors = false;
-							await update();
-						};
 					}}
 					class="space-y-4"
 				>
@@ -64,7 +62,7 @@ let suppressServerErrors = $state(false);
 					<div class="space-y-2">
 						<Label for="newPassword">New Password</Label>
 						<Input id="newPassword" name="newPassword" type="password" bind:value={newPassword} required />
-						{#if form?.resetErrors?.newPassword && !suppressServerErrors}
+						{#if form?.resetErrors?.newPassword}
 							<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
 						{/if}
 					</div>
