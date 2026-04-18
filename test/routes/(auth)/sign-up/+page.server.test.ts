@@ -121,6 +121,7 @@ describe("Sign-up +page.server", () => {
 					password: validData.password,
 					name: validData.name,
 					activeLanguage: validData.activeLanguage,
+					timezone: validData.timezone,
 				},
 				headers: event.request.headers,
 			});

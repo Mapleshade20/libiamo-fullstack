@@ -265,7 +265,7 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				title: "Hello {{missing}}",
-				shortObjective: null,
+				shortObjective: "Focus on {{topic}}",
 				description: null,
 				agentPrompt: null,
 				objectives: null,
