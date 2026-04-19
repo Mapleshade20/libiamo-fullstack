@@ -1,4 +1,6 @@
 <script lang="ts">
+import Eye from "@lucide/svelte/icons/eye";
+import EyeOff from "@lucide/svelte/icons/eye-off";
 import { enhance } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -6,10 +8,11 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 
 let { form, data } = $props();
+let showPassword = $state(false);
 </script>
 
 <Card.Root>
-	<Card.Header> <Card.Title class="text-xl">Sign In</Card.Title> </Card.Header>
+	<Card.Header><Card.Title class="text-xl">Sign In</Card.Title></Card.Header>
 	<Card.Content>
 		{#if data.resetSuccess}
 			<p class="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">Password reset successfully. Please sign in.</p>
@@ -22,7 +25,7 @@ let { form, data } = $props();
 		<form method="POST" use:enhance class="space-y-4">
 			<div class="space-y-2">
 				<Label for="email">Email</Label>
-				<Input id="email" name="email" type="email" value={form?.values?.email ?? ''} required />
+				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required />
 				{#if form?.errors?.email}
 					<p class="text-sm text-red-600">{form.errors.email[0]}</p>
 				{/if}
@@ -30,7 +33,22 @@ let { form, data } = $props();
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
-				<Input id="password" name="password" type="password" required />
+				<div class="relative">
+					<Input id="password" name="password" type={showPassword ? "text" : "password"} required />
+					<button
+						type="button"
+						class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+						aria-label={showPassword ? "Hide password" : "Show password"}
+						aria-pressed={showPassword}
+						onclick={() => (showPassword = !showPassword)}
+					>
+						{#if showPassword}
+							<EyeOff size={18} />
+						{:else}
+							<Eye size={18} />
+						{/if}
+					</button>
+				</div>
 				{#if form?.errors?.password}
 					<p class="text-sm text-red-600">{form.errors.password[0]}</p>
 				{/if}

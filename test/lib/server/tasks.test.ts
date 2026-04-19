@@ -199,7 +199,7 @@ describe("tasks helpers", () => {
 	});
 
 	it("ensureTasksForDate catches scheduling errors and continues", async () => {
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
 		countResultsQueue.push([{ count: 2 }], [{ count: 3 }]);
 		templateResultsQueue.push([{ tpl: buildTemplate(11, "weekly") }]);
 		variantResultsQueue.push([buildVariant(1, 11)]);
@@ -241,7 +241,8 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([
 			buildTemplate(50, "daily", {
 				titleBase: "Hello {{missing}}",
-				shortObjectiveBase: null,
+				shortObjectiveBase: "Focus on {{topic}}",
+				descriptionBase: null,
 				agentPromptBase: null,
 			}),
 		]);
@@ -252,7 +253,8 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
 			expect.objectContaining({
 				title: "Hello {{missing}}",
-				shortObjective: null,
+				shortObjective: "Focus on {{topic}}",
+				description: null,
 				agentPrompt: null,
 			}),
 		);

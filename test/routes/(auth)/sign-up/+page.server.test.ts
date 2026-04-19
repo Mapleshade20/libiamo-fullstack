@@ -115,7 +115,13 @@ describe("Sign-up +page.server", () => {
 			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
 
 			expect(auth.api.signUpEmail).toHaveBeenCalledWith({
-				body: validData,
+				body: {
+					email: validData.email,
+					password: validData.password,
+					name: validData.name,
+					activeLanguage: validData.activeLanguage,
+					timezone: validData.timezone,
+				},
 				headers: event.request.headers,
 			});
 

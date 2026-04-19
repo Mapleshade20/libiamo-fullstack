@@ -7,7 +7,12 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const token = event.url.searchParams.get("token");
-	return { hasToken: !!token, token };
+	const error = event.url.searchParams.get("error");
+	return {
+		hasToken: !!token,
+		token,
+		...(error ? { error } : {}),
+	};
 };
 
 export const actions: Actions = {
