@@ -8,14 +8,19 @@ import { task, template } from "$lib/server/db/schema";
 import { getMondayFromWeekString, scheduleTaskManually, toDateString } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
-// Helper: Safely generate the current ISO week string based on system timezone
+// Helper: Safely generate the current ISO week string using UTC-based ISO week arithmetic
 function getCurrentWeekString(): string {
-	const date = new Date();
-	date.setHours(0, 0, 0, 0);
-	date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
-	const week1 = new Date(date.getFullYear(), 0, 4);
-	const weekNumber = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-	return `${date.getFullYear()}-W${weekNumber.toString().padStart(2, "0")}`;
+	const now = new Date();
+	const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+	const isoDay = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+	// Move to the Thursday in the current ISO week so the ISO year is correct.
+	date.setUTCDate(date.getUTCDate() + 4 - isoDay);
+	const isoYear = date.getUTCFullYear();
+	const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+	const firstThursdayIsoDay = firstThursday.getUTCDay() === 0 ? 7 : firstThursday.getUTCDay();
+	firstThursday.setUTCDate(firstThursday.getUTCDate() + 4 - firstThursdayIsoDay);
+	const weekNumber = 1 + Math.floor((date.getTime() - firstThursday.getTime()) / (7 * 86400000));
+	return `${isoYear}-W${weekNumber.toString().padStart(2, "0")}`;
 }
 
 export const load: PageServerLoad = async (event) => {
@@ -23,8 +28,8 @@ export const load: PageServerLoad = async (event) => {
 	const rawMode = event.url.searchParams.get("mode") ?? "daily";
 	const mode: "daily" | "weekly" = rawMode === "weekly" ? "weekly" : "daily";
 	// 2. Safely resolve the raw date parameter, with fallbacks to avoid empty string errors
-	let rawDateParam = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-	const isValidFormat = rawDateParam && (/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) || /^\d{4}-W\d{2}$/.test(rawDateParam));
+	let rawDateParam = event.url.searchParams.get("date") ?? toDateString(new Date()).slice(0, 10);
+	const isValidFormat = rawDateParam && (/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) || /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(rawDateParam));
 
 	if (!isValidFormat) {
 		rawDateParam = mode === "weekly" ? getCurrentWeekString() : new Date().toISOString().slice(0, 10);

@@ -1,5 +1,4 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, sql } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
 import type { LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
@@ -36,7 +35,13 @@ export function toDateString(d: Date): string {
 }
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
-	return text.replace(/\{\{(\w+)\}\}/g, (_, k) => slots[k] ?? `{{${k}}}`);
+	return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+		// Safely check for own properties to prevent prototype leakage (e.g., __proto__)
+		if (Object.hasOwn(slots, k) && slots[k] !== undefined) {
+			return slots[k];
+		}
+		return `{{${k}}}`;
+	});
 }
 
 function resolveObjectives(objectives: string[] | null | undefined, slots: Record<string, string>): string[] | null {
@@ -146,7 +151,8 @@ async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "wee
 	const conditions = [eq(template.language, language), eq(template.cadence, cadence), eq(template.isActive, true)];
 
 	if (scheduledIds.length > 0) {
-		conditions.push(notInArray(template.id, scheduledIds));
+		// English Comment: Use Drizzle's native notInArray directly instead of the brittle custom wrapper
+		conditions.push(drizzleNotInArray(template.id, scheduledIds));
 	}
 
 	const templates = await db
@@ -172,16 +178,18 @@ export async function ensureTasksForDate(language: LanguageCode, today: Date): P
 	const mondayStr = toDateString(monday);
 	const todayStr = toDateString(today);
 
-	// Count existing tasks
+	// English Comment: Join template table to filter counts by specific cadence to avoid confusing daily/weekly quotas on Mondays
 	const [weeklyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
-		.where(and(eq(task.language, language), eq(task.date, mondayStr)));
+		.innerJoin(template, eq(task.templateId, template.id))
+		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.cadence, "weekly")));
 
 	const [dailyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
-		.where(and(eq(task.language, language), eq(task.date, todayStr)));
+		.innerJoin(template, eq(task.templateId, template.id))
+		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(template.cadence, "daily")));
 
 	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
 	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
@@ -203,36 +211,11 @@ export async function scheduleTaskManually(templateId: number, dateStr: string):
 		const monday = getMondayFromWeekString(dateStr);
 		targetDateStr = toDateString(monday);
 	} else if (tpl.cadence === "weekly") {
-		const selectedDate = new Date(dateStr);
+		const [year, month, day] = dateStr.split("-").map(Number);
+		const selectedDate = new Date(year, month - 1, day);
 		const monday = getMondayOfWeek(selectedDate);
 		targetDateStr = toDateString(monday);
 	}
 
 	await insertTask(tpl, targetDateStr, "manual");
-}
-function notInArray(
-	id: PgColumn<
-		{
-			name: "id";
-			tableName: "template";
-			dataType: "number";
-			columnType: "PgSerial";
-			data: number;
-			driverParam: number;
-			notNull: true;
-			hasDefault: true;
-			isPrimaryKey: true;
-			isAutoincrement: false;
-			hasRuntimeDefault: false;
-			enumValues: undefined;
-			baseColumn: never;
-			identity: undefined;
-			generated: undefined;
-		},
-		Record<string, never>,
-		Record<string, never>
-	>,
-	scheduledIds: number[],
-): import("drizzle-orm").SQL<unknown> {
-	return drizzleNotInArray(id, scheduledIds);
 }

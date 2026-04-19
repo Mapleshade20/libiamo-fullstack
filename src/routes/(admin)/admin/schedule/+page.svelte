@@ -17,12 +17,13 @@ let rawDate = $derived(data.filters.rawDate);
 let language = $derived(data.filters.language);
 
 // Initialize safely without referencing reactive props directly to avoid Svelte 5 warnings
-let selectedTemplateId = $state<number>(0);
+let selectedTemplateId = $state<number | string>(0);
 
 // Use effect to safely sync selectedTemplateId whenever activeTemplates changes
 $effect(() => {
+	const normalizedSelectedTemplateId = Number(selectedTemplateId);
 	if (data.activeTemplates.length > 0) {
-		if (!data.activeTemplates.some((t) => t.id === selectedTemplateId)) {
+		if (!data.activeTemplates.some((t) => t.id === normalizedSelectedTemplateId)) {
 			selectedTemplateId = data.activeTemplates[0].id;
 		}
 	} else {
@@ -109,7 +110,6 @@ function toggleMode(newMode: "daily" | "weekly") {
 							<Table.Cell>{t.id}</Table.Cell>
 							<Table.Cell>{t.title}</Table.Cell>
 							<Table.Cell>{t.templateInteractionType}</Table.Cell>
-							<Table.Cell>{t.templateCadence}</Table.Cell>
 							<Table.Cell>
 								<Badge
 									variant={t.origin === "auto"
