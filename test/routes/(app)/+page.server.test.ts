@@ -14,10 +14,13 @@ const { mockWhere, mockSelect, mockOnConflictDoNothing, mockValues, mockInsert }
 	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockOnConflictDoNothing, mockValues, mockInsert };
 });
 
-const { mockEnsureTasksForDate, mockGetMondayOfWeek, mockToDateString } = vi.hoisted(() => ({
+const { mockEnsureTasksForDate } = vi.hoisted(() => ({
 	mockEnsureTasksForDate: vi.fn(),
-	mockGetMondayOfWeek: vi.fn(() => new Date("2026-04-06T00:00:00.000Z")),
-	mockToDateString: vi.fn((d: Date) => d.toISOString().slice(0, 10)),
+}));
+
+const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => ({
+	mockGetMondayOfWeekForDate: vi.fn(() => "2026-04-13"),
+	mockGetLocalDateString: vi.fn(() => "2026-04-17"),
 }));
 
 vi.mock("$lib/server/auth", () => ({
@@ -58,8 +61,11 @@ vi.mock("$lib/server/db/schema", () => ({
 
 vi.mock("$lib/server/tasks", () => ({
 	ensureTasksForDate: mockEnsureTasksForDate,
-	getMondayOfWeek: mockGetMondayOfWeek,
-	toDateString: mockToDateString,
+}));
+
+vi.mock("$lib/server/dates", () => ({
+	getMondayOfWeekForDate: mockGetMondayOfWeekForDate,
+	getLocalDateString: mockGetLocalDateString,
 }));
 
 describe("(app) home +page.server", () => {
@@ -83,7 +89,7 @@ describe("(app) home +page.server", () => {
 		const result = await load({ locals: { user } } as any);
 
 		expect(mockEnsureTasksForDate).toHaveBeenCalledTimes(1);
-		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(Date));
+		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
 		expect(result).toEqual({
 			weeklyTasks,
 			dailyTasks,
@@ -105,40 +111,36 @@ describe("(app) home +page.server", () => {
 		});
 
 		it("should use UTC as default timezone if user.timezone is missing", async () => {
+			mockGetLocalDateString.mockReturnValue("2026-04-17");
 			mockWhere.mockResolvedValue([]); // Prevent DB mock errors
 			const user = { id: "u1", activeLanguage: "en" }; // No timezone set
 
 			await load({ locals: { user } } as any);
 
-			// Expected safe date anchored at 12:00 UTC for 2026-04-17
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith(
-				"en",
-				new Date(Date.UTC(2026, 3, 17, 12, 0, 0)), // Month is 0-indexed (3 = April)
-			);
+			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
 		});
 
 		it("should calculate local date correctly based on valid user timezone (e.g., Asia/Tokyo)", async () => {
+			mockGetLocalDateString.mockReturnValue("2026-04-18");
 			mockWhere.mockResolvedValue([]);
 			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
 
-			// Set system time to late UTC, which pushes Tokyo (UTC+9) into the next day
-			vi.setSystemTime(new Date("2026-04-17T20:00:00Z"));
-
 			await load({ locals: { user } } as any);
 
-			// Tokyo local date should be 2026-04-18
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", new Date(Date.UTC(2026, 3, 18, 12, 0, 0)));
+			expect(mockGetLocalDateString).toHaveBeenCalledWith("Asia/Tokyo");
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-18");
 		});
 
-		it("should fallback to local toISOString if timezone is invalid and throws error", async () => {
+		it("should fallback gracefully if timezone is invalid", async () => {
+			mockGetLocalDateString.mockReturnValue("2026-04-17");
 			mockWhere.mockResolvedValue([]);
 			const user = { id: "u1", activeLanguage: "en", timezone: "Invalid/Timezone" };
 
-			// System time is 2026-04-17T10:00:00Z
 			await load({ locals: { user } } as any);
 
-			// Fallback logic uses sliced ISO string, resulting in 2026-04-17
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", new Date(Date.UTC(2026, 3, 17, 12, 0, 0)));
+			expect(mockGetLocalDateString).toHaveBeenCalledWith("Invalid/Timezone");
+			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
 		});
 	});
 

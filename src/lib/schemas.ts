@@ -1,5 +1,9 @@
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+
+dayjs.extend(customParseFormat);
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const timezoneSchema = z.preprocess(
@@ -297,14 +301,11 @@ export const scheduleManualSchema = z.object({
 		if (isoWeekRegex.test(value)) {
 			return true;
 		}
-		const match = value.match(standardDateRegex);
-		if (!match) {
+		if (!standardDateRegex.test(value)) {
 			return false;
 		}
 
 		// Ensure the date actually exists (e.g., prevent Feb 30th)
-		const [year, month, day] = value.split("-").map(Number);
-		const parsedDate = new Date(Date.UTC(year, month - 1, day));
-		return parsedDate.getUTCFullYear() === year && parsedDate.getUTCMonth() === month - 1 && parsedDate.getUTCDate() === day;
+		return dayjs(value, "YYYY-MM-DD", true).isValid();
 	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
 });

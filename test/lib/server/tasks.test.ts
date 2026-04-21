@@ -25,7 +25,7 @@ const { mockInsertTaskConflict, mockInsertTaskValues, mockInsertTask, mockSelect
 
 				// Task count/scheduled query: has date but not cadence
 				if (table && "date" in table && !("cadence" in table)) {
-					// English Comment: Return a chainable object that supports BOTH innerJoin() and where() directly,
+					// Return a chainable object that supports BOTH innerJoin() and where() directly,
 					// to cover both count queries (which use innerJoin) and scheduled queries (which just use where).
 					const taskChain = {
 						innerJoin: () => taskChain,
@@ -94,7 +94,14 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-import { ensureTasksForDate, getMondayFromWeekString, getMondayOfWeek, scheduleTaskManually, toDateString } from "$lib/server/tasks";
+import {
+	ensureTasksForDate,
+	getMondayFromWeekString,
+	getMondayOfWeek,
+	getMondayOfWeekForDate,
+	scheduleTaskManually,
+	toDateString,
+} from "$lib/server/tasks";
 
 // ── 2. Helpers ─────────────────────────────────────────────────────────
 function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, unknown> = {}) {
@@ -131,7 +138,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.length = 0;
 		variantResultsQueue.length = 0;
 
-		// English Comment: Explicitly reset the mocked implementation and history to prevent test pollution
+		// Explicitly reset the mocked implementation and history to prevent test pollution
 		// in case a previous test threw an error before consuming its mockRejectedValueOnce.
 		mockInsertTaskConflict.mockReset();
 		mockInsertTaskConflict.mockImplementation(async () => undefined);
@@ -168,10 +175,39 @@ describe("tasks helpers", () => {
 		expect(toDateString(new Date("2026-04-04T08:30:00.000Z"))).toBe("2026-04-04");
 	});
 
+	// --- getMondayOfWeekForDate (timezone-independent UTC) ---
+	describe("getMondayOfWeekForDate", () => {
+		it("returns the same Monday when date is already Monday", () => {
+			expect(getMondayOfWeekForDate("2026-04-13")).toBe("2026-04-13");
+		});
+
+		it("returns previous Monday for a Sunday", () => {
+			expect(getMondayOfWeekForDate("2026-04-19")).toBe("2026-04-13");
+		});
+
+		it("is timezone-independent: result is identical regardless of process TZ", () => {
+			// Sunday that would shift if interpreted in e.g. Pacific/Auckland (UTC+12)
+			const results = new Set<string>();
+			const tzValues = ["UTC", "America/New_York", "Asia/Tokyo", "Pacific/Auckland"];
+			for (const tz of tzValues) {
+				process.env.TZ = tz;
+				results.add(getMondayOfWeekForDate("2026-04-19"));
+			}
+			delete process.env.TZ;
+			expect(results.size).toBe(1);
+			expect([...results][0]).toBe("2026-04-13");
+		});
+
+		it("handles week spanning year boundary (Sunday Jan 4 2026)", () => {
+			// 2026-01-04 is a Sunday; its ISO week Monday is 2025-12-29
+			expect(getMondayOfWeekForDate("2026-01-04")).toBe("2025-12-29");
+		});
+	});
+
 	// --- ensureTasksForDate Tests ---
 	it("ensureTasksForDate does nothing when quotas are already met", async () => {
 		countResultsQueue.push([{ count: 3 }], [{ count: 3 }]);
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 		expect(mockInsertTask).not.toHaveBeenCalled();
 	});
 
@@ -181,7 +217,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([{ tpl: buildTemplate(1, "weekly") }, { tpl: buildTemplate(2, "weekly") }], [{ tpl: buildTemplate(3, "daily") }]);
 		variantResultsQueue.push([buildVariant(1, 1)], [buildVariant(2, 2)], [buildVariant(3, 3)]);
 
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 
 		expect(mockInsertTask).toHaveBeenCalledTimes(3);
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(
@@ -199,7 +235,7 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([{ tpl: buildTemplate(42, "weekly") }]);
 		variantResultsQueue.push([buildVariant(1, 42)]);
 
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 		expect(mockInsertTask).toHaveBeenCalled();
 	});
 
@@ -209,10 +245,10 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([{ tpl: buildTemplate(11, "weekly") }]);
 		variantResultsQueue.push([buildVariant(1, 11)]);
 
-		// English Comment: Queue a failure for the insert statement
+		// Queue a failure for the insert statement
 		mockInsertTaskConflict.mockRejectedValueOnce(new Error("insert failed"));
 
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to schedule weekly task"), expect.any(Error));
 	});
 
@@ -221,21 +257,21 @@ describe("tasks helpers", () => {
 		templateResultsQueue.push([{ tpl: buildTemplate(30, "weekly") }], [{ tpl: buildTemplate(31, "daily") }]);
 		variantResultsQueue.push([buildVariant(1, 30)], [buildVariant(2, 31)]);
 
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 		expect(mockInsertTask).toHaveBeenCalled();
 	});
 
 	// --- EDGE CASE & VULNERABILITY TESTS ---
 
-	// English Comment: Edge Case: Defensive check to ensure we don't accidentally try to schedule negative tasks if data is anomalous
+	// Edge Case: Defensive check to ensure we don't accidentally try to schedule negative tasks if data is anomalous
 	it("ensureTasksForDate handles excessively high database counts without scheduling negatives", async () => {
 		countResultsQueue.push([{ count: 999 }], [{ count: 50 }]); // Anomaly: More tasks than max quota
-		await ensureTasksForDate("en", new Date("2026-04-04T00:00:00.000Z"));
+		await ensureTasksForDate("en", "2026-04-04");
 		// Math.max(0, 3 - count) should prevent it from passing negative neededCount to scheduleAutoTasks
 		expect(mockInsertTask).not.toHaveBeenCalled();
 	});
 
-	// English Comment: Security/Validation Edge Case: Ensure the regex replacer handles prototype injection safely without crashing
+	// Security/Validation Edge Case: Ensure the regex replacer handles prototype injection safely without crashing
 	it("scheduleTaskManually resolves templates safely ignoring prototype pollution attempts", async () => {
 		templateResultsQueue.push([buildTemplate(100, "daily", { titleBase: "User {{__proto__}} says hi" })]);
 		variantResultsQueue.push([buildVariant(1, 100, { slotValues: { normal: "val" } })]);
@@ -246,15 +282,29 @@ describe("tasks helpers", () => {
 		expect(mockInsertTaskValues).toHaveBeenCalledWith(expect.objectContaining({ title: "User {{__proto__}} says hi" }));
 	});
 
-	// English Comment: Edge Case: Gracefully handling completely mangled date strings
-	it("scheduleTaskManually processes invalid date strings without uncaught exceptions", async () => {
-		templateResultsQueue.push([buildTemplate(99, "weekly")]);
+	// Edge Case: Gracefully handling completely mangled date strings with daily cadence
+	it("scheduleTaskManually processes invalid date strings without uncaught exceptions for daily templates", async () => {
+		templateResultsQueue.push([buildTemplate(99, "daily")]);
 		variantResultsQueue.push([buildVariant(1, 99)]);
 
-		// An invalid date string passed manually shouldn't cause an unhandled process crash.
-		// JS Date parsing of "not-a-date" produces NaN, which our helper should stringify safely or fall through.
+		// An invalid date string passed manually for a daily template shouldn't cause an unhandled process crash.
 		await expect(scheduleTaskManually(99, "not-a-date")).resolves.not.toThrow();
 		expect(mockInsertTask).toHaveBeenCalledTimes(1);
+	});
+
+	// Strict weekly scheduling: non-week-string dates must be rejected
+	it("scheduleTaskManually rejects a calendar date for weekly templates", async () => {
+		templateResultsQueue.push([buildTemplate(99, "weekly")]);
+		await expect(scheduleTaskManually(99, "2026-04-04")).rejects.toThrow("Weekly templates require an ISO week date string (e.g. 2026-W16)");
+		expect(mockInsertTask).not.toHaveBeenCalled();
+	});
+
+	it("scheduleTaskManually accepts a valid ISO week string for weekly templates", async () => {
+		templateResultsQueue.push([buildTemplate(98, "weekly")]);
+		variantResultsQueue.push([buildVariant(2, 98)]);
+		await scheduleTaskManually(98, "2026-W16");
+		expect(mockInsertTask).toHaveBeenCalledTimes(1);
+		expect(mockInsertTaskValues).toHaveBeenCalledWith(expect.objectContaining({ origin: "manual" }));
 	});
 
 	// --- scheduleTaskManually Tests ---

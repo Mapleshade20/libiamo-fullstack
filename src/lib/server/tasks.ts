@@ -1,38 +1,10 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
+import { getMondayFromWeekString, getMondayOfWeek, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 
-export function getMondayOfWeek(d: Date): Date {
-	const date = new Date(d);
-	const day = date.getDay();
-	const diff = day === 0 ? -6 : 1 - day;
-	date.setDate(date.getDate() + diff);
-	date.setHours(0, 0, 0, 0);
-	return date;
-}
-
-export function getMondayFromWeekString(weekStr: string): Date {
-	const [yearStr, weekPart] = weekStr.split("-W");
-	const year = Number.parseInt(yearStr, 10);
-	const week = Number.parseInt(weekPart, 10);
-
-	// In ISO-8601, January 4th is always in week 1.
-	const jan4 = new Date(year, 0, 4);
-	const dayOfJan4 = jan4.getDay() || 7;
-	const mondayOfWeek1 = new Date(year, 0, 4 - dayOfJan4 + 1);
-
-	const targetMonday = new Date(mondayOfWeek1);
-	targetMonday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
-	return targetMonday;
-}
-
-export function toDateString(d: Date): string {
-	const yyyy = d.getFullYear();
-	const mm = String(d.getMonth() + 1).padStart(2, "0");
-	const dd = String(d.getDate()).padStart(2, "0");
-	return `${yyyy}-${mm}-${dd}`;
-}
+export { getMondayFromWeekString, getMondayOfWeek, getMondayOfWeekForDate, toDateString };
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
 	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {
@@ -48,8 +20,6 @@ function resolveObjectives(objectives: string[] | null | undefined, slots: Recor
 	if (!objectives || objectives.length === 0) return null;
 	return objectives.map((o) => resolveSlots(o, slots));
 }
-
-// ── MBTI persona types ────────────────────────────────────────────────
 
 const MBTI_TYPES = [
 	"INTJ",
@@ -96,8 +66,6 @@ function randomMbtiPersonaPrefix(): string {
 	return MBTI_PROMPT_MAP[type];
 }
 
-// ── insertTask ────────────────────────────────────────────────────────
-
 async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, origin: "manual" | "auto") {
 	// Query active variants for this template
 	const variants = await db
@@ -136,8 +104,6 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 		});
 }
 
-// ── ensureTasksForDate ────────────────────────────────────────────────
-
 async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "weekly", targetDateStr: string, neededCount: number) {
 	if (neededCount <= 0) return;
 
@@ -151,7 +117,7 @@ async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "wee
 	const conditions = [eq(template.language, language), eq(template.cadence, cadence), eq(template.isActive, true)];
 
 	if (scheduledIds.length > 0) {
-		// English Comment: Use Drizzle's native notInArray directly instead of the brittle custom wrapper
+		// Use Drizzle's native notInArray directly instead of the brittle custom wrapper
 		conditions.push(drizzleNotInArray(template.id, scheduledIds));
 	}
 
@@ -173,12 +139,10 @@ async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "wee
 	}
 }
 
-export async function ensureTasksForDate(language: LanguageCode, today: Date): Promise<void> {
-	const monday = getMondayOfWeek(today);
-	const mondayStr = toDateString(monday);
-	const todayStr = toDateString(today);
+export async function ensureTasksForDate(language: LanguageCode, todayStr: string): Promise<void> {
+	const mondayStr = getMondayOfWeekForDate(todayStr);
 
-	// English Comment: Join template table to filter counts by specific cadence to avoid confusing daily/weekly quotas on Mondays
+	// Join template table to filter counts by specific cadence to avoid confusing daily/weekly quotas on Mondays
 	const [weeklyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
@@ -198,23 +162,19 @@ export async function ensureTasksForDate(language: LanguageCode, today: Date): P
 	await scheduleAutoTasks(language, "daily", todayStr, dailyNeeded);
 }
 
-// ── scheduleTaskManually ──────────────────────────────────────────────
-
 export async function scheduleTaskManually(templateId: number, dateStr: string): Promise<void> {
 	const [tpl] = await db.select().from(template).where(eq(template.id, templateId)).limit(1);
 	if (!tpl) throw new Error("Template not found");
 
 	let targetDateStr = dateStr;
 
-	// Automatically snap to Monday if parsing a week string or a weekly template
+	// Automatically snap to Monday if parsing a week string.
+	// For weekly templates, require an ISO week string (YYYY-Www).
 	if (dateStr.includes("-W")) {
 		const monday = getMondayFromWeekString(dateStr);
 		targetDateStr = toDateString(monday);
 	} else if (tpl.cadence === "weekly") {
-		const [year, month, day] = dateStr.split("-").map(Number);
-		const selectedDate = new Date(year, month - 1, day);
-		const monday = getMondayOfWeek(selectedDate);
-		targetDateStr = toDateString(monday);
+		throw new Error("Weekly templates require an ISO week date string (e.g. 2026-W16)");
 	}
 
 	await insertTask(tpl, targetDateStr, "manual");
