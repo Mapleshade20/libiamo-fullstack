@@ -38,7 +38,7 @@ export const template = pgTable(
 		objectivesBase: text("objectives_base").array(),
 		agentPromptBase: text("agent_prompt_base"),
 		materialsMd: text("materials_md"),
-		tags: text("tags").array().default(sql`'{}'`).notNull(),
+		tags: text("tags").array(),
 
 		maxTurns: integer("max_turns"),
 		estimatedWords: integer("estimated_words"),
@@ -68,8 +68,8 @@ export const templateVariant = pgTable(
 			.notNull()
 			.references(() => template.id, { onDelete: "cascade" }),
 		isActive: boolean("is_active").default(true).notNull(),
-		slotValues: jsonb("slot_values").notNull().default(sql`'{}'`),
-		openingState: jsonb("opening_state").notNull().default(sql`'{}'`),
+		slotValues: jsonb("slot_values").notNull().default({}),
+		openingState: jsonb("opening_state").notNull().default({}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

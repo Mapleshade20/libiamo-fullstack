@@ -32,7 +32,7 @@ export const load: PageServerLoad = async (event) => {
 			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateCadence: task.cadence,
+			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -49,7 +49,7 @@ export const load: PageServerLoad = async (event) => {
 			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateCadence: task.cadence,
+			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
