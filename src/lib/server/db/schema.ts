@@ -91,6 +91,7 @@ export const task = pgTable(
 			.notNull()
 			.references(() => templateVariant.id),
 		language: languageCodeEnum("language").notNull(),
+		cadence: cadenceEnum("cadence").notNull(),
 		date: date("date").notNull(),
 		origin: scheduleOriginEnum("origin").notNull(),
 
@@ -102,7 +103,11 @@ export const task = pgTable(
 
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
-	(t) => [uniqueIndex("task_date_template_idx").on(t.date, t.templateId), index("task_language_date_idx").on(t.language, t.date)],
+	(t) => [
+		uniqueIndex("task_date_template_idx").on(t.date, t.templateId),
+		index("task_language_date_idx").on(t.language, t.date),
+		index("task_language_cadence_date_idx").on(t.language, t.cadence, t.date),
+	],
 );
 
 // ── Relations ────────────────────────────────────────────────────────

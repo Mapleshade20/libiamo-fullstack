@@ -52,11 +52,11 @@ export const load: PageServerLoad = async (event) => {
 			language: task.language,
 			templateTitle: template.titleBase,
 			templateInteractionType: template.interactionType,
-			templateCadence: template.cadence,
+			templateCadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.date, dateFilter), eq(task.language, languageFilter), eq(template.cadence, mode)))
+		.where(and(eq(task.date, dateFilter), eq(task.language, languageFilter), eq(task.cadence, mode)))
 		.orderBy(task.id);
 
 	// Query active templates strictly scoped by the current mode

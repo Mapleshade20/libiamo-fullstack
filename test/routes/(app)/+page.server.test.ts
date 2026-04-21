@@ -48,6 +48,7 @@ vi.mock("$lib/server/db/schema", () => ({
 		date: "date",
 		language: "language",
 		templateId: "templateId",
+		cadence: "cadence",
 	},
 	template: {
 		id: "id",
