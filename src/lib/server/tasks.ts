@@ -1,10 +1,10 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
-import { getMondayFromWeekString, getMondayOfWeek, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
+import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 
-export { getMondayFromWeekString, getMondayOfWeek, getMondayOfWeekForDate, toDateString };
+export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
 	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {
@@ -175,6 +175,8 @@ export async function scheduleTaskManually(templateId: number, dateStr: string):
 		targetDateStr = toDateString(monday);
 	} else if (tpl.cadence === "weekly") {
 		throw new Error("Weekly templates require an ISO week date string (e.g. 2026-W16)");
+	} else if (!dayjs(dateStr, "YYYY-MM-DD", true).isValid()) {
+		throw new Error("Invalid date string. Must be a valid YYYY-MM-DD date.");
 	}
 
 	await insertTask(tpl, targetDateStr, "manual");

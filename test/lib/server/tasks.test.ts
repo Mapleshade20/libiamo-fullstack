@@ -94,14 +94,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-import {
-	ensureTasksForDate,
-	getMondayFromWeekString,
-	getMondayOfWeek,
-	getMondayOfWeekForDate,
-	scheduleTaskManually,
-	toDateString,
-} from "$lib/server/tasks";
+import { ensureTasksForDate, getMondayFromWeekString, getMondayOfWeekForDate, scheduleTaskManually, toDateString } from "$lib/server/tasks";
 
 // ── 2. Helpers ─────────────────────────────────────────────────────────
 function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, unknown> = {}) {
@@ -159,16 +152,6 @@ describe("tasks helpers", () => {
 			const result = getMondayFromWeekString("2026-W01");
 			expect(toDateString(result)).toBe("2025-12-29");
 		});
-	});
-
-	it("getMondayOfWeek returns monday for a sunday date", () => {
-		const monday = getMondayOfWeek(new Date("2026-04-05T12:00:00.000Z"));
-		expect(monday.getDay()).toBe(1);
-	});
-
-	it("getMondayOfWeek keeps monday on monday", () => {
-		const monday = getMondayOfWeek(new Date("2026-04-06T12:00:00.000Z"));
-		expect(monday.getDay()).toBe(1);
 	});
 
 	it("toDateString returns YYYY-MM-DD", () => {
@@ -283,13 +266,19 @@ describe("tasks helpers", () => {
 	});
 
 	// Edge Case: Gracefully handling completely mangled date strings with daily cadence
-	it("scheduleTaskManually processes invalid date strings without uncaught exceptions for daily templates", async () => {
+	it("scheduleTaskManually rejects completely invalid date strings for daily templates", async () => {
 		templateResultsQueue.push([buildTemplate(99, "daily")]);
-		variantResultsQueue.push([buildVariant(1, 99)]);
 
-		// An invalid date string passed manually for a daily template shouldn't cause an unhandled process crash.
-		await expect(scheduleTaskManually(99, "not-a-date")).resolves.not.toThrow();
-		expect(mockInsertTask).toHaveBeenCalledTimes(1);
+		await expect(scheduleTaskManually(99, "not-a-date")).rejects.toThrow("Invalid date string");
+		expect(mockInsertTask).not.toHaveBeenCalled();
+	});
+
+	// Regression: valid-format but impossible dates (e.g. Feb 30) must be rejected
+	it("scheduleTaskManually rejects valid-format but impossible calendar dates for daily templates", async () => {
+		templateResultsQueue.push([buildTemplate(99, "daily")]);
+
+		await expect(scheduleTaskManually(99, "2026-02-30")).rejects.toThrow("Invalid date string");
+		expect(mockInsertTask).not.toHaveBeenCalled();
 	});
 
 	// Strict weekly scheduling: non-week-string dates must be rejected

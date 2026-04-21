@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
-import { getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
+import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
 import { scheduleTaskManually } from "$lib/server/tasks";
@@ -15,7 +15,10 @@ export const load: PageServerLoad = async (event) => {
 	const mode: "daily" | "weekly" = rawMode === "weekly" ? "weekly" : "daily";
 	// Safely resolve the raw date parameter, with fallbacks to avoid empty string errors
 	let rawDateParam = event.url.searchParams.get("date") ?? toDateString(new Date()).slice(0, 10);
-	const isValidFormat = rawDateParam && (/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) || /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(rawDateParam));
+	const isValidFormat =
+		rawDateParam &&
+		(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(rawDateParam) ||
+			(/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) && dayjs(rawDateParam, "YYYY-MM-DD", true).isValid()));
 
 	if (!isValidFormat) {
 		rawDateParam = mode === "weekly" ? getCurrentWeekString() : new Date().toISOString().slice(0, 10);

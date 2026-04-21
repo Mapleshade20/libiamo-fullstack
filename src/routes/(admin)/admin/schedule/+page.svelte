@@ -1,7 +1,7 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
-import { page } from "$app/stores";
+import { page } from "$app/state";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -14,10 +14,9 @@ let { form, data } = $props();
 
 let mode = $derived(data.filters.mode);
 let rawDate = $derived(data.filters.rawDate);
-let language = $derived(data.filters.language);
 
-// Initialize safely without referencing reactive props directly to avoid Svelte 5 warnings
-let selectedTemplateId = $state<number | string>(0);
+// Initialize to empty string to match the placeholder option's value
+let selectedTemplateId = $state<number | string>("");
 
 // Use effect to safely sync selectedTemplateId whenever activeTemplates changes
 $effect(() => {
@@ -27,13 +26,13 @@ $effect(() => {
 			selectedTemplateId = data.activeTemplates[0].id;
 		}
 	} else {
-		selectedTemplateId = 0;
+		selectedTemplateId = "";
 	}
 });
 
 function toggleMode(newMode: "daily" | "weekly") {
 	if (mode === newMode) return;
-	const url = new URL($page.url);
+	const url = new URL(page.url);
 	url.searchParams.set("mode", newMode);
 	url.searchParams.delete("date");
 	goto(url.toString(), { keepFocus: true });
@@ -151,7 +150,7 @@ function toggleMode(newMode: "daily" | "weekly") {
 						required
 					>
 						{#if data.activeTemplates.length === 0}
-							<option value="" disabled selected>No active {mode} templates</option>
+							<option value="" disabled>No active {mode} templates</option>
 						{/if}
 						{#each data.activeTemplates as tpl}
 							<option value={tpl.id}>{tpl.id} — {tpl.titleBase} ({tpl.language.toUpperCase()})</option>

@@ -12,14 +12,6 @@ dayjs.extend(customParseFormat);
 export { dayjs };
 
 /**
- * Get the Monday of the ISO week containing the given date.
- * Returns a Date object set to midnight (local time).
- */
-export function getMondayOfWeek(d: Date): Date {
-	return dayjs(d).isoWeekday(1).startOf("day").toDate();
-}
-
-/**
  * Given a YYYY-MM-DD date string, return the Monday of its ISO week as YYYY-MM-DD.
  * Uses UTC interpretation so the result is independent of server timezone.
  */
@@ -60,7 +52,7 @@ export function getLocalDateString(tz: string): string {
 	try {
 		return dayjs().tz(tz).format("YYYY-MM-DD");
 	} catch {
-		return dayjs().format("YYYY-MM-DD");
+		return dayjs().utc().format("YYYY-MM-DD");
 	}
 }
 
