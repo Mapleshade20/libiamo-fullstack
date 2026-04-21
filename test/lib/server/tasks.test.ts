@@ -23,8 +23,8 @@ const { mockInsertTaskConflict, mockInsertTaskValues, mockInsertTask, mockSelect
 					return { where: readVariantResult };
 				}
 
-				// Task count/scheduled query: has date but not cadence
-				if (table && "date" in table && !("cadence" in table)) {
+				// Task count/scheduled query: has variantId (unique to task table)
+				if (table && "variantId" in table) {
 					// Return a chainable object that supports BOTH innerJoin() and where() directly,
 					// to cover both count queries (which use innerJoin) and scheduled queries (which just use where).
 					const taskChain = {
@@ -77,6 +77,7 @@ vi.mock("$lib/server/db/schema", () => ({
 		id: "id",
 		language: "language",
 		variantId: "variantId",
+		cadence: "cadence",
 	},
 	template: {
 		id: "id",

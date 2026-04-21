@@ -91,6 +91,7 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 			templateId: tpl.id,
 			variantId: variant.id,
 			language: tpl.language,
+			cadence: tpl.cadence,
 			date: dateStr,
 			origin,
 			title: resolveSlots(tpl.titleBase, slots),
@@ -142,18 +143,15 @@ async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "wee
 export async function ensureTasksForDate(language: LanguageCode, todayStr: string): Promise<void> {
 	const mondayStr = getMondayOfWeekForDate(todayStr);
 
-	// Join template table to filter counts by specific cadence to avoid confusing daily/weekly quotas on Mondays
 	const [weeklyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.cadence, "weekly")));
+		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(task.cadence, "weekly")));
 
 	const [dailyCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(template.cadence, "daily")));
+		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(task.cadence, "daily")));
 
 	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
 	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));

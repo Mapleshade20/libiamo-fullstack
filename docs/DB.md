@@ -143,6 +143,7 @@ Additional business fields:
   templateId      integer         FK -> template.id
   variantId       integer         FK -> templateVariant.id, not null
   language        languageCode    not null
+  cadence         cadence         not null  -- copied from template at creation time
   date            date            not null  -- weekly: Monday, daily: that day
   origin          scheduleOrigin  not null
 
@@ -156,6 +157,7 @@ Additional business fields:
 
   UNIQUE: (date, templateId)
   INDEX: (language, date)
+  INDEX: (language, cadence, date)
 
 
 ### practiceSession [Phase A2]

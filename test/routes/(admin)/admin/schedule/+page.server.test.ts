@@ -18,7 +18,7 @@ vi.mock("$lib/server/db", () => {
 });
 
 vi.mock("$lib/server/db/schema", () => ({
-	task: { id: "id", title: "title", date: "date", origin: "origin", language: "language", templateId: "templateId" },
+	task: { id: "id", title: "title", date: "date", origin: "origin", language: "language", templateId: "templateId", cadence: "cadence" },
 	template: { id: "id", titleBase: "titleBase", interactionType: "interactionType", cadence: "cadence", isActive: "isActive", language: "language" },
 }));
 
