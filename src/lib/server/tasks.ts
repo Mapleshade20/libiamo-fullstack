@@ -14,8 +14,8 @@ export function getMondayOfWeek(d: Date): Date {
 
 export function getMondayFromWeekString(weekStr: string): Date {
 	const [yearStr, weekPart] = weekStr.split("-W");
-	const year = parseInt(yearStr, 10);
-	const week = parseInt(weekPart, 10);
+	const year = Number.parseInt(yearStr, 10);
+	const week = Number.parseInt(weekPart, 10);
 
 	// In ISO-8601, January 4th is always in week 1.
 	const jan4 = new Date(year, 0, 4);
@@ -35,7 +35,7 @@ export function toDateString(d: Date): string {
 }
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
-	return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {
 		// Safely check for own properties to prevent prototype leakage (e.g., __proto__)
 		if (Object.hasOwn(slots, k) && slots[k] !== undefined) {
 			return slots[k];

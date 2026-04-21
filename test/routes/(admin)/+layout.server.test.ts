@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
 import { describe, expect, it, vi } from "vitest";
-import { load } from "../../../src/routes/(admin)/+layout.server";
+import { load } from "$routes/(admin)/+layout.server";
 
 vi.mock("@sveltejs/kit", () => ({
 	redirect: vi.fn((status, location) => {

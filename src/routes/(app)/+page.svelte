@@ -59,7 +59,7 @@ const uiIcons: Record<string, Component> = {
 </script>
 
 <!-- WARN: Biome 2.4.11 parser bug -->
-{#snippet taskCard(task: (typeof data.dailyTasks)[0])}
+{#snippet taskCard(task: typeof data.dailyTasks[0])}
 	{@const Icon = uiIcons[task.templateUi] ?? MessageSquare}
 	<div
 		class="card-scene h-56 w-full cursor-pointer transition-transform duration-[400ms] ease-out hover:scale-[1.02] hover:-translate-y-1"
