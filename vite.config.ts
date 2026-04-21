@@ -17,5 +17,8 @@ export default defineConfig({
 				statements: 85,
 			},
 		},
+		env: {
+			DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy",
+		},
 	},
 });

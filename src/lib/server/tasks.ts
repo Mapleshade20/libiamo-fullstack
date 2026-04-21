@@ -1,31 +1,25 @@
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, notInArray as drizzleNotInArray, eq, max, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
+import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 
-export function getMondayOfWeek(d: Date): Date {
-	const date = new Date(d);
-	const day = date.getDay();
-	const diff = day === 0 ? -6 : 1 - day;
-	date.setDate(date.getDate() + diff);
-	date.setHours(0, 0, 0, 0);
-	return date;
-}
-
-export function toDateString(d: Date): string {
-	return d.toISOString().slice(0, 10);
-}
+export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
-	return text.replace(/\{\{(\w+)\}\}/g, (_, k) => slots[k] ?? `{{${k}}}`);
+	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {
+		// Safely check for own properties to prevent prototype leakage (e.g., __proto__)
+		if (Object.hasOwn(slots, k) && slots[k] !== undefined) {
+			return slots[k];
+		}
+		return `{{${k}}}`;
+	});
 }
 
 function resolveObjectives(objectives: string[] | null | undefined, slots: Record<string, string>): string[] | null {
 	if (!objectives || objectives.length === 0) return null;
 	return objectives.map((o) => resolveSlots(o, slots));
 }
-
-// ── MBTI persona types ────────────────────────────────────────────────
 
 const MBTI_TYPES = [
 	"INTJ",
@@ -72,8 +66,6 @@ function randomMbtiPersonaPrefix(): string {
 	return MBTI_PROMPT_MAP[type];
 }
 
-// ── insertTask ────────────────────────────────────────────────────────
-
 async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, origin: "manual" | "auto") {
 	// Query active variants for this template
 	const variants = await db
@@ -112,71 +104,80 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 		});
 }
 
-// ── ensureTasksForDate ────────────────────────────────────────────────
+async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "weekly", targetDateStr: string, neededCount: number) {
+	if (neededCount <= 0) return;
 
-export async function ensureTasksForDate(language: LanguageCode, today: Date): Promise<void> {
-	const monday = getMondayOfWeek(today);
-	const mondayStr = toDateString(monday);
-	const todayStr = toDateString(today);
-
-	// Count existing tasks
-	const [weeklyCount] = await db
-		.select({ count: sql<number>`count(*)::int` })
+	// Fetch IDs of templates already scheduled for this date to avoid useless DB retry
+	const scheduledTasks = await db
+		.select({ templateId: task.templateId })
 		.from(task)
-		.where(and(eq(task.language, language), eq(task.date, mondayStr)));
+		.where(and(eq(task.date, targetDateStr), eq(task.language, language)));
+	const scheduledIds = scheduledTasks.map((t) => t.templateId);
 
-	const [dailyCount] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(task)
-		.where(and(eq(task.language, language), eq(task.date, todayStr)));
+	const conditions = [eq(template.language, language), eq(template.cadence, cadence), eq(template.isActive, true)];
 
-	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
-	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
-
-	if (weeklyNeeded > 0) {
-		// Order by MAX(task.date) ASC NULLS FIRST to schedule least-recently-used templates first
-		const templates = await db
-			.select({ tpl: template })
-			.from(template)
-			.leftJoin(task, eq(task.templateId, template.id))
-			.where(and(eq(template.language, language), eq(template.cadence, "weekly"), eq(template.isActive, true)))
-			.groupBy(template.id)
-			.orderBy(asc(max(task.date)).append(sql` nulls first`))
-			.limit(weeklyNeeded);
-
-		for (const { tpl } of templates) {
-			try {
-				await insertTask(tpl, mondayStr, "auto");
-			} catch (e) {
-				console.error(`Failed to schedule weekly task for template ${tpl.id} on ${mondayStr}:`, e);
-			}
-		}
+	if (scheduledIds.length > 0) {
+		// Use Drizzle's native notInArray directly instead of the brittle custom wrapper
+		conditions.push(drizzleNotInArray(template.id, scheduledIds));
 	}
 
-	if (dailyNeeded > 0) {
-		const templates = await db
-			.select({ tpl: template })
-			.from(template)
-			.leftJoin(task, eq(task.templateId, template.id))
-			.where(and(eq(template.language, language), eq(template.cadence, "daily"), eq(template.isActive, true)))
-			.groupBy(template.id)
-			.orderBy(asc(max(task.date)).append(sql` nulls first`))
-			.limit(dailyNeeded);
+	const templates = await db
+		.select({ tpl: template })
+		.from(template)
+		.leftJoin(task, eq(task.templateId, template.id))
+		.where(and(...conditions))
+		.groupBy(template.id)
+		.orderBy(asc(max(task.date)).append(sql` nulls first`))
+		.limit(neededCount);
 
-		for (const { tpl } of templates) {
-			try {
-				await insertTask(tpl, todayStr, "auto");
-			} catch (e) {
-				console.error(`Failed to schedule daily task for template ${tpl.id} on ${todayStr}:`, e);
-			}
+	for (const { tpl } of templates) {
+		try {
+			await insertTask(tpl, targetDateStr, "auto");
+		} catch (e) {
+			console.error(`Failed to schedule ${cadence} task for template ${tpl.id} on ${targetDateStr}:`, e);
 		}
 	}
 }
 
-// ── scheduleTaskManually ──────────────────────────────────────────────
+export async function ensureTasksForDate(language: LanguageCode, todayStr: string): Promise<void> {
+	const mondayStr = getMondayOfWeekForDate(todayStr);
+
+	// Join template table to filter counts by specific cadence to avoid confusing daily/weekly quotas on Mondays
+	const [weeklyCount] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(task)
+		.innerJoin(template, eq(task.templateId, template.id))
+		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.cadence, "weekly")));
+
+	const [dailyCount] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(task)
+		.innerJoin(template, eq(task.templateId, template.id))
+		.where(and(eq(task.language, language), eq(task.date, todayStr), eq(template.cadence, "daily")));
+
+	const weeklyNeeded = Math.max(0, 3 - (weeklyCount?.count ?? 0));
+	const dailyNeeded = Math.max(0, 3 - (dailyCount?.count ?? 0));
+
+	await scheduleAutoTasks(language, "weekly", mondayStr, weeklyNeeded);
+	await scheduleAutoTasks(language, "daily", todayStr, dailyNeeded);
+}
 
 export async function scheduleTaskManually(templateId: number, dateStr: string): Promise<void> {
 	const [tpl] = await db.select().from(template).where(eq(template.id, templateId)).limit(1);
 	if (!tpl) throw new Error("Template not found");
-	await insertTask(tpl, dateStr, "manual");
+
+	let targetDateStr = dateStr;
+
+	// Automatically snap to Monday if parsing a week string.
+	// For weekly templates, require an ISO week string (YYYY-Www).
+	if (dateStr.includes("-W")) {
+		const monday = getMondayFromWeekString(dateStr);
+		targetDateStr = toDateString(monday);
+	} else if (tpl.cadence === "weekly") {
+		throw new Error("Weekly templates require an ISO week date string (e.g. 2026-W16)");
+	} else if (!dayjs(dateStr, "YYYY-MM-DD", true).isValid()) {
+		throw new Error("Invalid date string. Must be a valid YYYY-MM-DD date.");
+	}
+
+	await insertTask(tpl, targetDateStr, "manual");
 }

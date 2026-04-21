@@ -3,15 +3,46 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
+import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
 import { scheduleTaskManually } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
-	const dateFilter = event.url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+	// Establish global mode (defaults to daily)
+	const rawMode = event.url.searchParams.get("mode") ?? "daily";
+	const mode: "daily" | "weekly" = rawMode === "weekly" ? "weekly" : "daily";
+	// Safely resolve the raw date parameter, with fallbacks to avoid empty string errors
+	let rawDateParam = event.url.searchParams.get("date") ?? toDateString(new Date()).slice(0, 10);
+	const isValidFormat =
+		rawDateParam &&
+		(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(rawDateParam) ||
+			(/^\d{4}-\d{2}-\d{2}$/.test(rawDateParam) && dayjs(rawDateParam, "YYYY-MM-DD", true).isValid()));
+
+	if (!isValidFormat) {
+		rawDateParam = mode === "weekly" ? getCurrentWeekString() : new Date().toISOString().slice(0, 10);
+	}
+
 	const languageFilter = (event.url.searchParams.get("language") ?? "en") as LanguageCode;
 
+	// Resolve the actual DB filter date (convert week string to Monday's date)
+	let dateFilter = rawDateParam;
+	if (mode === "weekly" && rawDateParam.includes("-W")) {
+		const monday = getMondayFromWeekString(rawDateParam);
+		dateFilter = toDateString(monday);
+	} else if (mode === "weekly" && !rawDateParam.includes("-W")) {
+		// Recovery: Switched to weekly but URL held a daily date
+		rawDateParam = getCurrentWeekString();
+		const monday = getMondayFromWeekString(rawDateParam);
+		dateFilter = toDateString(monday);
+	} else if (mode === "daily" && rawDateParam.includes("-W")) {
+		// Recovery: Switched to daily but URL held a weekly date
+		rawDateParam = new Date().toISOString().slice(0, 10);
+		dateFilter = rawDateParam;
+	}
+
+	// Query scheduled tasks strictly scoped by the current mode
 	const scheduledTasks = await db
 		.select({
 			id: task.id,
@@ -25,19 +56,25 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.date, dateFilter), eq(task.language, languageFilter)))
+		.where(and(eq(task.date, dateFilter), eq(task.language, languageFilter), eq(template.cadence, mode)))
 		.orderBy(task.id);
 
+	// Query active templates strictly scoped by the current mode
 	const activeTemplates = await db
 		.select({ id: template.id, titleBase: template.titleBase, language: template.language })
 		.from(template)
-		.where(eq(template.isActive, true))
+		.where(and(eq(template.isActive, true), eq(template.cadence, mode)))
 		.orderBy(template.id);
 
 	return {
 		scheduledTasks,
 		activeTemplates,
-		filters: { date: dateFilter, language: languageFilter },
+		filters: {
+			mode,
+			date: dateFilter, // Resolved YYYY-MM-DD
+			rawDate: rawDateParam, // The input string (YYYY-MM-DD or YYYY-Www)
+			language: languageFilter,
+		},
 	};
 };
 

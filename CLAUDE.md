@@ -23,6 +23,7 @@ Key areas:
 
 - Routes: `(app)/` (authenticated pages; redirects to `/sign-in`), `(auth)/`, `(admin)/`.
 - Server (src/lib/server/): auth, db/schema, db/auth.schema (auto-generated + manual edits), email, tasks (auto-scheduling + admin scheduler).
+- Date/time handling: shared helpers live in `src/lib/server/dates.ts`; app task loading resolves week/day from each user's timezone, and weekly manual scheduling requires `YYYY-Www`.
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas in `src/lib/schemas.ts`.

@@ -1,5 +1,9 @@
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+
+dayjs.extend(customParseFormat);
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const timezoneSchema = z.preprocess(
@@ -288,5 +292,20 @@ export function getEditorFields(ui: UiVariant): FieldDef[] {
 // ── Schedule ──────────────────────────────────────────────────────────
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),
-	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+	// Validate both ISO week formats and real calendar dates
+	date: z.string().refine((value) => {
+		const standardDateRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+		// Restrict weeks to valid ISO range: 01 to 53
+		const isoWeekRegex = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+
+		if (isoWeekRegex.test(value)) {
+			return true;
+		}
+		if (!standardDateRegex.test(value)) {
+			return false;
+		}
+
+		// Ensure the date actually exists (e.g., prevent Feb 30th)
+		return dayjs(value, "YYYY-MM-DD", true).isValid();
+	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
 });

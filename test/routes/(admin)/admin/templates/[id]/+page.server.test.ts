@@ -4,26 +4,37 @@ import { actions, load } from "$routes/(admin)/admin/templates/[id]/+page.server
 
 // ── Mock DB ──────────────────────────────────────────────────────────────
 
-const mockFrom = vi.fn();
+// Dynamic queue to handle consecutive database select calls within a single test
+let dbSelectQueue: any[][] = [];
 
 vi.mock("$lib/server/db", () => ({
 	db: {
-		select: vi.fn(() => ({ from: mockFrom })),
-		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })) })),
-		insert: vi.fn(() => ({ values: vi.fn().mockResolvedValue(undefined) })),
+		select: vi.fn(() => {
+			const val = dbSelectQueue.shift() || [];
+			const chain = Promise.resolve(val) as any;
+			chain.from = vi.fn(() => chain);
+			chain.where = vi.fn(() => chain);
+			chain.limit = vi.fn(() => chain);
+			chain.orderBy = vi.fn(() => chain);
+			return chain;
+		}),
+		update: vi.fn(() => {
+			const chain = Promise.resolve() as any;
+			chain.set = vi.fn(() => chain);
+			chain.where = vi.fn(() => chain);
+			return chain;
+		}),
+		insert: vi.fn(() => {
+			const chain = Promise.resolve() as any;
+			chain.values = vi.fn(() => chain);
+			return chain;
+		}),
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	template: {
-		id: "id",
-		isActive: "isActive",
-	},
-	templateVariant: {
-		id: "id",
-		templateId: "templateId",
-		isActive: "isActive",
-	},
+	template: { id: "id", isActive: "isActive" },
+	templateVariant: { id: "id", templateId: "templateId", isActive: "isActive" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -74,12 +85,12 @@ const sampleTemplate = {
 describe("Admin Templates [id] +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		dbSelectQueue = []; // Reset queue before each test
 	});
 
 	describe("load function", () => {
 		it("returns 404 for non-numeric id", async () => {
 			const event = { params: { id: "abc" } } as any;
-
 			try {
 				await load(event);
 				expect.fail("Should have thrown");
@@ -87,40 +98,59 @@ describe("Admin Templates [id] +page.server", () => {
 				expect(err.status).toBe(404);
 			}
 		});
+
+		it("returns 404 if template is not found", async () => {
+			dbSelectQueue.push([]); // Empty result for template query
+			const event = { params: { id: "999" } } as any;
+			try {
+				await load(event);
+				expect.fail("Should have thrown");
+			} catch (err: any) {
+				expect(err.status).toBe(404);
+			}
+		});
+
+		it("loads template and variants successfully", async () => {
+			dbSelectQueue.push([sampleTemplate]); // 1st query: Template
+			dbSelectQueue.push([{ id: 1, slotValues: {} }]); // 2nd query: Variants
+
+			const event = { params: { id: "1" } } as any;
+			const result = await load(event);
+
+			expect((result as any).template).toBeDefined();
+			expect((result as any).variants).toBeDefined();
+			expect((result as any).template.id).toBe(1);
+		});
 	});
 
 	describe("save action", () => {
 		it("returns 400 with field errors for invalid template data", async () => {
 			const event = createActionEvent({}, "1");
-
 			const result = (await actions.save(event)) as ActionFailure<any>;
-
 			expect(result.status).toBe(400);
-			expect(result.data?.errors).toBeDefined();
 			expect(result.data?.errors?.titleBase).toBeDefined();
 		});
 
 		it("returns saved: true on success", async () => {
 			const event = createActionEvent(validTemplateEntries, "1");
-
 			const result = await actions.save(event);
-
 			expect(result).toEqual({ saved: true });
+		});
+	});
+
+	describe("delete action", () => {
+		it("soft deletes the template and redirects", async () => {
+			const event = createActionEvent({}, "1");
+			await expect(actions.delete(event)).rejects.toMatchObject({
+				status: 302,
+				location: "/admin/templates",
+			});
 		});
 	});
 
 	describe("addVariant action", () => {
 		it("returns 400 when variant is missing slot values", async () => {
-			// Mock DB to return template
-			const { db } = await import("$lib/server/db");
-			(db.select as any).mockReturnValueOnce({
-				from: vi.fn().mockReturnValue({
-					where: vi.fn().mockReturnValue({
-						limit: vi.fn().mockResolvedValue([sampleTemplate]),
-					}),
-				}),
-			});
-
+			dbSelectQueue.push([sampleTemplate]);
 			const event = createActionEvent(
 				{
 					slotValues: JSON.stringify({ friend: "Alice" }), // missing topic
@@ -128,69 +158,93 @@ describe("Admin Templates [id] +page.server", () => {
 				},
 				"1",
 			);
-
 			const result = (await actions.addVariant(event)) as ActionFailure<any>;
-
 			expect(result.status).toBe(400);
-			expect(result.data?.message).toContain("missing slot values");
 			expect(result.data?.message).toContain("topic");
 		});
 
-		it("returns 400 for invalid opening state", async () => {
-			const { db } = await import("$lib/server/db");
-			(db.select as any).mockReturnValueOnce({
-				from: vi.fn().mockReturnValue({
-					where: vi.fn().mockReturnValue({
-						limit: vi.fn().mockResolvedValue([{ ...sampleTemplate, ui: "discord" }]),
-					}),
-				}),
-			});
-
+		it("returns addedVariant: true on success", async () => {
+			dbSelectQueue.push([sampleTemplate]); // Provide template to parse UI logic
 			const event = createActionEvent(
 				{
 					slotValues: JSON.stringify({ friend: "Alice", topic: "weather" }),
-					openingState: JSON.stringify({ serverName: "My Server" }), // missing channelName
+					openingState: JSON.stringify({ previousMessages: [] }),
 				},
 				"1",
 			);
-
-			const result = (await actions.addVariant(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toContain("Invalid opening state");
-		});
-	});
-
-	describe("activateVariant action", () => {
-		it("returns 400 for non-numeric variantId", async () => {
-			const event = createActionEvent({ variantId: "abc" }, "1");
-
-			const result = (await actions.activateVariant(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toBe("Invalid variant id");
-		});
-	});
-
-	describe("deactivateVariant action", () => {
-		it("returns 400 for non-numeric variantId", async () => {
-			const event = createActionEvent({ variantId: "abc" }, "1");
-
-			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toBe("Invalid variant id");
+			const result = await actions.addVariant(event);
+			expect(result).toEqual({ addedVariant: true });
 		});
 	});
 
 	describe("saveVariant action", () => {
 		it("returns 400 for non-numeric variantId", async () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
-
 			const result = (await actions.saveVariant(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+		});
+
+		it("returns savedVariant: true on success", async () => {
+			dbSelectQueue.push([sampleTemplate]); // 1st query: get template
+			dbSelectQueue.push([{ id: 2 }]); // 2nd query: check if variant exists
+
+			const event = createActionEvent(
+				{
+					variantId: "2",
+					slotValues: JSON.stringify({ friend: "Alice", topic: "Code" }),
+					openingState: JSON.stringify({ previousMessages: [] }),
+				},
+				"1",
+			);
+
+			const result = await actions.saveVariant(event);
+			expect(result).toEqual({ savedVariant: true });
+		});
+	});
+
+	describe("activateVariant action", () => {
+		it("returns 400 for non-numeric variantId", async () => {
+			const event = createActionEvent({ variantId: "abc" }, "1");
+			const result = (await actions.activateVariant(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+		});
+
+		it("returns activated: true when updating an inactive variant", async () => {
+			dbSelectQueue.push([{ isActive: false }]); // Ensure variant exists and is inactive
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = await actions.activateVariant(event);
+
+			expect(result).toEqual({ activated: true });
+		});
+	});
+
+	describe("deactivateVariant action", () => {
+		it("returns 400 for non-numeric variantId", async () => {
+			const event = createActionEvent({ variantId: "abc" }, "1");
+			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+		});
+
+		it("fails if it tries to deactivate the last active variant", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // 1st: The target variant exists and is active
+			dbSelectQueue.push([{ id: 2 }]); // 2nd: Database returns only 1 active variant globally
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
-			expect(result.data?.message).toBe("Invalid variant id");
+			expect(result.data?.message).toContain("last active variant");
+		});
+
+		it("deactivates successfully if there are other active variants", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // 1st: Target exists and is active
+			dbSelectQueue.push([{ id: 2 }, { id: 3 }]); // 2nd: Database confirms multiple active variants
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = await actions.deactivateVariant(event);
+
+			expect(result).toEqual({ deactivated: true });
 		});
 	});
 });

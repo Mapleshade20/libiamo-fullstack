@@ -9,7 +9,7 @@ uiVariant = enum('reddit', 'apple_mail', 'discord', 'imessage', 'ao3', 'translat
 cadence = enum('weekly', 'daily')
 scheduleOrigin = enum('manual', 'auto')
 sessionStatus = enum('in_progress', 'completed', 'evaluated', 'abandoned')  -- Phase A2
-messageRole = enum('user', 'agent', 'tutor', 'hint')                        -- Phase A2
+messageRole = enum('user', 'assistant', 'tutor', 'hint')                        -- Phase A2
 
 
 ## Tables
@@ -165,7 +165,7 @@ Additional business fields:
   taskId                integer         FK -> task.id
   agentPromptSnapshot   jsonb           -- agentPrompt + selected persona
   status                sessionStatus   default 'in_progress'
-  tutorFeedback         jsonb           -- {content, objectiveResults: [{order, text, met}]}
+  tutorFeedback         jsonb           -- {content, objectiveResults: [{text, grade ("A"/"B"/"C")}]}
   startedAt             timestamp       default now
   completedAt           timestamp       nullable
 
