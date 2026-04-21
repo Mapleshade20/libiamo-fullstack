@@ -5,27 +5,13 @@ import Gem from "@lucide/svelte/icons/gem";
 import Star from "@lucide/svelte/icons/star";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
+import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
+import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
 let task = $derived(data.task);
 
-const objectives = $derived((task.objectivesResolved as { order: number; text: string }[] | null) ?? []);
-
-const typeLabels: Record<string, string> = {
-	chat: "Chat",
-	oneshot: "One-shot",
-	slow: "Slow Reply",
-	translate: "Translate",
-};
-
-const uiLabels: Record<string, string> = {
-	reddit: "Reddit",
-	apple_mail: "Mail",
-	discord: "Discord",
-	imessage: "iMessage",
-	ao3: "AO3",
-	translator: "Translator",
-};
+const objectives = $derived(task.objectives ?? []);
 
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
@@ -43,34 +29,36 @@ function difficultyLabel(level: number): string {
 	<div class="mt-12 flex-1 flex flex-col">
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest"> {uiLabels[task.templateUi] ?? task.templateUi} </Badge>
+				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
+					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
+				</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{typeLabels[task.templateType] ?? task.templateType}
+					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{task.titleResolved}</h1>
+			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{task.title}</h1>
 		</div>
 
-		{#if task.descriptionResolved}
-			<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{task.descriptionResolved}</p>
+		{#if task.description}
+			<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
 				<h2 class="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Objectives</h2>
 				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground max-w-xl">
-					{#each objectives.sort((a, b) => a.order - b.order) as obj}
-						<li>{obj.text}</li>
+					{#each objectives as obj}
+						<li>{obj}</li>
 					{/each}
 				</ol>
 			</div>
 		{/if}
 
-		{#if task.bgKnowledgeHtml}
+		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html task.bgKnowledgeHtml}</div>
+				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 

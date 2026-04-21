@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
-import { actions, load } from "../../../../src/routes/(auth)/forgot-password/+page.server";
+import { actions, load } from "$routes/(auth)/forgot-password/+page.server";
 
 vi.mock("$lib/server/auth", () => ({
 	auth: {
@@ -56,6 +56,14 @@ describe("Forgot-password +page.server", () => {
 			} as any);
 
 			expect(result).toEqual({ hasToken: true, token: "abc123" });
+		});
+
+		it("includes error when error query param exists", async () => {
+			const result = await load({
+				url: new URL("https://example.com/forgot-password?token=abc123&error=INVALID_TOKEN"),
+			} as any);
+
+			expect(result).toEqual({ hasToken: true, token: "abc123", error: "INVALID_TOKEN" });
 		});
 	});
 

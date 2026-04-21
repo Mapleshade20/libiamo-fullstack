@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth";
-import { actions, load } from "../../../../src/routes/(auth)/sign-up/+page.server";
+import { actions, load } from "$routes/(auth)/sign-up/+page.server";
 
 vi.mock("$lib/server/auth", () => ({
 	auth: {
@@ -104,6 +104,7 @@ describe("Sign-up +page.server", () => {
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "en",
+				timezone: "UTC",
 			};
 			const event = createEvent(validData);
 
@@ -114,7 +115,13 @@ describe("Sign-up +page.server", () => {
 			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
 
 			expect(auth.api.signUpEmail).toHaveBeenCalledWith({
-				body: validData,
+				body: {
+					email: validData.email,
+					password: validData.password,
+					name: validData.name,
+					activeLanguage: validData.activeLanguage,
+					timezone: validData.timezone,
+				},
 				headers: event.request.headers,
 			});
 

@@ -3,13 +3,13 @@
 ## Enums
 
 userRole = enum('learner', 'admin')
-languageCode = enum('en', 'es', 'fr')
-taskType = enum('chat', 'oneshot', 'slow', 'translate')
+languageCode = enum('en', 'es', 'fr', 'ja')
+interactionType = enum('chat', 'oneshot', 'slow', 'translate')
 uiVariant = enum('reddit', 'apple_mail', 'discord', 'imessage', 'ao3', 'translator')
-taskDuration = enum('weekly', 'daily')
+cadence = enum('weekly', 'daily')
 scheduleOrigin = enum('manual', 'auto')
 sessionStatus = enum('in_progress', 'completed', 'evaluated', 'abandoned')  -- Phase A2
-messageRole = enum('user', 'agent', 'tutor', 'hint')                        -- Phase A2
+messageRole = enum('user', 'assistant', 'tutor', 'hint')                        -- Phase A2
 
 
 ## Tables
@@ -40,52 +40,119 @@ Additional business fields:
 
 ### template
 
-  id                serial        PK
-  isActive          boolean       default true
-  language          languageCode  not null
-  type              taskType      not null
-  ui                uiVariant     not null
-  duration          taskDuration  not null
+  id                serial          PK
+  isActive          boolean         default true
+  language          languageCode    not null
+  interactionType   interactionType not null
+  ui                uiVariant       not null
+  cadence           cadence         not null
 
-  titleBase         text          -- all 'base' supports {{slot}} placeholders
-  descriptionBase   text          -- describe the full scenario
-  shortObjectiveBase text         -- used for homepage card display
-  objectivesBase    jsonb         -- [{order, text}]
-  agentPromptBase   text          -- system prompt template
-  agentPersonaPool  jsonb         -- [{name, age, personality, background}]
-  bgKnowledgeHtml    text          -- learning material, no slots
-  candidates        jsonb         -- [{slots: {}, context: {}}]
+  titleBase         text            not null  -- all 'base' fields support {{slot}} placeholders
+  shortObjectiveBase text                     -- short, used for homepage card display
+  descriptionBase   text                      -- describe the full scenario
+  objectivesBase    text[]                    -- list of objective strings
+  agentPromptBase   text                      -- system prompt template
+  materialsMd       text                      -- learning material in Markdown, no slots
+  tags              text[]          default {} -- categorization tags
 
-  maxTurns          integer       -- 0 for oneshot/translate
+  maxTurns          integer         -- 0 for oneshot/translate
   estimatedWords    integer
-  difficulty        integer       check 1-3
-  pointReward       integer       -- default: weekly=3pt, daily=1pt
-  gemReward         integer       -- default: pointReward * 10
+  difficulty        integer         check 1-3
+  pointReward       integer
+  gemReward         integer
 
-  lastScheduledAt   timestamp     default now
-  createdBy         text          FK -> user.id
-  createdAt         timestamp     default now
-  updatedAt         timestamp     default now, onUpdate now
+  createdBy         text            FK -> user.id
+  createdAt         timestamp       default now
+  updatedAt         timestamp       default now, onUpdate now
 
   UNIQUE: (id, language)
 
 
-### task
+### templateVariant
 
-  id                  serial          PK
-  templateId          integer         FK -> template.id
-  language            languageCode    not null
-  date                date            not null  -- weekly: Monday, daily: that day
-  origin              scheduleOrigin  not null
+  id            serial    PK
+  templateId    integer   FK -> template.id, onDelete cascade
+  isActive      boolean   default true
+  slotValues    jsonb     not null, default {}   -- {slotName: value}
+  openingState  jsonb     not null, default {}   -- platform-specific UI state (pre-populated messages, etc.)
+  createdAt     timestamp default now
+  updatedAt     timestamp default now, onUpdate now
 
-  titleResolved       text            not null
-  descriptionResolved text
-  shortObjectiveResolved text
-  objectivesResolved  jsonb           -- [{order, text}]
-  agentPromptResolved text
-  contextResolved     jsonb           -- platform-specific structure
+  INDEX: (templateId)
 
-  createdAt           timestamp       default now
+#### openingState examples by UI
+
+```jsonc
+// imessage
+{
+  "previousMessages": [
+    { "sender": "Mom", "text": "Hey, are you coming home for dinner?" }
+  ]
+}
+
+// discord
+{
+  "serverName": "Language Learners",
+  "channelName": "general",
+  "previousMessages": [
+    { "sender": "Alex", "text": "Has anyone tried the new grammar drills?", "timestamp": "10:00" }
+  ]
+}
+
+// reddit
+{
+  "post": {
+    "title": "What's the hardest part of learning Spanish?",
+    "body": "I've been studying for a year and still struggle with...",
+    "subreddit": "r/languagelearning",
+    "author": "curious_learner",
+    "votes": 42
+  },
+  "previousComments": [
+    { "author": "polyglot99", "text": "Subjunctive mood, hands down.", "votes": 15 }
+  ]
+}
+
+// apple_mail
+{
+  "emails": [
+    { "from": "boss@company.com", "to": "you@company.com", "subject": "Meeting Tomorrow", "body": "Hi, just a reminder...", "time": "14:30" }
+  ]
+}
+
+// ao3
+{
+  "workTitle": "Across the Ocean",
+  "chapterTitle": "Chapter 3: First Day",
+  "bodyExcerpt": "The train arrived exactly on time...",
+  "tags": ["Slow Burn", "Romance", "Modern AU"],
+  "previousComments": [
+    { "username": "fan123", "comment": "Loving this story so far!" }
+  ]
+}
+
+// translator
+{
+  "sourceText": "Bonjour, comment allez-vous aujourd'hui ?"
+}
+```
+
+### task (scheduled from a template+variant)
+
+  id              serial          PK
+  templateId      integer         FK -> template.id
+  variantId       integer         FK -> templateVariant.id, not null
+  language        languageCode    not null
+  date            date            not null  -- weekly: Monday, daily: that day
+  origin          scheduleOrigin  not null
+
+  title           text            not null
+  description     text
+  shortObjective  text
+  objectives      text[]          -- resolved objective strings
+  agentPrompt     text            -- resolved system prompt (includes injected MBTI persona prefix)
+
+  createdAt       timestamp       default now
 
   UNIQUE: (date, templateId)
   INDEX: (language, date)
@@ -96,9 +163,9 @@ Additional business fields:
   id                    serial          PK
   userId                text            FK -> user.id
   taskId                integer         FK -> task.id
-  agentPromptSnapshot   jsonb           -- agentPromptResolved + selected persona
+  agentPromptSnapshot   jsonb           -- agentPrompt + selected persona
   status                sessionStatus   default 'in_progress'
-  tutorFeedback         jsonb           -- {content, objectiveResults: [{order, text, met}]}
+  tutorFeedback         jsonb           -- {content, objectiveResults: [{text, grade ("A"/"B"/"C")}]}
   startedAt             timestamp       default now
   completedAt           timestamp       nullable
 
@@ -122,6 +189,8 @@ Additional business fields:
 user -> userLearningProfile        (one to many)
 user -> template.createdBy         (one to many)
 user -> practiceSession            (one to many) [Phase A2]
+template -> templateVariant        (one to many)
 template -> task                   (one to many)
+templateVariant -> task            (one to many)
 task -> practiceSession            (one to many) [Phase A2]
 practiceSession -> sessionMessage  (one to many) [Phase A2]
