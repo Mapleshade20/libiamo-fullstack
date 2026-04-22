@@ -32,11 +32,11 @@ export const load: PageServerLoad = async (event) => {
 			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateCadence: template.cadence,
+			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(template.cadence, "weekly")));
+		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(task.cadence, "weekly")));
 
 	const dailyTasks = await db
 		.select({
@@ -49,11 +49,11 @@ export const load: PageServerLoad = async (event) => {
 			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			templateCadence: template.cadence,
+			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(template.cadence, "daily")));
+		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
 
 	return {
 		weeklyTasks,
