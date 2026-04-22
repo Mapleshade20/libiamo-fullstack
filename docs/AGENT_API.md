@@ -16,9 +16,38 @@
 OPENAI_API_KEY="sk-***"
 OPENAI_BASE_URL="https://api-ai.thucs.cn/v1"
 OPENAI_MODEL="qwen3-max"
+
+# Disable SSL verification for self-signed certificates (development only)
+NODE_TLS_REJECT_UNAUTHORIZED="0"
 ```
 
 注意：示例中的 API Key 是占位符，禁止把真实密钥提交到仓库。
+
+## 手动测试示例
+
+```bash
+# Start server with SSL verification disabled
+NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm dev
+
+# Test APIs (replace YOUR_TOKEN with better-auth.session_token cookie)
+curl -X POST "http://localhost:5173/task/1/session?/start" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -H "Accept: application/json"
+
+curl -X POST "http://localhost:5173/task/1/session?/send" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -d "sessionId=2" \
+  -d "message=Hello" \
+  -H "Accept: application/json"
+
+curl -X POST "http://localhost:5173/task/1/session?/complete" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -d "sessionId=2" \
+  -H "Accept: application/json"
+```
 
 
 ## 类型定义
