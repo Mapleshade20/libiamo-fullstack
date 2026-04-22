@@ -189,10 +189,141 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 	return { reply: result.reply.content, turnCount };
 }
 
+export type TutorFeedback = {
+	content: string;
+	objectiveResults: Array<{ text: string; grade: "A" | "B" | "C" }>;
+};
+
 /**
- * Complete the session
+ * Build tutor evaluation prompt
  */
-export async function completeSession(sessionId: number): Promise<void> {
+function buildTutorPrompt(
+	objectives: string[],
+	scenarioContext: string,
+	messages: { role: string; content: string }[],
+): string {
+	// Build full conversation history for context
+	const conversationHistory = messages.map((m, i) => `[${m.role}] ${m.content}`).join("\n\n");
+
+	// Extract user messages for explicit evaluation
+	const userMessages = messages.filter((m) => m.role === "user");
+	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
+
+	return `You are a language tutor evaluating a student's conversation practice.
+
+	## Scenario Context
+	${scenarioContext || "General conversation practice"}
+
+	## Full Conversation History
+	${conversationHistory || "(No conversation yet)"}
+
+	## Task Objectives
+	${objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+
+	## Student's Messages (evaluate these specifically)
+	${studentMessages || "(No messages from student)"}
+
+	## Evaluation Instructions
+	Evaluate how well the student achieved each objective considering:
+	- The scenario context they were responding to
+	- The full conversation flow (how they adapted to the AI's responses)
+	- The quality and appropriateness of their messages
+
+	Grade each objective as:
+	- A: Excellent - fully achieved
+	- B: Good - mostly achieved with minor issues
+	- C: Needs improvement - significant gaps
+
+	Provide brief, constructive feedback (2-3 sentences).
+
+	Respond in JSON format:
+	{
+	"objectiveResults": [
+		{ "text": "objective description", "grade": "A|B|C" }
+	],
+	"content": "overall feedback on student's performance"
+	}`;
+}
+
+/**
+ * Evaluate session and generate tutor feedback
+ */
+export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: {
+			messages: { orderBy: asc(sessionMessage.createdAt) },
+			task: true,
+		},
+	});
+
+	if (!session) throw new Error("Session not found");
+	if (!session.task) throw new Error("Task not found");
+
+	const objectives = session.task.objectives ?? [];
+	if (objectives.length === 0) {
+		// No objectives to evaluate
+		const feedback: TutorFeedback = {
+			content: "No specific objectives were set for this task.",
+			objectiveResults: [],
+		};
+		await db
+			.update(practiceSession)
+			.set({ status: "evaluated", tutorFeedback: feedback })
+			.where(eq(practiceSession.id, sessionId));
+		return feedback;
+	}
+
+	// Extract scenario context from agentPromptSnapshot
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string };
+	const systemPromptLines = snapshot.systemPrompt.split("\n\n");
+	const scenarioContext = systemPromptLines.find((line) => line.startsWith("Scenario:")) || "";
+
+	const prompt = buildTutorPrompt(
+		objectives,
+		scenarioContext,
+		session.messages.map((m) => ({ role: m.role, content: m.content })),
+	);
+
+	// Call LLM for evaluation
+	const result = await createMultiTurnChat({
+		history: [{ role: "system", content: prompt }],
+		userMessage: "Please evaluate this conversation.",
+	});
+
+	// Parse JSON response
+	let feedback: TutorFeedback;
+	try {
+		const parsed = JSON.parse(result.reply.content);
+		feedback = {
+			content: parsed.content ?? "Evaluation completed.",
+			objectiveResults: Array.isArray(parsed.objectiveResults)
+				? parsed.objectiveResults.map((r: { text?: string; grade?: string }) => ({
+						text: r.text ?? "",
+						grade: ["A", "B", "C"].includes(r.grade ?? "") ? (r.grade as "A" | "B" | "C") : "C",
+					}))
+				: [],
+		};
+	} catch {
+		// Fallback if JSON parsing fails
+		feedback = {
+			content: result.reply.content,
+			objectiveResults: objectives.map((o) => ({ text: o, grade: "C" as const })),
+		};
+	}
+
+	await db
+		.update(practiceSession)
+		.set({ status: "evaluated", tutorFeedback: feedback })
+		.where(eq(practiceSession.id, sessionId));
+
+	return feedback;
+}
+
+/**
+ * Complete the session and trigger evaluation
+ */
+export async function completeSession(sessionId: number): Promise<TutorFeedback> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 	});
@@ -200,5 +331,12 @@ export async function completeSession(sessionId: number): Promise<void> {
 	if (!session) throw new Error("Session not found");
 	if (session.status !== "in_progress") throw new Error("Session not in progress");
 
-	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
+	// Mark as completed first
+	await db
+		.update(practiceSession)
+		.set({ status: "completed", completedAt: new Date() })
+		.where(eq(practiceSession.id, sessionId));
+
+	// Trigger evaluation automatically
+	return evaluateSession(sessionId);
 }

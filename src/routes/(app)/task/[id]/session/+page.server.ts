@@ -2,7 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { completeSession, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, sendMessage, startSession, type TutorFeedback } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -105,8 +105,8 @@ export const actions: Actions = {
 				return fail(403, { error: "Access denied" });
 			}
 
-			await completeSession(sessionId);
-			return { success: true };
+			const feedback = await completeSession(sessionId);
+			return { success: true, feedback };
 		} catch (e) {
 			console.error("Failed to complete session:", e);
 			return fail(500, { error: "Failed to complete session" });

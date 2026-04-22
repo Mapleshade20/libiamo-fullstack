@@ -232,14 +232,18 @@ describe("session page server", () => {
 				id: 789,
 				userId: "user_123",
 			});
-			mockSessionService.completeSession.mockResolvedValue(undefined);
+			const mockFeedback = {
+				content: "Good job!",
+				objectiveResults: [{ text: "Objective 1", grade: "A" as const }],
+			};
+			mockSessionService.completeSession.mockResolvedValue(mockFeedback);
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
 				locals: { user: mockUser },
 			} as any);
 
-			expect(result).toMatchObject({ success: true });
+			expect(result).toMatchObject({ success: true, feedback: mockFeedback });
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
 

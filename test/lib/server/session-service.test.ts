@@ -97,9 +97,140 @@ describe("session service", () => {
 				mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
 				const result = await startSession(1, "user_456");
-				// MBTI is in snapshot but not in systemPrompt (already in agentPromptBase from tasks.ts)
 				expect(result.systemPrompt).toContain("You are a helpful assistant.");
 			}
+		});
+
+		it("builds apple_mail scenario with full email details", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: {
+					openingState: {
+						emails: [{ from: "boss@company.com", subject: "Meeting tomorrow", body: "See you at 9am" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("boss@company.com");
+			expect(result.systemPrompt).toContain("Meeting tomorrow");
+			expect(result.systemPrompt).toContain("See you at 9am");
+		});
+
+		it("builds apple_mail scenario with empty emails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: { openingState: { emails: [] } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Scenario: Mail app");
+		});
+
+		it("builds imessage scenario with previous messages", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "imessage" as const },
+				variant: {
+					openingState: {
+						previousMessages: [
+							{ sender: "Alice", text: "Hey!" },
+							{ sender: "Bob", text: "What's up?" },
+						],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Alice: Hey!");
+			expect(result.systemPrompt).toContain("Bob: What's up?");
+		});
+
+		it("builds imessage scenario with empty previous messages", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "imessage" as const },
+				variant: { openingState: { previousMessages: [] } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Scenario: iMessage conversation");
+			expect(result.systemPrompt).not.toContain("Previous:");
+		});
+
+		it("builds ao3 scenario with comments", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "ao3" as const },
+				variant: {
+					openingState: {
+						workTitle: "My Fanfic",
+						bodyExcerpt: "Once upon a time...",
+						previousComments: [
+							{ username: "reader1", comment: "Love this!" },
+							{ username: "reader2", comment: "Great story" },
+						],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Work: My Fanfic");
+			expect(result.systemPrompt).toContain("reader1: Love this!");
+			expect(result.systemPrompt).toContain("reader2: Great story");
+		});
+
+		it("builds ao3 scenario with empty comments", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "ao3" as const },
+				variant: {
+					openingState: {
+						workTitle: "My Fanfic",
+						previousComments: [],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Work: My Fanfic");
+			expect(result.systemPrompt).not.toContain("Existing comments:");
+		});
+
+		it("handles unknown UI type gracefully", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "unknown_ui" as any },
+				variant: { openingState: { someData: "test" } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			// Should not throw, just have empty scenario context
+			expect(result.sessionId).toBe(123);
+			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
 
 		it("builds reddit scenario correctly", async () => {
@@ -265,16 +396,66 @@ describe("session service", () => {
 		const mockSession = {
 			id: 123,
 			status: "in_progress",
+			taskId: 1,
 		};
 
-		it("marks session as completed", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+		const mockTask = {
+			id: 1,
+			objectives: ["Use polite language", "Respond appropriately"],
+		};
+
+		it("marks session as completed and returns feedback", async () => {
+			mockDb.query.practiceSession.findFirst
+				.mockResolvedValueOnce(mockSession)
+				.mockResolvedValueOnce({
+					...mockSession,
+					agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
+					messages: [
+						{ role: "user", content: "Hello" },
+						{ role: "assistant", content: "Hi there" },
+					],
+					task: mockTask,
+				});
+			const whereMock = vi.fn();
+			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
+			mockClient.createMultiTurnChat.mockResolvedValue({
+				reply: {
+					content: JSON.stringify({
+						content: "Good job!",
+						objectiveResults: [
+							{ text: "Use polite language", grade: "A" },
+							{ text: "Respond appropriately", grade: "B" },
+						],
+					}),
+					model: "gpt-4",
+					raw: {},
+				},
+				messages: [],
+			});
+
+			const result = await completeSession(123);
+
+			expect(result.content).toBe("Good job!");
+			expect(result.objectiveResults).toHaveLength(2);
+			expect(mockDb.update).toHaveBeenCalledTimes(2); // completed + evaluated
+		});
+
+		it("handles empty objectives", async () => {
+			mockDb.query.practiceSession.findFirst
+				.mockResolvedValueOnce(mockSession)
+				.mockResolvedValueOnce({
+					...mockSession,
+					agentPromptSnapshot: { systemPrompt: "Scenario: Test\n\nPrompt", mbti: "ENFP", ui: "discord" },
+					messages: [],
+					task: { ...mockTask, objectives: [] },
+				});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
-			await completeSession(123);
+			const result = await completeSession(123);
 
-			expect(mockDb.update).toHaveBeenCalled();
+			expect(result.content).toContain("No specific objectives");
+			expect(result.objectiveResults).toHaveLength(0);
 		});
 
 		it("throws when session not found", async () => {
