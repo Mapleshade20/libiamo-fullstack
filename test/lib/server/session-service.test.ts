@@ -406,17 +406,15 @@ describe("session service", () => {
 		};
 
 		it("marks session as completed and returns feedback", async () => {
-			mockDb.query.practiceSession.findFirst
-				.mockResolvedValueOnce(mockSession)
-				.mockResolvedValueOnce({
-					...mockSession,
-					agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
-					messages: [
-						{ role: "user", content: "Hello" },
-						{ role: "assistant", content: "Hi there" },
-					],
-					task: mockTask,
-				});
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+				...mockSession,
+				agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
+				messages: [
+					{ role: "user", content: "Hello" },
+					{ role: "assistant", content: "Hi there" },
+				],
+				task: mockTask,
+			});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 			mockClient.createStructuredOutput.mockResolvedValue({
@@ -435,14 +433,12 @@ describe("session service", () => {
 		});
 
 		it("handles empty objectives", async () => {
-			mockDb.query.practiceSession.findFirst
-				.mockResolvedValueOnce(mockSession)
-				.mockResolvedValueOnce({
-					...mockSession,
-					agentPromptSnapshot: { systemPrompt: "Scenario: Test\n\nPrompt", mbti: "ENFP", ui: "discord" },
-					messages: [],
-					task: { ...mockTask, objectives: [] },
-				});
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+				...mockSession,
+				agentPromptSnapshot: { systemPrompt: "Scenario: Test\n\nPrompt", mbti: "ENFP", ui: "discord" },
+				messages: [],
+				task: { ...mockTask, objectives: [] },
+			});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 

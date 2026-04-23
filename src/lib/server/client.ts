@@ -6,8 +6,8 @@ if (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") {
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, Output } from "ai";
-import { env } from "$env/dynamic/private";
 import type { z } from "zod";
+import { env } from "$env/dynamic/private";
 
 // ── Types ─────────────────────────────────────────────────────────────
 

@@ -5,8 +5,8 @@
 
 import { asc, eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
-import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
+import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { getRandomMbti, type MbtiType } from "./mbti";
@@ -193,11 +193,7 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 /**
  * Build tutor evaluation prompt
  */
-function buildTutorPrompt(
-	objectives: string[],
-	scenarioContext: string,
-	messages: { role: string; content: string }[],
-): string {
+function buildTutorPrompt(objectives: string[], scenarioContext: string, messages: { role: string; content: string }[]): string {
 	// Build full conversation history for context
 	const conversationHistory = messages.map((m, i) => `[${m.role}] ${m.content}`).join("\n\n");
 
@@ -263,10 +259,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 			content: "No specific objectives were set for this task.",
 			objectiveResults: [],
 		};
-		await db
-			.update(practiceSession)
-			.set({ status: "evaluated", tutorFeedback: feedback })
-			.where(eq(practiceSession.id, sessionId));
+		await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
 		return feedback;
 	}
 
@@ -289,10 +282,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 
 	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages);
 
-	await db
-		.update(practiceSession)
-		.set({ status: "evaluated", tutorFeedback: feedback })
-		.where(eq(practiceSession.id, sessionId));
+	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
 
 	return feedback;
 }
@@ -309,10 +299,7 @@ export async function completeSession(sessionId: number): Promise<TutorFeedback>
 	if (session.status !== "in_progress") throw new Error("Session not in progress");
 
 	// Mark as completed first
-	await db
-		.update(practiceSession)
-		.set({ status: "completed", completedAt: new Date() })
-		.where(eq(practiceSession.id, sessionId));
+	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 
 	// Trigger evaluation automatically
 	return evaluateSession(sessionId);

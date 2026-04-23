@@ -141,10 +141,13 @@ describe("chat client wrappers", () => {
 		it("throws when response has malformed JSON", async () => {
 			vi.stubGlobal(
 				"fetch",
-				vi.fn(async () => new Response("not json at all", {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				})),
+				vi.fn(
+					async () =>
+						new Response("not json at all", {
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						}),
+				),
 			);
 
 			await expect(
