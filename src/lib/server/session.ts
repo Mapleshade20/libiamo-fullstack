@@ -7,7 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 
-export type { TutorFeedback };
+export type { TutorFeedback } from "$lib/schemas";
 
 import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
 import { db } from "./db";

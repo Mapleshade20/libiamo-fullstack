@@ -21,10 +21,6 @@ function createJsonResponse(body: unknown, status = 200): Response {
 	});
 }
 
-function createTextResponse(text: string, status = 200): Response {
-	return new Response(text, { status });
-}
-
 describe("chat client wrappers", () => {
 	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
