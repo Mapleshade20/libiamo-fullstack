@@ -4,7 +4,12 @@ if (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") {
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, Output } from "ai";
 import { env } from "$env/dynamic/private";
+import type { z } from "zod";
+
+// ── Types ─────────────────────────────────────────────────────────────
 
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
@@ -41,17 +46,39 @@ export type MultiTurnChatInput = {
 	options?: OpenAIOptions;
 };
 
-type ChatCompletionChunk = {
-	choices?: Array<{
-		message?: {
-			content?: string;
-		};
-	}>;
-	id?: string;
-	model?: string;
-};
+// ── Provider ──────────────────────────────────────────────────────────
 
-async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}): Promise<OpenAIResponse> {
+function createProvider() {
+	const apiKey = env.OPENAI_API_KEY?.trim();
+	if (!apiKey) {
+		throw new Error("OPENAI_API_KEY is not set. Please set OPENAI_API_KEY in .env");
+	}
+
+	const baseUrlRaw = env.OPENAI_BASE_URL?.trim();
+	if (!baseUrlRaw) {
+		throw new Error("OPENAI_BASE_URL is not set. Please set OPENAI_BASE_URL in .env");
+	}
+
+	const baseURL = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
+
+	return createOpenAICompatible({
+		name: "libiamo-llm",
+		baseURL,
+		apiKey,
+	});
+}
+
+function getModel() {
+	const model = env.OPENAI_MODEL?.trim();
+	if (!model) {
+		throw new Error("OPENAI_MODEL is not set. Please set OPENAI_MODEL in .env");
+	}
+	return createProvider()(model);
+}
+
+// ── Validation helpers ────────────────────────────────────────────────
+
+function validateMessages(messages: ChatMessage[]) {
 	if (!Array.isArray(messages) || messages.length === 0) {
 		throw new Error("messages must contain at least one item");
 	}
@@ -63,57 +90,59 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 			throw new Error("each message.content must be a non-empty string");
 		}
 	}
+}
 
-	const apiKey = env.OPENAI_API_KEY?.trim();
-	if (!apiKey) {
-		throw new Error("OPENAI_API_KEY is not set. Please set OPENAI_API_KEY in .env");
-	}
+// ── Core LLM functions using AI SDK ───────────────────────────────────
 
-	const baseUrlRaw = env.OPENAI_BASE_URL?.trim();
-	if (!baseUrlRaw) {
-		throw new Error("OPENAI_BASE_URL is not set. Please set OPENAI_BASE_URL in .env");
-	}
+/**
+ * Generate text from messages using the AI SDK.
+ * Replaces the hand-rolled fetch + JSON parsing.
+ */
+async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}): Promise<OpenAIResponse> {
+	validateMessages(messages);
 
-	const model = env.OPENAI_MODEL?.trim();
-	if (!model) {
-		throw new Error("OPENAI_MODEL is not set. Please set OPENAI_MODEL in .env");
-	}
-
-	const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
-
-	const response = await fetch(`${baseUrl}/chat/completions`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify({
-			model,
-			messages,
-			temperature: options.temperature ?? 0.7,
-			max_tokens: options.maxTokens ?? 4096,
-		}),
+	const result = await generateText({
+		model: getModel(),
+		messages,
+		temperature: options.temperature ?? 0.7,
+		maxOutputTokens: options.maxTokens ?? 4096,
 	});
 
-	if (!response.ok) {
-		const bodyText = await response.text();
-		throw new Error(`OpenAI API error (${response.status}): ${bodyText}`);
-	}
-
-	const data = (await response.json()) as ChatCompletionChunk;
-
-	const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+	const content = result.text?.trim() ?? "";
 	if (!content) {
-		throw new Error("OpenAI API returned empty content");
+		throw new Error("LLM returned empty content");
 	}
 
 	return {
-		id: data.id,
-		model: data.model,
+		id: result.response?.id,
+		model: result.response?.modelId,
 		content,
-		raw: data,
+		raw: result.response,
 	};
 }
+
+/**
+ * Generate structured JSON output validated against a Zod schema.
+ * Uses AI SDK's generateText with output.object() for reliable structured output.
+ * The schema description and field descriptions guide the LLM.
+ */
+export async function createStructuredOutput<T extends z.ZodType>(
+	schema: T,
+	messages: ChatMessage[],
+	options: OpenAIOptions = {},
+): Promise<z.infer<T>> {
+	const result = await generateText({
+		model: getModel(),
+		messages,
+		output: Output.object({ schema }),
+		temperature: options.temperature ?? 0.7,
+		maxOutputTokens: options.maxTokens ?? 4096,
+	});
+
+	return result.output as z.infer<T>;
+}
+
+// ── High-level chat functions ─────────────────────────────────────────
 
 export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<ConversationTurnResult> {
 	if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim()) {

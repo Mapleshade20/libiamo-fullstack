@@ -289,6 +289,21 @@ export function getEditorFields(ui: UiVariant): FieldDef[] {
 	return (openingStateSchemas[ui].meta() as OpeningStateEditorMeta | undefined)?.fields ?? [];
 }
 
+// ── Tutor Feedback (AI structured output) ────────────────────────────
+export const tutorFeedbackSchema = z.object({
+	content: z.string().describe("Overall feedback text for the student"),
+	objectiveResults: z
+		.array(
+			z.object({
+				text: z.string().describe("The objective being evaluated"),
+				grade: z.enum(["A", "B", "C"]).describe("A = excellent, B = good, C = needs improvement"),
+			}),
+		)
+		.describe("Per-objective evaluation results"),
+});
+
+export type TutorFeedback = z.infer<typeof tutorFeedbackSchema>;
+
 // ── Schedule ──────────────────────────────────────────────────────────
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),

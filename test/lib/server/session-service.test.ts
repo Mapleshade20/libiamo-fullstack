@@ -11,6 +11,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 	},
 	mockClient: {
 		createMultiTurnChat: vi.fn(),
+		createStructuredOutput: vi.fn(),
 	},
 }));
 
@@ -418,19 +419,12 @@ describe("session service", () => {
 				});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: {
-					content: JSON.stringify({
-						content: "Good job!",
-						objectiveResults: [
-							{ text: "Use polite language", grade: "A" },
-							{ text: "Respond appropriately", grade: "B" },
-						],
-					}),
-					model: "gpt-4",
-					raw: {},
-				},
-				messages: [],
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "Good job!",
+				objectiveResults: [
+					{ text: "Use polite language", grade: "A" },
+					{ text: "Respond appropriately", grade: "B" },
+				],
 			});
 
 			const result = await completeSession(123);

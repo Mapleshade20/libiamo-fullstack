@@ -5,7 +5,8 @@
 
 import { asc, eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
-import { type ChatMessage, createMultiTurnChat } from "./client";
+import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
+import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { getRandomMbti, type MbtiType } from "./mbti";
@@ -189,11 +190,6 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 	return { reply: result.reply.content, turnCount };
 }
 
-export type TutorFeedback = {
-	content: string;
-	objectiveResults: Array<{ text: string; grade: "A" | "B" | "C" }>;
-};
-
 /**
  * Build tutor evaluation prompt
  */
@@ -285,32 +281,13 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		session.messages.map((m) => ({ role: m.role, content: m.content })),
 	);
 
-	// Call LLM for evaluation
-	const result = await createMultiTurnChat({
-		history: [{ role: "system", content: prompt }],
-		userMessage: "Please evaluate this conversation.",
-	});
+	// Call LLM for evaluation using AI SDK generateObject with Zod schema
+	const messages: ChatMessage[] = [
+		{ role: "system", content: prompt },
+		{ role: "user", content: "Please evaluate this conversation." },
+	];
 
-	// Parse JSON response
-	let feedback: TutorFeedback;
-	try {
-		const parsed = JSON.parse(result.reply.content);
-		feedback = {
-			content: parsed.content ?? "Evaluation completed.",
-			objectiveResults: Array.isArray(parsed.objectiveResults)
-				? parsed.objectiveResults.map((r: { text?: string; grade?: string }) => ({
-						text: r.text ?? "",
-						grade: ["A", "B", "C"].includes(r.grade ?? "") ? (r.grade as "A" | "B" | "C") : "C",
-					}))
-				: [],
-		};
-	} catch {
-		// Fallback if JSON parsing fails
-		feedback = {
-			content: result.reply.content,
-			objectiveResults: objectives.map((o) => ({ text: o, grade: "C" as const })),
-		};
-	}
+	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages);
 
 	await db
 		.update(practiceSession)
