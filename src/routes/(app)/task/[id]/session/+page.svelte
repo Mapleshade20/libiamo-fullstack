@@ -4,7 +4,7 @@ import DiscordUI from "$lib/components/practice-ui/DiscordUI.svelte";
 let { data } = $props();
 </script>
 
-<svelte:head> <title>Practice Session - Libiamo</title> </svelte:head>
+<svelte:head><title>Practice Session - Libiamo</title></svelte:head>
 
 <DiscordUI
 	taskId={data.taskId}

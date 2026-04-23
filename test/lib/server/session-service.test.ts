@@ -49,7 +49,6 @@ describe("session service", () => {
 
 			expect(result.sessionId).toBe(123);
 			expect(result.mbti).toMatch(/^(INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)$/);
-			// MBTI is folded into the prompt composition; assert the scenario and task text here.
 			expect(result.systemPrompt).toContain("Discord");
 			expect(result.systemPrompt).toContain("Alice");
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
@@ -65,7 +64,6 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456");
 
-			// MBTI is still part of the generated prompt; this test only checks the scenario text and fallback agent prompt.
 			expect(result.systemPrompt).toContain("Discord");
 			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
 		});
@@ -80,7 +78,6 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456");
 
-			// MBTI is folded into the prompt composition; assert the fallback agent prompt remains present.
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
 
@@ -256,7 +253,6 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456");
 
-			// Should not throw, just have empty scenario context
 			expect(result.sessionId).toBe(123);
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
@@ -347,9 +343,11 @@ describe("session service", () => {
 
 		it("sends message and returns AI reply", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: { content: "Hello back!", model: "gpt-4", raw: {} },
-				messages: [],
+
+			// Mock the structured output to return the format required by the updated session.ts
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "Hello back!",
+				terminate: false,
 			});
 			mockDb.insert.mockReturnValue({ values: vi.fn() });
 
@@ -357,11 +355,14 @@ describe("session service", () => {
 
 			expect(result.reply).toBe("Hello back!");
 			expect(result.turnCount).toBe(1);
-			expect(mockClient.createMultiTurnChat).toHaveBeenCalledWith(
-				expect.objectContaining({
-					history: [{ role: "system", content: "Your MBTI type is ENFP." }],
-					userMessage: "Hello!",
-				}),
+			expect(result.terminated).toBe(false);
+
+			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
+				expect.any(Object), // Zod Schema
+				expect.arrayContaining([
+					expect.objectContaining({ role: "system", content: expect.stringContaining("Your MBTI type is ENFP.") }),
+					expect.objectContaining({ role: "user", content: "Hello!" }),
+				]),
 			);
 		});
 
@@ -373,23 +374,23 @@ describe("session service", () => {
 					{ role: "assistant", content: "First reply" },
 				],
 			});
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: { content: "Second reply", model: "gpt-4", raw: {} },
-				messages: [],
+
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "Second reply",
+				terminate: false,
 			});
 			mockDb.insert.mockReturnValue({ values: vi.fn() });
 
 			await sendMessage(123, "Second message");
 
-			expect(mockClient.createMultiTurnChat).toHaveBeenCalledWith(
-				expect.objectContaining({
-					history: [
-						{ role: "system", content: "Your MBTI type is ENFP." },
-						{ role: "user", content: "First message" },
-						{ role: "assistant", content: "First reply" },
-					],
-					userMessage: "Second message",
-				}),
+			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
+				expect.any(Object),
+				expect.arrayContaining([
+					expect.objectContaining({ role: "system" }),
+					expect.objectContaining({ role: "user", content: "First message" }),
+					expect.objectContaining({ role: "assistant", content: "First reply" }),
+					expect.objectContaining({ role: "user", content: "Second message" }),
+				]),
 			);
 		});
 
@@ -423,9 +424,10 @@ describe("session service", () => {
 					{ role: "assistant", content: "b" },
 				],
 			});
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: { content: "c", model: "gpt-4", raw: {} },
-				messages: [],
+
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "c",
+				terminate: false,
 			});
 			mockDb.insert.mockReturnValue({ values: vi.fn() });
 
@@ -459,6 +461,7 @@ describe("session service", () => {
 			});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
+
 			mockClient.createStructuredOutput.mockResolvedValue({
 				content: "Good job!",
 				objectiveResults: [
@@ -547,9 +550,9 @@ describe("session service", () => {
 
 		it("saves both user and assistant messages", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: { content: "AI reply", model: "gpt-4", raw: { usage: { tokens: 100 } } },
-				messages: [],
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "AI reply",
+				terminate: false,
 			});
 			const valuesMock = vi.fn();
 			mockDb.insert.mockReturnValue({ values: valuesMock });
@@ -564,9 +567,9 @@ describe("session service", () => {
 
 		it("trims user message before saving", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createMultiTurnChat.mockResolvedValue({
-				reply: { content: "reply", model: "gpt-4", raw: {} },
-				messages: [],
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "reply",
+				terminate: false,
 			});
 			const valuesMock = vi.fn();
 			mockDb.insert.mockReturnValue({ values: valuesMock });

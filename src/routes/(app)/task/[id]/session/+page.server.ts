@@ -36,7 +36,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const taskId = Number.parseInt(taskIdStr, 10);
 	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
 
-	// Check if there's an existing in-progress session for this user+task
 	const existingSession = await db.query.practiceSession.findFirst({
 		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id), eq(practiceSession.status, "in_progress")),
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
@@ -55,30 +54,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!taskData) throw error(404, "Task not found");
 
-	if (Number.isNaN(taskId)) {
-		return error(404, "Invalid task ID");
-	}
-
-	// 1. Fetch the agentPrompt from the database for this specific task
-	const [taskRecord] = await db.select({ agentPrompt: task.agentPrompt }).from(task).where(eq(task.id, taskId)).limit(1);
-
-	if (!taskRecord) {
-		return error(404, "Task not found");
-	}
-
-	// Use the exact same domain and parameters as +layout.server.ts to sync avatars
 	const email = user.email?.toLowerCase() || "";
 	const hash = crypto.createHash("md5").update(email).digest("hex");
 	const avatarUrl = `https://cn.cravatar.com/avatar/${hash}?d=identicon&s=192`;
 
-	// Retrieve active language
 	const learningLanguage = user.activeLanguage || "en";
 
 	return {
 		task: taskData,
 		existingSession,
 		taskId: taskIdStr,
-		agentPrompt: taskRecord.agentPrompt || "",
+		agentPrompt: taskData.agentPrompt || "",
 		user: {
 			name: user.name || "Learner",
 			avatarUrl,

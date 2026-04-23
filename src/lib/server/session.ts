@@ -1,20 +1,13 @@
-/**
- * Practice session management
- * Handles session lifecycle and message interactions
- */
-
 import { asc, eq } from "drizzle-orm";
+import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 
-import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
+import { type ChatMessage, createStructuredOutput } from "./client";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
-/**
- * Append a list of labelled messages to a context string.
- */
 function appendMessages(ctx: string, label: string, items: Array<Record<string, string | undefined>>): string {
 	if (!items.length) return ctx;
 	const lines = items.map((c) => `- ${Object.values(c).filter(Boolean).join(": ")}`);
@@ -84,9 +77,6 @@ function buildTranslatorContext(openingState: Record<string, unknown>): string {
 	return text ? `Text to translate: ${text}` : "Translation task";
 }
 
-/**
- * Build scenario context based on UI type and openingState
- */
 function buildScenarioContext(ui: UiVariant, openingState: Record<string, unknown>): string {
 	const builders: Record<UiVariant, (s: Record<string, unknown>) => string> = {
 		reddit: buildRedditContext,
@@ -99,9 +89,6 @@ function buildScenarioContext(ui: UiVariant, openingState: Record<string, unknow
 	return builders[ui]?.(openingState) ?? "";
 }
 
-/**
- * Build complete system prompt from scenario context and agent instructions.
- */
 function buildSystemPrompt(agentPrompt: string | null, scenarioContext: string): string {
 	const parts: string[] = [];
 
@@ -117,9 +104,6 @@ export type StartSessionResult = {
 	mbti: string;
 };
 
-/**
- * Start a new practice session
- */
 export async function startSession(taskId: number, userId: string): Promise<StartSessionResult> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
@@ -161,11 +145,16 @@ export async function startSession(taskId: number, userId: string): Promise<Star
 export type SendMessageResult = {
 	reply: string;
 	turnCount: number;
+	terminated?: boolean;
 };
 
-/**
- * Send message and get AI reply
- */
+const AgentReplySchema = z.object({
+	reply: z.string().describe("Your conversational reply to the user."),
+	terminate: z
+		.boolean()
+		.describe("Set to true ONLY IF the conversation has naturally concluded, objectives are fully met, or the user explicitly says goodbye."),
+});
+
 export async function sendMessage(sessionId: number, userMessage: string): Promise<SendMessageResult> {
 	if (!userMessage.trim()) {
 		throw new Error("userMessage is required");
@@ -183,84 +172,73 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 
-	// Build message history
-	const history: ChatMessage[] = [{ role: "system", content: snapshot.systemPrompt }];
+	// Inject exact JSON schema format to bypass provider compatibility issues
+	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema:\n{\n  "reply": "string (your conversational reply to the user)",\n  "terminate": boolean (true ONLY IF the conversation has naturally concluded or the user explicitly says goodbye)\n}`;
+
+	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
 	for (const m of session.messages) {
 		history.push({ role: m.role, content: m.content });
 	}
+	history.push({ role: "user", content: userMessage.trim() });
 
-	// Call LLM
-	const result = await createMultiTurnChat({
-		history,
-		userMessage: userMessage.trim(),
-	});
+	const output = await createStructuredOutput(AgentReplySchema, history);
 
-	// Save messages
 	await db.insert(sessionMessage).values([
 		{ sessionId, role: "user", content: userMessage.trim() },
 		{
 			sessionId,
 			role: "assistant",
-			content: result.reply.content,
-			llmMetadata: { model: result.reply.model, raw: result.reply.raw },
+			content: output.reply,
+			llmMetadata: { model: "structured-output", raw: output },
 		},
 	]);
 
 	const turnCount = session.messages.filter((m) => m.role === "user").length + 1;
 
-	return { reply: result.reply.content, turnCount };
+	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }
 
-/**
- * Build tutor evaluation prompt
- */
 function buildTutorPrompt(objectives: string[], scenarioContext: string, messages: { role: string; content: string }[]): string {
-	// Build full conversation history for context
 	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
-
-	// Extract user messages for explicit evaluation
 	const userMessages = messages.filter((m) => m.role === "user");
 	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
 
 	return `You are a language tutor evaluating a student's conversation practice.
 
-	## Scenario Context
-	${scenarioContext || "General conversation practice"}
+    ## Scenario Context
+    ${scenarioContext || "General conversation practice"}
 
-	## Full Conversation History
-	${conversationHistory || "(No conversation yet)"}
+    ## Full Conversation History
+    ${conversationHistory || "(No conversation yet)"}
 
-	## Task Objectives
-	${objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+    ## Task Objectives
+    ${objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")}
 
-	## Student's Messages (evaluate these specifically)
-	${studentMessages || "(No messages from student)"}
+    ## Student's Messages (evaluate these specifically)
+    ${studentMessages || "(No messages from student)"}
 
-	## Evaluation Instructions
-	Evaluate how well the student achieved each objective considering:
-	- The scenario context they were responding to
-	- The full conversation flow (how they adapted to the AI's responses)
-	- The quality and appropriateness of their messages
+    ## Evaluation Instructions
+    Evaluate how well the student achieved each objective considering:
+    - The scenario context they were responding to
+    - The full conversation flow (how they adapted to the AI's responses)
+    - The quality and appropriateness of their messages
 
-	Grade each objective as:
-	- A: Excellent - fully achieved
-	- B: Good - mostly achieved with minor issues
-	- C: Needs improvement - significant gaps
+    Grade each objective as:
+    - A: Excellent - fully achieved
+    - B: Good - mostly achieved with minor issues
+    - C: Needs improvement - significant gaps
 
-	Provide brief, constructive feedback (2-3 sentences).
+    Provide brief, constructive feedback (2-3 sentences).
 
-	Respond in JSON format:
-	{
-	"objectiveResults": [
-		{ "text": "objective description", "grade": "A|B|C" }
-	],
-	"content": "overall feedback on student's performance"
-	}`;
+    Respond in JSON format:
+    {
+    "objectiveResults": [
+        { "text": "objective description", "grade": "A|B|C" }
+    ],
+    "content": "overall feedback on student's performance"
+    }`;
 }
 
-/**
- * Evaluate session and generate tutor feedback
- */
 export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -275,7 +253,6 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 
 	const objectives = session.task.objectives ?? [];
 	if (objectives.length === 0) {
-		// No objectives to evaluate
 		const feedback: TutorFeedback = {
 			content: "No specific objectives were set for this task.",
 			objectiveResults: [],
@@ -284,7 +261,6 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		return feedback;
 	}
 
-	// Extract scenario context from snapshot (stored at session start)
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
 	const scenarioContext = snapshot.scenarioContext ?? "";
 
@@ -294,7 +270,6 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		session.messages.map((m) => ({ role: m.role, content: m.content })),
 	);
 
-	// Call LLM for evaluation using AI SDK generateObject with Zod schema
 	const messages: ChatMessage[] = [
 		{ role: "system", content: prompt },
 		{ role: "user", content: "Please evaluate this conversation." },
@@ -307,9 +282,6 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	return feedback;
 }
 
-/**
- * Complete the session and trigger evaluation
- */
 export async function completeSession(sessionId: number): Promise<TutorFeedback> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -320,11 +292,9 @@ export async function completeSession(sessionId: number): Promise<TutorFeedback>
 		throw new Error("Session not in progress or completed");
 	}
 
-	// Only transition to completed on first completion attempt.
 	if (session.status === "in_progress") {
 		await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 	}
 
-	// Trigger evaluation automatically
 	return evaluateSession(sessionId);
 }

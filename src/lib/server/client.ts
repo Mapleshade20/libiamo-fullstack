@@ -4,6 +4,8 @@ if (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") {
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
+process.env.AI_SDK_LOG_WARNINGS = "false";
+
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, Output } from "ai";
 import type { z } from "zod";
