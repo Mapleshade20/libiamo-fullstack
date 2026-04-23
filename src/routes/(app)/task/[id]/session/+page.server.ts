@@ -1,16 +1,59 @@
 import crypto from "node:crypto";
-import { error, redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { error, fail } from "@sveltejs/kit";
+import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { task } from "$lib/server/db/schema";
-import type { PageServerLoad } from "./$types";
+import { practiceSession, task } from "$lib/server/db/schema";
+import { completeSession, sendMessage, startSession } from "$lib/server/session";
+import type { Actions, PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
+function mapSendMessageError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "userMessage is required") return fail(400, { error: e.message });
+	if (e.message === "Session not found") return fail(404, { error: e.message });
+	if (e.message === "Session not in progress") return fail(409, { error: e.message });
+	return null;
+}
 
-	const taskIdStr = event.params.id;
-	const taskId = Number(taskIdStr);
+function mapStartSessionError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "Task not found") return fail(404, { error: e.message });
+	return null;
+}
+
+function mapCompleteSessionError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "Session not found") return fail(404, { error: e.message });
+	if (e.message === "Task not found") return fail(404, { error: e.message });
+	if (e.message === "Session not in progress or completed") return fail(409, { error: e.message });
+	return null;
+}
+
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const user = locals.user;
+	if (!user) throw error(401, "Unauthorized");
+
+	const taskIdStr = params.id;
+	const taskId = Number.parseInt(taskIdStr, 10);
+	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
+
+	// Check if there's an existing in-progress session for this user+task
+	const existingSession = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id), eq(practiceSession.status, "in_progress")),
+		orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
+		with: {
+			messages: true,
+		},
+	});
+
+	const taskData = await db.query.task.findFirst({
+		where: eq(task.id, taskId),
+		with: {
+			variant: true,
+			template: true,
+		},
+	});
+
+	if (!taskData) throw error(404, "Task not found");
 
 	if (Number.isNaN(taskId)) {
 		return error(404, "Invalid task ID");
@@ -32,12 +75,103 @@ export const load: PageServerLoad = async (event) => {
 	const learningLanguage = user.activeLanguage || "en";
 
 	return {
+		task: taskData,
+		existingSession,
 		taskId: taskIdStr,
-		agentPrompt: taskRecord.agentPrompt || "", // 2. Return agentPrompt to the page
+		agentPrompt: taskRecord.agentPrompt || "",
 		user: {
 			name: user.name || "Learner",
 			avatarUrl,
 			learningLanguage,
 		},
 	};
+};
+
+export const actions: Actions = {
+	start: async ({ params, locals }) => {
+		const user = locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+
+		try {
+			const result = await startSession(taskId, user.id);
+			return { success: true, ...result };
+		} catch (e) {
+			const mappedError = mapStartSessionError(e);
+			if (mappedError) return mappedError;
+
+			console.error("Failed to start session:", e);
+			return fail(500, { error: "Failed to start session" });
+		}
+	},
+
+	send: async ({ request, params, locals }) => {
+		const user = locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const message = formData.get("message") as string;
+
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (!message?.trim()) return fail(400, { error: "Message is required" });
+
+		try {
+			// Verify session belongs to this user and task
+			const session = await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, sessionId),
+			});
+
+			if (!session || session.userId !== user.id || session.taskId !== taskId) {
+				return fail(403, { error: "Access denied" });
+			}
+
+			const result = await sendMessage(sessionId, message);
+			return { success: true, ...result };
+		} catch (e) {
+			const mappedError = mapSendMessageError(e);
+			if (mappedError) return mappedError;
+
+			console.error("Failed to send message:", e);
+			return fail(500, { error: "Failed to send message" });
+		}
+	},
+
+	complete: async ({ request, params, locals }) => {
+		const user = locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+
+		try {
+			// Verify session belongs to this user and task
+			const session = await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, sessionId),
+			});
+
+			if (!session || session.userId !== user.id || session.taskId !== taskId) {
+				return fail(403, { error: "Access denied" });
+			}
+
+			const feedback = await completeSession(sessionId);
+			return { success: true, feedback };
+		} catch (e) {
+			const mappedError = mapCompleteSessionError(e);
+			if (mappedError) return mappedError;
+
+			console.error("Failed to complete session:", e);
+			return fail(500, { error: "Failed to complete session" });
+		}
+	},
 };

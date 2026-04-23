@@ -16,9 +16,60 @@
 OPENAI_API_KEY="sk-***"
 OPENAI_BASE_URL="https://api-ai.thucs.cn/v1"
 OPENAI_MODEL="qwen3-max"
+
+# Disable SSL verification for self-signed certificates (development only)
+NODE_TLS_REJECT_UNAUTHORIZED="0"
 ```
 
 注意：示例中的 API Key 是占位符，禁止把真实密钥提交到仓库。
+
+## 手动测试示例
+
+### 启动一个会话并进行对话
+
+```bash
+curl -X POST "http://localhost:5173/task/1/session?/start" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -H "Accept: application/json"
+
+# returns: sessionId=8, MBTI=INTP, Scenario=Reddit post about coffee vs tea
+
+curl -X POST "http://localhost:5173/task/1/session?/send" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -d "sessionId=8" \
+  -d "message=I think tea is too mild. Coffee gives me real energy boost." \
+  -H "Accept: application/json"
+
+# returns: AI response
+
+curl -X POST "http://localhost:5173/task/1/session?/complete" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Cookie: better-auth.session_token=YOUR_TOKEN" \
+  -d "sessionId=8" \
+  -H "Accept: application/json"
+```
+
+### Tutor 评估返回示例
+
+```json
+{
+  "success": true,
+  "feedback": {
+    "content": "The student's message is polite and respectful, fitting well within a civil debate. However, they did not mention any types of tea...",
+    "objectiveResults": [
+      { "text": "Mention at least two types of tea.", "grade": "C" },
+      { "text": "Counter the argument that coffee has more caffeine.", "grade": "C" },
+      { "text": "Maintain a respectful tone throughout the debate.", "grade": "A" }
+    ]
+  }
+}
+```
+
+**评估说明：**
+- Tutor 基于场景背景（Reddit 帖子）、对话历史和学生的消息进行评估
+- 学生获得了 A/C/C 的评分：语气尊重（A），但未提及茶种类（C），未反驳咖啡因论点（C）
 
 
 ## 类型定义

@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { user } from "./auth.schema";
-import { cadenceEnum, interactionTypeEnum, languageCodeEnum, scheduleOriginEnum, uiVariantEnum } from "./enums";
+import { cadenceEnum, interactionTypeEnum, languageCodeEnum, messageRoleEnum, scheduleOriginEnum, sessionStatusEnum, uiVariantEnum } from "./enums";
 
 // ── userLearningProfile ──────────────────────────────────────────────
 export const userLearningProfile = pgTable(
@@ -110,6 +110,42 @@ export const task = pgTable(
 	],
 );
 
+// ── practiceSession ────────────────────────────────────────────────────
+export const practiceSession = pgTable(
+	"practice_session",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
+		taskId: integer("task_id")
+			.notNull()
+			.references(() => task.id),
+		agentPromptSnapshot: jsonb("agent_prompt_snapshot").notNull(),
+		status: sessionStatusEnum("status").default("in_progress").notNull(),
+		tutorFeedback: jsonb("tutor_feedback"),
+		startedAt: timestamp("started_at").defaultNow().notNull(),
+		completedAt: timestamp("completed_at"),
+	},
+	(t) => [index("practice_session_user_task_idx").on(t.userId, t.taskId)],
+);
+
+// ── sessionMessage ─────────────────────────────────────────────────────
+export const sessionMessage = pgTable(
+	"session_message",
+	{
+		id: serial("id").primaryKey(),
+		sessionId: integer("session_id")
+			.notNull()
+			.references(() => practiceSession.id),
+		role: messageRoleEnum("role").notNull(),
+		content: text("content").notNull(),
+		llmMetadata: jsonb("llm_metadata"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [index("session_message_session_idx").on(t.sessionId)],
+);
+
 // ── Relations ────────────────────────────────────────────────────────
 export const userLearningProfileRelations = relations(userLearningProfile, ({ one }) => ({
 	user: one(user, {
@@ -143,6 +179,25 @@ export const taskRelations = relations(task, ({ one }) => ({
 	variant: one(templateVariant, {
 		fields: [task.variantId],
 		references: [templateVariant.id],
+	}),
+}));
+
+export const practiceSessionRelations = relations(practiceSession, ({ one, many }) => ({
+	user: one(user, {
+		fields: [practiceSession.userId],
+		references: [user.id],
+	}),
+	task: one(task, {
+		fields: [practiceSession.taskId],
+		references: [task.id],
+	}),
+	messages: many(sessionMessage),
+}));
+
+export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
+	session: one(practiceSession, {
+		fields: [sessionMessage.sessionId],
+		references: [practiceSession.id],
 	}),
 }));
 
