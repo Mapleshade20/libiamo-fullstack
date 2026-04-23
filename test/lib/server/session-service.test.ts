@@ -108,7 +108,7 @@ describe("session service", () => {
 				template: { ui: "apple_mail" as const },
 				variant: {
 					openingState: {
-						emails: [{ from: "boss@company.com", subject: "Meeting tomorrow", body: "See you at 9am" }],
+						emails: [{ from: "boss@company.com", to: "user@example.com", subject: "Meeting tomorrow", body: "See you at 9am" }],
 					},
 				},
 			});
@@ -118,8 +118,35 @@ describe("session service", () => {
 			const result = await startSession(1, "user_456");
 
 			expect(result.systemPrompt).toContain("boss@company.com");
+			expect(result.systemPrompt).toContain("user@example.com");
 			expect(result.systemPrompt).toContain("Meeting tomorrow");
 			expect(result.systemPrompt).toContain("See you at 9am");
+		});
+
+		it("builds apple_mail scenario with multiple emails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: {
+					openingState: {
+						emails: [
+							{ from: "alice@example.com", to: "user@example.com", subject: "Hello", body: "First email", time: "10:00" },
+							{ from: "bob@example.com", to: "user@example.com", subject: "Re: Hello", body: "Second email" },
+						],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Email 1:");
+			expect(result.systemPrompt).toContain("Email 2:");
+			expect(result.systemPrompt).toContain("alice@example.com");
+			expect(result.systemPrompt).toContain("bob@example.com");
+			expect(result.systemPrompt).toContain("10:00");
+			expect(result.systemPrompt).toContain("emails");
 		});
 
 		it("builds apple_mail scenario with empty emails", async () => {
@@ -267,6 +294,21 @@ describe("session service", () => {
 			const result = await startSession(1, "user_456");
 
 			expect(result.systemPrompt).toContain("Bonjour");
+		});
+
+		it("builds translator scenario with empty source text", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "translator" as const },
+				variant: { openingState: { sourceText: "" } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456");
+
+			expect(result.systemPrompt).toContain("Translation task");
+			expect(result.systemPrompt).not.toContain("Text to translate:");
 		});
 
 		it("throws when task not found", async () => {

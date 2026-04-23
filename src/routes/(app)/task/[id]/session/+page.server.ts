@@ -13,6 +13,12 @@ function mapSendMessageError(e: unknown) {
 	return null;
 }
 
+function mapStartSessionError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "Task not found") return fail(404, { error: e.message });
+	return null;
+}
+
 function mapCompleteSessionError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "Session not found") return fail(404, { error: e.message });
@@ -65,6 +71,9 @@ export const actions: Actions = {
 			const result = await startSession(taskId, user.id);
 			return { success: true, ...result };
 		} catch (e) {
+			const mappedError = mapStartSessionError(e);
+			if (mappedError) return mappedError;
+
 			console.error("Failed to start session:", e);
 			return fail(500, { error: "Failed to start session" });
 		}

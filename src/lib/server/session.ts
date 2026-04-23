@@ -7,8 +7,6 @@ import { asc, eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 
-export type { TutorFeedback } from "$lib/schemas";
-
 import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
@@ -34,10 +32,22 @@ function buildRedditContext(openingState: Record<string, unknown>): string {
 }
 
 function buildMailContext(openingState: Record<string, unknown>): string {
-	const emails = openingState.emails as Array<{ from?: string; subject?: string; body?: string }> | undefined;
+	const emails = openingState.emails as Array<{ from?: string; to?: string; subject?: string; body?: string; time?: string }> | undefined;
 	if (!emails?.length) return "Scenario: Mail app";
-	const e = emails[0];
-	return `Scenario: Received email\nFrom: ${e.from}\nSubject: ${e.subject}\nBody: ${e.body}`;
+
+	const emailLines = emails.map((e, i) => {
+		const parts = [
+			`Email ${i + 1}:`,
+			`  From: ${e.from}`,
+			`  To: ${e.to}`,
+			`  Subject: ${e.subject}`,
+			...(e.time ? [`  Time: ${e.time}`] : []),
+			`  Body: ${e.body}`,
+		];
+		return parts.join("\n");
+	});
+
+	return `Scenario: Received email${emails.length > 1 ? "s" : ""}\n${emailLines.join("\n\n")}`;
 }
 
 function buildDiscordContext(openingState: Record<string, unknown>): string {
