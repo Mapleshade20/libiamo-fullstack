@@ -381,5 +381,22 @@ describe("session page server", () => {
 
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
 		});
+
+		it("returns fail 409 when completeSession reports not in progress or completed", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.completeSession.mockRejectedValue(new Error("Session not in progress or completed"));
+
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress or completed" } });
+		});
 	});
 });

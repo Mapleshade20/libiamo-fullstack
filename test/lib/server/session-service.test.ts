@@ -49,7 +49,7 @@ describe("session service", () => {
 
 			expect(result.sessionId).toBe(123);
 			expect(result.mbti).toMatch(/^(INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)$/);
-			// MBTI is in snapshot but not in systemPrompt (already in agentPromptBase from tasks.ts)
+			// MBTI is folded into the prompt composition; assert the scenario and task text here.
 			expect(result.systemPrompt).toContain("Discord");
 			expect(result.systemPrompt).toContain("Alice");
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
@@ -65,7 +65,7 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456");
 
-			// MBTI is in snapshot but not in systemPrompt when agentPrompt is null
+			// MBTI is still part of the generated prompt; this test only checks the scenario text and fallback agent prompt.
 			expect(result.systemPrompt).toContain("Discord");
 			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
 		});
@@ -80,7 +80,7 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456");
 
-			// MBTI is in snapshot but not in systemPrompt (already in agentPromptBase from tasks.ts)
+			// MBTI is folded into the prompt composition; assert the fallback agent prompt remains present.
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
 

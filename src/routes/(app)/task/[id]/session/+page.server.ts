@@ -13,6 +13,14 @@ function mapSendMessageError(e: unknown) {
 	return null;
 }
 
+function mapCompleteSessionError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "Session not found") return fail(404, { error: e.message });
+	if (e.message === "Task not found") return fail(404, { error: e.message });
+	if (e.message === "Session not in progress or completed") return fail(409, { error: e.message });
+	return null;
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const user = locals.user;
 	if (!user) throw error(401, "Unauthorized");
@@ -122,6 +130,9 @@ export const actions: Actions = {
 			const feedback = await completeSession(sessionId);
 			return { success: true, feedback };
 		} catch (e) {
+			const mappedError = mapCompleteSessionError(e);
+			if (mappedError) return mappedError;
+
 			console.error("Failed to complete session:", e);
 			return fail(500, { error: "Failed to complete session" });
 		}
