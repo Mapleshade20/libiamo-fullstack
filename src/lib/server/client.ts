@@ -131,6 +131,8 @@ export async function createStructuredOutput<T extends z.ZodType>(
 	messages: ChatMessage[],
 	options: OpenAIOptions = {},
 ): Promise<z.infer<T>> {
+	validateMessages(messages);
+
 	const result = await generateText({
 		model: getModel(),
 		messages,

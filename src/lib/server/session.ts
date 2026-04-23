@@ -306,10 +306,14 @@ export async function completeSession(sessionId: number): Promise<TutorFeedback>
 	});
 
 	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
+	if (session.status !== "in_progress" && session.status !== "completed") {
+		throw new Error("Session not in progress or completed");
+	}
 
-	// Mark as completed first
-	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
+	// Only transition to completed on first completion attempt.
+	if (session.status === "in_progress") {
+		await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
+	}
 
 	// Trigger evaluation automatically
 	return evaluateSession(sessionId);

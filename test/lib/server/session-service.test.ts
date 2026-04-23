@@ -455,12 +455,34 @@ describe("session service", () => {
 		});
 
 		it("throws when session already completed", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				status: "completed",
+			mockDb.query.practiceSession.findFirst
+				.mockResolvedValueOnce({
+					...mockSession,
+					status: "completed",
+				})
+				.mockResolvedValueOnce({
+					...mockSession,
+					agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
+					messages: [
+						{ role: "user", content: "Hello" },
+						{ role: "assistant", content: "Hi there" },
+					],
+					task: mockTask,
+				});
+			const whereMock = vi.fn();
+			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "Good retry!",
+				objectiveResults: [
+					{ text: "Use polite language", grade: "A" },
+					{ text: "Respond appropriately", grade: "A" },
+				],
 			});
 
-			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
+			const result = await completeSession(123);
+
+			expect(result.content).toBe("Good retry!");
+			expect(mockDb.update).toHaveBeenCalledTimes(1); // evaluated only, no completed transition
 		});
 
 		it("throws when session already evaluated", async () => {
@@ -469,7 +491,7 @@ describe("session service", () => {
 				status: "evaluated",
 			});
 
-			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
+			await expect(completeSession(123)).rejects.toThrow("Session not in progress or completed");
 		});
 	});
 

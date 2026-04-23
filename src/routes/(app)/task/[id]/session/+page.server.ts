@@ -5,6 +5,14 @@ import { practiceSession, task } from "$lib/server/db/schema";
 import { completeSession, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
+function mapSendMessageError(e: unknown) {
+	if (!(e instanceof Error)) return null;
+	if (e.message === "userMessage is required") return fail(400, { error: e.message });
+	if (e.message === "Session not found") return fail(404, { error: e.message });
+	if (e.message === "Session not in progress") return fail(409, { error: e.message });
+	return null;
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const user = locals.user;
 	if (!user) throw error(401, "Unauthorized");
@@ -69,26 +77,32 @@ export const actions: Actions = {
 		if (!message?.trim()) return fail(400, { error: "Message is required" });
 
 		try {
-			// Verify session belongs to this user
+			// Verify session belongs to this user and task
 			const session = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, sessionId),
 			});
 
-			if (!session || session.userId !== user.id) {
+			if (!session || session.userId !== user.id || session.taskId !== taskId) {
 				return fail(403, { error: "Access denied" });
 			}
 
 			const result = await sendMessage(sessionId, message);
 			return { success: true, ...result };
 		} catch (e) {
+			const mappedError = mapSendMessageError(e);
+			if (mappedError) return mappedError;
+
 			console.error("Failed to send message:", e);
 			return fail(500, { error: "Failed to send message" });
 		}
 	},
 
-	complete: async ({ request, locals }) => {
+	complete: async ({ request, params, locals }) => {
 		const user = locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
 		const formData = await request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
@@ -96,12 +110,12 @@ export const actions: Actions = {
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 
 		try {
-			// Verify session belongs to this user
+			// Verify session belongs to this user and task
 			const session = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, sessionId),
 			});
 
-			if (!session || session.userId !== user.id) {
+			if (!session || session.userId !== user.id || session.taskId !== taskId) {
 				return fail(403, { error: "Access denied" });
 			}
 

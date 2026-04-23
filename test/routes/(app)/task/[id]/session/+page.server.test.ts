@@ -151,6 +151,7 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
+				taskId: 456,
 			});
 			mockSessionService.sendMessage.mockResolvedValue({
 				reply: "Hello back",
@@ -176,6 +177,25 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				userId: "other_user",
+				taskId: 456,
+			});
+
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns fail 403 when session belongs to another task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 999,
 			});
 
 			const result = await actions.send({
@@ -220,6 +240,44 @@ describe("session page server", () => {
 
 			expect(result).toMatchObject({ status: 401, data: { error: "Unauthorized" } });
 		});
+
+		it("returns fail 409 when sendMessage reports session not in progress", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockRejectedValue(new Error("Session not in progress"));
+
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress" } });
+		});
+
+		it("returns fail 404 when sendMessage reports session not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockRejectedValue(new Error("Session not found"));
+
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
+		});
 	});
 
 	describe("actions.complete", () => {
@@ -227,6 +285,7 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
+				taskId: 456,
 			});
 			const mockFeedback = {
 				content: "Good job!",
@@ -236,6 +295,7 @@ describe("session page server", () => {
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
 				locals: { user: mockUser },
 			} as any);
 
@@ -247,10 +307,28 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				userId: "other_user",
+				taskId: 456,
 			});
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns fail 403 when session belongs to another task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 999,
+			});
+
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
 				locals: { user: mockUser },
 			} as any);
 
@@ -260,15 +338,27 @@ describe("session page server", () => {
 		it("returns fail 400 when sessionId is invalid", async () => {
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "invalid" })[k] })) },
+				params: { id: mockTaskId },
 				locals: { user: mockUser },
 			} as any);
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid session ID" } });
 		});
 
+		it("returns fail 400 for invalid task ID", async () => {
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: "invalid" },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Invalid task ID" } });
+		});
+
 		it("returns fail 401 when user not authenticated", async () => {
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(new FormData()) },
+				params: { id: mockTaskId },
 				locals: { user: null },
 			} as any);
 
@@ -279,11 +369,13 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
+				taskId: 456,
 			});
 			mockSessionService.completeSession.mockRejectedValue(new Error("DB error"));
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
 				locals: { user: mockUser },
 			} as any);
 
