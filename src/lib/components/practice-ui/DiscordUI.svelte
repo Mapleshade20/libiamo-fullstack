@@ -21,9 +21,10 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
+	agentPrompt?: string;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en" }: Props = $props();
+let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", agentPrompt = "" }: Props = $props();
 
 const serverName = $derived(`${userName}'s Server`);
 const serverAcronym = $derived(
@@ -87,7 +88,7 @@ type Message = {
 	timestamp: string;
 	authorName: string;
 	avatar?: string;
-	avatarColor?: string; // Used to colorize agent avatars dynamically
+	avatarColor?: string;
 };
 
 type Member = {
@@ -104,11 +105,9 @@ let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let showMembers = $state(false);
 
-// State for dynamically generated members
 let mockOnlineMembers = $state<Member[]>([]);
 let mockOfflineMembers = $state<Member[]>([]);
 
-// Data pools for random generation
 const namePool = [
 	"Alex",
 	"ShadowHunter",
@@ -273,10 +272,7 @@ async function scrollToBottom() {
 }
 
 function formatTime(date: Date) {
-	return date.toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
+	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function getTodayDateString() {
@@ -308,7 +304,15 @@ async function handleSend() {
 	inputText = "";
 	await scrollToBottom();
 
-	// 2. Test LLM integration: Make ALL generated online users reply to this text
+	const historyForAPI = messages
+		.slice(0, -1)
+		.map((msg) => ({
+			role: msg.role === "user" ? "user" : "assistant",
+			content: msg.text,
+		}))
+		.slice(-10);
+
+	// 2. LLM integration
 	if (mockOnlineMembers.length > 0) {
 		// Loop through each online member and simulate a delayed response
 		mockOnlineMembers.forEach((member, index) => {
@@ -316,35 +320,76 @@ async function handleSend() {
 			const delay = 1000 + index * 800;
 
 			setTimeout(async () => {
-				messages = [
-					...messages,
-					{
-						id: crypto.randomUUID(),
-						role: "agent",
-						text: `[${member.name} Received]: "${currentText}" - This is a test LLM response.`,
-						timestamp: formatTime(new Date()),
-						authorName: member.name,
-						avatarColor: member.color, // Pass their specific color to the chat UI
-					},
-				];
-				await scrollToBottom();
+				try {
+					// Combine the database agentPrompt with the Discord persona wrapper
+					const baseInstruction = agentPrompt || `You are helping the user practice ${language}.`;
+					const systemPrompt = `[CORE INSTRUCTIONS]\n${baseInstruction}\n\n[ROLEPLAY CONTEXT]\nYou are a Discord user named ${member.name}. Your current status is: ${member.sub || "Online"}. Keep your response casual, conversational, short, and natural for a Discord chat room. Use emojis occasionally.`;
+
+					const response = await fetch("/api/chat", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							userMessage: currentText,
+							history: historyForAPI,
+							systemPrompt: systemPrompt,
+						}),
+					});
+
+					if (response.ok) {
+						const data = await response.json();
+						messages = [
+							...messages,
+							{
+								id: crypto.randomUUID(),
+								role: "agent",
+								text: data.reply.content,
+								timestamp: formatTime(new Date()),
+								authorName: member.name,
+								avatarColor: member.color,
+							},
+						];
+						await scrollToBottom();
+					}
+				} catch (error) {
+					console.error(`Failed to get LLM response for ${member.name}:`, error);
+				}
 			}, delay);
 		});
 	} else {
-		// Fallback if randomly generated 0 online users, just to show system is working
+		// Fallback
 		setTimeout(async () => {
-			messages = [
-				...messages,
-				{
-					id: crypto.randomUUID(),
-					role: "agent",
-					text: `[System Bot]: Received "${currentText}". No other users are currently online to reply.`,
-					timestamp: formatTime(new Date()),
-					authorName: "System Bot",
-					avatarColor: "bg-[#5865F2]",
-				},
-			];
-			await scrollToBottom();
+			try {
+				// System bot doesn't need the DB prompt, it just notifies the user
+				const systemPrompt = `You are System Bot. Inform the user in ${language} that no other users are currently online to reply.`;
+
+				const response = await fetch("/api/chat", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						userMessage: currentText,
+						history: historyForAPI,
+						systemPrompt: systemPrompt,
+					}),
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					messages = [
+						...messages,
+						{
+							id: crypto.randomUUID(),
+							role: "agent",
+							text: data.reply.content,
+							timestamp: formatTime(new Date()),
+							authorName: "System Bot",
+							avatarColor: "bg-[#5865F2]",
+						},
+					];
+					await scrollToBottom();
+				}
+			} catch (error) {
+				console.error("System Bot fallback error:", error);
+			}
 		}, 1000);
 	}
 }
@@ -386,14 +431,11 @@ function handleMockAction() {
 		>
 			<LogOut size={22} class="mr-0.5" />
 		</a>
-
 		<div class="h-[2px] w-8 rounded-full bg-[#35363C]"></div>
-
 		<button type="button" class="relative flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#5865F2] text-white transition-all">
 			<div class="absolute -left-3 top-2 h-8 w-1 rounded-r-full bg-white"></div>
 			<span class="text-sm font-medium">{serverAcronym}</span>
 		</button>
-
 		<button
 			type="button"
 			class="flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] text-[#23A559] transition-all hover:rounded-[16px] hover:bg-[#23A559] hover:text-white"
@@ -412,7 +454,6 @@ function handleMockAction() {
 			<span class="truncate">{serverName}</span>
 			<ChevronDown size={18} />
 		</button>
-
 		<div class="flex-1 overflow-y-auto p-2 hide-scrollbar">
 			<button
 				type="button"
@@ -421,12 +462,10 @@ function handleMockAction() {
 				<span>{t.textChannels}</span>
 				<Plus size={14} />
 			</button>
-
 			<button type="button" class="flex w-full items-center gap-1.5 rounded bg-[#404249] px-2 py-1.5 text-[#DBDEE1]">
 				<Hash size={18} class="text-[#80848E]" />
 				<span class="text-sm">{t.general}</span>
 			</button>
-
 			<button
 				type="button"
 				class="w-full mb-1 mt-6 px-2 text-xs font-semibold text-[#949BA4] hover:text-gray-300 cursor-pointer flex justify-between items-center"
@@ -447,7 +486,6 @@ function handleMockAction() {
 				<span class="text-sm">{t.general}</span>
 			</button>
 		</div>
-
 		<div class="flex h-[52px] items-center justify-between bg-[#232428] px-2">
 			<button
 				type="button"
@@ -485,16 +523,13 @@ function handleMockAction() {
 				<Hash size={24} class="text-[#80848E]" />
 				<span class="font-semibold text-white">{t.general}</span>
 			</div>
-
 			<div class="flex items-center gap-4 text-[#B5BAC1]">
 				<button type="button" class="hover:text-[#DBDEE1]" onclick={handleMockAction}><Hash size={20} /></button>
 				<button type="button" class="hover:text-[#DBDEE1]" onclick={handleMockAction}><Bell size={20} /></button>
 				<button type="button" class="hover:text-[#DBDEE1]" onclick={handleMockAction}><Pin size={20} /></button>
 				<button
 					type="button"
-					class="transition-colors {showMembers
-                        ? 'text-white'
-                        : 'hover:text-[#DBDEE1]'}"
+					class="transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
 					onclick={() => (showMembers = !showMembers)}
 				>
 					<Users size={20} />
@@ -510,14 +545,10 @@ function handleMockAction() {
 						<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString()}</span>
 						<div class="h-px flex-1 bg-[#404249]"></div>
 					</div>
-
 					{#each messages as msg}
 						<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
 							<div
-								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
-                                'agent'
-                                    ? msg.avatarColor
-                                    : 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden"
+								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role === 'agent' ? msg.avatarColor : 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden"
 							>
 								{#if msg.role === "user" && msg.avatar}
 									<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
@@ -564,7 +595,6 @@ function handleMockAction() {
 			{#if showMembers}
 				<div class="w-60 bg-[#2B2D31] shrink-0 flex flex-col hide-scrollbar overflow-y-auto px-2 py-4">
 					<h3 class="px-2 pt-2 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.online} - {mockOnlineMembers.length + 1}</h3>
-
 					<div class="flex items-center gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-100 transition-colors">
 						<div class="relative h-8 w-8 shrink-0">
 							<div class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white">
@@ -578,7 +608,6 @@ function handleMockAction() {
 						</div>
 						<span class="text-[#DBDEE1] font-medium text-sm truncate">{userName}</span>
 					</div>
-
 					{#each mockOnlineMembers as member}
 						<div class="flex items-center gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-100 transition-colors">
 							<div class="relative h-8 w-8 shrink-0">
@@ -595,9 +624,7 @@ function handleMockAction() {
 							</div>
 						</div>
 					{/each}
-
 					<h3 class="px-2 pt-6 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.offline} - {mockOfflineMembers.length}</h3>
-
 					{#each mockOfflineMembers as member}
 						<div
 							class="flex items-center gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-50 hover:opacity-100 transition-all"

@@ -6,4 +6,10 @@ let { data } = $props();
 
 <svelte:head> <title>Practice Session - Libiamo</title> </svelte:head>
 
-<DiscordUI taskId={data.taskId} userName={data.user.name} avatarUrl={data.user.avatarUrl} language={data.user.learningLanguage} />
+<DiscordUI
+	taskId={data.taskId}
+	userName={data.user.name}
+	avatarUrl={data.user.avatarUrl}
+	language={data.user.learningLanguage}
+	agentPrompt={data.agentPrompt}
+/>
