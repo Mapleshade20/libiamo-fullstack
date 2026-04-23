@@ -3,7 +3,6 @@ import type { LanguageCode } from "$lib/constants";
 import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
-import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 
@@ -22,11 +21,6 @@ function resolveObjectives(objectives: string[] | null | undefined, slots: Recor
 	return objectives.map((o) => resolveSlots(o, slots));
 }
 
-function randomMbtiPersonaPrefix(): string {
-	const mbti = getRandomMbti();
-	return getMbtiPrompt(mbti);
-}
-
 async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, origin: "manual" | "auto") {
 	// Query active variants for this template
 	const variants = await db
@@ -42,9 +36,8 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 	const variant = variants[Math.floor(Math.random() * variants.length)];
 	const slots = (variant.slotValues ?? {}) as Record<string, string>;
 
-	// Compose agent prompt with MBTI persona prefix
-	const basePrompt = tpl.agentPromptBase ? resolveSlots(tpl.agentPromptBase, slots) : null;
-	const agentPrompt = basePrompt ? `${randomMbtiPersonaPrefix()}\n\n${basePrompt}` : null;
+	// Compose agent prompt (MBTI is applied at session start, not task creation)
+	const agentPrompt = tpl.agentPromptBase ? resolveSlots(tpl.agentPromptBase, slots) : null;
 
 	await db
 		.insert(task)

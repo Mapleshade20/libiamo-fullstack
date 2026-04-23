@@ -54,11 +54,7 @@ describe("session page server", () => {
 
 		it("returns null existingSession when no in-progress session", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				status: "completed",
-				messages: [],
-			});
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
 			const result = (await load({
 				params: { id: mockTaskId },

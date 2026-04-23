@@ -6,91 +6,97 @@
 import { asc, eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
+
+export type { TutorFeedback };
+
 import { type ChatMessage, createMultiTurnChat, createStructuredOutput } from "./client";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { getRandomMbti, type MbtiType } from "./mbti";
+import { getMbtiPrompt, getRandomMbti } from "./mbti";
+
+/**
+ * Append a list of labelled messages to a context string.
+ */
+function appendMessages(ctx: string, label: string, items: Array<Record<string, string | undefined>>): string {
+	if (!items.length) return ctx;
+	const lines = items.map((c) => `- ${Object.values(c).filter(Boolean).join(": ")}`);
+	return `${ctx}\n${label}:\n${lines.join("\n")}`;
+}
+
+function buildRedditContext(openingState: Record<string, unknown>): string {
+	const post = openingState.post as { title?: string; body?: string } | undefined;
+	const comments = openingState.previousComments as Array<{ author?: string; text?: string }> | undefined;
+	let ctx = "Scenario: Reddit post";
+	if (post?.title) ctx += `\nTitle: ${post.title}`;
+	if (post?.body) ctx += `\nContent: ${post.body}`;
+	if (comments?.length) ctx = appendMessages(ctx, "Existing comments", comments as Array<Record<string, string | undefined>>);
+	return ctx;
+}
+
+function buildMailContext(openingState: Record<string, unknown>): string {
+	const emails = openingState.emails as Array<{ from?: string; subject?: string; body?: string }> | undefined;
+	if (!emails?.length) return "Scenario: Mail app";
+	const e = emails[0];
+	return `Scenario: Received email\nFrom: ${e.from}\nSubject: ${e.subject}\nBody: ${e.body}`;
+}
+
+function buildDiscordContext(openingState: Record<string, unknown>): string {
+	const server = openingState.serverName as string | undefined;
+	const channel = openingState.channelName as string | undefined;
+	const msgs = openingState.previousMessages as Array<{ sender?: string; text?: string }> | undefined;
+	let ctx = "Scenario: Discord";
+	if (server) ctx += `\nServer: ${server}`;
+	if (channel) ctx += `\nChannel: ${channel}`;
+	if (msgs?.length) ctx = appendMessages(ctx, "History", msgs as Array<Record<string, string | undefined>>);
+	return ctx;
+}
+
+function buildIMessageContext(openingState: Record<string, unknown>): string {
+	const prev = openingState.previousMessages as Array<{ sender?: string; text?: string }> | undefined;
+	let ctx = "Scenario: iMessage conversation";
+	if (prev?.length) ctx = appendMessages(ctx, "Previous", prev as Array<Record<string, string | undefined>>);
+	return ctx;
+}
+
+function buildAo3Context(openingState: Record<string, unknown>): string {
+	const work = openingState.workTitle as string | undefined;
+	const excerpt = openingState.bodyExcerpt as string | undefined;
+	const comments = openingState.previousComments as Array<{ username?: string; comment?: string }> | undefined;
+	let ctx = "Scenario: AO3 work page";
+	if (work) ctx += `\nWork: ${work}`;
+	if (excerpt) ctx += `\nExcerpt: ${excerpt}`;
+	if (comments?.length) ctx = appendMessages(ctx, "Existing comments", comments as Array<Record<string, string | undefined>>);
+	return ctx;
+}
+
+function buildTranslatorContext(openingState: Record<string, unknown>): string {
+	const text = openingState.sourceText as string | undefined;
+	return text ? `Text to translate: ${text}` : "Translation task";
+}
 
 /**
  * Build scenario context based on UI type and openingState
  */
 function buildScenarioContext(ui: UiVariant, openingState: Record<string, unknown>): string {
-	switch (ui) {
-		case "reddit": {
-			const post = openingState.post as { title?: string; body?: string; subreddit?: string } | undefined;
-			const comments = openingState.previousComments as Array<{ author?: string; text?: string }> | undefined;
-			let ctx = "Scenario: Reddit post";
-			if (post?.title) ctx += `\nTitle: ${post.title}`;
-			if (post?.body) ctx += `\nContent: ${post.body}`;
-			if (comments?.length) {
-				ctx += "\nExisting comments:";
-				for (const c of comments) ctx += `\n- ${c.author}: ${c.text}`;
-			}
-			return ctx;
-		}
-		case "apple_mail": {
-			const emails = openingState.emails as Array<{ from?: string; subject?: string; body?: string }> | undefined;
-			if (!emails?.length) return "Scenario: Mail app";
-			const e = emails[0];
-			return `Scenario: Received email\nFrom: ${e.from}\nSubject: ${e.subject}\nBody: ${e.body}`;
-		}
-		case "discord": {
-			const server = openingState.serverName as string | undefined;
-			const channel = openingState.channelName as string | undefined;
-			const msgs = openingState.previousMessages as Array<{ sender?: string; text?: string }> | undefined;
-			let ctx = "Scenario: Discord";
-			if (server) ctx += `\nServer: ${server}`;
-			if (channel) ctx += `\nChannel: ${channel}`;
-			if (msgs?.length) {
-				ctx += "\nHistory:";
-				for (const m of msgs) ctx += `\n- ${m.sender}: ${m.text}`;
-			}
-			return ctx;
-		}
-		case "imessage": {
-			const prev = openingState.previousMessages as Array<{ sender?: string; text?: string }> | undefined;
-			let ctx = "Scenario: iMessage conversation";
-			if (prev?.length) {
-				ctx += "\nPrevious:";
-				for (const m of prev) ctx += `\n- ${m.sender}: ${m.text}`;
-			}
-			return ctx;
-		}
-		case "ao3": {
-			const work = openingState.workTitle as string | undefined;
-			const excerpt = openingState.bodyExcerpt as string | undefined;
-			const comments = openingState.previousComments as Array<{ username?: string; comment?: string }> | undefined;
-			let ctx = "Scenario: AO3 work page";
-			if (work) ctx += `\nWork: ${work}`;
-			if (excerpt) ctx += `\nExcerpt: ${excerpt}`;
-			if (comments?.length) {
-				ctx += "\nExisting comments:";
-				for (const c of comments) ctx += `\n- ${c.username}: ${c.comment}`;
-			}
-			return ctx;
-		}
-		case "translator": {
-			const text = openingState.sourceText as string | undefined;
-			return text ? `Text to translate: ${text}` : "Translation task";
-		}
-		default:
-			return "";
-	}
+	const builders: Record<UiVariant, (s: Record<string, unknown>) => string> = {
+		reddit: buildRedditContext,
+		apple_mail: buildMailContext,
+		discord: buildDiscordContext,
+		imessage: buildIMessageContext,
+		ao3: buildAo3Context,
+		translator: buildTranslatorContext,
+	};
+	return builders[ui]?.(openingState) ?? "";
 }
 
 /**
- * Build complete system prompt
- * Note: MBTI is already included in agentPromptBase from tasks.ts
+ * Build complete system prompt from scenario context and agent instructions.
  */
-function buildSystemPrompt(agentPromptBase: string | null, ui: UiVariant, openingState: Record<string, unknown>): string {
+function buildSystemPrompt(agentPrompt: string | null, scenarioContext: string): string {
 	const parts: string[] = [];
 
-	// Scenario context
-	const scenario = buildScenarioContext(ui, openingState);
-	if (scenario) parts.push(scenario);
-
-	// Task instruction (already includes MBTI from tasks.ts)
-	if (agentPromptBase) parts.push(agentPromptBase);
+	if (scenarioContext) parts.push(scenarioContext);
+	if (agentPrompt) parts.push(agentPrompt);
 
 	return parts.join("\n\n");
 }
@@ -118,9 +124,14 @@ export async function startSession(taskId: number, userId: string): Promise<Star
 	}
 
 	const mbti = getRandomMbti();
-	const systemPrompt = buildSystemPrompt(taskData.agentPrompt, taskData.template.ui, taskData.variant.openingState as Record<string, unknown>);
+	const mbtiPrefix = getMbtiPrompt(mbti);
+	const agentPrompt = taskData.agentPrompt ? `${mbtiPrefix}\n\n${taskData.agentPrompt}` : mbtiPrefix;
+	const ui = taskData.template.ui;
+	const openingState = taskData.variant.openingState as Record<string, unknown>;
+	const scenarioContext = buildScenarioContext(ui, openingState);
+	const systemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
 
-	const snapshot = { systemPrompt, mbti, ui: taskData.template.ui };
+	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
 
 	const [session] = await db
 		.insert(practiceSession)
@@ -195,7 +206,7 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
  */
 function buildTutorPrompt(objectives: string[], scenarioContext: string, messages: { role: string; content: string }[]): string {
 	// Build full conversation history for context
-	const conversationHistory = messages.map((m, i) => `[${m.role}] ${m.content}`).join("\n\n");
+	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
 
 	// Extract user messages for explicit evaluation
 	const userMessages = messages.filter((m) => m.role === "user");
@@ -263,10 +274,9 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		return feedback;
 	}
 
-	// Extract scenario context from agentPromptSnapshot
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string };
-	const systemPromptLines = snapshot.systemPrompt.split("\n\n");
-	const scenarioContext = systemPromptLines.find((line) => line.startsWith("Scenario:")) || "";
+	// Extract scenario context from snapshot (stored at session start)
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
+	const scenarioContext = snapshot.scenarioContext ?? "";
 
 	const prompt = buildTutorPrompt(
 		objectives,

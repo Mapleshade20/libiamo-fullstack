@@ -1,8 +1,8 @@
 import { error, fail } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { completeSession, sendMessage, startSession, type TutorFeedback } from "$lib/server/session";
+import { completeSession, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Check if there's an existing in-progress session for this user+task
 	const existingSession = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.taskId, taskId),
+		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id), eq(practiceSession.status, "in_progress")),
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
 		with: {
 			messages: true,
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		task: taskData,
-		existingSession: existingSession?.status === "in_progress" ? existingSession : null,
+		existingSession,
 	};
 };
 
