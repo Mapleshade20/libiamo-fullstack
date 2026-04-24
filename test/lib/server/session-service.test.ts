@@ -28,6 +28,7 @@ describe("session service", () => {
 	const mockTask = {
 		id: 1,
 		agentPrompt: "You are a helpful assistant.",
+		language: "en",
 		template: {
 			ui: "discord" as const,
 		},
@@ -344,7 +345,6 @@ describe("session service", () => {
 		it("sends message and returns AI reply", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
 
-			// Mock the structured output to return the format required by the updated session.ts
 			mockClient.createStructuredOutput.mockResolvedValue({
 				reply: "Hello back!",
 				terminate: false,
@@ -358,7 +358,7 @@ describe("session service", () => {
 			expect(result.terminated).toBe(false);
 
 			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
-				expect.any(Object), // Zod Schema
+				expect.any(Object),
 				expect.arrayContaining([
 					expect.objectContaining({ role: "system", content: expect.stringContaining("Your MBTI type is ENFP.") }),
 					expect.objectContaining({ role: "user", content: "Hello!" }),
@@ -444,8 +444,9 @@ describe("session service", () => {
 			taskId: 1,
 		};
 
-		const mockTask = {
+		const mockTaskObjectives = {
 			id: 1,
+			language: "en",
 			objectives: ["Use polite language", "Respond appropriately"],
 		};
 
@@ -457,7 +458,7 @@ describe("session service", () => {
 					{ role: "user", content: "Hello" },
 					{ role: "assistant", content: "Hi there" },
 				],
-				task: mockTask,
+				task: mockTaskObjectives,
 			});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
@@ -474,7 +475,7 @@ describe("session service", () => {
 
 			expect(result.content).toBe("Good job!");
 			expect(result.objectiveResults).toHaveLength(2);
-			expect(mockDb.update).toHaveBeenCalledTimes(2); // completed + evaluated
+			expect(mockDb.update).toHaveBeenCalledTimes(2);
 		});
 
 		it("handles empty objectives", async () => {
@@ -482,14 +483,19 @@ describe("session service", () => {
 				...mockSession,
 				agentPromptSnapshot: { systemPrompt: "Scenario: Test\n\nPrompt", mbti: "ENFP", ui: "discord" },
 				messages: [],
-				task: { ...mockTask, objectives: [] },
+				task: { ...mockTaskObjectives, objectives: [] },
 			});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "General fluency assessment here.",
+				objectiveResults: [],
+			});
+
 			const result = await completeSession(123);
 
-			expect(result.content).toContain("No specific objectives");
+			expect(result.content).toBe("General fluency assessment here.");
 			expect(result.objectiveResults).toHaveLength(0);
 		});
 
@@ -512,7 +518,7 @@ describe("session service", () => {
 						{ role: "user", content: "Hello" },
 						{ role: "assistant", content: "Hi there" },
 					],
-					task: mockTask,
+					task: mockTaskObjectives,
 				});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
@@ -527,7 +533,7 @@ describe("session service", () => {
 			const result = await completeSession(123);
 
 			expect(result.content).toBe("Good retry!");
-			expect(mockDb.update).toHaveBeenCalledTimes(1); // evaluated only, no completed transition
+			expect(mockDb.update).toHaveBeenCalledTimes(1);
 		});
 
 		it("throws when session already evaluated", async () => {

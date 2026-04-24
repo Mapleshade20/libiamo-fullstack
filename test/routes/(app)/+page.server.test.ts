@@ -5,13 +5,14 @@ import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
 const { mockWhere, mockSelect, mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
 	const mockWhere = vi.fn();
-	const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
+	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
+	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin }));
 	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin }));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));
 	const mockOnConflictDoNothing = vi.fn();
 	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockOnConflictDoNothing, mockValues, mockInsert };
+	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockOnConflictDoNothing, mockValues, mockInsert, mockLeftJoin };
 });
 
 const { mockEnsureTasksForDate } = vi.hoisted(() => ({
@@ -58,6 +59,11 @@ vi.mock("$lib/server/db/schema", () => ({
 		cadence: "cadence",
 	},
 	userLearningProfile: Symbol("userLearningProfile"),
+	practiceSession: {
+		status: "status",
+		taskId: "taskId",
+		userId: "userId",
+	},
 }));
 
 vi.mock("$lib/server/tasks", () => ({
@@ -98,23 +104,20 @@ describe("(app) home +page.server", () => {
 		});
 	});
 
-	// --- New tests for timezone logic ---
 	describe("timezone logic", () => {
 		beforeEach(() => {
-			// Lock system time to prevent flaky tests
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-04-17T10:00:00Z"));
 		});
 
 		afterEach(() => {
-			// Restore real timers after timezone tests
 			vi.useRealTimers();
 		});
 
 		it("should use UTC as default timezone if user.timezone is missing", async () => {
 			mockGetLocalDateString.mockReturnValue("2026-04-17");
-			mockWhere.mockResolvedValue([]); // Prevent DB mock errors
-			const user = { id: "u1", activeLanguage: "en" }; // No timezone set
+			mockWhere.mockResolvedValue([]);
+			const user = { id: "u1", activeLanguage: "en" };
 
 			await load({ locals: { user } } as any);
 

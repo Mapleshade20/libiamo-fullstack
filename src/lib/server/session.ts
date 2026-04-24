@@ -125,7 +125,7 @@ export async function startSession(taskId: number, userId: string, learningLangu
 	const scenarioContext = buildScenarioContext(ui, openingState);
 	const languageConstraint = `IMPORTANT: You MUST generate all your conversational replies in ${learningLanguage.toUpperCase()}. Do not use English unless the user explicitly asks for a translation or the specific scenario demands it.`;
 
-	let baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
+	const baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
 	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
@@ -201,45 +201,56 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }
 
-function buildTutorPrompt(objectives: string[], scenarioContext: string, messages: { role: string; content: string }[]): string {
+function buildTutorPrompt(
+	objectives: string[],
+	scenarioContext: string,
+	messages: { role: string; content: string }[],
+	learningLanguage: string,
+): string {
 	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
 	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
 
+	const objectivesSection =
+		objectives.length > 0
+			? objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")
+			: "No specific task objectives. Please evaluate general conversational fluency, grammar, and appropriateness for the scenario.";
+
 	return `You are a language tutor evaluating a student's conversation practice.
 
-    ## Scenario Context
-    ${scenarioContext || "General conversation practice"}
+	## Scenario Context
+	${scenarioContext || "General conversation practice"}
 
-    ## Full Conversation History
-    ${conversationHistory || "(No conversation yet)"}
+	## Full Conversation History
+	${conversationHistory || "(No conversation yet)"}
 
-    ## Task Objectives
-    ${objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+	## Task Objectives
+	${objectivesSection}
 
-    ## Student's Messages (evaluate these specifically)
-    ${studentMessages || "(No messages from student)"}
+	## Student's Messages (evaluate these specifically)
+	${studentMessages || "(No messages from student)"}
 
-    ## Evaluation Instructions
-    Evaluate how well the student achieved each objective considering:
-    - The scenario context they were responding to
-    - The full conversation flow (how they adapted to the AI's responses)
-    - The quality and appropriateness of their messages
+	## Evaluation Instructions
+	Evaluate how well the student achieved the objectives (or general fluency if none) considering:
+	- The scenario context they were responding to
+	- The full conversation flow (how they adapted to the AI's responses)
+	- The quality and appropriateness of their messages
 
-    Grade each objective as:
-    - A: Excellent - fully achieved
-    - B: Good - mostly achieved with minor issues
-    - C: Needs improvement - significant gaps
+	Grade each objective (or general fluency) as:
+	- A: Excellent - fully achieved
+	- B: Good - mostly achieved with minor issues
+	- C: Needs improvement - significant gaps
 
-    Provide brief, constructive feedback (2-3 sentences).
+	Provide brief, constructive feedback (2-3 sentences).
+	IMPORTANT: You MUST write the "content" (overall feedback on student's performance) in ${learningLanguage.toUpperCase()}. Do NOT write the feedback in English. The "text" field of objectiveResults should remain in the original language of the objectives.
 
-    Respond in JSON format:
-    {
-    "objectiveResults": [
-        { "text": "objective description", "grade": "A|B|C" }
-    ],
-    "content": "overall feedback on student's performance"
-    }`;
+	Respond in JSON format:
+	{
+	"objectiveResults": [
+		{ "text": "objective description", "grade": "A|B|C" }
+	],
+	"content": "overall feedback on student's performance"
+	}`;
 }
 
 export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
@@ -255,14 +266,14 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	if (!session.task) throw new Error("Task not found");
 
 	const objectives = session.task.objectives ?? [];
-	if (objectives.length === 0) {
-		const feedback: TutorFeedback = {
-			content: "No specific objectives were set for this task.",
-			objectiveResults: [],
-		};
-		await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
-		return feedback;
-	}
+
+	const languageMap: Record<string, string> = {
+		en: "English",
+		es: "Spanish",
+		fr: "French",
+		ja: "Japanese",
+	};
+	const learningLanguageName = languageMap[session.task.language] || session.task.language;
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
 	const scenarioContext = snapshot.scenarioContext ?? "";
@@ -271,6 +282,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		objectives,
 		scenarioContext,
 		session.messages.map((m) => ({ role: m.role, content: m.content })),
+		learningLanguageName,
 	);
 
 	const messages: ChatMessage[] = [

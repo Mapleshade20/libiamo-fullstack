@@ -1,5 +1,6 @@
 <script lang="ts">
 import BookOpen from "@lucide/svelte/icons/book-open";
+import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Hash from "@lucide/svelte/icons/hash";
 import Languages from "@lucide/svelte/icons/languages";
 import Mail from "@lucide/svelte/icons/mail";
@@ -58,9 +59,11 @@ const uiIcons: Record<string, Component> = {
 };
 </script>
 
-<!-- WARN: Biome 2.4.11 parser bug -->
-{#snippet taskCard(task: typeof data.dailyTasks[0])}
+{#snippet taskCard(task: any)}
 	{@const Icon = uiIcons[task.templateUi] ?? MessageSquare}
+	{@const isFinished =
+		task.sessionStatus === "completed" ||
+		task.sessionStatus === "evaluated"}
 	<div
 		class="card-scene h-56 w-full cursor-pointer transition-transform duration-[400ms] ease-out hover:scale-[1.02] hover:-translate-y-1"
 		role="button"
@@ -69,38 +72,85 @@ const uiIcons: Record<string, Component> = {
 		onkeydown={(e) => e.key === "Enter" && toggleFlip(task.id)}
 	>
 		<div class="card-inner w-full h-full" class:is-flipped={flippedId === task.id}>
-			<!-- Front -->
 			<div
-				class="card-face absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-sm transition-shadow duration-500 hover:shadow-xl"
+				class="card-face absolute inset-0 {isFinished
+					? 'bg-green-50/40 border-green-500/40'
+					: 'bg-card border-border'} rounded-2xl border p-5 flex flex-col justify-between shadow-sm transition-shadow duration-500 hover:shadow-xl"
 			>
+				{#if isFinished}
+					<div class="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0">
+						<div class="absolute -right-6 -top-6 text-green-500/10 rotate-12"><CheckCircle2 size={130} /></div>
+					</div>
+				{/if}
 				<div class="flex justify-between items-center">
-					<div class="p-2.5 rounded-full bg-background/60 border border-border"><Icon size={20} strokeWidth={1} class="text-foreground" /></div>
+					<div
+						class="p-2.5 rounded-full {isFinished
+							? 'bg-green-500/20 border-green-500/30 text-green-700'
+							: 'bg-background/60 border-border text-foreground'} border"
+					>
+						<Icon size={20} strokeWidth={1} class="currentColor" />
+					</div>
 					<span class="flex gap-0.5">
 						{#each Array.from({ length: 3 }, (_, i) => i < task.templateDifficulty) as filled}
 							<span
 								class="inline-block h-2 w-2 rounded-full {filled
-									? 'bg-muted-foreground'
+									? isFinished
+										? 'bg-green-600/60'
+										: 'bg-muted-foreground'
 									: 'bg-border'}"
 							></span>
 						{/each}
 					</span>
 				</div>
-				<h3 class="font-serif text-xl text-foreground leading-tight">{task.title}</h3>
+				<div>
+					{#if isFinished}
+						<span class="text-[10px] font-bold text-green-600 flex items-center gap-1 mb-1.5 uppercase tracking-wider"
+							><CheckCircle2 size={12} strokeWidth={2.5} />
+							Completed</span
+						>
+					{/if}
+					<h3
+						class="font-serif text-xl {isFinished
+							? 'text-green-950'
+							: 'text-foreground'} leading-tight"
+					>
+						{task.title}
+					</h3>
+				</div>
 			</div>
 
-			<!-- Back -->
-			<div class="card-face card-back absolute inset-0 bg-card rounded-2xl border border-border p-5 flex flex-col justify-between shadow-xl">
+			<div
+				class="card-face card-back absolute inset-0 {isFinished
+					? 'bg-green-50/90 border-green-500/40'
+					: 'bg-card border-border'} rounded-2xl border p-5 flex flex-col justify-between shadow-xl"
+			>
 				<div class="pt-1">
-					<h4 class="font-serif text-base mb-3 text-foreground">Mission Objective</h4>
-					<p class="text-sm text-muted-foreground leading-5 line-clamp-4">{task.shortObjective ?? "—"}</p>
+					<h4
+						class="font-serif text-base mb-3 {isFinished
+							? 'text-green-800'
+							: 'text-foreground'}"
+					>
+						Mission Objective
+					</h4>
+					<p
+						class="text-sm {isFinished
+							? 'text-green-700/80'
+							: 'text-muted-foreground'} leading-5 line-clamp-4"
+					>
+						{task.shortObjective ?? "—"}
+					</p>
 				</div>
 				<div class="space-y-2.5">
 					<a
 						href="/task/{task.id}"
 						onclick={(e) => enterTask(e, task.id)}
-						class="block w-full py-2 bg-foreground text-background rounded-lg text-xs font-medium tracking-wide text-center hover:opacity-90 transition-opacity shadow-md"
+						class="block w-full py-2 {isFinished
+							? 'bg-green-600 text-white hover:bg-green-700'
+							: 'bg-foreground text-background hover:opacity-90'} rounded-lg text-xs font-medium tracking-wide text-center transition-opacity shadow-md"
 					>
-						{t(lang, "hall.enter")}
+						{isFinished
+							? t(lang, "hall.reviewReport")
+							: t(lang, "hall.enter")}
 					</a>
 				</div>
 			</div>
@@ -109,7 +159,6 @@ const uiIcons: Record<string, Component> = {
 {/snippet}
 
 <div class="space-y-10">
-	<!-- Greeting -->
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
 			Welcome back, {data.user.name}.<br>
@@ -117,7 +166,6 @@ const uiIcons: Record<string, Component> = {
 		</h1>
 	</section>
 
-	<!-- Daily Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
 			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.today")}</h3>
@@ -134,7 +182,6 @@ const uiIcons: Record<string, Component> = {
 		{/if}
 	</section>
 
-	<!-- Weekly Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
 			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.thisWeek")}</h3>

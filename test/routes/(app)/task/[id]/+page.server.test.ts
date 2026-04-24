@@ -4,7 +4,7 @@ import { load } from "$routes/(app)/task/[id]/+page.server";
 const { mockLimit, mockSelect } = vi.hoisted(() => {
 	const mockLimit = vi.fn();
 	const mockWhere = vi.fn(() => ({ limit: mockLimit }));
-	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
+	const mockLeftJoin: any = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
 	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin }));
 	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin }));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));

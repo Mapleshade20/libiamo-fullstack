@@ -96,6 +96,24 @@ describe("session page server", () => {
 				} as any),
 			).rejects.toMatchObject({ status: 404 });
 		});
+
+		it("throws 501 when UI is not implemented", async () => {
+			const unimplementedTask = {
+				id: 456,
+				title: "Test Task",
+				template: { ui: "imessage" as const },
+				variant: { openingState: {} },
+			};
+			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
+
+			await expect(
+				load({
+					params: { id: mockTaskId },
+					locals: { user: mockUser },
+					parent: async () => ({ avatarUrl: "https://mock.com" }),
+				} as any),
+			).rejects.toMatchObject({ status: 501 });
+		});
 	});
 
 	describe("actions.start", () => {
@@ -140,6 +158,17 @@ describe("session page server", () => {
 
 		it("returns fail 500 when startSession throws", async () => {
 			mockSessionService.startSession.mockRejectedValue(new Error("DB error"));
+
+			const result = await actions.start({
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to start session" } });
+		});
+
+		it("returns fail 500 when startSession throws a non-Error payload", async () => {
+			mockSessionService.startSession.mockRejectedValue("String error instead of Error instance");
 
 			const result = await actions.start({
 				params: { id: mockTaskId },
@@ -282,6 +311,25 @@ describe("session page server", () => {
 
 			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
 		});
+
+		it("returns fail 500 when sendMessage throws a non-Error payload", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockRejectedValue({ some: "object error" });
+
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
+		});
 	});
 
 	describe("actions.complete", () => {
@@ -401,6 +449,22 @@ describe("session page server", () => {
 			} as any);
 
 			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress or completed" } });
+		});
+		it("returns fail 500 when completeSession throws a non-Error payload", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.completeSession.mockRejectedValue(12345);
+
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
 		});
 	});
 });

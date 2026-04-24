@@ -5,7 +5,7 @@ import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
 import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/dates";
 import { db } from "$lib/server/db";
-import { task, template, userLearningProfile } from "$lib/server/db/schema";
+import { practiceSession, task, template, userLearningProfile } from "$lib/server/db/schema";
 import { ensureTasksForDate } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -17,7 +17,6 @@ export const load: PageServerLoad = async (event) => {
 	const userTz = user.timezone || "UTC";
 	const userLocalDateStr = getLocalDateString(userTz);
 
-	// Generate tasks if they don't exist yet, using the user's local date string
 	await ensureTasksForDate(language, userLocalDateStr);
 
 	const mondayStr = getMondayOfWeekForDate(userLocalDateStr);
@@ -33,9 +32,11 @@ export const load: PageServerLoad = async (event) => {
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
 			cadence: task.cadence,
+			sessionStatus: practiceSession.status,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
+		.leftJoin(practiceSession, and(eq(practiceSession.taskId, task.id), eq(practiceSession.userId, user.id)))
 		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(task.cadence, "weekly")));
 
 	const dailyTasks = await db
@@ -50,9 +51,11 @@ export const load: PageServerLoad = async (event) => {
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
 			cadence: task.cadence,
+			sessionStatus: practiceSession.status,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
+		.leftJoin(practiceSession, and(eq(practiceSession.taskId, task.id), eq(practiceSession.userId, user.id)))
 		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
 
 	return {
@@ -80,7 +83,6 @@ export const actions: Actions = {
 		const userId = event.locals.user?.id;
 		if (!userId) return fail(401);
 
-		// Ensure learning profile exists for the new language
 		await db
 			.insert(userLearningProfile)
 			.values({
