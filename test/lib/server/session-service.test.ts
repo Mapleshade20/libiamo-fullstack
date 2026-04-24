@@ -45,7 +45,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.sessionId).toBe(123);
 			expect(result.mbti).toMatch(/^(INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)$/);
@@ -62,7 +62,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Discord");
 			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
@@ -76,7 +76,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
@@ -94,7 +94,7 @@ describe("session service", () => {
 				const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 				mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-				const result = await startSession(1, "user_456");
+				const result = await startSession(1, "user_456", "English");
 				expect(result.systemPrompt).toContain("You are a helpful assistant.");
 			}
 		});
@@ -112,7 +112,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("boss@company.com");
 			expect(result.systemPrompt).toContain("user@example.com");
@@ -136,7 +136,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Email 1:");
 			expect(result.systemPrompt).toContain("Email 2:");
@@ -155,7 +155,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Scenario: Mail app");
 		});
@@ -176,7 +176,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Alice: Hey!");
 			expect(result.systemPrompt).toContain("Bob: What's up?");
@@ -191,7 +191,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Scenario: iMessage conversation");
 			expect(result.systemPrompt).not.toContain("Previous:");
@@ -215,7 +215,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Work: My Fanfic");
 			expect(result.systemPrompt).toContain("reader1: Love this!");
@@ -236,7 +236,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Work: My Fanfic");
 			expect(result.systemPrompt).not.toContain("Existing comments:");
@@ -251,7 +251,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.sessionId).toBe(123);
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
@@ -271,7 +271,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Reddit");
 			expect(result.systemPrompt).toContain("Test Post");
@@ -287,7 +287,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Bonjour");
 		});
@@ -301,7 +301,7 @@ describe("session service", () => {
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
 
-			const result = await startSession(1, "user_456");
+			const result = await startSession(1, "user_456", "English");
 
 			expect(result.systemPrompt).toContain("Translation task");
 			expect(result.systemPrompt).not.toContain("Text to translate:");
@@ -310,26 +310,26 @@ describe("session service", () => {
 		it("throws when task not found", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(null);
 
-			await expect(startSession(999, "user_456")).rejects.toThrow("Task not found");
+			await expect(startSession(999, "user_456", "English")).rejects.toThrow("Task not found");
 		});
 
 		it("throws when variant not found", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, variant: null });
 
-			await expect(startSession(1, "user_456")).rejects.toThrow("Task not found");
+			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Task not found");
 		});
 
 		it("throws when template not found", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: null });
 
-			await expect(startSession(1, "user_456")).rejects.toThrow("Task not found");
+			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Task not found");
 		});
 
 		it("throws when session creation fails", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }) });
 
-			await expect(startSession(1, "user_456")).rejects.toThrow("Failed to create session");
+			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Failed to create session");
 		});
 	});
 

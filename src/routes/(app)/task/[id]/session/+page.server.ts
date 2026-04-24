@@ -88,7 +88,16 @@ export const actions: Actions = {
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
 		try {
-			const result = await startSession(taskId, user.id);
+			const langCode = user.activeLanguage || "en";
+			const languageMap: Record<string, string> = {
+				en: "English",
+				es: "Spanish",
+				fr: "French",
+				ja: "Japanese",
+			};
+			const learningLanguageName = languageMap[langCode] || langCode;
+
+			const result = await startSession(taskId, user.id, learningLanguageName);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapStartSessionError(e);

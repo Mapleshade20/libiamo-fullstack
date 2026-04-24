@@ -104,7 +104,7 @@ export type StartSessionResult = {
 	mbti: string;
 };
 
-export async function startSession(taskId: number, userId: string): Promise<StartSessionResult> {
+export async function startSession(taskId: number, userId: string, learningLanguage: string): Promise<StartSessionResult> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
 		with: {
@@ -123,7 +123,10 @@ export async function startSession(taskId: number, userId: string): Promise<Star
 	const ui = taskData.template.ui;
 	const openingState = taskData.variant.openingState as Record<string, unknown>;
 	const scenarioContext = buildScenarioContext(ui, openingState);
-	const systemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
+	const languageConstraint = `IMPORTANT: You MUST generate all your conversational replies in ${learningLanguage.toUpperCase()}. Do not use English unless the user explicitly asks for a translation or the specific scenario demands it.`;
+
+	let baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
+	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
 

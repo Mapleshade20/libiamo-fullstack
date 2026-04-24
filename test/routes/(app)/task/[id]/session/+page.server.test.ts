@@ -45,6 +45,8 @@ describe("session page server", () => {
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
+				// Mock the parent function to resolve the avatarUrl
+				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.task).toEqual(mockTask);
@@ -59,6 +61,8 @@ describe("session page server", () => {
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
+				// Mock the parent function here as well
+				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.existingSession).toBeNull();
@@ -113,7 +117,7 @@ describe("session page server", () => {
 				systemPrompt: "Test prompt",
 				mbti: "ENFP",
 			});
-			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
+			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123", "English");
 		});
 
 		it("returns fail 401 when user not authenticated", async () => {
