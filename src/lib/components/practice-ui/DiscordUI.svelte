@@ -17,7 +17,6 @@ import Sticker from "@lucide/svelte/icons/sticker";
 import Users from "@lucide/svelte/icons/users";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
-import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { COMMON_EMOJIS } from "./emojis";
@@ -28,11 +27,10 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	agentPrompt?: string;
 	existingSession?: any;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", agentPrompt = "", existingSession = null }: Props = $props();
+let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", existingSession = null }: Props = $props();
 
 const serverName = $derived(`${userName}'s Server`);
 const serverAcronym = $derived(

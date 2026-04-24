@@ -11,5 +11,5 @@ let { data } = $props();
 	userName={data.user.name}
 	avatarUrl={data.user.avatarUrl}
 	language={data.user.learningLanguage}
-	agentPrompt={data.agentPrompt}
+	existingSession={data.existingSession}
 />

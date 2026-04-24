@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
 import { completeSession, sendMessage, startSession } from "$lib/server/session";
@@ -37,7 +37,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
 
 	const existingSession = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id), eq(practiceSession.status, "in_progress")),
+		where: and(
+			eq(practiceSession.taskId, taskId),
+			eq(practiceSession.userId, user.id),
+			inArray(practiceSession.status, ["in_progress", "completed", "evaluated"]),
+		),
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
 		with: {
 			messages: true,

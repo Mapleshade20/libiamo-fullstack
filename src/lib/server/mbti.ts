@@ -1,7 +1,7 @@
 /**
  * MBTI type definitions and utilities for agent personality generation
  */
-
+import { randomInt } from "node:crypto";
 export const MBTI_TYPES = [
 	"INTJ",
 	"INTP",
@@ -43,7 +43,7 @@ export const MBTI_PROMPT_MAP: Record<MbtiType, string> = {
 };
 
 export function getRandomMbti(): MbtiType {
-	return MBTI_TYPES[Math.floor(Math.random() * MBTI_TYPES.length)];
+	return MBTI_TYPES[randomInt(MBTI_TYPES.length)];
 }
 
 export function getMbtiPrompt(mbti: MbtiType): string {
