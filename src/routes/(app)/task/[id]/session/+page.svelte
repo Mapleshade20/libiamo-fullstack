@@ -4,12 +4,20 @@ import DiscordUI from "$lib/components/practice-ui/DiscordUI.svelte";
 let { data } = $props();
 </script>
 
-<svelte:head><title>Practice Session - Libiamo</title></svelte:head>
-
-<DiscordUI
-	taskId={data.taskId}
-	userName={data.user.name}
-	avatarUrl={data.user.avatarUrl}
-	language={data.user.learningLanguage}
-	existingSession={data.existingSession}
-/>
+{#if data.task.template.ui === "discord"}
+	<DiscordUI
+		taskId={data.taskId}
+		userName={data.user.name}
+		avatarUrl={data.user.avatarUrl}
+		language={data.user.learningLanguage}
+		existingSession={data.existingSession}
+	/>
+{:else if data.task.template.ui === "imessage"}
+	<div class="flex h-screen items-center justify-center bg-background">
+		<p class="text-muted-foreground">iMessage UI is under construction...</p>
+	</div>
+{:else}
+	<div class="flex h-screen items-center justify-center bg-background">
+		<p class="text-muted-foreground text-sm uppercase tracking-widest">{data.task.template.ui} interface not yet implemented</p>
+	</div>
+{/if}

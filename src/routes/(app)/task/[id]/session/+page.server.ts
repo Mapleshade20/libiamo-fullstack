@@ -57,7 +57,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	});
 
 	if (!taskData) throw error(404, "Task not found");
+	const IMPLEMENTED_UIS = ["discord"];
 
+	if (!IMPLEMENTED_UIS.includes(taskData.template.ui)) {
+		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
+	}
+
+	// The Cravatar/Gravatar API strictly requires MD5 hashing for email addresses.
+	// This is not used for cryptography or password hashing, so it is perfectly safe here.
+	// NOSONAR typescript:S4790
 	const email = user.email?.toLowerCase() || "";
 	const hash = crypto.createHash("md5").update(email).digest("hex");
 	const avatarUrl = `https://cn.cravatar.com/avatar/${hash}?d=identicon&s=192`;

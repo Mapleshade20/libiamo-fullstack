@@ -13,6 +13,9 @@ let task = $derived(data.task);
 
 const objectives = $derived(task.objectives ?? []);
 
+const IMPLEMENTED_UIS = ["discord"];
+let isPracticeEnabled = $derived(IMPLEMENTED_UIS.includes(task.templateUi));
+
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
 }
@@ -30,10 +33,14 @@ function difficultyLabel(level: number): string {
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
-					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
+					{UI_VARIANT_LABELS[
+						task.templateUi as keyof typeof UI_VARIANT_LABELS
+					] ?? task.templateUi}
 				</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
+					{INTERACTION_TYPE_LABELS[
+						task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS
+					] ?? task.templateInteractionType}
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
@@ -73,7 +80,11 @@ function difficultyLabel(level: number): string {
 					</span>
 				</div>
 
-				<Button class="px-8" href="/task/{task.id}/session">Start Practice</Button>
+				{#if isPracticeEnabled}
+					<Button class="px-8" href="/task/{task.id}/session">Start Practice</Button>
+				{:else}
+					<Button class="px-8" disabled variant="secondary">Coming Soon</Button>
+				{/if}
 			</div>
 		</div>
 	</div>
