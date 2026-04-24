@@ -7,6 +7,7 @@ import Gift from "@lucide/svelte/icons/gift";
 import Hash from "@lucide/svelte/icons/hash";
 import Headphones from "@lucide/svelte/icons/headphones";
 import Info from "@lucide/svelte/icons/info";
+import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import LogOut from "@lucide/svelte/icons/log-out";
 import Mic from "@lucide/svelte/icons/mic";
 import Pin from "@lucide/svelte/icons/pin";
@@ -60,6 +61,9 @@ const i18n = {
 		returnHall: "Return to Hall",
 		evaluating: "Evaluating...",
 		finishTask: "Finish Task",
+		getHint: "Get Hint",
+		hintTitle: "Suggested Replies",
+		thinking: "Tutor is thinking...",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -78,6 +82,9 @@ const i18n = {
 		returnHall: "Volver al Salón",
 		evaluating: "Evaluando...",
 		finishTask: "Terminar Tarea",
+		getHint: "Obtener sugerencia",
+		hintTitle: "Sugerencias de respuesta",
+		thinking: "El tutor está pensando...",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -96,6 +103,9 @@ const i18n = {
 		returnHall: "Retour au Hall",
 		evaluating: "Évaluation...",
 		finishTask: "Terminer la Tâche",
+		getHint: "Obtenir un indice",
+		hintTitle: "Suggestions de réponse",
+		thinking: "Le tuteur réfléchit...",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -114,6 +124,9 @@ const i18n = {
 		returnHall: "ホールに戻る",
 		evaluating: "評価中...",
 		finishTask: "タスクを終了",
+		getHint: "ヒントを得る",
+		hintTitle: "おすすめの返信",
+		thinking: "チューターが考え中...",
 	},
 };
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -174,7 +187,9 @@ let showMentionMenu = $state(false);
 let mentionQuery = $state("");
 let mentionIndex = $state(0);
 let filteredMentionUsers = $derived(allUsers.filter((u) => u.name.toLowerCase().includes(mentionQuery.toLowerCase())));
-
+let hints = $state<Array<{ text: string; translation: string }>>([]);
+let isGettingHint = $state(false);
+let showHintMenu = $state(false);
 let contextMenu = $state({
 	show: false,
 	x: 0,
@@ -239,7 +254,34 @@ function initUserPool(seedId: number) {
 	}
 	offlineUsers = offline;
 }
+async function handleGetHint() {
+	if (!sessionId || isGettingHint || isCompleted) return;
+	isGettingHint = true;
+	showHintMenu = true;
+	hints = [];
 
+	try {
+		const formData = new FormData();
+		formData.append("sessionId", String(sessionId));
+		const res = await fetch(`?/hint`, {
+			method: "POST",
+			body: formData,
+		});
+		const result = deserialize(await res.text());
+
+		if (result.type === "success" && result.data) {
+			hints = (result.data as any).hints;
+		}
+	} finally {
+		isGettingHint = false;
+	}
+}
+
+function selectHint(text: string) {
+	inputText = text;
+	showHintMenu = false;
+	inputRef?.focus();
+}
 $effect(() => {
 	if (existingSession && existingSession.id !== lastLoadedSessionId) {
 		const currentId = existingSession.id;
@@ -862,44 +904,100 @@ function handleMockAction() {
 									: t.messagePlaceholder}
 							class="flex-1 bg-transparent text-[#DBDEE1] outline-none placeholder:text-[#82868D] disabled:opacity-50"
 						>
-						<div class="flex gap-3 text-[#B5BAC1] relative emoji-container-wrapper">
-							<button type="button" class="transition-colors hover:text-[#DBDEE1]" onclick={handleMockAction}><Gift size={22} /></button>
-							<button type="button" class="transition-colors hover:text-[#DBDEE1]" onclick={handleMockAction}><Sticker size={22} /></button>
 
-							{#if showEmojiPicker}
-								<div
-									class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+						<div class="flex gap-3 text-[#B5BAC1] relative items-center">
+							<div class="relative flex items-center">
+								<button
+									type="button"
+									class="transition-colors {isGettingHint
+										? 'text-yellow-400'
+										: 'hover:text-[#DBDEE1]'}"
+									onclick={handleGetHint}
+									title={t.getHint}
 								>
-									<div class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22]">Common Emojis</div>
-									<div class="p-2 grid grid-cols-8 gap-1 max-h-60 overflow-y-auto hide-scrollbar">
-										{#each COMMON_EMOJIS as emoji}
+									<Lightbulb
+										size={22}
+										class={isGettingHint
+											? "animate-pulse"
+											: ""}
+									/>
+								</button>
+
+								{#if showHintMenu}
+									<div
+										class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+									>
+										<div
+											class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22] flex justify-between items-center"
+										>
+											<span>{t.hintTitle}</span>
 											<button
 												type="button"
-												class="h-8 w-8 flex items-center justify-center rounded hover:bg-[#35373C] transition-colors text-lg"
-												onclick={(e) => {
-													e.stopPropagation();
-													insertEmoji(emoji);
-												}}
+												onclick={() =>
+													(showHintMenu = false)}
+												class="hover:text-white text-lg"
 											>
-												{emoji}
+												&times;
 											</button>
-										{/each}
+										</div>
+										<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
+											{#if isGettingHint}
+												<div class="py-6 text-center text-sm text-[#80848E] italic animate-pulse">{t.thinking}</div>
+											{:else}
+												{#each hints as hint}
+													<button
+														type="button"
+														class="w-full text-left p-2.5 rounded hover:bg-[#35373C] transition-colors border border-transparent hover:border-[#404249] group"
+														onclick={() =>
+															selectHint(
+																hint.text,
+															)}
+													>
+														<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
+													</button>
+												{/each}
+											{/if}
+										</div>
 									</div>
-								</div>
-							{/if}
+								{/if}
+							</div>
 
-							<button
-								type="button"
-								class="transition-colors {showEmojiPicker
-									? 'text-white'
-									: 'hover:text-[#DBDEE1]'}"
-								onclick={(e) => {
-									e.stopPropagation();
-									showEmojiPicker = !showEmojiPicker;
-								}}
-							>
-								<Smile size={22} />
-							</button>
+							<div class="relative flex items-center">
+								<button
+									type="button"
+									class="transition-colors {showEmojiPicker
+										? 'text-white'
+										: 'hover:text-[#DBDEE1]'}"
+									onclick={(e) => {
+										e.stopPropagation();
+										showEmojiPicker = !showEmojiPicker;
+									}}
+								>
+									<Smile size={22} />
+								</button>
+
+								{#if showEmojiPicker}
+									<div
+										class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+									>
+										<div class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22]">Common Emojis</div>
+										<div class="p-2 grid grid-cols-8 gap-1 max-h-60 overflow-y-auto hide-scrollbar">
+											{#each COMMON_EMOJIS as emoji}
+												<button
+													type="button"
+													class="h-8 w-8 flex items-center justify-center rounded hover:bg-[#35373C] transition-colors text-lg"
+													onclick={(e) => {
+														e.stopPropagation();
+														insertEmoji(emoji);
+													}}
+												>
+													{emoji}
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
+							</div>
 						</div>
 					</div>
 				</div>

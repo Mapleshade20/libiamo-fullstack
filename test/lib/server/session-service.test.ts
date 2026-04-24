@@ -18,7 +18,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/client", () => mockClient);
 
-import { completeSession, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
 
 describe("session service", () => {
 	beforeEach(() => {
@@ -583,6 +583,35 @@ describe("session service", () => {
 			await sendMessage(123, "  Hello  ");
 
 			expect(valuesMock).toHaveBeenCalledWith([expect.objectContaining({ content: "Hello" }), expect.any(Object)]);
+		});
+	});
+	describe("generateHint", () => {
+		it("generates hints based on session history and language", async () => {
+			const mockSession = {
+				id: 123,
+				task: { language: "ja" },
+				agentPromptSnapshot: { systemPrompt: "Context" },
+				messages: [{ role: "user", content: "Hello" }],
+			};
+
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				hints: [{ text: "こんにちは", translation: "Hello" }],
+			});
+
+			const result = await generateHint(123);
+
+			expect(result.hints).toHaveLength(1);
+			expect(result.hints[0].text).toBe("こんにちは");
+			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
+				expect.any(Object),
+				expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("JAPANESE") })]),
+			);
+		});
+
+		it("throws error if session is not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+			await expect(generateHint(999)).rejects.toThrow("Session not found");
 		});
 	});
 });

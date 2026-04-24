@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generateHint } from "$lib/server/session";
 
 const { mockDb, mockSessionService } = vi.hoisted(() => ({
 	mockDb: {
@@ -11,6 +12,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		startSession: vi.fn(),
 		sendMessage: vi.fn(),
 		completeSession: vi.fn(),
+		generateHint: vi.fn(),
 	},
 }));
 
@@ -329,6 +331,56 @@ describe("session page server", () => {
 			} as any);
 
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
+		});
+		describe("actions.hint", () => {
+			it("returns success with hints when called correctly", async () => {
+				const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
+				// Ensure generateHint is mocked in the test setup
+				vi.mocked(generateHint).mockResolvedValue(mockHints);
+
+				const formData = new FormData();
+				formData.append("sessionId", "123");
+
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					params: { id: "456" },
+					locals: { user: mockUser },
+				} as any);
+
+				expect(result).toEqual({ success: true, ...mockHints });
+			});
+
+			it("returns 401 when user is unauthenticated", async () => {
+				const result = await actions.hint({
+					locals: { user: null },
+				} as any);
+
+				expect(result).toMatchObject({ status: 401 });
+			});
+
+			it("returns 400 when sessionId is missing", async () => {
+				const formData = new FormData();
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					locals: { user: mockUser },
+				} as any);
+
+				expect(result).toMatchObject({ status: 400 });
+			});
+
+			it("returns 500 when generateHint fails", async () => {
+				vi.mocked(generateHint).mockRejectedValue(new Error("AI error"));
+				const formData = new FormData();
+				formData.append("sessionId", "123");
+
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					locals: { user: mockUser },
+					params: { id: "456" },
+				} as any);
+
+				expect(result).toMatchObject({ status: 500 });
+			});
 		});
 	});
 

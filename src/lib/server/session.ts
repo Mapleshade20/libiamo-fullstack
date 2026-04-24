@@ -313,3 +313,71 @@ export async function completeSession(sessionId: number): Promise<TutorFeedback>
 
 	return evaluateSession(sessionId);
 }
+
+export type HintResult = {
+	hints: Array<{ text: string; translation: string }>;
+};
+
+const HintSchema = z.object({
+	hints: z
+		.array(
+			z.object({
+				text: z.string().describe("The suggested reply in the learning language."),
+				translation: z.string().describe("English translation of the suggestion."),
+			}),
+		)
+		.min(1)
+		.max(3),
+});
+
+export async function generateHint(sessionId: number): Promise<HintResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: {
+			messages: { orderBy: asc(sessionMessage.createdAt) },
+			task: true,
+		},
+	});
+
+	if (!session) throw new Error("Session not found");
+	if (!session.task) throw new Error("Task not found");
+
+	const languageMap: Record<string, string> = {
+		en: "English",
+		es: "Spanish",
+		fr: "French",
+		ja: "Japanese",
+	};
+	const learningLanguageName = languageMap[session.task.language] || session.task.language;
+
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
+	const history = session.messages.map((m) => `[${m.role}] ${m.content}`).join("\n");
+
+	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
+
+    ## Roleplay Rules & Context
+    ${snapshot.systemPrompt}
+
+    ## Conversation History
+    ${history || "(No messages yet)"}
+
+    ## Critical Instructions
+    Suggest 3 natural ways for the student to reply.
+    1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
+    2. The suggestions must be consistent with the persona and context provided above.
+    3. The "translation" field should provide an English translation of that suggestion.
+
+    Respond in JSON format:
+    {
+      "hints": [
+        { "text": "suggested reply in ${learningLanguageName}", "translation": "English translation" }
+      ]
+    }`;
+
+	const messages: ChatMessage[] = [
+		{ role: "system", content: prompt },
+		{ role: "user", content: `Give me hints for my next reply in ${learningLanguageName}.` },
+	];
+
+	return await createStructuredOutput(HintSchema, messages);
+}

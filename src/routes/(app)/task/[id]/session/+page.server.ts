@@ -2,7 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { completeSession, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 function mapSendMessageError(e: unknown) {
@@ -173,6 +173,23 @@ export const actions: Actions = {
 
 			console.error("Failed to complete session:", e);
 			return fail(500, { error: "Failed to complete session" });
+		}
+	},
+	hint: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const formData = await event.request.formData();
+		const sessionId = Number(formData.get("sessionId"));
+
+		if (!sessionId) return fail(400, { error: "Invalid session" });
+
+		try {
+			const result = await generateHint(sessionId);
+			return { success: true, ...result };
+		} catch (e) {
+			console.error(e);
+			return fail(500, { error: "Failed to generate hints" });
 		}
 	},
 };
