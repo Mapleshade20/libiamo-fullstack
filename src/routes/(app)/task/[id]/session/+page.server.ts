@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "$lib/server/db";
@@ -28,7 +27,7 @@ function mapCompleteSessionError(e: unknown) {
 	return null;
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, parent }) => {
 	const user = locals.user;
 	if (!user) throw error(401, "Unauthorized");
 
@@ -63,13 +62,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
-	// The Cravatar/Gravatar API strictly requires MD5 hashing for email addresses.
-	// This is not used for cryptography or password hashing, so it is perfectly safe here.
-	// NOSONAR typescript:S4790
-	const email = user.email?.toLowerCase() || "";
-	const hash = crypto.createHash("md5").update(email).digest("hex");
-	const avatarUrl = `https://cn.cravatar.com/avatar/${hash}?d=identicon&s=192`;
-
+	const parentData = await parent();
+	const avatarUrl = parentData.avatarUrl;
 	const learningLanguage = user.activeLanguage || "en";
 
 	return {
