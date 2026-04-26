@@ -56,6 +56,9 @@ const i18n = {
 		hintTitle: "Suggested Replies",
 		thinking: "Tutor is thinking...",
 		earlier: "Earlier",
+		retryFailedMessage: "Agent reply failed. Click Retry to try again.",
+		retryInputPlaceholder: "Agent reply failed. Use Retry.",
+		retry: "Retry",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -78,6 +81,9 @@ const i18n = {
 		hintTitle: "Sugerencias de respuesta",
 		thinking: "El tutor está pensando...",
 		earlier: "Antes",
+		retryFailedMessage: "La respuesta del agente falló. Haz clic en Reintentar para volver a intentarlo.",
+		retryInputPlaceholder: "La respuesta del agente falló. Usa Reintentar.",
+		retry: "Reintentar",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -100,6 +106,9 @@ const i18n = {
 		hintTitle: "Suggestions de réponse",
 		thinking: "Le tuteur réfléchit...",
 		earlier: "Plus tôt",
+		retryFailedMessage: "La réponse de l'agent a échoué. Cliquez sur Réessayer pour réessayer.",
+		retryInputPlaceholder: "La réponse de l'agent a échoué. Utilisez Réessayer.",
+		retry: "Réessayer",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -122,6 +131,9 @@ const i18n = {
 		hintTitle: "おすすめの返信",
 		thinking: "チューターが考え中...",
 		earlier: "先ほど",
+		retryFailedMessage: "エージェントの返信に失敗しました。再試行を押してもう一度お試しください。",
+		retryInputPlaceholder: "エージェントの返信に失敗しました。再試行を使用してください。",
+		retry: "再試行",
 	},
 };
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -226,6 +238,7 @@ let contextMenu = $state({
 let showEmojiPicker = $state(false);
 let isWaitingRetry = $state(false);
 const retryResolvers = new Map<string, () => void>();
+const AGENT_REPLY_TIMEOUT_MS = 20_000;
 
 function updateMessageById(messageId: string, updater: (message: Message) => Message) {
 	messages = messages.map((message) => (message.id === messageId ? updater(message) : message));
@@ -256,12 +269,27 @@ async function submitAgentReply(messageText: string) {
 	sendData.append("sessionId", String(sessionId));
 	sendData.append("message", messageText);
 
-	const sendRes = await fetch(`?/send`, {
-		method: "POST",
-		body: sendData,
-	});
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => {
+		controller.abort();
+	}, AGENT_REPLY_TIMEOUT_MS);
 
-	return deserialize(await sendRes.text());
+	try {
+		const sendRes = await fetch(`?/send`, {
+			method: "POST",
+			body: sendData,
+			signal: controller.signal,
+		});
+
+		return deserialize(await sendRes.text());
+	} catch (error) {
+		if (error instanceof DOMException && error.name === "AbortError") {
+			throw new Error(`Agent reply timed out after ${AGENT_REPLY_TIMEOUT_MS / 1000}s`);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeoutId);
+	}
 }
 
 function createSeededRandom(seed: number) {
@@ -590,7 +618,7 @@ async function handleSend() {
 					{
 						id: failedAgentMessageId,
 						role: "agent",
-						text: "Agent reply failed. Click Retry to try again.",
+						text: t.retryFailedMessage,
 						timestamp: formatTime(new Date()),
 						authorName: agentUser.name,
 						avatarColor: agentUser.color,
@@ -600,7 +628,7 @@ async function handleSend() {
 			} else {
 				updateMessageById(failedAgentMessageId, (message) => ({
 					...message,
-					text: "Agent reply failed. Click Retry to try again.",
+					text: t.retryFailedMessage,
 					deliveryState: "failed",
 					isHidden: false,
 					timestamp: formatTime(new Date()),
@@ -962,10 +990,11 @@ function handleMockAction() {
 										<span class="text-[#F28B82] whitespace-pre-wrap">{msg.text}</span>
 										<button
 											type="button"
-											class="rounded bg-[#DA373C] px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#B52D31]"
+											class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31] disabled:opacity-50"
 											onclick={() => handleRetry(msg.id)}
 										>
-											Retry
+											<AlertCircle size={16} />
+											{t.retry}
 										</button>
 									</div>
 								{:else}
@@ -1049,7 +1078,7 @@ function handleMockAction() {
 							placeholder={isCompleted
 								? "Session ended"
 								: isWaitingRetry
-									? "Agent reply failed. Use Retry."
+									? t.retryInputPlaceholder
 									: messagePlaceholder}
 							class="flex-1 bg-transparent text-[#DBDEE1] outline-none placeholder:text-[#82868D] disabled:opacity-50"
 						>
