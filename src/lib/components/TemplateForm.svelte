@@ -50,6 +50,45 @@ interface Props {
 }
 
 let { template = {} as TemplateData, variants = [], form = null, action = "", submitLabel = "Save" }: Props = $props();
+let mainFormEl: HTMLFormElement | null = null;
+
+function getScrollableParent(element: HTMLElement): HTMLElement | null {
+	let current = element.parentElement;
+	while (current) {
+		const style = window.getComputedStyle(current);
+		const overflowY = style.overflowY;
+		const canScroll = (overflowY === "auto" || overflowY === "scroll") && current.scrollHeight > current.clientHeight;
+		if (canScroll) return current;
+		current = current.parentElement;
+	}
+	return null;
+}
+
+function centerField(element: HTMLElement) {
+	const scrollParent = getScrollableParent(element);
+	const elementRect = element.getBoundingClientRect();
+
+	if (!scrollParent) {
+		const targetTop = window.scrollY + elementRect.top - window.innerHeight / 2 + elementRect.height / 2;
+		window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+	} else {
+		const parentRect = scrollParent.getBoundingClientRect();
+		const offsetTop = elementRect.top - parentRect.top;
+		const targetTop = scrollParent.scrollTop + offsetTop - scrollParent.clientHeight / 2 + elementRect.height / 2;
+		scrollParent.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+	}
+}
+
+function handleInvalidCapture(event: Event) {
+	const field = event.target as HTMLElement | null;
+	if (!field) return;
+
+	requestAnimationFrame(() => {
+		centerField(field);
+		// One more pass to beat late browser scrolling.
+		requestAnimationFrame(() => centerField(field));
+	});
+}
 
 const isEditMode = $derived("id" in template);
 
@@ -191,7 +230,7 @@ function jsonStr(val: unknown): string {
 }
 </script>
 
-<form method="POST" {action} use:enhance class="space-y-8">
+<form method="POST" {action} use:enhance class="space-y-8" bind:this={mainFormEl} oninvalidcapture={handleInvalidCapture}>
 	{#if form?.message}
 		<p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
 	{/if}

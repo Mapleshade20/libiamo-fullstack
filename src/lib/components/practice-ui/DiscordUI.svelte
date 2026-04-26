@@ -140,6 +140,7 @@ type Message = {
 	avatar?: string;
 	avatarColor?: string;
 	isHidden?: boolean;
+	deliveryState?: "sent" | "pending" | "failed";
 };
 
 type ObjectiveResult = { text: string; grade: "A" | "B" | "C" };
@@ -197,6 +198,45 @@ let contextMenu = $state({
 	targetUser: null as DiscordUser | null,
 });
 let showEmojiPicker = $state(false);
+let isWaitingRetry = $state(false);
+const retryResolvers = new Map<string, () => void>();
+
+function updateMessageById(messageId: string, updater: (message: Message) => Message) {
+	messages = messages.map((message) => (message.id === messageId ? updater(message) : message));
+}
+
+function waitForRetry(messageId: string): Promise<void> {
+	return new Promise((resolve) => {
+		retryResolvers.set(messageId, resolve);
+	});
+}
+
+function handleRetry(messageId: string) {
+	updateMessageById(messageId, (message) => ({
+		...message,
+		isHidden: true,
+	}));
+
+	const resolveRetry = retryResolvers.get(messageId);
+	if (!resolveRetry) return;
+
+	retryResolvers.delete(messageId);
+	isWaitingRetry = false;
+	resolveRetry();
+}
+
+async function submitAgentReply(messageText: string) {
+	const sendData = new FormData();
+	sendData.append("sessionId", String(sessionId));
+	sendData.append("message", messageText);
+
+	const sendRes = await fetch(`?/send`, {
+		method: "POST",
+		body: sendData,
+	});
+
+	return deserialize(await sendRes.text());
+}
 
 function createSeededRandom(seed: number) {
 	let state = seed ? seed * 1234567 : 1234567;
@@ -426,9 +466,10 @@ async function handleComplete() {
 }
 
 async function handleSend() {
-	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing) return;
+	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	const currentText = inputText;
+	let failedAgentMessageId: string | null = null;
 	inputText = "";
 	showMentionMenu = false;
 	showEmojiPicker = false;
@@ -448,37 +489,76 @@ async function handleSend() {
 	await scrollToBottom();
 
 	try {
-		const sendData = new FormData();
-		sendData.append("sessionId", String(sessionId));
-		sendData.append("message", currentText);
+		while (true) {
+			let sendResult: any = null;
+			try {
+				sendResult = await submitAgentReply(currentText);
+			} catch (error) {
+				console.error("Message submission failed:", error);
+			}
 
-		const sendRes = await fetch(`?/send`, {
-			method: "POST",
-			body: sendData,
-		});
-		const sendResult = deserialize(await sendRes.text());
+			if (sendResult?.type === "success" && sendResult.data) {
+				if (failedAgentMessageId) {
+					updateMessageById(failedAgentMessageId, (message) => ({
+						...message,
+						text: sendResult.data.reply as string,
+						deliveryState: "sent",
+						isHidden: false,
+						timestamp: formatTime(new Date()),
+					}));
+				} else {
+					messages = [
+						...messages,
+						{
+							id: crypto.randomUUID(),
+							role: "agent",
+							text: sendResult.data.reply as string,
+							timestamp: formatTime(new Date()),
+							authorName: agentUser.name,
+							avatarColor: agentUser.color,
+							deliveryState: "sent",
+						},
+					];
+				}
+				await scrollToBottom();
+				await invalidateAll();
 
-		if (sendResult.type === "success" && sendResult.data) {
-			messages = [
-				...messages,
-				{
-					id: crypto.randomUUID(),
-					role: "agent",
-					text: sendResult.data.reply as string,
+				if (sendResult.data.terminated) await handleComplete();
+				break;
+			}
+
+			if (!failedAgentMessageId) {
+				failedAgentMessageId = crypto.randomUUID();
+				messages = [
+					...messages,
+					{
+						id: failedAgentMessageId,
+						role: "agent",
+						text: "Agent reply failed. Click Retry to try again.",
+						timestamp: formatTime(new Date()),
+						authorName: agentUser.name,
+						avatarColor: agentUser.color,
+						deliveryState: "failed",
+					},
+				];
+			} else {
+				updateMessageById(failedAgentMessageId, (message) => ({
+					...message,
+					text: "Agent reply failed. Click Retry to try again.",
+					deliveryState: "failed",
+					isHidden: false,
 					timestamp: formatTime(new Date()),
-					authorName: agentUser.name,
-					avatarColor: agentUser.color,
-				},
-			];
+				}));
+			}
 			await scrollToBottom();
-			await invalidateAll();
 
-			if (sendResult.data.terminated) await handleComplete();
+			isWaitingRetry = true;
+			await waitForRetry(failedAgentMessageId);
 		}
-	} catch (error) {
-		console.error("Message submission failed:", error);
 	} finally {
 		isSubmitting = false;
+		isWaitingRetry = false;
+		if (failedAgentMessageId) retryResolvers.delete(failedAgentMessageId);
 	}
 }
 
@@ -821,12 +901,25 @@ function handleMockAction() {
 									<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
 									<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
 								</div>
-								<div class="text-[#DBDEE1] whitespace-pre-wrap">{msg.text}</div>
+								{#if msg.role === "agent" && msg.deliveryState === "failed"}
+									<div class="mt-1 flex flex-wrap items-center gap-2">
+										<span class="text-[#F28B82] whitespace-pre-wrap">{msg.text}</span>
+										<button
+											type="button"
+											class="rounded bg-[#DA373C] px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#B52D31]"
+											onclick={() => handleRetry(msg.id)}
+										>
+											Retry
+										</button>
+									</div>
+								{:else}
+									<div class="text-[#DBDEE1] whitespace-pre-wrap">{msg.text}</div>
+								{/if}
 							</div>
 						</div>
 					{/each}
 
-					{#if isInitializing || isSubmitting}
+					{#if isInitializing}
 						<div class="mt-4 flex p-1 -mx-4 px-4 items-center gap-3">
 							<div class="flex gap-1">
 								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce"></span>
@@ -899,8 +992,8 @@ function handleMockAction() {
 							type="text"
 							placeholder={isCompleted
 								? "Session ended"
-								: isInitializing || isSubmitting
-									? "Waiting..."
+								: isWaitingRetry
+									? "Agent reply failed. Use Retry."
 									: t.messagePlaceholder}
 							class="flex-1 bg-transparent text-[#DBDEE1] outline-none placeholder:text-[#82868D] disabled:opacity-50"
 						>

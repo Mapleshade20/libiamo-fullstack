@@ -565,10 +565,33 @@ describe("session service", () => {
 
 			await sendMessage(123, "User message");
 
-			expect(valuesMock).toHaveBeenCalledWith([
-				{ sessionId: 123, role: "user", content: "User message" },
-				{ sessionId: 123, role: "assistant", content: "AI reply", llmMetadata: expect.any(Object) },
-			]);
+			expect(valuesMock).toHaveBeenCalledTimes(2);
+			expect(valuesMock).toHaveBeenNthCalledWith(1, { sessionId: 123, role: "user", content: "User message" });
+			expect(valuesMock).toHaveBeenNthCalledWith(2, {
+				sessionId: 123,
+				role: "assistant",
+				content: "AI reply",
+				llmMetadata: expect.any(Object),
+			});
+		});
+
+		it("persists user message before requesting LLM output", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "AI reply",
+				terminate: false,
+			});
+			const valuesMock = vi.fn();
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "Ordering check");
+
+			expect(valuesMock).toHaveBeenNthCalledWith(1, {
+				sessionId: 123,
+				role: "user",
+				content: "Ordering check",
+			});
+			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.createStructuredOutput.mock.invocationCallOrder[0]);
 		});
 
 		it("trims user message before saving", async () => {
@@ -582,7 +605,23 @@ describe("session service", () => {
 
 			await sendMessage(123, "  Hello  ");
 
-			expect(valuesMock).toHaveBeenCalledWith([expect.objectContaining({ content: "Hello" }), expect.any(Object)]);
+			expect(valuesMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ content: "Hello" }));
+		});
+
+		it("persists user message even when LLM generation fails", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockRejectedValue(new Error("LLM timeout"));
+			const valuesMock = vi.fn();
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await expect(sendMessage(123, "Need a reply")).rejects.toThrow("LLM timeout");
+
+			expect(valuesMock).toHaveBeenCalledTimes(1);
+			expect(valuesMock).toHaveBeenCalledWith({
+				sessionId: 123,
+				role: "user",
+				content: "Need a reply",
+			});
 		});
 	});
 	describe("generateHint", () => {

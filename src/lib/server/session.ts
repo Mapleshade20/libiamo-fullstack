@@ -159,7 +159,8 @@ const AgentReplySchema = z.object({
 });
 
 export async function sendMessage(sessionId: number, userMessage: string): Promise<SendMessageResult> {
-	if (!userMessage.trim()) {
+	const trimmedUserMessage = userMessage.trim();
+	if (!trimmedUserMessage) {
 		throw new Error("userMessage is required");
 	}
 
@@ -182,19 +183,19 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 	for (const m of session.messages) {
 		history.push({ role: m.role, content: m.content });
 	}
-	history.push({ role: "user", content: userMessage.trim() });
+	history.push({ role: "user", content: trimmedUserMessage });
+
+	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
+	await db.insert(sessionMessage).values({ sessionId, role: "user", content: trimmedUserMessage });
 
 	const output = await createStructuredOutput(AgentReplySchema, history);
 
-	await db.insert(sessionMessage).values([
-		{ sessionId, role: "user", content: userMessage.trim() },
-		{
-			sessionId,
-			role: "assistant",
-			content: output.reply,
-			llmMetadata: { model: "structured-output", raw: output },
-		},
-	]);
+	await db.insert(sessionMessage).values({
+		sessionId,
+		role: "assistant",
+		content: output.reply,
+		llmMetadata: { model: "structured-output", raw: output },
+	});
 
 	const turnCount = session.messages.filter((m) => m.role === "user").length + 1;
 
