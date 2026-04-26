@@ -11,6 +11,7 @@ let { data } = $props();
 		avatarUrl={data.user.avatarUrl}
 		language={data.user.learningLanguage}
 		existingSession={data.existingSession}
+		openingState={data.task.variant?.openingState}
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<div class="flex h-screen items-center justify-center bg-background">

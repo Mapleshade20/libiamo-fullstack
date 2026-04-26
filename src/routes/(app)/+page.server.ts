@@ -1,5 +1,5 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
@@ -32,11 +32,9 @@ export const load: PageServerLoad = async (event) => {
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
 			cadence: task.cadence,
-			sessionStatus: practiceSession.status,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.leftJoin(practiceSession, and(eq(practiceSession.taskId, task.id), eq(practiceSession.userId, user.id)))
 		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(task.cadence, "weekly")));
 
 	const dailyTasks = await db
@@ -51,16 +49,43 @@ export const load: PageServerLoad = async (event) => {
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
 			cadence: task.cadence,
-			sessionStatus: practiceSession.status,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.leftJoin(practiceSession, and(eq(practiceSession.taskId, task.id), eq(practiceSession.userId, user.id)))
 		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
 
+	const allTaskIds = [...new Set([...weeklyTasks, ...dailyTasks].map((taskItem) => taskItem.id))];
+
+	const relatedSessions =
+		allTaskIds.length > 0
+			? await db.query.practiceSession.findMany({
+					where: and(eq(practiceSession.userId, user.id), inArray(practiceSession.taskId, allTaskIds)),
+					columns: {
+						id: true,
+						taskId: true,
+						status: true,
+						startedAt: true,
+					},
+					orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
+				})
+			: [];
+
+	const latestSessionStatusByTaskId = new Map<number, (typeof relatedSessions)[number]["status"]>();
+	for (const session of relatedSessions) {
+		if (!latestSessionStatusByTaskId.has(session.taskId)) {
+			latestSessionStatusByTaskId.set(session.taskId, session.status);
+		}
+	}
+
 	return {
-		weeklyTasks,
-		dailyTasks,
+		weeklyTasks: weeklyTasks.map((taskItem) => ({
+			...taskItem,
+			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
+		})),
+		dailyTasks: dailyTasks.map((taskItem) => ({
+			...taskItem,
+			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
+		})),
 		language,
 	};
 };

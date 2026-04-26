@@ -179,12 +179,23 @@ export const actions: Actions = {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
 
-		const formData = await event.request.formData();
-		const sessionId = Number(formData.get("sessionId"));
+		const taskId = Number.parseInt(event.params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
-		if (!sessionId) return fail(400, { error: "Invalid session" });
+		const formData = await event.request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
 
 		try {
+			const session = await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, sessionId),
+			});
+
+			if (!session || session.userId !== user.id || session.taskId !== taskId) {
+				return fail(403, { error: "Access denied" });
+			}
+
 			const result = await generateHint(sessionId);
 			return { success: true, ...result };
 		} catch (e) {

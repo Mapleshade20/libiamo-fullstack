@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { generateHint } from "$lib/server/session";
 
 const { mockDb, mockSessionService } = vi.hoisted(() => ({
 	mockDb: {
@@ -335,8 +334,12 @@ describe("session page server", () => {
 		describe("actions.hint", () => {
 			it("returns success with hints when called correctly", async () => {
 				const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
-				// Ensure generateHint is mocked in the test setup
-				vi.mocked(generateHint).mockResolvedValue(mockHints);
+				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+					id: 123,
+					userId: "user_123",
+					taskId: 456,
+				});
+				mockSessionService.generateHint.mockResolvedValue(mockHints);
 
 				const formData = new FormData();
 				formData.append("sessionId", "123");
@@ -348,6 +351,7 @@ describe("session page server", () => {
 				} as any);
 
 				expect(result).toEqual({ success: true, ...mockHints });
+				expect(mockSessionService.generateHint).toHaveBeenCalledWith(123);
 			});
 
 			it("returns 401 when user is unauthenticated", async () => {
@@ -363,13 +367,65 @@ describe("session page server", () => {
 				const result = await actions.hint({
 					request: { formData: () => Promise.resolve(formData) },
 					locals: { user: mockUser },
+					params: { id: "456" },
 				} as any);
 
 				expect(result).toMatchObject({ status: 400 });
 			});
 
+			it("returns 400 when taskId is invalid", async () => {
+				const formData = new FormData();
+				formData.append("sessionId", "123");
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					locals: { user: mockUser },
+					params: { id: "invalid" },
+				} as any);
+
+				expect(result).toMatchObject({ status: 400, data: { error: "Invalid task ID" } });
+			});
+
+			it("returns 403 when session belongs to another user", async () => {
+				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+					id: 123,
+					userId: "other_user",
+					taskId: 456,
+				});
+				const formData = new FormData();
+				formData.append("sessionId", "123");
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					locals: { user: mockUser },
+					params: { id: "456" },
+				} as any);
+
+				expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+			});
+
+			it("returns 403 when session belongs to another task", async () => {
+				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+					id: 123,
+					userId: "user_123",
+					taskId: 999,
+				});
+				const formData = new FormData();
+				formData.append("sessionId", "123");
+				const result = await actions.hint({
+					request: { formData: () => Promise.resolve(formData) },
+					locals: { user: mockUser },
+					params: { id: "456" },
+				} as any);
+
+				expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+			});
+
 			it("returns 500 when generateHint fails", async () => {
-				vi.mocked(generateHint).mockRejectedValue(new Error("AI error"));
+				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+					id: 123,
+					userId: "user_123",
+					taskId: 456,
+				});
+				mockSessionService.generateHint.mockRejectedValue(new Error("AI error"));
 				const formData = new FormData();
 				formData.append("sessionId", "123");
 

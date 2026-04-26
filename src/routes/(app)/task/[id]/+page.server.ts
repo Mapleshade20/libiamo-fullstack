@@ -31,12 +31,10 @@ export const load: PageServerLoad = async (event) => {
 			pointReward: template.pointReward,
 			gemReward: template.gemReward,
 			openingState: templateVariant.openingState,
-			sessionStatus: practiceSession.status,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
 		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
-		.leftJoin(practiceSession, and(eq(practiceSession.taskId, task.id), eq(practiceSession.userId, user.id)))
 		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as LanguageCode)))
 		.limit(1);
 
@@ -44,5 +42,18 @@ export const load: PageServerLoad = async (event) => {
 		return error(404, "Task not found");
 	}
 
-	return { task: result };
+	const latestSession = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
+		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
+		columns: {
+			status: true,
+		},
+	});
+
+	return {
+		task: {
+			...result,
+			sessionStatus: latestSession?.status ?? null,
+		},
+	};
 };

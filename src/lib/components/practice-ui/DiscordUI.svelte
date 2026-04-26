@@ -29,19 +29,10 @@ interface Props {
 	avatarUrl?: string;
 	language?: string;
 	existingSession?: any;
+	openingState?: unknown;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", existingSession = null }: Props = $props();
-
-const serverName = $derived(`${userName}'s Server`);
-const serverAcronym = $derived(
-	serverName
-		.split(" ")
-		.map((w) => w[0])
-		.join("")
-		.slice(0, 2)
-		.toUpperCase(),
-);
+let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", existingSession = null, openingState = null }: Props = $props();
 
 const i18n = {
 	en: {
@@ -50,7 +41,7 @@ const i18n = {
 		general: "general",
 		online: "Online",
 		offline: "Offline",
-		messagePlaceholder: "Message #general",
+		messagePlaceholder: "Message #{channel}",
 		returnTask: "Return to Task",
 		unavailableFeature: "In the immersive learning context, this feature is unavailable.",
 		questCompleted: "Quest Completed",
@@ -64,6 +55,7 @@ const i18n = {
 		getHint: "Get Hint",
 		hintTitle: "Suggested Replies",
 		thinking: "Tutor is thinking...",
+		earlier: "Earlier",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -71,7 +63,7 @@ const i18n = {
 		general: "general",
 		online: "En línea",
 		offline: "Desconectado",
-		messagePlaceholder: "Enviar mensaje a #general",
+		messagePlaceholder: "Enviar mensaje a #{channel}",
 		returnTask: "Volver a la tarea",
 		unavailableFeature: "En el contexto de aprendizaje inmersivo, esta función no está disponible.",
 		questCompleted: "Misión Completada",
@@ -85,6 +77,7 @@ const i18n = {
 		getHint: "Obtener sugerencia",
 		hintTitle: "Sugerencias de respuesta",
 		thinking: "El tutor está pensando...",
+		earlier: "Antes",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -92,7 +85,7 @@ const i18n = {
 		general: "général",
 		online: "En ligne",
 		offline: "Hors ligne",
-		messagePlaceholder: "Envoyer un message à #général",
+		messagePlaceholder: "Envoyer un message à #{channel}",
 		returnTask: "Retour à la tâche",
 		unavailableFeature: "Dans le contexte d'apprentissage immersif, cette fonctionnalité n'est pas disponible.",
 		questCompleted: "Quête Terminée",
@@ -106,6 +99,7 @@ const i18n = {
 		getHint: "Obtenir un indice",
 		hintTitle: "Suggestions de réponse",
 		thinking: "Le tuteur réfléchit...",
+		earlier: "Plus tôt",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -113,7 +107,7 @@ const i18n = {
 		general: "一般",
 		online: "オンライン",
 		offline: "オフライン",
-		messagePlaceholder: "#一般 へメッセージを送信",
+		messagePlaceholder: "#{channel} へメッセージを送信",
 		returnTask: "タスクに戻る",
 		unavailableFeature: "没入型学習コンテキストでは、この機能は利用できません。",
 		questCompleted: "クエスト完了",
@@ -127,9 +121,41 @@ const i18n = {
 		getHint: "ヒントを得る",
 		hintTitle: "おすすめの返信",
 		thinking: "チューターが考え中...",
+		earlier: "先ほど",
 	},
 };
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
+
+type DiscordOpeningState = {
+	serverName?: string;
+	channelName?: string;
+	previousMessages?: Array<{
+		sender?: string;
+		author?: string;
+		text?: string;
+		content?: string;
+	}>;
+};
+
+const openingStateData = $derived((openingState ?? {}) as DiscordOpeningState);
+
+function normalizeText(value: unknown, fallback: string) {
+	if (typeof value !== "string") return fallback;
+	const trimmed = value.trim();
+	return trimmed || fallback;
+}
+
+const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
+const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
+const messagePlaceholder = $derived(t.messagePlaceholder.replace("{channel}", channelName));
+const serverAcronym = $derived(
+	serverName
+		.split(" ")
+		.map((w) => w[0])
+		.join("")
+		.slice(0, 2)
+		.toUpperCase(),
+);
 
 type Message = {
 	id: string;
@@ -294,6 +320,32 @@ function initUserPool(seedId: number) {
 	}
 	offlineUsers = offline;
 }
+
+function getOpeningStateMessages(): Message[] {
+	if (!Array.isArray(openingStateData.previousMessages)) return [];
+
+	return openingStateData.previousMessages.flatMap((rawMessage, index) => {
+		const sender = normalizeText(rawMessage.sender ?? rawMessage.author, "");
+		const text = normalizeText(rawMessage.text ?? rawMessage.content, "");
+		if (!text) return [];
+
+		const isUserMessage = sender === userName;
+		const authorName = sender || (isUserMessage ? userName : agentUser.name);
+
+		return [
+			{
+				id: `opening-${index}-${authorName}`,
+				role: isUserMessage ? "user" : "agent",
+				text,
+				timestamp: t.earlier,
+				authorName,
+				avatar: isUserMessage ? avatarUrl : undefined,
+				avatarColor: !isUserMessage ? agentUser.color : undefined,
+				deliveryState: "sent",
+			},
+		];
+	});
+}
 async function handleGetHint() {
 	if (!sessionId || isGettingHint || isCompleted) return;
 	isGettingHint = true;
@@ -337,7 +389,8 @@ $effect(() => {
 			showEvaluationModal = true;
 		}
 
-		messages =
+		const openingMessages = getOpeningStateMessages();
+		const sessionMessages =
 			existingSession.messages?.map((m: any) => ({
 				id: m.id.toString(),
 				role: m.role === "user" ? "user" : "agent",
@@ -348,6 +401,7 @@ $effect(() => {
 				avatarColor: m.role !== "user" ? agentUser.color : undefined,
 				isHidden: m.content === "*User joined the server*",
 			})) || [];
+		messages = [...openingMessages, ...sessionMessages];
 
 		tick().then(() => {
 			if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -384,7 +438,9 @@ onMount(async () => {
 				const sendResult = deserialize(await sendRes.text());
 
 				if (sendResult.type === "success" && sendResult.data) {
+					const openingMessages = getOpeningStateMessages();
 					messages = [
+						...openingMessages,
 						{
 							id: crypto.randomUUID(),
 							role: "user",
@@ -806,7 +862,7 @@ function handleMockAction() {
 			</button>
 			<button type="button" class="flex w-full items-center gap-1.5 rounded bg-[#404249] px-2 py-1.5 text-[#DBDEE1]">
 				<Hash size={18} class="text-[#80848E]" />
-				<span class="text-sm">{t.general}</span>
+				<span class="text-sm">{channelName}</span>
 			</button>
 		</div>
 
@@ -845,7 +901,7 @@ function handleMockAction() {
 		<div class="flex h-12 shrink-0 items-center justify-between border-b border-[#1F2023] px-4 shadow-sm">
 			<div class="flex items-center gap-2">
 				<Hash size={24} class="text-[#80848E]" />
-				<span class="font-semibold text-white">{t.general}</span>
+				<span class="font-semibold text-white">{channelName}</span>
 			</div>
 			<div class="flex items-center gap-4 text-[#B5BAC1]">
 				{#if !isCompleted && sessionId}
@@ -994,7 +1050,7 @@ function handleMockAction() {
 								? "Session ended"
 								: isWaitingRetry
 									? "Agent reply failed. Use Retry."
-									: t.messagePlaceholder}
+									: messagePlaceholder}
 							class="flex-1 bg-transparent text-[#DBDEE1] outline-none placeholder:text-[#82868D] disabled:opacity-50"
 						>
 
