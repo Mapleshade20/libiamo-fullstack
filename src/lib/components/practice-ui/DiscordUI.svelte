@@ -20,6 +20,7 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
 import { COMMON_EMOJIS } from "./emojis";
 import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./mockData";
 
@@ -59,6 +60,7 @@ const i18n = {
 		retryFailedMessage: "Agent reply failed. Click Retry to try again.",
 		retryInputPlaceholder: "Agent reply failed. Use Retry.",
 		retry: "Retry",
+		stillProcessingMessage: "Agent is still processing. Retry in a moment.",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -84,6 +86,7 @@ const i18n = {
 		retryFailedMessage: "La respuesta del agente falló. Haz clic en Reintentar para volver a intentarlo.",
 		retryInputPlaceholder: "La respuesta del agente falló. Usa Reintentar.",
 		retry: "Reintentar",
+		stillProcessingMessage: "El agente todavía está procesando. Reintenta en un momento.",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -109,6 +112,7 @@ const i18n = {
 		retryFailedMessage: "La réponse de l'agent a échoué. Cliquez sur Réessayer pour réessayer.",
 		retryInputPlaceholder: "La réponse de l'agent a échoué. Utilisez Réessayer.",
 		retry: "Réessayer",
+		stillProcessingMessage: "L'agent traite encore la demande. Réessayez dans un instant.",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -134,6 +138,7 @@ const i18n = {
 		retryFailedMessage: "エージェントの返信に失敗しました。再試行を押してもう一度お試しください。",
 		retryInputPlaceholder: "エージェントの返信に失敗しました。再試行を使用してください。",
 		retry: "再試行",
+		stillProcessingMessage: "エージェントはまだ処理中です。少し待ってから再試行してください。",
 	},
 };
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -169,17 +174,7 @@ const serverAcronym = $derived(
 		.toUpperCase(),
 );
 
-type Message = {
-	id: string;
-	role: "user" | "agent";
-	text: string;
-	timestamp: string;
-	authorName: string;
-	avatar?: string;
-	avatarColor?: string;
-	isHidden?: boolean;
-	deliveryState?: "sent" | "pending" | "failed";
-};
+type Message = DiscordSessionMessage;
 
 type ObjectiveResult = { text: string; grade: "A" | "B" | "C" };
 type TutorFeedback = {
@@ -238,7 +233,7 @@ let contextMenu = $state({
 let showEmojiPicker = $state(false);
 let isWaitingRetry = $state(false);
 const retryResolvers = new Map<string, () => void>();
-const AGENT_REPLY_TIMEOUT_MS = 20_000;
+const AGENT_REPLY_TIMEOUT_MS = 25_000;
 
 function updateMessageById(messageId: string, updater: (message: Message) => Message) {
 	messages = messages.map((message) => (message.id === messageId ? updater(message) : message));
@@ -251,23 +246,27 @@ function waitForRetry(messageId: string): Promise<void> {
 }
 
 function handleRetry(messageId: string) {
+	const resolveRetry = retryResolvers.get(messageId);
+	if (!resolveRetry) {
+		void retryPersistedAgentReply(messageId);
+		return;
+	}
+
 	updateMessageById(messageId, (message) => ({
 		...message,
 		isHidden: true,
 	}));
-
-	const resolveRetry = retryResolvers.get(messageId);
-	if (!resolveRetry) return;
 
 	retryResolvers.delete(messageId);
 	isWaitingRetry = false;
 	resolveRetry();
 }
 
-async function submitAgentReply(messageText: string) {
+async function submitAgentReply(messageText: string, clientMessageId: string) {
 	const sendData = new FormData();
 	sendData.append("sessionId", String(sessionId));
 	sendData.append("message", messageText);
+	sendData.append("clientMessageId", clientMessageId);
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => {
@@ -289,6 +288,73 @@ async function submitAgentReply(messageText: string) {
 		throw error;
 	} finally {
 		clearTimeout(timeoutId);
+	}
+}
+
+async function retryPersistedAgentReply(messageId: string) {
+	const failedMessage = messages.find((message) => message.id === messageId);
+	if (!failedMessage?.clientMessageId || !failedMessage.retryText || isSubmitting || isCompleted || isInitializing || !sessionId) return;
+
+	isSubmitting = true;
+	isWaitingRetry = true;
+	updateMessageById(messageId, (message) => ({
+		...message,
+		text: t.stillProcessingMessage,
+		deliveryState: "pending",
+	}));
+	await scrollToBottom();
+
+	try {
+		while (true) {
+			let sendResult: any = null;
+			try {
+				sendResult = await submitAgentReply(failedMessage.retryText, failedMessage.clientMessageId);
+			} catch (error) {
+				console.error("Message retry failed:", error);
+			}
+
+			if (sendResult?.type === "success" && sendResult.data) {
+				if (sendResult.data.pending) {
+					updateMessageById(messageId, (message) => ({
+						...message,
+						text: t.stillProcessingMessage,
+						deliveryState: "pending",
+						isHidden: false,
+						timestamp: formatTime(new Date()),
+					}));
+					await scrollToBottom();
+					await waitForRetry(messageId);
+					continue;
+				}
+
+				updateMessageById(messageId, (message) => ({
+					...message,
+					text: sendResult.data.reply as string,
+					deliveryState: "sent",
+					isHidden: false,
+					timestamp: formatTime(new Date()),
+				}));
+				await scrollToBottom();
+				await invalidateAll();
+
+				if (sendResult.data.terminated) await handleComplete();
+				break;
+			}
+
+			updateMessageById(messageId, (message) => ({
+				...message,
+				text: t.retryFailedMessage,
+				deliveryState: "failed",
+				isHidden: false,
+				timestamp: formatTime(new Date()),
+			}));
+			await scrollToBottom();
+			await waitForRetry(messageId);
+		}
+	} finally {
+		isSubmitting = false;
+		isWaitingRetry = false;
+		retryResolvers.delete(messageId);
 	}
 }
 
@@ -418,17 +484,15 @@ $effect(() => {
 		}
 
 		const openingMessages = getOpeningStateMessages();
-		const sessionMessages =
-			existingSession.messages?.map((m: any) => ({
-				id: m.id.toString(),
-				role: m.role === "user" ? "user" : "agent",
-				text: m.content,
-				timestamp: formatTime(new Date(m.createdAt)),
-				authorName: m.role === "user" ? userName : agentUser.name,
-				avatar: m.role === "user" ? avatarUrl : undefined,
-				avatarColor: m.role !== "user" ? agentUser.color : undefined,
-				isHidden: m.content === "*User joined the server*",
-			})) || [];
+		const sessionMessages = buildDiscordSessionMessages({
+			rawMessages: existingSession.messages ?? [],
+			formatTimestamp: formatTime,
+			userName,
+			agentName: agentUser.name,
+			avatarUrl,
+			agentColor: agentUser.color,
+			labels: t,
+		});
 		messages = [...openingMessages, ...sessionMessages];
 
 		tick().then(() => {
@@ -458,6 +522,7 @@ onMount(async () => {
 				const sendData = new FormData();
 				sendData.append("sessionId", String(currentId));
 				sendData.append("message", "*User joined the server*");
+				sendData.append("clientMessageId", `join-${currentId}`);
 
 				const sendRes = await fetch(`?/send`, {
 					method: "POST",
@@ -553,6 +618,7 @@ async function handleSend() {
 	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	const currentText = inputText;
+	const clientMessageId = crypto.randomUUID();
 	let failedAgentMessageId: string | null = null;
 	inputText = "";
 	showMentionMenu = false;
@@ -568,6 +634,7 @@ async function handleSend() {
 			timestamp: formatTime(new Date()),
 			authorName: userName,
 			avatar: avatarUrl,
+			clientMessageId,
 		},
 	];
 	await scrollToBottom();
@@ -576,12 +643,43 @@ async function handleSend() {
 		while (true) {
 			let sendResult: any = null;
 			try {
-				sendResult = await submitAgentReply(currentText);
+				sendResult = await submitAgentReply(currentText, clientMessageId);
 			} catch (error) {
 				console.error("Message submission failed:", error);
 			}
 
 			if (sendResult?.type === "success" && sendResult.data) {
+				if (sendResult.data.pending) {
+					if (!failedAgentMessageId) {
+						failedAgentMessageId = crypto.randomUUID();
+						messages = [
+							...messages,
+							{
+								id: failedAgentMessageId,
+								role: "agent",
+								text: t.stillProcessingMessage,
+								timestamp: formatTime(new Date()),
+								authorName: agentUser.name,
+								avatarColor: agentUser.color,
+								deliveryState: "pending",
+								clientMessageId,
+							},
+						];
+					} else {
+						updateMessageById(failedAgentMessageId, (message) => ({
+							...message,
+							text: t.stillProcessingMessage,
+							deliveryState: "pending",
+							isHidden: false,
+							timestamp: formatTime(new Date()),
+						}));
+					}
+					await scrollToBottom();
+					isWaitingRetry = true;
+					await waitForRetry(failedAgentMessageId);
+					continue;
+				}
+
 				if (failedAgentMessageId) {
 					updateMessageById(failedAgentMessageId, (message) => ({
 						...message,
@@ -994,6 +1092,17 @@ function handleMockAction() {
 											onclick={() => handleRetry(msg.id)}
 										>
 											<AlertCircle size={16} />
+											{t.retry}
+										</button>
+									</div>
+								{:else if msg.role === "agent" && msg.deliveryState === "pending"}
+									<div class="mt-1 flex flex-wrap items-center gap-2">
+										<span class="text-[#F0B232] whitespace-pre-wrap">{msg.text}</span>
+										<button
+											type="button"
+											class="flex items-center gap-2 rounded bg-[#5865F2] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#4752C4] disabled:opacity-50"
+											onclick={() => handleRetry(msg.id)}
+										>
 											{t.retry}
 										</button>
 									</div>

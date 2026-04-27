@@ -205,6 +205,35 @@ describe("session page server", () => {
 				reply: "Hello back",
 				turnCount: 2,
 			});
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", undefined);
+		});
+
+		it("passes clientMessageId through to sendMessage", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockResolvedValue({
+				reply: "Still working",
+				turnCount: 2,
+				pending: true,
+			});
+
+			await actions.send({
+				request: {
+					formData: () =>
+						Promise.resolve(
+							Object.assign(new FormData(), {
+								get: (k: string) => ({ sessionId: "789", message: "Hello", clientMessageId: "msg-123" })[k],
+							}),
+						),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123");
 		});
 
 		it("returns fail 403 when session belongs to another user", async () => {

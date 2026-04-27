@@ -118,6 +118,8 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
 		const message = formData.get("message") as string;
+		const clientMessageIdValue = formData.get("clientMessageId");
+		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!message?.trim()) return fail(400, { error: "Message is required" });
@@ -132,7 +134,7 @@ export const actions: Actions = {
 				return fail(403, { error: "Access denied" });
 			}
 
-			const result = await sendMessage(sessionId, message);
+			const result = await sendMessage(sessionId, message, clientMessageId || undefined);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

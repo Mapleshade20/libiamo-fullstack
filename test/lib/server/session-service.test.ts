@@ -23,6 +23,14 @@ import { completeSession, generateHint, sendMessage, startSession } from "$lib/s
 describe("session service", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
+		mockDb.insert.mockImplementation(() => ({
+			values: vi.fn(() => ({
+				returning: vi.fn().mockResolvedValue([{ id: 999 }]),
+			})),
+		}));
+		mockDb.update.mockImplementation(() => ({
+			set: vi.fn(() => ({ where: vi.fn() })),
+		}));
 	});
 
 	const mockTask = {
@@ -349,8 +357,6 @@ describe("session service", () => {
 				reply: "Hello back!",
 				terminate: false,
 			});
-			mockDb.insert.mockReturnValue({ values: vi.fn() });
-
 			const result = await sendMessage(123, "Hello!");
 
 			expect(result.reply).toBe("Hello back!");
@@ -379,8 +385,6 @@ describe("session service", () => {
 				reply: "Second reply",
 				terminate: false,
 			});
-			mockDb.insert.mockReturnValue({ values: vi.fn() });
-
 			await sendMessage(123, "Second message");
 
 			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
@@ -429,11 +433,66 @@ describe("session service", () => {
 				reply: "c",
 				terminate: false,
 			});
-			mockDb.insert.mockReturnValue({ values: vi.fn() });
-
 			const result = await sendMessage(123, "3");
 
 			expect(result.turnCount).toBe(3);
+		});
+
+		it("returns existing assistant reply for duplicate clientMessageId", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } },
+					{ id: 2, role: "assistant", content: "Hello back!", llmMetadata: { raw: { terminate: true } } },
+				],
+			});
+
+			const result = await sendMessage(123, "Hello!", "msg-1");
+
+			expect(result).toEqual({ reply: "Hello back!", turnCount: 1, terminated: true });
+			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
+		});
+
+		it("does not treat a later turn's assistant reply as the duplicate clientMessageId reply", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } },
+					{ id: 2, role: "user", content: "Different turn", llmMetadata: { clientMessageId: "msg-2", failed: false } },
+					{ id: 3, role: "assistant", content: "Reply to different turn", llmMetadata: { raw: { terminate: false } } },
+				],
+			});
+
+			const result = await sendMessage(123, "Hello!", "msg-1");
+
+			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
+			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
+		});
+
+		it("returns pending for duplicate clientMessageId while assistant reply is still processing", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } }],
+			});
+
+			const result = await sendMessage(123, "Hello!", "msg-1");
+
+			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
+			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
+		});
+
+		it("retries failed generation without inserting a duplicate user message", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: true } }],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Recovered", terminate: false });
+
+			const result = await sendMessage(123, "Hello!", "msg-1");
+
+			expect(result).toEqual({ reply: "Recovered", turnCount: 1, terminated: false });
+			expect(mockDb.update).toHaveBeenCalled();
+			expect(mockDb.insert).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -560,7 +619,10 @@ describe("session service", () => {
 				reply: "AI reply",
 				terminate: false,
 			});
-			const valuesMock = vi.fn();
+			const valuesMock = vi
+				.fn()
+				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
+				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
 			await sendMessage(123, "User message");
@@ -581,7 +643,10 @@ describe("session service", () => {
 				reply: "AI reply",
 				terminate: false,
 			});
-			const valuesMock = vi.fn();
+			const valuesMock = vi
+				.fn()
+				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
+				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
 			await sendMessage(123, "Ordering check");
@@ -600,7 +665,10 @@ describe("session service", () => {
 				reply: "reply",
 				terminate: false,
 			});
-			const valuesMock = vi.fn();
+			const valuesMock = vi
+				.fn()
+				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
+				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
 			await sendMessage(123, "  Hello  ");
@@ -611,7 +679,7 @@ describe("session service", () => {
 		it("persists user message even when LLM generation fails", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
 			mockClient.createStructuredOutput.mockRejectedValue(new Error("LLM timeout"));
-			const valuesMock = vi.fn();
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
 			await expect(sendMessage(123, "Need a reply")).rejects.toThrow("LLM timeout");
@@ -621,7 +689,21 @@ describe("session service", () => {
 				sessionId: 123,
 				role: "user",
 				content: "Need a reply",
+				llmMetadata: undefined,
 			});
+		});
+
+		it("marks failed clientMessageId metadata when LLM generation fails", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockRejectedValue(new Error("LLM timeout"));
+			const valuesMock = vi
+				.fn()
+				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-1", failed: false } }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await expect(sendMessage(123, "Need a reply", "msg-1")).rejects.toThrow("LLM timeout");
+
+			expect(mockDb.update).toHaveBeenCalled();
 		});
 	});
 	describe("generateHint", () => {

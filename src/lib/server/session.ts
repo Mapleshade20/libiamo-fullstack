@@ -149,7 +149,44 @@ export type SendMessageResult = {
 	reply: string;
 	turnCount: number;
 	terminated?: boolean;
+	pending?: boolean;
 };
+
+type SessionMessageMetadata = {
+	clientMessageId?: string;
+	failed?: boolean;
+	model?: string;
+	raw?: unknown;
+};
+
+function getMessageMetadata(value: unknown): SessionMessageMetadata {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return value as SessionMessageMetadata;
+}
+
+function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
+	messages: T[],
+	clientMessageId: string,
+) {
+	const userIndex = messages.findIndex(
+		(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+	);
+
+	if (userIndex === -1) return null;
+
+	const userMessage = messages[userIndex];
+	const messagesAfterUser = messages.slice(userIndex + 1);
+	const nextUserMessageIndex = messagesAfterUser.findIndex((message) => message.role === "user");
+	const messagesInSameTurn = nextUserMessageIndex === -1 ? messagesAfterUser : messagesAfterUser.slice(0, nextUserMessageIndex);
+	const assistantReply = messagesInSameTurn.find((message) => message.role === "assistant");
+	const metadata = getMessageMetadata(userMessage.llmMetadata);
+
+	return {
+		userMessage,
+		assistantReply,
+		failed: metadata.failed === true,
+	};
+}
 
 const AgentReplySchema = z.object({
 	reply: z.string().describe("Your conversational reply to the user."),
@@ -158,7 +195,7 @@ const AgentReplySchema = z.object({
 		.describe("Set to true ONLY IF the conversation has naturally concluded, objectives are fully met, or the user explicitly says goodbye."),
 });
 
-export async function sendMessage(sessionId: number, userMessage: string): Promise<SendMessageResult> {
+export async function sendMessage(sessionId: number, userMessage: string, clientMessageId?: string): Promise<SendMessageResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) {
 		throw new Error("userMessage is required");
@@ -174,21 +211,91 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 	if (!session) throw new Error("Session not found");
 	if (session.status !== "in_progress") throw new Error("Session not in progress");
 
+	let activeMessages = session.messages;
+	let existingUserMessage: (typeof session.messages)[number] | null = null;
+	let reusedExistingUserMessage = false;
+
+	if (clientMessageId) {
+		const existingState = getExistingUserMessageState(session.messages, clientMessageId);
+		if (existingState?.assistantReply) {
+			return {
+				reply: existingState.assistantReply.content,
+				turnCount: session.messages.filter((m) => m.role === "user").length,
+				terminated: getMessageMetadata(existingState.assistantReply.llmMetadata).raw
+					? ((getMessageMetadata(existingState.assistantReply.llmMetadata).raw as { terminate?: boolean }).terminate ?? false)
+					: false,
+			};
+		}
+
+		if (existingState && !existingState.failed) {
+			return {
+				reply: "",
+				turnCount: session.messages.filter((m) => m.role === "user").length,
+				pending: true,
+			};
+		}
+
+		existingUserMessage = existingState?.userMessage ?? null;
+		reusedExistingUserMessage = existingUserMessage !== null;
+	}
+
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 
 	// Inject exact JSON schema format to bypass provider compatibility issues
 	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema:\n{\n  "reply": "string (your conversational reply to the user)",\n  "terminate": boolean (true ONLY IF the conversation has naturally concluded or the user explicitly says goodbye)\n}`;
 
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
-	for (const m of session.messages) {
+	for (const m of activeMessages) {
 		history.push({ role: m.role, content: m.content });
 	}
-	history.push({ role: "user", content: trimmedUserMessage });
+	if (!existingUserMessage) {
+		history.push({ role: "user", content: trimmedUserMessage });
+	}
 
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
-	await db.insert(sessionMessage).values({ sessionId, role: "user", content: trimmedUserMessage });
+	if (!existingUserMessage) {
+		const insertedMessages = await db
+			.insert(sessionMessage)
+			.values({
+				sessionId,
+				role: "user",
+				content: trimmedUserMessage,
+				llmMetadata: clientMessageId ? { clientMessageId, failed: false } : undefined,
+			})
+			.returning();
+		const insertedUserMessage = insertedMessages[0];
+		if (insertedUserMessage) {
+			existingUserMessage = insertedUserMessage;
+			activeMessages = [...activeMessages, insertedUserMessage];
+		}
+	} else if (existingUserMessage.id) {
+		await db
+			.update(sessionMessage)
+			.set({ llmMetadata: { ...getMessageMetadata(existingUserMessage.llmMetadata), clientMessageId, failed: false } })
+			.where(eq(sessionMessage.id, existingUserMessage.id));
 
-	const output = await createStructuredOutput(AgentReplySchema, history);
+		activeMessages = activeMessages.map((message) =>
+			message === existingUserMessage
+				? {
+						...message,
+						llmMetadata: { ...getMessageMetadata(message.llmMetadata), clientMessageId, failed: false },
+					}
+				: message,
+		);
+	}
+
+	let output: z.infer<typeof AgentReplySchema>;
+	try {
+		output = await createStructuredOutput(AgentReplySchema, history);
+	} catch (error) {
+		if (existingUserMessage?.id) {
+			await db
+				.update(sessionMessage)
+				.set({ llmMetadata: { ...getMessageMetadata(existingUserMessage.llmMetadata), clientMessageId, failed: true } })
+				.where(eq(sessionMessage.id, existingUserMessage.id));
+		}
+		throw error;
+	}
 
 	await db.insert(sessionMessage).values({
 		sessionId,
@@ -197,7 +304,7 @@ export async function sendMessage(sessionId: number, userMessage: string): Promi
 		llmMetadata: { model: "structured-output", raw: output },
 	});
 
-	const turnCount = session.messages.filter((m) => m.role === "user").length + 1;
+	const turnCount = session.messages.filter((m) => m.role === "user").length + (reusedExistingUserMessage ? 0 : 1);
 
 	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }

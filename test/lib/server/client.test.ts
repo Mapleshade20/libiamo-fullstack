@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const { mockGenerateText, mockOutputObject, mockCreateOpenAICompatible } = vi.hoisted(() => ({
+const { mockGenerateText, mockCreateOpenAICompatible } = vi.hoisted(() => ({
 	mockGenerateText: vi.fn(),
-	mockOutputObject: vi.fn(() => "mock-output"),
 	mockCreateOpenAICompatible: vi.fn(() => vi.fn(() => "mock-model")),
 }));
 
@@ -21,9 +20,6 @@ vi.mock("@ai-sdk/openai-compatible", () => ({
 
 vi.mock("ai", () => ({
 	generateText: mockGenerateText,
-	Output: {
-		object: mockOutputObject,
-	},
 }));
 
 describe("client createStructuredOutput", () => {
@@ -39,8 +35,8 @@ describe("client createStructuredOutput", () => {
 		expect(mockGenerateText).not.toHaveBeenCalled();
 	});
 
-	it("calls generateText with validated messages", async () => {
-		mockGenerateText.mockResolvedValue({ output: { content: "ok" } });
+	it("calls generateText with validated messages and parses JSON text", async () => {
+		mockGenerateText.mockResolvedValue({ text: '{"content":"ok"}' });
 
 		const { createStructuredOutput } = await import("$lib/server/client");
 		const schema = z.object({ content: z.string() });
@@ -49,14 +45,53 @@ describe("client createStructuredOutput", () => {
 		const result = await createStructuredOutput(schema, messages, { temperature: 0.3, maxTokens: 128 });
 
 		expect(result).toEqual({ content: "ok" });
-		expect(mockOutputObject).toHaveBeenCalledTimes(1);
 		expect(mockGenerateText).toHaveBeenCalledWith(
 			expect.objectContaining({
 				model: "mock-model",
-				messages,
+				messages: [...messages, expect.objectContaining({ role: "user", content: expect.stringContaining("valid JSON object") })],
 				temperature: 0.3,
 				maxOutputTokens: 128,
 			}),
+		);
+	});
+
+	it("recovers provider output with a newline between the opening quote and key name", async () => {
+		mockGenerateText.mockResolvedValue({ text: '{"\nreply":"¡Hola!","terminate":false}' });
+
+		const { createStructuredOutput } = await import("$lib/server/client");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		const result = await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
+
+		expect(result).toEqual({ reply: "¡Hola!", terminate: false });
+	});
+
+	it("retries when the first JSON response is incomplete", async () => {
+		mockGenerateText.mockResolvedValueOnce({ text: '{"\nreply":": "}' }).mockResolvedValueOnce({ text: '{"reply":"Recovered","terminate":false}' });
+
+		const { createStructuredOutput } = await import("$lib/server/client");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		const result = await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
+
+		expect(result).toEqual({ reply: "Recovered", terminate: false });
+		expect(mockGenerateText).toHaveBeenCalledTimes(2);
+		expect(mockGenerateText).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				temperature: 0,
+				messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("previous response was invalid") })]),
+			}),
+		);
+	});
+
+	it("rethrows structured output errors when retry parsing cannot recover", async () => {
+		mockGenerateText.mockResolvedValueOnce({ text: "not json" }).mockResolvedValueOnce({ text: "still not json" });
+
+		const { createStructuredOutput } = await import("$lib/server/client");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }])).rejects.toThrow(
+			"LLM returned invalid structured JSON",
 		);
 	});
 });

@@ -7,7 +7,7 @@ if (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") {
 process.env.AI_SDK_LOG_WARNINGS = "false";
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 
@@ -94,6 +94,39 @@ function validateMessages(messages: ChatMessage[]) {
 	}
 }
 
+function stripJsonFences(text: string) {
+	return text
+		.trim()
+		.replace(/^```(?:json)?\s*/i, "")
+		.replace(/\s*```$/i, "")
+		.trim();
+}
+
+function extractJsonObject(text: string) {
+	const stripped = stripJsonFences(text);
+	const start = stripped.indexOf("{");
+	const end = stripped.lastIndexOf("}");
+	if (start === -1 || end === -1 || end <= start) return stripped;
+	return stripped.slice(start, end + 1);
+}
+
+function repairMalformedJson(text: string) {
+	return extractJsonObject(text).replace(/"\s+([A-Za-z_$][\w$-]*)"\s*:/g, '"$1":');
+}
+
+function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
+	const candidates = [extractJsonObject(text), repairMalformedJson(text)];
+	for (const candidate of candidates) {
+		try {
+			return schema.parse(JSON.parse(candidate)) as z.infer<T>;
+		} catch {
+			// Try the next recovery candidate.
+		}
+	}
+
+	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 500)}`);
+}
+
 // ── Core LLM functions using AI SDK ───────────────────────────────────
 
 /**
@@ -125,8 +158,8 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 
 /**
  * Generate structured JSON output validated against a Zod schema.
- * Uses AI SDK's generateText with output.object() for reliable structured output.
- * The schema description and field descriptions guide the LLM.
+ * Uses plain text generation instead of AI SDK output.object() because some
+ * OpenAI-compatible providers used here do not support responseFormat.
  */
 export async function createStructuredOutput<T extends z.ZodType>(
 	schema: T,
@@ -135,15 +168,45 @@ export async function createStructuredOutput<T extends z.ZodType>(
 ): Promise<z.infer<T>> {
 	validateMessages(messages);
 
-	const result = await generateText({
+	const textOnlyMessages: ChatMessage[] = [
+		...messages,
+		{
+			role: "user",
+			content: "Return ONLY one valid JSON object that satisfies the requested schema. Do not use markdown, comments, or extra text.",
+		},
+	];
+
+	const firstResult = await generateText({
 		model: getModel(),
-		messages,
-		output: Output.object({ schema }),
+		messages: textOnlyMessages,
 		temperature: options.temperature ?? 0.7,
 		maxOutputTokens: options.maxTokens ?? 4096,
 	});
-
-	return result.output as z.infer<T>;
+	const firstText = firstResult.text?.trim() ?? "";
+	try {
+		return parseStructuredOutputText(schema, firstText);
+	} catch (firstError) {
+		const retryResult = await generateText({
+			model: getModel(),
+			messages: [
+				...textOnlyMessages,
+				{ role: "assistant", content: firstText || "(empty response)" },
+				{
+					role: "user",
+					content:
+						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
+				},
+			],
+			temperature: 0,
+			maxOutputTokens: options.maxTokens ?? 4096,
+		});
+		const retryText = retryResult.text?.trim() ?? "";
+		try {
+			return parseStructuredOutputText(schema, retryText);
+		} catch {
+			throw firstError;
+		}
+	}
 }
 
 // ── High-level chat functions ─────────────────────────────────────────
