@@ -168,7 +168,7 @@ const uiIcons: Record<string, Component> = {
 
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.today")}</h3>
+			<h2 class="text-2xl">{t(lang, "hall.today")}</h2>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.dailyTasks.length === 0}
@@ -184,7 +184,7 @@ const uiIcons: Record<string, Component> = {
 
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.thisWeek")}</h3>
+			<h2 class="text-2xl">{t(lang, "hall.thisWeek")}</h2>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.weeklyTasks.length === 0}

@@ -872,7 +872,7 @@ function handleMockAction() {
 			<div class="bg-[#2B2D31] border border-[#1E1F22] rounded-xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col transform transition-all">
 				<div class="bg-[#23A559] p-6 text-center relative">
 					<CheckCircle class="mx-auto text-white mb-2 drop-shadow-md" size={56} />
-					<h2 class="text-2xl font-black text-white uppercase tracking-widest drop-shadow-md">{t.questCompleted}</h2>
+					<h2 class="text-2xl font-black text-white uppercase tracking-wide drop-shadow-md">{t.questCompleted}</h2>
 					<p class="text-green-100 mt-1 font-medium text-sm">{t.tutorReport}</p>
 				</div>
 

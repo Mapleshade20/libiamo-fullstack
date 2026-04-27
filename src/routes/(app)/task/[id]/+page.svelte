@@ -56,39 +56,17 @@ function difficultyLabel(level: number): string {
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			<h1
-				class="font-serif text-3xl md:text-5xl {isFinished
-					? 'text-green-950'
-					: 'text-foreground'} leading-tight"
-			>
-				{task.title}
-			</h1>
+			<h1 class="text-2xl md:text-3xl">{task.title}</h1>
 		</div>
 
 		{#if task.description}
-			<p
-				class="mt-8 max-w-xl text-base font-light leading-relaxed {isFinished
-					? 'text-green-900/70'
-					: 'text-muted-foreground'}"
-			>
-				{task.description}
-			</p>
+			<p class="mt-8 text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
-				<h2
-					class="mb-3 text-xs font-bold uppercase tracking-widest {isFinished
-						? 'text-green-700/60'
-						: 'text-muted-foreground'}"
-				>
-					Objectives
-				</h2>
-				<ol
-					class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed {isFinished
-						? 'text-green-900/80'
-						: 'text-muted-foreground'} max-w-xl"
-				>
+				<h2 class="mb-2">Objectives</h2>
+				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
 					{/each}
@@ -98,14 +76,8 @@ function difficultyLabel(level: number): string {
 
 		{#if task.materialsMd}
 			<div class="mt-10">
-				<h2
-					class="mb-4 text-xs font-bold uppercase tracking-widest {isFinished
-						? 'text-green-700/60'
-						: 'text-muted-foreground'}"
-				>
-					Background Material
-				</h2>
-				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
+				<h2 class="mb-2">Background Material</h2>
+				<div class="prose prose-neutral text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 
