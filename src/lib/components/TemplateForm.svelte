@@ -87,10 +87,25 @@ const requiredSlots = $derived(
 	}),
 );
 
+// ── Interaction type tracking ────────────────────────────────────
+let selectedInteractionType = $state<string>(untrack(() => template.interactionType ?? "chat"));
+$effect(() => {
+	selectedInteractionType = template.interactionType ?? "chat";
+});
+
+let isTranslate = $derived(selectedInteractionType === "translate");
+
 // ── UI variant tracking ──────────────────────────────────────────
 let selectedUi = $state<UiVariant>(untrack(() => (template.ui as UiVariant) ?? "reddit"));
 $effect(() => {
 	selectedUi = (template.ui as UiVariant) ?? "reddit";
+});
+
+// Auto-set UI variant and lock when interactionType is translate
+$effect(() => {
+	if (isTranslate) {
+		selectedUi = "translator";
+	}
 });
 
 // Markdown preview
@@ -219,9 +234,10 @@ function jsonStr(val: unknown): string {
 					name="interactionType"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					required
+					bind:value={selectedInteractionType}
 				>
 					{#each INTERACTION_TYPES as type}
-						<option value={type} selected={template.interactionType === type}>{INTERACTION_TYPE_LABELS[type]}</option>
+						<option value={type}>{INTERACTION_TYPE_LABELS[type]}</option>
 					{/each}
 				</select>
 				{#if form?.errors?.interactionType}
@@ -230,33 +246,41 @@ function jsonStr(val: unknown): string {
 			</div>
 
 			<div class="space-y-2">
-				<Label for="ui">UI Variant</Label>
+				<Label for="ui">UI Variant {isTranslate ? "(auto: Translator)" : ""}</Label>
 				<select
 					id="ui"
 					name="ui"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					required
 					bind:value={selectedUi}
+					disabled={isTranslate}
 				>
 					{#each UI_VARIANTS as variant}
 						<option value={variant}>{UI_VARIANT_LABELS[variant]}</option>
 					{/each}
 				</select>
+				{#if isTranslate}
+					<input type="hidden" name="ui" value="translator">
+				{/if}
 				{#if form?.errors?.ui}
 					<p class="text-sm text-red-600">{form.errors.ui[0]}</p>
 				{/if}
 			</div>
 
-			<div class="space-y-2">
-				<Label for="cadence">Cadence</Label>
-				<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-					<option value="weekly" selected={template.cadence === "weekly"}>Weekly</option>
-					<option value="daily" selected={template.cadence === "daily"}>Daily</option>
-				</select>
-				{#if form?.errors?.cadence}
-					<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
-				{/if}
-			</div>
+			{#if !isTranslate}
+				<div class="space-y-2">
+					<Label for="cadence">Cadence</Label>
+					<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+						<option value="weekly" selected={template.cadence === "weekly"}>Weekly</option>
+						<option value="daily" selected={template.cadence === "daily"}>Daily</option>
+					</select>
+					{#if form?.errors?.cadence}
+						<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
+					{/if}
+				</div>
+			{:else}
+				<input type="hidden" name="cadence" value="weekly">
+			{/if}
 
 			<div class="space-y-2">
 				<Label for="difficulty">Difficulty (1–3)</Label>
@@ -266,10 +290,12 @@ function jsonStr(val: unknown): string {
 				{/if}
 			</div>
 
-			<div class="space-y-2">
-				<Label for="maxTurns">Max Turns</Label>
-				<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ""} />
-			</div>
+			{#if !isTranslate}
+				<div class="space-y-2">
+					<Label for="maxTurns">Max Turns</Label>
+					<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ""} />
+				</div>
+			{/if}
 
 			<div class="space-y-2">
 				<Label for="estimatedWords">Estimated Words</Label>
@@ -326,19 +352,21 @@ function jsonStr(val: unknown): string {
 			<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
 		</div>
 
-		<div class="space-y-2">
-			<Label for="objectivesBase">Objectives (one per line)</Label>
-			<Textarea
-				id="objectivesBase"
-				name="objectivesBase"
-				rows={4}
-				bind:value={objectivesText}
-				placeholder="Give a convincing reason&#10;Do not over-explain&#10;Show you still value the friendship"
-			/>
-			{#if form?.errors?.objectivesBase}
-				<p class="text-sm text-red-600">{form.errors.objectivesBase[0]}</p>
-			{/if}
-		</div>
+		{#if !isTranslate}
+			<div class="space-y-2">
+				<Label for="objectivesBase">Objectives (one per line)</Label>
+				<Textarea
+					id="objectivesBase"
+					name="objectivesBase"
+					rows={4}
+					bind:value={objectivesText}
+					placeholder="Give a convincing reason&#10;Do not over-explain&#10;Show you still value the friendship"
+				/>
+				{#if form?.errors?.objectivesBase}
+					<p class="text-sm text-red-600">{form.errors.objectivesBase[0]}</p>
+				{/if}
+			</div>
+		{/if}
 
 		<div class="space-y-2">
 			<Label for="tags">Tags (comma-separated)</Label>
@@ -372,7 +400,7 @@ function jsonStr(val: unknown): string {
 	</fieldset>
 
 	<!-- Create mode: First Variant (INSIDE the form) -->
-	{#if !isEditMode}
+	{#if !isEditMode && !isTranslate}
 		<fieldset class="space-y-4 rounded-md border border-input p-4">
 			<h2 class="uppercase tracking-widest text-muted-foreground px-1">First Variant</h2>
 			<p class="text-xs text-muted-foreground">
@@ -405,7 +433,7 @@ function jsonStr(val: unknown): string {
 </form>
 
 <!-- Section C: Variants (edit mode only — separate forms, outside the main form) -->
-{#if isEditMode}
+{#if isEditMode && !isTranslate}
 	<div class="mt-8 space-y-4">
 		<div class="flex items-center justify-between">
 			<h2 class="uppercase tracking-widest text-muted-foreground">Variants</h2>
