@@ -14,8 +14,6 @@ import type {
 	translatorOpeningStateSchema,
 } from "$lib/schemas";
 
-export type { UiVariant } from "$lib/constants";
-
 // ── Types ────────────────────────────────────────────────────────────
 
 type IMessageState = z.infer<typeof imessageOpeningStateSchema>;
@@ -123,3 +121,5 @@ export function getDefaultOpeningState(ui: UiVariant): OpeningState {
 			return { sourceText: "" };
 	}
 }
+
+export type { UiVariant } from "$lib/constants";

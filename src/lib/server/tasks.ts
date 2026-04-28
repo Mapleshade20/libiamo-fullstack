@@ -4,8 +4,6 @@ import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } 
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 
-export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
-
 function resolveSlots(text: string, slots: Record<string, string>): string {
 	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {
 		// Safely check for own properties to prevent prototype leakage (e.g., __proto__)
@@ -133,3 +131,5 @@ export async function scheduleTaskManually(templateId: number, dateStr: string):
 
 	await insertTask(tpl, targetDateStr, "manual");
 }
+
+export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";

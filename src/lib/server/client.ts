@@ -1,11 +1,3 @@
-// Force disable SSL verification for self-signed certificates in development
-// This must be set before any HTTPS requests are made
-if (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") {
-	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
-
-process.env.AI_SDK_LOG_WARNINGS = "false";
-
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText } from "ai";
 import type { z } from "zod";
