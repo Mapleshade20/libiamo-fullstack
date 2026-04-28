@@ -92,8 +92,8 @@ export const templateSchema = z.object({
 				.map((s) => s.trim())
 				.filter(Boolean);
 		}),
-	// passagesBase: text → string[][] (paragraphs of sentences)
-	passagesBase: z
+	// translationBase: text → string[][] (paragraphs of sentences)
+	translationBase: z
 		.string()
 		.optional()
 		.transform((v) => {

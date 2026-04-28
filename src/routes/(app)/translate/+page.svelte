@@ -1,9 +1,11 @@
 <script lang="ts">
+import Check from "@lucide/svelte/icons/check";
 import Languages from "@lucide/svelte/icons/languages";
 import { type LanguageCode, t } from "$lib/i18n";
 
 let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
+let statusMap = $derived<Record<string, string>>(data.statusMap ?? {});
 
 let flippedId = $state<number | null>(null);
 
@@ -13,6 +15,7 @@ function toggleFlip(id: number) {
 </script>
 
 {#snippet translateCard(tpl: typeof data.templates[0])}
+	{@const status = statusMap[String(tpl.id)]}
 	<div
 		class="card-scene h-56 w-full cursor-pointer transition-transform duration-[400ms] ease-out hover:scale-[1.02] hover:-translate-y-1"
 		role="button"
@@ -27,15 +30,31 @@ function toggleFlip(id: number) {
 			>
 				<div class="flex justify-between items-center">
 					<div class="p-2.5 rounded-full bg-background/60 border border-border"><Languages size={20} strokeWidth={1} class="text-foreground" /></div>
-					<span class="flex gap-0.5">
-						{#each Array.from({ length: 3 }, (_, i) => i < tpl.difficulty) as filled}
+					<div class="flex items-center gap-2">
+						{#if status === "submitted" || status === "evaluated"}
 							<span
-								class="inline-block h-2 w-2 rounded-full {filled
-									? 'bg-muted-foreground'
-									: 'bg-border'}"
-							></span>
-						{/each}
-					</span>
+								class="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+							>
+								<Check size={10} />
+								Done
+							</span>
+						{:else if status === "draft"}
+							<span
+								class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+							>
+								Draft
+							</span>
+						{/if}
+						<span class="flex gap-0.5">
+							{#each Array.from({ length: 3 }, (_, i) => i < tpl.difficulty) as filled}
+								<span
+									class="inline-block h-2 w-2 rounded-full {filled
+										? 'bg-muted-foreground'
+										: 'bg-border'}"
+								></span>
+							{/each}
+						</span>
+					</div>
 				</div>
 				<h3 class="font-serif text-xl text-foreground leading-tight">{tpl.titleBase}</h3>
 			</div>
@@ -51,7 +70,11 @@ function toggleFlip(id: number) {
 						href="/translate/{tpl.id}"
 						class="block w-full py-2 bg-foreground text-background rounded-lg text-xs font-medium tracking-wide text-center hover:opacity-90 transition-opacity shadow-md"
 					>
-						{t(lang, "hall.enter")}
+						{status === "draft"
+							? "Continue"
+							: status === "submitted" || status === "evaluated"
+								? "View Result"
+								: t(lang, "hall.enter")}
 					</a>
 				</div>
 			</div>

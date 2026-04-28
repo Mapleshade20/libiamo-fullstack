@@ -38,7 +38,7 @@ export const template = pgTable(
 		objectivesBase: text("objectives_base").array(),
 		agentPromptBase: text("agent_prompt_base"),
 		materialsMd: text("materials_md"),
-		passagesBase: jsonb("passages_base").$type<string[][]>(),
+		translationBase: jsonb("translation_base").$type<string[][]>(),
 		tags: text("tags").array(),
 
 		maxTurns: integer("max_turns"),
@@ -125,7 +125,7 @@ export const translationAttempt = pgTable(
 		translations: jsonb("translations").$type<Record<string, string>>().notNull().default({}),
 		status: text("status").$type<"draft" | "submitted" | "evaluated">().notNull().default("draft"),
 		evaluation: jsonb("evaluation").$type<{
-			overallScore?: number;
+			overallScore?: string;
 			overallFeedback?: string;
 			highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
 		}>(),

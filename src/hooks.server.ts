@@ -1,3 +1,8 @@
+// Disable TLS verification for development (API may have self-signed/mismatched certs)
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === undefined) {
+	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 import type { Handle } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";

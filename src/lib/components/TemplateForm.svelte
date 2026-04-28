@@ -35,7 +35,7 @@ type TemplateData = {
 	agentPromptBase?: string | null;
 	materialsMd?: string | null;
 	objectivesBase?: string[] | null;
-	passagesBase?: string[][] | null;
+	translationBase?: string[][] | null;
 	tags?: string[] | null;
 };
 
@@ -403,12 +403,12 @@ function jsonStr(val: unknown): string {
 	<!-- Passages (translate mode only) -->
 	{#if isTranslate}
 		<div class="space-y-2">
-			<Label for="passagesBase">Passages (one sentence per line, empty line = new paragraph)</Label>
+			<Label for="translationBase">Source Text (one sentence per line, empty line = new paragraph)</Label>
 			<Textarea
-				id="passagesBase"
-				name="passagesBase"
+				id="translationBase"
+				name="translationBase"
 				rows={10}
-				value={(template.passagesBase ?? []).map((p) => p.join("\n")).join("\n\n")}
+				value={(template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n")}
 				placeholder="The sun was setting behind the mountains.&#10;The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank.&#10;The water reflected the fading light."
 			/>
 			<p class="text-xs text-muted-foreground">Each line = one sentence. Blank line = paragraph break.</p>

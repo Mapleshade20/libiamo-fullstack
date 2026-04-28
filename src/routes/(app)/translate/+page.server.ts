@@ -1,8 +1,8 @@
 import { redirect } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { db } from "$lib/server/db";
-import { template } from "$lib/server/db/schema";
+import { template, translationAttempt } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -21,8 +21,27 @@ export const load: PageServerLoad = async (event) => {
 		.from(template)
 		.where(and(eq(template.language, language), eq(template.ui, "translator"), eq(template.isActive, true)));
 
+	// Get latest attempt status for each template for this user
+	const attempts = await db
+		.select({
+			templateId: translationAttempt.templateId,
+			status: translationAttempt.status,
+		})
+		.from(translationAttempt)
+		.where(eq(translationAttempt.userId, user.id))
+		.orderBy(desc(translationAttempt.updatedAt));
+
+	// Map: templateId → latest status
+	const statusMap = new Map<number, string>();
+	for (const a of attempts) {
+		if (!statusMap.has(a.templateId)) {
+			statusMap.set(a.templateId, a.status);
+		}
+	}
+
 	return {
 		templates,
 		language,
+		statusMap: Object.fromEntries(statusMap),
 	};
 };
