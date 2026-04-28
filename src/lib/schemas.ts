@@ -92,6 +92,23 @@ export const templateSchema = z.object({
 				.map((s) => s.trim())
 				.filter(Boolean);
 		}),
+	// passagesBase: text → string[][] (paragraphs of sentences)
+	passagesBase: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return null;
+			const paragraphs = v
+				.split(/\n\s*\n/)
+				.map((para) =>
+					para
+						.split("\n")
+						.map((s) => s.trim())
+						.filter(Boolean),
+				)
+				.filter((para) => para.length > 0);
+			return paragraphs.length > 0 ? paragraphs : null;
+		}),
 	// tags: comma-separated string → string[]
 	tags: z
 		.string()

@@ -48,7 +48,7 @@ function toggleFlip(id: number) {
 				</div>
 				<div class="space-y-2.5">
 					<a
-						href="/task/{tpl.id}"
+						href="/translate/{tpl.id}"
 						class="block w-full py-2 bg-foreground text-background rounded-lg text-xs font-medium tracking-wide text-center hover:opacity-90 transition-opacity shadow-md"
 					>
 						{t(lang, "hall.enter")}

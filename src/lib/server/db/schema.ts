@@ -38,6 +38,7 @@ export const template = pgTable(
 		objectivesBase: text("objectives_base").array(),
 		agentPromptBase: text("agent_prompt_base"),
 		materialsMd: text("materials_md"),
+		passagesBase: jsonb("passages_base").$type<string[][]>(),
 		tags: text("tags").array(),
 
 		maxTurns: integer("max_turns"),
@@ -110,6 +111,33 @@ export const task = pgTable(
 	],
 );
 
+// ── translationAttempt ──────────────────────────────────────────────
+export const translationAttempt = pgTable(
+	"translation_attempt",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		templateId: integer("template_id")
+			.notNull()
+			.references(() => template.id),
+		translations: jsonb("translations").$type<Record<string, string>>().notNull().default({}),
+		status: text("status").$type<"draft" | "submitted" | "evaluated">().notNull().default("draft"),
+		evaluation: jsonb("evaluation").$type<{
+			overallScore?: number;
+			overallFeedback?: string;
+			highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
+		}>(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [index("translation_attempt_user_template_idx").on(t.userId, t.templateId)],
+);
+
 // ── Relations ────────────────────────────────────────────────────────
 export const userLearningProfileRelations = relations(userLearningProfile, ({ one }) => ({
 	user: one(user, {
@@ -133,6 +161,17 @@ export const templateVariantRelations = relations(templateVariant, ({ one, many 
 		references: [template.id],
 	}),
 	tasks: many(task),
+}));
+
+export const translationAttemptRelations = relations(translationAttempt, ({ one }) => ({
+	user: one(user, {
+		fields: [translationAttempt.userId],
+		references: [user.id],
+	}),
+	template: one(template, {
+		fields: [translationAttempt.templateId],
+		references: [template.id],
+	}),
 }));
 
 export const taskRelations = relations(task, ({ one }) => ({

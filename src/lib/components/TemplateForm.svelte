@@ -35,6 +35,7 @@ type TemplateData = {
 	agentPromptBase?: string | null;
 	materialsMd?: string | null;
 	objectivesBase?: string[] | null;
+	passagesBase?: string[][] | null;
 	tags?: string[] | null;
 };
 
@@ -398,6 +399,21 @@ function jsonStr(val: unknown): string {
 			{/if}
 		</div>
 	</fieldset>
+
+	<!-- Passages (translate mode only) -->
+	{#if isTranslate}
+		<div class="space-y-2">
+			<Label for="passagesBase">Passages (one sentence per line, empty line = new paragraph)</Label>
+			<Textarea
+				id="passagesBase"
+				name="passagesBase"
+				rows={10}
+				value={(template.passagesBase ?? []).map((p) => p.join("\n")).join("\n\n")}
+				placeholder="The sun was setting behind the mountains.&#10;The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank.&#10;The water reflected the fading light."
+			/>
+			<p class="text-xs text-muted-foreground">Each line = one sentence. Blank line = paragraph break.</p>
+		</div>
+	{/if}
 
 	<!-- Create mode: First Variant (INSIDE the form) -->
 	{#if !isEditMode && !isTranslate}
