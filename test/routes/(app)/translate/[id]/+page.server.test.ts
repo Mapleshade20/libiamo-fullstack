@@ -10,12 +10,13 @@ const { mockLimit, mockOrderBy, mockWhere, mockSelect, mockUpdate, mockSet, mock
 	const mockFrom = vi.fn<() => any>(() => ({ where: mockWhere }));
 	const mockSelect = vi.fn<() => any>(() => ({ from: mockFrom }));
 
-	const mockUpdateWhere = vi.fn();
+	const mockReturning = vi.fn<() => any>();
+
+	const mockUpdateWhere = vi.fn<() => any>(() => ({ returning: mockReturning }));
 	const mockSet = vi.fn<() => any>();
 	mockSet.mockReturnValue({ where: mockUpdateWhere });
 	const mockUpdate = vi.fn<() => any>(() => ({ set: mockSet, where: mockUpdateWhere }));
 
-	const mockReturning = vi.fn<() => any>();
 	const mockValues = vi.fn<() => any>(() => ({ returning: mockReturning }));
 	const mockInsert = vi.fn<() => any>(() => ({ values: mockValues }));
 
@@ -205,13 +206,26 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.status).toBe(400);
 		});
 
+		it("returns 404 when template not found", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([]);
+			const result = (await actions.saveDraft(createActionEvent({ translations: '{"0-0":"hello"}' }, { id: "999" }))) as any;
+			expect(result.status).toBe(404);
+		});
+
 		it("updates existing draft when attemptId provided", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ id: 1 }]);
+			mockReturning.mockResolvedValueOnce([{ id: 42 }]);
 			const result = await actions.saveDraft(createActionEvent({ translations: '{"0-0":"hello"}', attemptId: "42" }, { id: "1" }));
 			expect(result).toEqual({ success: true });
 			expect(mockSet).toHaveBeenCalled();
 		});
 
 		it("creates new draft when no attemptId", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ id: 1 }]);
+			mockReturning.mockResolvedValueOnce([{ id: 1 }]);
 			const result = await actions.saveDraft(createActionEvent({ translations: '{"0-0":"hello"}' }, { id: "1" }));
 			expect(result).toEqual({ success: true });
 			expect(mockInsert).toHaveBeenCalled();
@@ -239,6 +253,13 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 400 for invalid JSON translations", async () => {
 			const result = (await actions.submit(createActionEvent({ translations: "bad" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 404 when template not found", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([]);
+			const result = (await actions.submit(createActionEvent({ translations: '{"0-0":"hello"}' }, { id: "999" }))) as any;
+			expect(result.status).toBe(404);
 		});
 
 		it("evaluates and marks as evaluated on success", async () => {
@@ -361,7 +382,8 @@ describe("(app) translate/[id] +page.server", () => {
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "es" }]);
 
-			// No mockReturning needed — should use update path instead of insert
+			// Update path returning (scoped update with userId + templateId)
+			mockReturning.mockResolvedValueOnce([{ id: 55 }]);
 
 			// LLM returns valid evaluation
 			const evaluation = { overallScore: "A", overallFeedback: "Perfect" };

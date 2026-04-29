@@ -14,14 +14,17 @@ function toggleFlip(id: number) {
 }
 </script>
 
-{#snippet translateCard(tpl: typeof data.templates[0])}
+{#snippet translateCard(tpl: typeof data.templates[number])}
 	{@const status = statusMap[String(tpl.id)]}
 	<div
 		class="card-scene h-56 w-full cursor-pointer transition-transform duration-[400ms] ease-out hover:scale-[1.02] hover:-translate-y-1"
 		role="button"
 		tabindex="0"
 		onclick={() => toggleFlip(tpl.id)}
-		onkeydown={(e) => e.key === "Enter" && toggleFlip(tpl.id)}
+		onkeydown={(e) => {
+			if (e.key === " " || e.key === "Spacebar") { e.preventDefault(); toggleFlip(tpl.id); }
+			else if (e.key === "Enter") { toggleFlip(tpl.id); }
+		}}
 	>
 		<div class="card-inner w-full h-full" class:is-flipped={flippedId === tpl.id}>
 			<!-- Front -->

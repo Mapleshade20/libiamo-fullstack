@@ -6,9 +6,54 @@ import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async (event) => {
+/** Throw redirect if user is not authenticated */
+function requireUser(event: { locals: App.Locals }) {
 	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
+	if (!user) throw redirect(302, "/sign-in");
+	return user;
+}
+
+/** Parse translations and attemptId from form data */
+function parseTranslationsForm(
+	formData: FormData,
+): { ok: true; translations: Record<string, string>; attemptId: number | null } | { ok: false; error: string } {
+	const raw = formData.get("translations");
+	if (!raw || typeof raw !== "string") {
+		return { ok: false, error: "Missing translations" };
+	}
+	let translations: Record<string, string>;
+	try {
+		translations = JSON.parse(raw);
+	} catch {
+		return { ok: false, error: "Invalid translations JSON" };
+	}
+	const attemptIdRaw = formData.get("attemptId");
+	const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
+	return { ok: true, translations, attemptId };
+}
+
+/** Insert a new attempt or update an existing one, returning the record ID */
+async function upsertAttempt(userId: string, templateId: number, translations: Record<string, string>, attemptId: number | null): Promise<number> {
+	if (attemptId && !Number.isNaN(attemptId)) {
+		const [updated] = await db
+			.update(translationAttempt)
+			.set({ translations, updatedAt: new Date() })
+			.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.userId, userId), eq(translationAttempt.templateId, templateId)))
+			.returning({ id: translationAttempt.id });
+		if (!updated) {
+			throw error(403, "Attempt not found or not owned by user");
+		}
+		return updated.id;
+	}
+	const [inserted] = await db
+		.insert(translationAttempt)
+		.values({ userId, templateId, translations, status: "draft" })
+		.returning({ id: translationAttempt.id });
+	return inserted.id;
+}
+
+export const load: PageServerLoad = async (event) => {
+	const user = requireUser(event);
 
 	const templateId = Number(event.params.id);
 	if (Number.isNaN(templateId)) {
@@ -145,64 +190,34 @@ ${translationLines}`;
 
 export const actions: Actions = {
 	saveDraft: async (event) => {
-		const user = event.locals.user;
-		if (!user) return redirect(302, "/sign-in");
+		const user = requireUser(event);
 
 		const templateId = Number(event.params.id);
 		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
 
-		const form = await event.request.formData();
-		const translationsRaw = form.get("translations");
-		if (!translationsRaw || typeof translationsRaw !== "string") {
-			return fail(400, { error: "Missing translations" });
-		}
+		const parsed = parseTranslationsForm(await event.request.formData());
+		if (!parsed.ok) return fail(400, { error: parsed.error });
 
-		let translations: Record<string, string>;
-		try {
-			translations = JSON.parse(translationsRaw);
-		} catch {
-			return fail(400, { error: "Invalid translations JSON" });
-		}
+		// Verify template exists and is a translate template
+		const [tpl] = await db
+			.select({ id: template.id })
+			.from(template)
+			.where(and(eq(template.id, templateId), eq(template.interactionType, "translate"), eq(template.isActive, true)))
+			.limit(1);
+		if (!tpl) return fail(404, { error: "Template not found" });
 
-		const attemptIdRaw = form.get("attemptId");
-		const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
-
-		if (attemptId && !Number.isNaN(attemptId)) {
-			await db.update(translationAttempt).set({ translations, updatedAt: new Date() }).where(eq(translationAttempt.id, attemptId));
-		} else {
-			await db.insert(translationAttempt).values({
-				userId: user.id,
-				templateId,
-				translations,
-				status: "draft",
-			});
-		}
-
+		await upsertAttempt(user.id, templateId, parsed.translations, parsed.attemptId);
 		return { success: true };
 	},
 
 	submit: async (event) => {
-		const user = event.locals.user;
-		if (!user) return redirect(302, "/sign-in");
+		const user = requireUser(event);
 
 		const templateId = Number(event.params.id);
 		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
 
-		const form = await event.request.formData();
-		const translationsRaw = form.get("translations");
-		if (!translationsRaw || typeof translationsRaw !== "string") {
-			return fail(400, { error: "Missing translations" });
-		}
-
-		let translations: Record<string, string>;
-		try {
-			translations = JSON.parse(translationsRaw);
-		} catch {
-			return fail(400, { error: "Invalid translations JSON" });
-		}
-
-		const attemptIdRaw = form.get("attemptId");
-		const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
+		const parsed = parseTranslationsForm(await event.request.formData());
+		if (!parsed.ok) return fail(400, { error: parsed.error });
 
 		// Fetch the template to get passages and agent prompt for evaluation
 		const [tpl] = await db
@@ -214,29 +229,15 @@ export const actions: Actions = {
 			.where(eq(template.id, templateId))
 			.limit(1);
 
-		// Save translations first (keep as draft until evaluation succeeds)
-		let recordId: number;
-		if (attemptId && !Number.isNaN(attemptId)) {
-			await db.update(translationAttempt).set({ translations, updatedAt: new Date() }).where(eq(translationAttempt.id, attemptId));
-			recordId = attemptId;
-		} else {
-			const [inserted] = await db
-				.insert(translationAttempt)
-				.values({
-					userId: user.id,
-					templateId,
-					translations,
-					status: "draft",
-				})
-				.returning({ id: translationAttempt.id });
-			recordId = inserted.id;
-		}
+		if (!tpl) return fail(404, { error: "Template not found" });
+
+		const recordId = await upsertAttempt(user.id, templateId, parsed.translations, parsed.attemptId);
 
 		// Evaluate via Agent API using the global hardcoded prompt
 		if (tpl?.translationBase) {
 			try {
 				const evalPrompt = buildTranslationEvalPrompt(tpl.language as LanguageCode);
-				const evaluation = await evaluateTranslation(evalPrompt, tpl.translationBase as string[][], translations);
+				const evaluation = await evaluateTranslation(evalPrompt, tpl.translationBase as string[][], parsed.translations);
 				await db
 					.update(translationAttempt)
 					.set({ status: "evaluated", evaluation, updatedAt: new Date() })

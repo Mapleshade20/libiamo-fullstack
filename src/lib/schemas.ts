@@ -200,7 +200,7 @@ export const ao3OpeningStateSchema = z.object({
 });
 
 export const translatorOpeningStateSchema = z.object({
-	sourceText: z.string(),
+	sourceText: z.string().min(1, "Source text is required"),
 });
 
 // ── Opening state editor metadata ─────────────────────────────────────

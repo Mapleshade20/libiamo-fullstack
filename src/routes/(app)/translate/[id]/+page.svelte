@@ -360,7 +360,7 @@ async function handleSubmit() {
 											role="button"
 											tabindex={submitted ? -1 : 0}
 											onclick={() => { if (!submitted) toggleSentence(key); }}
-											onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !submitted) toggleSentence(key); }}
+											onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !submitted) { e.preventDefault(); toggleSentence(key); } }}
 											class="w-full text-left rounded-lg px-3 py-2 transition-colors {submitted ? 'cursor-default' : 'cursor-pointer'} {done && !submitted
 												? 'bg-foreground/5'
 												: ''} {activeKey === key && !submitted
