@@ -38,6 +38,11 @@ vi.mock("$lib/server/email", () => ({
 	sendEmail: mockSendEmail,
 }));
 
+vi.mock("$lib/server/email-templates", () => ({
+	emailVerificationHtml: vi.fn((email: string, url: string) => `<html>verify ${email} ${url}</html>`),
+	resetPasswordHtml: vi.fn((email: string, url: string) => `<html>reset ${email} ${url}</html>`),
+}));
+
 describe("auth server configuration", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -77,6 +82,7 @@ describe("auth server configuration", () => {
 			text: expect.stringContaining(
 				"Click the link to verify your email: https://example.com/verify-token?callbackURL=%2Fverify%3Fsuccess%3D1&errorURL=%2Fverify",
 			),
+			html: expect.any(String),
 		});
 	});
 
@@ -93,6 +99,7 @@ describe("auth server configuration", () => {
 			to: "learner@example.com",
 			subject: "Reset your password",
 			text: "Click the link to reset your password: https://example.com/reset-token",
+			html: expect.any(String),
 		});
 	});
 });

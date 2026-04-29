@@ -5,6 +5,7 @@ import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
 import { db } from "$lib/server/db";
 import { sendEmail } from "$lib/server/email";
+import { emailVerificationHtml, resetPasswordHtml } from "$lib/server/email-templates";
 
 export const auth = betterAuth({
 	baseURL: env.ORIGIN,
@@ -19,6 +20,7 @@ export const auth = betterAuth({
 				to: user.email,
 				subject: "Reset your password",
 				text: `Click the link to reset your password: ${url}`,
+				html: resetPasswordHtml(user.email, url),
 			});
 		},
 	},
@@ -34,6 +36,7 @@ export const auth = betterAuth({
 				to: user.email,
 				subject: "Verify your email address",
 				text: `Click the link to verify your email: ${urlObj.toString()}`,
+				html: emailVerificationHtml(user.email, urlObj.toString()),
 			});
 		},
 	},
