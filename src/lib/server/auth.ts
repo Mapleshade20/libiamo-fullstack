@@ -4,8 +4,7 @@ import { sveltekitCookies } from "better-auth/svelte-kit";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
 import { db } from "$lib/server/db";
-import { sendEmail } from "$lib/server/email";
-import { emailVerificationHtml, resetPasswordHtml } from "$lib/server/email-templates";
+import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/email";
 
 export const auth = betterAuth({
 	baseURL: env.ORIGIN,
@@ -14,11 +13,12 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
+		resetPasswordTokenExpiresIn: 3600,
 		minPasswordLength: 8,
 		sendResetPassword: async ({ user, url }) => {
 			void sendEmail({
 				to: user.email,
-				subject: "Reset your password",
+				subject: "Libiamo | Reset your password",
 				text: `Click the link to reset your password: ${url}`,
 				html: resetPasswordHtml(user.email, url),
 			});
@@ -28,13 +28,14 @@ export const auth = betterAuth({
 		sendOnSignUp: true,
 		sendOnSignIn: true, // send verification email on sign in if email not verified
 		autoSignInAfterVerification: true,
+		expiresIn: 3600,
 		sendVerificationEmail: async ({ user, url }) => {
 			const urlObj = new URL(url);
 			urlObj.searchParams.set("callbackURL", "/verify?success=1");
 			urlObj.searchParams.set("errorURL", "/verify"); // back to verify page when error
 			void sendEmail({
 				to: user.email,
-				subject: "Verify your email address",
+				subject: "Libiamo | Verify your email address",
 				text: `Click the link to verify your email: ${urlObj.toString()}`,
 				html: emailVerificationHtml(user.email, urlObj.toString()),
 			});
