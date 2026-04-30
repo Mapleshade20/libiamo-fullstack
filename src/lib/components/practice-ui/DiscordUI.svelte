@@ -1,11 +1,8 @@
 <script lang="ts">
-import AlertCircle from "@lucide/svelte/icons/alert-circle";
-import Bell from "@lucide/svelte/icons/bell";
 import CheckCircle from "@lucide/svelte/icons/check-circle";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
-import Gift from "@lucide/svelte/icons/gift";
 import Hash from "@lucide/svelte/icons/hash";
-import Headphones from "@lucide/svelte/icons/headphones";
+import HelpCircle from "@lucide/svelte/icons/help-circle";
 import Info from "@lucide/svelte/icons/info";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import LogOut from "@lucide/svelte/icons/log-out";
@@ -16,13 +13,24 @@ import Settings from "@lucide/svelte/icons/settings";
 import Smile from "@lucide/svelte/icons/smile";
 import Sticker from "@lucide/svelte/icons/sticker";
 import Users from "@lucide/svelte/icons/users";
+import Menu from "@lucide/svelte/icons/menu";
 import { onMount, tick } from "svelte";
-import { fade } from "svelte/transition";
+import { fade, slide, fly } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+
 import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
-import { COMMON_EMOJIS } from "./emojis";
+import { i18n } from "./i18n";
+import { type DiscordOpeningState, type DiscordUser, type TutorFeedback, type ObjectiveResult } from "./types";
 import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./mockData";
+
+import EmojiPicker from "../EmojiPicker.svelte";
+import MarkdownRenderer from "../MarkdownRenderer.svelte";
+import ResizeableTextarea from "../ResizeableTextarea.svelte";
+import { normalizeText, formatTime, getTodayDateString } from "../utils/messageUtils";
+import { normalizeEmojiTextForDisplay, extractEmojiFromPickerEvent } from "../utils/emojiUtils";
+import { isTurnLimitReached, getTurnLimitMessage } from "../utils/sessionUtils";
+import { prepareMarkdownText } from "../utils/markdownUtils";
 
 interface Props {
 	taskId?: string | number;
@@ -31,136 +39,21 @@ interface Props {
 	language?: string;
 	existingSession?: any;
 	openingState?: unknown;
+	maxTurns?: number;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", existingSession = null, openingState = null }: Props = $props();
+let {
+	taskId = "",
+	userName = "Learner",
+	avatarUrl = "",
+	language = "en",
+	existingSession = null,
+	openingState = null,
+	maxTurns = 0,
+}: Props = $props();
 
-const i18n = {
-	en: {
-		textChannels: "TEXT CHANNELS",
-		voiceChannels: "VOICE CHANNELS",
-		general: "general",
-		online: "Online",
-		offline: "Offline",
-		messagePlaceholder: "Message #{channel}",
-		returnTask: "Return to Task",
-		unavailableFeature: "In the immersive learning context, this feature is unavailable.",
-		questCompleted: "Quest Completed",
-		tutorReport: "Tutor Evaluation Report",
-		overallFeedback: "Overall Feedback",
-		objectiveAssessment: "Objective Assessment",
-		closeReview: "Close & Review Chat",
-		returnHall: "Return to Hall",
-		evaluating: "Evaluating...",
-		finishTask: "Finish Task",
-		getHint: "Get Hint",
-		hintTitle: "Suggested Replies",
-		thinking: "Tutor is thinking...",
-		earlier: "Earlier",
-		retryFailedMessage: "Agent reply failed. Click Retry to try again.",
-		retryInputPlaceholder: "Agent reply failed. Use Retry.",
-		retry: "Retry",
-		stillProcessingMessage: "Agent is still processing. Retry in a moment.",
-	},
-	es: {
-		textChannels: "CANALES DE TEXTO",
-		voiceChannels: "CANALES DE VOZ",
-		general: "general",
-		online: "En línea",
-		offline: "Desconectado",
-		messagePlaceholder: "Enviar mensaje a #{channel}",
-		returnTask: "Volver a la tarea",
-		unavailableFeature: "En el contexto de aprendizaje inmersivo, esta función no está disponible.",
-		questCompleted: "Misión Completada",
-		tutorReport: "Informe de Evaluación del Tutor",
-		overallFeedback: "Comentarios Generales",
-		objectiveAssessment: "Evaluación de Objetivos",
-		closeReview: "Cerrar y Revisar Chat",
-		returnHall: "Volver al Salón",
-		evaluating: "Evaluando...",
-		finishTask: "Terminar Tarea",
-		getHint: "Obtener sugerencia",
-		hintTitle: "Sugerencias de respuesta",
-		thinking: "El tutor está pensando...",
-		earlier: "Antes",
-		retryFailedMessage: "La respuesta del agente falló. Haz clic en Reintentar para volver a intentarlo.",
-		retryInputPlaceholder: "La respuesta del agente falló. Usa Reintentar.",
-		retry: "Reintentar",
-		stillProcessingMessage: "El agente todavía está procesando. Reintenta en un momento.",
-	},
-	fr: {
-		textChannels: "SALONS TEXTUELS",
-		voiceChannels: "SALONS VOCAUX",
-		general: "général",
-		online: "En ligne",
-		offline: "Hors ligne",
-		messagePlaceholder: "Envoyer un message à #{channel}",
-		returnTask: "Retour à la tâche",
-		unavailableFeature: "Dans le contexte d'apprentissage immersif, cette fonctionnalité n'est pas disponible.",
-		questCompleted: "Quête Terminée",
-		tutorReport: "Rapport d'Évaluation du Tuteur",
-		overallFeedback: "Commentaires Généraux",
-		objectiveAssessment: "Évaluation des Objectifs",
-		closeReview: "Fermer et Revoir le Chat",
-		returnHall: "Retour au Hall",
-		evaluating: "Évaluation...",
-		finishTask: "Terminer la Tâche",
-		getHint: "Obtenir un indice",
-		hintTitle: "Suggestions de réponse",
-		thinking: "Le tuteur réfléchit...",
-		earlier: "Plus tôt",
-		retryFailedMessage: "La réponse de l'agent a échoué. Cliquez sur Réessayer pour réessayer.",
-		retryInputPlaceholder: "La réponse de l'agent a échoué. Utilisez Réessayer.",
-		retry: "Réessayer",
-		stillProcessingMessage: "L'agent traite encore la demande. Réessayez dans un instant.",
-	},
-	ja: {
-		textChannels: "テキストチャンネル",
-		voiceChannels: "ボイスチャンネル",
-		general: "一般",
-		online: "オンライン",
-		offline: "オフライン",
-		messagePlaceholder: "#{channel} へメッセージを送信",
-		returnTask: "タスクに戻る",
-		unavailableFeature: "没入型学習コンテキストでは、この機能は利用できません。",
-		questCompleted: "クエスト完了",
-		tutorReport: "チューター評価レポート",
-		overallFeedback: "総合フィードバック",
-		objectiveAssessment: "目標評価",
-		closeReview: "閉じてチャットを確認",
-		returnHall: "ホールに戻る",
-		evaluating: "評価中...",
-		finishTask: "タスクを終了",
-		getHint: "ヒントを得る",
-		hintTitle: "おすすめの返信",
-		thinking: "チューターが考え中...",
-		earlier: "先ほど",
-		retryFailedMessage: "エージェントの返信に失敗しました。再試行を押してもう一度お試しください。",
-		retryInputPlaceholder: "エージェントの返信に失敗しました。再試行を使用してください。",
-		retry: "再試行",
-		stillProcessingMessage: "エージェントはまだ処理中です。少し待ってから再試行してください。",
-	},
-};
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
-
-type DiscordOpeningState = {
-	serverName?: string;
-	channelName?: string;
-	previousMessages?: Array<{
-		sender?: string;
-		author?: string;
-		text?: string;
-		content?: string;
-	}>;
-};
-
 const openingStateData = $derived((openingState ?? {}) as DiscordOpeningState);
-
-function normalizeText(value: unknown, fallback: string) {
-	if (typeof value !== "string") return fallback;
-	const trimmed = value.trim();
-	return trimmed || fallback;
-}
 
 const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
 const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
@@ -176,19 +69,7 @@ const serverAcronym = $derived(
 
 type Message = DiscordSessionMessage;
 
-type ObjectiveResult = { text: string; grade: "A" | "B" | "C" };
-type TutorFeedback = {
-	content: string;
-	objectiveResults: ObjectiveResult[];
-};
-type DiscordUser = {
-	id: string;
-	name: string;
-	status: string;
-	color: string;
-	isAgent: boolean;
-};
-
+let showMobileMenu = $state(false); // for mobile responsiveness
 let sessionId = $state<number | null>(null);
 let lastLoadedSessionId = $state<number | null>(null);
 let isSubmitting = $state(false);
@@ -234,6 +115,16 @@ let showEmojiPicker = $state(false);
 let isWaitingRetry = $state(false);
 const retryResolvers = new Map<string, () => void>();
 const AGENT_REPLY_TIMEOUT_MS = 25_000;
+const userMessageCount = $derived(messages.filter((m) => m.role === "user").length);
+const limitReached = $derived(isTurnLimitReached(userMessageCount, maxTurns ?? 0));
+
+function handleEmojiSelected(event: CustomEvent | Event) {
+	const emoji = extractEmojiFromPickerEvent(event);
+	if (emoji) {
+		inputText += emoji;
+	}
+	showEmojiPicker = false;
+}
 
 function updateMessageById(messageId: string, updater: (message: Message) => Message) {
 	messages = messages.map((message) => (message.id === messageId ? updater(message) : message));
@@ -573,21 +464,6 @@ async function scrollToBottom() {
 	if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-function formatTime(date: Date) {
-	return date.toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
-
-function getTodayDateString() {
-	return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, {
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	}).format(new Date());
-}
-
 async function handleComplete() {
 	if (!sessionId || isCompleting || isCompleted) return;
 	isCompleting = true;
@@ -615,9 +491,10 @@ async function handleComplete() {
 }
 
 async function handleSend() {
-	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId) return;
+	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
 
-	const currentText = inputText;
+	// Use prepareMarkdownText to format the input before clearing it
+	const currentText = prepareMarkdownText(inputText);
 	const clientMessageId = crypto.randomUUID();
 	let failedAgentMessageId: string | null = null;
 	inputText = "";
@@ -630,7 +507,7 @@ async function handleSend() {
 		{
 			id: crypto.randomUUID(),
 			role: "user",
-			text: currentText,
+			text: currentText, // using the formatted markdown text
 			timestamp: formatTime(new Date()),
 			authorName: userName,
 			avatar: avatarUrl,
@@ -744,50 +621,6 @@ async function handleSend() {
 	}
 }
 
-function handleInput() {
-	if (!inputRef) return;
-	const cursor = inputRef.selectionStart || 0;
-	const textBeforeCursor = inputText.slice(0, cursor);
-	const match = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
-
-	if (match) {
-		mentionQuery = match[1];
-		showMentionMenu = true;
-		mentionIndex = 0;
-	} else {
-		showMentionMenu = false;
-	}
-}
-
-function handleKeydown(e: KeyboardEvent) {
-	if (showMentionMenu && filteredMentionUsers.length > 0) {
-		if (e.key === "ArrowDown") {
-			e.preventDefault();
-			mentionIndex = (mentionIndex + 1) % filteredMentionUsers.length;
-			return;
-		}
-		if (e.key === "ArrowUp") {
-			e.preventDefault();
-			mentionIndex = (mentionIndex - 1 + filteredMentionUsers.length) % filteredMentionUsers.length;
-			return;
-		}
-		if (e.key === "Enter" || e.key === "Tab") {
-			e.preventDefault();
-			insertMention(filteredMentionUsers[mentionIndex]);
-			return;
-		}
-		if (e.key === "Escape") {
-			showMentionMenu = false;
-			return;
-		}
-	}
-
-	if (e.key === "Enter" && !e.shiftKey) {
-		e.preventDefault();
-		handleSend();
-	}
-}
-
 function insertMention(user: DiscordUser) {
 	if (!inputRef) return;
 	const cursor = inputRef.selectionStart || 0;
@@ -805,24 +638,6 @@ function insertMention(user: DiscordUser) {
 			inputRef?.setSelectionRange(newCursor, newCursor);
 		}, 0);
 	}
-}
-
-function insertEmoji(emoji: string) {
-	if (!inputRef) {
-		inputText += emoji;
-		return;
-	}
-	const cursor = inputRef.selectionStart || 0;
-	const textBeforeCursor = inputText.slice(0, cursor);
-	const textAfterCursor = inputText.slice(cursor);
-
-	inputText = `${textBeforeCursor}${emoji}${textAfterCursor}`;
-
-	setTimeout(() => {
-		inputRef?.focus();
-		const newCursor = cursor + emoji.length;
-		inputRef?.setSelectionRange(newCursor, newCursor);
-	}, 0);
 }
 
 function handleContextMenu(e: MouseEvent, user: DiscordUser) {
@@ -862,11 +677,14 @@ function handleMockAction() {
 }
 </script>
 
+<!-- Global click handler for closing menus/pickers -->
 <svelte:window onclick={handleWindowClick} />
 
 <div
-	class="fixed inset-0 z-[999] flex h-screen w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white"
+	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
 >
+	<!-- 1. MODALS & OVERLAYS -->
+	<!-- Evaluation/Feedback Modal -->
 	{#if showEvaluationModal && feedback}
 		<div transition:fade={{ duration: 200 }} class="absolute inset-0 z-[2000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
 			<div class="bg-[#2B2D31] border border-[#1E1F22] rounded-xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col transform transition-all">
@@ -875,13 +693,11 @@ function handleMockAction() {
 					<h2 class="text-2xl font-black text-white uppercase tracking-wide drop-shadow-md">{t.questCompleted}</h2>
 					<p class="text-green-100 mt-1 font-medium text-sm">{t.tutorReport}</p>
 				</div>
-
 				<div class="p-6 overflow-y-auto max-h-[50vh] hide-scrollbar bg-[#313338]">
 					<h3 class="text-xs font-black text-[#949BA4] uppercase mb-2 tracking-wider">{t.overallFeedback}</h3>
 					<p class="text-[#DBDEE1] text-[15px] leading-relaxed whitespace-pre-wrap mb-8 bg-[#2B2D31] p-4 rounded-lg border border-[#1E1F22]">
 						{feedback.content}
 					</p>
-
 					{#if feedback.objectiveResults && feedback.objectiveResults.length > 0}
 						<h3 class="text-xs font-black text-[#949BA4] uppercase mb-3 tracking-wider">{t.objectiveAssessment}</h3>
 						<div class="space-y-2">
@@ -889,21 +705,14 @@ function handleMockAction() {
 								<div class="flex items-center justify-between bg-[#2B2D31] p-3 rounded-lg border border-[#1E1F22] shadow-sm">
 									<span class="text-[14px] text-[#DBDEE1] font-medium pr-4 leading-snug">{obj.text}</span>
 									<span
-										class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-black shadow-inner {obj.grade ===
-										'A'
-											? 'bg-[#23A559] text-white'
-											: obj.grade === 'B'
-												? 'bg-[#FEE75C] text-black'
-												: 'bg-[#DA373C] text-white'}"
+										class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-black shadow-inner {obj.grade === 'A' ? 'bg-[#23A559] text-white' : obj.grade === 'B' ? 'bg-[#FEE75C] text-black' : 'bg-[#DA373C] text-white'}"
+										>{obj.grade}</span
 									>
-										{obj.grade}
-									</span>
 								</div>
 							{/each}
 						</div>
 					{/if}
 				</div>
-
 				<div class="p-5 bg-[#2B2D31] border-t border-[#1E1F22] flex justify-end gap-3">
 					<button
 						type="button"
@@ -915,13 +724,14 @@ function handleMockAction() {
 					<a
 						href="/"
 						class="px-6 py-2 rounded-md font-bold text-sm text-white bg-[#5865F2] hover:bg-[#4752C4] shadow-md transition-colors flex items-center gap-2"
+						>{t.returnHall}</a
 					>
-						{t.returnHall}
-					</a>
 				</div>
 			</div>
 		</div>
 	{/if}
+
+	<!-- Context Menu for @mentions -->
 	{#if contextMenu.show && contextMenu.targetUser}
 		<div
 			class="fixed z-[1000] bg-[#111214] border border-[#1E1F22] rounded shadow-lg py-1 w-48 text-sm text-[#DBDEE1]"
@@ -937,6 +747,7 @@ function handleMockAction() {
 		</div>
 	{/if}
 
+	<!-- Toast Notifications -->
 	{#if showToast}
 		<div
 			transition:fade={{ duration: 150 }}
@@ -947,87 +758,117 @@ function handleMockAction() {
 		</div>
 	{/if}
 
-	<div class="flex w-[72px] flex-col items-center gap-2 overflow-y-auto bg-[#1E1F22] py-3 hide-scrollbar">
-		<a
-			href={`/task/${taskId}`}
-			class="group relative flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] transition-all hover:rounded-[16px] overflow-hidden shadow-sm text-[#DBDEE1] hover:text-white hover:bg-[#DA373C]"
-			title={t.returnTask}
-		>
-			<LogOut size={22} class="mr-0.5" />
-		</a>
-		<div class="h-[2px] w-8 rounded-full bg-[#35363C]"></div>
-		<button type="button" class="relative flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#5865F2] text-white transition-all">
-			<div class="absolute -left-3 top-2 h-8 w-1 rounded-r-full bg-white"></div>
-			<span class="text-sm font-medium">{serverAcronym}</span>
+	<!-- 2. MOBILE TOP BAR -->
+	<div class="flex h-12 w-full shrink-0 items-center justify-between border-b border-[#1F2023] bg-[#2B2D31] px-4 md:hidden">
+		<button type="button" onclick={() => (showMobileMenu = !showMobileMenu)} class="text-[#B5BAC1] hover:text-white">
+			<Menu size={24} />
 		</button>
-		<button
-			type="button"
-			class="flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] text-[#23A559] transition-all hover:rounded-[16px] hover:bg-[#23A559] hover:text-white"
-			onclick={handleMockAction}
-		>
-			<Plus size={24} />
-		</button>
+		<span class="font-bold text-white truncate px-4">{serverName}</span>
+		<div class="w-6"></div>
 	</div>
 
-	<div class="flex w-60 flex-col bg-[#2B2D31]">
-		<button
-			type="button"
-			class="flex h-12 items-center justify-between border-b border-[#1F2023] px-4 font-semibold shadow-sm transition-colors hover:bg-[#35373C]"
-			onclick={handleMockAction}
-		>
-			<span class="truncate">{serverName}</span>
-			<ChevronDown size={18} />
-		</button>
-		<div class="flex-1 overflow-y-auto p-2 hide-scrollbar">
+	<!-- 3. SIDEBAR SECTION (Responsive) -->
+	<div
+		class="fixed inset-0 z-[1001] flex md:relative md:flex h-full transition-transform duration-300 md:translate-x-0 {showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}"
+	>
+		{#if showMobileMenu}
+			<div
+				role="button"
+				tabindex="-1"
+				class="fixed inset-0 bg-black/60 md:hidden -z-10"
+				style="width: 100vw; height: 100vh;"
+				onclick={() => showMobileMenu = false}
+				onkeydown={(e) => e.key === 'Escape' && (showMobileMenu = false)}
+				transition:fade={{ duration: 200 }}
+			></div>
+		{/if}
+
+		<!-- Server Rail Actions -->
+		<div class="z-10 flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-[#1E1F22] py-3 hide-scrollbar">
+			<a
+				href={`/task/${taskId}`}
+				class="group relative flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] transition-all hover:rounded-[16px] overflow-hidden shadow-sm text-[#DBDEE1] hover:text-white hover:bg-[#DA373C]"
+				title={t.returnTask}
+			>
+				<LogOut size={22} class="mr-0.5" />
+			</a>
+			<div class="h-[2px] w-8 rounded-full bg-[#35363C]"></div>
+			<button type="button" class="relative flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#5865F2] text-white transition-all">
+				<div class="absolute -left-3 top-2 h-8 w-1 rounded-r-full bg-white"></div>
+				<span class="text-sm font-medium">{serverAcronym}</span>
+			</button>
 			<button
 				type="button"
-				class="w-full mb-1 mt-4 px-2 text-xs font-semibold text-[#949BA4] hover:text-gray-300 cursor-pointer flex justify-between items-center"
+				class="flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] text-[#23A559] transition-all hover:rounded-[16px] hover:bg-[#23A559] hover:text-white"
+				onclick={handleMockAction}
 			>
-				<span>{t.textChannels}</span>
-				<Plus size={14} />
-			</button>
-			<button type="button" class="flex w-full items-center gap-1.5 rounded bg-[#404249] px-2 py-1.5 text-[#DBDEE1]">
-				<Hash size={18} class="text-[#80848E]" />
-				<span class="text-sm">{channelName}</span>
+				<Plus size={24} />
 			</button>
 		</div>
 
-		<div class="flex h-[52px] items-center justify-between bg-[#232428] px-2">
+		<!-- Channel List Navigation -->
+		<div class="z-10 flex w-60 shrink-0 flex-col bg-[#2B2D31]">
 			<button
 				type="button"
-				class="flex items-center gap-2 rounded px-2 py-1 hover:bg-[#35373C] w-full max-w-[140px] truncate"
+				class="flex h-12 items-center justify-between border-b border-[#1F2023] px-4 font-semibold shadow-sm transition-colors hover:bg-[#35373C]"
 				onclick={handleMockAction}
 			>
-				<div class="relative h-8 w-8 shrink-0">
-					<div class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white">
-						{#if avatarUrl}
-							<img src={avatarUrl} alt="User" class="h-full w-full object-cover">
-						{:else}
-							{userName.charAt(0).toUpperCase()}
-						{/if}
-					</div>
-					<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#232428] bg-[#23A559]"></div>
-				</div>
-				<div class="flex flex-col items-start text-sm truncate">
-					<span class="font-semibold leading-tight text-white truncate w-full text-left">{userName}</span>
-					<span class="text-xs text-[#949BA4]">{t.online}</span>
-				</div>
+				<span class="truncate">{serverName}</span>
+				<ChevronDown size={18} />
 			</button>
-			<div class="flex gap-1 text-[#B5BAC1]">
-				<button type="button" class="rounded p-1.5 hover:bg-[#35373C] hover:text-[#DBDEE1]" onclick={handleMockAction}><Mic size={18} /></button>
-				<button type="button" class="rounded p-1.5 hover:bg-[#35373C] hover:text-[#DBDEE1]" onclick={handleMockAction}>
-					<Headphones size={18} />
+			<div class="flex-1 overflow-y-auto p-2 hide-scrollbar">
+				<button
+					type="button"
+					class="w-full mb-1 mt-4 px-2 text-xs font-semibold text-[#949BA4] hover:text-gray-300 cursor-pointer flex justify-between items-center"
+				>
+					<span>{t.textChannels}</span>
+					<Plus size={14} />
 				</button>
-				<button type="button" class="rounded p-1.5 hover:bg-[#35373C] hover:text-[#DBDEE1]" onclick={handleMockAction}><Settings size={18} /></button>
+				<button type="button" class="flex w-full items-center gap-1.5 rounded bg-[#404249] px-2 py-1.5 text-[#DBDEE1]">
+					<Hash size={18} class="text-[#80848E]" />
+					<span class="text-sm">{channelName}</span>
+				</button>
+			</div>
+			<!-- User Profile Footer -->
+			<div class="flex h-[52px] items-center justify-between bg-[#232428] px-2">
+				<button
+					type="button"
+					class="flex items-center gap-2 rounded px-2 py-1 hover:bg-[#35373C] w-full max-w-[140px] truncate"
+					onclick={handleMockAction}
+				>
+					<div class="relative h-8 w-8 shrink-0">
+						<div class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white">
+							{#if avatarUrl}
+								<img src={avatarUrl} alt="User" class="h-full w-full object-cover">
+							{/if}
+							{#if !avatarUrl}
+								{userName.charAt(0).toUpperCase()}
+							{/if}
+						</div>
+						<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#232428] bg-[#23A559]"></div>
+					</div>
+					<div class="flex flex-col items-start text-sm truncate">
+						<span class="font-semibold leading-tight text-white truncate w-full text-left">{userName}</span>
+						<span class="text-xs text-[#949BA4]">{t.online}</span>
+					</div>
+				</button>
+				<div class="flex gap-1 text-[#B5BAC1]">
+					<button type="button" class="rounded p-1.5 hover:bg-[#35373C] hover:text-[#DBDEE1]" onclick={handleMockAction}><Mic size={18} /></button>
+					<button type="button" class="rounded p-1.5 hover:bg-[#35373C] hover:text-[#DBDEE1]" onclick={handleMockAction}>
+						<Settings size={18} />
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
 
-	<div class="flex flex-1 flex-col bg-[#313338] min-w-0">
-		<div class="flex h-12 shrink-0 items-center justify-between border-b border-[#1F2023] px-4 shadow-sm">
-			<div class="flex items-center gap-2">
-				<Hash size={24} class="text-[#80848E]" />
-				<span class="font-semibold text-white">{channelName}</span>
+	<!-- 4. MAIN CONTENT AREA -->
+	<div class="flex flex-1 flex-col bg-[#313338] min-w-0 h-full relative">
+		<!-- Channel Header -->
+		<div class="flex h-12 shrink-0 items-center justify-between border-b border-[#1F2023] px-4 shadow-sm z-10">
+			<div class="flex items-center gap-2 overflow-hidden px-1">
+				<Hash size={24} class="text-[#80848E] shrink-0" />
+				<span class="font-semibold text-white truncate">{channelName}</span>
 			</div>
 			<div class="flex items-center gap-4 text-[#B5BAC1]">
 				{#if !isCompleted && sessionId}
@@ -1035,19 +876,15 @@ function handleMockAction() {
 						type="button"
 						class="flex items-center gap-2 rounded bg-[#23A559] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#1D8749] disabled:opacity-50"
 						onclick={handleComplete}
-						disabled={isCompleting ||
-							isSubmitting ||
-							isInitializing}
+						disabled={isCompleting || isSubmitting || isInitializing}
 					>
 						<CheckCircle size={16} />
-						{isCompleting ? t.evaluating : t.finishTask}
+						<span class="hidden sm:inline">{isCompleting ? t.evaluating : t.finishTask}</span>
 					</button>
 				{/if}
 				<button
 					type="button"
-					class="transition-colors {showMembers
-						? 'text-white'
-						: 'hover:text-[#DBDEE1]'}"
+					class="transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
 					onclick={() => (showMembers = !showMembers)}
 				>
 					<Users size={20} />
@@ -1055,22 +892,22 @@ function handleMockAction() {
 			</div>
 		</div>
 
-		<div class="flex flex-1 overflow-hidden">
+		<!-- Chat & Member List Container (Combined) -->
+		<div class="flex flex-1 overflow-hidden relative">
+			<!-- Message & Input Column -->
 			<div class="flex flex-1 flex-col min-w-0 relative">
-				<div bind:this={chatContainer} class="flex-1 overflow-y-auto px-4 py-6">
+				<!-- Message Stream Display -->
+				<div bind:this={chatContainer} class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
 					<div class="my-4 mt-auto flex items-center justify-center">
 						<div class="h-px flex-1 bg-[#404249]"></div>
-						<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString()}</span>
+						<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language)}</span>
 						<div class="h-px flex-1 bg-[#404249]"></div>
 					</div>
 
-					{#each messages.filter((m) => !m.isHidden) as msg}
+					{#each messages.filter((m) => !m.isHidden) as msg (msg.id)}
 						<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
 							<div
-								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
-								'agent'
-									? msg.avatarColor
-									: 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden"
+								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role === 'agent' ? msg.avatarColor : 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden shadow-inner"
 							>
 								{#if msg.role === "user" && msg.avatar}
 									<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
@@ -1078,37 +915,39 @@ function handleMockAction() {
 									{msg.authorName.charAt(0).toUpperCase()}
 								{/if}
 							</div>
-							<div class="flex-1">
+							<div class="flex-1 overflow-hidden">
 								<div class="flex items-baseline gap-2">
 									<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
 									<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
 								</div>
-								{#if msg.role === "agent" && msg.deliveryState === "failed"}
-									<div class="mt-1 flex flex-wrap items-center gap-2">
-										<span class="text-[#F28B82] whitespace-pre-wrap">{msg.text}</span>
-										<button
-											type="button"
-											class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31] disabled:opacity-50"
-											onclick={() => handleRetry(msg.id)}
-										>
-											<AlertCircle size={16} />
-											{t.retry}
-										</button>
-									</div>
-								{:else if msg.role === "agent" && msg.deliveryState === "pending"}
-									<div class="mt-1 flex flex-wrap items-center gap-2">
-										<span class="text-[#F0B232] whitespace-pre-wrap">{msg.text}</span>
-										<button
-											type="button"
-											class="flex items-center gap-2 rounded bg-[#5865F2] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#4752C4] disabled:opacity-50"
-											onclick={() => handleRetry(msg.id)}
-										>
-											{t.retry}
-										</button>
-									</div>
-								{:else}
-									<div class="text-[#DBDEE1] whitespace-pre-wrap">{msg.text}</div>
-								{/if}
+
+								<div class="mt-0.5 text-[#DBDEE1] break-words leading-normal">
+									{#if msg.role === "agent" && msg.deliveryState === "failed"}
+										<div class="mt-1 flex flex-wrap items-center gap-2">
+											<span class="text-[#F28B82] whitespace-pre-wrap">{msg.text}</span>
+											<button
+												type="button"
+												class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31]"
+												onclick={() => handleRetry(msg.id)}
+											>
+												<CheckCircle size={16} />{t.retry}
+											</button>
+										</div>
+									{:else if msg.role === "agent" && msg.deliveryState === "pending"}
+										<div class="mt-1 flex flex-wrap items-center gap-2">
+											<span class="text-[#F0B232] whitespace-pre-wrap">{msg.text}</span>
+											<button
+												type="button"
+												class="flex items-center gap-2 rounded bg-[#5865F2] px-3 py-1 text-sm font-medium text-white hover:bg-[#4752C4]"
+												onclick={() => handleRetry(msg.id)}
+											>
+												{t.retry}
+											</button>
+										</div>
+									{:else}
+										<div class="markdown-wrapper"><MarkdownRenderer content={normalizeEmojiTextForDisplay(msg.text)} /></div>
+									{/if}
+								</div>
 							</div>
 						</div>
 					{/each}
@@ -1120,15 +959,12 @@ function handleMockAction() {
 								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.2s"></span>
 								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.4s"></span>
 							</div>
-							<span class="text-xs font-semibold text-[#80848E]">
-								{isInitializing
-									? "Agent is joining..."
-									: `${agentUser.name} is typing...`}
-							</span>
+							<span class="text-xs font-semibold text-[#80848E]">{isInitializing ? "Agent is joining..." : `${agentUser.name} is typing...`}</span>
 						</div>
 					{/if}
 				</div>
 
+				<!-- Message Input Section -->
 				<div class="px-4 pb-6 pt-1 shrink-0 relative">
 					{#if showMentionMenu && filteredMentionUsers.length > 0}
 						<div class="absolute bottom-[100%] left-4 mb-2 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded shadow-xl overflow-hidden z-50">
@@ -1138,12 +974,8 @@ function handleMockAction() {
 									<li class="mx-1">
 										<button
 											type="button"
-											class="w-full text-left px-3 py-2 rounded hover:bg-[#35373C] cursor-pointer flex items-center gap-2 {mentionIndex ===
-											i
-												? 'bg-[#35373C]'
-												: ''}"
-											onmouseenter={() =>
-												(mentionIndex = i)}
+											class="w-full text-left px-3 py-2 rounded hover:bg-[#35373C] cursor-pointer flex items-center gap-2 {mentionIndex === i ? 'bg-[#35373C]' : ''}"
+											onmouseenter={() => (mentionIndex = i)}
 											onclick={() => insertMention(user)}
 										>
 											<div
@@ -1162,207 +994,197 @@ function handleMockAction() {
 						</div>
 					{/if}
 
-					<div
-						class="flex items-center rounded-lg bg-[#383A40] px-4 py-2.5 {isCompleted
-							? 'opacity-50 cursor-not-allowed'
-							: ''}"
-					>
-						<button
-							type="button"
-							class="mr-4 rounded-full bg-[#B5BAC1] p-1 text-[#383A40] transition-colors hover:bg-[#DBDEE1]"
-							onclick={handleMockAction}
-						>
-							<Plus size={16} strokeWidth={3} />
-						</button>
-						<input
-							bind:this={inputRef}
-							bind:value={inputText}
-							oninput={handleInput}
-							onkeydown={handleKeydown}
-							disabled={isSubmitting ||
-								isCompleting ||
-								isCompleted ||
-								isInitializing}
-							type="text"
-							placeholder={isCompleted
-								? "Session ended"
-								: isWaitingRetry
-									? t.retryInputPlaceholder
-									: messagePlaceholder}
-							class="flex-1 bg-transparent text-[#DBDEE1] outline-none placeholder:text-[#82868D] disabled:opacity-50"
-						>
+					<div class="flex flex-col relative rounded-lg bg-[#383A40]">
+						{#if limitReached}
+							<div class="p-2.5 text-sm italic text-orange-400 bg-black/20 rounded-t-lg border-b border-[#313338]">
+								{getTurnLimitMessage(maxTurns)}
+							</div>
+						{/if}
 
-						<div class="flex gap-3 text-[#B5BAC1] relative items-center">
-							<div class="relative flex items-center">
+						<div class="flex items-start px-4 {isCompleted || limitReached ? 'opacity-50' : ''}">
+							<div class="flex h-[44px] shrink-0 items-center justify-center mr-4">
 								<button
 									type="button"
-									class="transition-colors {isGettingHint
-										? 'text-yellow-400'
-										: 'hover:text-[#DBDEE1]'}"
-									onclick={handleGetHint}
-									title={t.getHint}
+									class="rounded-full bg-[#B5BAC1] p-1 text-[#383A40] transition-colors hover:bg-[#DBDEE1]"
+									onclick={handleMockAction}
 								>
-									<Lightbulb
-										size={22}
-										class={isGettingHint
-											? "animate-pulse"
-											: ""}
-									/>
+									<Plus size={16} strokeWidth={3} />
 								</button>
-
-								{#if showHintMenu}
-									<div
-										class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
-									>
-										<div
-											class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22] flex justify-between items-center"
-										>
-											<span>{t.hintTitle}</span>
-											<button
-												type="button"
-												onclick={() =>
-													(showHintMenu = false)}
-												class="hover:text-white text-lg"
-											>
-												&times;
-											</button>
-										</div>
-										<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
-											{#if isGettingHint}
-												<div class="py-6 text-center text-sm text-[#80848E] italic animate-pulse">{t.thinking}</div>
-											{:else}
-												{#each hints as hint}
-													<button
-														type="button"
-														class="w-full text-left p-2.5 rounded hover:bg-[#35373C] transition-colors border border-transparent hover:border-[#404249] group"
-														onclick={() =>
-															selectHint(
-																hint.text,
-															)}
-													>
-														<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
-													</button>
-												{/each}
-											{/if}
-										</div>
-									</div>
-								{/if}
 							</div>
 
-							<div class="relative flex items-center">
-								<button
-									type="button"
-									class="transition-colors {showEmojiPicker
-										? 'text-white'
-										: 'hover:text-[#DBDEE1]'}"
-									onclick={(e) => {
-										e.stopPropagation();
-										showEmojiPicker = !showEmojiPicker;
-									}}
-								>
-									<Smile size={22} />
-								</button>
+							<div class="flex-1 min-w-0">
+								<ResizeableTextarea
+									bind:value={inputText}
+									maxRows={10}
+									disabled={isSubmitting || isCompleting || isCompleted || isInitializing || limitReached}
+									placeholder={isCompleted ? "Session ended" : limitReached ? "Turn limit reached" : isWaitingRetry? t.retryInputPlaceholder : messagePlaceholder}
+									onKeyDown={(e:KeyboardEvent) => {
+					if (e.key === 'Enter' && !e.shiftKey) {
+						const isMobile = window.matchMedia("(max-width: 768px)").matches;
+						if (!isMobile) {
+							e.preventDefault();
+							handleSend();
+						}
+					}
+				}}
+								/>
+							</div>
 
-								{#if showEmojiPicker}
-									<div
-										class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+							<div class="flex h-[44px] shrink-0 items-center justify-center gap-3 ml-3 text-[#B5BAC1] relative">
+								<div class="relative flex h-full items-center">
+									<button
+										type="button"
+										class="transition-colors {isGettingHint ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
+										onclick={handleGetHint}
+										title={t.getHint}
 									>
-										<div class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22]">Common Emojis</div>
-										<div class="p-2 grid grid-cols-8 gap-1 max-h-60 overflow-y-auto hide-scrollbar">
-											{#each COMMON_EMOJIS as emoji}
-												<button
-													type="button"
-													class="h-8 w-8 flex items-center justify-center rounded hover:bg-[#35373C] transition-colors text-lg"
-													onclick={(e) => {
-														e.stopPropagation();
-														insertEmoji(emoji);
-													}}
-												>
-													{emoji}
-												</button>
-											{/each}
+										<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
+									</button>
+									{#if showHintMenu}
+										<div
+											class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+										>
+											<div
+												class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22] flex justify-between items-center"
+											>
+												<span>{t.hintTitle}</span>
+												<button type="button" onclick={() => (showHintMenu = false)} class="hover:text-white text-lg">&times;</button>
+											</div>
+											<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
+												{#if isGettingHint}
+													<div class="py-6 text-center text-sm text-[#80848E] italic animate-pulse">{t.thinking}</div>
+												{:else}
+													{#each hints as hint}
+														<button
+															type="button"
+															class="w-full text-left p-2.5 rounded hover:bg-[#35373C] transition-colors border border-transparent hover:border-[#404249]"
+															onclick={() => selectHint(hint.text)}
+														>
+															<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
+														</button>
+													{/each}
+												{/if}
+											</div>
 										</div>
-									</div>
-								{/if}
+									{/if}
+								</div>
+
+								<div class="relative flex h-full items-center">
+									<button
+										type="button"
+										class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+										onclick={(e) => { e.stopPropagation(); showEmojiPicker = !showEmojiPicker; }}
+									>
+										<Smile size={22} />
+									</button>
+									{#if showEmojiPicker}
+										<div
+											class="absolute bottom-[100%] right-0 mb-4 z-[1002] bg-[#232428] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden"
+											transition:fade={{ duration: 100 }}
+										>
+											<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker on:emoji-selected={handleEmojiSelected} /></div>
+										</div>
+									{/if}
+								</div>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
+			<!-- Member List (Sidebar) - REPOSITIONED INSIDE CHAT FLEX CONTAINER -->
 			{#if showMembers}
-				<div class="w-60 bg-[#2B2D31] shrink-0 flex flex-col hide-scrollbar overflow-y-auto px-2 py-4">
-					<h3 class="px-2 pt-2 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.online} — {onlineUsers.length + 2}</h3>
+				<!-- Overlay for mobile view -->
+				<div
+					role="none"
+					class="fixed inset-0 z-[1001] bg-black/40 xl:hidden"
+					onclick={() => (showMembers = false)}
+					transition:fade={{ duration: 150 }}
+				></div>
 
-					<div class="flex items-center gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded mt-0.5 opacity-100 transition-colors cursor-default">
-						<div class="relative h-8 w-8 shrink-0">
-							<div class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white">
-								{#if avatarUrl}
-									<img src={avatarUrl} alt="User" class="h-full w-full object-cover">
-								{:else}
-									{userName.charAt(0).toUpperCase()}
-								{/if}
-							</div>
-							<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#2B2D31] bg-[#23A559]"></div>
-						</div>
-						<span class="text-[#DBDEE1] font-medium text-sm truncate">{userName} (You)</span>
-					</div>
+				<!-- Sidebar container -->
+				<div
+					class="fixed inset-y-0 right-0 z-[1002] flex w-60 flex-col bg-[#2B2D31] border-l border-[#26272B] shadow-2xl xl:shadow-none xl:static xl:z-0 xl:translate-x-0"
+					transition:fly={{ x: 240, duration: 250 }}
+				>
+					<div class="flex-1 overflow-y-auto px-2 py-4 hide-scrollbar">
+						<!-- Online Header -->
+						<h3 class="px-2 pt-2 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.online} — {onlineUsers.length + 2}</h3>
 
-					<button
-						type="button"
-						class="flex items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-100 transition-colors"
-						oncontextmenu={(e) => handleContextMenu(e, agentUser)}
-					>
-						<div class="relative h-8 w-8 shrink-0">
-							<div class="h-full w-full rounded-full {agentUser.color} overflow-hidden flex items-center justify-center font-bold text-white">
-								{agentUser.name.charAt(0).toUpperCase()}
+						<!-- Current User Item -->
+						<div class="flex items-center gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded mt-0.5 opacity-100 transition-colors cursor-default">
+							<div class="relative h-8 w-8 shrink-0">
+								<div
+									class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white shadow-inner text-sm"
+								>
+									{#if avatarUrl}
+										<img src={avatarUrl} alt="User" class="h-full w-full object-cover">
+									{:else}
+										{userName.charAt(0).toUpperCase()}
+									{/if}
+								</div>
+								<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#2B2D31] bg-[#23A559]"></div>
 							</div>
-							<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#2B2D31] bg-[#23A559]"></div>
+							<span class="text-[#DBDEE1] font-medium text-sm truncate">{userName} (You)</span>
 						</div>
-						<div class="flex flex-col justify-center min-w-0">
-							<div class="flex items-center gap-1">
-								<span class="text-[#DBDEE1] font-medium text-sm truncate">{agentUser.name}</span>
-								<span class="text-[9px] bg-[#5865F2] text-white px-1 rounded font-bold uppercase tracking-wide leading-tight">Bot</span>
-							</div>
-							<span class="text-xs text-[#B5BAC1] truncate">{agentUser.status}</span>
-						</div>
-					</button>
 
-					{#each onlineUsers as user}
+						<!-- Bot / Agent Item -->
 						<button
 							type="button"
-							class="flex items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-100 transition-colors"
-							oncontextmenu={(e) => handleContextMenu(e, user)}
+							class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 transition-colors"
+							oncontextmenu={(e) => handleContextMenu(e, agentUser)}
 						>
 							<div class="relative h-8 w-8 shrink-0">
-								<div class="h-full w-full rounded-full {user.color} overflow-hidden flex items-center justify-center font-bold text-white">
-									{user.name.charAt(0).toUpperCase()}
+								<div class="h-full w-full rounded-full {agentUser.color} flex items-center justify-center font-bold text-white uppercase text-sm">
+									{agentUser.name.charAt(0)}
 								</div>
 								<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#2B2D31] bg-[#23A559]"></div>
 							</div>
 							<div class="flex flex-col justify-center min-w-0">
-								<span class="text-[#DBDEE1] font-medium text-sm truncate">{user.name}</span>
-								<span class="text-xs text-[#B5BAC1] truncate">{user.status}</span>
-							</div>
-						</button>
-					{/each}
-
-					<h3 class="px-2 pt-6 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.offline} — {offlineUsers.length}</h3>
-
-					{#each offlineUsers as user}
-						<button
-							type="button"
-							class="flex items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-50 hover:opacity-100 transition-all"
-							oncontextmenu={(e) => handleContextMenu(e, user)}
-						>
-							<div class="relative h-8 w-8 shrink-0">
-								<div class="h-full w-full rounded-full {user.color} overflow-hidden flex items-center justify-center font-bold text-white">
-									{user.name.charAt(0).toUpperCase()}
+								<div class="flex items-center gap-1">
+									<span class="text-[#DBDEE1] font-medium text-sm truncate">{agentUser.name}</span>
+									<span class="text-[9px] bg-[#5865F2] text-white px-1 rounded font-bold uppercase tracking-wide leading-tight">Bot</span>
 								</div>
+								<span class="text-xs text-[#B5BAC1] truncate">{agentUser.status}</span>
 							</div>
-							<span class="text-[#80848E] font-medium text-sm truncate">{user.name}</span>
 						</button>
-					{/each}
+
+						<!-- Online Others -->
+						{#each onlineUsers as user (user.name)}
+							<button
+								type="button"
+								class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 transition-colors"
+								oncontextmenu={(e) => handleContextMenu(e, user)}
+							>
+								<div class="relative h-8 w-8 shrink-0">
+									<div class="h-full w-full rounded-full {user.color} flex items-center justify-center font-bold text-white uppercase text-sm">
+										{user.name.charAt(0)}
+									</div>
+									<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#2B2D31] bg-[#23A559]"></div>
+								</div>
+								<div class="flex flex-col justify-center min-w-0">
+									<span class="text-[#DBDEE1] font-medium text-sm truncate">{user.name}</span>
+									<span class="text-xs text-[#B5BAC1] truncate">{user.status}</span>
+								</div>
+							</button>
+						{/each}
+
+						<!-- Offline Header -->
+						<h3 class="px-2 pt-6 pb-1 text-[12px] font-semibold text-[#949BA4] uppercase">{t.offline} — {offlineUsers.length}</h3>
+						{#each offlineUsers as user (user.name)}
+							<button
+								type="button"
+								class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-50 hover:opacity-100 transition-all font-medium"
+							>
+								<div class="relative h-8 w-8 shrink-0">
+									<div class="h-full w-full rounded-full {user.color} flex items-center justify-center font-bold text-white uppercase text-sm">
+										{user.name.charAt(0)}
+									</div>
+								</div>
+								<span class="text-[#80848E] text-sm truncate ml-3">{user.name}</span>
+							</button>
+						{/each}
+					</div>
 				</div>
 			{/if}
 		</div>
@@ -1370,11 +1192,30 @@ function handleMockAction() {
 </div>
 
 <style>
-.hide-scrollbar::-webkit-scrollbar {
-	display: none;
-}
 .hide-scrollbar {
 	-ms-overflow-style: none;
 	scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-thumb {
+	background: #1a1b1e;
+	border-radius: 4px;
+}
+:global(.markdown-wrapper p) {
+	margin: 0;
+	display: inline;
+}
+:global(html),
+:global(body) {
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+	overscroll-behavior: none;
 }
 </style>

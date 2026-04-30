@@ -1,9 +1,13 @@
 import { error, fail } from "@sveltejs/kit";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, count } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { practiceSession, task } from "$lib/server/db/schema";
+import { practiceSession, task, sessionMessage } from "$lib/server/db/schema";
 import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
+import EmojiConverter from "emoji-js";
+
+const emojiConverter = new EmojiConverter();
+emojiConverter.colons_mode = true;
 
 function mapSendMessageError(e: unknown) {
 	if (!(e instanceof Error)) return null;
@@ -35,6 +39,16 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 	const taskId = Number.parseInt(taskIdStr, 10);
 	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
 
+	const taskData = await db.query.task.findFirst({
+		where: eq(task.id, taskId),
+		with: {
+			variant: true,
+			template: true,
+		},
+	});
+
+	if (!taskData) throw error(404, "Task not found");
+
 	const existingSession = await db.query.practiceSession.findFirst({
 		where: and(
 			eq(practiceSession.taskId, taskId),
@@ -47,17 +61,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		},
 	});
 
-	const taskData = await db.query.task.findFirst({
-		where: eq(task.id, taskId),
-		with: {
-			variant: true,
-			template: true,
-		},
-	});
-
-	if (!taskData) throw error(404, "Task not found");
 	const IMPLEMENTED_UIS = ["discord"];
-
 	if (!IMPLEMENTED_UIS.includes(taskData.template.ui)) {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
@@ -71,6 +75,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		existingSession,
 		taskId: taskIdStr,
 		agentPrompt: taskData.agentPrompt || "",
+		maxTurns: taskData.template.maxTurns || 0,
 		user: {
 			name: user.name || "Learner",
 			avatarUrl,
@@ -117,15 +122,20 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const message = formData.get("message") as string;
+		const rawMessage = formData.get("message") as string;
 		const clientMessageIdValue = formData.get("clientMessageId");
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!message?.trim()) return fail(400, { error: "Message is required" });
+		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
 
 		try {
-			// Verify session belongs to this user and task
+			const taskData = await db.query.task.findFirst({
+				where: eq(task.id, taskId),
+				with: { template: true },
+			});
+			if (!taskData) return fail(404, { error: "Task not found" });
+
 			const session = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, sessionId),
 			});
@@ -134,7 +144,21 @@ export const actions: Actions = {
 				return fail(403, { error: "Access denied" });
 			}
 
-			const result = await sendMessage(sessionId, message, clientMessageId || undefined);
+			const maxTurns = taskData.template.maxTurns || 0;
+			if (maxTurns > 0) {
+				const [result] = await db
+					.select({ count: count() })
+					.from(sessionMessage)
+					.where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.role, "user")));
+
+				if (result.count >= maxTurns) {
+					return fail(403, { error: "Maximum conversation turns reached" });
+				}
+			}
+
+			const formattedMessage = emojiConverter.replace_unified(rawMessage);
+
+			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
@@ -177,6 +201,7 @@ export const actions: Actions = {
 			return fail(500, { error: "Failed to complete session" });
 		}
 	},
+
 	hint: async (event) => {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });

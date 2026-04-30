@@ -12,6 +12,7 @@ let { data } = $props();
 		language={data.user.learningLanguage}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
+		maxTurns={data.task.template.maxTurns ?? 0}
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<div class="flex h-screen items-center justify-center bg-background">

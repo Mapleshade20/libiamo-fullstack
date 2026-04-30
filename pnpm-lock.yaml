@@ -17,6 +17,12 @@ importers:
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
+      emoji-js:
+        specifier: ^3.9.0
+        version: 3.9.0
+      emoji-picker-element:
+        specifier: ^1.29.1
+        version: 1.29.1
       isomorphic-dompurify:
         specifier: ^3.9.0
         version: 3.9.0(@noble/hashes@2.0.1)
@@ -57,6 +63,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.2.2(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
+      '@types/emoji-js':
+        specifier: ^3.5.2
+        version: 3.5.2
       '@types/node':
         specifier: ^24
         version: 24.12.0
@@ -1321,6 +1330,9 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
+  '@types/emoji-js@3.5.2':
+    resolution: {integrity: sha512-qPR85yjSPk2UEbdjYYNHfcOjVod7DCARSrJlPcL+cwaDFwdnmOFhPyYUvP5GaW0YZEy8mU93ZjTNgsVWz1zzlg==}
+
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
@@ -1908,6 +1920,15 @@ packages:
 
   electron-to-chromium@1.5.328:
     resolution: {integrity: sha512-QNQ5l45DzYytThO21403XN3FvK0hOkWDG8viNf6jqS42msJ8I4tGDSpBCgvDRRPnkffafiwAym2X2eHeGD2V0w==}
+
+  emoji-datasource@16.0.0:
+    resolution: {integrity: sha512-/qHKqK5Nr3+8zhgO6kHmF43Fm5C8HNn0AaFRIpgw8HF3+uF0Vfc8jgLI1ZQS5ba1vBzksS8NBCjHejwLb2D/Sg==}
+
+  emoji-js@3.9.0:
+    resolution: {integrity: sha512-vC3AScez2NNw9W5gz4TtYtNCcLG343UFLnrM5J/5RMDr0zy7ARxBZkWsQilb6f3u+CfzRaj0J2chZJBwI6blmQ==}
+
+  emoji-picker-element@1.29.1:
+    resolution: {integrity: sha512-TOiHzu9Dqib3x4MwcAi3wi3RdyT4SoeB4b15AvH1ks4SBwTl7DeebhZ0d3x6dNi4XfNU7IGRZ7NBQllj0RqwrQ==}
 
   end-of-stream@1.4.5:
     resolution: {integrity: sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==}
@@ -3819,6 +3840,8 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
+  '@types/emoji-js@3.5.2': {}
+
   '@types/estree@1.0.8': {}
 
   '@types/node@24.12.0':
@@ -4175,6 +4198,15 @@ snapshots:
       postgres: 3.4.8
 
   electron-to-chromium@1.5.328: {}
+
+  emoji-datasource@16.0.0: {}
+
+  emoji-js@3.9.0:
+    dependencies:
+      emoji-datasource: 16.0.0
+      tar-fs: 2.1.4
+
+  emoji-picker-element@1.29.1: {}
 
   end-of-stream@1.4.5:
     dependencies:
