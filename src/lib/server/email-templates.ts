@@ -159,7 +159,7 @@ function wrapContent(
     <!-- Footer -->
     <div style="${FOOTER_STYLES}">
       <p style="${FOOTER_TEXT_STYLES}">
-        This email was sent by <a href="https://libiamo.app" style="${FOOTER_LINK_STYLES}">Libiamo</a>.<br>
+        This email was sent by <a href="https://libiamo.net" style="${FOOTER_LINK_STYLES}">Libiamo</a>.<br>
         If you didn't request this, you can safely ignore this email.
       </p>
     </div>
