@@ -2,35 +2,33 @@
 import CheckCircle from "@lucide/svelte/icons/check-circle";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Hash from "@lucide/svelte/icons/hash";
-import HelpCircle from "@lucide/svelte/icons/help-circle";
 import Info from "@lucide/svelte/icons/info";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import LogOut from "@lucide/svelte/icons/log-out";
+import Menu from "@lucide/svelte/icons/menu";
 import Mic from "@lucide/svelte/icons/mic";
-import Pin from "@lucide/svelte/icons/pin";
 import Plus from "@lucide/svelte/icons/plus";
 import Settings from "@lucide/svelte/icons/settings";
 import Smile from "@lucide/svelte/icons/smile";
-import Sticker from "@lucide/svelte/icons/sticker";
 import Users from "@lucide/svelte/icons/users";
-import Menu from "@lucide/svelte/icons/menu";
 import { onMount, tick } from "svelte";
-import { fade, slide, fly } from "svelte/transition";
+import { fade, fly, slide } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
-
-import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
-import { i18n } from "./i18n";
-import { type DiscordOpeningState, type DiscordUser, type TutorFeedback, type ObjectiveResult } from "./types";
-import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./mockData";
-
 import EmojiPicker from "../EmojiPicker.svelte";
 import MarkdownRenderer from "../MarkdownRenderer.svelte";
 import ResizeableTextarea from "../ResizeableTextarea.svelte";
-import { normalizeText, formatTime, getTodayDateString } from "../utils/messageUtils";
-import { normalizeEmojiTextForDisplay, extractEmojiFromPickerEvent } from "../utils/emojiUtils";
-import { isTurnLimitReached, getTurnLimitMessage } from "../utils/sessionUtils";
+import { extractEmojiFromPickerEvent, normalizeEmojiTextForDisplay } from "../utils/emojiUtils";
+import { formatTime, getTodayDateString, normalizeText } from "../utils/messageUtils";
 import { prepareMarkdownText } from "../utils/markdownUtils";
+import { getTurnLimitMessage, isTurnLimitReached } from "../utils/sessionUtils";
+import { submitAgentReply, postAction } from "./apiService";
+import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
+import { i18n } from "./i18n";
+import { updateMessageById } from "./messageManager";
+import { getOpeningStateMessages } from "./messageTransformer";
+import { initUserPool } from "./mockUser";
+import { type DiscordOpeningState, type DiscordUser, type TutorFeedback, type ObjectiveResult } from "./types";
 
 interface Props {
 	taskId?: string | number;
@@ -114,7 +112,6 @@ let contextMenu = $state({
 let showEmojiPicker = $state(false);
 let isWaitingRetry = $state(false);
 const retryResolvers = new Map<string, () => void>();
-const AGENT_REPLY_TIMEOUT_MS = 25_000;
 const userMessageCount = $derived(messages.filter((m) => m.role === "user").length);
 const limitReached = $derived(isTurnLimitReached(userMessageCount, maxTurns ?? 0));
 
@@ -124,10 +121,6 @@ function handleEmojiSelected(event: CustomEvent | Event) {
 		inputText += emoji;
 	}
 	showEmojiPicker = false;
-}
-
-function updateMessageById(messageId: string, updater: (message: Message) => Message) {
-	messages = messages.map((message) => (message.id === messageId ? updater(message) : message));
 }
 
 function waitForRetry(messageId: string): Promise<void> {
@@ -143,7 +136,7 @@ function handleRetry(messageId: string) {
 		return;
 	}
 
-	updateMessageById(messageId, (message) => ({
+	messages = updateMessageById(messages, messageId, (message) => ({
 		...message,
 		isHidden: true,
 	}));
@@ -153,42 +146,13 @@ function handleRetry(messageId: string) {
 	resolveRetry();
 }
 
-async function submitAgentReply(messageText: string, clientMessageId: string) {
-	const sendData = new FormData();
-	sendData.append("sessionId", String(sessionId));
-	sendData.append("message", messageText);
-	sendData.append("clientMessageId", clientMessageId);
-
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => {
-		controller.abort();
-	}, AGENT_REPLY_TIMEOUT_MS);
-
-	try {
-		const sendRes = await fetch(`?/send`, {
-			method: "POST",
-			body: sendData,
-			signal: controller.signal,
-		});
-
-		return deserialize(await sendRes.text());
-	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") {
-			throw new Error(`Agent reply timed out after ${AGENT_REPLY_TIMEOUT_MS / 1000}s`);
-		}
-		throw error;
-	} finally {
-		clearTimeout(timeoutId);
-	}
-}
-
 async function retryPersistedAgentReply(messageId: string) {
 	const failedMessage = messages.find((message) => message.id === messageId);
 	if (!failedMessage?.clientMessageId || !failedMessage.retryText || isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	isSubmitting = true;
 	isWaitingRetry = true;
-	updateMessageById(messageId, (message) => ({
+	messages = updateMessageById(messages, messageId, (message) => ({
 		...message,
 		text: t.stillProcessingMessage,
 		deliveryState: "pending",
@@ -199,14 +163,14 @@ async function retryPersistedAgentReply(messageId: string) {
 		while (true) {
 			let sendResult: any = null;
 			try {
-				sendResult = await submitAgentReply(failedMessage.retryText, failedMessage.clientMessageId);
+				sendResult = await submitAgentReply(sessionId, failedMessage.retryText, failedMessage.clientMessageId);
 			} catch (error) {
 				console.error("Message retry failed:", error);
 			}
 
 			if (sendResult?.type === "success" && sendResult.data) {
 				if (sendResult.data.pending) {
-					updateMessageById(messageId, (message) => ({
+					messages = updateMessageById(messages, messageId, (message) => ({
 						...message,
 						text: t.stillProcessingMessage,
 						deliveryState: "pending",
@@ -218,7 +182,7 @@ async function retryPersistedAgentReply(messageId: string) {
 					continue;
 				}
 
-				updateMessageById(messageId, (message) => ({
+				messages = updateMessageById(messages, messageId, (message) => ({
 					...message,
 					text: sendResult.data.reply as string,
 					deliveryState: "sent",
@@ -232,7 +196,7 @@ async function retryPersistedAgentReply(messageId: string) {
 				break;
 			}
 
-			updateMessageById(messageId, (message) => ({
+			messages = updateMessageById(messages, messageId, (message) => ({
 				...message,
 				text: t.retryFailedMessage,
 				deliveryState: "failed",
@@ -249,88 +213,6 @@ async function retryPersistedAgentReply(messageId: string) {
 	}
 }
 
-function createSeededRandom(seed: number) {
-	let state = seed ? seed * 1234567 : 1234567;
-	return () => {
-		state = (state * 9301 + 49297) % 233280;
-		return state / 233280;
-	};
-}
-
-function shuffleArray<T>(array: T[], randomFunc: () => number): T[] {
-	const arr = [...array];
-	for (let i = arr.length - 1; i > 0; i--) {
-		const j = Math.floor(randomFunc() * (i + 1));
-		[arr[i], arr[j]] = [arr[j], arr[i]];
-	}
-	return arr;
-}
-
-function initUserPool(seedId: number) {
-	const random = createSeededRandom(seedId);
-	const shuffledNames = shuffleArray(USER_POOL, random);
-
-	agentUser = {
-		id: "agent",
-		name: shuffledNames.pop() || "Agent",
-		status: STATUS_POOL[Math.floor(random() * STATUS_POOL.length)],
-		color: COLOR_POOL[Math.floor(random() * COLOR_POOL.length)],
-		isAgent: true,
-	};
-
-	const numOnline = Math.floor(random() * 3) + 1;
-	const numOffline = Math.floor(random() * 4) + 2;
-
-	const online = [];
-	for (let i = 0; i < numOnline; i++) {
-		online.push({
-			id: `online_${i}`,
-			name: shuffledNames.pop() || `User_${i}`,
-			status: STATUS_POOL[Math.floor(random() * STATUS_POOL.length)],
-			color: COLOR_POOL[Math.floor(random() * COLOR_POOL.length)],
-			isAgent: false,
-		});
-	}
-	onlineUsers = online;
-
-	const offline = [];
-	for (let i = 0; i < numOffline; i++) {
-		offline.push({
-			id: `offline_${i}`,
-			name: shuffledNames.pop() || `Offline_${i}`,
-			status: "Offline",
-			color: COLOR_POOL[Math.floor(random() * COLOR_POOL.length)],
-			isAgent: false,
-		});
-	}
-	offlineUsers = offline;
-}
-
-function getOpeningStateMessages(): Message[] {
-	if (!Array.isArray(openingStateData.previousMessages)) return [];
-
-	return openingStateData.previousMessages.flatMap((rawMessage, index) => {
-		const sender = normalizeText(rawMessage.sender ?? rawMessage.author, "");
-		const text = normalizeText(rawMessage.text ?? rawMessage.content, "");
-		if (!text) return [];
-
-		const isUserMessage = sender === userName;
-		const authorName = sender || (isUserMessage ? userName : agentUser.name);
-
-		return [
-			{
-				id: `opening-${index}-${authorName}`,
-				role: isUserMessage ? "user" : "agent",
-				text,
-				timestamp: t.earlier,
-				authorName,
-				avatar: isUserMessage ? avatarUrl : undefined,
-				avatarColor: !isUserMessage ? agentUser.color : undefined,
-				deliveryState: "sent",
-			},
-		];
-	});
-}
 async function handleGetHint() {
 	if (!sessionId || isGettingHint || isCompleted) return;
 	isGettingHint = true;
@@ -338,13 +220,7 @@ async function handleGetHint() {
 	hints = [];
 
 	try {
-		const formData = new FormData();
-		formData.append("sessionId", String(sessionId));
-		const res = await fetch(`?/hint`, {
-			method: "POST",
-			body: formData,
-		});
-		const result = deserialize(await res.text());
+		const result = await postAction("hint", sessionId);
 
 		if (result.type === "success" && result.data) {
 			hints = (result.data as any).hints;
@@ -365,7 +241,7 @@ $effect(() => {
 		lastLoadedSessionId = currentId;
 		sessionId = currentId;
 
-		initUserPool(currentId);
+		({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
 
 		isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
 		feedback = existingSession.tutorFeedback || null;
@@ -374,7 +250,13 @@ $effect(() => {
 			showEvaluationModal = true;
 		}
 
-		const openingMessages = getOpeningStateMessages();
+		const openingMessages = getOpeningStateMessages({
+			openingStateData: existingSession.openingState ?? {},
+			userName,
+			agentUser,
+			avatarUrl,
+			labels: { earlier: t.earlier },
+		});
 		const sessionMessages = buildDiscordSessionMessages({
 			rawMessages: existingSession.messages ?? [],
 			formatTimestamp: formatTime,
@@ -396,19 +278,14 @@ onMount(async () => {
 	if (!existingSession) {
 		isInitializing = true;
 		try {
-			const startData = new FormData();
-			const startRes = await fetch(`?/start`, {
-				method: "POST",
-				body: startData,
-			});
-			const startResult = deserialize(await startRes.text());
+			const startResult = await postAction("start", null);
 
 			if (startResult.type === "success" && startResult.data) {
 				const currentId = startResult.data.sessionId as number;
 				sessionId = currentId;
 				lastLoadedSessionId = currentId;
 
-				initUserPool(currentId);
+				({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
 
 				const sendData = new FormData();
 				sendData.append("sessionId", String(currentId));
@@ -422,7 +299,13 @@ onMount(async () => {
 				const sendResult = deserialize(await sendRes.text());
 
 				if (sendResult.type === "success" && sendResult.data) {
-					const openingMessages = getOpeningStateMessages();
+					const openingMessages = getOpeningStateMessages({
+						openingStateData: existingSession.openingState ?? {},
+						userName,
+						agentUser,
+						avatarUrl,
+						labels: { earlier: t.earlier },
+					});
 					messages = [
 						...openingMessages,
 						{
@@ -454,7 +337,7 @@ onMount(async () => {
 		}
 	} else {
 		if (!onlineUsers.length && existingSession.id) {
-			initUserPool(existingSession.id);
+			({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
 		}
 	}
 });
@@ -468,13 +351,7 @@ async function handleComplete() {
 	if (!sessionId || isCompleting || isCompleted) return;
 	isCompleting = true;
 	try {
-		const completeData = new FormData();
-		completeData.append("sessionId", String(sessionId));
-		const res = await fetch(`?/complete`, {
-			method: "POST",
-			body: completeData,
-		});
-		const result = deserialize(await res.text());
+		const result = await postAction("complete", sessionId);
 
 		if (result.type === "success" && result.data) {
 			isCompleted = true;
@@ -520,7 +397,7 @@ async function handleSend() {
 		while (true) {
 			let sendResult: any = null;
 			try {
-				sendResult = await submitAgentReply(currentText, clientMessageId);
+				sendResult = await submitAgentReply(sessionId, currentText, clientMessageId);
 			} catch (error) {
 				console.error("Message submission failed:", error);
 			}
@@ -543,7 +420,7 @@ async function handleSend() {
 							},
 						];
 					} else {
-						updateMessageById(failedAgentMessageId, (message) => ({
+						messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
 							...message,
 							text: t.stillProcessingMessage,
 							deliveryState: "pending",
@@ -558,7 +435,7 @@ async function handleSend() {
 				}
 
 				if (failedAgentMessageId) {
-					updateMessageById(failedAgentMessageId, (message) => ({
+					messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
 						...message,
 						text: sendResult.data.reply as string,
 						deliveryState: "sent",
@@ -601,7 +478,7 @@ async function handleSend() {
 					},
 				];
 			} else {
-				updateMessageById(failedAgentMessageId, (message) => ({
+				messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
 					...message,
 					text: t.retryFailedMessage,
 					deliveryState: "failed",
