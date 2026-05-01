@@ -1,10 +1,10 @@
 import { error, fail } from "@sveltejs/kit";
-import { and, eq, inArray, count } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
+import EmojiConverter from "emoji-js";
 import { db } from "$lib/server/db";
-import { practiceSession, task, sessionMessage } from "$lib/server/db/schema";
+import { practiceSession, sessionMessage, task } from "$lib/server/db/schema";
 import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
-import EmojiConverter from "emoji-js";
 
 const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;

@@ -351,42 +351,36 @@ async function handleComplete() {
 }
 
 async function handleSend() {
-    if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
 
-    const currentText = prepareMarkdownText(inputText);
-    const clientMessageId = crypto.randomUUID();
-    
-    inputText = "";
-    showMentionMenu = false;
-    showEmojiPicker = false;
-    isSubmitting = true;
+	const currentText = prepareMarkdownText(inputText);
+	const clientMessageId = crypto.randomUUID();
 
-    messages = [
-        ...messages,
-        {
-            id: crypto.randomUUID(),
-            role: "user",
-            text: currentText,
-            timestamp: formatTime(new Date()),
-            authorName: userName,
-            avatar: avatarUrl,
-            clientMessageId,
-        },
-    ];
-    await scrollToBottom();
+	inputText = "";
+	showMentionMenu = false;
+	showEmojiPicker = false;
+	isSubmitting = true;
 
-    try {
-        await runAgentReplyWorkflow(
-            sessionId, 
-            clientMessageId, 
-            currentText, 
-            null, 
-            getWorkflowCallbacks()
-        );
-    } finally {
-        isSubmitting = false;
-        isWaitingRetry = false;
-    }
+	messages = [
+		...messages,
+		{
+			id: crypto.randomUUID(),
+			role: "user",
+			text: currentText,
+			timestamp: formatTime(new Date()),
+			authorName: userName,
+			avatar: avatarUrl,
+			clientMessageId,
+		},
+	];
+	await scrollToBottom();
+
+	try {
+		await runAgentReplyWorkflow(sessionId, clientMessageId, currentText, null, getWorkflowCallbacks());
+	} finally {
+		isSubmitting = false;
+		isWaitingRetry = false;
+	}
 }
 
 function insertMention(user: DiscordUser) {
