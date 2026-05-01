@@ -19,16 +19,17 @@ import EmojiPicker from "../EmojiPicker.svelte";
 import MarkdownRenderer from "../MarkdownRenderer.svelte";
 import ResizeableTextarea from "../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent, normalizeEmojiTextForDisplay } from "../utils/emojiUtils";
-import { formatTime, getTodayDateString, normalizeText } from "../utils/messageUtils";
 import { prepareMarkdownText } from "../utils/markdownUtils";
+import { formatTime, getTodayDateString, normalizeText } from "../utils/messageUtils";
 import { getTurnLimitMessage, isTurnLimitReached } from "../utils/sessionUtils";
-import { submitAgentReply, postAction } from "./apiService";
+import { postAction, submitAgentReply } from "./apiService";
+import { runAgentReplyWorkflow } from "./chatFlowController";
 import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
 import { i18n } from "./i18n";
 import { updateMessageById } from "./messageManager";
 import { getOpeningStateMessages } from "./messageTransformer";
 import { initUserPool } from "./mockUser";
-import { type DiscordOpeningState, type DiscordUser, type TutorFeedback, type ObjectiveResult } from "./types";
+import { type DiscordOpeningState, type DiscordUser, type ObjectiveResult, type TutorFeedback } from "./types";
 
 interface Props {
 	taskId?: string | number;
@@ -123,12 +124,6 @@ function handleEmojiSelected(event: CustomEvent | Event) {
 	showEmojiPicker = false;
 }
 
-function waitForRetry(messageId: string): Promise<void> {
-	return new Promise((resolve) => {
-		retryResolvers.set(messageId, resolve);
-	});
-}
-
 function handleRetry(messageId: string) {
 	const resolveRetry = retryResolvers.get(messageId);
 	if (!resolveRetry) {
@@ -146,70 +141,58 @@ function handleRetry(messageId: string) {
 	resolveRetry();
 }
 
+const getWorkflowCallbacks = () => ({
+	formatTime,
+	labels: {
+		stillProcessing: t.stillProcessingMessage,
+		retryFailed: t.retryFailedMessage,
+	},
+	onScrollToBottom: scrollToBottom,
+	onInvalidate: () => invalidateAll(),
+	onComplete: handleComplete,
+	onUpdateMessage: (id: string, updates: Partial<Message>) => {
+		messages = updateMessageById(messages, id, (m) => ({ ...m, ...updates }));
+	},
+	onCreateAgentMessage: (params: { id: string; text: string; state: "pending" | "sent" | "failed"; timestamp: string; clientMessageId?: string }) => {
+		const { id, text, state, timestamp, clientMessageId } = params;
+		messages = [
+			...messages,
+			{
+				id,
+				role: "agent",
+				text,
+				timestamp,
+				authorName: agentUser.name,
+				avatarColor: agentUser.color,
+				deliveryState: state,
+				clientMessageId,
+			},
+		];
+	},
+});
+
 async function retryPersistedAgentReply(messageId: string) {
-	const failedMessage = messages.find((message) => message.id === messageId);
-	if (!failedMessage?.clientMessageId || !failedMessage.retryText || isSubmitting || isCompleted || isInitializing || !sessionId) return;
+	const failedMessage = messages.find((m) => m.id === messageId);
+	if (!failedMessage?.clientMessageId || isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	isSubmitting = true;
 	isWaitingRetry = true;
-	messages = updateMessageById(messages, messageId, (message) => ({
-		...message,
-		text: t.stillProcessingMessage,
-		deliveryState: "pending",
-	}));
-	await scrollToBottom();
 
 	try {
-		while (true) {
-			let sendResult: any = null;
-			try {
-				sendResult = await submitAgentReply(sessionId, failedMessage.retryText, failedMessage.clientMessageId);
-			} catch (error) {
-				console.error("Message retry failed:", error);
-			}
-
-			if (sendResult?.type === "success" && sendResult.data) {
-				if (sendResult.data.pending) {
-					messages = updateMessageById(messages, messageId, (message) => ({
-						...message,
-						text: t.stillProcessingMessage,
-						deliveryState: "pending",
-						isHidden: false,
-						timestamp: formatTime(new Date()),
-					}));
-					await scrollToBottom();
-					await waitForRetry(messageId);
-					continue;
-				}
-
-				messages = updateMessageById(messages, messageId, (message) => ({
-					...message,
-					text: sendResult.data.reply as string,
-					deliveryState: "sent",
-					isHidden: false,
+		await runAgentReplyWorkflow(sessionId, failedMessage.clientMessageId, failedMessage.text, messageId, {
+			...getWorkflowCallbacks(),
+			onStart: () => {
+				messages = updateMessageById(messages, messageId, (m) => ({
+					...m,
+					text: t.stillProcessingMessage,
+					deliveryState: "pending",
 					timestamp: formatTime(new Date()),
 				}));
-				await scrollToBottom();
-				await invalidateAll();
-
-				if (sendResult.data.terminated) await handleComplete();
-				break;
-			}
-
-			messages = updateMessageById(messages, messageId, (message) => ({
-				...message,
-				text: t.retryFailedMessage,
-				deliveryState: "failed",
-				isHidden: false,
-				timestamp: formatTime(new Date()),
-			}));
-			await scrollToBottom();
-			await waitForRetry(messageId);
-		}
+			},
+		});
 	} finally {
 		isSubmitting = false;
 		isWaitingRetry = false;
-		retryResolvers.delete(messageId);
 	}
 }
 
@@ -368,134 +351,42 @@ async function handleComplete() {
 }
 
 async function handleSend() {
-	if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+    if (!inputText.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
 
-	// Use prepareMarkdownText to format the input before clearing it
-	const currentText = prepareMarkdownText(inputText);
-	const clientMessageId = crypto.randomUUID();
-	let failedAgentMessageId: string | null = null;
-	inputText = "";
-	showMentionMenu = false;
-	showEmojiPicker = false;
-	isSubmitting = true;
+    const currentText = prepareMarkdownText(inputText);
+    const clientMessageId = crypto.randomUUID();
+    
+    inputText = "";
+    showMentionMenu = false;
+    showEmojiPicker = false;
+    isSubmitting = true;
 
-	messages = [
-		...messages,
-		{
-			id: crypto.randomUUID(),
-			role: "user",
-			text: currentText, // using the formatted markdown text
-			timestamp: formatTime(new Date()),
-			authorName: userName,
-			avatar: avatarUrl,
-			clientMessageId,
-		},
-	];
-	await scrollToBottom();
+    messages = [
+        ...messages,
+        {
+            id: crypto.randomUUID(),
+            role: "user",
+            text: currentText,
+            timestamp: formatTime(new Date()),
+            authorName: userName,
+            avatar: avatarUrl,
+            clientMessageId,
+        },
+    ];
+    await scrollToBottom();
 
-	try {
-		while (true) {
-			let sendResult: any = null;
-			try {
-				sendResult = await submitAgentReply(sessionId, currentText, clientMessageId);
-			} catch (error) {
-				console.error("Message submission failed:", error);
-			}
-
-			if (sendResult?.type === "success" && sendResult.data) {
-				if (sendResult.data.pending) {
-					if (!failedAgentMessageId) {
-						failedAgentMessageId = crypto.randomUUID();
-						messages = [
-							...messages,
-							{
-								id: failedAgentMessageId,
-								role: "agent",
-								text: t.stillProcessingMessage,
-								timestamp: formatTime(new Date()),
-								authorName: agentUser.name,
-								avatarColor: agentUser.color,
-								deliveryState: "pending",
-								clientMessageId,
-							},
-						];
-					} else {
-						messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
-							...message,
-							text: t.stillProcessingMessage,
-							deliveryState: "pending",
-							isHidden: false,
-							timestamp: formatTime(new Date()),
-						}));
-					}
-					await scrollToBottom();
-					isWaitingRetry = true;
-					await waitForRetry(failedAgentMessageId);
-					continue;
-				}
-
-				if (failedAgentMessageId) {
-					messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
-						...message,
-						text: sendResult.data.reply as string,
-						deliveryState: "sent",
-						isHidden: false,
-						timestamp: formatTime(new Date()),
-					}));
-				} else {
-					messages = [
-						...messages,
-						{
-							id: crypto.randomUUID(),
-							role: "agent",
-							text: sendResult.data.reply as string,
-							timestamp: formatTime(new Date()),
-							authorName: agentUser.name,
-							avatarColor: agentUser.color,
-							deliveryState: "sent",
-						},
-					];
-				}
-				await scrollToBottom();
-				await invalidateAll();
-
-				if (sendResult.data.terminated) await handleComplete();
-				break;
-			}
-
-			if (!failedAgentMessageId) {
-				failedAgentMessageId = crypto.randomUUID();
-				messages = [
-					...messages,
-					{
-						id: failedAgentMessageId,
-						role: "agent",
-						text: t.retryFailedMessage,
-						timestamp: formatTime(new Date()),
-						authorName: agentUser.name,
-						avatarColor: agentUser.color,
-						deliveryState: "failed",
-					},
-				];
-			} else {
-				messages = updateMessageById(messages, failedAgentMessageId, (message) => ({
-					...message,
-					text: t.retryFailedMessage,
-					deliveryState: "failed",
-					isHidden: false,
-					timestamp: formatTime(new Date()),
-				}));
-			}
-			await scrollToBottom();
-
-			isWaitingRetry = true;
-			await waitForRetry(failedAgentMessageId);
-		}
-	} finally {
-		isSubmitting = false;
-		isWaitingRetry = false;
-		if (failedAgentMessageId) retryResolvers.delete(failedAgentMessageId);
-	}
+    try {
+        await runAgentReplyWorkflow(
+            sessionId, 
+            clientMessageId, 
+            currentText, 
+            null, 
+            getWorkflowCallbacks()
+        );
+    } finally {
+        isSubmitting = false;
+        isWaitingRetry = false;
+    }
 }
 
 function insertMention(user: DiscordUser) {
