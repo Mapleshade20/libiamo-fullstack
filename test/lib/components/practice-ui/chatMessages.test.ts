@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDiscordSessionMessages } from "$lib/components/practice-ui/discordSessionMessages";
+import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
 
 const labels = {
 	retryFailedMessage: "Agent reply failed. Click Retry to try again.",
@@ -15,9 +15,9 @@ const baseOptions = {
 	labels,
 };
 
-describe("buildDiscordSessionMessages", () => {
+describe("buildChatMessages", () => {
 	it("adds a failed retry placeholder after a failed persisted user turn", () => {
-		const result = buildDiscordSessionMessages({
+		const result = buildChatMessages({
 			...baseOptions,
 			rawMessages: [
 				{
@@ -42,7 +42,7 @@ describe("buildDiscordSessionMessages", () => {
 	});
 
 	it("adds a pending retry placeholder after an unfinished persisted user turn", () => {
-		const result = buildDiscordSessionMessages({
+		const result = buildChatMessages({
 			...baseOptions,
 			rawMessages: [
 				{
@@ -65,7 +65,7 @@ describe("buildDiscordSessionMessages", () => {
 	});
 
 	it("does not add a retry placeholder when the same turn already has an assistant reply", () => {
-		const result = buildDiscordSessionMessages({
+		const result = buildChatMessages({
 			...baseOptions,
 			rawMessages: [
 				{
@@ -83,7 +83,7 @@ describe("buildDiscordSessionMessages", () => {
 	});
 
 	it("does not use a later turn's assistant reply to satisfy an unfinished turn", () => {
-		const result = buildDiscordSessionMessages({
+		const result = buildChatMessages({
 			...baseOptions,
 			rawMessages: [
 				{

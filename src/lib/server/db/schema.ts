@@ -27,6 +27,7 @@ export const template = pgTable(
 	{
 		id: serial("id").primaryKey(),
 		isActive: boolean("is_active").default(true).notNull(),
+		agentStartsFirst: boolean("agent_starts_first").default(true).notNull(),
 		language: languageCodeEnum("language").notNull(),
 		interactionType: interactionTypeEnum("interaction_type").notNull(),
 		ui: uiVariantEnum("ui").notNull(),

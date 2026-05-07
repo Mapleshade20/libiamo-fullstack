@@ -1,11 +1,11 @@
 import { submitAgentReply } from "./apiService";
-import type { DiscordSessionMessage } from "./discordSessionMessages";
+import type { ChatMessage } from "./chatMessages";
 import { retryManager } from "./messageManager";
 
 export interface FlowCallbacks {
 	formatTime: (date: Date) => string;
 	onStart?: () => void;
-	onUpdateMessage: (id: string, updates: Partial<DiscordSessionMessage>) => void;
+	onUpdateMessage: (id: string, updates: Partial<ChatMessage>) => void;
 	onCreateAgentMessage: (params: {
 		id: string;
 		text: string;
@@ -43,7 +43,10 @@ export async function runAgentReplyWorkflow(
 			} catch (error) {
 				console.error("Message submission failed:", error);
 			}
-
+			if (sendResult?.type === "failure" && sendResult.status >= 400 && sendResult.status < 500) {
+				console.warn("Backend rejected the message:", sendResult.data?.error);
+				break;
+			}
 			if (sendResult?.type === "success" && sendResult.data) {
 				if (sendResult.data.pending) {
 					const timestamp = callbacks.formatTime(new Date());

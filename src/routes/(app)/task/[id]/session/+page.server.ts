@@ -76,6 +76,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		taskId: taskIdStr,
 		agentPrompt: taskData.agentPrompt || "",
 		maxTurns: taskData.template.maxTurns || 0,
+		agentStartsFirst: taskData.template.agentStartsFirst,
 		user: {
 			name: user.name || "Learner",
 			avatarUrl,

@@ -29,6 +29,7 @@ type TemplateData = {
 	pointReward?: number;
 	gemReward?: number;
 	isActive?: boolean;
+	agentStartsFirst?: boolean;
 	titleBase?: string;
 	shortObjectiveBase?: string | null;
 	descriptionBase?: string | null;
@@ -70,12 +71,18 @@ function centerField(element: HTMLElement) {
 
 	if (!scrollParent) {
 		const targetTop = window.scrollY + elementRect.top - window.innerHeight / 2 + elementRect.height / 2;
-		window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+		window.scrollTo({
+			top: Math.max(0, targetTop),
+			behavior: "smooth",
+		});
 	} else {
 		const parentRect = scrollParent.getBoundingClientRect();
 		const offsetTop = elementRect.top - parentRect.top;
 		const targetTop = scrollParent.scrollTop + offsetTop - scrollParent.clientHeight / 2 + elementRect.height / 2;
-		scrollParent.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+		scrollParent.scrollTo({
+			top: Math.max(0, targetTop),
+			behavior: "smooth",
+		});
 	}
 }
 
@@ -171,13 +178,22 @@ $effect(() => {
 });
 
 function getVariantDraft(id: number): VariantDraft {
-	return variantDrafts.get(id) ?? { slotValues: {}, openingState: {}, originalJson: "{}" };
+	return (
+		variantDrafts.get(id) ?? {
+			slotValues: {},
+			openingState: {},
+			originalJson: "{}",
+		}
+	);
 }
 
 function isVariantDirty(id: number): boolean {
 	const draft = variantDrafts.get(id);
 	if (!draft) return false;
-	const currentJson = JSON.stringify({ sv: draft.slotValues, os: draft.openingState });
+	const currentJson = JSON.stringify({
+		sv: draft.slotValues,
+		os: draft.openingState,
+	});
 	return currentJson !== draft.originalJson;
 }
 
@@ -335,6 +351,10 @@ function jsonStr(val: unknown): string {
 				<input id="isActive" name="isActive" type="checkbox" checked={template.isActive ?? true} class="rounded border-input">
 				<Label for="isActive">Active</Label>
 			</div>
+			<div class="flex items-center gap-2 pt-6">
+				<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" checked={template.agentStartsFirst ?? true} class="rounded border-input">
+				<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
+			</div>
 		</div>
 	</fieldset>
 
@@ -461,10 +481,15 @@ function jsonStr(val: unknown): string {
 		{#each variants as v (v.id)}
 			{@const draft = getVariantDraft(v.id)}
 			{@const dirty = isVariantDirty(v.id)}
-			<div class="rounded-md border border-input p-4 space-y-3 {!v.isActive ? 'opacity-50' : ''}">
+			<div
+				class="rounded-md border border-input p-4 space-y-3 {!v.isActive
+					? 'opacity-50'
+					: ''}"
+			>
 				<div class="flex items-center justify-between">
 					<span class="text-sm font-medium">
-						Variant #{v.id} {v.isActive ? "" : "(inactive)"}
+						Variant #{v.id}
+						{v.isActive ? "" : "(inactive)"}
 						{#if dirty}
 							<span class="ml-2 text-xs text-amber-600">(unsaved)</span>
 						{/if}
@@ -472,7 +497,9 @@ function jsonStr(val: unknown): string {
 					<div class="flex gap-2">
 						<button
 							type="button"
-							onclick={() => (editingVariantId = editingVariantId === v.id ? null : v.id)}
+							onclick={() =>
+								(editingVariantId =
+									editingVariantId === v.id ? null : v.id)}
 							class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
 						>
 							{editingVariantId === v.id ? "Close" : "Edit"}
@@ -497,7 +524,13 @@ function jsonStr(val: unknown): string {
 
 						<div class="space-y-2">
 							<Label>Slot Values</Label>
-							<SlotEditor value={draft.slotValues} {requiredSlots} name="slotValues" onchange={(slots) => updateDraftSlots(v.id, slots)} />
+							<SlotEditor
+								value={draft.slotValues}
+								{requiredSlots}
+								name="slotValues"
+								onchange={(slots) =>
+									updateDraftSlots(v.id, slots)}
+							/>
 						</div>
 
 						<div class="space-y-2">
@@ -506,7 +539,11 @@ function jsonStr(val: unknown): string {
 								value={draft.openingState}
 								ui={selectedUi}
 								name="openingState"
-								onchange={(state) => updateDraftOpeningState(v.id, state as Record<string, unknown>)}
+								onchange={(state) =>
+									updateDraftOpeningState(
+										v.id,
+										state as Record<string, unknown>,
+									)}
 							/>
 						</div>
 
@@ -516,11 +553,15 @@ function jsonStr(val: unknown): string {
 					<div class="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
 						<div>
 							<span class="font-medium text-foreground">Slot Values:</span>
-							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(v.slotValues)}</pre>
+							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(
+									v.slotValues,
+								)}</pre>
 						</div>
 						<div>
 							<span class="font-medium text-foreground">Opening State:</span>
-							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(v.openingState)}</pre>
+							<pre class="mt-1 overflow-auto max-h-20 rounded bg-muted px-2 py-1">{jsonStr(
+									v.openingState,
+								)}</pre>
 						</div>
 					</div>
 				{/if}

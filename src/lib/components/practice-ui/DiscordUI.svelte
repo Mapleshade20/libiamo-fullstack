@@ -11,6 +11,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import Settings from "@lucide/svelte/icons/settings";
 import Smile from "@lucide/svelte/icons/smile";
 import Users from "@lucide/svelte/icons/users";
+import EmojiConvertor from "emoji-js";
 import { onMount, tick } from "svelte";
 import { fade, fly, slide } from "svelte/transition";
 import { deserialize } from "$app/forms";
@@ -21,15 +22,15 @@ import ResizeableTextarea from "../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent, normalizeEmojiTextForDisplay } from "../utils/emojiUtils";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { formatTime, getTodayDateString, normalizeText } from "../utils/messageUtils";
-import { getTurnLimitMessage, isTurnLimitReached } from "../utils/sessionUtils";
+import { calculateCurrentTurns, getTurnLimitMessage, isTurnLimitReached } from "../utils/sessionUtils";
 import { postAction, submitAgentReply } from "./apiService";
 import { runAgentReplyWorkflow } from "./chatFlowController";
-import { buildDiscordSessionMessages, type DiscordSessionMessage } from "./discordSessionMessages";
+import { buildChatMessages, type ChatMessage } from "./chatMessages";
 import { i18n } from "./i18n";
-import { updateMessageById } from "./messageManager";
+import { retryManager, updateMessageById } from "./messageManager";
 import { getOpeningStateMessages } from "./messageTransformer";
 import { initUserPool } from "./mockUser";
-import { type DiscordOpeningState, type DiscordUser, type ObjectiveResult, type TutorFeedback } from "./types";
+import { type ChatOpeningState, type ChatUser, type ObjectiveResult, type TutorFeedback } from "./types";
 
 interface Props {
 	taskId?: string | number;
@@ -39,6 +40,7 @@ interface Props {
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
+	agentStartsFirst?: boolean;
 }
 
 let {
@@ -49,10 +51,11 @@ let {
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
+	agentStartsFirst = true,
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
-const openingStateData = $derived((openingState ?? {}) as DiscordOpeningState);
+const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 
 const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
 const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
@@ -65,29 +68,34 @@ const serverAcronym = $derived(
 		.slice(0, 2)
 		.toUpperCase(),
 );
-
-type Message = DiscordSessionMessage;
+const emojiConv = new EmojiConvertor();
+emojiConv.replace_mode = "unified";
+emojiConv.allow_native = true;
+type Message = ChatMessage;
 
 let showMobileMenu = $state(false); // for mobile responsiveness
 let sessionId = $state<number | null>(null);
 let lastLoadedSessionId = $state<number | null>(null);
+let lastServerMessageCount = $state<number>(0);
 let isSubmitting = $state(false);
+let isEntering = $state(true);
+let hasAutoCompleted = $state(false);
 let isCompleting = $state(false);
 let isCompleted = $state(false);
 let showEvaluationModal = $state(false);
 let isInitializing = $state(false);
 let feedback = $state<TutorFeedback | null>(null);
-let messages = $state<Message[]>([]);
-
-let agentUser = $state<DiscordUser>({
+let messages = $state<ChatMessage[]>([]);
+let hasAttemptedComplete = $state(false);
+let agentUser = $state<ChatUser>({
 	id: "agent",
 	name: "Agent",
 	status: "Online",
 	color: "bg-[#5865F2]",
 	isAgent: true,
 });
-let onlineUsers = $state<DiscordUser[]>([]);
-let offlineUsers = $state<DiscordUser[]>([]);
+let onlineUsers = $state<ChatUser[]>([]);
+let offlineUsers = $state<ChatUser[]>([]);
 let allUsers = $derived([agentUser, ...onlineUsers, ...offlineUsers]);
 
 let inputRef = $state<HTMLInputElement | null>(null);
@@ -108,13 +116,15 @@ let contextMenu = $state({
 	show: false,
 	x: 0,
 	y: 0,
-	targetUser: null as DiscordUser | null,
+	targetUser: null as ChatUser | null,
 });
 let showEmojiPicker = $state(false);
-let isWaitingRetry = $state(false);
-const retryResolvers = new Map<string, () => void>();
-const userMessageCount = $derived(messages.filter((m) => m.role === "user").length);
-const limitReached = $derived(isTurnLimitReached(userMessageCount, maxTurns ?? 0));
+const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
+const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
+const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
+const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst));
+const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
+const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 
 function handleEmojiSelected(event: CustomEvent | Event) {
 	const emoji = extractEmojiFromPickerEvent(event);
@@ -125,8 +135,9 @@ function handleEmojiSelected(event: CustomEvent | Event) {
 }
 
 function handleRetry(messageId: string) {
-	const resolveRetry = retryResolvers.get(messageId);
-	if (!resolveRetry) {
+	const resolved = retryManager.resolveRetry(messageId);
+
+	if (!resolved) {
 		void retryPersistedAgentReply(messageId);
 		return;
 	}
@@ -135,10 +146,6 @@ function handleRetry(messageId: string) {
 		...message,
 		isHidden: true,
 	}));
-
-	retryResolvers.delete(messageId);
-	isWaitingRetry = false;
-	resolveRetry();
 }
 
 const getWorkflowCallbacks = () => ({
@@ -151,7 +158,10 @@ const getWorkflowCallbacks = () => ({
 	onInvalidate: () => invalidateAll(),
 	onComplete: handleComplete,
 	onUpdateMessage: (id: string, updates: Partial<Message>) => {
-		messages = updateMessageById(messages, id, (m) => ({ ...m, ...updates }));
+		messages = updateMessageById(messages, id, (m) => ({
+			...m,
+			...updates,
+		}));
 	},
 	onCreateAgentMessage: (params: { id: string; text: string; state: "pending" | "sent" | "failed"; timestamp: string; clientMessageId?: string }) => {
 		const { id, text, state, timestamp, clientMessageId } = params;
@@ -176,40 +186,64 @@ async function retryPersistedAgentReply(messageId: string) {
 	if (!failedMessage?.clientMessageId || isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	isSubmitting = true;
-	isWaitingRetry = true;
 
 	try {
-		await runAgentReplyWorkflow(sessionId, failedMessage.clientMessageId, failedMessage.text, messageId, {
+		await runAgentReplyWorkflow(sessionId, failedMessage.clientMessageId, failedMessage.retryText || failedMessage.text, messageId, {
 			...getWorkflowCallbacks(),
 			onStart: () => {
-				messages = updateMessageById(messages, messageId, (m) => ({
-					...m,
-					text: t.stillProcessingMessage,
-					deliveryState: "pending",
-					timestamp: formatTime(new Date()),
-				}));
+				messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
 			},
 		});
 	} finally {
 		isSubmitting = false;
-		isWaitingRetry = false;
 	}
 }
 
+let hintAbortController: AbortController | null = null;
+
 async function handleGetHint() {
-	if (!sessionId || isGettingHint || isCompleted) return;
+	if (isGettingHint) {
+		showHintMenu = true;
+		return;
+	}
+	if (!sessionId || isCompleted) return;
+
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
+	hintAbortController = new AbortController();
 
 	try {
-		const result = await postAction("hint", sessionId);
+		const formData = new FormData();
+		formData.append("sessionId", String(sessionId));
+		const res = await fetch(`?/hint`, {
+			method: "POST",
+			body: formData,
+			signal: hintAbortController.signal,
+		});
+		const result = deserialize(await res.text());
 
 		if (result.type === "success" && result.data) {
 			hints = (result.data as any).hints;
 		}
+	} catch (error) {
+		if (error instanceof DOMException && error.name === "AbortError") {
+			console.log("Hint request was aborted by user.");
+		} else {
+			console.error("Failed to get hints:", error);
+		}
 	} finally {
 		isGettingHint = false;
+		hintAbortController = null;
+	}
+}
+
+function closeHintMenu() {
+	showHintMenu = false;
+	if (isGettingHint && hintAbortController) {
+		hintAbortController.abort();
+		isGettingHint = false;
+		hintAbortController = null;
 	}
 }
 
@@ -218,46 +252,87 @@ function selectHint(text: string) {
 	showHintMenu = false;
 	inputRef?.focus();
 }
+
 $effect(() => {
-	if (existingSession && existingSession.id !== lastLoadedSessionId) {
-		const currentId = existingSession.id;
-		lastLoadedSessionId = currentId;
-		sessionId = currentId;
+	if (limitReached && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
+		hasAutoCompleted = true;
+		handleComplete();
+	}
+});
 
-		({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
+$effect(() => {
+	if (existingSession) {
+		const serverMsgCount = existingSession.messages?.length || 0;
 
-		isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
-		feedback = existingSession.tutorFeedback || null;
+		if (existingSession.id !== lastLoadedSessionId || serverMsgCount > lastServerMessageCount) {
+			const currentId = existingSession.id;
+			lastLoadedSessionId = currentId;
+			lastServerMessageCount = serverMsgCount;
+			sessionId = currentId;
 
-		if (isCompleted && feedback) {
-			showEvaluationModal = true;
+			({ agentUser, onlineUsers, offlineUsers } = initUserPool(currentId));
+
+			isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
+			feedback = existingSession.tutorFeedback || null;
+
+			if (isCompleted && feedback) showEvaluationModal = true;
+
+			const openingMessages = getOpeningStateMessages({
+				openingStateData: existingSession.openingState ?? {},
+				userName,
+				agentUser,
+				avatarUrl,
+				labels: { earlier: t.earlier },
+			});
+
+			const sortedRawMessages = [...(existingSession.messages ?? [])].sort(
+				(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+			);
+
+			const sessionMessages = buildChatMessages({
+				rawMessages: sortedRawMessages,
+				formatTimestamp: formatTime,
+				userName,
+				agentName: agentUser.name,
+				avatarUrl,
+				agentColor: agentUser.color,
+				labels: t,
+			});
+
+			messages = [...openingMessages, ...sessionMessages];
+
+			tick().then(() => {
+				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+			});
 		}
+	}
+});
 
-		const openingMessages = getOpeningStateMessages({
-			openingStateData: existingSession.openingState ?? {},
-			userName,
-			agentUser,
-			avatarUrl,
-			labels: { earlier: t.earlier },
-		});
-		const sessionMessages = buildDiscordSessionMessages({
-			rawMessages: existingSession.messages ?? [],
-			formatTimestamp: formatTime,
-			userName,
-			agentName: agentUser.name,
-			avatarUrl,
-			agentColor: agentUser.color,
-			labels: t,
-		});
-		messages = [...openingMessages, ...sessionMessages];
+$effect(() => {
+	const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
+	if (needsPolling && !isSubmitting && sessionId) {
+		const interval = setInterval(() => {
+			invalidateAll();
+		}, 3000);
+		return () => clearInterval(interval);
+	}
+});
 
-		tick().then(() => {
-			if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-		});
+$effect(() => {
+	const text = inputText;
+	const match = text.match(/@([a-zA-Z0-9_]*)$/);
+	if (match) {
+		mentionQuery = match[1];
+		showMentionMenu = true;
+	} else {
+		showMentionMenu = false;
 	}
 });
 
 onMount(async () => {
+	setTimeout(() => {
+		isEntering = false;
+	}, 500);
 	if (!existingSession) {
 		isInitializing = true;
 		try {
@@ -268,27 +343,17 @@ onMount(async () => {
 				sessionId = currentId;
 				lastLoadedSessionId = currentId;
 
-				({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
+				({ agentUser, onlineUsers, offlineUsers } = initUserPool(currentId));
 
-				const sendData = new FormData();
-				sendData.append("sessionId", String(currentId));
-				sendData.append("message", "*User joined the server*");
-				sendData.append("clientMessageId", `join-${currentId}`);
-
-				const sendRes = await fetch(`?/send`, {
-					method: "POST",
-					body: sendData,
+				const openingMessages = getOpeningStateMessages({
+					openingStateData: openingStateData,
+					userName,
+					agentUser,
+					avatarUrl,
+					labels: { earlier: t.earlier },
 				});
-				const sendResult = deserialize(await sendRes.text());
 
-				if (sendResult.type === "success" && sendResult.data) {
-					const openingMessages = getOpeningStateMessages({
-						openingStateData: existingSession.openingState ?? {},
-						userName,
-						agentUser,
-						avatarUrl,
-						labels: { earlier: t.earlier },
-					});
+				if (agentStartsFirst) {
 					messages = [
 						...openingMessages,
 						{
@@ -300,18 +365,17 @@ onMount(async () => {
 							avatar: avatarUrl,
 							isHidden: true,
 						},
-						{
-							id: crypto.randomUUID(),
-							role: "agent",
-							text: sendResult.data.reply as string,
-							timestamp: formatTime(new Date()),
-							authorName: agentUser.name,
-							avatarColor: agentUser.color,
-						},
 					];
+
 					await scrollToBottom();
-					await invalidateAll();
+
+					await runAgentReplyWorkflow(currentId, `join-${currentId}`, "*User joined the server*", null, getWorkflowCallbacks());
+				} else {
+					messages = [...openingMessages];
 				}
+
+				await scrollToBottom();
+				await invalidateAll();
 			}
 		} catch (error) {
 			console.error("Initialization failed:", error);
@@ -333,6 +397,7 @@ async function scrollToBottom() {
 async function handleComplete() {
 	if (!sessionId || isCompleting || isCompleted) return;
 	isCompleting = true;
+	hasAttemptedComplete = true;
 	try {
 		const result = await postAction("complete", sessionId);
 
@@ -342,9 +407,12 @@ async function handleComplete() {
 			showEvaluationModal = true;
 			await scrollToBottom();
 			await invalidateAll();
+		} else {
+			hasAttemptedComplete = false;
 		}
 	} catch (error) {
 		console.error("Completion failed:", error);
+		hasAttemptedComplete = false;
 	} finally {
 		isCompleting = false;
 	}
@@ -379,30 +447,24 @@ async function handleSend() {
 		await runAgentReplyWorkflow(sessionId, clientMessageId, currentText, null, getWorkflowCallbacks());
 	} finally {
 		isSubmitting = false;
-		isWaitingRetry = false;
 	}
 }
 
-function insertMention(user: DiscordUser) {
-	if (!inputRef) return;
-	const cursor = inputRef.selectionStart || 0;
-	const textBeforeCursor = inputText.slice(0, cursor);
-	const textAfterCursor = inputText.slice(cursor);
+function insertMention(user: ChatUser) {
+	const lastAtIndex = inputText.lastIndexOf("@");
 
-	const match = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
-	if (match) {
-		const beforeMention = textBeforeCursor.slice(0, match.index);
-		inputText = `${beforeMention}@${user.name} ${textAfterCursor}`;
-		showMentionMenu = false;
-		setTimeout(() => {
-			inputRef?.focus();
-			const newCursor = beforeMention.length + user.name.length + 2;
-			inputRef?.setSelectionRange(newCursor, newCursor);
-		}, 0);
+	if (lastAtIndex !== -1) {
+		const beforeMention = inputText.slice(0, lastAtIndex);
+		inputText = `${beforeMention}@${user.name}`;
+	} else {
+		const space = inputText.endsWith(" ") || inputText === "" ? "" : " ";
+		inputText += `${space}@${user.name} `;
 	}
+
+	showMentionMenu = false;
 }
 
-function handleContextMenu(e: MouseEvent, user: DiscordUser) {
+function handleContextMenu(e: MouseEvent, user: ChatUser) {
 	e.preventDefault();
 	contextMenu = {
 		show: true,
@@ -428,6 +490,11 @@ function handleWindowClick(e: MouseEvent) {
 	if (!target.closest(".emoji-container-wrapper")) {
 		showEmojiPicker = false;
 	}
+	if (!target.closest(".hint-container-wrapper")) {
+		if (showHintMenu) {
+			closeHintMenu();
+		}
+	}
 }
 
 function handleMockAction() {
@@ -441,6 +508,17 @@ function handleMockAction() {
 
 <!-- Global click handler for closing menus/pickers -->
 <svelte:window onclick={handleWindowClick} />
+
+{#if isEntering}
+	<div class="fixed inset-0 z-[3000] flex flex-col items-center justify-center bg-[#313338]" out:fade={{ duration: 200 }}>
+		<div class="flex items-center gap-2">
+			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]"></span>
+			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]" style="animation-delay: 0.2s"></span>
+			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]" style="animation-delay: 0.4s"></span>
+		</div>
+		<p class="mt-4 text-sm font-bold text-[#80848E] uppercase tracking-wider">Connecting...</p>
+	</div>
+{/if}
 
 <div
 	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
@@ -467,7 +545,12 @@ function handleMockAction() {
 								<div class="flex items-center justify-between bg-[#2B2D31] p-3 rounded-lg border border-[#1E1F22] shadow-sm">
 									<span class="text-[14px] text-[#DBDEE1] font-medium pr-4 leading-snug">{obj.text}</span>
 									<span
-										class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-black shadow-inner {obj.grade === 'A' ? 'bg-[#23A559] text-white' : obj.grade === 'B' ? 'bg-[#FEE75C] text-black' : 'bg-[#DA373C] text-white'}"
+										class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-black shadow-inner {obj.grade ===
+										'A'
+											? 'bg-[#23A559] text-white'
+											: obj.grade === 'B'
+												? 'bg-[#FEE75C] text-black'
+												: 'bg-[#DA373C] text-white'}"
 										>{obj.grade}</span
 									>
 								</div>
@@ -531,7 +614,9 @@ function handleMockAction() {
 
 	<!-- 3. SIDEBAR SECTION (Responsive) -->
 	<div
-		class="fixed inset-0 z-[1001] flex md:relative md:flex h-full transition-transform duration-300 md:translate-x-0 {showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}"
+		class="fixed inset-0 z-[1001] flex md:relative md:flex h-full transition-transform duration-300 md:translate-x-0 {showMobileMenu
+			? 'translate-x-0'
+			: '-translate-x-full md:translate-x-0'}"
 	>
 		{#if showMobileMenu}
 			<div
@@ -539,8 +624,9 @@ function handleMockAction() {
 				tabindex="-1"
 				class="fixed inset-0 bg-black/60 md:hidden -z-10"
 				style="width: 100vw; height: 100vh;"
-				onclick={() => showMobileMenu = false}
-				onkeydown={(e) => e.key === 'Escape' && (showMobileMenu = false)}
+				onclick={() => (showMobileMenu = false)}
+				onkeydown={(e) =>
+					e.key === "Escape" && (showMobileMenu = false)}
 				transition:fade={{ duration: 200 }}
 			></div>
 		{/if}
@@ -633,12 +719,26 @@ function handleMockAction() {
 				<span class="font-semibold text-white truncate">{channelName}</span>
 			</div>
 			<div class="flex items-center gap-4 text-[#B5BAC1]">
+				{#if remainingTurns !== null && !isCompleted}
+					<div class="flex items-center gap-2 px-3 py-1 rounded bg-[#232428] shadow-inner border border-[#1E1F22]">
+						<span class="text-xs font-bold text-[#949BA4] uppercase tracking-wider">{t.turnsLeft}</span>
+						<span
+							class="text-sm font-black {remainingTurns <= 2
+								? 'text-[#DA373C]'
+								: 'text-[#23A559]'}"
+						>
+							{remainingTurns}
+						</span>
+					</div>
+				{/if}
 				{#if !isCompleted && sessionId}
 					<button
 						type="button"
 						class="flex items-center gap-2 rounded bg-[#23A559] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#1D8749] disabled:opacity-50"
 						onclick={handleComplete}
-						disabled={isCompleting || isSubmitting || isInitializing}
+						disabled={isCompleting ||
+							isSubmitting ||
+							isInitializing}
 					>
 						<CheckCircle size={16} />
 						<span class="hidden sm:inline">{isCompleting ? t.evaluating : t.finishTask}</span>
@@ -646,7 +746,9 @@ function handleMockAction() {
 				{/if}
 				<button
 					type="button"
-					class="transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+					class="transition-colors {showMembers
+						? 'text-white'
+						: 'hover:text-[#DBDEE1]'}"
 					onclick={() => (showMembers = !showMembers)}
 				>
 					<Users size={20} />
@@ -666,10 +768,13 @@ function handleMockAction() {
 						<div class="h-px flex-1 bg-[#404249]"></div>
 					</div>
 
-					{#each messages.filter((m) => !m.isHidden) as msg (msg.id)}
+					{#each messages.filter((m) => !m.isHidden && m.deliveryState !== "pending") as msg (msg.id)}
 						<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
 							<div
-								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role === 'agent' ? msg.avatarColor : 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden shadow-inner"
+								class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
+								'agent'
+									? msg.avatarColor
+									: 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden shadow-inner"
 							>
 								{#if msg.role === "user" && msg.avatar}
 									<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
@@ -682,46 +787,77 @@ function handleMockAction() {
 									<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
 									<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
 								</div>
-
 								<div class="mt-0.5 text-[#DBDEE1] break-words leading-normal">
 									{#if msg.role === "agent" && msg.deliveryState === "failed"}
 										<div class="mt-1 flex flex-wrap items-center gap-2">
-											<span class="text-[#F28B82] whitespace-pre-wrap">{msg.text}</span>
-											<button
-												type="button"
-												class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31]"
-												onclick={() => handleRetry(msg.id)}
+											<span class="text-[#F28B82] whitespace-pre-wrap"
+												>{emojiConv.replace_colons(
+													msg.text,
+												)}</span
 											>
-												<CheckCircle size={16} />{t.retry}
-											</button>
+											{#if !limitReached}
+												<button
+													type="button"
+													class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31]"
+													onclick={() =>
+														handleRetry(msg.id)}
+												>
+													<CheckCircle size={16} />{t.retry}
+												</button>
+											{/if}
 										</div>
 									{:else if msg.role === "agent" && msg.deliveryState === "pending"}
 										<div class="mt-1 flex flex-wrap items-center gap-2">
-											<span class="text-[#F0B232] whitespace-pre-wrap">{msg.text}</span>
+											<span class="text-[#F0B232] whitespace-pre-wrap"
+												>{emojiConv.replace_colons(
+													msg.text,
+												)}</span
+											>
 											<button
 												type="button"
 												class="flex items-center gap-2 rounded bg-[#5865F2] px-3 py-1 text-sm font-medium text-white hover:bg-[#4752C4]"
-												onclick={() => handleRetry(msg.id)}
+												onclick={() =>
+													handleRetry(msg.id)}
 											>
 												{t.retry}
 											</button>
 										</div>
 									{:else}
-										<div class="markdown-wrapper"><MarkdownRenderer content={normalizeEmojiTextForDisplay(msg.text)} /></div>
+										<div class="markdown-wrapper">
+											<MarkdownRenderer
+												content={normalizeEmojiTextForDisplay(
+													emojiConv.replace_colons(
+														msg.text,
+													),
+												)}
+											/>
+										</div>
 									{/if}
 								</div>
 							</div>
 						</div>
 					{/each}
 
-					{#if isInitializing}
-						<div class="mt-4 flex p-1 -mx-4 px-4 items-center gap-3">
-							<div class="flex gap-1">
-								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce"></span>
-								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.2s"></span>
-								<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.4s"></span>
+					{#if isTyping}
+						<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group items-center gap-3">
+							<div
+								class="mr-1 h-10 w-10 shrink-0 rounded-full {agentUser.color} flex items-center justify-center text-white font-bold overflow-hidden"
+							>
+								{agentUser.name.charAt(0).toUpperCase()}
 							</div>
-							<span class="text-xs font-semibold text-[#80848E]">{isInitializing ? "Agent is joining..." : `${agentUser.name} is typing...`}</span>
+
+							<div class="flex-1 flex items-center gap-3">
+								<div class="flex gap-1">
+									<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce"></span>
+									<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.2s"></span>
+									<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.4s"></span>
+								</div>
+								<span class="text-xs font-semibold text-[#80848E]">
+									{isInitializing
+										? "Agent is joining..."
+										: `${agentUser.name} is typing...`}
+								</span>
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -736,9 +872,16 @@ function handleMockAction() {
 									<li class="mx-1">
 										<button
 											type="button"
-											class="w-full text-left px-3 py-2 rounded hover:bg-[#35373C] cursor-pointer flex items-center gap-2 {mentionIndex === i ? 'bg-[#35373C]' : ''}"
-											onmouseenter={() => (mentionIndex = i)}
-											onclick={() => insertMention(user)}
+											class="w-full text-left px-3 py-2 rounded hover:bg-[#35373C] cursor-pointer flex items-center gap-2 {mentionIndex ===
+											i
+												? 'bg-[#35373C]'
+												: ''}"
+											onmouseenter={() =>
+												(mentionIndex = i)}
+											onmousedown={(e) => {
+												e.preventDefault();
+												insertMention(user);
+											}}
 										>
 											<div
 												class="w-6 h-6 shrink-0 rounded-full {user.color} flex items-center justify-center text-xs font-bold text-white overflow-hidden"
@@ -757,13 +900,12 @@ function handleMockAction() {
 					{/if}
 
 					<div class="flex flex-col relative rounded-lg bg-[#383A40]">
-						{#if limitReached}
-							<div class="p-2.5 text-sm italic text-orange-400 bg-black/20 rounded-t-lg border-b border-[#313338]">
-								{getTurnLimitMessage(maxTurns)}
-							</div>
-						{/if}
-
-						<div class="flex items-start px-4 {isCompleted || limitReached ? 'opacity-50' : ''}">
+						<div
+							class="flex items-start px-4 {isCompleted ||
+							limitReached
+								? 'opacity-50'
+								: ''}"
+						>
 							<div class="flex h-[44px] shrink-0 items-center justify-center mr-4">
 								<button
 									type="button"
@@ -778,17 +920,68 @@ function handleMockAction() {
 								<ResizeableTextarea
 									bind:value={inputText}
 									maxRows={10}
-									disabled={isSubmitting || isCompleting || isCompleted || isInitializing || limitReached}
-									placeholder={isCompleted ? "Session ended" : limitReached ? "Turn limit reached" : isWaitingRetry? t.retryInputPlaceholder : messagePlaceholder}
-									onKeyDown={(e:KeyboardEvent) => {
-					if (e.key === 'Enter' && !e.shiftKey) {
-						const isMobile = window.matchMedia("(max-width: 768px)").matches;
-						if (!isMobile) {
-							e.preventDefault();
-							handleSend();
-						}
-					}
-				}}
+									disabled={isSubmitting ||
+										isCompleting ||
+										isCompleted ||
+										isInitializing ||
+										limitReached}
+									placeholder={isCompleted
+										? "Session ended"
+										: limitReached
+											? "Turn limit reached"
+											: isWaitingRetry
+												? t.retryInputPlaceholder
+												: messagePlaceholder}
+									onKeyDown={(e: KeyboardEvent) => {
+										if (
+											showMentionMenu &&
+											filteredMentionUsers.length > 0
+										) {
+											if (e.key === "ArrowDown") {
+												e.preventDefault();
+												mentionIndex =
+													(mentionIndex + 1) %
+													filteredMentionUsers.length;
+												return;
+											}
+											if (e.key === "ArrowUp") {
+												e.preventDefault();
+												mentionIndex =
+													(mentionIndex -
+														1 +
+														filteredMentionUsers.length) %
+													filteredMentionUsers.length;
+												return;
+											}
+											if (
+												e.key === "Enter" ||
+												e.key === "Tab"
+											) {
+												e.preventDefault();
+												insertMention(
+													filteredMentionUsers[
+														mentionIndex
+													],
+												);
+												return;
+											}
+											if (e.key === "Escape") {
+												showMentionMenu = false;
+												return;
+											}
+										}
+
+										if (e.key === "Enter" && !e.shiftKey) {
+											const isMobile =
+												window.matchMedia(
+													"(max-width: 768px)",
+												).matches;
+											if (!isMobile) {
+												e.preventDefault();
+												handleSend();
+											}
+										}
+									}}
 								/>
 							</div>
 
@@ -796,11 +989,21 @@ function handleMockAction() {
 								<div class="relative flex h-full items-center">
 									<button
 										type="button"
-										class="transition-colors {isGettingHint ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
-										onclick={handleGetHint}
+										class="transition-colors {isGettingHint
+											? 'text-yellow-400'
+											: 'hover:text-[#DBDEE1]'}"
+										onclick={(e) => {
+											e.stopPropagation();
+											handleGetHint();
+										}}
 										title={t.getHint}
 									>
-										<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
+										<Lightbulb
+											size={22}
+											class={isGettingHint
+												? "animate-pulse"
+												: ""}
+										/>
 									</button>
 									{#if showHintMenu}
 										<div
@@ -810,7 +1013,16 @@ function handleMockAction() {
 												class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22] flex justify-between items-center"
 											>
 												<span>{t.hintTitle}</span>
-												<button type="button" onclick={() => (showHintMenu = false)} class="hover:text-white text-lg">&times;</button>
+												<button
+													type="button"
+													onclick={(e) => {
+														e.stopPropagation();
+														closeHintMenu();
+													}}
+													class="hover:text-white text-lg"
+												>
+													&times;
+												</button>
 											</div>
 											<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
 												{#if isGettingHint}
@@ -820,7 +1032,10 @@ function handleMockAction() {
 														<button
 															type="button"
 															class="w-full text-left p-2.5 rounded hover:bg-[#35373C] transition-colors border border-transparent hover:border-[#404249]"
-															onclick={() => selectHint(hint.text)}
+															onclick={() =>
+																selectHint(
+																	hint.text,
+																)}
 														>
 															<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
 														</button>
@@ -834,8 +1049,13 @@ function handleMockAction() {
 								<div class="relative flex h-full items-center">
 									<button
 										type="button"
-										class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
-										onclick={(e) => { e.stopPropagation(); showEmojiPicker = !showEmojiPicker; }}
+										class="transition-colors {showEmojiPicker
+											? 'text-white'
+											: 'hover:text-[#DBDEE1]'}"
+										onclick={(e) => {
+											e.stopPropagation();
+											showEmojiPicker = !showEmojiPicker;
+										}}
 									>
 										<Smile size={22} />
 									</button>
@@ -844,7 +1064,7 @@ function handleMockAction() {
 											class="absolute bottom-[100%] right-0 mb-4 z-[1002] bg-[#232428] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden"
 											transition:fade={{ duration: 100 }}
 										>
-											<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker on:emoji-selected={handleEmojiSelected} /></div>
+											<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker onEmojiSelected={handleEmojiSelected} /></div>
 										</div>
 									{/if}
 								</div>
@@ -894,7 +1114,8 @@ function handleMockAction() {
 						<button
 							type="button"
 							class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 transition-colors"
-							oncontextmenu={(e) => handleContextMenu(e, agentUser)}
+							oncontextmenu={(e) =>
+								handleContextMenu(e, agentUser)}
 						>
 							<div class="relative h-8 w-8 shrink-0">
 								<div class="h-full w-full rounded-full {agentUser.color} flex items-center justify-center font-bold text-white uppercase text-sm">
@@ -916,7 +1137,8 @@ function handleMockAction() {
 							<button
 								type="button"
 								class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 transition-colors"
-								oncontextmenu={(e) => handleContextMenu(e, user)}
+								oncontextmenu={(e) =>
+									handleContextMenu(e, user)}
 							>
 								<div class="relative h-8 w-8 shrink-0">
 									<div class="h-full w-full rounded-full {user.color} flex items-center justify-center font-bold text-white uppercase text-sm">
@@ -937,6 +1159,8 @@ function handleMockAction() {
 							<button
 								type="button"
 								class="flex w-full items-center text-left gap-3 px-2 py-1.5 hover:bg-[#35373C] rounded cursor-pointer mt-0.5 opacity-50 hover:opacity-100 transition-all font-medium"
+								oncontextmenu={(e) =>
+									handleContextMenu(e, user)}
 							>
 								<div class="relative h-8 w-8 shrink-0">
 									<div class="h-full w-full rounded-full {user.color} flex items-center justify-center font-bold text-white uppercase text-sm">
@@ -972,12 +1196,5 @@ function handleMockAction() {
 :global(.markdown-wrapper p) {
 	margin: 0;
 	display: inline;
-}
-:global(html),
-:global(body) {
-	height: 100%;
-	margin: 0;
-	overflow: hidden;
-	overscroll-behavior: none;
 }
 </style>

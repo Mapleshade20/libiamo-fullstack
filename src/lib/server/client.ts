@@ -87,11 +87,10 @@ function validateMessages(messages: ChatMessage[]) {
 }
 
 function stripJsonFences(text: string) {
-	return text
-		.trim()
-		.replace(/^```(?:json)?\s*/i, "")
-		.replace(/\s*```$/i, "")
-		.trim();
+	let cleaned = text.trim();
+	cleaned = cleaned.replace(/^`{3}(?:json)?/i, "").trim();
+	cleaned = cleaned.replace(/`{3}$/i, "").trim();
+	return cleaned;
 }
 
 function extractJsonObject(text: string) {

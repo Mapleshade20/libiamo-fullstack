@@ -11,7 +11,7 @@ type RetryLabels = {
 	stillProcessingMessage: string;
 };
 
-export type DiscordSessionMessage = {
+export type ChatMessage = {
 	id: string;
 	role: "user" | "agent";
 	text: string;
@@ -34,13 +34,13 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	for (let index = userMessageIndex + 1; index < rawMessages.length; index += 1) {
 		const message = rawMessages[index];
 		if (message.role === "user") return false;
-		if (message.role === "assistant") return true;
+		if (message.role === "assistant" || message.role === "agent") return true;
 	}
 
 	return false;
 }
 
-export function buildDiscordSessionMessages({
+export function buildChatMessages({
 	rawMessages,
 	formatTimestamp,
 	userName,
@@ -56,7 +56,7 @@ export function buildDiscordSessionMessages({
 	avatarUrl?: string;
 	agentColor?: string;
 	labels: RetryLabels;
-}): DiscordSessionMessage[] {
+}): ChatMessage[] {
 	return rawMessages.flatMap((message, index) => {
 		const metadata = getMessageMetadata(message.llmMetadata);
 		const mappedMessage = {
@@ -69,7 +69,7 @@ export function buildDiscordSessionMessages({
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: message.content === "*User joined the server*",
 			clientMessageId: metadata.clientMessageId,
-		} satisfies DiscordSessionMessage;
+		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
 			return [mappedMessage];
@@ -87,7 +87,7 @@ export function buildDiscordSessionMessages({
 				deliveryState: metadata.failed === true ? "failed" : "pending",
 				clientMessageId: metadata.clientMessageId,
 				retryText: message.content,
-			} satisfies DiscordSessionMessage,
+			} satisfies ChatMessage,
 		];
 	});
 }

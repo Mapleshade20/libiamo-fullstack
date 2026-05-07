@@ -1,10 +1,6 @@
-import type { DiscordSessionMessage } from "./discordSessionMessages";
+import type { ChatMessage } from "./chatMessages";
 
-export function updateMessageById(
-	messages: DiscordSessionMessage[],
-	messageId: string,
-	updater: (message: DiscordSessionMessage) => DiscordSessionMessage,
-): DiscordSessionMessage[] {
+export function updateMessageById(messages: ChatMessage[], messageId: string, updater: (message: ChatMessage) => ChatMessage): ChatMessage[] {
 	return messages.map((message) => (message.id === messageId ? updater(message) : message));
 }
 

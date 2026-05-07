@@ -24,6 +24,7 @@ export const i18n = {
 		retryInputPlaceholder: "Agent reply failed. Use Retry.",
 		retry: "Retry",
 		stillProcessingMessage: "Agent is still processing. Retry in a moment.",
+		turnsLeft: "Turns Left",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -50,6 +51,7 @@ export const i18n = {
 		retryInputPlaceholder: "La respuesta del agente falló. Usa Reintentar.",
 		retry: "Reintentar",
 		stillProcessingMessage: "El agente todavía está procesando. Reintenta en un momento.",
+		turnsLeft: "Turnos restantes",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -76,6 +78,7 @@ export const i18n = {
 		retryInputPlaceholder: "La réponse de l'agent a échoué. Utilisez Réessayer.",
 		retry: "Réessayer",
 		stillProcessingMessage: "L'agent traite encore la demande. Réessayez dans un instant.",
+		turnsLeft: "Tours restants",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -102,5 +105,6 @@ export const i18n = {
 		retryInputPlaceholder: "エージェントの返信に失敗しました。再試行を使用してください。",
 		retry: "再試行",
 		stillProcessingMessage: "エージェントはまだ処理中です。少し待ってから再試行してください。",
+		turnsLeft: "残りターン",
 	},
 };

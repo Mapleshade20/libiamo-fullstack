@@ -8,7 +8,7 @@ export type TutorFeedback = {
 	objectiveResults: ObjectiveResult[];
 };
 
-export type DiscordUser = {
+export type ChatUser = {
 	id: string;
 	name: string;
 	status: string;
@@ -16,7 +16,7 @@ export type DiscordUser = {
 	isAgent: boolean;
 };
 
-export type DiscordOpeningState = {
+export type ChatOpeningState = {
 	serverName?: string;
 	channelName?: string;
 	previousMessages?: Array<{

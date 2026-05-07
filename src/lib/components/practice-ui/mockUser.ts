@@ -1,5 +1,5 @@
 import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./mockData";
-import type { DiscordUser } from "./types";
+import type { ChatUser } from "./types";
 
 export function createSeededRandom(seed: number) {
 	let state = seed ? seed * 1234567 : 1234567;
@@ -22,7 +22,7 @@ export function initUserPool(seedId: number) {
 	const random = createSeededRandom(seedId);
 	const shuffledNames = shuffleArray(USER_POOL, random);
 
-	const agentUser: DiscordUser = {
+	const agentUser: ChatUser = {
 		id: "agent",
 		name: shuffledNames.pop() || "Agent",
 		status: STATUS_POOL[Math.floor(random() * STATUS_POOL.length)],
@@ -33,7 +33,7 @@ export function initUserPool(seedId: number) {
 	const numOnline = Math.floor(random() * 3) + 1;
 	const numOffline = Math.floor(random() * 4) + 2;
 
-	const onlineUsers: DiscordUser[] = [];
+	const onlineUsers: ChatUser[] = [];
 	for (let i = 0; i < numOnline; i++) {
 		onlineUsers.push({
 			id: `online_${i}`,
@@ -44,7 +44,7 @@ export function initUserPool(seedId: number) {
 		});
 	}
 
-	const offlineUsers: DiscordUser[] = [];
+	const offlineUsers: ChatUser[] = [];
 	for (let i = 0; i < numOffline; i++) {
 		offlineUsers.push({
 			id: `offline_${i}`,

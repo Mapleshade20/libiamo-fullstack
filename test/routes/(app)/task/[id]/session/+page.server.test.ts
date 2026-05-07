@@ -6,6 +6,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 			practiceSession: { findFirst: vi.fn() },
 			task: { findFirst: vi.fn() },
 		},
+		select: vi.fn(),
 	},
 	mockSessionService: {
 		startSession: vi.fn(),
@@ -178,9 +179,17 @@ describe("session page server", () => {
 
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to start session" } });
 		});
+		it("returns fail 404 when startSession reports Task not found", async () => {
+			mockSessionService.startSession.mockRejectedValue(new Error("Task not found"));
+			const result = await actions.start({ params: { id: mockTaskId }, locals: { user: mockUser } } as any);
+			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+		});
 	});
 
 	describe("actions.send", () => {
+		beforeEach(() => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+		});
 		it("sends message successfully", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
@@ -467,6 +476,38 @@ describe("session page server", () => {
 				expect(result).toMatchObject({ status: 500 });
 			});
 		});
+		it("returns fail 403 when maximum conversation turns reached", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, template: { maxTurns: 5 } });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+
+			// Mock Drizzle count query
+			const mockWhere = vi.fn().mockResolvedValue([{ count: 5 }]);
+			const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+			mockDb.select.mockReturnValue({ from: mockFrom });
+
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+
+			expect(result).toMatchObject({ status: 403, data: { error: "Maximum conversation turns reached" } });
+		});
+
+		it("returns fail 400 when sendMessage reports userMessage is required", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockRejectedValue(new Error("userMessage is required"));
+			const result = await actions.send({
+				request: {
+					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
+				},
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+			expect(result).toMatchObject({ status: 400, data: { error: "userMessage is required" } });
+		});
 	});
 
 	describe("actions.complete", () => {
@@ -602,6 +643,27 @@ describe("session page server", () => {
 			} as any);
 
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
+		});
+		it("returns fail 404 when completeSession reports Task not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.completeSession.mockRejectedValue(new Error("Task not found"));
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+		});
+
+		it("returns fail 404 when completeSession reports Session not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.completeSession.mockRejectedValue(new Error("Session not found"));
+			const result = await actions.complete({
+				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as any);
+			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
 		});
 	});
 });

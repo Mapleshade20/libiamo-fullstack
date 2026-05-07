@@ -1,14 +1,14 @@
 import { normalizeText } from "../utils/messageUtils";
-import type { DiscordSessionMessage } from "./discordSessionMessages";
-import type { DiscordOpeningState, DiscordUser } from "./types";
+import type { ChatMessage } from "./chatMessages";
+import type { ChatOpeningState, ChatUser } from "./types";
 
 export function getOpeningStateMessages(params: {
-	openingStateData: DiscordOpeningState;
+	openingStateData: ChatOpeningState;
 	userName: string;
-	agentUser: DiscordUser;
+	agentUser: ChatUser;
 	avatarUrl: string;
 	labels: { earlier: string };
-}): DiscordSessionMessage[] {
+}): ChatMessage[] {
 	const { openingStateData, userName, agentUser, avatarUrl, labels } = params;
 
 	if (!Array.isArray(openingStateData.previousMessages)) return [];
@@ -31,7 +31,7 @@ export function getOpeningStateMessages(params: {
 				avatar: isUserMessage ? avatarUrl : undefined,
 				avatarColor: !isUserMessage ? agentUser.color : undefined,
 				deliveryState: "sent",
-			} as DiscordSessionMessage,
+			} as ChatMessage,
 		];
 	});
 }
