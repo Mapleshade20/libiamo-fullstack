@@ -11,12 +11,12 @@ export function stripBasicMarkdown(text: string): string {
 	if (!text) return "";
 
 	return text
-		.replace(/\*\*([^*\n]+)\*\*/g, "$1")
-		.replace(/\*([^*\n]+)\*/g, "$1")
-		.replace(/__([^\n_]+)__/g, "$1")
-		.replace(/~~([^\n~]+)~~/g, "$1")
-		.replace(/#{1,6}\s+/g, "")
-		.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, "$1")
+		.replace(/\*\*([^*\n]{1,500})\*\*/g, "$1")
+		.replace(/\*([^*\n]{1,500})\*/g, "$1")
+		.replace(/__([^\n_]{1,500})__/g, "$1")
+		.replace(/~~([^\n~]{1,500})~~/g, "$1")
+		.replace(/#{1,6}[ \t]+/g, "")
+		.replace(/\[([^\]\n]{1,200})\]\(([^)\n]{1,1000})\)/g, "$1")
 		.trim();
 }
 
