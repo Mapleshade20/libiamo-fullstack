@@ -3,7 +3,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { db } from "$lib/server/db";
 import { practiceSession, sessionMessage, task } from "$lib/server/db/schema";
-import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -137,13 +137,8 @@ export const actions: Actions = {
 			});
 			if (!taskData) return fail(404, { error: "Task not found" });
 
-			const session = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, sessionId),
-			});
-
-			if (!session || session.userId !== user.id || session.taskId !== taskId) {
-				return fail(403, { error: "Access denied" });
-			}
+			const session = await getSessionOrFail(sessionId, user.id, taskId);
+			if (!session) return fail(403, { error: "Access denied" });
 
 			const maxTurns = taskData.template.maxTurns || 0;
 			if (maxTurns > 0) {
@@ -184,13 +179,8 @@ export const actions: Actions = {
 
 		try {
 			// Verify session belongs to this user and task
-			const session = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, sessionId),
-			});
-
-			if (!session || session.userId !== user.id || session.taskId !== taskId) {
-				return fail(403, { error: "Access denied" });
-			}
+			const session = await getSessionOrFail(sessionId, user.id, taskId);
+			if (!session) return fail(403, { error: "Access denied" });
 
 			const feedback = await completeSession(sessionId);
 			return { success: true, feedback };
@@ -216,13 +206,8 @@ export const actions: Actions = {
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
 
 		try {
-			const session = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, sessionId),
-			});
-
-			if (!session || session.userId !== user.id || session.taskId !== taskId) {
-				return fail(403, { error: "Access denied" });
-			}
+			const session = await getSessionOrFail(sessionId, user.id, taskId);
+			if (!session) return fail(403, { error: "Access denied" });
 
 			const result = await generateHint(sessionId);
 			return { success: true, ...result };

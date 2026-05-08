@@ -489,3 +489,13 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 
 	return await createStructuredOutput(HintSchema, messages);
 }
+
+export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+	});
+	if (!session || session.userId !== userId || session.taskId !== taskId) {
+		return null;
+	}
+	return session;
+}

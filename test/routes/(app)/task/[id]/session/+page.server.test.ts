@@ -13,6 +13,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		sendMessage: vi.fn(),
 		completeSession: vi.fn(),
 		generateHint: vi.fn(),
+		getSessionOrFail: vi.fn(),
 	},
 }));
 
@@ -191,7 +192,7 @@ describe("session page server", () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 		});
 		it("sends message successfully", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -218,7 +219,7 @@ describe("session page server", () => {
 		});
 
 		it("passes clientMessageId through to sendMessage", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -246,11 +247,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when session belongs to another user", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				userId: "other_user",
-				taskId: 456,
-			});
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
 			const result = await actions.send({
 				request: {
@@ -264,11 +261,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when session belongs to another task", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				userId: "user_123",
-				taskId: 999,
-			});
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
 			const result = await actions.send({
 				request: {
@@ -314,7 +307,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 409 when sendMessage reports session not in progress", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -333,7 +326,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 404 when sendMessage reports session not found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -352,7 +345,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 500 when sendMessage throws a non-Error payload", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -372,7 +365,7 @@ describe("session page server", () => {
 		describe("actions.hint", () => {
 			it("returns success with hints when called correctly", async () => {
 				const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
-				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				mockSessionService.getSessionOrFail.mockResolvedValue({
 					id: 123,
 					userId: "user_123",
 					taskId: 456,
@@ -424,11 +417,7 @@ describe("session page server", () => {
 			});
 
 			it("returns 403 when session belongs to another user", async () => {
-				mockDb.query.practiceSession.findFirst.mockResolvedValue({
-					id: 123,
-					userId: "other_user",
-					taskId: 456,
-				});
+				mockSessionService.getSessionOrFail.mockResolvedValue(null);
 				const formData = new FormData();
 				formData.append("sessionId", "123");
 				const result = await actions.hint({
@@ -441,11 +430,7 @@ describe("session page server", () => {
 			});
 
 			it("returns 403 when session belongs to another task", async () => {
-				mockDb.query.practiceSession.findFirst.mockResolvedValue({
-					id: 123,
-					userId: "user_123",
-					taskId: 999,
-				});
+				mockSessionService.getSessionOrFail.mockResolvedValue(null);
 				const formData = new FormData();
 				formData.append("sessionId", "123");
 				const result = await actions.hint({
@@ -458,7 +443,7 @@ describe("session page server", () => {
 			});
 
 			it("returns 500 when generateHint fails", async () => {
-				mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				mockSessionService.getSessionOrFail.mockResolvedValue({
 					id: 123,
 					userId: "user_123",
 					taskId: 456,
@@ -478,7 +463,7 @@ describe("session page server", () => {
 		});
 		it("returns fail 403 when maximum conversation turns reached", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, template: { maxTurns: 5 } });
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 
 			// Mock Drizzle count query
 			const mockWhere = vi.fn().mockResolvedValue([{ count: 5 }]);
@@ -497,7 +482,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 400 when sendMessage reports userMessage is required", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.sendMessage.mockRejectedValue(new Error("userMessage is required"));
 			const result = await actions.send({
 				request: {
@@ -512,7 +497,7 @@ describe("session page server", () => {
 
 	describe("actions.complete", () => {
 		it("completes session successfully", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -534,11 +519,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when session belongs to another user", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				userId: "other_user",
-				taskId: 456,
-			});
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
@@ -550,11 +531,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when session belongs to another task", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				userId: "user_123",
-				taskId: 999,
-			});
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
@@ -596,7 +573,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 500 when completeSession throws", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -613,7 +590,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 409 when completeSession reports not in progress or completed", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -629,7 +606,7 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress or completed" } });
 		});
 		it("returns fail 500 when completeSession throws a non-Error payload", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
@@ -645,7 +622,7 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
 		});
 		it("returns fail 404 when completeSession reports Task not found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.completeSession.mockRejectedValue(new Error("Task not found"));
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
@@ -656,7 +633,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 404 when completeSession reports Session not found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.completeSession.mockRejectedValue(new Error("Session not found"));
 			const result = await actions.complete({
 				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
