@@ -10,7 +10,7 @@ import { postAction } from "../apiService";
 import { buildChatMessages, type ChatMessage, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ChatHeader from "./ChatHeader.svelte";
-import { runAgentReplyWorkflow } from "./chatFlowController";
+import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { i18n } from "./i18n";
 import MemberList from "./MemberList.svelte";
 import MessageInput from "./MessageInput.svelte";
@@ -18,16 +18,10 @@ import MessageStream from "./MessageStream.svelte";
 import MobileTopBar from "./MobileTopBar.svelte";
 import { getOpeningStateMessages } from "./messageTransformer";
 import Overlays from "./Overlays.svelte";
-import { retryManager } from "./retryManager";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatOpeningState, type ChatUser } from "./types";
 import { initUserPool } from "./userPool";
 
-/*
- * ======================================================
- * Area 1: Props input & Derived state definitions
- * ======================================================
- */
 interface Props {
 	taskId?: string | number;
 	userName?: string;
@@ -50,12 +44,6 @@ let {
 	agentStartsFirst = true,
 }: Props = $props();
 
-/*
- * ======================================================
- * Area 2: Core state variables
- * ======================================================
- */
-
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 
@@ -73,7 +61,6 @@ const serverAcronym = $derived(
 const emojiConv = new EmojiConvertor();
 emojiConv.replace_mode = "unified";
 emojiConv.allow_native = true;
-type Message = ChatMessage;
 
 let showMobileMenu = $state(false);
 let sessionId = $state<number | null>(null);
@@ -120,75 +107,60 @@ const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst))
 const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 
-/*
- * ======================================================
- * Area 3: Handlers
- * ======================================================
- */
-
-function handleRetry(messageId: string) {
-	const resolved = retryManager.resolveRetry(messageId);
-
-	if (!resolved) {
-		void retryPersistedAgentReply(messageId);
-		return;
-	}
-
-	messages = updateMessageById(messages, messageId, (message) => ({
-		...message,
-		isHidden: true,
-	}));
+function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
+	messages = [
+		...messages,
+		{
+			id: crypto.randomUUID(),
+			role: "agent",
+			text: params.text,
+			timestamp: formatTime(new Date()),
+			authorName: agentUser.name,
+			avatarColor: agentUser.color,
+			deliveryState: params.deliveryState,
+			clientMessageId: params.clientMessageId,
+			retryText: params.retryText,
+		},
+	];
 }
 
-const getWorkflowCallbacks = () => ({
-	formatTime,
-	labels: {
-		stillProcessing: t.stillProcessingMessage,
-		retryFailed: t.retryFailedMessage,
-	},
-	onScrollToBottom: scrollToBottom,
-	onInvalidate: () => invalidateAll(),
-	onComplete: handleComplete,
-	onUpdateMessage: (id: string, updates: Partial<Message>) => {
-		messages = updateMessageById(messages, id, (m) => ({
-			...m,
-			...updates,
-		}));
-	},
-	onCreateAgentMessage: (params: { id: string; text: string; state: "pending" | "sent" | "failed"; timestamp: string; clientMessageId?: string }) => {
-		const { id, text, state, timestamp, clientMessageId } = params;
-		messages = [
-			...messages,
-			{
-				id,
-				role: "agent",
-				text,
-				timestamp,
-				authorName: agentUser.name,
-				avatarColor: agentUser.color,
-				deliveryState: state,
-				clientMessageId,
-			},
-		];
-	},
-});
+function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string) {
+	if (result.status === "reply") {
+		addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId });
+		if (result.terminated) handleComplete();
+	} else if (result.status === "pending") {
+		addAgentMessage({ text: t.stillProcessingMessage, deliveryState: "pending", clientMessageId });
+	} else if (result.status === "failed") {
+		addAgentMessage({
+			text: t.retryFailedMessage,
+			deliveryState: "failed",
+			clientMessageId,
+			retryText,
+		});
+	} else if (result.status === "rejected") {
+		console.warn("Backend rejected the message");
+	}
+}
 
-async function retryPersistedAgentReply(messageId: string) {
-	const failedMessage = messages.find((m) => m.id === messageId);
-	if (!failedMessage?.clientMessageId || isSubmitting || isCompleted || isInitializing || !sessionId) return;
+async function handleRetry(messageId: string) {
+	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+
+	const message = messages.find((m) => m.id === messageId);
+	if (!message?.clientMessageId) return;
+
+	messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
+	await scrollToBottom();
 
 	isSubmitting = true;
 
-	try {
-		await runAgentReplyWorkflow(sessionId, failedMessage.clientMessageId, failedMessage.retryText || failedMessage.text, messageId, {
-			...getWorkflowCallbacks(),
-			onStart: () => {
-				messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
-			},
-		});
-	} finally {
-		isSubmitting = false;
-	}
+	const retryText = message.retryText || message.text;
+	const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId);
+
+	applySendResult(result, message.clientMessageId, retryText);
+
+	await scrollToBottom();
+	await invalidateAll();
+	isSubmitting = false;
 }
 
 async function scrollToBottom() {
@@ -242,11 +214,13 @@ async function handleSend(text: string) {
 	];
 	await scrollToBottom();
 
-	try {
-		await runAgentReplyWorkflow(sessionId, clientMessageId, currentText, null, getWorkflowCallbacks());
-	} finally {
-		isSubmitting = false;
-	}
+	const result = await attemptAgentReply(sessionId, currentText, clientMessageId);
+
+	applySendResult(result, clientMessageId, currentText);
+
+	await scrollToBottom();
+	await invalidateAll();
+	isSubmitting = false;
 }
 
 function handleContextMenu(e: MouseEvent, user: ChatUser) {
@@ -278,12 +252,6 @@ function handleMockAction() {
 		showToast = false;
 	}, 3000);
 }
-
-/*
- * ======================================================
- * Area 4: Side effects
- * ======================================================
- */
 
 $effect(() => {
 	if (limitReached && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
@@ -351,12 +319,6 @@ $effect(() => {
 	}
 });
 
-/*
- * ======================================================
- * Area 5: Lifecycle
- * ======================================================
- */
-
 onMount(async () => {
 	setTimeout(() => {
 		isEntering = false;
@@ -397,7 +359,10 @@ onMount(async () => {
 
 					await scrollToBottom();
 
-					await runAgentReplyWorkflow(currentId, `join-${currentId}`, "*User joined the server*", null, getWorkflowCallbacks());
+					const result = await attemptAgentReply(currentId, "*User joined the server*", `join-${currentId}`);
+
+					messages = [...messages];
+					applySendResult(result, `join-${currentId}`);
 				} else {
 					messages = [...openingMessages];
 				}
@@ -433,12 +398,9 @@ onMount(async () => {
 	</div>
 {/if}
 
-<!-- =============== MAIN CONTAINER =============== -->
-
 <div
 	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
 >
-	<!-- 1. MODALS & OVERLAYS -->
 	<Overlays
 		{showEvaluationModal}
 		{feedback}
@@ -450,10 +412,8 @@ onMount(async () => {
 		onContextMenuMention={handleContextMenuMention}
 	/>
 
-	<!-- 2. MOBILE TOP BAR -->
 	<MobileTopBar {serverName} onToggleMenu={() => (showMobileMenu = !showMobileMenu)} />
 
-	<!-- 3. SIDEBAR SECTION -->
 	<Sidebar
 		{serverName}
 		{channelName}
@@ -467,9 +427,7 @@ onMount(async () => {
 		onMockAction={handleMockAction}
 	/>
 
-	<!-- 4. MAIN CONTENT AREA -->
 	<div class="flex flex-1 flex-col bg-[#313338] min-w-0 h-full relative">
-		<!-- Channel Header -->
 		<ChatHeader
 			{channelName}
 			{remainingTurns}
@@ -486,9 +444,7 @@ onMount(async () => {
 			onToggleMembers={() => (showMembers = !showMembers)}
 		/>
 
-		<!-- Chat & Member List Container -->
 		<div class="flex flex-1 overflow-hidden relative">
-			<!-- Message & Input Column -->
 			<div class="flex flex-1 flex-col min-w-0 relative">
 				<MessageStream
 					bind:chatContainer
@@ -519,7 +475,6 @@ onMount(async () => {
 				/>
 			</div>
 
-			<!-- Member List -->
 			{#if showMembers}
 				<MemberList
 					{onlineUsers}

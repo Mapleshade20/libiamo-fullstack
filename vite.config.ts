@@ -10,6 +10,7 @@ export default defineConfig({
 			reporter: ["text", "lcov"],
 			provider: "v8",
 			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/practice-ui/*.ts", "src/lib/markdown.ts"],
+			exclude: ["src/lib/components/practice-ui/types.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,
