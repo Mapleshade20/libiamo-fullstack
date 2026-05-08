@@ -1,4 +1,5 @@
 <script lang="ts">
+// Class A: pure UI component - no direct API calls or complex logic here, just rendering and UI state management.
 import CheckCircle from "@lucide/svelte/icons/check-circle";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Hash from "@lucide/svelte/icons/hash";
@@ -11,27 +12,44 @@ import Plus from "@lucide/svelte/icons/plus";
 import Settings from "@lucide/svelte/icons/settings";
 import Smile from "@lucide/svelte/icons/smile";
 import Users from "@lucide/svelte/icons/users";
+
+// Class B: 3rd party runtime libraries.
 import EmojiConvertor from "emoji-js";
+
+// Class C: svelte framework runtime.
 import { onMount, tick } from "svelte";
 import { fade, fly, slide } from "svelte/transition";
+
+// Class D: svelte kit framework.
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+
+// Class E: brother components and utilities.
 import EmojiPicker from "../EmojiPicker.svelte";
 import MarkdownRenderer from "../MarkdownRenderer.svelte";
 import ResizeableTextarea from "../ResizeableTextarea.svelte";
+
+// class F: utility functions specific to this app that are used across multiple components, but don't belong to any single component.
 import { extractEmojiFromPickerEvent, normalizeEmojiTextForDisplay } from "../utils/emojiUtils";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { formatTime, getTodayDateString, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, getTurnLimitMessage, isTurnLimitReached } from "../utils/sessionUtils";
+
+// class G: Discord practice specific logic.
 import { postAction, submitAgentReply } from "./apiService";
 import { runAgentReplyWorkflow } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, updateMessageById } from "./chatMessages";
 import { i18n } from "./i18n";
-import { retryManager, updateMessageById } from "./messageManager";
 import { getOpeningStateMessages } from "./messageTransformer";
-import { initUserPool } from "./mockUser";
-import { type ChatOpeningState, type ChatUser, type ObjectiveResult, type TutorFeedback } from "./types";
+import { retryManager } from "./retryManager";
+import { type ChatOpeningState, type ChatUser, /*type ObjectiveResult, */ type TutorFeedback } from "./types";
+import { initUserPool } from "./userPool";
 
+/*
+ * ======================================================
+ * Area 1: Props input & Derived state definitions
+ * ======================================================
+ */
 interface Props {
 	taskId?: string | number;
 	userName?: string;
@@ -53,6 +71,19 @@ let {
 	maxTurns = 0,
 	agentStartsFirst = true,
 }: Props = $props();
+
+/*
+ * ======================================================
+ * Area 2: Core state variables, including:
+ * - Session life cycle states
+ * - Message stream
+ * - User pool (agent + online + offline)
+ * - Input UI related
+ * - UI triggers
+ * - Hint
+ * - Derived states
+ * ======================================================
+ */
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
@@ -126,6 +157,11 @@ const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst))
 const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 
+/*
+ * ======================================================
+ * Area 3: Functions handling user interactions and core logic
+ * ======================================================
+ */
 function handleEmojiSelected(event: CustomEvent | Event) {
 	const emoji = extractEmojiFromPickerEvent(event);
 	if (emoji) {
@@ -253,6 +289,16 @@ function selectHint(text: string) {
 	inputRef?.focus();
 }
 
+/*
+ * ======================================================
+ * Area 4: Side effect wiring up - reacting to state changes for things like:
+ * - Auto-completing when turn limit is reached
+ * - Loading session messages when existingSession prop is provided/updated
+ * - Polling for pending messages
+ * - Detecting @mention trigger in input text
+ * ======================================================
+ */
+
 $effect(() => {
 	if (limitReached && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 		hasAutoCompleted = true;
@@ -328,6 +374,12 @@ $effect(() => {
 		showMentionMenu = false;
 	}
 });
+
+/*
+ * ======================================================
+ * Area 5: Lifecycle hooks for initialization and cleanup
+ * ======================================================
+ */
 
 onMount(async () => {
 	setTimeout(() => {
@@ -506,6 +558,8 @@ function handleMockAction() {
 }
 </script>
 
+<!--===================================================-->
+
 <!-- Global click handler for closing menus/pickers -->
 <svelte:window onclick={handleWindowClick} />
 
@@ -519,6 +573,8 @@ function handleMockAction() {
 		<p class="mt-4 text-sm font-bold text-[#80848E] uppercase tracking-wider">Connecting...</p>
 	</div>
 {/if}
+
+<!-- =============== MAIN CONTAINER =============== -->
 
 <div
 	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { retryManager, updateMessageById } from "$lib/components/practice-ui/messageManager";
+import { updateMessageById } from "$lib/components/practice-ui/chatMessages";
+import { retryManager } from "$lib/components/practice-ui/retryManager";
 
 describe("messageManager", () => {
 	describe("updateMessageById", () => {

@@ -10,7 +10,7 @@ vi.mock("$lib/components/practice-ui/apiService", () => ({
 	submitAgentReply: mocks.submitAgentReply,
 }));
 
-vi.mock("$lib/components/practice-ui/messageManager", () => ({
+vi.mock("$lib/components/practice-ui/retryManager", () => ({
 	retryManager: {
 		waitForRetry: mocks.waitForRetry,
 		clear: mocks.clearRetry,

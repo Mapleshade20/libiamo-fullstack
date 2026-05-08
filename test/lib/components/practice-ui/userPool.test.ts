@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { COLOR_POOL, STATUS_POOL } from "$lib/components/practice-ui/mockData";
-import { createSeededRandom, initUserPool, shuffleArray } from "$lib/components/practice-ui/mockUser";
+import { createSeededRandom, initUserPool, shuffleArray } from "$lib/components/practice-ui/userPool";
 
-describe("mockUser", () => {
+describe("userPool", () => {
 	describe("initUserPool", () => {
 		it("initializes deterministic user pool based on session ID", () => {
 			const pool1 = initUserPool(1001);

@@ -1,6 +1,6 @@
 import { submitAgentReply } from "./apiService";
 import type { ChatMessage } from "./chatMessages";
-import { retryManager } from "./messageManager";
+import { retryManager } from "./retryManager";
 
 export interface FlowCallbacks {
 	formatTime: (date: Date) => string;

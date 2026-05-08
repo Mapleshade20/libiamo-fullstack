@@ -91,3 +91,7 @@ export function buildChatMessages({
 		];
 	});
 }
+
+export function updateMessageById(messages: ChatMessage[], messageId: string, updater: (message: ChatMessage) => ChatMessage): ChatMessage[] {
+	return messages.map((message) => (message.id === messageId ? updater(message) : message));
+}
