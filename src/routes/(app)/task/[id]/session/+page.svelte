@@ -1,5 +1,5 @@
 <script lang="ts">
-import DiscordUI from "$lib/components/practice-ui/DiscordUI.svelte";
+import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
 
 let { data } = $props();
 </script>

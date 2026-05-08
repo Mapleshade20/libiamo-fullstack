@@ -1,5 +1,5 @@
-import { normalizeText } from "../utils/messageUtils";
-import type { ChatMessage } from "./chatMessages";
+import { normalizeText } from "../../utils/messageUtils";
+import type { ChatMessage } from "../chatMessages";
 import type { ChatOpeningState, ChatUser } from "./types";
 
 export function getOpeningStateMessages(params: {

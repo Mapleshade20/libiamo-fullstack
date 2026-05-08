@@ -10,15 +10,15 @@ vi.mock("$lib/components/practice-ui/apiService", () => ({
 	submitAgentReply: mocks.submitAgentReply,
 }));
 
-vi.mock("$lib/components/practice-ui/retryManager", () => ({
+vi.mock("$lib/components/practice-ui/discord/retryManager", () => ({
 	retryManager: {
 		waitForRetry: mocks.waitForRetry,
 		clear: mocks.clearRetry,
 	},
 }));
 
-import type { FlowCallbacks } from "$lib/components/practice-ui/chatFlowController";
-import { runAgentReplyWorkflow } from "$lib/components/practice-ui/chatFlowController";
+import type { FlowCallbacks } from "$lib/components/practice-ui/discord/chatFlowController";
+import { runAgentReplyWorkflow } from "$lib/components/practice-ui/discord/chatFlowController";
 
 describe("chatFlowController", () => {
 	const labels = {

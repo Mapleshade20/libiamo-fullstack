@@ -48,6 +48,7 @@ export function buildChatMessages({
 	avatarUrl,
 	agentColor,
 	labels,
+	isHidden = () => false,
 }: {
 	rawMessages: PersistedSessionMessage[];
 	formatTimestamp: (date: Date) => string;
@@ -56,6 +57,7 @@ export function buildChatMessages({
 	avatarUrl?: string;
 	agentColor?: string;
 	labels: RetryLabels;
+	isHidden?: (message: PersistedSessionMessage) => boolean;
 }): ChatMessage[] {
 	return rawMessages.flatMap((message, index) => {
 		const metadata = getMessageMetadata(message.llmMetadata);
@@ -67,7 +69,7 @@ export function buildChatMessages({
 			authorName: message.role === "user" ? userName : agentName,
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
-			isHidden: message.content === "*User joined the server*",
+			isHidden: isHidden(message),
 			clientMessageId: metadata.clientMessageId,
 		} satisfies ChatMessage;
 

@@ -1,5 +1,5 @@
-import { submitAgentReply } from "./apiService";
-import type { ChatMessage } from "./chatMessages";
+import { submitAgentReply } from "../apiService";
+import type { ChatMessage } from "../chatMessages";
 import { retryManager } from "./retryManager";
 
 export interface FlowCallbacks {
