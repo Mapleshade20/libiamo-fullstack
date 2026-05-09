@@ -172,11 +172,17 @@ ${translationLines}`;
 		options: { temperature: 0.7, maxTokens: 4096 },
 	});
 
-	// Try to extract JSON from the response
+	// Try to extract JSON from fenced code block
 	let jsonStr = reply.content.trim();
-	const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-	if (fenceMatch) {
-		jsonStr = fenceMatch[1].trim();
+	const fenceStart = jsonStr.indexOf("```");
+	if (fenceStart !== -1) {
+		let after = jsonStr.slice(fenceStart + 3);
+		if (after.startsWith("json")) after = after.slice(4);
+		after = after.trimStart();
+		const fenceEnd = after.indexOf("```");
+		if (fenceEnd !== -1) {
+			jsonStr = after.slice(0, fenceEnd).trim();
+		}
 	}
 
 	// If the entire response is valid JSON, parse it
