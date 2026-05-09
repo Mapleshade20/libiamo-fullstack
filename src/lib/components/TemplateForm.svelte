@@ -8,7 +8,15 @@ import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
-import { INTERACTION_TYPE_LABELS, INTERACTION_TYPES, LANGUAGE_CODES, LANGUAGE_LABELS, UI_VARIANT_LABELS, UI_VARIANTS } from "$lib/constants";
+import {
+	CADENCES,
+	INTERACTION_TYPE_LABELS,
+	INTERACTION_TYPES,
+	LANGUAGE_CODES,
+	LANGUAGE_LABELS,
+	UI_VARIANT_LABELS,
+	UI_VARIANTS,
+} from "$lib/constants";
 import { renderMarkdown } from "$lib/markdown";
 
 type VariantData = {
@@ -108,6 +116,9 @@ $effect(() => {
 		selectedUi = "translator";
 	}
 });
+
+// Filter out translator from UI options when not translate
+const uiOptions = $derived(isTranslate ? UI_VARIANTS : UI_VARIANTS.filter((v) => v !== "translator"));
 
 // Markdown preview
 let showMdPreview = $state(false);
@@ -256,7 +267,7 @@ function jsonStr(val: unknown): string {
 					bind:value={selectedUi}
 					disabled={isTranslate}
 				>
-					{#each UI_VARIANTS as variant}
+					{#each uiOptions as variant}
 						<option value={variant}>{UI_VARIANT_LABELS[variant]}</option>
 					{/each}
 				</select>
@@ -272,15 +283,18 @@ function jsonStr(val: unknown): string {
 				<div class="space-y-2">
 					<Label for="cadence">Cadence</Label>
 					<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-						<option value="weekly" selected={template.cadence === "weekly"}>Weekly</option>
-						<option value="daily" selected={template.cadence === "daily"}>Daily</option>
+						{#each CADENCES as cadence}
+							<option value={cadence} selected={template.cadence === cadence}>
+								{cadence === "none" ? "None" : cadence.charAt(0).toUpperCase() + cadence.slice(1)}
+							</option>
+						{/each}
 					</select>
 					{#if form?.errors?.cadence}
 						<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
 					{/if}
 				</div>
 			{:else}
-				<input type="hidden" name="cadence" value="weekly">
+				<input type="hidden" name="cadence" value="none">
 			{/if}
 
 			<div class="space-y-2">
@@ -348,10 +362,12 @@ function jsonStr(val: unknown): string {
 			<Textarea id="descriptionBase" name="descriptionBase" rows={3} bind:value={descriptionBase} />
 		</div>
 
-		<div class="space-y-2">
-			<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at schedule time) </Label>
-			<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
-		</div>
+		{#if !isTranslate}
+			<div class="space-y-2">
+				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at schedule time) </Label>
+				<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
+			</div>
+		{/if}
 
 		{#if !isTranslate}
 			<div class="space-y-2">
