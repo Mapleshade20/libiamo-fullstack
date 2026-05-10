@@ -28,6 +28,7 @@ function toggleFlip(id: number) {
 			<div class="grid gap-5 md:grid-cols-3">
 				{#each data.templates as tpl}
 					{@const status = statusMap[String(tpl.id)]}
+					{@const isFinished = status === "submitted" || status === "evaluated"}
 					<TaskCard
 						id={tpl.id}
 						title={tpl.titleBase}
@@ -35,12 +36,13 @@ function toggleFlip(id: number) {
 						icon={Languages}
 						shortObjective={tpl.shortObjectiveBase}
 						href="/translate/{tpl.id}"
-						buttonLabel={status === 'draft'
-							? 'Continue'
-							: status === 'submitted' || status === 'evaluated'
-								? 'View Result'
+						buttonLabel={isFinished
+							? 'View Result'
+							: status === 'draft'
+								? 'Continue'
 								: t(lang, 'hall.enter')}
-						{status}
+						status={isFinished ? null : status}
+						{isFinished}
 						flipped={flippedId === tpl.id}
 						onflip={toggleFlip}
 					/>
