@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { attemptAgentReply, type SendAttemptResult } from "$lib/components/practice-ui/discord/chatFlowController";
+import { attemptAgentReply, type SendAttemptResult } from "$lib/components/practice-ui/chatFlowController";
 
 global.fetch = vi.fn();
 vi.mock("$app/forms", () => ({
