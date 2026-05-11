@@ -118,7 +118,7 @@ let {
 			<div class="space-y-2.5">
 				<a
 					{href}
-					onclick={(e) => onenter?.(e, id)}
+					onclick={(e) => { e.stopPropagation(); onenter?.(e, id); }}
 					class="block w-full py-2 {isFinished
 						? 'bg-green-600 text-white hover:bg-green-700'
 						: 'bg-foreground text-background hover:opacity-90'} rounded-lg text-xs font-medium tracking-wide text-center transition-opacity shadow-md"
