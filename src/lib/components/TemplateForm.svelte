@@ -110,10 +110,14 @@ $effect(() => {
 	selectedUi = (template.ui as UiVariant) ?? "reddit";
 });
 
-// Auto-set UI variant and lock when interactionType is translate
+// Auto-set UI variant and lock when interactionType is translate.
+// When switching away, reset to a valid non-translator default so the
+// <select> never holds a value excluded from its options.
 $effect(() => {
 	if (isTranslate) {
 		selectedUi = "translator";
+	} else if (selectedUi === "translator") {
+		selectedUi = "reddit";
 	}
 });
 
