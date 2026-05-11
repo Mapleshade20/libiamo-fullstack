@@ -206,6 +206,22 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.status).toBe(400);
 		});
 
+		it("returns 400 for non-numeric attemptId", async () => {
+			const result = (await actions.saveDraft(createActionEvent({ translations: '{"0-0":"hello"}', attemptId: "abc" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+		});
+
+		it("throws 403 when attemptId update returns empty (not found or not owned)", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ id: 1 }]);
+			// upsertAttempt update path: returning resolves to empty array
+			mockReturning.mockResolvedValueOnce([]);
+			await expect(actions.saveDraft(createActionEvent({ translations: '{"0-0":"hello"}', attemptId: "99" }, { id: "1" }))).rejects.toMatchObject({
+				status: 403,
+				body: { message: "Attempt not found or not owned by user" },
+			});
+		});
+
 		it("returns 404 when template not found", async () => {
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([]);
@@ -253,6 +269,22 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 400 for invalid JSON translations", async () => {
 			const result = (await actions.submit(createActionEvent({ translations: "bad" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 for non-numeric attemptId", async () => {
+			const result = (await actions.submit(createActionEvent({ translations: '{"0-0":"hello"}', attemptId: "abc" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+		});
+
+		it("throws 403 when attemptId update returns empty (not found or not owned)", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
+			// upsertAttempt update path: returning resolves to empty array
+			mockReturning.mockResolvedValueOnce([]);
+			await expect(actions.submit(createActionEvent({ translations: '{"0-0":"hello"}', attemptId: "99" }, { id: "1" }))).rejects.toMatchObject({
+				status: 403,
+				body: { message: "Attempt not found or not owned by user" },
+			});
 		});
 
 		it("returns 404 when template not found", async () => {

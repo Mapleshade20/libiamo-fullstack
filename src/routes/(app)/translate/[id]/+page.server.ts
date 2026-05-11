@@ -29,6 +29,9 @@ function parseTranslationsForm(
 	}
 	const attemptIdRaw = formData.get("attemptId");
 	const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
+	if (attemptIdRaw && (!Number.isFinite(attemptId) || !Number.isInteger(attemptId))) {
+		return { ok: false, error: "Invalid attempt ID" };
+	}
 	return { ok: true, translations, attemptId };
 }
 
