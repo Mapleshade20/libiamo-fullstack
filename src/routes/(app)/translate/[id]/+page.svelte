@@ -42,6 +42,7 @@ let translating = $state(false);
 let translations = $state<Record<string, string>>({});
 let activeKey = $state<string | null>(null);
 let saving = $state(false);
+let saveError = $state<string | null>(null);
 let submitted = $state(false);
 let submitError = $state<string | null>(null);
 
@@ -112,12 +113,20 @@ function scoreColor(score?: string): string {
 
 async function handleSaveDraft() {
 	saving = true;
+	saveError = null;
 	try {
 		const form = new FormData();
 		form.set("translations", JSON.stringify(translations));
 		if (attemptId) form.set("attemptId", String(attemptId));
-		await fetch("?/saveDraft", { method: "POST", body: form });
+		const res = await fetch("?/saveDraft", { method: "POST", body: form });
+		if (!res.ok) {
+			const errData = await res.json().catch(() => null);
+			saveError = errData?.error ?? "Failed to save draft. Please try again.";
+			return;
+		}
 		await invalidateAll();
+	} catch {
+		saveError = "Failed to save draft. Please try again.";
 	} finally {
 		saving = false;
 	}
@@ -463,6 +472,9 @@ async function handleSubmit() {
 						{/if}
 					{:else if !submitted}
 						<!-- Translation mode (before submit): save & submit -->
+						{#if saveError}
+							<span class="text-sm text-red-600">{saveError}</span>
+						{/if}
 						{#if submitError}
 							<span class="text-sm text-red-600">{submitError}</span>
 						{/if}
