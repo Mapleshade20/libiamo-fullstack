@@ -112,12 +112,15 @@ function scoreColor(score?: string): string {
 
 async function handleSaveDraft() {
 	saving = true;
-	const form = new FormData();
-	form.set("translations", JSON.stringify(translations));
-	if (attemptId) form.set("attemptId", String(attemptId));
-	await fetch("?/saveDraft", { method: "POST", body: form });
-	await invalidateAll();
-	saving = false;
+	try {
+		const form = new FormData();
+		form.set("translations", JSON.stringify(translations));
+		if (attemptId) form.set("attemptId", String(attemptId));
+		await fetch("?/saveDraft", { method: "POST", body: form });
+		await invalidateAll();
+	} finally {
+		saving = false;
+	}
 }
 
 async function handleSubmit() {
@@ -128,45 +131,51 @@ async function handleSubmit() {
 	submitError = null;
 	// Don't exit translation mode — stay for in-place annotation
 
-	const form = new FormData();
-	form.set("translations", JSON.stringify(translations));
-	if (attemptId) form.set("attemptId", String(attemptId));
-	const res = await fetch("?/submit", { method: "POST", body: form });
+	try {
+		const form = new FormData();
+		form.set("translations", JSON.stringify(translations));
+		if (attemptId) form.set("attemptId", String(attemptId));
+		const res = await fetch("?/submit", { method: "POST", body: form });
 
-	if (res.ok) {
-		await invalidateAll();
-		// After invalidation, savedEvaluation should be populated
-		// Animate highlights appearing one by one
-		const evalResult = data.attempt?.evaluation as Evaluation | null;
-		const evalToUse = evalResult?.highlights ? evalResult : null;
+		if (res.ok) {
+			await invalidateAll();
+			// After invalidation, savedEvaluation should be populated
+			// Animate highlights appearing one by one
+			const evalResult = data.attempt?.evaluation as Evaluation | null;
+			const evalToUse = evalResult?.highlights ? evalResult : null;
 
-		if (evalToUse?.highlights && evalToUse.highlights.length > 0) {
-			liveEvaluation = { ...evalToUse, highlights: [] };
-			// Stagger highlight animations
-			for (let i = 0; i < evalToUse.highlights.length; i++) {
-				await new Promise((r) => setTimeout(r, 400));
-				liveEvaluation = {
-					...evalToUse,
-					highlights: evalToUse.highlights.slice(0, i + 1),
-				};
-				visibleHighlightKeys = new Set([...visibleHighlightKeys, evalToUse.highlights[i].key]);
+			if (evalToUse?.highlights && evalToUse.highlights.length > 0) {
+				liveEvaluation = { ...evalToUse, highlights: [] };
+				// Stagger highlight animations
+				for (let i = 0; i < evalToUse.highlights.length; i++) {
+					await new Promise((r) => setTimeout(r, 400));
+					liveEvaluation = {
+						...evalToUse,
+						highlights: evalToUse.highlights.slice(0, i + 1),
+					};
+					visibleHighlightKeys = new Set([...visibleHighlightKeys, evalToUse.highlights[i].key]);
+				}
+			} else {
+				liveEvaluation = evalToUse;
 			}
 		} else {
-			liveEvaluation = evalToUse;
+			// LLM failed — reset to draft state so user can retry
+			submitted = false;
+			try {
+				const errData = await res.json();
+				submitError = errData?.error ?? "Evaluation failed. Please try again.";
+			} catch {
+				submitError = "Evaluation failed. Please try again.";
+			}
 		}
-	} else {
-		// LLM failed — reset to draft state so user can retry
+	} catch {
+		// Network error — reset to draft state so user can retry
 		submitted = false;
-		try {
-			const errData = await res.json();
-			submitError = errData?.error ?? "Evaluation failed. Please try again.";
-		} catch {
-			submitError = "Evaluation failed. Please try again.";
-		}
+		submitError = "Evaluation failed. Please try again.";
+	} finally {
+		evaluating = false;
+		saving = false;
 	}
-
-	evaluating = false;
-	saving = false;
 }
 </script>
 
