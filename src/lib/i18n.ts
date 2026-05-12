@@ -49,6 +49,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"admin.editTemplate": "Edit Template",
 		"admin.scheduleTask": "Schedule Quest",
 
+		// Translate
+		"translate.title": "Translation",
+		"translate.empty": "No content available for translation yet.",
+
 		// Common
 		"common.save": "Save",
 		"common.cancel": "Cancel",
@@ -104,6 +108,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"admin.editTemplate": "Editar Plantilla",
 		"admin.scheduleTask": "Programar Misión",
 
+		// Translate
+		"translate.title": "Traducción",
+		"translate.empty": "No hay contenido disponible para traducir todavía.",
+
 		"common.save": "Guardar",
 		"common.cancel": "Cancelar",
 		"common.delete": "Eliminar",
@@ -158,6 +166,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"admin.editTemplate": "Modifier le Modèle",
 		"admin.scheduleTask": "Planifier une Quête",
 
+		// Translate
+		"translate.title": "Traduction",
+		"translate.empty": "Aucun contenu disponible pour la traduction pour le moment.",
+
 		"common.save": "Enregistrer",
 		"common.cancel": "Annuler",
 		"common.delete": "Supprimer",
@@ -211,6 +223,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"admin.newTemplate": "新規テンプレート",
 		"admin.editTemplate": "テンプレートの編集",
 		"admin.scheduleTask": "クエストの予定",
+
+		// Translate
+		"translate.title": "翻訳",
+		"translate.empty": "現在翻訳可能なコンテンツはありません。",
 
 		"common.save": "保存",
 		"common.cancel": "キャンセル",

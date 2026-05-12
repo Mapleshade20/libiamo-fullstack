@@ -19,29 +19,39 @@ export const actions: Actions = {
 		const userId = event.locals.user?.id;
 		if (!userId) return fail(401);
 
-		const parsed = parseTemplateForm(formData);
-		const variantResult = prepareVariantPayload(result.data, parsed.slotValues, parsed.openingState, "First variant");
-		if (variantResult.error) {
-			return fail(400, { message: variantResult.error, values: raw });
-		}
+		const isTranslate = result.data.interactionType === "translate";
 
-		// Create template + first variant in a single transaction
-		await db.transaction(async (tx) => {
-			const [newTemplate] = await tx
-				.insert(template)
-				.values({
-					...result.data,
-					createdBy: userId,
-				})
-				.returning({ id: template.id });
-
-			await tx.insert(templateVariant).values({
-				templateId: newTemplate.id,
-				isActive: true,
-				slotValues: variantResult.slotValues,
-				openingState: variantResult.openingState,
+		// Translate templates don't use variants
+		if (isTranslate) {
+			await db.insert(template).values({
+				...result.data,
+				createdBy: userId,
 			});
-		});
+		} else {
+			const parsed = parseTemplateForm(formData);
+			const variantResult = prepareVariantPayload(result.data, parsed.slotValues, parsed.openingState, "First variant");
+			if (variantResult.error) {
+				return fail(400, { message: variantResult.error, values: raw });
+			}
+
+			// Create template + first variant in a single transaction
+			await db.transaction(async (tx) => {
+				const [newTemplate] = await tx
+					.insert(template)
+					.values({
+						...result.data,
+						createdBy: userId,
+					})
+					.returning({ id: template.id });
+
+				await tx.insert(templateVariant).values({
+					templateId: newTemplate.id,
+					isActive: true,
+					slotValues: variantResult.slotValues,
+					openingState: variantResult.openingState,
+				});
+			});
+		}
 
 		return redirect(302, "/admin/templates");
 	},

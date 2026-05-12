@@ -1,4 +1,4 @@
-import { and, asc, notInArray as drizzleNotInArray, eq, max, sql } from "drizzle-orm";
+import { and, asc, notInArray as drizzleNotInArray, eq, max, ne, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
 import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
@@ -67,7 +67,12 @@ async function scheduleAutoTasks(language: LanguageCode, cadence: "daily" | "wee
 		.where(and(eq(task.date, targetDateStr), eq(task.language, language)));
 	const scheduledIds = scheduledTasks.map((t) => t.templateId);
 
-	const conditions = [eq(template.language, language), eq(template.cadence, cadence), eq(template.isActive, true)];
+	const conditions = [
+		eq(template.language, language),
+		eq(template.cadence, cadence),
+		eq(template.isActive, true),
+		ne(template.interactionType, "translate"),
+	];
 
 	if (scheduledIds.length > 0) {
 		// Use Drizzle's native notInArray directly instead of the brittle custom wrapper
