@@ -77,25 +77,25 @@ export const templateSchema = z
 			.optional()
 			.transform((v) => v === "on"),
 
-	agentStartsFirst: z.any().transform((v) => v === "on"),
+		agentStartsFirst: z.any().transform((v) => v === "on"),
 
-	titleBase: z.string().min(1, "Title is required"),
-	shortObjectiveBase: z.string().optional(),
-	descriptionBase: z.string().optional(),
-	agentPromptBase: z.string().optional(),
-	materialsMd: z.string().optional(),
-	// objectives: newline-separated string → string[]
-	objectivesBase: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-				// translationBase: text → string[][] (paragraphs of sentences)
+		titleBase: z.string().min(1, "Title is required"),
+		shortObjectiveBase: z.string().optional(),
+		descriptionBase: z.string().optional(),
+		agentPromptBase: z.string().optional(),
+		materialsMd: z.string().optional(),
+		// objectives: newline-separated string → string[]
+		objectivesBase: z
+			.string()
+			.optional()
+			.transform((v) => {
+				if (!v) return [];
+				return v
+					.split("\n")
+					.map((s) => s.trim())
+					.filter(Boolean);
+			}),
+		// translationBase: text → string[][] (paragraphs of sentences)
 		translationBase: z
 			.string()
 			.optional()
@@ -112,22 +112,22 @@ export const templateSchema = z
 					.filter((para) => para.length > 0);
 				return paragraphs.length > 0 ? paragraphs : null;
 			}),
-	// tags: comma-separated string → string[]
-	tags: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-})	.refine((data) => (data.interactionType === "translate") === (data.ui === "translator"), {
+		// tags: comma-separated string → string[]
+		tags: z
+			.string()
+			.optional()
+			.transform((v) => {
+				if (!v) return [];
+				return v
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean);
+			}),
+	})
+	.refine((data) => (data.interactionType === "translate") === (data.ui === "translator"), {
 		message: 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise',
 		path: ["ui"],
-	})
-;
+	});
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({
