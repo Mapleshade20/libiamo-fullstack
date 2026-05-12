@@ -1,5 +1,3 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText } from "ai";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 
@@ -40,9 +38,29 @@ export type MultiTurnChatInput = {
 	options?: OpenAIOptions;
 };
 
-// ── Provider ──────────────────────────────────────────────────────────
+// ── OpenAI-compatible response types ──────────────────────────────────
 
-function createProvider() {
+type ChatCompletionResponse = {
+	id?: string;
+	model?: string;
+	choices?: Array<{
+		message?: {
+			role?: string;
+			content?: string | null;
+		};
+		finish_reason?: string | null;
+		index?: number;
+	}>;
+	error?: {
+		message?: string;
+		type?: string;
+		code?: string | number;
+	};
+};
+
+// ── Env helpers ───────────────────────────────────────────────────────
+
+function getOpenAIConfig() {
 	const apiKey = env.OPENAI_API_KEY?.trim();
 	if (!apiKey) {
 		throw new Error("OPENAI_API_KEY is not set. Please set OPENAI_API_KEY in .env");
@@ -53,21 +71,18 @@ function createProvider() {
 		throw new Error("OPENAI_BASE_URL is not set. Please set OPENAI_BASE_URL in .env");
 	}
 
-	const baseURL = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
-
-	return createOpenAICompatible({
-		name: "libiamo-llm",
-		baseURL,
-		apiKey,
-	});
-}
-
-function getModel() {
 	const model = env.OPENAI_MODEL?.trim();
 	if (!model) {
 		throw new Error("OPENAI_MODEL is not set. Please set OPENAI_MODEL in .env");
 	}
-	return createProvider()(model);
+
+	const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
+
+	return {
+		apiKey,
+		baseUrl,
+		model,
+	};
 }
 
 // ── Validation helpers ────────────────────────────────────────────────
@@ -76,10 +91,12 @@ function validateMessages(messages: ChatMessage[]) {
 	if (!Array.isArray(messages) || messages.length === 0) {
 		throw new Error("messages must contain at least one item");
 	}
+
 	for (const message of messages) {
 		if (!message || !["system", "user", "assistant"].includes(message.role)) {
 			throw new Error("each message.role must be one of: system, user, assistant");
 		}
+
 		if (typeof message.content !== "string" || !message.content.trim()) {
 			throw new Error("each message.content must be a non-empty string");
 		}
@@ -97,7 +114,11 @@ function extractJsonObject(text: string) {
 	const stripped = stripJsonFences(text);
 	const start = stripped.indexOf("{");
 	const end = stripped.lastIndexOf("}");
-	if (start === -1 || end === -1 || end <= start) return stripped;
+
+	if (start === -1 || end === -1 || end <= start) {
+		return stripped;
+	}
+
 	return stripped.slice(start, end + 1);
 }
 
@@ -107,6 +128,7 @@ function repairMalformedJson(text: string) {
 
 function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
 	const candidates = [extractJsonObject(text), repairMalformedJson(text)];
+
 	for (const candidate of candidates) {
 		try {
 			return schema.parse(JSON.parse(candidate)) as z.infer<T>;
@@ -118,40 +140,61 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 500)}`);
 }
 
-// ── Core LLM functions using AI SDK ───────────────────────────────────
+// ── Core LLM function using fetch ─────────────────────────────────────
 
-/**
- * Generate text from messages using the AI SDK.
- * Replaces the hand-rolled fetch + JSON parsing.
- */
 async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}): Promise<OpenAIResponse> {
 	validateMessages(messages);
 
-	const result = await generateText({
-		model: getModel(),
-		messages,
-		temperature: options.temperature ?? 0.7,
-		maxOutputTokens: options.maxTokens ?? 4096,
+	const { apiKey, baseUrl, model } = getOpenAIConfig();
+
+	const response = await fetch(`${baseUrl}/chat/completions`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify({
+			model,
+			messages,
+			temperature: options.temperature ?? 0.7,
+			max_tokens: options.maxTokens ?? 4096,
+		}),
 	});
 
-	const content = result.text?.trim() ?? "";
+	const bodyText = await response.text();
+
+	if (!response.ok) {
+		throw new Error(`OpenAI API error (${response.status}): ${bodyText}`);
+	}
+
+	let data: ChatCompletionResponse;
+
+	try {
+		data = JSON.parse(bodyText) as ChatCompletionResponse;
+	} catch {
+		throw new Error(`OpenAI API returned non-JSON response: ${bodyText.slice(0, 500)}`);
+	}
+
+	if (data.error) {
+		throw new Error(`OpenAI API error: ${data.error.message ?? JSON.stringify(data.error)}`);
+	}
+
+	const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+
 	if (!content) {
-		throw new Error("LLM returned empty content");
+		throw new Error("OpenAI API returned empty content");
 	}
 
 	return {
-		id: result.response?.id,
-		model: result.response?.modelId,
+		id: data.id,
+		model: data.model,
 		content,
-		raw: result.response,
+		raw: data,
 	};
 }
 
-/**
- * Generate structured JSON output validated against a Zod schema.
- * Uses plain text generation instead of AI SDK output.object() because some
- * OpenAI-compatible providers used here do not support responseFormat.
- */
+// ── Structured output ─────────────────────────────────────────────────
+
 export async function createStructuredOutput<T extends z.ZodType>(
 	schema: T,
 	messages: ChatMessage[],
@@ -167,31 +210,33 @@ export async function createStructuredOutput<T extends z.ZodType>(
 		},
 	];
 
-	const firstResult = await generateText({
-		model: getModel(),
-		messages: textOnlyMessages,
-		temperature: options.temperature ?? 0.7,
-		maxOutputTokens: options.maxTokens ?? 4096,
-	});
-	const firstText = firstResult.text?.trim() ?? "";
+	const firstResult = await createChatCompletion(textOnlyMessages, options);
+	const firstText = firstResult.content.trim();
+
 	try {
 		return parseStructuredOutputText(schema, firstText);
 	} catch (firstError) {
-		const retryResult = await generateText({
-			model: getModel(),
-			messages: [
+		const retryResult = await createChatCompletion(
+			[
 				...textOnlyMessages,
-				{ role: "assistant", content: firstText || "(empty response)" },
+				{
+					role: "assistant",
+					content: firstText || "(empty response)",
+				},
 				{
 					role: "user",
 					content:
 						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
 				},
 			],
-			temperature: 0,
-			maxOutputTokens: options.maxTokens ?? 4096,
-		});
-		const retryText = retryResult.text?.trim() ?? "";
+			{
+				...options,
+				temperature: 0,
+			},
+		);
+
+		const retryText = retryResult.content.trim();
+
 		try {
 			return parseStructuredOutputText(schema, retryText);
 		} catch {
@@ -206,13 +251,24 @@ export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<
 	if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim()) {
 		throw new Error("systemPrompt is required");
 	}
+
 	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
 		throw new Error("userMessage is required");
 	}
-	const requestMessages: ChatMessage[] = [];
-	requestMessages.push({ role: "system", content: input.systemPrompt.trim() });
-	requestMessages.push({ role: "user", content: input.userMessage.trim() });
+
+	const requestMessages: ChatMessage[] = [
+		{
+			role: "system",
+			content: input.systemPrompt.trim(),
+		},
+		{
+			role: "user",
+			content: input.userMessage.trim(),
+		},
+	];
+
 	const reply = await createChatCompletion(requestMessages, input.options ?? {});
+
 	return {
 		reply,
 		messages: [...requestMessages, { role: "assistant", content: reply.content }],
@@ -223,14 +279,20 @@ export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<Co
 	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
 		throw new Error("userMessage is required");
 	}
+
 	if (!Array.isArray(input.history)) {
 		throw new Error("history must be an array");
 	}
 
-	const history = input.history.map((msg) => {
-		if (typeof msg.content !== "string") {
+	const history: ChatMessage[] = input.history.map((msg) => {
+		if (!msg || !["system", "user", "assistant"].includes(msg.role)) {
+			throw new Error("each message.role must be one of: system, user, assistant");
+		}
+
+		if (typeof msg.content !== "string" || !msg.content.trim()) {
 			throw new Error("each message.content must be a non-empty string");
 		}
+
 		return {
 			role: msg.role,
 			content: msg.content.trim(),
@@ -238,21 +300,37 @@ export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<Co
 	});
 
 	const systemPrompt = typeof input.systemPrompt === "string" ? input.systemPrompt.trim() : undefined;
+
 	if (systemPrompt) {
 		const systemIndex = history.findIndex((msg) => msg.role === "system");
+
 		if (systemIndex >= 0) {
-			history[systemIndex] = { role: "system", content: systemPrompt };
+			history[systemIndex] = {
+				role: "system",
+				content: systemPrompt,
+			};
 		} else {
-			history.unshift({ role: "system", content: systemPrompt });
+			history.unshift({
+				role: "system",
+				content: systemPrompt,
+			});
 		}
 	} else {
 		const hasSystemInHistory = history.some((msg) => msg.role === "system" && msg.content.trim().length > 0);
+
 		if (!hasSystemInHistory) {
 			throw new Error("systemPrompt is required for the first turn, or history must include a system message");
 		}
 	}
 
-	const requestMessages: ChatMessage[] = [...history, { role: "user", content: input.userMessage.trim() }];
+	const requestMessages: ChatMessage[] = [
+		...history,
+		{
+			role: "user",
+			content: input.userMessage.trim(),
+		},
+	];
+
 	const reply = await createChatCompletion(requestMessages, input.options ?? {});
 
 	return {

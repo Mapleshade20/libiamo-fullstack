@@ -86,6 +86,7 @@ const uiIcons: Record<string, Component> = {
 						shortObjective={task.shortObjective}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
+						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
 						flipped={flippedId === task.id}
 						onflip={toggleFlip}
 						onenter={enterTask}
@@ -113,6 +114,7 @@ const uiIcons: Record<string, Component> = {
 						shortObjective={task.shortObjective}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
+						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
 						flipped={flippedId === task.id}
 						onflip={toggleFlip}
 						onenter={enterTask}

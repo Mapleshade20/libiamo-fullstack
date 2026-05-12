@@ -55,8 +55,6 @@
 		"vitest": "^4.1.2"
 	},
 	"dependencies": {
-		"@ai-sdk/openai-compatible": "^2.0.41",
-		"ai": "^6.0.168",
 		"dayjs": "^1.11.20",
 		"emoji-js": "^3.9.0",
 		"emoji-picker-element": "^1.29.1",
