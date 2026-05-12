@@ -9,6 +9,7 @@ import { calculateCurrentTurns, isTurnLimitReached } from "../../utils/sessionUt
 import { postAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, updateMessageById } from "../chatMessages";
+import { getOpeningStateMessages } from "../messageTransformer";
 import type { TutorFeedback } from "../types";
 import ChatHeader from "./ChatHeader.svelte";
 import { i18n } from "./i18n";
@@ -16,7 +17,6 @@ import MemberList from "./MemberList.svelte";
 import MessageInput from "./MessageInput.svelte";
 import MessageStream from "./MessageStream.svelte";
 import MobileTopBar from "./MobileTopBar.svelte";
-import { getOpeningStateMessages } from "../messageTransformer";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatOpeningState, type ChatUser } from "./types";
@@ -46,7 +46,6 @@ let {
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
-
 const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
 const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
 const messagePlaceholder = $derived(t.messagePlaceholder.replace("{channel}", channelName));
@@ -75,7 +74,6 @@ let showEvaluationModal = $state(false);
 let isInitializing = $state(false);
 let feedback = $state<TutorFeedback | null>(null);
 let messages = $state<ChatMessage[]>([]);
-let hasAttemptedComplete = $state(false);
 let agentUser = $state<ChatUser>({
 	id: "agent",
 	name: "Agent",
@@ -171,7 +169,6 @@ async function scrollToBottom() {
 async function handleComplete() {
 	if (!sessionId || isCompleting || isCompleted) return;
 	isCompleting = true;
-	hasAttemptedComplete = true;
 	try {
 		const result = await postAction("complete", sessionId);
 
@@ -181,12 +178,9 @@ async function handleComplete() {
 			showEvaluationModal = true;
 			await scrollToBottom();
 			await invalidateAll();
-		} else {
-			hasAttemptedComplete = false;
 		}
 	} catch (error) {
 		console.error("Completion failed:", error);
-		hasAttemptedComplete = false;
 	} finally {
 		isCompleting = false;
 	}
