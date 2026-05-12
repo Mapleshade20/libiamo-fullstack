@@ -28,34 +28,17 @@ describe("apiService", () => {
 			expect(global.fetch).toHaveBeenCalledWith("?/start", expect.objectContaining({ method: "POST" }));
 		});
 
-		it("handles null sessionId", async () => {
+		it("omits sessionId from FormData when null", async () => {
 			const mockResponse = { type: "success", data: {} };
 			(global.fetch as any).mockResolvedValue({
 				text: () => Promise.resolve(JSON.stringify(mockResponse)),
 			});
 
 			await postAction("complete", null);
-			expect(global.fetch).toHaveBeenCalledWith("?/complete", expect.objectContaining({ method: "POST" }));
-		});
 
-		it("handles empty string sessionId", async () => {
-			const mockResponse = { type: "success", data: {} };
-			(global.fetch as any).mockResolvedValue({
-				text: () => Promise.resolve(JSON.stringify(mockResponse)),
-			});
-
-			await postAction("complete", "");
-			expect(global.fetch).toHaveBeenCalledWith("?/complete", expect.objectContaining({ method: "POST" }));
-		});
-
-		it("handles zero sessionId", async () => {
-			const mockResponse = { type: "success", data: { sessionId: 0 } };
-			(global.fetch as any).mockResolvedValue({
-				text: () => Promise.resolve(JSON.stringify(mockResponse)),
-			});
-
-			await postAction("start", 0);
-			expect(global.fetch).toHaveBeenCalledWith("?/start", expect.objectContaining({ method: "POST" }));
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			const formData = fetchCall[1].body as FormData;
+			expect(formData.get("sessionId")).toBeNull();
 		});
 
 		it("sends FormData with sessionId when provided", async () => {

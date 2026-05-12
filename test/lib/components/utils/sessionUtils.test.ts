@@ -24,6 +24,7 @@ describe("sessionUtils", () => {
 	});
 
 	it("returns formatted turn limit message", () => {
-		expect(getTurnLimitMessage(10)).toContain("10");
+		expect(getTurnLimitMessage(10)).toBe("This session has reached the maximum turn limit (10).");
+		expect(getTurnLimitMessage(0)).toBe("");
 	});
 });

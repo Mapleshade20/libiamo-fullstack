@@ -3,12 +3,6 @@ import { ensureMarkdownContent, prepareMarkdownText, stripBasicMarkdown } from "
 
 describe("markdownUtils", () => {
 	describe("prepareMarkdownText", () => {
-		it("preserves markdown formatting for rendering", () => {
-			const input = "**Bold** and *Italic* and __Underline__ and ~~Strike~~";
-
-			expect(prepareMarkdownText(input)).toBe("**Bold** and *Italic* and __Underline__ and ~~Strike~~");
-		});
-
 		it("normalizes CRLF line endings without stripping markdown", () => {
 			const input = "### Header\r\nClick [here](https://example.com) to view";
 

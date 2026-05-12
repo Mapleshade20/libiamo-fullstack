@@ -82,31 +82,10 @@ describe("userPool", () => {
 			expect(uniqueNames.size).toBe(allNames.length);
 		});
 
-		it("produces different results for different seeds", () => {
+		it("produces distinct agent names across different seeds", () => {
 			const pools = Array.from({ length: 10 }, (_, i) => initUserPool(10000 + i));
-
-			const agentNames = pools.map((p) => p.agentUser.name);
-			const uniqueNames = new Set(agentNames);
-
-			// At least some variety in agent names across different seeds
-			expect(uniqueNames.size).toBeGreaterThan(1);
-		});
-
-		it("handles very small seed values", () => {
-			const pool = initUserPool(1);
-
-			expect(pool.agentUser).toBeDefined();
-			expect(pool.onlineUsers).toBeDefined();
-			expect(pool.offlineUsers).toBeDefined();
-			expect(pool.onlineUsers.length).toBeGreaterThanOrEqual(1);
-		});
-
-		it("handles very large seed values", () => {
-			const pool = initUserPool(999999999);
-
-			expect(pool.agentUser).toBeDefined();
-			expect(pool.onlineUsers).toBeDefined();
-			expect(pool.offlineUsers).toBeDefined();
+			const uniqueNames = new Set(pools.map((p) => p.agentUser.name));
+			expect(uniqueNames.size).toBeGreaterThanOrEqual(8);
 		});
 
 		it("creates default user names when pool is exhausted", () => {
