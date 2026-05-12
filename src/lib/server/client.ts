@@ -182,7 +182,7 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 	const content = data.choices?.[0]?.message?.content?.trim() ?? "";
 
 	if (!content) {
-		throw new Error("OpenAI API returned empty content");
+		throw new Error("LLM returned empty content");
 	}
 
 	return {
