@@ -30,5 +30,5 @@ export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 	translate: "Translate",
 };
 
-export const CADENCES = ["weekly", "daily"] as const;
+export const CADENCES = ["weekly", "daily", "none"] as const;
 export type Cadence = (typeof CADENCES)[number];
