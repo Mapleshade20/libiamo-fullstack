@@ -16,7 +16,7 @@ import MemberList from "./MemberList.svelte";
 import MessageInput from "./MessageInput.svelte";
 import MessageStream from "./MessageStream.svelte";
 import MobileTopBar from "./MobileTopBar.svelte";
-import { getOpeningStateMessages } from "./messageTransformer";
+import { getOpeningStateMessages } from "../messageTransformer";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatOpeningState, type ChatUser } from "./types";

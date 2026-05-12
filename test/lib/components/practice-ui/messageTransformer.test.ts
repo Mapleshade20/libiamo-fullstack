@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getOpeningStateMessages } from "$lib/components/practice-ui/discord/messageTransformer";
 import type { ChatOpeningState, ChatUser } from "$lib/components/practice-ui/discord/types";
+import { getOpeningStateMessages } from "$lib/components/practice-ui/messageTransformer";
 
 describe("messageTransformer", () => {
 	const mockAgentUser: ChatUser = {

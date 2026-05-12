@@ -1,6 +1,6 @@
-import { normalizeText } from "../../utils/messageUtils";
-import type { ChatMessage } from "../chatMessages";
-import type { ChatOpeningState, ChatUser } from "./types";
+import { normalizeText } from "../utils/messageUtils";
+import type { ChatMessage } from "./chatMessages";
+import type { ChatOpeningState, ChatUser } from "./discord/types";
 
 export function getOpeningStateMessages(params: {
 	openingStateData: ChatOpeningState;
