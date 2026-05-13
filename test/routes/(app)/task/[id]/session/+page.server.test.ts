@@ -27,12 +27,13 @@ describe("session page server", () => {
 		vi.resetAllMocks();
 	});
 
-	const mockUser = { id: "user_123", name: "Test User" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
 		title: "Test Task",
-		template: { ui: "discord" as const },
+		language: "en",
+		template: { ui: "discord" as const, maxTurns: 0 },
 		variant: { openingState: {} },
 	};
 
@@ -124,6 +125,7 @@ describe("session page server", () => {
 			const unimplementedTask = {
 				id: 456,
 				title: "Test Task",
+				language: "en",
 				template: { ui: "imessage" as const },
 				variant: { openingState: {} },
 			};
@@ -140,6 +142,10 @@ describe("session page server", () => {
 	});
 
 	describe("actions.start", () => {
+		beforeEach(() => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+		});
+
 		it("creates new session successfully", async () => {
 			mockSessionService.startSession.mockResolvedValue({
 				sessionId: 789,
@@ -158,7 +164,7 @@ describe("session page server", () => {
 				systemPrompt: "Test prompt",
 				mbti: "ENFP",
 			});
-			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123", "English");
+			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
 		});
 
 		it("maps Task not found from service to 404", async () => {
@@ -220,7 +226,7 @@ describe("session page server", () => {
 				reply: "Hello back",
 				turnCount: 2,
 			});
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", undefined);
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", undefined, { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("passes clientMessageId through to sendMessage", async () => {
@@ -237,7 +243,7 @@ describe("session page server", () => {
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123");
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {
@@ -303,13 +309,10 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when maximum conversation turns reached", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, template: { maxTurns: 5 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, language: "en", template: { maxTurns: 5 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 
-			// Mock Drizzle count query
-			const mockWhere = vi.fn().mockResolvedValue([{ count: 5 }]);
-			const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-			mockDb.select.mockReturnValue({ from: mockFrom });
+			mockSessionService.sendMessage.mockRejectedValue(new Error("Maximum conversation turns reached"));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 

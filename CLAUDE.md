@@ -27,7 +27,7 @@ Key areas:
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas in `src/lib/schemas.ts`, including admin form schemas and per-UI `openingState` schemas. Admin variant helpers validate slot coverage for `{{slot}}` placeholders.
-- Constants: `src/lib/constants.ts` — single source of truth for enum values/types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`) and labels. Do not inline enum unions.
+- Constants: `src/lib/constants.ts` — single source of truth for enum values/types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`), labels, and language display-name helpers. Do not inline enum unions or duplicate language-name maps/helpers elsewhere.
 - Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
 - Practice UI: reusable client code lives under `src/lib/components/practice-ui/`; Discord is the implemented chat UI, with other UI variants scaffolded/validated.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.

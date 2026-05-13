@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
-import type { UiVariant } from "$lib/constants";
+import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
@@ -138,7 +138,7 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	const ui = taskData.template.ui;
 	const openingState = taskData.variant.openingState as Record<string, unknown>;
 	const scenarioContext = buildScenarioContext(ui, openingState);
-	const learningLanguage = getLanguageName(taskData.language);
+	const learningLanguage = getLanguageEnglishName(taskData.language);
 	const languageConstraint = `IMPORTANT: You MUST give all your conversational replies in ${learningLanguage.toUpperCase()}.`;
 
 	const baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
@@ -146,34 +146,39 @@ export async function startSession(taskId: number, userId: string, _learningLang
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
 
-	const [session] = await db
-		.insert(practiceSession)
-		.values({
-			userId,
-			taskId,
-			agentPromptSnapshot: snapshot,
-			status: "in_progress",
-		})
-		.onConflictDoNothing({ target: [practiceSession.userId, practiceSession.taskId] })
-		.returning();
+	try {
+		const [session] = await db
+			.insert(practiceSession)
+			.values({
+				userId,
+				taskId,
+				agentPromptSnapshot: snapshot,
+				status: "in_progress",
+			})
+			.returning();
 
-	if (session) return { sessionId: session.id, systemPrompt, mbti };
+		if (!session) throw new Error("Failed to create session");
+		return { sessionId: session.id, systemPrompt, mbti };
+	} catch (error) {
+		const racedSession = await db.query.practiceSession.findFirst({
+			where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
+			columns: {
+				id: true,
+				agentPromptSnapshot: true,
+			},
+		});
+		if (!racedSession) {
+			if (error instanceof Error && error.message === "Failed to create session") throw error;
+			throw new Error("Failed to create session");
+		}
 
-	const racedSession = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
-		columns: {
-			id: true,
-			agentPromptSnapshot: true,
-		},
-	});
-	if (!racedSession) throw new Error("Failed to create session");
-
-	const racedSnapshot = racedSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
-	return {
-		sessionId: racedSession.id,
-		systemPrompt: racedSnapshot.systemPrompt ?? "",
-		mbti: racedSnapshot.mbti ?? "",
-	};
+		const racedSnapshot = racedSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
+		return {
+			sessionId: racedSession.id,
+			systemPrompt: racedSnapshot.systemPrompt ?? "",
+			mbti: racedSnapshot.mbti ?? "",
+		};
+	}
 }
 
 export type SendMessageResult = {
@@ -202,16 +207,6 @@ function isHiddenUserMessage(message: { role: string; llmMetadata?: unknown }): 
 
 function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unknown }>): number {
 	return messages.filter((message) => message.role === "user" && !isHiddenUserMessage(message)).length;
-}
-
-function getLanguageName(code: string): string {
-	const languageMap: Record<string, string> = {
-		en: "English",
-		es: "Spanish",
-		fr: "French",
-		ja: "Japanese",
-	};
-	return languageMap[code] || code;
 }
 
 function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
@@ -458,7 +453,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 
 	const objectives = session.task.objectives ?? [];
 
-	const learningLanguageName = getLanguageName(session.task.language);
+	const learningLanguageName = getLanguageEnglishName(session.task.language);
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
 	const scenarioContext = snapshot.scenarioContext ?? "";
@@ -527,7 +522,7 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 	if (!session) throw new Error("Session not found");
 	if (!session.task) throw new Error("Task not found");
 
-	const learningLanguageName = getLanguageName(session.task.language);
+	const learningLanguageName = getLanguageEnglishName(session.task.language);
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 	const history = session.messages

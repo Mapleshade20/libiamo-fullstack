@@ -20,6 +20,17 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	ja: "日本語",
 };
 
+export const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
+	en: "English",
+	es: "Spanish",
+	fr: "French",
+	ja: "Japanese",
+};
+
+export function getLanguageEnglishName(code: string): string {
+	return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+}
+
 export const INTERACTION_TYPES = ["chat", "oneshot", "slow", "translate"] as const;
 export type InteractionType = (typeof INTERACTION_TYPES)[number];
 
