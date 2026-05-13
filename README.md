@@ -60,7 +60,7 @@ Scheduling and recurrence
 - Variant selection: when creating a task the system selects one active variant at random and resolves slots from variant.slotValues. Templates without explicit slots must still have at least one active variant.
 
 Persona & agent prompt
-- Persona selection moved to the application layer. At scheduling time a small MBTI-based persona prefix is prepended to a template's agentPromptBase and saved into the task.agentPrompt. The template no longer stores a persona pool.
+- Persona selection happens at practice session start: a random MBTI-based persona prefix is prepended to the task's resolved agent prompt and saved in the session prompt snapshot.
 
 Validation and UI
 - Opening state shapes are validated in TypeScript with per-UI Zod schemas.

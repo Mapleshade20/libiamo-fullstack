@@ -427,7 +427,7 @@ function jsonStr(val: unknown): string {
 
 		{#if !isTranslate}
 			<div class="space-y-2">
-				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at schedule time) </Label>
+				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at session start) </Label>
 				<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
 			</div>
 		{/if}
