@@ -9,19 +9,7 @@
 
 ## 环境变量
 
-`.env` 建议设置如下：
-
-```env
-# OpenAI-compatible API
-OPENAI_API_KEY="sk-***"
-OPENAI_BASE_URL="https://api-ai.thucs.cn/v1"
-OPENAI_MODEL="qwen3-max"
-
-# Disable SSL verification for self-signed certificates (development only)
-NODE_TLS_REJECT_UNAUTHORIZED="0"
-```
-
-注意：示例中的 API Key 是占位符，禁止把真实密钥提交到仓库。
+`.env` 设置 `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`
 
 ## 手动测试示例
 
