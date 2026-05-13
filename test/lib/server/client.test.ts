@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-vi.mock("$env/dynamic/private", () => ({
-	env: {
+const { mockEnv } = vi.hoisted(() => ({
+	mockEnv: {
 		OPENAI_API_KEY: "test-key",
 		OPENAI_BASE_URL: "https://example.com/v1",
 		OPENAI_MODEL: "test-model",
+		LLM_DEBUG: "",
 	},
+}));
+
+vi.mock("$env/dynamic/private", () => ({
+	env: mockEnv,
 }));
 
 function createChatCompletionResponse(content: string) {
@@ -37,6 +42,7 @@ describe("client createStructuredOutput", () => {
 
 	beforeEach(() => {
 		vi.restoreAllMocks();
+		mockEnv.LLM_DEBUG = "";
 	});
 
 	it("validates messages before provider call", async () => {
@@ -96,6 +102,49 @@ describe("client createStructuredOutput", () => {
 		);
 	});
 
+	it("merges adjacent same-role messages before sending to OpenAI-compatible providers", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"reply":"ok","terminate":false}'));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/client");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		await createStructuredOutput(schema, [
+			{ role: "system", content: "Return JSON." },
+			{ role: "user", content: "Learner said hello." },
+		]);
+
+		const firstCall = fetchMock.mock.calls[0];
+		if (!firstCall) throw new Error("fetch was not called");
+		const payload = JSON.parse(String((firstCall[1] as RequestInit).body));
+
+		expect(payload.messages).toEqual([
+			{ role: "system", content: "Return JSON." },
+			{
+				role: "user",
+				content: expect.stringContaining("Learner said hello.\n\nReturn ONLY one valid JSON object"),
+			},
+		]);
+	});
+
+	it("logs request and response bodies only when LLM_DEBUG is enabled", async () => {
+		mockEnv.LLM_DEBUG = "true";
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
+		const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/client");
+		const schema = z.object({ content: z.string() });
+
+		await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
+
+		expect(infoSpy).toHaveBeenCalledWith("[llm-debug] request", expect.stringContaining('"url": "https://example.com/v1/chat/completions"'));
+		expect(infoSpy).toHaveBeenCalledWith("[llm-debug] response", expect.stringContaining('"status": 200'));
+
+		const loggedText = infoSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+		expect(loggedText).not.toContain("test-key");
+		expect(loggedText).not.toContain("Authorization");
+	});
 	it("recovers provider output with a newline between the opening quote and key name", async () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"\nreply":"¡Hola!","terminate":false}'));
 		vi.stubGlobal("fetch", fetchMock);

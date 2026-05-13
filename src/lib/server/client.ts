@@ -85,6 +85,31 @@ function getOpenAIConfig() {
 	};
 }
 
+// ── Debug helpers ─────────────────────────────────────────────────────
+
+function isLlmDebugEnabled() {
+	const value = env.LLM_DEBUG?.trim().toLowerCase();
+	return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function safeJsonParse(text: string): unknown {
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return text;
+	}
+}
+
+function debugLog(event: string, details: Record<string, unknown>) {
+	if (!isLlmDebugEnabled()) return;
+
+	try {
+		console.info(`[llm-debug] ${event}`, JSON.stringify(details, null, 2));
+	} catch {
+		console.info(`[llm-debug] ${event}`, details);
+	}
+}
+
 // ── Validation helpers ────────────────────────────────────────────────
 
 function validateMessages(messages: ChatMessage[]) {
@@ -101,6 +126,22 @@ function validateMessages(messages: ChatMessage[]) {
 			throw new Error("each message.content must be a non-empty string");
 		}
 	}
+}
+
+function mergeAdjacentMessages(messages: ChatMessage[]): ChatMessage[] {
+	const merged: ChatMessage[] = [];
+
+	for (const message of messages) {
+		const previous = merged.at(-1);
+
+		if (previous?.role === message.role) {
+			previous.content = `${previous.content.trimEnd()}\n\n${message.content.trimStart()}`;
+		} else {
+			merged.push({ ...message });
+		}
+	}
+
+	return merged;
 }
 
 function stripJsonFences(text: string) {
@@ -146,22 +187,46 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 	validateMessages(messages);
 
 	const { apiKey, baseUrl, model } = getOpenAIConfig();
+	const endpoint = `${baseUrl}/chat/completions`;
+	const requestBody = {
+		model,
+		messages: mergeAdjacentMessages(messages),
+		temperature: options.temperature ?? 0.7,
+		max_tokens: options.maxTokens ?? 4096,
+	};
 
-	const response = await fetch(`${baseUrl}/chat/completions`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify({
-			model,
-			messages,
-			temperature: options.temperature ?? 0.7,
-			max_tokens: options.maxTokens ?? 4096,
-		}),
+	debugLog("request", {
+		url: endpoint,
+		body: requestBody,
 	});
 
+	let response: Response;
+
+	try {
+		response = await fetch(endpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${apiKey}`,
+			},
+			body: JSON.stringify(requestBody),
+		});
+	} catch (error) {
+		debugLog("network-error", {
+			url: endpoint,
+			message: error instanceof Error ? error.message : String(error),
+		});
+		throw error;
+	}
+
 	const bodyText = await response.text();
+
+	debugLog("response", {
+		url: endpoint,
+		status: response.status,
+		ok: response.ok,
+		body: safeJsonParse(bodyText),
+	});
 
 	if (!response.ok) {
 		throw new Error(`OpenAI API error (${response.status}): ${bodyText}`);

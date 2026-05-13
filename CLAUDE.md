@@ -35,6 +35,6 @@ Key areas:
 ## Notes for agents
 
 - Use tabs for indentation.
-- Run `pnpm format`, `pnpm check` and `pnpm test` before finishing changes. Write unit tests for additional "server.ts" code.
-- Use context7-mcp tool for svelte or package docs/lookups when stuck on problems.
+- Run `pnpm format`, `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
+- If stuck on a problem after 2-3 failed attempts, do not brutely retry. Search the web for solutions and come up with new approaches.
 - Refer to `docs/DB.md`, `docs/ROADMAP.md`, and `README.md` for schema, roadmap, and core concepts.

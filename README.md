@@ -20,6 +20,8 @@ Once you've created a project and installed dependencies with `pnpm install`, st
 pnpm dev
 ```
 
+Optional LLM debugging: set `LLM_DEBUG=true` in `.env` to print OpenAI-compatible request and response bodies to the server console. API keys are not logged.
+
 ## Building
 
 To create a production version of your app:
