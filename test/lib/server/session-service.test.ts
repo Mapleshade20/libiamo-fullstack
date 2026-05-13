@@ -58,7 +58,7 @@ describe("session service", () => {
 
 			expect(result.sessionId).toBe(123);
 			expect(result.mbti).toMatch(/^(INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)$/);
-			expect(result.systemPrompt).toContain("IMPORTANT: You MUST generate all your conversational replies in ENGLISH");
+			expect(result.systemPrompt).toContain("IMPORTANT: You MUST give all your conversational replies in ENGLISH");
 			expect(result.systemPrompt).toContain("Scenario: Discord");
 			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});

@@ -390,8 +390,7 @@ describe("chat client wrappers", () => {
 			const payload = JSON.parse(String(init.body));
 			expect(payload.messages).toEqual([
 				{ role: "system", content: "New persona" },
-				{ role: "user", content: "Hi" },
-				{ role: "user", content: "How are you?" },
+				{ role: "user", content: "Hi\n\nHow are you?" },
 			]);
 		});
 

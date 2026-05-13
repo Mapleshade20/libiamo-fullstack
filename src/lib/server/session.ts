@@ -123,7 +123,7 @@ export async function startSession(taskId: number, userId: string, learningLangu
 	const ui = taskData.template.ui;
 	const openingState = taskData.variant.openingState as Record<string, unknown>;
 	const scenarioContext = buildScenarioContext(ui, openingState);
-	const languageConstraint = `IMPORTANT: You MUST generate all your conversational replies in ${learningLanguage.toUpperCase()}. Do not use English unless the user explicitly asks for a translation or the specific scenario demands it.`;
+	const languageConstraint = `IMPORTANT: You MUST give all your conversational replies in ${learningLanguage.toUpperCase()}.`;
 
 	const baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
 	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
@@ -190,9 +190,7 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 
 const AgentReplySchema = z.object({
 	reply: z.string().describe("Your conversational reply to the user."),
-	terminate: z
-		.boolean()
-		.describe("Set to true ONLY IF the conversation has naturally concluded, objectives are fully met, or the user explicitly says goodbye."),
+	terminate: z.boolean().describe("true ONLY IF you are severely offended or the user explicitly says goodbye"),
 });
 
 export async function sendMessage(sessionId: number, userMessage: string, clientMessageId?: string): Promise<SendMessageResult> {
@@ -242,7 +240,7 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 
 	// Inject exact JSON schema format to bypass provider compatibility issues
-	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema:\n{\n  "reply": "string (your conversational reply to the user)",\n  "terminate": boolean (true ONLY IF the conversation has naturally concluded or the user explicitly says goodbye)\n}`;
+	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean (true ONLY IF you are severely offended or the user explicitly says goodbye) }`;
 
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
 	for (const m of activeMessages) {
