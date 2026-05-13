@@ -1,11 +1,11 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth";
 import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/dates";
 import { db } from "$lib/server/db";
-import { task, template, userLearningProfile } from "$lib/server/db/schema";
+import { practiceSession, task, template, userLearningProfile } from "$lib/server/db/schema";
 import { ensureTasksForDate } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -17,7 +17,6 @@ export const load: PageServerLoad = async (event) => {
 	const userTz = user.timezone || "UTC";
 	const userLocalDateStr = getLocalDateString(userTz);
 
-	// Generate tasks if they don't exist yet, using the user's local date string
 	await ensureTasksForDate(language, userLocalDateStr);
 
 	const mondayStr = getMondayOfWeekForDate(userLocalDateStr);
@@ -55,9 +54,38 @@ export const load: PageServerLoad = async (event) => {
 		.innerJoin(template, eq(task.templateId, template.id))
 		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
 
+	const allTaskIds = [...new Set([...weeklyTasks, ...dailyTasks].map((taskItem) => taskItem.id))];
+
+	const relatedSessions =
+		allTaskIds.length > 0
+			? await db.query.practiceSession.findMany({
+					where: and(eq(practiceSession.userId, user.id), inArray(practiceSession.taskId, allTaskIds)),
+					columns: {
+						id: true,
+						taskId: true,
+						status: true,
+						startedAt: true,
+					},
+					orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
+				})
+			: [];
+
+	const latestSessionStatusByTaskId = new Map<number, (typeof relatedSessions)[number]["status"]>();
+	for (const session of relatedSessions) {
+		if (!latestSessionStatusByTaskId.has(session.taskId)) {
+			latestSessionStatusByTaskId.set(session.taskId, session.status);
+		}
+	}
+
 	return {
-		weeklyTasks,
-		dailyTasks,
+		weeklyTasks: weeklyTasks.map((taskItem) => ({
+			...taskItem,
+			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
+		})),
+		dailyTasks: dailyTasks.map((taskItem) => ({
+			...taskItem,
+			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
+		})),
 		language,
 	};
 };
@@ -80,7 +108,6 @@ export const actions: Actions = {
 		const userId = event.locals.user?.id;
 		if (!userId) return fail(401);
 
-		// Ensure learning profile exists for the new language
 		await db
 			.insert(userLearningProfile)
 			.values({

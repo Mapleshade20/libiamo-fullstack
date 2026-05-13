@@ -1,8 +1,7 @@
 import { error, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import type { LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
-import { task, template, templateVariant } from "$lib/server/db/schema";
+import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -35,12 +34,25 @@ export const load: PageServerLoad = async (event) => {
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
 		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
-		.where(and(eq(task.id, taskId), eq(task.language, user.activeLanguage as LanguageCode)))
+		.where(eq(task.id, taskId))
 		.limit(1);
 
 	if (!result) {
 		return error(404, "Task not found");
 	}
 
-	return { task: result };
+	const latestSession = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
+		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
+		columns: {
+			status: true,
+		},
+	});
+
+	return {
+		task: {
+			...result,
+			sessionStatus: latestSession?.status ?? null,
+		},
+	};
 };

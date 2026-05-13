@@ -40,7 +40,7 @@
 ## Phase A2 Scope
 
 Practice sessions:
-- Start session: create practiceSession, randomly select persona from pool
+- Start session: create practiceSession, randomly select MBTI persona, snapshot full system prompt
 - Session UI: render platform-specific interface (imessage, reddit, etc.)
 - Send message: user sends message, LLM agent responds (for chat/slow types)
 - Request hint: ask tutor agent for help without consuming turns

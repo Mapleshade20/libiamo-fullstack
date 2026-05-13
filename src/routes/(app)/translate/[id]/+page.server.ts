@@ -1,9 +1,9 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
-import { createSingleTurnChat } from "$lib/server/client";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
+import { createSingleTurnChat } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Throw redirect if user is not authenticated */

@@ -62,6 +62,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"common.back": "Back",
 		"common.loading": "Loading...",
 		"common.error": "Something went wrong.",
+
+		"hall.reviewReport": "Review Report",
+		"task.startPractice": "Start Practice",
+		"task.comingSoon": "Coming Soon",
 	},
 	es: {
 		"nav.home": "Salón de Misiones",
@@ -116,6 +120,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"common.back": "Volver",
 		"common.loading": "Cargando...",
 		"common.error": "Algo salió mal.",
+
+		"hall.reviewReport": "Revisar Informe",
+		"task.startPractice": "Comenzar Práctica",
+		"task.comingSoon": "Próximamente",
 	},
 	fr: {
 		"nav.home": "Salle des Quêtes",
@@ -170,6 +178,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"common.back": "Retour",
 		"common.loading": "Chargement...",
 		"common.error": "Quelque chose s'est mal passé.",
+
+		"hall.reviewReport": "Voir le Rapport",
+		"task.startPractice": "Commencer la Pratique",
+		"task.comingSoon": "Bientôt Disponible",
 	},
 	ja: {
 		"nav.home": "クエストホール",
@@ -224,6 +236,10 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"common.back": "戻る",
 		"common.loading": "読み込み中...",
 		"common.error": "問題が発生しました。",
+
+		"hall.reviewReport": "レポートを確認",
+		"task.startPractice": "練習を開始",
+		"task.comingSoon": "近日公開",
 	},
 };
 

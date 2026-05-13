@@ -7,3 +7,5 @@ export const interactionTypeEnum = pgEnum("interaction_type", [...INTERACTION_TY
 export const uiVariantEnum = pgEnum("ui_variant", [...UI_VARIANTS]);
 export const cadenceEnum = pgEnum("cadence", [...CADENCES]);
 export const scheduleOriginEnum = pgEnum("schedule_origin", ["manual", "auto"]);
+export const sessionStatusEnum = pgEnum("session_status", ["in_progress", "completed", "evaluated"]);
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);

@@ -1,11 +1,11 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
-import Clock from "@lucide/svelte/icons/clock";
-import Gem from "@lucide/svelte/icons/gem";
+import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Star from "@lucide/svelte/icons/star";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
+import { type LanguageCode, t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
@@ -13,12 +13,20 @@ let task = $derived(data.task);
 
 const objectives = $derived(task.objectives ?? []);
 
+const IMPLEMENTED_UIS = ["discord"];
+let isPracticeEnabled = $derived(IMPLEMENTED_UIS.includes(task.templateUi));
+let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
+let lang = $derived(task.language as LanguageCode);
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
 }
 </script>
 
-<div class="fixed inset-0 bg-card"></div>
+<div class="fixed inset-0 bg-card overflow-hidden z-0">
+	{#if isFinished}
+		<div class="absolute -right-24 -top-24 text-green-500/5 pointer-events-none"><CheckCircle2 size={500} strokeWidth={1} /></div>
+	{/if}
+</div>
 
 <div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
 	<a href="/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
@@ -29,25 +37,34 @@ function difficultyLabel(level: number): string {
 	<div class="mt-12 flex-1 flex flex-col">
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
+				{#if isFinished}
+					<Badge class="bg-green-500/10 text-green-600 hover:bg-green-500/10 border-green-500/20 text-[10px] font-bold uppercase tracking-widest">
+						Completed
+					</Badge>
+				{/if}
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
-					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
+					{UI_VARIANT_LABELS[
+						task.templateUi as keyof typeof UI_VARIANT_LABELS
+					] ?? task.templateUi}
 				</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
+					{INTERACTION_TYPE_LABELS[
+						task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS
+					] ?? task.templateInteractionType}
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{task.title}</h1>
+			<h1 class="text-2xl md:text-3xl">{task.title}</h1>
 		</div>
 
 		{#if task.description}
-			<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
+			<p class="mt-8 text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
-				<h2 class="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Objectives</h2>
-				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground max-w-xl">
+				<h2 class="mb-2">Objectives</h2>
+				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
 					{/each}
@@ -57,8 +74,8 @@ function difficultyLabel(level: number): string {
 
 		{#if task.materialsMd}
 			<div class="mt-10">
-				<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-				<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
+				<h2 class="mb-2">Background Material</h2>
+				<div class="prose prose-neutral text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 
@@ -71,16 +88,15 @@ function difficultyLabel(level: number): string {
 						{task.pointReward}
 						pts
 					</span>
-					<span class="flex items-center gap-1.5">
-						<Gem size={14} strokeWidth={1.5} />
-						{task.gemReward}
-						gems
-					</span>
-					{#if task.estimatedWords}
-						<span class="flex items-center gap-1.5"> <Clock size={14} strokeWidth={1.5} />~{task.estimatedWords} words </span>
-					{/if}
 				</div>
-				<Button disabled class="px-8">Start Practice</Button>
+
+				{#if isFinished}
+					<Button class="px-8 bg-green-600 hover:bg-green-700 text-white" href="/task/{task.id}/session">{t(lang, "hall.reviewReport")}</Button>
+				{:else if isPracticeEnabled}
+					<Button class="px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
+				{:else}
+					<Button class="px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
+				{/if}
 			</div>
 		</div>
 	</div>

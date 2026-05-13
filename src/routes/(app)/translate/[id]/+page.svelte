@@ -190,7 +190,7 @@ async function handleSubmit() {
 
 <div class="fixed inset-0 bg-card"></div>
 
-<div class="relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
+<div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
 	<!-- Back button -->
 	{#if translating}
 		<button

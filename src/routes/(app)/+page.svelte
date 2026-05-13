@@ -60,7 +60,6 @@ const uiIcons: Record<string, Component> = {
 </script>
 
 <div class="space-y-10">
-	<!-- Greeting -->
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
 			Welcome back, {data.user.name}.<br>
@@ -68,10 +67,9 @@ const uiIcons: Record<string, Component> = {
 		</h1>
 	</section>
 
-	<!-- Daily Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.today")}</h3>
+			<h2 class="text-2xl">{t(lang, "hall.today")}</h2>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.dailyTasks.length === 0}
@@ -87,6 +85,7 @@ const uiIcons: Record<string, Component> = {
 						shortObjective={task.shortObjective}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
+						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
 						flipped={flippedId === task.id}
 						onflip={toggleFlip}
 						onenter={enterTask}
@@ -96,10 +95,9 @@ const uiIcons: Record<string, Component> = {
 		{/if}
 	</section>
 
-	<!-- Weekly Quests -->
 	<section>
 		<div class="flex items-center gap-4 mb-5">
-			<h3 class="font-serif text-2xl text-foreground whitespace-nowrap">{t(lang, "hall.thisWeek")}</h3>
+			<h2 class="text-2xl">{t(lang, "hall.thisWeek")}</h2>
 			<div class="h-px flex-1 bg-border"></div>
 		</div>
 		{#if data.weeklyTasks.length === 0}
@@ -115,6 +113,7 @@ const uiIcons: Record<string, Component> = {
 						shortObjective={task.shortObjective}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
+						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
 						flipped={flippedId === task.id}
 						onflip={toggleFlip}
 						onenter={enterTask}
