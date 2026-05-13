@@ -77,6 +77,30 @@ describe("Task detail +page.server", () => {
 		});
 	});
 
+	it("returns task payload even when task language differs from active language", async () => {
+		const row = {
+			id: 42,
+			title: "Spanish task",
+			language: "es",
+			templateUi: "discord",
+			pointReward: 10,
+		};
+		mockLimit.mockResolvedValueOnce([row]);
+		mockFindFirst.mockResolvedValueOnce(null);
+
+		const result = await load({
+			locals: { user: { id: "u1", activeLanguage: "en" } },
+			params: { id: "42" },
+		} as any);
+
+		expect(result).toEqual({
+			task: {
+				...row,
+				sessionStatus: null,
+			},
+		});
+	});
+
 	it("returns null sessionStatus when latest session does not exist", async () => {
 		const row = {
 			id: 42,

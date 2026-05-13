@@ -9,10 +9,6 @@ import type { Actions, PageServerLoad } from "./$types";
 const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
-function isActiveLanguageTask(taskLanguage: string, activeLanguage: string | null | undefined) {
-	return taskLanguage === (activeLanguage || "en");
-}
-
 function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
 	return message.trim() === "*User joined the server*" && clientMessageId === `join-${sessionId}`;
 }
@@ -56,7 +52,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		},
 	});
 
-	if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) throw error(404, "Task not found");
+	if (!taskData) throw error(404, "Task not found");
 
 	const existingSession = await db.query.practiceSession.findFirst({
 		where: and(
@@ -103,14 +99,6 @@ export const actions: Actions = {
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
 		try {
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				columns: { language: true },
-			});
-			if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) {
-				return fail(404, { error: "Task not found" });
-			}
-
 			const result = await startSession(taskId, user.id);
 			return { success: true, ...result };
 		} catch (e) {
@@ -143,7 +131,7 @@ export const actions: Actions = {
 				where: eq(task.id, taskId),
 				with: { template: true },
 			});
-			if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) {
+			if (!taskData) {
 				return fail(404, { error: "Task not found" });
 			}
 

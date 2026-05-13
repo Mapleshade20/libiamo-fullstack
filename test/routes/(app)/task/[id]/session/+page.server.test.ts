@@ -121,6 +121,21 @@ describe("session page server", () => {
 			).rejects.toMatchObject({ status: 404 });
 		});
 
+		it("returns task when task language differs from active language", async () => {
+			const spanishTask = { ...mockTask, language: "es" };
+			mockDb.query.task.findFirst.mockResolvedValue(spanishTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			const result = (await load({
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+			} as any)) as { task: typeof spanishTask; existingSession: { id: number } | null };
+
+			expect(result.task).toEqual(spanishTask);
+			expect(result.existingSession).toBeNull();
+		});
+
 		it("throws 501 when UI is not implemented", async () => {
 			const unimplementedTask = {
 				id: 456,
@@ -164,6 +179,22 @@ describe("session page server", () => {
 				systemPrompt: "Test prompt",
 				mbti: "ENFP",
 			});
+			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
+		});
+
+		it("starts session when task language differs from active language", async () => {
+			mockSessionService.startSession.mockResolvedValue({
+				sessionId: 789,
+				systemPrompt: "Test prompt",
+				mbti: "ENFP",
+			});
+
+			const result = await actions.start({
+				params: { id: mockTaskId },
+				locals: { user: { ...mockUser, activeLanguage: "fr" } },
+			} as any);
+
+			expect(result).toMatchObject({ success: true, sessionId: 789 });
 			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
 		});
 
@@ -244,6 +275,26 @@ describe("session page server", () => {
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+		});
+
+		it("sends message when task language differs from active language", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, language: "es" });
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockResolvedValue({
+				reply: "Hola",
+				turnCount: 1,
+			});
+
+			const result = await actions.send(
+				createFormEvent({ user: { ...mockUser, activeLanguage: "fr" }, values: { sessionId: "789", message: "Hola" } }),
+			);
+
+			expect(result).toMatchObject({ success: true, reply: "Hola" });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", undefined, { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {
