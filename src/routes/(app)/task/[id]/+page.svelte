@@ -1,8 +1,6 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
-import Clock from "@lucide/svelte/icons/clock";
-import Gem from "@lucide/svelte/icons/gem";
 import Star from "@lucide/svelte/icons/star";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";

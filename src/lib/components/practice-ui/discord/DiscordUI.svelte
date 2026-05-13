@@ -272,7 +272,7 @@ $effect(() => {
 			if (isCompleted && feedback) showEvaluationModal = true;
 
 			const openingMessages = getOpeningStateMessages({
-				openingStateData: existingSession.openingState ?? {},
+				openingStateData,
 				userName,
 				agentUser,
 				avatarUrl,

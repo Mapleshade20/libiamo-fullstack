@@ -1,6 +1,5 @@
 <script lang="ts">
 import BookOpen from "@lucide/svelte/icons/book-open";
-import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Hash from "@lucide/svelte/icons/hash";
 import Languages from "@lucide/svelte/icons/languages";
 import Mail from "@lucide/svelte/icons/mail";

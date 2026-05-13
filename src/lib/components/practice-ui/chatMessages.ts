@@ -25,9 +25,9 @@ export type ChatMessage = {
 	retryText?: string;
 };
 
-function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean } {
+function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean; hidden?: boolean } {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as { clientMessageId?: string; failed?: boolean };
+	return value as { clientMessageId?: string; failed?: boolean; hidden?: boolean };
 }
 
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
@@ -69,7 +69,7 @@ export function buildChatMessages({
 			authorName: message.role === "user" ? userName : agentName,
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
-			isHidden: isHidden(message),
+			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
 		} satisfies ChatMessage;
 
