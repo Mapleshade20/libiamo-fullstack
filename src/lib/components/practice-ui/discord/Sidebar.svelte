@@ -5,7 +5,7 @@ import LogOut from "@lucide/svelte/icons/log-out";
 import Mic from "@lucide/svelte/icons/mic";
 import Plus from "@lucide/svelte/icons/plus";
 import Settings from "@lucide/svelte/icons/settings";
-import { fade } from "svelte/transition";
+import { fade, fly } from "svelte/transition";
 
 let {
 	serverName = "",
@@ -32,28 +32,12 @@ let {
 } = $props();
 </script>
 
-<div
-	class="fixed inset-0 z-[1001] flex md:relative md:flex h-full transition-transform duration-300 md:translate-x-0 {showMobileMenu
-		? 'translate-x-0'
-		: '-translate-x-full md:translate-x-0'}"
->
-	{#if showMobileMenu}
-		<div
-			role="button"
-			tabindex="-1"
-			class="fixed inset-0 bg-black/60 md:hidden -z-10"
-			style="width: 100vw; height: 100vh;"
-			onclick={onCloseMobileMenu}
-			onkeydown={(e) => e.key === "Escape" && onCloseMobileMenu()}
-			transition:fade={{ duration: 200 }}
-		></div>
-	{/if}
-
+{#snippet sidebarContent()}
 	<!-- Server Rail Actions -->
 	<div class="z-10 flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-[#1E1F22] py-3 hide-scrollbar">
 		<a
 			href={`/task/${taskId}`}
-			class="group relative flex h-12 w-12 items-center justify-center rounded-[24px] bg-[#313338] transition-all hover:rounded-[16px] overflow-hidden shadow-sm text-[#DBDEE1] hover:text-white hover:bg-[#DA373C]"
+			class="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[24px] bg-[#313338] text-[#DBDEE1] shadow-sm transition-all hover:rounded-[16px] hover:bg-[#DA373C] hover:text-white"
 			title={t.returnTask}
 		>
 			<LogOut size={22} class="mr-0.5" />
@@ -85,7 +69,7 @@ let {
 		<div class="flex-1 overflow-y-auto p-2 hide-scrollbar">
 			<button
 				type="button"
-				class="w-full mb-1 mt-4 px-2 text-xs font-semibold text-[#949BA4] hover:text-gray-300 cursor-pointer flex justify-between items-center"
+				class="mt-4 mb-1 flex w-full cursor-pointer items-center justify-between px-2 text-xs font-semibold text-[#949BA4] hover:text-gray-300"
 			>
 				<span>{t.textChannels}</span>
 				<Plus size={14} />
@@ -97,19 +81,19 @@ let {
 		</div>
 		<!-- User Profile Footer -->
 		<div class="flex h-[52px] items-center justify-between bg-[#232428] px-2">
-			<button type="button" class="flex items-center gap-2 rounded px-2 py-1 hover:bg-[#35373C] w-full max-w-[140px] truncate" onclick={onMockAction}>
+			<button type="button" class="flex w-full max-w-[140px] items-center gap-2 truncate rounded px-2 py-1 hover:bg-[#35373C]" onclick={onMockAction}>
 				<div class="relative h-8 w-8 shrink-0">
-					<div class="h-full w-full rounded-full bg-[#5865F2] overflow-hidden flex items-center justify-center font-bold text-white">
+					<div class="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#5865F2] font-bold text-white">
 						{#if avatarUrl}
 							<img src={avatarUrl} alt="User" class="h-full w-full object-cover">
 						{:else}
 							{userName.charAt(0).toUpperCase()}
 						{/if}
 					</div>
-					<div class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#232428] bg-[#23A559]"></div>
+					<div class="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 rounded-full border-[2.5px] border-[#232428] bg-[#23A559]"></div>
 				</div>
-				<div class="flex flex-col items-start text-sm truncate">
-					<span class="font-semibold leading-tight text-white truncate w-full text-left">{userName}</span>
+				<div class="flex flex-col items-start truncate text-sm">
+					<span class="w-full truncate text-left leading-tight font-semibold text-white">{userName}</span>
 					<span class="text-xs text-[#949BA4]">{t.online}</span>
 				</div>
 			</button>
@@ -119,7 +103,22 @@ let {
 			</div>
 		</div>
 	</div>
-</div>
+{/snippet}
+
+{#if showMobileMenu}
+	<div
+		role="button"
+		tabindex="-1"
+		class="fixed inset-0 z-[1001] bg-black/60 md:hidden"
+		onclick={onCloseMobileMenu}
+		onkeydown={(e) => e.key === "Escape" && onCloseMobileMenu()}
+		transition:fade={{ duration: 150 }}
+	></div>
+
+	<div class="fixed inset-y-0 left-0 z-[1002] flex h-full md:hidden" transition:fly={{ x: -312, duration: 250 }}>{@render sidebarContent()}</div>
+{/if}
+
+<div class="hidden h-full md:flex">{@render sidebarContent()}</div>
 
 <style>
 .hide-scrollbar {
