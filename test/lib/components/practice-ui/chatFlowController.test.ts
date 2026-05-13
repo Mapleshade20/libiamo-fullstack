@@ -67,20 +67,10 @@ describe("attemptAgentReply", () => {
 		expect(result).toEqual({ status: "rejected" } satisfies SendAttemptResult);
 	});
 
-	it("returns rejected on 499 boundary client error", async () => {
-		mockFailure(499);
-
+	it.each([401, 499])("returns rejected for client error status %s", async (status) => {
+		mockFailure(status);
 		const result = await attemptAgentReply(1, "Hi", "client-1");
-
 		expect(result).toEqual({ status: "rejected" } satisfies SendAttemptResult);
-	});
-
-	it("returns failed on 5xx server error", async () => {
-		mockFailure(500);
-
-		const result = await attemptAgentReply(1, "Hi", "client-1");
-
-		expect(result).toEqual({ status: "failed" } satisfies SendAttemptResult);
 	});
 
 	it("returns failed on network error", async () => {
@@ -135,19 +125,9 @@ describe("attemptAgentReply", () => {
 		expect(fetchCall[1].body.get("clientMessageId")).toBe("msg-abc");
 	});
 
-	it("returns failed on non-4xx failure status", async () => {
-		mockFailure(0); // status 0 is not >= 400
-
+	it.each([0, 500, 503])("returns failed for non-client failure status %s", async (status) => {
+		mockFailure(status);
 		const result = await attemptAgentReply(1, "Hi", "client-1");
-
-		expect(result).toEqual({ status: "failed" } satisfies SendAttemptResult);
-	});
-
-	it("returns failed on failure with status 500+", async () => {
-		mockFailure(503);
-
-		const result = await attemptAgentReply(1, "Hi", "client-1");
-
 		expect(result).toEqual({ status: "failed" } satisfies SendAttemptResult);
 	});
 });

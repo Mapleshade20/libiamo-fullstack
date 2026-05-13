@@ -36,6 +36,26 @@ describe("session page server", () => {
 		variant: { openingState: {} },
 	};
 
+	const createFormEvent = ({
+		taskId = mockTaskId,
+		user = mockUser,
+		values = {},
+	}: {
+		taskId?: string;
+		user?: typeof mockUser | null;
+		values?: Record<string, string>;
+	}) => {
+		const formData = new FormData();
+		for (const [key, value] of Object.entries(values)) {
+			formData.append(key, value);
+		}
+		return {
+			request: { formData: () => Promise.resolve(formData) },
+			params: { id: taskId },
+			locals: { user },
+		} as any;
+	};
+
 	describe("load", () => {
 		it("returns task and existing session when found", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
@@ -141,49 +161,39 @@ describe("session page server", () => {
 			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123", "English");
 		});
 
-		it("returns fail 401 when user not authenticated", async () => {
-			const result = await actions.start({
-				params: { id: mockTaskId },
-				locals: { user: null },
-			} as any);
-
-			expect(result).toMatchObject({ status: 401, data: { error: "Unauthorized" } });
-		});
-
-		it("returns fail 400 for invalid task ID", async () => {
-			const result = await actions.start({
-				params: { id: "invalid" },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid task ID" } });
-		});
-
-		it("returns fail 500 when startSession throws", async () => {
-			mockSessionService.startSession.mockRejectedValue(new Error("DB error"));
-
-			const result = await actions.start({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to start session" } });
-		});
-
-		it("returns fail 500 when startSession throws a non-Error payload", async () => {
-			mockSessionService.startSession.mockRejectedValue("String error instead of Error instance");
-
-			const result = await actions.start({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to start session" } });
-		});
-		it("returns fail 404 when startSession reports Task not found", async () => {
+		it("maps Task not found from service to 404", async () => {
 			mockSessionService.startSession.mockRejectedValue(new Error("Task not found"));
 			const result = await actions.start({ params: { id: mockTaskId }, locals: { user: mockUser } } as any);
 			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+		});
+
+		it.each([
+			{
+				name: "unauthenticated user",
+				event: { params: { id: mockTaskId }, locals: { user: null } },
+				expected: { status: 401, data: { error: "Unauthorized" } },
+			},
+			{
+				name: "invalid task id",
+				event: { params: { id: "invalid" }, locals: { user: mockUser } },
+				expected: { status: 400, data: { error: "Invalid task ID" } },
+			},
+			{
+				name: "unexpected service failure",
+				event: { params: { id: mockTaskId }, locals: { user: mockUser } },
+				setup: () => mockSessionService.startSession.mockRejectedValue(new Error("DB error")),
+				expected: { status: 500, data: { error: "Failed to start session" } },
+			},
+			{
+				name: "non-error payload from service",
+				event: { params: { id: mockTaskId }, locals: { user: mockUser } },
+				setup: () => mockSessionService.startSession.mockRejectedValue("String error"),
+				expected: { status: 500, data: { error: "Failed to start session" } },
+			},
+		])("returns controlled failures for $name", async ({ event, expected, setup }) => {
+			setup?.();
+			const result = await actions.start(event as any);
+			expect(result).toMatchObject(expected);
 		});
 	});
 
@@ -191,6 +201,7 @@ describe("session page server", () => {
 		beforeEach(() => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 		});
+
 		it("sends message successfully", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
@@ -202,13 +213,7 @@ describe("session page server", () => {
 				turnCount: 2,
 			});
 
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 
 			expect(result).toMatchObject({
 				success: true,
@@ -230,121 +235,62 @@ describe("session page server", () => {
 				pending: true,
 			});
 
-			await actions.send({
-				request: {
-					formData: () =>
-						Promise.resolve(
-							Object.assign(new FormData(), {
-								get: (k: string) => ({ sessionId: "789", message: "Hello", clientMessageId: "msg-123" })[k],
-							}),
-						),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123");
 		});
 
-		it("returns fail 403 when session belongs to another user", async () => {
+		it("returns fail 403 when session ownership check fails", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 
 			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
 		});
 
-		it("returns fail 403 when session belongs to another task", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue(null);
-
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		it.each([
+			{
+				name: "unauthenticated user",
+				event: createFormEvent({ user: null, values: { sessionId: "789", message: "Hello" } }),
+				expected: { status: 401, data: { error: "Unauthorized" } },
+			},
+			{
+				name: "invalid task id",
+				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789", message: "Hello" } }),
+				expected: { status: 400, data: { error: "Invalid task ID" } },
+			},
+			{
+				name: "invalid session id",
+				event: createFormEvent({ values: { sessionId: "invalid", message: "Hello" } }),
+				expected: { status: 400, data: { error: "Invalid session ID" } },
+			},
+			{
+				name: "empty message",
+				event: createFormEvent({ values: { sessionId: "789", message: "" } }),
+				expected: { status: 400, data: { error: "Message is required" } },
+			},
+		])("returns controlled failures for $name", async ({ event, expected }) => {
+			const result = await actions.send(event);
+			expect(result).toMatchObject(expected);
 		});
 
-		it("returns fail 400 when sessionId is invalid", async () => {
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "invalid", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid session ID" } });
-		});
-
-		it("returns fail 400 when message is empty", async () => {
-			const result = await actions.send({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Message is required" } });
-		});
-
-		it("returns fail 401 when user not authenticated", async () => {
-			const result = await actions.send({
-				request: { formData: () => Promise.resolve(new FormData()) },
-				params: { id: mockTaskId },
-				locals: { user: null },
-			} as any);
-
-			expect(result).toMatchObject({ status: 401, data: { error: "Unauthorized" } });
-		});
-
-		it("returns fail 409 when sendMessage reports session not in progress", async () => {
+		it.each([
+			{ error: "userMessage is required", status: 400 },
+			{ error: "Session not found", status: 404 },
+			{ error: "Session not in progress", status: 409 },
+		])("maps service error '$error' to $status", async ({ error, status }) => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockRejectedValue(new Error("Session not in progress"));
+			mockSessionService.sendMessage.mockRejectedValue(new Error(error));
 
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress" } });
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
+			expect(result).toMatchObject({ status, data: { error } });
 		});
 
-		it("returns fail 404 when sendMessage reports session not found", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({
-				id: 789,
-				userId: "user_123",
-				taskId: 456,
-			});
-			mockSessionService.sendMessage.mockRejectedValue(new Error("Session not found"));
-
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
-		});
-
-		it("returns fail 500 when sendMessage throws a non-Error payload", async () => {
+		it("returns 500 for unexpected non-Error failures", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
@@ -352,115 +298,10 @@ describe("session page server", () => {
 			});
 			mockSessionService.sendMessage.mockRejectedValue({ some: "object error" });
 
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
 		});
-		describe("actions.hint", () => {
-			it("returns success with hints when called correctly", async () => {
-				const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
-				mockSessionService.getSessionOrFail.mockResolvedValue({
-					id: 123,
-					userId: "user_123",
-					taskId: 456,
-				});
-				mockSessionService.generateHint.mockResolvedValue(mockHints);
 
-				const formData = new FormData();
-				formData.append("sessionId", "123");
-
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					params: { id: "456" },
-					locals: { user: mockUser },
-				} as any);
-
-				expect(result).toEqual({ success: true, ...mockHints });
-				expect(mockSessionService.generateHint).toHaveBeenCalledWith(123);
-			});
-
-			it("returns 401 when user is unauthenticated", async () => {
-				const result = await actions.hint({
-					locals: { user: null },
-				} as any);
-
-				expect(result).toMatchObject({ status: 401 });
-			});
-
-			it("returns 400 when sessionId is missing", async () => {
-				const formData = new FormData();
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					locals: { user: mockUser },
-					params: { id: "456" },
-				} as any);
-
-				expect(result).toMatchObject({ status: 400 });
-			});
-
-			it("returns 400 when taskId is invalid", async () => {
-				const formData = new FormData();
-				formData.append("sessionId", "123");
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					locals: { user: mockUser },
-					params: { id: "invalid" },
-				} as any);
-
-				expect(result).toMatchObject({ status: 400, data: { error: "Invalid task ID" } });
-			});
-
-			it("returns 403 when session belongs to another user", async () => {
-				mockSessionService.getSessionOrFail.mockResolvedValue(null);
-				const formData = new FormData();
-				formData.append("sessionId", "123");
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					locals: { user: mockUser },
-					params: { id: "456" },
-				} as any);
-
-				expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
-			});
-
-			it("returns 403 when session belongs to another task", async () => {
-				mockSessionService.getSessionOrFail.mockResolvedValue(null);
-				const formData = new FormData();
-				formData.append("sessionId", "123");
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					locals: { user: mockUser },
-					params: { id: "456" },
-				} as any);
-
-				expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
-			});
-
-			it("returns 500 when generateHint fails", async () => {
-				mockSessionService.getSessionOrFail.mockResolvedValue({
-					id: 123,
-					userId: "user_123",
-					taskId: 456,
-				});
-				mockSessionService.generateHint.mockRejectedValue(new Error("AI error"));
-				const formData = new FormData();
-				formData.append("sessionId", "123");
-
-				const result = await actions.hint({
-					request: { formData: () => Promise.resolve(formData) },
-					locals: { user: mockUser },
-					params: { id: "456" },
-				} as any);
-
-				expect(result).toMatchObject({ status: 500 });
-			});
-		});
 		it("returns fail 403 when maximum conversation turns reached", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, template: { maxTurns: 5 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
@@ -470,28 +311,9 @@ describe("session page server", () => {
 			const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
 			mockDb.select.mockReturnValue({ from: mockFrom });
 
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 
 			expect(result).toMatchObject({ status: 403, data: { error: "Maximum conversation turns reached" } });
-		});
-
-		it("returns fail 400 when sendMessage reports userMessage is required", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockRejectedValue(new Error("userMessage is required"));
-			const result = await actions.send({
-				request: {
-					formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789", message: "Hello" })[k] })),
-				},
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-			expect(result).toMatchObject({ status: 400, data: { error: "userMessage is required" } });
 		});
 	});
 
@@ -508,104 +330,54 @@ describe("session page server", () => {
 			};
 			mockSessionService.completeSession.mockResolvedValue(mockFeedback);
 
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 
 			expect(result).toMatchObject({ success: true, feedback: mockFeedback });
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
 
-		it("returns fail 403 when session belongs to another user", async () => {
+		it("returns fail 403 when ownership check fails", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 
 			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
 		});
 
-		it("returns fail 403 when session belongs to another task", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue(null);
-
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		it.each([
+			{
+				name: "invalid session id",
+				event: createFormEvent({ values: { sessionId: "invalid" } }),
+				expected: { status: 400, data: { error: "Invalid session ID" } },
+			},
+			{
+				name: "invalid task id",
+				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789" } }),
+				expected: { status: 400, data: { error: "Invalid task ID" } },
+			},
+			{
+				name: "unauthenticated user",
+				event: createFormEvent({ user: null, values: { sessionId: "789" } }),
+				expected: { status: 401, data: { error: "Unauthorized" } },
+			},
+		])("returns controlled failures for $name", async ({ event, expected }) => {
+			const result = await actions.complete(event);
+			expect(result).toMatchObject(expected);
 		});
 
-		it("returns fail 400 when sessionId is invalid", async () => {
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "invalid" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
+		it.each([
+			{ error: "Session not in progress or completed", status: 409 },
+			{ error: "Task not found", status: 404 },
+			{ error: "Session not found", status: 404 },
+		])("maps completeSession error '$error' to $status", async ({ error, status }) => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.completeSession.mockRejectedValue(new Error(error));
 
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid session ID" } });
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
+			expect(result).toMatchObject({ status, data: { error } });
 		});
 
-		it("returns fail 400 for invalid task ID", async () => {
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: "invalid" },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid task ID" } });
-		});
-
-		it("returns fail 401 when user not authenticated", async () => {
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(new FormData()) },
-				params: { id: mockTaskId },
-				locals: { user: null },
-			} as any);
-
-			expect(result).toMatchObject({ status: 401, data: { error: "Unauthorized" } });
-		});
-
-		it("returns fail 500 when completeSession throws", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({
-				id: 789,
-				userId: "user_123",
-				taskId: 456,
-			});
-			mockSessionService.completeSession.mockRejectedValue(new Error("DB error"));
-
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
-		});
-
-		it("returns fail 409 when completeSession reports not in progress or completed", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({
-				id: 789,
-				userId: "user_123",
-				taskId: 456,
-			});
-			mockSessionService.completeSession.mockRejectedValue(new Error("Session not in progress or completed"));
-
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({ status: 409, data: { error: "Session not in progress or completed" } });
-		});
-		it("returns fail 500 when completeSession throws a non-Error payload", async () => {
+		it("returns fail 500 for unknown completeSession failures", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
@@ -613,34 +385,64 @@ describe("session page server", () => {
 			});
 			mockSessionService.completeSession.mockRejectedValue(12345);
 
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
 		});
-		it("returns fail 404 when completeSession reports Task not found", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.completeSession.mockRejectedValue(new Error("Task not found"));
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+	});
+
+	describe("actions.hint", () => {
+		it("returns success with hints when called correctly", async () => {
+			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue(mockHints);
+
+			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
+
+			expect(result).toEqual({ success: true, ...mockHints });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123);
 		});
 
-		it("returns fail 404 when completeSession reports Session not found", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.completeSession.mockRejectedValue(new Error("Session not found"));
-			const result = await actions.complete({
-				request: { formData: () => Promise.resolve(Object.assign(new FormData(), { get: (k: string) => ({ sessionId: "789" })[k] })) },
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
+		it.each([
+			{
+				name: "unauthenticated user",
+				event: createFormEvent({ user: null, values: { sessionId: "123" } }),
+				expected: { status: 401, data: { error: "Unauthorized" } },
+			},
+			{
+				name: "invalid task id",
+				event: createFormEvent({ taskId: "invalid", values: { sessionId: "123" } }),
+				expected: { status: 400, data: { error: "Invalid task ID" } },
+			},
+			{
+				name: "invalid session id",
+				event: createFormEvent({ values: {} }),
+				expected: { status: 400, data: { error: "Invalid session" } },
+			},
+		])("returns controlled failures for $name", async ({ event, expected }) => {
+			const result = await actions.hint(event);
+			expect(result).toMatchObject(expected);
+		});
+
+		it("returns 403 when ownership check fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
+			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns 500 when generateHint fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockRejectedValue(new Error("AI error"));
+
+			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to generate hints" } });
 		});
 	});
 });
