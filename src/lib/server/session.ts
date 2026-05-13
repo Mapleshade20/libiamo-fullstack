@@ -2,10 +2,9 @@ import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
-
-import { type ChatMessage, createStructuredOutput } from "./client";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
+import { type ChatMessage, createStructuredOutput } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 function appendMessages(ctx: string, label: string, items: Array<Record<string, string | undefined>>): string {

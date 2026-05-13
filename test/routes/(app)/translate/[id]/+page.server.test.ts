@@ -71,7 +71,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-vi.mock("$lib/server/client", () => ({
+vi.mock("$lib/server/llm", () => ({
 	createSingleTurnChat: mockCreateSingleTurnChat,
 }));
 

@@ -1,6 +1,6 @@
 # Agent API 文档
 
-本文档对应实现文件：`src/lib/server/client.ts`
+本文档对应实现文件：`src/lib/server/llm.ts`
 
 ## 对外可用函数
 
@@ -114,7 +114,7 @@ type ConversationTurnResult = {
 示例：
 
 ```ts
-import { createSingleTurnChat } from "$lib/server/client";
+import { createSingleTurnChat } from "$lib/server/llm";
 
 const turn = await createSingleTurnChat({
   systemPrompt: "你是英语口语陪练教练，回答简短。",
@@ -159,7 +159,7 @@ system 规则：
 示例：
 
 ```ts
-import { createMultiTurnChat, type ChatMessage } from "$lib/server/client";
+import { createMultiTurnChat, type ChatMessage } from "$lib/server/llm";
 
 let history: ChatMessage[] = [
   { role: "system", content: "你是英语口语陪练教练，回答尽量简短。" },

@@ -12,7 +12,7 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { createMultiTurnChat, createSingleTurnChat } from "$lib/server/client";
+import { createMultiTurnChat, createSingleTurnChat } from "$lib/server/llm";
 
 function createJsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {

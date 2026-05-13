@@ -16,7 +16,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/client", () => mockClient);
+vi.mock("$lib/server/llm", () => mockClient);
 
 import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
 

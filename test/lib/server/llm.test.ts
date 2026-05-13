@@ -49,7 +49,7 @@ describe("client createStructuredOutput", () => {
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ content: z.string() });
 
 		await expect(createStructuredOutput(schema, [] as any)).rejects.toThrow("messages must contain at least one item");
@@ -60,7 +60,7 @@ describe("client createStructuredOutput", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ content: z.string() });
 		const messages = [{ role: "system" as const, content: "You are a tutor." }];
 
@@ -106,7 +106,7 @@ describe("client createStructuredOutput", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"reply":"ok","terminate":false}'));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
 		await createStructuredOutput(schema, [
@@ -133,7 +133,7 @@ describe("client createStructuredOutput", () => {
 		const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ content: z.string() });
 
 		await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
@@ -149,7 +149,7 @@ describe("client createStructuredOutput", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"\nreply":"¡Hola!","terminate":false}'));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
 		const result = await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
@@ -165,7 +165,7 @@ describe("client createStructuredOutput", () => {
 
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
 		const result = await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
@@ -196,7 +196,7 @@ describe("client createStructuredOutput", () => {
 
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { createStructuredOutput } = await import("$lib/server/client");
+		const { createStructuredOutput } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
 		await expect(createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }])).rejects.toThrow(
