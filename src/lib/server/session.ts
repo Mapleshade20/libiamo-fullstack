@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
@@ -103,7 +103,7 @@ export type StartSessionResult = {
 	mbti: string;
 };
 
-export async function startSession(taskId: number, userId: string, learningLanguage: string): Promise<StartSessionResult> {
+export async function startSession(taskId: number, userId: string, _learningLanguage?: string): Promise<StartSessionResult> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
 		with: {
@@ -116,12 +116,29 @@ export async function startSession(taskId: number, userId: string, learningLangu
 		throw new Error("Task not found");
 	}
 
+	const existingSession = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
+		columns: {
+			id: true,
+			agentPromptSnapshot: true,
+		},
+	});
+	if (existingSession) {
+		const snapshot = existingSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
+		return {
+			sessionId: existingSession.id,
+			systemPrompt: snapshot.systemPrompt ?? "",
+			mbti: snapshot.mbti ?? "",
+		};
+	}
+
 	const mbti = getRandomMbti();
 	const mbtiPrefix = getMbtiPrompt(mbti);
 	const agentPrompt = taskData.agentPrompt ? `${mbtiPrefix}\n\n${taskData.agentPrompt}` : mbtiPrefix;
 	const ui = taskData.template.ui;
 	const openingState = taskData.variant.openingState as Record<string, unknown>;
 	const scenarioContext = buildScenarioContext(ui, openingState);
+	const learningLanguage = getLanguageName(taskData.language);
 	const languageConstraint = `IMPORTANT: You MUST give all your conversational replies in ${learningLanguage.toUpperCase()}.`;
 
 	const baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
@@ -137,11 +154,26 @@ export async function startSession(taskId: number, userId: string, learningLangu
 			agentPromptSnapshot: snapshot,
 			status: "in_progress",
 		})
+		.onConflictDoNothing({ target: [practiceSession.userId, practiceSession.taskId] })
 		.returning();
 
-	if (!session) throw new Error("Failed to create session");
+	if (session) return { sessionId: session.id, systemPrompt, mbti };
 
-	return { sessionId: session.id, systemPrompt, mbti };
+	const racedSession = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
+		columns: {
+			id: true,
+			agentPromptSnapshot: true,
+		},
+	});
+	if (!racedSession) throw new Error("Failed to create session");
+
+	const racedSnapshot = racedSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
+	return {
+		sessionId: racedSession.id,
+		systemPrompt: racedSnapshot.systemPrompt ?? "",
+		mbti: racedSnapshot.mbti ?? "",
+	};
 }
 
 export type SendMessageResult = {
@@ -154,6 +186,7 @@ export type SendMessageResult = {
 type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
+	hidden?: boolean;
 	model?: string;
 	raw?: unknown;
 };
@@ -161,6 +194,24 @@ type SessionMessageMetadata = {
 function getMessageMetadata(value: unknown): SessionMessageMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 	return value as SessionMessageMetadata;
+}
+
+function isHiddenUserMessage(message: { role: string; llmMetadata?: unknown }): boolean {
+	return message.role === "user" && getMessageMetadata(message.llmMetadata).hidden === true;
+}
+
+function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unknown }>): number {
+	return messages.filter((message) => message.role === "user" && !isHiddenUserMessage(message)).length;
+}
+
+function getLanguageName(code: string): string {
+	const languageMap: Record<string, string> = {
+		en: "English",
+		es: "Spanish",
+		fr: "French",
+		ja: "Japanese",
+	};
+	return languageMap[code] || code;
 }
 
 function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
@@ -192,7 +243,17 @@ const AgentReplySchema = z.object({
 	terminate: z.boolean().describe("true ONLY IF you are severely offended or the user explicitly says goodbye"),
 });
 
-export async function sendMessage(sessionId: number, userMessage: string, clientMessageId?: string): Promise<SendMessageResult> {
+export type SendMessageOptions = {
+	hiddenUserMessage?: boolean;
+	maxTurns?: number | null;
+};
+
+export async function sendMessage(
+	sessionId: number,
+	userMessage: string,
+	clientMessageId?: string,
+	options: SendMessageOptions = {},
+): Promise<SendMessageResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) {
 		throw new Error("userMessage is required");
@@ -217,7 +278,7 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 		if (existingState?.assistantReply) {
 			return {
 				reply: existingState.assistantReply.content,
-				turnCount: session.messages.filter((m) => m.role === "user").length,
+				turnCount: countVisibleUserTurns(session.messages),
 				terminated: getMessageMetadata(existingState.assistantReply.llmMetadata).raw
 					? ((getMessageMetadata(existingState.assistantReply.llmMetadata).raw as { terminate?: boolean }).terminate ?? false)
 					: false,
@@ -227,13 +288,18 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 		if (existingState && !existingState.failed) {
 			return {
 				reply: "",
-				turnCount: session.messages.filter((m) => m.role === "user").length,
+				turnCount: countVisibleUserTurns(session.messages),
 				pending: true,
 			};
 		}
 
 		existingUserMessage = existingState?.userMessage ?? null;
 		reusedExistingUserMessage = existingUserMessage !== null;
+	}
+
+	const maxTurns = options.maxTurns ?? 0;
+	if (!existingUserMessage && !options.hiddenUserMessage && maxTurns > 0 && countVisibleUserTurns(activeMessages) >= maxTurns) {
+		throw new Error("Maximum conversation turns reached");
 	}
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
@@ -257,7 +323,8 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 				sessionId,
 				role: "user",
 				content: trimmedUserMessage,
-				llmMetadata: clientMessageId ? { clientMessageId, failed: false } : undefined,
+				llmMetadata:
+					clientMessageId || options.hiddenUserMessage ? { clientMessageId, failed: false, hidden: options.hiddenUserMessage === true } : undefined,
 			})
 			.returning();
 		const insertedUserMessage = insertedMessages[0];
@@ -268,14 +335,26 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 	} else if (existingUserMessage.id) {
 		await db
 			.update(sessionMessage)
-			.set({ llmMetadata: { ...getMessageMetadata(existingUserMessage.llmMetadata), clientMessageId, failed: false } })
+			.set({
+				llmMetadata: {
+					...getMessageMetadata(existingUserMessage.llmMetadata),
+					clientMessageId,
+					failed: false,
+					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+				},
+			})
 			.where(eq(sessionMessage.id, existingUserMessage.id));
 
 		activeMessages = activeMessages.map((message) =>
 			message === existingUserMessage
 				? {
 						...message,
-						llmMetadata: { ...getMessageMetadata(message.llmMetadata), clientMessageId, failed: false },
+						llmMetadata: {
+							...getMessageMetadata(message.llmMetadata),
+							clientMessageId,
+							failed: false,
+							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+						},
 					}
 				: message,
 		);
@@ -288,7 +367,14 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 		if (existingUserMessage?.id) {
 			await db
 				.update(sessionMessage)
-				.set({ llmMetadata: { ...getMessageMetadata(existingUserMessage.llmMetadata), clientMessageId, failed: true } })
+				.set({
+					llmMetadata: {
+						...getMessageMetadata(existingUserMessage.llmMetadata),
+						clientMessageId,
+						failed: true,
+						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+					},
+				})
 				.where(eq(sessionMessage.id, existingUserMessage.id));
 		}
 		throw error;
@@ -301,7 +387,7 @@ export async function sendMessage(sessionId: number, userMessage: string, client
 		llmMetadata: { model: "structured-output", raw: output },
 	});
 
-	const turnCount = session.messages.filter((m) => m.role === "user").length + (reusedExistingUserMessage ? 0 : 1);
+	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
 
 	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }
@@ -372,13 +458,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 
 	const objectives = session.task.objectives ?? [];
 
-	const languageMap: Record<string, string> = {
-		en: "English",
-		es: "Spanish",
-		fr: "French",
-		ja: "Japanese",
-	};
-	const learningLanguageName = languageMap[session.task.language] || session.task.language;
+	const learningLanguageName = getLanguageName(session.task.language);
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
 	const scenarioContext = snapshot.scenarioContext ?? "";
@@ -386,7 +466,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	const prompt = buildTutorPrompt(
 		objectives,
 		scenarioContext,
-		session.messages.map((m) => ({ role: m.role, content: m.content })),
+		session.messages.filter((m) => !isHiddenUserMessage(m)).map((m) => ({ role: m.role, content: m.content })),
 		learningLanguageName,
 	);
 
@@ -447,16 +527,13 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 	if (!session) throw new Error("Session not found");
 	if (!session.task) throw new Error("Task not found");
 
-	const languageMap: Record<string, string> = {
-		en: "English",
-		es: "Spanish",
-		fr: "French",
-		ja: "Japanese",
-	};
-	const learningLanguageName = languageMap[session.task.language] || session.task.language;
+	const learningLanguageName = getLanguageName(session.task.language);
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
-	const history = session.messages.map((m) => `[${m.role}] ${m.content}`).join("\n");
+	const history = session.messages
+		.filter((m) => !isHiddenUserMessage(m))
+		.map((m) => `[${m.role}] ${m.content}`)
+		.join("\n");
 
 	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
 

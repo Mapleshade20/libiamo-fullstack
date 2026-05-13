@@ -1,19 +1,28 @@
 import { error, fail } from "@sveltejs/kit";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { db } from "$lib/server/db";
-import { practiceSession, sessionMessage, task } from "$lib/server/db/schema";
+import { practiceSession, task } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
+function isActiveLanguageTask(taskLanguage: string, activeLanguage: string | null | undefined) {
+	return taskLanguage === (activeLanguage || "en");
+}
+
+function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
+	return message.trim() === "*User joined the server*" && clientMessageId === `join-${sessionId}`;
+}
+
 function mapSendMessageError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "userMessage is required") return fail(400, { error: e.message });
 	if (e.message === "Session not found") return fail(404, { error: e.message });
 	if (e.message === "Session not in progress") return fail(409, { error: e.message });
+	if (e.message === "Maximum conversation turns reached") return fail(403, { error: e.message });
 	return null;
 }
 
@@ -47,7 +56,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		},
 	});
 
-	if (!taskData) throw error(404, "Task not found");
+	if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) throw error(404, "Task not found");
 
 	const existingSession = await db.query.practiceSession.findFirst({
 		where: and(
@@ -68,7 +77,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 
 	const parentData = await parent();
 	const avatarUrl = parentData.avatarUrl;
-	const learningLanguage = user.activeLanguage || "en";
+	const learningLanguage = taskData.language;
 
 	return {
 		task: taskData,
@@ -94,16 +103,15 @@ export const actions: Actions = {
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
 		try {
-			const langCode = user.activeLanguage || "en";
-			const languageMap: Record<string, string> = {
-				en: "English",
-				es: "Spanish",
-				fr: "French",
-				ja: "Japanese",
-			};
-			const learningLanguageName = languageMap[langCode] || langCode;
+			const taskData = await db.query.task.findFirst({
+				where: eq(task.id, taskId),
+				columns: { language: true },
+			});
+			if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) {
+				return fail(404, { error: "Task not found" });
+			}
 
-			const result = await startSession(taskId, user.id, learningLanguageName);
+			const result = await startSession(taskId, user.id);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapStartSessionError(e);
@@ -135,26 +143,20 @@ export const actions: Actions = {
 				where: eq(task.id, taskId),
 				with: { template: true },
 			});
-			if (!taskData) return fail(404, { error: "Task not found" });
+			if (!taskData || !isActiveLanguageTask(taskData.language, user.activeLanguage)) {
+				return fail(404, { error: "Task not found" });
+			}
 
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const maxTurns = taskData.template.maxTurns || 0;
-			if (maxTurns > 0) {
-				const [result] = await db
-					.select({ count: count() })
-					.from(sessionMessage)
-					.where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.role, "user")));
-
-				if (result.count >= maxTurns) {
-					return fail(403, { error: "Maximum conversation turns reached" });
-				}
-			}
-
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
+			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
-			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined);
+			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined, {
+				hiddenUserMessage,
+				maxTurns: taskData.template.maxTurns,
+			});
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

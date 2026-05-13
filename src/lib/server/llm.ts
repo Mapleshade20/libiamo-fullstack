@@ -267,15 +267,7 @@ export async function createStructuredOutput<T extends z.ZodType>(
 ): Promise<z.infer<T>> {
 	validateMessages(messages);
 
-	const textOnlyMessages: ChatMessage[] = [
-		...messages,
-		{
-			role: "user",
-			content: "Return ONLY one valid JSON object that satisfies the requested schema. Do not use markdown, comments, or extra text.",
-		},
-	];
-
-	const firstResult = await createChatCompletion(textOnlyMessages, options);
+	const firstResult = await createChatCompletion(messages, options);
 	const firstText = firstResult.content.trim();
 
 	try {
@@ -283,13 +275,13 @@ export async function createStructuredOutput<T extends z.ZodType>(
 	} catch (firstError) {
 		const retryResult = await createChatCompletion(
 			[
-				...textOnlyMessages,
+				...messages,
 				{
 					role: "assistant",
 					content: firstText || "(empty response)",
 				},
 				{
-					role: "user",
+					role: "system",
 					content:
 						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
 				},

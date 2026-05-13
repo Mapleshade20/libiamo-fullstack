@@ -91,13 +91,7 @@ describe("client createStructuredOutput", () => {
 				model: "test-model",
 				temperature: 0.3,
 				max_tokens: 128,
-				messages: [
-					...messages,
-					expect.objectContaining({
-						role: "user",
-						content: expect.stringContaining("valid JSON object"),
-					}),
-				],
+				messages,
 			}),
 		);
 	});
@@ -112,6 +106,7 @@ describe("client createStructuredOutput", () => {
 		await createStructuredOutput(schema, [
 			{ role: "system", content: "Return JSON." },
 			{ role: "user", content: "Learner said hello." },
+			{ role: "user", content: "Learner said goodbye." },
 		]);
 
 		const firstCall = fetchMock.mock.calls[0];
@@ -122,7 +117,7 @@ describe("client createStructuredOutput", () => {
 			{ role: "system", content: "Return JSON." },
 			{
 				role: "user",
-				content: expect.stringContaining("Learner said hello.\n\nReturn ONLY one valid JSON object"),
+				content: expect.stringContaining("Learner said hello.\n\nLearner said goodbye."),
 			},
 		]);
 	});

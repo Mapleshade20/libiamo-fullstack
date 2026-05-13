@@ -119,17 +119,17 @@ export const practiceSession = pgTable(
 		id: serial("id").primaryKey(),
 		userId: text("user_id")
 			.notNull()
-			.references(() => user.id),
+			.references(() => user.id, { onDelete: "cascade" }),
 		taskId: integer("task_id")
 			.notNull()
-			.references(() => task.id),
+			.references(() => task.id, { onDelete: "cascade" }),
 		agentPromptSnapshot: jsonb("agent_prompt_snapshot").notNull(),
 		status: sessionStatusEnum("status").default("in_progress").notNull(),
 		tutorFeedback: jsonb("tutor_feedback"),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
 	},
-	(t) => [index("practice_session_user_task_idx").on(t.userId, t.taskId)],
+	(t) => [uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId)],
 );
 
 // ── sessionMessage ─────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export const sessionMessage = pgTable(
 		id: serial("id").primaryKey(),
 		sessionId: integer("session_id")
 			.notNull()
-			.references(() => practiceSession.id),
+			.references(() => practiceSession.id, { onDelete: "cascade" }),
 		role: messageRoleEnum("role").notNull(),
 		content: text("content").notNull(),
 		llmMetadata: jsonb("llm_metadata"),
