@@ -1,7 +1,9 @@
 <script lang="ts">
 import Languages from "@lucide/svelte/icons/languages";
+import { goto } from "$app/navigation";
 import TaskCard from "$lib/components/TaskCard.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
+import { captureTaskEnterTransition } from "$lib/task-transition";
 
 let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
@@ -11,6 +13,35 @@ let flippedId = $state<number | null>(null);
 
 function toggleFlip(id: number) {
 	flippedId = flippedId === id ? null : id;
+}
+
+function enterTask(event: MouseEvent, taskId: number) {
+	event.preventDefault();
+	event.stopPropagation();
+
+	const link = event.currentTarget as HTMLAnchorElement;
+	const face = link.closest(".card-face") as HTMLElement | null;
+	const cardScene = link.closest(".card-scene") as HTMLElement | null;
+	const sourceEl = face ?? cardScene;
+
+	if (sourceEl) {
+		const rect = sourceEl.getBoundingClientRect();
+		const radius = Number.parseFloat(getComputedStyle(sourceEl).borderRadius) || 16;
+
+		captureTaskEnterTransition({
+			taskId,
+			href: link.href,
+			sourceRect: {
+				top: rect.top,
+				left: rect.left,
+				width: rect.width,
+				height: rect.height,
+			},
+			sourceRadius: radius,
+		});
+	}
+
+	goto(link.href);
 }
 </script>
 
@@ -45,6 +76,7 @@ function toggleFlip(id: number) {
 						{isFinished}
 						flipped={flippedId === tpl.id}
 						onflip={toggleFlip}
+						onenter={enterTask}
 					/>
 				{/each}
 			</div>

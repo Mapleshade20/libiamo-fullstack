@@ -67,7 +67,7 @@ $effect(() => {
 
 	if (!transition) return;
 	if (transition.stage !== "captured") return;
-	if (pathname !== `/task/${transition.taskId}`) return;
+	if (pathname !== new URL(transition.href).pathname) return;
 
 	void runTaskEnterOverlay();
 });
