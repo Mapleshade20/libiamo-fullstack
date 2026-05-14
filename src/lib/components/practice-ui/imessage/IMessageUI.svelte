@@ -562,12 +562,12 @@ onMount(() => {
 							disabled={disabledComposer}
 						></textarea>
 						<div class="absolute top-1/2 right-4 z-10 flex -translate-y-1/2 items-center gap-2 md:right-8">
-						<div class="hint-container-wrapper relative">
-							<button
-								type="button"
-								class="flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D1D6] bg-white text-[#8E8E93] transition-colors hover:text-[#1C1C1E] disabled:opacity-50"
-								title={t.getHint}
-								onclick={(event) => {
+							<div class="hint-container-wrapper relative">
+								<button
+									type="button"
+									class="flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D1D6] bg-white text-[#8E8E93] transition-colors hover:text-[#1C1C1E] disabled:opacity-50"
+									title={t.getHint}
+									onclick={(event) => {
 									event.stopPropagation();
 									if (showHintMenu) {
 										closeHintMenu();
@@ -575,63 +575,65 @@ onMount(() => {
 										handleGetHint();
 									}
 								}}
-								disabled={!sessionId || disabledComposer}
-							>
-								<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
-							</button>
+									disabled={!sessionId || disabledComposer}
+								>
+									<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
+								</button>
 
-							{#if showHintMenu}
-								<div class="absolute right-0 bottom-[calc(100%+8px)] z-20 w-72 overflow-hidden rounded-xl border border-[#D1D1D6] bg-white shadow-xl">
-									<div class="flex items-center justify-between border-b border-[#E5E5EA] px-3 py-2">
-										<span class="text-xs font-semibold uppercase tracking-wide text-[#8E8E93]">{t.hintTitle}</span>
-										<button
-											type="button"
-											class="text-sm text-[#8E8E93] hover:text-[#1C1C1E]"
-											onclick={(event) => {
+								{#if showHintMenu}
+									<div
+										class="absolute right-0 bottom-[calc(100%+8px)] z-20 w-72 overflow-hidden rounded-xl border border-[#D1D1D6] bg-white shadow-xl"
+									>
+										<div class="flex items-center justify-between border-b border-[#E5E5EA] px-3 py-2">
+											<span class="text-xs font-semibold uppercase tracking-wide text-[#8E8E93]">{t.hintTitle}</span>
+											<button
+												type="button"
+												class="text-sm text-[#8E8E93] hover:text-[#1C1C1E]"
+												onclick={(event) => {
 												event.stopPropagation();
 												closeHintMenu();
 											}}
-										>
-											&times;
-										</button>
+											>
+												&times;
+											</button>
+										</div>
+										<div class="max-h-64 space-y-1 overflow-y-auto p-2">
+											{#if isGettingHint}
+												<p class="py-5 text-center text-sm text-[#8E8E93] italic">{t.thinking}</p>
+											{:else if hints.length === 0}
+												<p class="py-5 text-center text-sm text-[#8E8E93]">{t.noHints}</p>
+											{:else}
+												{#each hints as hint}
+													<button
+														type="button"
+														class="w-full rounded-lg border border-transparent px-2.5 py-2 text-left hover:border-[#E5E5EA] hover:bg-[#F7F7FA]"
+														onclick={() => selectHint(hint.text)}
+													>
+														<p class="text-sm text-[#1C1C1E]">{hint.text}</p>
+														{#if hint.translation}
+															<p class="mt-0.5 text-xs text-[#8E8E93]">{hint.translation}</p>
+														{/if}
+													</button>
+												{/each}
+											{/if}
+										</div>
 									</div>
-									<div class="max-h-64 space-y-1 overflow-y-auto p-2">
-										{#if isGettingHint}
-											<p class="py-5 text-center text-sm text-[#8E8E93] italic">{t.thinking}</p>
-										{:else if hints.length === 0}
-											<p class="py-5 text-center text-sm text-[#8E8E93]">{t.noHints}</p>
-										{:else}
-											{#each hints as hint}
-												<button
-													type="button"
-													class="w-full rounded-lg border border-transparent px-2.5 py-2 text-left hover:border-[#E5E5EA] hover:bg-[#F7F7FA]"
-													onclick={() => selectHint(hint.text)}
-												>
-													<p class="text-sm text-[#1C1C1E]">{hint.text}</p>
-													{#if hint.translation}
-														<p class="mt-0.5 text-xs text-[#8E8E93]">{hint.translation}</p>
-													{/if}
-												</button>
-											{/each}
-										{/if}
-									</div>
-								</div>
-							{/if}
-						</div>
-						<button
-							type="button"
-							class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
-							onclick={() => {
+								{/if}
+							</div>
+							<button
+								type="button"
+								class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
+								onclick={() => {
 								if (!inputText.trim() || disabledComposer) return;
 								const text = inputText;
 								inputText = "";
 								handleSend(text);
 							}}
-							disabled={!inputText.trim() || disabledComposer}
-						>
-							<ArrowUp size={16} />
-						</button>
-					</div>
+								disabled={!inputText.trim() || disabledComposer}
+							>
+								<ArrowUp size={16} />
+							</button>
+						</div>
 					</div>
 				</div>
 			</section>
