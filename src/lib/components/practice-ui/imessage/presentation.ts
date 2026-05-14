@@ -44,7 +44,8 @@ export function getLastOutgoingMessageId(messages: ChatMessage[]): string | null
 
 export function resolveIMessageContactName(params: { openingStateData: IMessageOpeningState; userName: string; fallbackName: string }) {
 	const { openingStateData, userName, fallbackName } = params;
-	for (const message of openingStateData.previousMessages ?? []) {
+	const previousMessages = Array.isArray(openingStateData.previousMessages) ? openingStateData.previousMessages : [];
+	for (const message of previousMessages) {
 		const sender = normalizeText(message.sender ?? message.author, "");
 		if (sender && sender !== userName) return sender;
 	}

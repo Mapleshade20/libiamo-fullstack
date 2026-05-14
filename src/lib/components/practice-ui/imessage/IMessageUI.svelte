@@ -52,7 +52,7 @@ emojiConv.allow_native = true;
 
 let sessionId = $state<number | null>(null);
 let lastLoadedSessionId = $state<number | null>(null);
-let lastServerMessageCount = $state<number>(0);
+let lastSessionSnapshot = $state("");
 let isSubmitting = $state(false);
 let isEntering = $state(true);
 let hasAutoCompleted = $state(false);
@@ -96,6 +96,13 @@ const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessag
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 const disabledComposer = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
 
+function getSessionSnapshot(session: { status?: unknown; messages?: Array<any> }): string {
+	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
+		.map((message) => [message.id, message.status, message.content, message.clientMessageId ?? "", message.createdAt].join(":"))
+		.join("|");
+	return `${session.status ?? ""}::${messagesSnapshot}`;
+}
+
 function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
 	messages = [
 		...messages,
@@ -132,7 +139,7 @@ function applySendResult(result: SendAttemptResult, clientMessageId: string, ret
 }
 
 async function handleRetry(messageId: string) {
-	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+	if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
 	const message = messages.find((m) => m.id === messageId);
 	if (!message?.clientMessageId) return;
@@ -294,7 +301,7 @@ function showIncomingSender(index: number) {
 }
 
 $effect(() => {
-	if (limitReached && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
+	if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 		hasAutoCompleted = true;
 		handleComplete();
 	}
@@ -302,12 +309,12 @@ $effect(() => {
 
 $effect(() => {
 	if (existingSession) {
-		const serverMsgCount = existingSession.messages?.length || 0;
+		const sessionSnapshot = getSessionSnapshot(existingSession);
 
-		if (existingSession.id !== lastLoadedSessionId || serverMsgCount > lastServerMessageCount) {
+		if (existingSession.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
 			const currentId = existingSession.id;
 			lastLoadedSessionId = currentId;
-			lastServerMessageCount = serverMsgCount;
+			lastSessionSnapshot = sessionSnapshot;
 			sessionId = currentId;
 
 			({ agentUser } = initUserPool(currentId));
@@ -404,7 +411,7 @@ onMount(() => {
 						const result = await attemptAgentReply(currentId, "*User joined the server*", `join-${currentId}`);
 
 						messages = [...messages];
-						applySendResult(result, `join-${currentId}`);
+						applySendResult(result, `join-${currentId}`, "*User joined the server*");
 					} else {
 						messages = [...openingMessages];
 					}
@@ -516,7 +523,7 @@ onMount(() => {
 							<div class="max-w-[82%] px-3 py-2 text-[15px] leading-5 shadow-sm md:max-w-[68%] {getBubbleClasses(msg, index)}">
 								<MarkdownRenderer content={emojiConv.replace_colons(msg.text)} />
 							</div>
-							{#if msg.role === "agent" && msg.deliveryState === "failed" && !limitReached}
+							{#if msg.role === "agent" && msg.deliveryState === "failed"}
 								<button
 									type="button"
 									class="mt-1 ml-1 rounded-full border border-[#0A84FF] px-2 py-0.5 text-[11px] font-semibold text-[#0A84FF] hover:bg-[#EAF2FF]"
@@ -623,6 +630,7 @@ onMount(() => {
 							<button
 								type="button"
 								class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
+								aria-label={t.sendMessage}
 								onclick={() => {
 								if (!inputText.trim() || disabledComposer) return;
 								const text = inputText;

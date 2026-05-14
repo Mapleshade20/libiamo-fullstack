@@ -7,6 +7,7 @@ import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
+import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
 let task = $derived(data.task);
@@ -74,7 +75,7 @@ function difficultyLabel(level: number): string {
 		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-2">Background Material</h2>
-				<div class="prose prose-neutral text-base font-light leading-relaxed whitespace-pre-wrap">{task.materialsMd}</div>
+				<div class="prose prose-neutral text-base font-light leading-relaxed whitespace-pre-wrap">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 

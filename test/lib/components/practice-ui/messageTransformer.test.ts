@@ -150,7 +150,7 @@ describe("messageTransformer", () => {
 		});
 	});
 
-	it("normalizes invalid sender/text fields to empty strings", () => {
+	it("skips messages with invalid sender/text fields", () => {
 		const openingStateData: ChatOpeningState = {
 			previousMessages: [{ sender: null as any, text: null as any }],
 		};

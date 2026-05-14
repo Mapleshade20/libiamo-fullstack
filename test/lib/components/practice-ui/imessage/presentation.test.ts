@@ -78,6 +78,18 @@ describe("resolveIMessageContactName", () => {
 
 		expect(name).toBe("Agent");
 	});
+
+	it("falls back safely when previousMessages is malformed", () => {
+		const name = resolveIMessageContactName({
+			openingStateData: {
+				previousMessages: "broken" as any,
+			},
+			userName: "Learner",
+			fallbackName: "Agent",
+		});
+
+		expect(name).toBe("Agent");
+	});
 });
 
 describe("getLastOutgoingMessageId", () => {

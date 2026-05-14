@@ -137,21 +137,21 @@ describe("session page server", () => {
 		});
 
 		it("returns task data when UI is imessage", async () => {
-			const unimplementedTask = {
+			const imessageTask = {
 				id: 456,
 				title: "Test Task",
 				language: "en",
 				template: { ui: "imessage" as const },
 				variant: { openingState: {} },
 			};
-			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
+			mockDb.query.task.findFirst.mockResolvedValue(imessageTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
 				parent: async () => ({ avatarUrl: "https://mock.com" }),
-			} as any)) as { task: typeof unimplementedTask };
+			} as any)) as { task: typeof imessageTask };
 
 			expect(result.task.template.ui).toBe("imessage");
 		});
