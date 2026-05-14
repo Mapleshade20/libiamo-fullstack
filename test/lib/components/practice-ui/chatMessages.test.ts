@@ -83,6 +83,24 @@ describe("buildChatMessages", () => {
 		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
 	});
 
+	it("treats an 'agent' role message as an assistant reply in the same turn", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+				{ id: 2, role: "agent", content: "Hi", createdAt: new Date("2026-01-01T10:01:00Z") },
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
+	});
+
 	it("does not use a later turn's assistant reply to satisfy an unfinished turn", () => {
 		const result = buildChatMessages({
 			...baseOptions,
@@ -121,6 +139,47 @@ describe("buildChatMessages", () => {
 		expect(result).toHaveLength(2);
 		expect(result[0].isHidden).toBe(false);
 		expect(result[1].isHidden).toBe(true);
+	});
+
+	it("marks mapped message as hidden when llm metadata hidden is true", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hidden by metadata",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { hidden: true },
+				},
+			],
+		});
+
+		expect(result).toHaveLength(1);
+		expect(result[0].isHidden).toBe(true);
+	});
+
+	it("ignores malformed llm metadata and avoids retry placeholders", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: "not-an-object" as any,
+				},
+			],
+		});
+
+		expect(result).toHaveLength(1);
+		expect(result[0]).toMatchObject({
+			id: "1",
+			role: "user",
+			text: "Hello",
+			clientMessageId: undefined,
+		});
 	});
 });
 

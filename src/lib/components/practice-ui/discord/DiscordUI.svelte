@@ -187,7 +187,7 @@ async function handleComplete() {
 }
 
 async function handleSend(text: string) {
-	if (!text.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+	if (!text.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached || isWaitingRetry) return;
 
 	const currentText = prepareMarkdownText(text);
 	const clientMessageId = crypto.randomUUID();

@@ -136,12 +136,32 @@ describe("session page server", () => {
 			expect(result.existingSession).toBeNull();
 		});
 
-		it("throws 501 when UI is not implemented", async () => {
+		it("returns task data when UI is imessage", async () => {
 			const unimplementedTask = {
 				id: 456,
 				title: "Test Task",
 				language: "en",
 				template: { ui: "imessage" as const },
+				variant: { openingState: {} },
+			};
+			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			const result = (await load({
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+				parent: async () => ({ avatarUrl: "https://mock.com" }),
+			} as any)) as { task: typeof unimplementedTask };
+
+			expect(result.task.template.ui).toBe("imessage");
+		});
+
+		it("throws 501 when UI is not implemented", async () => {
+			const unimplementedTask = {
+				id: 456,
+				title: "Test Task",
+				language: "en",
+				template: { ui: "ao3" as const },
 				variant: { openingState: {} },
 			};
 			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
