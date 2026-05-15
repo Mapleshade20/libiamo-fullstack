@@ -32,6 +32,18 @@ export const signInSchema = z.object({
 	password: z.string().min(1, "Password is required"),
 });
 
+const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: string }) => {
+	const hasApiKey = data.apiKey?.trim();
+	const hasBaseUrl = data.apiBaseUrl?.trim();
+	const hasModel = data.apiModel?.trim();
+	if (hasApiKey || hasBaseUrl || hasModel) {
+		if (!hasApiKey || !hasBaseUrl || !hasModel) return false;
+	}
+	return true;
+};
+
+const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
+
 export const signUpSchema = z
 	.object({
 		email: z.email("Invalid email"),
@@ -43,24 +55,10 @@ export const signUpSchema = z
 		apiBaseUrl: z.url().optional(),
 		apiModel: z.string().optional(),
 	})
-	.refine(
-		(data) => {
-			// If any BYOK field is provided, all three must be filled
-			const hasApiKey = data.apiKey?.trim();
-			const hasBaseUrl = data.apiBaseUrl?.trim();
-			const hasModel = data.apiModel?.trim();
-			if (hasApiKey || hasBaseUrl || hasModel) {
-				if (!hasApiKey || !hasBaseUrl || !hasModel) {
-					return false;
-				}
-			}
-			return true;
-		},
-		{
-			message: "All three fields (API Key, Base URL, Model) are required when configuring BYOK",
-			path: ["apiKey"],
-		},
-	);
+	.refine(byokRefine, {
+		message: byokMessage,
+		path: ["apiKey"],
+	});
 
 export const forgotPasswordSchema = z.object({
 	email: z.email("Invalid email"),
@@ -81,23 +79,10 @@ export const profileSchema = z
 		apiBaseUrl: z.url().optional(),
 		apiModel: z.string().optional(),
 	})
-	.refine(
-		(data) => {
-			const hasApiKey = data.apiKey?.trim();
-			const hasBaseUrl = data.apiBaseUrl?.trim();
-			const hasModel = data.apiModel?.trim();
-			if (hasApiKey || hasBaseUrl || hasModel) {
-				if (!hasApiKey || !hasBaseUrl || !hasModel) {
-					return false;
-				}
-			}
-			return true;
-		},
-		{
-			message: "All three fields (API Key, Base URL, Model) are required when configuring BYOK",
-			path: ["apiKey"],
-		},
-	);
+	.refine(byokRefine, {
+		message: byokMessage,
+		path: ["apiKey"],
+	});
 
 export const switchLanguageSchema = z.object({
 	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),
