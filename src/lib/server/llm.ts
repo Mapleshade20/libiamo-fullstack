@@ -108,12 +108,12 @@ async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
 	if (userId) {
 		const userConfig = await getUserOpenAIConfig(userId);
 		if (userConfig) {
-			console.info(`[llm] Using BYOK config: model=${userConfig.model}, baseUrl=${userConfig.baseUrl}`);
+			debugLog("config", { source: "byok", model: userConfig.model, baseUrl: userConfig.baseUrl });
 			return userConfig;
 		}
 	}
 	const envConfig = getEnvOpenAIConfig();
-	console.info(`[llm] Using env config: model=${envConfig.model}, baseUrl=${envConfig.baseUrl}`);
+	debugLog("config", { source: "env", model: envConfig.model, baseUrl: envConfig.baseUrl });
 	return envConfig;
 }
 
