@@ -83,7 +83,6 @@ export const profileSchema = z
 	})
 	.refine(
 		(data) => {
-			// If any BYOK field is provided, all three must be filled
 			const hasApiKey = data.apiKey?.trim();
 			const hasBaseUrl = data.apiBaseUrl?.trim();
 			const hasModel = data.apiModel?.trim();

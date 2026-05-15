@@ -98,17 +98,10 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 
 	if (!row) return null;
 
-	// BYOK must have all three fields set; never mix user key with env baseUrl/model
-	const baseUrlRaw = row.baseUrl?.trim();
-	if (!baseUrlRaw) return null;
-
-	const model = row.model?.trim();
-	if (!model) return null;
-
 	const apiKey = decryptApiKey(row.encryptedKey);
-	const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
+	const baseUrl = row.baseUrl.endsWith("/") ? row.baseUrl.slice(0, -1) : row.baseUrl;
 
-	return { apiKey, baseUrl, model };
+	return { apiKey, baseUrl, model: row.model };
 }
 
 async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {

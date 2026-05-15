@@ -123,24 +123,10 @@ export const actions: Actions = {
 					});
 				}
 			}
-
-			// Upsert: overwrite existing key
 			await db
 				.insert(userApiKey)
-				.values({
-					userId,
-					encryptedKey: encryptApiKey(apiKey),
-					baseUrl: apiBaseUrl || null,
-					model: apiModel || null,
-				})
-				.onConflictDoUpdate({
-					target: userApiKey.userId,
-					set: {
-						encryptedKey: encryptApiKey(apiKey),
-						baseUrl: apiBaseUrl || null,
-						model: apiModel || null,
-					},
-				});
+				.values({ userId, encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl!, model: apiModel! })
+				.onConflictDoUpdate({ target: userApiKey.userId, set: { encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl!, model: apiModel! } });
 		}
 
 		return { success: true };

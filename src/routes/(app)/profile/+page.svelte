@@ -83,10 +83,6 @@ function applyDetectedTimezone() {
 		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Profile updated.</p>
 	{/if}
 
-	{#if form?.message}
-		<p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
-	{/if}
-
 	<Card.Root>
 		<Card.Content class="pt-6">
 			<div class="flex items-center gap-6">
@@ -179,6 +175,9 @@ function applyDetectedTimezone() {
 				</select>
 				<Button type="submit" variant="secondary">Switch</Button>
 			</form>
+			{#if form?.message}
+				<p class="text-sm text-red-600">{form.message}</p>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

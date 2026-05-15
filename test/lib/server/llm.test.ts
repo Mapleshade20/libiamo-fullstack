@@ -309,14 +309,10 @@ describe("createChatCompletion", () => {
 		expect(url).toBe("https://user-api.example.com/v1/chat/completions");
 	});
 
-	it("falls back to env config when BYOK row is missing baseUrl or model", async () => {
+	it("falls back to env config when user has no BYOK row", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
-		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce({
-			userId: "byok-user",
-			encryptedKey: "test-cipher",
-			baseUrl: null,
-			model: null,
-		} as any);
+		// findFirst returns undefined — no BYOK row at all
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
 
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
 		vi.stubGlobal("fetch", fetchMock);

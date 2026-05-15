@@ -87,8 +87,8 @@ export const userApiKey = pgTable(
 			.primaryKey()
 			.references(() => user.id, { onDelete: "cascade" }),
 		encryptedKey: text("encrypted_key").notNull(),
-		baseUrl: text("base_url"),
-		model: text("model"),
+		baseUrl: text("base_url").notNull(),
+		model: text("model").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

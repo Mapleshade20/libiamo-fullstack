@@ -4,14 +4,13 @@ import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
-const { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere, mockOnConflictDoUpdate } = vi.hoisted(() => {
+const { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
 	const mockOnConflictDoNothing = vi.fn();
-	const mockOnConflictDoUpdate = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: mockOnConflictDoUpdate }));
+	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: vi.fn() }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
 	const mockWhere = vi.fn();
 	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere, mockOnConflictDoUpdate };
+	return { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
 });
 
 vi.mock("$lib/server/auth", () => ({
