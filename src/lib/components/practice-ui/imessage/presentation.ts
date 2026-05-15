@@ -1,14 +1,4 @@
-import { normalizeText } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
-
-type IMessageOpeningState = {
-	previousMessages?: Array<{
-		sender?: string;
-		author?: string;
-		text?: string;
-		content?: string;
-	}>;
-};
 
 export type BubbleGroupPosition = "single" | "start" | "middle" | "end";
 
@@ -40,14 +30,4 @@ export function getLastOutgoingMessageId(messages: ChatMessage[]): string | null
 		if (messages[index]?.role === "user") return messages[index].id;
 	}
 	return null;
-}
-
-export function resolveIMessageContactName(params: { openingStateData: IMessageOpeningState; userName: string; fallbackName: string }) {
-	const { openingStateData, userName, fallbackName } = params;
-	const previousMessages = Array.isArray(openingStateData.previousMessages) ? openingStateData.previousMessages : [];
-	for (const message of previousMessages) {
-		const sender = normalizeText(message.sender ?? message.author, "");
-		if (sender && sender !== userName) return sender;
-	}
-	return fallbackName;
 }

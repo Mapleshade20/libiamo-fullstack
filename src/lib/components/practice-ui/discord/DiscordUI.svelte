@@ -1,16 +1,9 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
-import { onMount, tick } from "svelte";
+import { onMount } from "svelte";
 import { fade } from "svelte/transition";
-import { invalidateAll } from "$app/navigation";
-import { prepareMarkdownText } from "../../utils/markdownUtils";
-import { formatTime, normalizeText } from "../../utils/messageUtils";
-import { calculateCurrentTurns, isTurnLimitReached } from "../../utils/sessionUtils";
-import { postAction } from "../apiService";
-import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
-import { buildChatMessages, type ChatMessage, updateMessageById } from "../chatMessages";
-import { getOpeningStateMessages } from "../messageTransformer";
-import type { TutorFeedback } from "../types";
+import { normalizeText } from "../../utils/messageUtils";
+import { createPracticeSession } from "../session.svelte";
 import ChatHeader from "./ChatHeader.svelte";
 import { i18n } from "./i18n";
 import MemberList from "./MemberList.svelte";
@@ -19,7 +12,7 @@ import MessageStream from "./MessageStream.svelte";
 import MobileTopBar from "./MobileTopBar.svelte";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
-import { type ChatOpeningState, type ChatUser } from "./types";
+import { type ChatUser } from "./types";
 import { initUserPool } from "./userPool";
 
 interface Props {
@@ -45,7 +38,33 @@ let {
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
-const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
+const sessionLabels = {
+	get stillProcessingMessage() {
+		return t.stillProcessingMessage;
+	},
+	get retryFailedMessage() {
+		return t.retryFailedMessage;
+	},
+	get earlier() {
+		return t.earlier;
+	},
+};
+
+const session = createPracticeSession(() => ({
+	userName,
+	avatarUrl,
+	language,
+	existingSession,
+	openingState,
+	maxTurns,
+	agentStartsFirst,
+	labels: sessionLabels,
+	joinTriggerText: "*User joined the server*",
+	isHiddenCheck: (m) => m.content === "*User joined the server*",
+}));
+
+const openingStateData = session.openingStateData;
+
 const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
 const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
 const messagePlaceholder = $derived(t.messagePlaceholder.replace("{channel}", channelName));
@@ -62,31 +81,10 @@ emojiConv.replace_mode = "unified";
 emojiConv.allow_native = true;
 
 let showMobileMenu = $state(false);
-let sessionId = $state<number | null>(null);
-let lastLoadedSessionId = $state<number | null>(null);
-let lastServerMessageCount = $state<number>(0);
-let isSubmitting = $state(false);
-let isEntering = $state(true);
-let hasAutoCompleted = $state(false);
-let isCompleting = $state(false);
-let isCompleted = $state(false);
-let showEvaluationModal = $state(false);
-let isInitializing = $state(false);
-let feedback = $state<TutorFeedback | null>(null);
-let messages = $state<ChatMessage[]>([]);
-let agentUser = $state<ChatUser>({
-	id: "agent",
-	name: "Agent",
-	status: "Online",
-	color: "bg-[#5865F2]",
-	isAgent: true,
-});
 let onlineUsers = $state<ChatUser[]>([]);
 let offlineUsers = $state<ChatUser[]>([]);
-let allUsers = $derived([agentUser, ...onlineUsers, ...offlineUsers]);
+let allUsers = $derived([session.agentUser, ...onlineUsers, ...offlineUsers]);
 
-let inputText = $state("");
-let chatContainer = $state<HTMLElement | null>(null);
 let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let showMembers = $state(true);
@@ -97,125 +95,6 @@ let contextMenu = $state({
 	y: 0,
 	targetUser: null as ChatUser | null,
 });
-
-const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
-const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
-const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
-const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst));
-const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
-const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
-
-function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
-	messages = [
-		...messages,
-		{
-			id: crypto.randomUUID(),
-			role: "agent",
-			text: params.text,
-			timestamp: formatTime(new Date()),
-			authorName: agentUser.name,
-			avatarColor: agentUser.color,
-			deliveryState: params.deliveryState,
-			clientMessageId: params.clientMessageId,
-			retryText: params.retryText,
-		},
-	];
-}
-
-function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string) {
-	if (result.status === "reply") {
-		addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId });
-		if (result.terminated) handleComplete();
-	} else if (result.status === "pending") {
-		addAgentMessage({ text: t.stillProcessingMessage, deliveryState: "pending", clientMessageId });
-	} else if (result.status === "failed") {
-		addAgentMessage({
-			text: t.retryFailedMessage,
-			deliveryState: "failed",
-			clientMessageId,
-			retryText,
-		});
-	} else if (result.status === "rejected") {
-		console.warn("Backend rejected the message");
-	}
-}
-
-async function handleRetry(messageId: string) {
-	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
-
-	const message = messages.find((m) => m.id === messageId);
-	if (!message?.clientMessageId) return;
-
-	messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
-	await scrollToBottom();
-
-	isSubmitting = true;
-
-	const retryText = message.retryText || message.text;
-	const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId);
-
-	applySendResult(result, message.clientMessageId, retryText);
-
-	await scrollToBottom();
-	await invalidateAll();
-	isSubmitting = false;
-}
-
-async function scrollToBottom() {
-	await tick();
-	if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-}
-
-async function handleComplete() {
-	if (!sessionId || isCompleting || isCompleted) return;
-	isCompleting = true;
-	try {
-		const result = await postAction("complete", sessionId);
-
-		if (result.type === "success" && result.data) {
-			isCompleted = true;
-			feedback = result.data.feedback as TutorFeedback;
-			showEvaluationModal = true;
-			await scrollToBottom();
-			await invalidateAll();
-		}
-	} catch (error) {
-		console.error("Completion failed:", error);
-	} finally {
-		isCompleting = false;
-	}
-}
-
-async function handleSend(text: string) {
-	if (!text.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached || isWaitingRetry) return;
-
-	const currentText = prepareMarkdownText(text);
-	const clientMessageId = crypto.randomUUID();
-
-	isSubmitting = true;
-
-	messages = [
-		...messages,
-		{
-			id: crypto.randomUUID(),
-			role: "user",
-			text: currentText,
-			timestamp: formatTime(new Date()),
-			authorName: userName,
-			avatar: avatarUrl,
-			clientMessageId,
-		},
-	];
-	await scrollToBottom();
-
-	const result = await attemptAgentReply(sessionId, currentText, clientMessageId);
-
-	applySendResult(result, clientMessageId, currentText);
-
-	await scrollToBottom();
-	await invalidateAll();
-	isSubmitting = false;
-}
 
 function handleContextMenu(e: MouseEvent, user: ChatUser) {
 	e.preventDefault();
@@ -229,8 +108,8 @@ function handleContextMenu(e: MouseEvent, user: ChatUser) {
 
 function handleContextMenuMention() {
 	if (contextMenu.targetUser) {
-		const space = inputText.endsWith(" ") || inputText === "" ? "" : " ";
-		inputText += `${space}@${contextMenu.targetUser.name} `;
+		const space = session.inputText.endsWith(" ") || session.inputText === "" ? "" : " ";
+		session.inputText += `${space}@${contextMenu.targetUser.name} `;
 	}
 	contextMenu.show = false;
 }
@@ -247,132 +126,10 @@ function handleMockAction() {
 	}, 3000);
 }
 
-$effect(() => {
-	if (limitReached && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
-		hasAutoCompleted = true;
-		handleComplete();
-	}
-});
-
-$effect(() => {
-	if (existingSession) {
-		const serverMsgCount = existingSession.messages?.length || 0;
-
-		if (existingSession.id !== lastLoadedSessionId || serverMsgCount > lastServerMessageCount) {
-			const currentId = existingSession.id;
-			lastLoadedSessionId = currentId;
-			lastServerMessageCount = serverMsgCount;
-			sessionId = currentId;
-
-			({ agentUser, onlineUsers, offlineUsers } = initUserPool(currentId));
-
-			isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
-			feedback = existingSession.tutorFeedback || null;
-
-			if (isCompleted && feedback) showEvaluationModal = true;
-
-			const openingMessages = getOpeningStateMessages({
-				openingStateData,
-				userName,
-				agentUser,
-				avatarUrl,
-				labels: { earlier: t.earlier },
-			});
-
-			const sortedRawMessages = [...(existingSession.messages ?? [])].sort(
-				(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-			);
-
-			const sessionMessages = buildChatMessages({
-				rawMessages: sortedRawMessages,
-				formatTimestamp: formatTime,
-				userName,
-				agentName: agentUser.name,
-				avatarUrl,
-				agentColor: agentUser.color,
-				labels: t,
-				isHidden: (m) => m.content === "*User joined the server*",
-			});
-
-			messages = [...openingMessages, ...sessionMessages];
-
-			tick().then(() => {
-				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-			});
-		}
-	}
-});
-
-$effect(() => {
-	const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
-	if (needsPolling && !isSubmitting && sessionId) {
-		const interval = setInterval(() => {
-			invalidateAll();
-		}, 3000);
-		return () => clearInterval(interval);
-	}
-});
-
-onMount(async () => {
-	setTimeout(() => {
-		isEntering = false;
-	}, 500);
-	if (!existingSession) {
-		isInitializing = true;
-		try {
-			const startResult = await postAction("start", null);
-
-			if (startResult.type === "success" && startResult.data) {
-				const currentId = startResult.data.sessionId as number;
-				sessionId = currentId;
-				lastLoadedSessionId = currentId;
-
-				({ agentUser, onlineUsers, offlineUsers } = initUserPool(currentId));
-
-				const openingMessages = getOpeningStateMessages({
-					openingStateData: openingStateData,
-					userName,
-					agentUser,
-					avatarUrl,
-					labels: { earlier: t.earlier },
-				});
-
-				if (agentStartsFirst) {
-					messages = [
-						...openingMessages,
-						{
-							id: crypto.randomUUID(),
-							role: "user",
-							text: "*User joined the server*",
-							timestamp: formatTime(new Date()),
-							authorName: userName,
-							avatar: avatarUrl,
-							isHidden: true,
-						},
-					];
-
-					await scrollToBottom();
-
-					const result = await attemptAgentReply(currentId, "*User joined the server*", `join-${currentId}`);
-
-					messages = [...messages];
-					applySendResult(result, `join-${currentId}`);
-				} else {
-					messages = [...openingMessages];
-				}
-
-				await scrollToBottom();
-				await invalidateAll();
-			}
-		} catch (error) {
-			console.error("Initialization failed:", error);
-		} finally {
-			isInitializing = false;
-		}
-	} else {
-		if (!onlineUsers.length && existingSession.id) {
-			({ agentUser, onlineUsers, offlineUsers } = initUserPool(existingSession.id));
-		}
+onMount(() => {
+	if (!existingSession) return;
+	if (!onlineUsers.length && existingSession.id) {
+		({ onlineUsers, offlineUsers } = initUserPool(existingSession.id));
 	}
 });
 </script>
@@ -381,7 +138,7 @@ onMount(async () => {
 
 <svelte:window onclick={handleWindowClick} />
 
-{#if isEntering}
+{#if session.isEntering}
 	<div class="fixed inset-0 z-[3000] flex flex-col items-center justify-center bg-[#313338]" out:fade={{ duration: 200 }}>
 		<div class="flex items-center gap-2">
 			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]"></span>
@@ -396,13 +153,13 @@ onMount(async () => {
 	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
 >
 	<Overlays
-		{showEvaluationModal}
-		{feedback}
+		showEvaluationModal={session.showEvaluationModal}
+		feedback={session.feedback}
 		{contextMenu}
 		{showToast}
 		{taskId}
 		{t}
-		onCloseEvaluation={() => (showEvaluationModal = false)}
+		onCloseEvaluation={() => (session.showEvaluationModal = false)}
 		onContextMenuMention={handleContextMenuMention}
 	/>
 
@@ -424,48 +181,48 @@ onMount(async () => {
 	<div class="flex flex-1 flex-col bg-[#313338] min-w-0 h-full relative">
 		<ChatHeader
 			{channelName}
-			{remainingTurns}
-			{isCompleted}
-			{sessionId}
-			{isCompleting}
-			{isSubmitting}
-			{isInitializing}
+			remainingTurns={session.remainingTurns}
+			isCompleted={session.isCompleted}
+			sessionId={session.sessionId}
+			isCompleting={session.isCompleting}
+			isSubmitting={session.isSubmitting}
+			isInitializing={session.isInitializing}
 			{showMembers}
 			turnsLeftLabel={t.turnsLeft}
 			evaluatingLabel={t.evaluating}
 			finishTaskLabel={t.finishTask}
-			onComplete={handleComplete}
+			onComplete={session.handleComplete}
 			onToggleMembers={() => (showMembers = !showMembers)}
 		/>
 
 		<div class="flex flex-1 overflow-hidden relative">
 			<div class="flex flex-1 flex-col min-w-0 relative">
 				<MessageStream
-					bind:chatContainer
-					{messages}
-					{isTyping}
-					{isInitializing}
-					{agentUser}
-					{limitReached}
+					bind:chatContainer={session.chatContainer}
+					messages={session.messages}
+					isTyping={session.isTyping}
+					isInitializing={session.isInitializing}
+					agentUser={session.agentUser}
+					limitReached={session.limitReached}
 					{language}
 					{emojiConv}
 					retryLabel={t.retry}
-					onRetry={handleRetry}
+					onRetry={session.handleRetry}
 				/>
 
 				<MessageInput
-					bind:inputText
-					{isSubmitting}
-					{isCompleting}
-					{isCompleted}
-					{isInitializing}
-					{limitReached}
-					{isWaitingRetry}
+					bind:inputText={session.inputText}
+					isSubmitting={session.isSubmitting}
+					isCompleting={session.isCompleting}
+					isCompleted={session.isCompleted}
+					isInitializing={session.isInitializing}
+					limitReached={session.limitReached}
+					isWaitingRetry={session.isWaitingRetry}
 					{messagePlaceholder}
-					{sessionId}
+					sessionId={session.sessionId}
 					{t}
 					{allUsers}
-					onSend={handleSend}
+					onSend={session.handleSend}
 				/>
 			</div>
 
@@ -473,7 +230,7 @@ onMount(async () => {
 				<MemberList
 					{onlineUsers}
 					{offlineUsers}
-					{agentUser}
+					agentUser={session.agentUser}
 					{userName}
 					{avatarUrl}
 					onlineLabel={t.online}

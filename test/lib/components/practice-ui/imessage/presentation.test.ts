@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import {
-	getBubbleGroupPosition,
-	getLastOutgoingMessageId,
-	getRenderableMessages,
-	resolveIMessageContactName,
-} from "$lib/components/practice-ui/imessage/presentation";
+import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "$lib/components/practice-ui/imessage/presentation";
+import { resolveAgentName } from "$lib/components/practice-ui/session.svelte";
 
 function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
 	return {
@@ -51,42 +47,42 @@ describe("getBubbleGroupPosition", () => {
 	});
 });
 
-describe("resolveIMessageContactName", () => {
+describe("resolveAgentName", () => {
 	it("prefers first non-user sender in opening messages", () => {
-		const name = resolveIMessageContactName({
-			openingStateData: {
+		const name = resolveAgentName(
+			{
 				previousMessages: [
 					{ sender: "Learner", text: "hey" },
 					{ sender: "Roddy", text: "hello" },
 				],
-			},
-			userName: "Learner",
-			fallbackName: "Agent",
-		});
+			} as any,
+			"Learner",
+			"Agent",
+		);
 
 		expect(name).toBe("Roddy");
 	});
 
 	it("falls back to agent name when no peer sender exists", () => {
-		const name = resolveIMessageContactName({
-			openingStateData: {
+		const name = resolveAgentName(
+			{
 				previousMessages: [{ sender: "Learner", text: "hey" }],
-			},
-			userName: "Learner",
-			fallbackName: "Agent",
-		});
+			} as any,
+			"Learner",
+			"Agent",
+		);
 
 		expect(name).toBe("Agent");
 	});
 
 	it("falls back safely when previousMessages is malformed", () => {
-		const name = resolveIMessageContactName({
-			openingStateData: {
+		const name = resolveAgentName(
+			{
 				previousMessages: "broken" as any,
 			},
-			userName: "Learner",
-			fallbackName: "Agent",
-		});
+			"Learner",
+			"Agent",
+		);
 
 		expect(name).toBe("Agent");
 	});
