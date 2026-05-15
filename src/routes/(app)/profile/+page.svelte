@@ -218,14 +218,14 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiBaseUrl">Base URL</Label>
-					<Input id="apiBaseUrl" name="apiBaseUrl" placeholder="https://api.openai.com/v1" />
+					<Input id="apiBaseUrl" name="apiBaseUrl" value={form?.values?.apiBaseUrl ?? ""} placeholder="https://api.openai.com/v1" />
 					{#if form?.errors?.apiBaseUrl}
 						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
 					{/if}
 				</div>
 				<div class="space-y-2">
 					<Label for="apiModel">Model</Label>
-					<Input id="apiModel" name="apiModel" placeholder="gpt-4o" />
+					<Input id="apiModel" name="apiModel" value={form?.values?.apiModel ?? ""} placeholder="gpt-4o" />
 					{#if form?.errors?.apiModel}
 						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}
