@@ -29,9 +29,15 @@ export const actions: Actions = {
 			apiModel: formData.get("apiModel")?.toString() || undefined,
 		};
 
+		// Return values for form re-population, with secrets stripped
+		const safeValues = (overrides?: Partial<typeof raw>) => {
+			const { password: _, apiKey: __, ...safe } = { ...raw, ...overrides };
+			return safe;
+		};
+
 		const result = signUpSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: safeValues() });
 		}
 
 		// Verify BYOK before creating the user, so a bad key blocks signup entirely
@@ -42,7 +48,7 @@ export const actions: Actions = {
 		if (apiKey && apiBaseUrl && apiModel) {
 			const verification = await verifyApiKey(apiBaseUrl, apiKey, apiModel);
 			if (!verification.ok) {
-				return fail(400, { message: `API key verification failed: ${verification.error}`, values: raw });
+				return fail(400, { message: `API key verification failed: ${verification.error}`, values: safeValues() });
 			}
 		}
 
@@ -83,9 +89,9 @@ export const actions: Actions = {
 			}
 		} catch (error) {
 			if (error instanceof APIError) {
-				return fail(400, { message: error.message || "Registration failed", values: raw });
+				return fail(400, { message: error.message || "Registration failed", values: safeValues() });
 			}
-			return fail(500, { message: "Unexpected error", values: raw });
+			return fail(500, { message: "Unexpected error", values: safeValues() });
 		}
 
 		return redirect(302, "/verify?pending=1");

@@ -88,8 +88,12 @@ export const actions: Actions = {
 		};
 
 		const result = profileSchema.safeParse(raw);
+		const safeValues = (overrides?: Partial<typeof raw>) => {
+			const { apiKey: _, ...safe } = { ...raw, ...overrides };
+			return safe;
+		};
 		if (!result.success) {
-			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: safeValues() });
 		}
 
 		// Update user profile fields
@@ -119,7 +123,7 @@ export const actions: Actions = {
 				if (!verification.ok) {
 					return fail(400, {
 						message: `API key verification failed: ${verification.error}`,
-						values: raw,
+						values: safeValues(),
 					});
 				}
 

@@ -110,7 +110,7 @@ $effect(() => {
 					{/if}
 					<div class="space-y-2">
 						<Label for="apiKey">API Key</Label>
-						<Input id="apiKey" name="apiKey" type="password" value={form?.values?.apiKey ?? ""} placeholder="sk-..." />
+						<Input id="apiKey" name="apiKey" type="password" placeholder="Enter your API key" />
 						{#if form?.errors?.apiKey}
 							<p class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
 						{/if}
