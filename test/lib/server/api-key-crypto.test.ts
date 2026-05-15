@@ -41,7 +41,6 @@ describe("api-key-crypto", () => {
 		it("throws on tampered ciphertext", () => {
 			const encrypted = encryptApiKey("sk-secret");
 			const parts = encrypted.split(":");
-			// Flip a bit in the ciphertext
 			const tamperedHex = parts[2].replace(/[0-9a-f]/, (c) => (c === "f" ? "0" : "f"));
 			const tampered = `${parts[0]}:${parts[1]}:${tamperedHex}`;
 			expect(() => decryptApiKey(tampered)).toThrow();
@@ -49,7 +48,6 @@ describe("api-key-crypto", () => {
 
 		it("throws when BETTER_AUTH_SECRET is not set", async () => {
 			mockEnv.BETTER_AUTH_SECRET = "";
-			// Re-import to get a fresh module (won't work with static imports, so test the error path directly)
 			expect(() => encryptApiKey("sk-xxx")).toThrow("BETTER_AUTH_SECRET is not set");
 			mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
 		});
@@ -113,6 +111,36 @@ describe("api-key-crypto", () => {
 
 			expect(result.ok).toBe(false);
 			expect("error" in result && result.error).toContain("HTTP 500");
+		});
+
+		it("returns ok:false on fetch abort (timeout)", async () => {
+			const fetchMock = vi.fn(async () => {
+				const err = new Error("aborted");
+				err.name = "AbortError";
+				throw err;
+			});
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await verifyApiKey("https://api.example.com/v1", "sk-key", "m");
+
+			expect(result.ok).toBe(false);
+			expect("error" in result && result.error).toContain("timed out");
+		});
+
+		it("handles error response with null error object", async () => {
+			const fetchMock = vi.fn(
+				async () =>
+					new Response(JSON.stringify({ error: null }), {
+						status: 400,
+						headers: { "Content-Type": "application/json" },
+					}),
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await verifyApiKey("https://api.example.com/v1", "sk-key", "m");
+
+			expect(result.ok).toBe(false);
+			expect("error" in result && result.error).toContain("HTTP 400");
 		});
 	});
 });

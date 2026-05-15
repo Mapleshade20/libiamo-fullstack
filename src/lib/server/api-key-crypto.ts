@@ -87,9 +87,10 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 	try {
 		const body = await response.text();
 		const parsed = JSON.parse(body);
+		const errorVal = (parsed as Record<string, unknown>).error;
 		const msg =
-			(parsed as Record<string, unknown>).error && typeof (parsed as Record<string, unknown>).error === "object"
-				? (parsed.error as Record<string, unknown>).message || JSON.stringify(parsed.error)
+			errorVal && typeof errorVal === "object" && errorVal !== null
+				? (errorVal as Record<string, unknown>).message || JSON.stringify(errorVal)
 				: body.slice(0, 200);
 		detail = `HTTP ${response.status}: ${msg}`;
 	} catch {
