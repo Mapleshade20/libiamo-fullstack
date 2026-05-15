@@ -40,7 +40,7 @@ export const signUpSchema = z
 		activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
 		timezone: timezoneSchema,
 		apiKey: z.string().optional(),
-		apiBaseUrl: z.string().optional(),
+		apiBaseUrl: z.url().optional(),
 		apiModel: z.string().optional(),
 	})
 	.refine(
@@ -78,7 +78,7 @@ export const profileSchema = z
 		timezone: timezoneSchema,
 		nativeLanguage: z.string().optional(),
 		apiKey: z.string().optional(),
-		apiBaseUrl: z.string().optional(),
+		apiBaseUrl: z.url().optional(),
 		apiModel: z.string().optional(),
 	})
 	.refine(

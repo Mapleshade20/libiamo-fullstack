@@ -122,11 +122,12 @@ export const actions: Actions = {
 						values: raw,
 					});
 				}
+
+				await db
+					.insert(userApiKey)
+					.values({ userId, encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl, model: apiModel })
+					.onConflictDoUpdate({ target: userApiKey.userId, set: { encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl, model: apiModel } });
 			}
-			await db
-				.insert(userApiKey)
-				.values({ userId, encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl!, model: apiModel! })
-				.onConflictDoUpdate({ target: userApiKey.userId, set: { encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl!, model: apiModel! } });
 		}
 
 		return { success: true };
