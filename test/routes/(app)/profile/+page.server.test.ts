@@ -4,11 +4,14 @@ import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
-const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
+const { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere, mockOnConflictDoUpdate } = vi.hoisted(() => {
 	const mockOnConflictDoNothing = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
+	const mockOnConflictDoUpdate = vi.fn();
+	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: mockOnConflictDoUpdate }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockOnConflictDoNothing, mockValues, mockInsert };
+	const mockWhere = vi.fn();
+	const mockDelete = vi.fn(() => ({ where: mockWhere }));
+	return { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere, mockOnConflictDoUpdate };
 });
 
 vi.mock("$lib/server/auth", () => ({
@@ -23,11 +26,24 @@ vi.mock("$lib/server/auth", () => ({
 vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: mockInsert,
+		delete: mockDelete,
+		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(undefined) } },
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
 	userLearningProfile: Symbol("userLearningProfile"),
+	userApiKey: { userId: Symbol("userApiKey.userId") },
+}));
+
+const { mockEncryptApiKey, mockVerifyApiKey } = vi.hoisted(() => ({
+	mockEncryptApiKey: vi.fn((k: string) => `encrypted:${k}`),
+	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
+}));
+
+vi.mock("$lib/server/api-key-crypto", () => ({
+	encryptApiKey: mockEncryptApiKey,
+	verifyApiKey: mockVerifyApiKey,
 }));
 
 describe("Profile +page.server", () => {
@@ -37,16 +53,15 @@ describe("Profile +page.server", () => {
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
-		it("returns serverTimezones populated by Intl API", async () => {
-			// Calling load will invoke buildTimezoneList() and test lines 14-55
-			const event = {} as any;
-			const result = (await load(event)) as { serverTimezones: any[] };
+		it("returns serverTimezones and hasApiKey", async () => {
+			const event = { locals: { user: { id: "test-user" } } } as any;
+			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean };
 
 			expect(result.serverTimezones).toBeDefined();
 			expect(Array.isArray(result.serverTimezones)).toBe(true);
 
-			// Depending on Node version, the list might be populated or empty,
-			// but the function should safely resolve without throwing.
+			expect(result.hasApiKey).toBe(false);
+
 			if (result.serverTimezones.length > 0) {
 				expect(result.serverTimezones[0]).toHaveProperty("value");
 				expect(result.serverTimezones[0]).toHaveProperty("label");
@@ -72,10 +87,8 @@ describe("Profile +page.server", () => {
 			const event = createActionEvent({});
 			const result = await actions.updateProfile(event);
 
-			expect(auth.api.updateUser).toHaveBeenCalledWith({
-				body: {},
-				headers: event.request.headers,
-			});
+			// No user profile fields to update, so updateUser is not called
+			expect(auth.api.updateUser).not.toHaveBeenCalled();
 			expect(result).toEqual({ success: true });
 		});
 
@@ -129,6 +142,80 @@ describe("Profile +page.server", () => {
 			const event = createActionEvent({});
 			await expect(actions.signOut(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 			expect(auth.api.signOut).toHaveBeenCalledWith({ headers: event.request.headers });
+		});
+	});
+
+	// ── BYOK (Bring Your Own Key) ─────────────────────────────────────
+	describe("BYOK", () => {
+		it("clearApiKey deletes the user's API key row", async () => {
+			const event = createActionEvent({});
+			const result = await actions.clearApiKey(event);
+
+			expect(result).toEqual({ success: true });
+			expect(mockDelete).toHaveBeenCalled();
+			expect(mockWhere).toHaveBeenCalled();
+		});
+
+		it("clearApiKey returns 401 when no user", async () => {
+			const event = createActionEvent({}, "");
+			const result = (await actions.clearApiKey(event)) as ActionFailure<any>;
+			expect(result.status).toBe(401);
+		});
+
+		it("updateProfile saves BYOK config after verification", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-test-key",
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			mockVerifyApiKey.mockResolvedValue({ ok: true });
+
+			const result = await actions.updateProfile(event);
+
+			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test-key", "test-model");
+			expect(mockEncryptApiKey).toHaveBeenCalledWith("sk-test-key");
+			expect(result).toEqual({ success: true });
+		});
+
+		it("updateProfile returns 400 when BYOK verification fails", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-bad-key",
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			mockVerifyApiKey.mockResolvedValue({ ok: false, error: "HTTP 401: Invalid API Key" });
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toContain("API key verification failed");
+			expect(mockEncryptApiKey).not.toHaveBeenCalled();
+		});
+
+		it("updateProfile returns schema error when apiKey is given without baseUrl", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-key-only",
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiKey).toBeDefined();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+		});
+
+		it("updateProfile returns schema error when baseUrl and model are given without apiKey", async () => {
+			const event = createActionEvent({
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiKey).toBeDefined();
 		});
 	});
 });

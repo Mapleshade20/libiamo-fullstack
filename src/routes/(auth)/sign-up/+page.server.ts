@@ -2,9 +2,10 @@ import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { signUpSchema } from "$lib/schemas";
+import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
 import { db } from "$lib/server/db";
-import { userLearningProfile } from "$lib/server/db/schema";
+import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -23,11 +24,26 @@ export const actions: Actions = {
 			name: formData.get("name")?.toString() ?? "",
 			activeLanguage: formData.get("activeLanguage")?.toString() ?? "",
 			timezone: formData.get("timezone")?.toString() || "UTC",
+			apiKey: formData.get("apiKey")?.toString() || undefined,
+			apiBaseUrl: formData.get("apiBaseUrl")?.toString() || undefined,
+			apiModel: formData.get("apiModel")?.toString() || undefined,
 		};
 
 		const result = signUpSchema.safeParse(raw);
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+		}
+
+		// Verify BYOK before creating the user, so a bad key blocks signup entirely
+		const apiKey = result.data.apiKey?.trim();
+		const apiBaseUrl = result.data.apiBaseUrl?.trim();
+		const apiModel = result.data.apiModel?.trim();
+
+		if (apiKey && apiBaseUrl && apiModel) {
+			const verification = await verifyApiKey(apiBaseUrl, apiKey, apiModel);
+			if (!verification.ok) {
+				return fail(400, { message: `API key verification failed: ${verification.error}`, values: raw });
+			}
 		}
 
 		try {
@@ -51,6 +67,19 @@ export const actions: Actions = {
 						language: result.data.activeLanguage,
 					})
 					.onConflictDoNothing();
+
+				// Store the already-verified BYOK key
+				if (apiKey && apiBaseUrl && apiModel) {
+					await db
+						.insert(userApiKey)
+						.values({
+							userId: res.user.id,
+							encryptedKey: encryptApiKey(apiKey),
+							baseUrl: apiBaseUrl,
+							model: apiModel,
+						})
+						.onConflictDoNothing();
+				}
 			}
 		} catch (error) {
 			if (error instanceof APIError) {

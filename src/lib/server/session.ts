@@ -246,6 +246,7 @@ export type SendMessageOptions = {
 export async function sendMessage(
 	sessionId: number,
 	userMessage: string,
+	userId: string,
 	clientMessageId?: string,
 	options: SendMessageOptions = {},
 ): Promise<SendMessageResult> {
@@ -357,7 +358,7 @@ export async function sendMessage(
 
 	let output: z.infer<typeof AgentReplySchema>;
 	try {
-		output = await createStructuredOutput(AgentReplySchema, history);
+		output = await createStructuredOutput(AgentReplySchema, history, {}, userId);
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -470,7 +471,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		{ role: "user", content: "Please evaluate this conversation." },
 	];
 
-	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages);
+	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages, {}, session.userId);
 
 	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
 
@@ -556,7 +557,7 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 		{ role: "user", content: `Give me hints for my next reply in ${learningLanguageName}.` },
 	];
 
-	return await createStructuredOutput(HintSchema, messages);
+	return await createStructuredOutput(HintSchema, messages, {}, session.userId);
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

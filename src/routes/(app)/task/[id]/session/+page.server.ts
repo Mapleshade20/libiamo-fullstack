@@ -141,7 +141,7 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
-			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined, {
+			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
 			});

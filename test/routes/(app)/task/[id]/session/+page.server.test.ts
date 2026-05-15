@@ -257,7 +257,7 @@ describe("session page server", () => {
 				reply: "Hello back",
 				turnCount: 2,
 			});
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("passes clientMessageId through to sendMessage", async () => {
@@ -274,7 +274,7 @@ describe("session page server", () => {
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("sends message when task language differs from active language", async () => {
@@ -294,7 +294,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toMatchObject({ success: true, reply: "Hola" });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {

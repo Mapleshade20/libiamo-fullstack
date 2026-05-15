@@ -1,9 +1,11 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { profileSchema, switchLanguageSchema } from "$lib/schemas";
+import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
 import { db } from "$lib/server/db";
-import { userLearningProfile } from "$lib/server/db/schema";
+import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 /**
@@ -55,9 +57,21 @@ function getMemoizedTimezones(): { value: string; label: string }[] {
 	return _cachedTimezones;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async (event) => {
+	const userId = event.locals.user?.id;
+	let hasApiKey = false;
+
+	if (userId) {
+		const row = await db.query.userApiKey.findFirst({
+			where: (t, { eq }) => eq(t.userId, userId),
+			columns: { userId: true },
+		});
+		hasApiKey = row !== undefined;
+	}
+
 	return {
 		serverTimezones: getMemoizedTimezones(),
+		hasApiKey,
 	};
 };
 
@@ -68,6 +82,9 @@ export const actions: Actions = {
 			name: formData.get("name")?.toString() ?? undefined,
 			timezone: formData.get("timezone")?.toString() ?? undefined,
 			nativeLanguage: formData.get("nativeLanguage")?.toString() ?? undefined,
+			apiKey: formData.get("apiKey")?.toString() || undefined,
+			apiBaseUrl: formData.get("apiBaseUrl")?.toString() || undefined,
+			apiModel: formData.get("apiModel")?.toString() || undefined,
 		};
 
 		const result = profileSchema.safeParse(raw);
@@ -75,13 +92,65 @@ export const actions: Actions = {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
-		const body = Object.fromEntries(Object.entries(result.data).filter(([_, v]) => v !== undefined));
+		// Update user profile fields
+		const body = Object.fromEntries(
+			Object.entries(result.data).filter(([k, v]) => v !== undefined && k !== "apiKey" && k !== "apiBaseUrl" && k !== "apiModel"),
+		);
 
-		await auth.api.updateUser({
-			body,
-			headers: event.request.headers,
-		});
+		if (Object.keys(body).length > 0) {
+			await auth.api.updateUser({
+				body,
+				headers: event.request.headers,
+			});
+		}
 
+		// Handle BYOK API key: overwrite-style update
+		const userId = event.locals.user?.id;
+		if (!userId) return fail(401);
+
+		const apiKey = result.data.apiKey?.trim();
+		if (apiKey) {
+			const apiBaseUrl = result.data.apiBaseUrl?.trim();
+			const apiModel = result.data.apiModel?.trim();
+
+			// Verify the key before saving
+			if (apiBaseUrl && apiModel) {
+				const verification = await verifyApiKey(apiBaseUrl, apiKey, apiModel);
+				if (!verification.ok) {
+					return fail(400, {
+						message: `API key verification failed: ${verification.error}`,
+						values: raw,
+					});
+				}
+			}
+
+			// Upsert: overwrite existing key
+			await db
+				.insert(userApiKey)
+				.values({
+					userId,
+					encryptedKey: encryptApiKey(apiKey),
+					baseUrl: apiBaseUrl || null,
+					model: apiModel || null,
+				})
+				.onConflictDoUpdate({
+					target: userApiKey.userId,
+					set: {
+						encryptedKey: encryptApiKey(apiKey),
+						baseUrl: apiBaseUrl || null,
+						model: apiModel || null,
+					},
+				});
+		}
+
+		return { success: true };
+	},
+
+	clearApiKey: async (event) => {
+		const userId = event.locals.user?.id;
+		if (!userId) return fail(401);
+
+		await db.delete(userApiKey).where(eq(userApiKey.userId, userId));
 		return { success: true };
 	},
 

@@ -32,13 +32,35 @@ export const signInSchema = z.object({
 	password: z.string().min(1, "Password is required"),
 });
 
-export const signUpSchema = z.object({
-	email: z.email("Invalid email"),
-	password: z.string().min(8, "Password must be at least 8 characters"),
-	name: z.string().min(1, "Name is required"),
-	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
-	timezone: timezoneSchema,
-});
+export const signUpSchema = z
+	.object({
+		email: z.email("Invalid email"),
+		password: z.string().min(8, "Password must be at least 8 characters"),
+		name: z.string().min(1, "Name is required"),
+		activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
+		timezone: timezoneSchema,
+		apiKey: z.string().optional(),
+		apiBaseUrl: z.string().optional(),
+		apiModel: z.string().optional(),
+	})
+	.refine(
+		(data) => {
+			// If any BYOK field is provided, all three must be filled
+			const hasApiKey = data.apiKey?.trim();
+			const hasBaseUrl = data.apiBaseUrl?.trim();
+			const hasModel = data.apiModel?.trim();
+			if (hasApiKey || hasBaseUrl || hasModel) {
+				if (!hasApiKey || !hasBaseUrl || !hasModel) {
+					return false;
+				}
+			}
+			return true;
+		},
+		{
+			message: "All three fields (API Key, Base URL, Model) are required when configuring BYOK",
+			path: ["apiKey"],
+		},
+	);
 
 export const forgotPasswordSchema = z.object({
 	email: z.email("Invalid email"),
@@ -50,11 +72,33 @@ export const resetPasswordSchema = z.object({
 });
 
 // ── App ──────────────────────────────────────────────────────────────
-export const profileSchema = z.object({
-	name: z.string().max(50).optional(),
-	timezone: timezoneSchema,
-	nativeLanguage: z.string().optional(),
-});
+export const profileSchema = z
+	.object({
+		name: z.string().max(50).optional(),
+		timezone: timezoneSchema,
+		nativeLanguage: z.string().optional(),
+		apiKey: z.string().optional(),
+		apiBaseUrl: z.string().optional(),
+		apiModel: z.string().optional(),
+	})
+	.refine(
+		(data) => {
+			// If any BYOK field is provided, all three must be filled
+			const hasApiKey = data.apiKey?.trim();
+			const hasBaseUrl = data.apiBaseUrl?.trim();
+			const hasModel = data.apiModel?.trim();
+			if (hasApiKey || hasBaseUrl || hasModel) {
+				if (!hasApiKey || !hasBaseUrl || !hasModel) {
+					return false;
+				}
+			}
+			return true;
+		},
+		{
+			message: "All three fields (API Key, Base URL, Model) are required when configuring BYOK",
+			path: ["apiKey"],
+		},
+	);
 
 export const switchLanguageSchema = z.object({
 	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),

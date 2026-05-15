@@ -98,6 +98,41 @@ $effect(() => {
 				{/if}
 			</div>
 
+			<!-- BYOK: optional API key section -->
+			<details class="space-y-3 rounded-md border border-input p-3">
+				<summary class="cursor-pointer text-sm font-medium text-muted-foreground">Bring Your Own Key (optional)</summary>
+				<div class="mt-3 space-y-3">
+					<p class="text-xs text-muted-foreground">
+						Provide your own OpenAI-compatible API key. If left empty, the default platform key will be used. Your key is encrypted before storage.
+					</p>
+					{#if form?.message}
+						<p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
+					{/if}
+					<div class="space-y-2">
+						<Label for="apiKey">API Key</Label>
+						<Input id="apiKey" name="apiKey" type="password" value={form?.values?.apiKey ?? ""} placeholder="sk-..." />
+						{#if form?.errors?.apiKey}
+							<p class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
+						{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="apiBaseUrl">Base URL</Label>
+						<Input id="apiBaseUrl" name="apiBaseUrl" value={form?.values?.apiBaseUrl ?? ""} placeholder="https://api.openai.com/v1" />
+						{#if form?.errors?.apiBaseUrl}
+							<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
+						{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="apiModel">Model</Label>
+						<Input id="apiModel" name="apiModel" value={form?.values?.apiModel ?? ""} placeholder="gpt-4o" />
+						{#if form?.errors?.apiModel}
+							<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
+						{/if}
+					</div>
+				</div>
+			</details>
+			<!-- End BYOK section -->
+
 			<Button type="submit" class="w-full">Sign Up</Button>
 		</form>
 	</Card.Content>
