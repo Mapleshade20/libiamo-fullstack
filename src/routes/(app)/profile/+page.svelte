@@ -231,7 +231,7 @@ function applyDetectedTimezone() {
 					{/if}
 				</div>
 				<div class="flex gap-3">
-					<Button type="submit">Save API Key</Button>
+					<Button type="submit">{data.hasApiKey ? "Update API Key" : "Save API Key"}</Button>
 					{#if data.hasApiKey}
 						<Button type="submit" formaction="?/clearApiKey" variant="outline">Remove API Key</Button>
 					{/if}
