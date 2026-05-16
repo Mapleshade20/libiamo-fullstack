@@ -149,6 +149,59 @@ export const templateSchema = z
 		path: ["ui"],
 	});
 
+export const templateContributionSchema = z
+	.object({
+		language: z.enum(LANGUAGE_CODES),
+		interactionType: z.enum(INTERACTION_TYPES),
+		ui: z.enum(UI_VARIANTS),
+
+		titleBase: z.string().min(1, "Title is required"),
+		shortObjectiveBase: z.string().optional(),
+		descriptionBase: z.string().optional(),
+		agentPromptBase: z.string().optional(),
+		materialsMd: z.string().optional(),
+		objectivesBase: z
+			.string()
+			.optional()
+			.transform((v) => {
+				if (!v) return [];
+				return v
+					.split("\n")
+					.map((s) => s.trim())
+					.filter(Boolean);
+			}),
+		translationBase: z
+			.string()
+			.optional()
+			.transform((v) => {
+				if (!v) return null;
+				const paragraphs = v
+					.split(/\n\s*\n/)
+					.map((para) =>
+						para
+							.split("\n")
+							.map((s) => s.trim())
+							.filter(Boolean),
+					)
+					.filter((para) => para.length > 0);
+				return paragraphs.length > 0 ? paragraphs : null;
+			}),
+		tags: z
+			.string()
+			.optional()
+			.transform((v) => {
+				if (!v) return [];
+				return v
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean);
+			}),
+	})
+	.refine((data) => (data.interactionType === "translate") === (data.ui === "translator"), {
+		message: 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise',
+		path: ["ui"],
+	});
+
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({
 	slotValues: z.record(z.string(), z.string()).default({}),

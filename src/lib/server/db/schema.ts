@@ -67,8 +67,8 @@ export const templateContribution = pgTable("template_contribution", {
 	language: languageCodeEnum("language").notNull(),
 	interactionType: interactionTypeEnum("interaction_type").notNull(),
 	ui: uiVariantEnum("ui").notNull(),
-	cadence: cadenceEnum("cadence").notNull(),
-	agentStartsFirst: boolean("agent_starts_first").default(true).notNull(),
+	cadence: cadenceEnum("cadence"),
+	agentStartsFirst: boolean("agent_starts_first"),
 
 	titleBase: text("title_base").notNull(),
 	shortObjectiveBase: text("short_objective_base"),
@@ -82,11 +82,7 @@ export const templateContribution = pgTable("template_contribution", {
 	slotValues: jsonb("slot_values").notNull().default({}),
 	openingState: jsonb("opening_state").notNull().default({}),
 
-	maxTurns: integer("max_turns"),
-	estimatedWords: integer("estimated_words"),
-	difficulty: integer("difficulty").notNull(),
-	pointReward: integer("point_reward").notNull(),
-	gemReward: integer("gem_reward").notNull(),
+	difficulty: integer("difficulty"),
 
 	status: text("status", { enum: ["approved", "pending", "rejected"] })
 		.$type<"approved" | "pending" | "rejected">()

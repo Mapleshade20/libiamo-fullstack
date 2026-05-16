@@ -10,6 +10,7 @@ import {
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
+	templateContributionSchema,
 	templateSchema,
 	translatorOpeningStateSchema,
 	validateOpeningState,
@@ -128,6 +129,86 @@ describe("schemas", () => {
 		expect(result.slotValues).toEqual({});
 		expect(result.openingState).toEqual({});
 		expect(result.isActive).toBe(true);
+	});
+
+	// ── templateContributionSchema ─────────────────────────────────────
+
+	const baseContribution = {
+		language: "en",
+		interactionType: "chat",
+		ui: "discord",
+		titleBase: "Chat with {{friend}}",
+	};
+
+	it("templateContributionSchema parses minimal valid input", () => {
+		const result = templateContributionSchema.parse(baseContribution);
+		expect(result.titleBase).toBe("Chat with {{friend}}");
+		expect(result.interactionType).toBe("chat");
+	});
+
+	it("templateContributionSchema rejects missing required fields", () => {
+		expect(templateContributionSchema.safeParse({}).success).toBe(false);
+		expect(templateContributionSchema.safeParse({ language: "en", interactionType: "chat", ui: "discord" }).success).toBe(false);
+		// missing titleBase
+	});
+
+	it("templateContributionSchema does NOT require admin-only fields", () => {
+		// These fields should NOT be present or required
+		const result = templateContributionSchema.parse(baseContribution) as Record<string, unknown>;
+		expect(result).not.toHaveProperty("cadence");
+		expect(result).not.toHaveProperty("difficulty");
+		expect(result).not.toHaveProperty("pointReward");
+		expect(result).not.toHaveProperty("gemReward");
+		expect(result).not.toHaveProperty("isActive");
+		expect(result).not.toHaveProperty("agentStartsFirst");
+	});
+
+	it("templateContributionSchema transforms objectivesBase newline to array", () => {
+		const result = templateContributionSchema.parse({
+			...baseContribution,
+			objectivesBase: "Be polite\nStay on topic",
+		});
+		expect(result.objectivesBase).toEqual(["Be polite", "Stay on topic"]);
+	});
+
+	it("templateContributionSchema transforms tags comma to array", () => {
+		const result = templateContributionSchema.parse({
+			...baseContribution,
+			tags: "travel, food",
+		});
+		expect(result.tags).toEqual(["travel", "food"]);
+	});
+
+	it("templateContributionSchema transforms translationBase paragraphs", () => {
+		const result = templateContributionSchema.parse({
+			...baseContribution,
+			translationBase: "Hello\nWorld\n\nGoodbye",
+		});
+		expect(result.translationBase).toEqual([["Hello", "World"], ["Goodbye"]]);
+	});
+
+	it("templateContributionSchema returns empty for optional fields when not provided", () => {
+		const result = templateContributionSchema.parse(baseContribution);
+		expect(result.objectivesBase).toEqual([]);
+		expect(result.tags).toEqual([]);
+		expect(result.translationBase).toBeNull();
+		expect(result.shortObjectiveBase).toBeUndefined();
+		expect(result.descriptionBase).toBeUndefined();
+	});
+
+	it("templateContributionSchema rejects invalid interactionType", () => {
+		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "invalid" }).success).toBe(false);
+	});
+
+	it("templateContributionSchema rejects invalid language", () => {
+		expect(templateContributionSchema.safeParse({ ...baseContribution, language: "de" }).success).toBe(false);
+	});
+
+	it("templateContributionSchema rejects ui/interactionType mismatch", () => {
+		// translate must have ui=translator
+		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "translate", ui: "discord" }).success).toBe(false);
+		// non-translate must not have ui=translator
+		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "chat", ui: "translator" }).success).toBe(false);
 	});
 
 	// ── openingState per-UI schemas ───────────────────────────────────

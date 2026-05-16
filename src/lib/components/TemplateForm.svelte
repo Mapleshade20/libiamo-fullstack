@@ -57,9 +57,19 @@ interface Props {
 	} | null;
 	action?: string;
 	submitLabel?: string;
+	cancelHref?: string;
+	hideAdminFields?: boolean;
 }
 
-let { template = {} as TemplateData, variants = [], form = null, action = "", submitLabel = "Save" }: Props = $props();
+let {
+	template = {} as TemplateData,
+	variants = [],
+	form = null,
+	action = "",
+	submitLabel = "Save",
+	cancelHref = "/admin/templates",
+	hideAdminFields = false,
+}: Props = $props();
 let mainFormEl: HTMLFormElement | null = null;
 
 function getScrollableParent(element: HTMLElement): HTMLElement | null {
@@ -338,68 +348,82 @@ function jsonStr(val: unknown): string {
 				{/if}
 			</div>
 
-			{#if !isTranslate}
-				<div class="space-y-2">
-					<Label for="cadence">Cadence</Label>
-					<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-						{#each CADENCES as cadence}
-							<option value={cadence} selected={template.cadence === cadence}>
-								{cadence === "none" ? "None" : cadence.charAt(0).toUpperCase() + cadence.slice(1)}
-							</option>
-						{/each}
-					</select>
-					{#if form?.errors?.cadence}
-						<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
-					{/if}
-				</div>
-			{:else}
-				<input type="hidden" name="cadence" value="none">
+			{#if !hideAdminFields}
+				{#if !isTranslate}
+					<div class="space-y-2">
+						<Label for="cadence">Cadence</Label>
+						<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+							{#each CADENCES as cadence}
+								<option value={cadence} selected={template.cadence === cadence}>
+									{cadence === "none" ? "None" : cadence.charAt(0).toUpperCase() + cadence.slice(1)}
+								</option>
+							{/each}
+						</select>
+						{#if form?.errors?.cadence}
+							<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
+						{/if}
+					</div>
+				{:else}
+					<input type="hidden" name="cadence" value="none">
+				{/if}
 			{/if}
 
-			<div class="space-y-2">
-				<Label for="difficulty">Difficulty (1–3)</Label>
-				<Input id="difficulty" name="difficulty" type="number" min="1" max="3" value={template.difficulty ?? 1} required />
-				{#if form?.errors?.difficulty}
-					<p class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
-				{/if}
-			</div>
+			{#if !hideAdminFields}
+				<div class="space-y-2">
+					<Label for="difficulty">Difficulty (1–3)</Label>
+					<Input id="difficulty" name="difficulty" type="number" min="1" max="3" value={template.difficulty ?? 1} required />
+					{#if form?.errors?.difficulty}
+						<p class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
+					{/if}
+				</div>
+			{/if}
 
-			{#if !isTranslate}
+			{#if !isTranslate && !hideAdminFields}
 				<div class="space-y-2">
 					<Label for="maxTurns">Max Turns</Label>
 					<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ""} />
 				</div>
 			{/if}
 
-			<div class="space-y-2">
-				<Label for="estimatedWords">Estimated Words</Label>
-				<Input id="estimatedWords" name="estimatedWords" type="number" min="0" value={template.estimatedWords ?? ""} />
-			</div>
+			{#if !hideAdminFields}
+				<div class="space-y-2">
+					<Label for="estimatedWords">Estimated Words</Label>
+					<Input id="estimatedWords" name="estimatedWords" type="number" min="0" value={template.estimatedWords ?? ""} />
+				</div>
 
-			<div class="space-y-2">
-				<Label for="pointReward">Point Reward</Label>
-				<Input id="pointReward" name="pointReward" type="number" min="0" value={template.pointReward ?? 3} required />
-				{#if form?.errors?.pointReward}
-					<p class="text-sm text-red-600">{form.errors.pointReward[0]}</p>
-				{/if}
-			</div>
+				<div class="space-y-2">
+					<Label for="pointReward">Point Reward</Label>
+					<Input id="pointReward" name="pointReward" type="number" min="0" value={template.pointReward ?? 3} required />
+					{#if form?.errors?.pointReward}
+						<p class="text-sm text-red-600">{form.errors.pointReward[0]}</p>
+					{/if}
+				</div>
 
-			<div class="space-y-2">
-				<Label for="gemReward">Gem Reward</Label>
-				<Input id="gemReward" name="gemReward" type="number" min="0" value={template.gemReward ?? 30} required />
-				{#if form?.errors?.gemReward}
-					<p class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
-				{/if}
-			</div>
+				<div class="space-y-2">
+					<Label for="gemReward">Gem Reward</Label>
+					<Input id="gemReward" name="gemReward" type="number" min="0" value={template.gemReward ?? 30} required />
+					{#if form?.errors?.gemReward}
+						<p class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
+					{/if}
+				</div>
 
-			<div class="flex items-center gap-2 pt-6">
-				<input id="isActive" name="isActive" type="checkbox" checked={template.isActive ?? true} class="rounded border-input">
-				<Label for="isActive">Active</Label>
-			</div>
-			<div class="flex items-center gap-2 pt-6">
-				<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" checked={template.agentStartsFirst ?? true} class="rounded border-input">
-				<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
-			</div>
+				<div class="flex items-center gap-2 pt-6">
+					<input id="isActive" name="isActive" type="checkbox" checked={template.isActive ?? true} class="rounded border-input">
+					<Label for="isActive">Active</Label>
+				</div>
+			{/if}
+			{#if !hideAdminFields}
+				<div class="flex items-center gap-2 pt-6">
+					<input
+						id="agentStartsFirst"
+						name="agentStartsFirst"
+						type="checkbox"
+						checked={template.agentStartsFirst ?? true}
+						class="rounded border-input"
+					>
+					<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
+				</div>
+			{/if}
 		</div>
 	</fieldset>
 
@@ -523,7 +547,7 @@ function jsonStr(val: unknown): string {
 			<p class="text-sm text-amber-600">Unsaved variant changes (#{dirtyVariantIds.join(", #")}). Save variants before saving template.</p>
 		{/if}
 		<Button type="submit" disabled={isEditMode && hasDirtyVariants}>{submitLabel}</Button>
-		<Button href="/admin/templates" variant="outline">Cancel</Button>
+		<Button href={cancelHref} variant="outline">Cancel</Button>
 	</div>
 </form>
 
