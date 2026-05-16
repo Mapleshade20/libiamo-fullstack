@@ -79,6 +79,45 @@ describe("session service", () => {
 			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
 		});
 
+		it("formats Discord history with sender before text even when openingState stores text first", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				variant: {
+					openingState: {
+						serverName: "Amigos",
+						channelName: "general",
+						previousMessages: [{ text: "Sii ya lo vi", sender: "Mario" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("History:\n- Mario: Sii ya lo vi");
+			expect(result.systemPrompt).not.toContain("History:\n- Sii ya lo vi: Mario");
+		});
+
+		it("formats iMessage history with sender before text even when openingState stores text first", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "imessage" as const },
+				variant: {
+					openingState: {
+						previousMessages: [{ text: "¿Vienes?", sender: "Ana" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Previous:\n- Ana: ¿Vienes?");
+			expect(result.systemPrompt).not.toContain("Previous:\n- ¿Vienes?: Ana");
+		});
+
 		it.each([
 			{
 				name: "reddit",
