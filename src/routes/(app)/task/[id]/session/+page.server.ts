@@ -176,6 +176,8 @@ export const actions: Actions = {
 		const rawMessage = formData.get("message") as string;
 		const clientMessageIdValue = formData.get("clientMessageId");
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
+		const presentationReportValue = formData.get("presentationReport");
+		const presentationReport = typeof presentationReportValue === "string" ? presentationReportValue.trim().slice(0, 1000) : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
@@ -196,6 +198,7 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const submitResult = await submitOneShotMessage(sessionId, formattedMessage, clientMessageId || undefined, {
 				maxTurns: taskData.template.maxTurns,
+				presentationReport,
 			});
 			const feedback = await completeSession(sessionId);
 

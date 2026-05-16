@@ -11,7 +11,7 @@ import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
-import { formatDraftMessage, parseDraftFromMessage, plainTextToDraftHtml } from "./mailUtils";
+import { formatDraftMessage, parseDraftFromMessage, plainTextToDraftHtml, summarizeDraftPresentation } from "./mailUtils";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailHint } from "./types";
@@ -168,11 +168,12 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string) {
+async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, presentationReport: string) {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
+	formData.append("presentationReport", presentationReport);
 
 	const res = await fetch(`?/submit`, {
 		method: "POST",
@@ -275,6 +276,7 @@ async function handleSendEmail() {
 	if (!draft.to.trim() || !draft.body.trim()) return;
 
 	const currentText = formatDraftMessage(draft, t.noSubject);
+	const presentationReport = summarizeDraftPresentation(draft);
 	const clientMessageId = crypto.randomUUID();
 	isSubmitting = true;
 
@@ -295,7 +297,7 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId);
+		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, presentationReport);
 		if (result.type === "success" && result.data) {
 			isCompleted = true;
 			feedback = result.data.feedback as TutorFeedback;

@@ -26,18 +26,18 @@ export type NormalizedMailEmail = MailEmail & {
 };
 
 export type MailHint = {
-	subjectSuggestion: {
+	subjectSuggestion?: {
 		text: string;
-	};
-	nextSection: {
+	} | null;
+	nextSection?: {
 		title: string;
 		text: string;
 	} | null;
-	nextSentence: {
+	nextSentence?: {
 		title: string;
 		text: string;
-	};
-	checklist: Array<{
+	} | null;
+	checklist?: Array<{
 		text: string;
 		done: boolean;
 		note: string;

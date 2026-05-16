@@ -395,7 +395,7 @@ export async function submitOneShotMessage(
 	sessionId: number,
 	userMessage: string,
 	clientMessageId?: string,
-	options: { maxTurns?: number | null } = {},
+	options: { maxTurns?: number | null; presentationReport?: string } = {},
 ): Promise<SubmitOneShotResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) {
@@ -428,7 +428,14 @@ export async function submitOneShotMessage(
 		sessionId,
 		role: "user",
 		content: trimmedUserMessage,
-		llmMetadata: clientMessageId ? { clientMessageId, failed: false } : undefined,
+		llmMetadata:
+			clientMessageId || options.presentationReport
+				? {
+						clientMessageId,
+						failed: false,
+						presentationReport: options.presentationReport?.trim() || undefined,
+					}
+				: undefined,
 	});
 
 	return { turnCount: countVisibleUserTurns(session.messages) + 1 };
@@ -437,12 +444,20 @@ export async function submitOneShotMessage(
 function buildTutorPrompt(
 	objectives: string[],
 	scenarioContext: string,
-	messages: { role: string; content: string }[],
+	messages: { role: string; content: string; llmMetadata?: unknown }[],
 	learningLanguage: string,
 ): string {
 	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
 	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
+	const presentationReports = userMessages
+		.map((message, index) => {
+			const metadata = message.llmMetadata as { presentationReport?: unknown } | null;
+			const report = typeof metadata?.presentationReport === "string" ? metadata.presentationReport.trim() : "";
+			return report ? `${index + 1}. ${report}` : "";
+		})
+		.filter(Boolean)
+		.join("\n");
 
 	const objectivesSection =
 		objectives.length > 0
@@ -463,11 +478,15 @@ function buildTutorPrompt(
 	## Student's Messages (evaluate these specifically)
 	${studentMessages || "(No messages from student)"}
 
+	## Email Presentation Notes
+	${presentationReports || "(No separate presentation notes)"}
+
 	## Evaluation Instructions
 	Evaluate how well the student achieved the objectives (or general fluency if none) considering:
 	- The scenario context they were responding to
 	- The full conversation flow (how they adapted to the AI's responses)
 	- The quality and appropriateness of their messages
+	- For email-style tasks, whether the message presentation is visually reasonable and appropriate. Do not treat presentation notes as student-written message text.
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved
@@ -508,7 +527,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	const prompt = buildTutorPrompt(
 		objectives,
 		scenarioContext,
-		session.messages.filter((m) => !isHiddenUserMessage(m)).map((m) => ({ role: m.role, content: m.content })),
+		session.messages.filter((m) => !isHiddenUserMessage(m)).map((m) => ({ role: m.role, content: m.content, llmMetadata: m.llmMetadata })),
 		learningLanguageName,
 	);
 
@@ -557,7 +576,7 @@ export type MailHintResult = {
 		nextSentence: {
 			title: string;
 			text: string;
-		};
+		} | null;
 		checklist: Array<{
 			text: string;
 			done: boolean;
@@ -578,32 +597,52 @@ const HintSchema = z.object({
 		.max(3),
 });
 
-const MailHintSectionSchema = z.object({
-	title: z.string().describe("A short label for this suggestion."),
-	text: z.string().describe("Suggested email body text. Never include a subject line."),
+const emptyMailHint = {
+	subjectSuggestion: { text: "" },
+	nextSection: null,
+	nextSentence: null,
+	checklist: [],
+};
+
+const MailHintSectionSchema = z
+	.object({
+		title: z.string().catch("").default("").describe("A short label for this suggestion."),
+		text: z.string().catch("").default("").describe("Suggested email body text. Never include a subject line."),
+	})
+	.catch({ title: "", text: "" });
+
+const OptionalMailHintSectionSchema = MailHintSectionSchema.nullish().transform((section) => {
+	if (!section?.text?.trim()) return null;
+	return section;
 });
 
+const MailHintChecklistItemSchema = z
+	.object({
+		text: z.string().catch("").default("").describe("A concise checklist item for a good email response."),
+		done: z.boolean().catch(false).default(false).describe("Whether the current draft already satisfies this item."),
+		note: z.string().catch("").default("").describe("A brief explanation or reminder for the student."),
+	})
+	.catch({ text: "", done: false, note: "" });
+
 const MailHintSchema = z.object({
-	mailHint: z.object({
-		subjectSuggestion: z
-			.object({
-				text: z.string().describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
-			})
-			.default({ text: "" }),
-		nextSection: MailHintSectionSchema.nullable().default(null),
-		nextSentence: MailHintSectionSchema.default({ title: "", text: "" }),
-		checklist: z
-			.array(
-				z.object({
-					text: z.string().describe("A concise checklist item for a good email response."),
-					done: z.boolean().describe("Whether the current draft already satisfies this item."),
-					note: z.string().describe("A brief explanation or reminder for the student."),
-				}),
-			)
-			.min(3)
-			.max(6)
-			.default([]),
-	}),
+	mailHint: z
+		.object({
+			subjectSuggestion: z
+				.object({
+					text: z.string().catch("").default("").describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
+				})
+				.catch({ text: "" })
+				.nullish()
+				.transform((suggestion) => suggestion ?? { text: "" }),
+			nextSection: OptionalMailHintSectionSchema.default(null),
+			nextSentence: OptionalMailHintSectionSchema.default(null),
+			checklist: z
+				.array(MailHintChecklistItemSchema)
+				.nullish()
+				.transform((items) => (items ?? []).filter((item) => item.text.trim() || item.note.trim()).slice(0, 6)),
+		})
+		.catch(emptyMailHint)
+		.default(emptyMailHint),
 });
 
 export async function generateHint(sessionId: number): Promise<HintResult> {
@@ -690,15 +729,15 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 
 	## Instructions
 	Provide practical writing help for the student's current email draft. Keep the JSON compact.
-	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
+	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY when those objects are present.
 	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
 	3. Do not write a full replacement email unless the draft is empty; prefer the next useful section.
 	4. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
 	5. Mark checklist items done only when the current draft clearly satisfies them.
 	6. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
 	7. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
-	8. Return nextSection as null only if no useful next section is needed. Otherwise return a complete section object.
-	9. Return 3 to 6 checklist items, each with concise text and a short note.
+	8. Return nextSection or nextSentence as null only if no useful suggestion is needed. Otherwise return a complete section object.
+	9. Return up to 6 checklist items, each with concise text and a short note.
 	10. Return ONLY JSON. Do not use Markdown code fences.
 
 	Respond in JSON format:

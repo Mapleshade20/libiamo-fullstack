@@ -1,10 +1,4 @@
 <script lang="ts">
-import AlignLeft from "@lucide/svelte/icons/align-left";
-import AlignRight from "@lucide/svelte/icons/align-right";
-import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
-import Circle from "@lucide/svelte/icons/circle";
-import IndentDecrease from "@lucide/svelte/icons/indent-decrease";
-import IndentIncrease from "@lucide/svelte/icons/indent-increase";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import Paperclip from "@lucide/svelte/icons/paperclip";
@@ -12,6 +6,8 @@ import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import ComposeHintPanel from "./ComposeHintPanel.svelte";
+import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
 import { plainTextToDraftHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
@@ -56,11 +52,36 @@ let frame = $state({ x: 0, y: 0, width: 900, height: 680 });
 let frameReady = $state(false);
 let viewportWidth = $state(1024);
 let lastAppliedEditorHtml = $state("");
+let activeFormats = $state<ComposeActiveFormats>({
+	bold: false,
+	italic: false,
+	underline: false,
+	strikeThrough: false,
+	insertUnorderedList: false,
+	insertOrderedList: false,
+});
 const isCompact = $derived(viewportWidth <= 640);
 const editorIsEmpty = $derived(!draft.body.trim());
+const editorDisabled = $derived(isSubmitting || isCompleted || limitReached);
 
 const MIN_WIDTH = 560;
 const MIN_HEIGHT = 440;
+type EditorCommand =
+	| "bold"
+	| "italic"
+	| "underline"
+	| "strikeThrough"
+	| "justifyLeft"
+	| "justifyCenter"
+	| "justifyRight"
+	| "justifyFull"
+	| "indent"
+	| "outdent"
+	| "insertUnorderedList"
+	| "insertOrderedList"
+	| "foreColor"
+	| "fontSize"
+	| "removeFormat";
 
 function constrainFrame(nextFrame = frame) {
 	if (typeof window === "undefined") return nextFrame;
@@ -123,27 +144,53 @@ function startResize(event: PointerEvent) {
 	window.addEventListener("pointerup", handleUp);
 }
 
+function getPlainTextFromEditor() {
+	if (!bodyEditor) return "";
+	return bodyEditor.innerText
+		.replace(/\u00a0/g, " ")
+		.replace(/[\u200B-\u200D\uFEFF]/g, "")
+		.replace(/\n$/, "");
+}
+
+function updateActiveFormats() {
+	activeFormats = {
+		bold: document.queryCommandState("bold"),
+		italic: document.queryCommandState("italic"),
+		underline: document.queryCommandState("underline"),
+		strikeThrough: document.queryCommandState("strikeThrough"),
+		insertUnorderedList: document.queryCommandState("insertUnorderedList"),
+		insertOrderedList: document.queryCommandState("insertOrderedList"),
+	};
+}
+
 function syncDraftFromEditor() {
 	if (!bodyEditor) return;
-	const body = bodyEditor.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
+	const body = getPlainTextFromEditor();
 	const bodyHtml = bodyEditor.innerHTML;
 	lastAppliedEditorHtml = bodyHtml;
 	draft = { ...draft, body, bodyHtml };
+	updateActiveFormats();
 }
 
 function focusEditor() {
 	bodyEditor?.focus();
 }
 
-function runEditorCommand(command: "justifyLeft" | "justifyRight" | "indent" | "outdent") {
-	if (!bodyEditor) return;
+function runEditorCommand(command: EditorCommand, value?: string) {
+	if (!bodyEditor || editorDisabled) return;
 	focusEditor();
-	document.execCommand(command, false);
+	document.execCommand(command, false, value);
 	syncDraftFromEditor();
 }
 
-function setAlignment(align: "left" | "right") {
-	runEditorCommand(align === "right" ? "justifyRight" : "justifyLeft");
+function setAlignment(align: "left" | "center" | "right" | "justify") {
+	const commandByAlignment = {
+		left: "justifyLeft",
+		center: "justifyCenter",
+		right: "justifyRight",
+		justify: "justifyFull",
+	} as const;
+	runEditorCommand(commandByAlignment[align]);
 }
 
 function indentSelection() {
@@ -152,6 +199,26 @@ function indentSelection() {
 
 function outdentSelection() {
 	runEditorCommand("outdent");
+}
+
+function toggleInlineFormat(command: "bold" | "italic" | "underline" | "strikeThrough") {
+	runEditorCommand(command);
+}
+
+function toggleList(command: "insertUnorderedList" | "insertOrderedList") {
+	runEditorCommand(command);
+}
+
+function applyTextColor(color: string) {
+	runEditorCommand("foreColor", color);
+}
+
+function applyFontSize(value: string) {
+	runEditorCommand("fontSize", value);
+}
+
+function clearFormatting() {
+	runEditorCommand("removeFormat");
 }
 
 function handleEditorKeydown(event: KeyboardEvent) {
@@ -182,8 +249,16 @@ onMount(() => {
 		frame = constrainFrame();
 	}
 
+	function handleSelectionChange() {
+		if (bodyEditor?.contains(document.activeElement)) updateActiveFormats();
+	}
+
 	window.addEventListener("resize", handleResize);
-	return () => window.removeEventListener("resize", handleResize);
+	document.addEventListener("selectionchange", handleSelectionChange);
+	return () => {
+		window.removeEventListener("resize", handleResize);
+		document.removeEventListener("selectionchange", handleSelectionChange);
+	};
 });
 
 $effect(() => {
@@ -218,33 +293,19 @@ $effect(() => {
 		<span>{t.subject}:</span>
 		<input bind:value={draft.subject} disabled={isSubmitting || isCompleted || limitReached}>
 	</label>
-	<div class="format-toolbar flex items-center gap-1 border-b border-black/10 bg-white px-3 py-2">
-		<button type="button" class="format-button" title={t.outdent} disabled={isSubmitting || isCompleted || limitReached} onclick={outdentSelection}>
-			<IndentDecrease size={16} />
-		</button>
-		<button type="button" class="format-button" title={t.indent} disabled={isSubmitting || isCompleted || limitReached} onclick={indentSelection}>
-			<IndentIncrease size={16} />
-		</button>
-		<div class="mx-1 h-5 w-px bg-black/10"></div>
-		<button
-			type="button"
-			class="format-button"
-			title={t.alignLeft}
-			disabled={isSubmitting || isCompleted || limitReached}
-			onclick={() => setAlignment("left")}
-		>
-			<AlignLeft size={16} />
-		</button>
-		<button
-			type="button"
-			class="format-button"
-			title={t.alignRight}
-			disabled={isSubmitting || isCompleted || limitReached}
-			onclick={() => setAlignment("right")}
-		>
-			<AlignRight size={16} />
-		</button>
-	</div>
+	<ComposeToolbar
+		{activeFormats}
+		{editorDisabled}
+		{t}
+		onToggleInlineFormat={toggleInlineFormat}
+		onToggleList={toggleList}
+		onApplyTextColor={applyTextColor}
+		onApplyFontSize={applyFontSize}
+		onOutdent={outdentSelection}
+		onIndent={indentSelection}
+		onSetAlignment={setAlignment}
+		onClearFormatting={clearFormatting}
+	/>
 	<div class="editor-wrap min-h-0 flex-1">
 		{#if editorIsEmpty}
 			<div class="editor-placeholder">{isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}</div>
@@ -252,8 +313,8 @@ $effect(() => {
 		<div
 			bind:this={bodyEditor}
 			class="body-editor"
-			class:is-disabled={isSubmitting || isCompleted || limitReached}
-			contenteditable={!(isSubmitting || isCompleted || limitReached)}
+			class:is-disabled={editorDisabled}
+			contenteditable={!editorDisabled}
 			role="textbox"
 			aria-multiline="true"
 			tabindex="0"
@@ -264,67 +325,7 @@ $effect(() => {
 		></div>
 	</div>
 	{#if showHintPanel}
-		<div class="hint-panel border-t border-black/10 bg-[#FBFBFD] p-3">
-			<div class="mb-2 flex items-center justify-between">
-				<div class="flex items-center gap-2 text-sm font-semibold text-[#1D1D1F]">
-					<Lightbulb size={16} class="text-[#FF9F0A]" />
-					{t.hintTitle}
-				</div>
-				<button type="button" class="rounded p-1 text-[#6E6E73] hover:bg-black/10 hover:text-[#1D1D1F]" onclick={onCloseHint}><X size={15} /></button>
-			</div>
-			{#if isGettingHint}
-				<div class="flex items-center gap-2 py-5 text-sm text-[#6E6E73]">
-					<LoaderCircle size={16} class="animate-spin" />
-					{t.thinking}
-				</div>
-			{:else if hint}
-				{#if hint.subjectSuggestion?.text}
-					<div class="mb-3 rounded-lg border border-[#D1E3FF] bg-[#F2F7FF] p-3">
-						<div class="hint-card-title">{t.subject}</div>
-						<p class="mt-1 text-sm leading-snug text-[#1D1D1F]">{hint.subjectSuggestion.text}</p>
-						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.subjectSuggestion.text, "subject")}>{t.insert}</button>
-					</div>
-				{/if}
-				<div class="grid gap-3 {hint.nextSection?.text ? 'md:grid-cols-[1fr_1fr]' : ''}">
-					{#if hint.nextSection?.text}
-						<div class="hint-card">
-							<div class="hint-card-title">{t.nextSection}</div>
-							<div class="hint-card-subtitle">{hint.nextSection.title}</div>
-							<p>{hint.nextSection.text}</p>
-							<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSection?.text ?? "", "body")}>{t.insert}</button>
-						</div>
-					{/if}
-					{#if hint.nextSentence?.text}
-						<div class="hint-card">
-							<div class="hint-card-title">{t.nextSentence}</div>
-							<div class="hint-card-subtitle">{hint.nextSentence.title}</div>
-							<p>{hint.nextSentence.text}</p>
-							<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSentence.text, "body")}>{t.insert}</button>
-						</div>
-					{/if}
-				</div>
-				{#if hint.checklist.length}
-					<div class="mt-3 rounded-lg border border-black/10 bg-white p-3">
-						<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6E6E73]">{t.checklist}</div>
-						<div class="space-y-2">
-							{#each hint.checklist as item}
-								<div class="flex gap-2 text-sm">
-									{#if item.done}
-										<CheckCircle2 size={17} class="mt-0.5 shrink-0 text-[#34C759]" />
-									{:else}
-										<Circle size={17} class="mt-0.5 shrink-0 text-[#8E8E93]" />
-									{/if}
-									<div class="min-w-0">
-										<div class="font-medium text-[#1D1D1F]">{item.text}</div>
-										<div class="text-xs leading-snug text-[#6E6E73]">{item.note}</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-			{/if}
-		</div>
+		<ComposeHintPanel {hint} {isGettingHint} {t} {onCloseHint} {onInsertHint} />
 	{/if}
 	<div class="flex items-center gap-2 border-t border-black/10 bg-[#F7F7F9] px-4 py-3">
 		<button type="button" class="icon-button" onclick={onMockAction}><Paperclip size={17} /></button>
@@ -409,26 +410,6 @@ $effect(() => {
 	cursor: default;
 }
 
-.format-button {
-	display: inline-flex;
-	height: 28px;
-	width: 30px;
-	align-items: center;
-	justify-content: center;
-	border-radius: 6px;
-	color: #6e6e73;
-}
-
-.format-button:hover {
-	background: #e5e5ea;
-	color: #1d1d1f;
-}
-
-.format-button:disabled {
-	cursor: not-allowed;
-	opacity: 0.45;
-}
-
 .editor-wrap {
 	position: relative;
 	overflow: auto;
@@ -451,6 +432,35 @@ $effect(() => {
 	margin: 0;
 }
 
+.body-editor :global(ul),
+.body-editor :global(ol) {
+	list-style-position: outside;
+	margin: 0.4em 0;
+	padding-left: 1.6em;
+}
+
+.body-editor :global(ul) {
+	list-style-type: disc;
+}
+
+.body-editor :global(ol) {
+	list-style-type: decimal;
+}
+
+.body-editor :global(ul ul) {
+	list-style-type: circle;
+}
+
+.body-editor :global(ol ol),
+.body-editor :global(ul ol) {
+	list-style-type: lower-alpha;
+}
+
+.body-editor :global(li) {
+	padding-left: 0.1em;
+	display: list-item;
+}
+
 .body-editor.is-disabled {
 	pointer-events: none;
 	opacity: 0.5;
@@ -465,54 +475,6 @@ $effect(() => {
 	color: #8e8e93;
 	font-size: 15px;
 	line-height: 1.5;
-}
-
-.hint-panel {
-	max-height: min(340px, 45dvh);
-	overflow-y: auto;
-}
-
-.hint-card {
-	border: 1px solid rgba(0, 0, 0, 0.1);
-	border-radius: 9px;
-	background: white;
-	padding: 12px;
-}
-
-.hint-card-title {
-	font-size: 0.72rem;
-	font-weight: 700;
-	text-transform: uppercase;
-	color: #6e6e73;
-}
-
-.hint-card-subtitle {
-	margin-top: 3px;
-	font-size: 0.85rem;
-	font-weight: 650;
-	color: #1d1d1f;
-}
-
-.hint-card p {
-	margin-top: 8px;
-	white-space: pre-wrap;
-	font-size: 0.86rem;
-	line-height: 1.45;
-	color: #3a3a3c;
-}
-
-.hint-insert {
-	margin-top: 10px;
-	border-radius: 6px;
-	background: #3478f6;
-	padding: 6px 10px;
-	font-size: 0.8rem;
-	font-weight: 700;
-	color: white;
-}
-
-.hint-insert:hover {
-	background: #0a64ff;
 }
 
 .resize-grip {
