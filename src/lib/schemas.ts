@@ -44,21 +44,13 @@ const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: str
 
 const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
 
-export const signUpSchema = z
-	.object({
-		email: z.email("Invalid email"),
-		password: z.string().min(8, "Password must be at least 8 characters"),
-		name: z.string().min(1, "Name is required"),
-		activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
-		timezone: timezoneSchema,
-		apiKey: z.string().optional(),
-		apiBaseUrl: z.url().optional(),
-		apiModel: z.string().optional(),
-	})
-	.refine(byokRefine, {
-		message: byokMessage,
-		path: ["apiKey"],
-	});
+export const signUpSchema = z.object({
+	email: z.email("Invalid email"),
+	password: z.string().min(8, "Password must be at least 8 characters"),
+	name: z.string().min(1, "Name is required"),
+	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
+	timezone: timezoneSchema,
+});
 
 export const forgotPasswordSchema = z.object({
 	email: z.email("Invalid email"),

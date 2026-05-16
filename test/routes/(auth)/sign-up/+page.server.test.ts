@@ -30,17 +30,6 @@ vi.mock("$lib/server/db", () => ({
 
 vi.mock("$lib/server/db/schema", () => ({
 	userLearningProfile: Symbol("userLearningProfile"),
-	userApiKey: Symbol("userApiKey"),
-}));
-
-const { mockEncryptApiKey, mockVerifyApiKey } = vi.hoisted(() => ({
-	mockEncryptApiKey: vi.fn((k: string) => `encrypted:${k}`),
-	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
-}));
-
-vi.mock("$lib/server/api-key-crypto", () => ({
-	encryptApiKey: mockEncryptApiKey,
-	verifyApiKey: mockVerifyApiKey,
 }));
 
 vi.mock("better-auth/api", () => {
@@ -282,98 +271,6 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toBe("Registration failed");
-		});
-	});
-
-	// ── BYOK (Bring Your Own Key) ─────────────────────────────────────
-	describe("BYOK", () => {
-		it("verifies BYOK before signup and stores on success", async () => {
-			const event = createEvent({
-				email: "byok@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-				apiKey: "sk-test",
-				apiBaseUrl: "https://api.example.com/v1",
-				apiModel: "test-model",
-			});
-
-			mockVerifyApiKey.mockResolvedValue({ ok: true });
-			vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({ user: { id: "byok-user" } } as any);
-
-			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
-
-			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test", "test-model");
-			expect(mockEncryptApiKey).toHaveBeenCalledWith("sk-test");
-		});
-
-		it("blocks signup when BYOK verification fails", async () => {
-			const event = createEvent({
-				email: "badbyok@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-				apiKey: "sk-bad",
-				apiBaseUrl: "https://api.example.com/v1",
-				apiModel: "test-model",
-			});
-
-			mockVerifyApiKey.mockResolvedValue({ ok: false, error: "HTTP 401: Invalid Key" });
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toContain("API key verification failed");
-			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
-		});
-
-		it("skips BYOK verification when no apiKey provided", async () => {
-			const event = createEvent({
-				email: "nobyok@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-			});
-
-			vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({ user: { id: "nobyok-user" } } as any);
-
-			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
-
-			expect(mockVerifyApiKey).not.toHaveBeenCalled();
-		});
-
-		it("returns schema error when apiKey given without baseUrl", async () => {
-			const event = createEvent({
-				email: "partial@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-				apiKey: "sk-key",
-			});
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.errors?.apiKey).toBeDefined();
-			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
-			expect(mockVerifyApiKey).not.toHaveBeenCalled();
-		});
-
-		it("returns schema error when baseUrl and model given without apiKey", async () => {
-			const event = createEvent({
-				email: "partial2@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-				apiBaseUrl: "https://api.example.com/v1",
-				apiModel: "test-model",
-			});
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.errors?.apiKey).toBeDefined();
-			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
 		});
 	});
 });
