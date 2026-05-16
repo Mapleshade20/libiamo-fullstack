@@ -158,7 +158,6 @@ export const templateContributionSchema = z
 		titleBase: z.string().min(1, "Title is required"),
 		shortObjectiveBase: z.string().optional(),
 		descriptionBase: z.string().optional(),
-		agentPromptBase: z.string().optional(),
 		materialsMd: z.string().optional(),
 		objectivesBase: z
 			.string()

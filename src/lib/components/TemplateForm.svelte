@@ -464,7 +464,7 @@ function jsonStr(val: unknown): string {
 			<Textarea id="descriptionBase" name="descriptionBase" rows={3} bind:value={descriptionBase} />
 		</div>
 
-		{#if !isTranslate}
+		{#if !isTranslate && !hideAdminFields}
 			<div class="space-y-2">
 				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at session start) </Label>
 				<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />

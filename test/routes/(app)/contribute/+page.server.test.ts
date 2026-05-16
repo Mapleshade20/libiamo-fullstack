@@ -10,9 +10,16 @@ const { mockInsert, mockValues } = vi.hoisted(() => {
 	return { mockInsert, mockValues };
 });
 
+vi.mock("drizzle-orm", () => {
+	const eq = vi.fn(() => "eq");
+	const desc = vi.fn(() => "desc");
+	return { eq, desc };
+});
+
 vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: mockInsert,
+		select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn().mockResolvedValue([]) })) })) })),
 	},
 }));
 
@@ -68,10 +75,10 @@ describe("Contribute +page.server", () => {
 			});
 		});
 
-		it("returns empty object for authenticated learners", async () => {
+		it("returns empty contributions for authenticated learners", async () => {
 			const event = { locals: { user: { id: "user-1", role: "learner" } } } as any;
-			const result = await load(event);
-			expect(result).toEqual({});
+			const result = (await load(event)) as { contributions: unknown[] };
+			expect(result.contributions).toEqual([]);
 		});
 	});
 

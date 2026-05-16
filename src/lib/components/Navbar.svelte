@@ -17,9 +17,10 @@ interface Props {
 	mode: "app" | "admin";
 	user: { name: string; email: string; role: string; activeLanguage: string };
 	avatarUrl?: string;
+	pendingReviewCount?: number;
 }
 
-let { mode, user, avatarUrl }: Props = $props();
+let { mode, user, avatarUrl, pendingReviewCount = 0 }: Props = $props();
 
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
@@ -151,6 +152,9 @@ function closeMobile() {
 					onmouseleave={() => (hoveredIndex = null)}
 				>
 					{item.label}
+					{#if item.label === "Reviews" && pendingReviewCount > 0}
+						<span class="ml-1 rounded-full bg-red-500 text-white text-[9px] px-1.5 py-0.5 leading-none font-bold">{pendingReviewCount}</span>
+					{/if}
 				</a>
 			{/each}
 
@@ -257,6 +261,9 @@ function closeMobile() {
 							: 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]'}"
 					>
 						{item.label}
+						{#if item.label === "Reviews" && pendingReviewCount > 0}
+							<span class="ml-2 rounded-full bg-red-500 text-white text-[9px] px-1.5 py-0.5 leading-none font-bold">{pendingReviewCount}</span>
+						{/if}
 					</a>
 				{/each}
 			</nav>
