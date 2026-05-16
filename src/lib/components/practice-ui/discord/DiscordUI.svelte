@@ -4,7 +4,7 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../../utils/markdownUtils";
-import { formatTime, normalizeText } from "../../utils/messageUtils";
+import { createTimeFormatter, normalizeText } from "../../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../../utils/sessionUtils";
 import { postAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
@@ -106,10 +106,7 @@ const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending
 const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst));
 const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
-
-function formatUserTime(date: Date) {
-	return formatTime(date, timeZone);
-}
+const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
 	messages = [
@@ -118,7 +115,7 @@ function addAgentMessage(params: { text: string; deliveryState: "sent" | "pendin
 			id: crypto.randomUUID(),
 			role: "agent",
 			text: params.text,
-			timestamp: formatUserTime(new Date()),
+			timestamp: formatTimestamp(new Date()),
 			authorName: agentUser.name,
 			avatarColor: agentUser.color,
 			deliveryState: params.deliveryState,
@@ -206,7 +203,7 @@ async function handleSend(text: string) {
 			id: crypto.randomUUID(),
 			role: "user",
 			text: currentText,
-			timestamp: formatUserTime(new Date()),
+			timestamp: formatTimestamp(new Date()),
 			authorName: userName,
 			avatar: avatarUrl,
 			clientMessageId,
@@ -291,7 +288,7 @@ $effect(() => {
 
 			const sessionMessages = buildChatMessages({
 				rawMessages: sortedRawMessages,
-				formatTimestamp: formatUserTime,
+				formatTimestamp,
 				userName,
 				agentName: agentUser.name,
 				avatarUrl,
@@ -350,7 +347,7 @@ onMount(async () => {
 							id: crypto.randomUUID(),
 							role: "user",
 							text: "*User joined the server*",
-							timestamp: formatUserTime(new Date()),
+							timestamp: formatTimestamp(new Date()),
 							authorName: userName,
 							avatar: avatarUrl,
 							isHidden: true,

@@ -19,6 +19,10 @@ export function formatTime(date: Date, timeZone?: string) {
 	}
 }
 
+export function createTimeFormatter(timeZone?: string) {
+	return (date: Date) => formatTime(date, timeZone);
+}
+
 export function getTodayDateString(language: string, timeZone?: string) {
 	const options: Intl.DateTimeFormatOptions = {
 		year: "numeric",

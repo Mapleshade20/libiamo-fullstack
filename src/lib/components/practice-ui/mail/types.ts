@@ -32,7 +32,7 @@ export type MailHint = {
 	nextSection: {
 		title: string;
 		text: string;
-	};
+	} | null;
 	nextSentence: {
 		title: string;
 		text: string;

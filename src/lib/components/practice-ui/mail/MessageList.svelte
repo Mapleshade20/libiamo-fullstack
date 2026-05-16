@@ -3,11 +3,13 @@ import PanelLeft from "@lucide/svelte/icons/panel-left";
 import Search from "@lucide/svelte/icons/search";
 import type { ChatMessage } from "../chatMessages";
 import { parseDraftFromMessage } from "./mailUtils";
-import type { NormalizedMailEmail } from "./types";
+import type { DraftEmail, NormalizedMailEmail } from "./types";
 
 let {
 	inboxEmails = [] as NormalizedMailEmail[],
 	sentMessages = [] as ChatMessage[],
+	draft = { to: "", subject: "", body: "" } as DraftEmail,
+	draftCount = 0,
 	selectedSentId = null as string | null,
 	activeView = "inbox",
 	todayLabel = "",
@@ -15,17 +17,24 @@ let {
 	onOpenSidebar = () => {},
 	onSearchFocus = () => {},
 	onSelectSentMessage = (_messageId: string) => {},
+	onSelectDraftMessage = () => {},
 }: {
 	inboxEmails?: NormalizedMailEmail[];
 	sentMessages?: ChatMessage[];
+	draft?: DraftEmail;
+	draftCount?: number;
 	selectedSentId?: string | null;
-	activeView?: "inbox" | "sent";
+	activeView?: "inbox" | "sent" | "drafts";
 	todayLabel?: string;
 	t?: Record<string, string>;
 	onOpenSidebar?: () => void;
 	onSearchFocus?: () => void;
 	onSelectSentMessage?: (messageId: string) => void;
+	onSelectDraftMessage?: () => void;
 } = $props();
+
+const title = $derived(activeView === "sent" ? t.sent : activeView === "drafts" ? t.drafts : t.inbox);
+const draftPreview = $derived(draft.body.trim() || t.composePlaceholder);
 </script>
 
 <section class="mail-list border-r border-black/10 bg-[#F7F7F9]">
@@ -46,18 +55,19 @@ let {
 		</div>
 	</header>
 	<div class="h-[calc(100%-52px)] overflow-y-auto">
-		<div class="px-4 pb-2 pt-4 text-2xl font-bold tracking-tight">{activeView === "sent" ? t.sent : t.inbox}</div>
-		{#each inboxEmails as email}
-			<button type="button" class="message-row {activeView === 'inbox' ? 'selected' : ''}">
-				<div class="flex items-baseline gap-2">
-					<span class="truncate text-sm font-semibold">{email.fromName}</span>
-					<span class="ml-auto shrink-0 text-xs text-[#6E6E73]">{email.time || todayLabel}</span>
-				</div>
-				<div class="truncate text-sm font-medium">{email.subject}</div>
-				<div class="line-clamp-2 text-xs leading-snug text-[#6E6E73]">{email.preview}</div>
-			</button>
-		{/each}
-		{#if sentMessages.length}
+		<div class="px-4 pb-2 pt-4 text-2xl font-bold tracking-tight">{title}</div>
+		{#if activeView === "inbox"}
+			{#each inboxEmails as email}
+				<button type="button" class="message-row selected">
+					<div class="flex items-baseline gap-2">
+						<span class="truncate text-sm font-semibold">{email.fromName}</span>
+						<span class="ml-auto shrink-0 text-xs text-[#6E6E73]">{email.time || todayLabel}</span>
+					</div>
+					<div class="truncate text-sm font-medium">{email.subject}</div>
+					<div class="line-clamp-2 text-xs leading-snug text-[#6E6E73]">{email.preview}</div>
+				</button>
+			{/each}
+		{:else if activeView === "sent" && sentMessages.length}
 			<div class="px-4 pb-1 pt-4 text-xs font-semibold uppercase text-[#6E6E73]">{t.sent}</div>
 			{#each sentMessages as message}
 				{@const parsed = parseDraftFromMessage(message.text, t.noSubject)}
@@ -70,6 +80,16 @@ let {
 					<div class="line-clamp-2 text-xs leading-snug text-[#6E6E73]">{parsed.body}</div>
 				</button>
 			{/each}
+		{:else if activeView === "drafts" && draftCount > 0}
+			<div class="px-4 pb-1 pt-4 text-xs font-semibold uppercase text-[#6E6E73]">{t.drafts}</div>
+			<button type="button" class="message-row selected" onclick={onSelectDraftMessage}>
+				<div class="flex items-baseline gap-2">
+					<span class="truncate text-sm font-semibold">{draft.to}</span>
+					<span class="ml-auto shrink-0 text-xs text-[#6E6E73]">{todayLabel}</span>
+				</div>
+				<div class="truncate text-sm font-medium">{draft.subject || t.noSubject}</div>
+				<div class="line-clamp-2 text-xs leading-snug text-[#6E6E73]">{draftPreview}</div>
+			</button>
 		{/if}
 	</div>
 </section>

@@ -7,6 +7,7 @@ import Trash2 from "@lucide/svelte/icons/trash-2";
 
 let {
 	showSidebar = false,
+	activeMailbox = "inbox" as "inbox" | "sent" | "drafts",
 	inboxCount = 0,
 	sentCount = 0,
 	draftCount = 0,
@@ -19,6 +20,7 @@ let {
 	onMockAction = () => {},
 }: {
 	showSidebar?: boolean;
+	activeMailbox?: "inbox" | "sent" | "drafts";
 	inboxCount?: number;
 	sentCount?: number;
 	draftCount?: number;
@@ -50,17 +52,17 @@ let {
 	</div>
 	<nav class="px-2">
 		<p class="px-3 pb-1 text-xs font-semibold uppercase text-[#6E6E73]">{t.mailboxes}</p>
-		<button type="button" class="mailbox-row active" onclick={onSelectInbox}>
+		<button type="button" class="mailbox-row {activeMailbox === 'inbox' ? 'active' : ''}" onclick={onSelectInbox}>
 			<Inbox size={17} />
 			<span>{t.inbox}</span>
 			<span class="ml-auto">{inboxCount}</span>
 		</button>
-		<button type="button" class="mailbox-row" onclick={onSelectSent}>
+		<button type="button" class="mailbox-row {activeMailbox === 'sent' ? 'active' : ''}" onclick={onSelectSent}>
 			<Send size={17} />
 			<span>{t.sent}</span>
 			<span class="ml-auto">{sentCount}</span>
 		</button>
-		<button type="button" class="mailbox-row" onclick={onSelectDraft}>
+		<button type="button" class="mailbox-row {activeMailbox === 'drafts' ? 'active' : ''}" onclick={onSelectDraft}>
 			<Edit3 size={17} />
 			<span>{t.drafts}</span>
 			<span class="ml-auto">{draftCount}</span>

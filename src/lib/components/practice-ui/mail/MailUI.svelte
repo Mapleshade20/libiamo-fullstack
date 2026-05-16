@@ -4,7 +4,7 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
-import { formatTime, getTodayDateString } from "../../utils/messageUtils";
+import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { buildChatMessages, type ChatMessage } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
@@ -47,6 +47,7 @@ let feedback = $state<TutorFeedback | null>(null);
 let mailHint = $state<MailHint | null>(null);
 let messages = $state<ChatMessage[]>([]);
 let selectedSentId = $state<string | null>(null);
+let activeMailbox = $state<"inbox" | "sent" | "drafts">("inbox");
 let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
 let draftStorageReady = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
@@ -61,14 +62,10 @@ const limitReached = $derived(hasSubmittedEmail || isCompleted);
 const isBusy = $derived(isInitializing || isSubmitting);
 const selectedSentMessage = $derived(selectedSentId ? (sentMessages.find((message) => message.id === selectedSentId) ?? null) : null);
 const selectedSentEmail = $derived(selectedSentMessage ? parseDraftFromMessage(selectedSentMessage.text, t.noSubject) : null);
-const activeView = $derived(selectedSentMessage ? "sent" : "inbox");
 const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!hasSubmittedEmail && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const todayLabel = $derived(getTodayDateString(language, timeZone));
-
-function formatUserTime(date: Date) {
-	return formatTime(date, timeZone);
-}
+const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 function getDefaultDraft(): DraftEmail {
 	return {
@@ -120,15 +117,41 @@ function newMessage() {
 	openComposer();
 }
 
-function openDraft() {
+function selectInbox() {
 	selectedSentId = null;
-	showCompose = true;
+	activeMailbox = "inbox";
+	showCompose = false;
+	showSidebar = false;
+}
+
+function selectSentMailbox() {
+	activeMailbox = "sent";
+	showSidebar = false;
+	showCompose = false;
+	if (!selectedSentId && sentMessages.length) {
+		selectedSentId = sentMessages.at(-1)?.id ?? sentMessages[0].id;
+	}
+}
+
+function selectDraftMailbox() {
+	selectedSentId = null;
+	activeMailbox = "drafts";
+	showCompose = false;
 	showSidebar = false;
 }
 
 function selectSentMessage(messageId: string) {
 	selectedSentId = messageId;
+	activeMailbox = "sent";
 	showCompose = false;
+	showSidebar = false;
+}
+
+function selectDraftMessage() {
+	if (draftCount <= 0) return;
+	selectedSentId = null;
+	activeMailbox = "drafts";
+	showCompose = true;
 	showSidebar = false;
 }
 
@@ -259,7 +282,7 @@ async function handleSendEmail() {
 		id: crypto.randomUUID(),
 		role: "user",
 		text: currentText,
-		timestamp: formatUserTime(new Date()),
+		timestamp: formatTimestamp(new Date()),
 		authorName: userName,
 		avatar: avatarUrl,
 		clientMessageId,
@@ -267,6 +290,7 @@ async function handleSendEmail() {
 
 	messages = [...messages, sentMessage];
 	selectedSentId = sentMessage.id;
+	activeMailbox = "sent";
 	showCompose = false;
 	await scrollToMessageBottom();
 
@@ -305,7 +329,7 @@ function loadExistingSession(session: any) {
 	const sortedRawMessages = [...(session.messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 	messages = buildChatMessages({
 		rawMessages: sortedRawMessages,
-		formatTimestamp: formatUserTime,
+		formatTimestamp,
 		userName,
 		agentName: t.tutorReply,
 		avatarUrl,
@@ -316,6 +340,7 @@ function loadExistingSession(session: any) {
 	if (isCompleted && feedback) showEvaluationModal = true;
 	if (!selectedSentId && messages.some((m) => m.role === "user" && !m.isHidden)) {
 		selectedSentId = messages.filter((m) => m.role === "user" && !m.isHidden).at(-1)?.id ?? null;
+		activeMailbox = "sent";
 		showCompose = false;
 	}
 }
@@ -366,28 +391,32 @@ $effect(() => {
 	<div class="mail-window grid h-full w-full grid-cols-[240px_minmax(280px,360px)_1fr] overflow-hidden border border-black/10 bg-white shadow-2xl">
 		<Sidebar
 			{showSidebar}
+			{activeMailbox}
 			returnHref={`/task/${taskId}`}
 			inboxCount={inboxEmails.length}
 			{sentCount}
 			{draftCount}
 			{t}
 			onNewMessage={newMessage}
-			onSelectInbox={handleMockAction}
-			onSelectSent={() => sentMessages[0] && selectSentMessage(sentMessages.at(-1)?.id ?? sentMessages[0].id)}
-			onSelectDraft={openDraft}
+			onSelectInbox={selectInbox}
+			onSelectSent={selectSentMailbox}
+			onSelectDraft={selectDraftMailbox}
 			onMockAction={handleMockAction}
 		/>
 
 		<MessageList
 			{inboxEmails}
 			{sentMessages}
+			{draft}
+			{draftCount}
 			{selectedSentId}
-			{activeView}
+			activeView={activeMailbox}
 			{todayLabel}
 			{t}
 			onOpenSidebar={() => (showSidebar = true)}
 			onSearchFocus={handleMockAction}
 			onSelectSentMessage={selectSentMessage}
+			onSelectDraftMessage={selectDraftMessage}
 		/>
 
 		<DetailPane

@@ -3,6 +3,7 @@ import AlignLeft from "@lucide/svelte/icons/align-left";
 import AlignRight from "@lucide/svelte/icons/align-right";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Circle from "@lucide/svelte/icons/circle";
+import IndentDecrease from "@lucide/svelte/icons/indent-decrease";
 import IndentIncrease from "@lucide/svelte/icons/indent-increase";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
@@ -134,7 +135,7 @@ function focusEditor() {
 	bodyEditor?.focus();
 }
 
-function runEditorCommand(command: "justifyLeft" | "justifyRight" | "indent") {
+function runEditorCommand(command: "justifyLeft" | "justifyRight" | "indent" | "outdent") {
 	if (!bodyEditor) return;
 	focusEditor();
 	document.execCommand(command, false);
@@ -147,6 +148,16 @@ function setAlignment(align: "left" | "right") {
 
 function indentSelection() {
 	runEditorCommand("indent");
+}
+
+function outdentSelection() {
+	runEditorCommand("outdent");
+}
+
+function handleEditorKeydown(event: KeyboardEvent) {
+	if (event.key !== "Tab") return;
+	event.preventDefault();
+	runEditorCommand(event.shiftKey ? "outdent" : "indent");
 }
 
 function handlePaste(event: ClipboardEvent) {
@@ -208,6 +219,9 @@ $effect(() => {
 		<input bind:value={draft.subject} disabled={isSubmitting || isCompleted || limitReached}>
 	</label>
 	<div class="format-toolbar flex items-center gap-1 border-b border-black/10 bg-white px-3 py-2">
+		<button type="button" class="format-button" title={t.outdent} disabled={isSubmitting || isCompleted || limitReached} onclick={outdentSelection}>
+			<IndentDecrease size={16} />
+		</button>
 		<button type="button" class="format-button" title={t.indent} disabled={isSubmitting || isCompleted || limitReached} onclick={indentSelection}>
 			<IndentIncrease size={16} />
 		</button>
@@ -244,6 +258,7 @@ $effect(() => {
 			aria-multiline="true"
 			tabindex="0"
 			oninput={syncDraftFromEditor}
+			onkeydown={handleEditorKeydown}
 			onblur={syncDraftFromEditor}
 			onpaste={handlePaste}
 		></div>
@@ -270,38 +285,44 @@ $effect(() => {
 						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.subjectSuggestion.text, "subject")}>{t.insert}</button>
 					</div>
 				{/if}
-				<div class="grid gap-3 md:grid-cols-[1fr_1fr]">
-					<div class="hint-card">
-						<div class="hint-card-title">{t.nextSection}</div>
-						<div class="hint-card-subtitle">{hint.nextSection.title}</div>
-						<p>{hint.nextSection.text}</p>
-						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSection.text, "body")}>{t.insert}</button>
-					</div>
-					<div class="hint-card">
-						<div class="hint-card-title">{t.nextSentence}</div>
-						<div class="hint-card-subtitle">{hint.nextSentence.title}</div>
-						<p>{hint.nextSentence.text}</p>
-						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSentence.text, "body")}>{t.insert}</button>
-					</div>
+				<div class="grid gap-3 {hint.nextSection?.text ? 'md:grid-cols-[1fr_1fr]' : ''}">
+					{#if hint.nextSection?.text}
+						<div class="hint-card">
+							<div class="hint-card-title">{t.nextSection}</div>
+							<div class="hint-card-subtitle">{hint.nextSection.title}</div>
+							<p>{hint.nextSection.text}</p>
+							<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSection?.text ?? "", "body")}>{t.insert}</button>
+						</div>
+					{/if}
+					{#if hint.nextSentence?.text}
+						<div class="hint-card">
+							<div class="hint-card-title">{t.nextSentence}</div>
+							<div class="hint-card-subtitle">{hint.nextSentence.title}</div>
+							<p>{hint.nextSentence.text}</p>
+							<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSentence.text, "body")}>{t.insert}</button>
+						</div>
+					{/if}
 				</div>
-				<div class="mt-3 rounded-lg border border-black/10 bg-white p-3">
-					<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6E6E73]">{t.checklist}</div>
-					<div class="space-y-2">
-						{#each hint.checklist as item}
-							<div class="flex gap-2 text-sm">
-								{#if item.done}
-									<CheckCircle2 size={17} class="mt-0.5 shrink-0 text-[#34C759]" />
-								{:else}
-									<Circle size={17} class="mt-0.5 shrink-0 text-[#8E8E93]" />
-								{/if}
-								<div class="min-w-0">
-									<div class="font-medium text-[#1D1D1F]">{item.text}</div>
-									<div class="text-xs leading-snug text-[#6E6E73]">{item.note}</div>
+				{#if hint.checklist.length}
+					<div class="mt-3 rounded-lg border border-black/10 bg-white p-3">
+						<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6E6E73]">{t.checklist}</div>
+						<div class="space-y-2">
+							{#each hint.checklist as item}
+								<div class="flex gap-2 text-sm">
+									{#if item.done}
+										<CheckCircle2 size={17} class="mt-0.5 shrink-0 text-[#34C759]" />
+									{:else}
+										<Circle size={17} class="mt-0.5 shrink-0 text-[#8E8E93]" />
+									{/if}
+									<div class="min-w-0">
+										<div class="font-medium text-[#1D1D1F]">{item.text}</div>
+										<div class="text-xs leading-snug text-[#6E6E73]">{item.note}</div>
+									</div>
 								</div>
-							</div>
-						{/each}
+							{/each}
+						</div>
 					</div>
-				</div>
+				{/if}
 			{/if}
 		</div>
 	{/if}
@@ -426,12 +447,8 @@ $effect(() => {
 
 .body-editor :global(div),
 .body-editor :global(p) {
-	margin: 0 0 1em;
-}
-
-.body-editor :global(div:last-child),
-.body-editor :global(p:last-child) {
-	margin-bottom: 0;
+	min-height: 1.5em;
+	margin: 0;
 }
 
 .body-editor.is-disabled {

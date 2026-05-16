@@ -553,7 +553,7 @@ export type MailHintResult = {
 		nextSection: {
 			title: string;
 			text: string;
-		};
+		} | null;
 		nextSentence: {
 			title: string;
 			text: string;
@@ -578,19 +578,20 @@ const HintSchema = z.object({
 		.max(3),
 });
 
+const MailHintSectionSchema = z.object({
+	title: z.string().describe("A short label for this suggestion."),
+	text: z.string().describe("Suggested email body text. Never include a subject line."),
+});
+
 const MailHintSchema = z.object({
 	mailHint: z.object({
-		subjectSuggestion: z.object({
-			text: z.string().describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
-		}),
-		nextSection: z.object({
-			title: z.string().describe("A short label for what this suggested paragraph does."),
-			text: z.string().describe("A complete paragraph or body section the student can append to the email body. Never include a subject line."),
-		}),
-		nextSentence: z.object({
-			title: z.string().describe("A short label for this next-sentence suggestion."),
-			text: z.string().describe("One natural next sentence the student can append to the email body."),
-		}),
+		subjectSuggestion: z
+			.object({
+				text: z.string().describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
+			})
+			.default({ text: "" }),
+		nextSection: MailHintSectionSchema.nullable().default(null),
+		nextSentence: MailHintSectionSchema.default({ title: "", text: "" }),
 		checklist: z
 			.array(
 				z.object({
@@ -600,7 +601,8 @@ const MailHintSchema = z.object({
 				}),
 			)
 			.min(3)
-			.max(6),
+			.max(6)
+			.default([]),
 	}),
 });
 
@@ -687,7 +689,7 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 	${draft.body || "(empty)"}
 
 	## Instructions
-	Provide practical writing help for the student's current email draft.
+	Provide practical writing help for the student's current email draft. Keep the JSON compact.
 	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
 	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
 	3. Do not write a full replacement email unless the draft is empty; prefer the next useful section.
@@ -695,6 +697,9 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 	5. Mark checklist items done only when the current draft clearly satisfies them.
 	6. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
 	7. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
+	8. Return nextSection as null only if no useful next section is needed. Otherwise return a complete section object.
+	9. Return 3 to 6 checklist items, each with concise text and a short note.
+	10. Return ONLY JSON. Do not use Markdown code fences.
 
 	Respond in JSON format:
 	{
@@ -713,7 +718,7 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 		{ role: "user", content: `Help me improve and continue this one-shot email in ${learningLanguageName}.` },
 	];
 
-	return await createStructuredOutput(MailHintSchema, messages);
+	return await createStructuredOutput(MailHintSchema, messages, { temperature: 0.2, maxTokens: 1600 });
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {
