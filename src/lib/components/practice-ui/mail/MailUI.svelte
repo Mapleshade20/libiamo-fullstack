@@ -5,6 +5,7 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
+import { postAction } from "../apiService";
 import { buildChatMessages, type ChatMessage } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
@@ -231,46 +232,6 @@ function closeHintPanel() {
 	}
 }
 
-function splitSubjectFromHint(text: string) {
-	const lines = text.trim().split(/\r?\n/);
-	const subjectLineIndex = lines.findIndex((line) => /^subject\s*:/i.test(line.trim()));
-	if (subjectLineIndex === -1) return { subject: "", body: text.trim() };
-
-	const subject = lines[subjectLineIndex]?.replace(/^subject\s*:/i, "").trim() ?? "";
-	const body = lines
-		.filter((_, index) => index !== subjectLineIndex)
-		.join("\n")
-		.trim();
-	return { subject, body };
-}
-
-function insertHintText(text: string, kind: "body" | "subject" = "body") {
-	const parsed = splitSubjectFromHint(text);
-	const subject =
-		kind === "subject"
-			? text
-					.trim()
-					.replace(/^subject\s*:/i, "")
-					.trim()
-			: parsed.subject;
-	const trimmedText = kind === "subject" ? "" : parsed.body;
-
-	if (subject) {
-		draft = {
-			...draft,
-			subject,
-		};
-	}
-
-	if (!trimmedText) return;
-	const trimmedBody = draft.body.trimEnd();
-	draft = {
-		...draft,
-		body: trimmedBody ? `${trimmedBody}\n\n${trimmedText}` : trimmedText,
-	};
-	draft = { ...draft, bodyHtml: plainTextToDraftHtml(draft.body) };
-}
-
 async function handleSendEmail() {
 	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
 	if (!draft.to.trim() || !draft.body.trim()) return;
@@ -305,6 +266,7 @@ async function handleSendEmail() {
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			await invalidateAll();
 		} else {
+			console.error("One-shot submission was rejected:", result);
 			messages = messages.filter((message) => message.id !== sentMessage.id);
 			showCompose = true;
 		}
@@ -360,6 +322,24 @@ onMount(async () => {
 	if (!isCompleted && !hasExistingSubmission) {
 		openComposer(true);
 		draftStorageReady = true;
+	}
+
+	if (!existingSession) {
+		isInitializing = true;
+		try {
+			const startResult = await postAction("start", null);
+			if (startResult.type === "success" && startResult.data) {
+				sessionId = startResult.data.sessionId as number;
+				lastLoadedSessionId = sessionId;
+				await invalidateAll();
+			} else {
+				console.error("Mail session initialization was rejected:", startResult);
+			}
+		} catch (error) {
+			console.error("Mail session initialization failed:", error);
+		} finally {
+			isInitializing = false;
+		}
 	}
 });
 
@@ -458,7 +438,6 @@ $effect(() => {
 			onSend={handleSendEmail}
 			onGetHint={handleGetHint}
 			onCloseHint={closeHintPanel}
-			onInsertHint={insertHintText}
 		/>
 	{/if}
 </div>

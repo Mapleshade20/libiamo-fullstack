@@ -487,6 +487,8 @@ function buildTutorPrompt(
 	- The full conversation flow (how they adapted to the AI's responses)
 	- The quality and appropriateness of their messages
 	- For email-style tasks, whether the message presentation is visually reasonable and appropriate. Do not treat presentation notes as student-written message text.
+	- Email Presentation Notes may include a marked copy of the email body. Markers such as **text**, [color=value]text[/color], [size=value]text[/size], or [align=value]text[/align] describe visual styling only and are not part of the student's words.
+	- Use the marked email body to judge formatting choices in context: styling a truly important deadline, heading, or key action can be appropriate, but styling ordinary words or phrases with bold/color/large fonts is usually distracting or unprofessional.
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved
@@ -731,14 +733,18 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 	Provide practical writing help for the student's current email draft. Keep the JSON compact.
 	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY when those objects are present.
 	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
-	3. Do not write a full replacement email unless the draft is empty; prefer the next useful section.
-	4. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
-	5. Mark checklist items done only when the current draft clearly satisfies them.
-	6. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
-	7. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
-	8. Return nextSection or nextSentence as null only if no useful suggestion is needed. Otherwise return a complete section object.
-	9. Return up to 6 checklist items, each with concise text and a short note.
-	10. Return ONLY JSON. Do not use Markdown code fences.
+	3. Provide both nextSentence and nextSection when each would help. They should serve different purposes, not duplicate the same idea.
+	4. nextSentence should be one concise sentence that can be inserted at the cursor or used as an immediate local continuation.
+	5. nextSection should be a useful paragraph or short section for the next missing part of the email, such as a closing request, summary, next steps, sign-off, or missing task response.
+	6. If the draft is nearly complete, nextSentence can suggest a final transition while nextSection can suggest a polished closing/signature block.
+	7. Return either field as null only when that specific type of help would not add value.
+	8. Do not write a full replacement email unless the draft is empty.
+	9. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
+	10. Mark checklist items done only when the current draft clearly satisfies them.
+	11. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
+	12. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
+	13. Return up to 6 checklist items, each with concise text and a short note.
+	14. Return ONLY JSON. Do not use Markdown code fences.
 
 	Respond in JSON format:
 	{

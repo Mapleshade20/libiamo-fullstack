@@ -177,7 +177,7 @@ export const actions: Actions = {
 		const clientMessageIdValue = formData.get("clientMessageId");
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 		const presentationReportValue = formData.get("presentationReport");
-		const presentationReport = typeof presentationReportValue === "string" ? presentationReportValue.trim().slice(0, 1000) : "";
+		const presentationReport = typeof presentationReportValue === "string" ? presentationReportValue.trim().slice(0, 4000) : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });

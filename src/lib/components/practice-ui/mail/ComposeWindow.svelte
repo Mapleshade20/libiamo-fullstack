@@ -8,7 +8,7 @@ import { onMount } from "svelte";
 import { fly } from "svelte/transition";
 import ComposeHintPanel from "./ComposeHintPanel.svelte";
 import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
-import { plainTextToDraftHtml } from "./mailUtils";
+import { normalizeMailBodySpacing, plainTextToDraftHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
 let {
@@ -27,7 +27,6 @@ let {
 	onSend = () => {},
 	onGetHint = () => {},
 	onCloseHint = () => {},
-	onInsertHint = (_text: string, _kind?: "body" | "subject") => {},
 }: {
 	draft?: DraftEmail;
 	isSubmitting?: boolean;
@@ -44,7 +43,6 @@ let {
 	onSend?: () => void;
 	onGetHint?: () => void;
 	onCloseHint?: () => void;
-	onInsertHint?: (text: string, kind?: "body" | "subject") => void;
 } = $props();
 
 let bodyEditor = $state<HTMLDivElement | null>(null);
@@ -52,6 +50,7 @@ let frame = $state({ x: 0, y: 0, width: 900, height: 680 });
 let frameReady = $state(false);
 let viewportWidth = $state(1024);
 let lastAppliedEditorHtml = $state("");
+let savedEditorRange = $state<Range | null>(null);
 let activeFormats = $state<ComposeActiveFormats>({
 	bold: false,
 	italic: false,
@@ -81,7 +80,9 @@ type EditorCommand =
 	| "insertOrderedList"
 	| "foreColor"
 	| "fontSize"
-	| "removeFormat";
+	| "removeFormat"
+	| "undo"
+	| "redo";
 
 function constrainFrame(nextFrame = frame) {
 	if (typeof window === "undefined") return nextFrame;
@@ -146,10 +147,12 @@ function startResize(event: PointerEvent) {
 
 function getPlainTextFromEditor() {
 	if (!bodyEditor) return "";
-	return bodyEditor.innerText
-		.replace(/\u00a0/g, " ")
-		.replace(/[\u200B-\u200D\uFEFF]/g, "")
-		.replace(/\n$/, "");
+	return normalizeMailBodySpacing(
+		bodyEditor.innerText
+			.replace(/\u00a0/g, " ")
+			.replace(/[\u200B-\u200D\uFEFF]/g, "")
+			.replace(/\n$/, ""),
+	);
 }
 
 function updateActiveFormats() {
@@ -163,12 +166,49 @@ function updateActiveFormats() {
 	};
 }
 
+function selectionBelongsToEditor(range: Range) {
+	if (!bodyEditor) return false;
+	const container = range.commonAncestorContainer;
+	return bodyEditor === container || bodyEditor.contains(container);
+}
+
+function saveEditorSelection() {
+	if (!bodyEditor || typeof window === "undefined") return;
+	const selection = window.getSelection();
+	if (!selection?.rangeCount) return;
+
+	const range = selection.getRangeAt(0);
+	if (!selectionBelongsToEditor(range)) return;
+	savedEditorRange = range.cloneRange();
+}
+
+function restoreEditorSelection() {
+	if (!bodyEditor || typeof window === "undefined") return;
+	const selection = window.getSelection();
+	if (!selection) return;
+
+	focusEditor();
+	selection.removeAllRanges();
+
+	if (savedEditorRange && selectionBelongsToEditor(savedEditorRange)) {
+		selection.addRange(savedEditorRange);
+		return;
+	}
+
+	const range = document.createRange();
+	range.selectNodeContents(bodyEditor);
+	range.collapse(false);
+	selection.addRange(range);
+	savedEditorRange = range.cloneRange();
+}
+
 function syncDraftFromEditor() {
 	if (!bodyEditor) return;
 	const body = getPlainTextFromEditor();
 	const bodyHtml = bodyEditor.innerHTML;
 	lastAppliedEditorHtml = bodyHtml;
 	draft = { ...draft, body, bodyHtml };
+	saveEditorSelection();
 	updateActiveFormats();
 }
 
@@ -178,7 +218,7 @@ function focusEditor() {
 
 function runEditorCommand(command: EditorCommand, value?: string) {
 	if (!bodyEditor || editorDisabled) return;
-	focusEditor();
+	restoreEditorSelection();
 	document.execCommand(command, false, value);
 	syncDraftFromEditor();
 }
@@ -221,6 +261,14 @@ function clearFormatting() {
 	runEditorCommand("removeFormat");
 }
 
+function undoEditorChange() {
+	runEditorCommand("undo");
+}
+
+function redoEditorChange() {
+	runEditorCommand("redo");
+}
+
 function handleEditorKeydown(event: KeyboardEvent) {
 	if (event.key !== "Tab") return;
 	event.preventDefault();
@@ -232,6 +280,41 @@ function handlePaste(event: ClipboardEvent) {
 	const text = event.clipboardData?.getData("text/plain") ?? "";
 	document.execCommand("insertText", false, text);
 	syncDraftFromEditor();
+}
+
+function splitSubjectFromHint(text: string) {
+	const lines = text.trim().split(/\r?\n/);
+	const subjectLineIndex = lines.findIndex((line) => /^subject\s*:/i.test(line.trim()));
+	if (subjectLineIndex === -1) return { subject: "", body: text.trim() };
+
+	const subject = lines[subjectLineIndex]?.replace(/^subject\s*:/i, "").trim() ?? "";
+	const body = lines
+		.filter((_, index) => index !== subjectLineIndex)
+		.join("\n")
+		.trim();
+	return { subject, body };
+}
+
+function insertTextAtCursor(text: string) {
+	if (!bodyEditor || editorDisabled || !text.trim()) return;
+	restoreEditorSelection();
+	document.execCommand("insertText", false, text);
+	syncDraftFromEditor();
+}
+
+function insertHintText(text: string, kind: "body" | "subject" = "body") {
+	const parsed = splitSubjectFromHint(text);
+	const subject =
+		kind === "subject"
+			? text
+					.trim()
+					.replace(/^subject\s*:/i, "")
+					.trim()
+			: parsed.subject;
+	const bodyText = kind === "subject" ? "" : parsed.body;
+
+	if (subject) draft = { ...draft, subject };
+	if (bodyText) insertTextAtCursor(bodyText);
 }
 
 onMount(() => {
@@ -250,7 +333,10 @@ onMount(() => {
 	}
 
 	function handleSelectionChange() {
-		if (bodyEditor?.contains(document.activeElement)) updateActiveFormats();
+		if (bodyEditor?.contains(document.activeElement)) {
+			saveEditorSelection();
+			updateActiveFormats();
+		}
 	}
 
 	window.addEventListener("resize", handleResize);
@@ -305,6 +391,8 @@ $effect(() => {
 		onIndent={indentSelection}
 		onSetAlignment={setAlignment}
 		onClearFormatting={clearFormatting}
+		onUndo={undoEditorChange}
+		onRedo={redoEditorChange}
 	/>
 	<div class="editor-wrap min-h-0 flex-1">
 		{#if editorIsEmpty}
@@ -320,12 +408,15 @@ $effect(() => {
 			tabindex="0"
 			oninput={syncDraftFromEditor}
 			onkeydown={handleEditorKeydown}
+			onkeyup={saveEditorSelection}
+			onmouseup={saveEditorSelection}
+			onfocus={saveEditorSelection}
 			onblur={syncDraftFromEditor}
 			onpaste={handlePaste}
 		></div>
 	</div>
 	{#if showHintPanel}
-		<ComposeHintPanel {hint} {isGettingHint} {t} {onCloseHint} {onInsertHint} />
+		<ComposeHintPanel {hint} {isGettingHint} {t} {onCloseHint} onInsertHint={insertHintText} />
 	{/if}
 	<div class="flex items-center gap-2 border-t border-black/10 bg-[#F7F7F9] px-4 py-3">
 		<button type="button" class="icon-button" onclick={onMockAction}><Paperclip size={17} /></button>

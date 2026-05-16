@@ -6,6 +6,7 @@ import Paperclip from "@lucide/svelte/icons/paperclip";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import UserCircle from "@lucide/svelte/icons/user-circle";
 import type { ChatMessage } from "../chatMessages";
+import { normalizeMailBodySpacing } from "./mailUtils";
 import type { DraftEmail } from "./types";
 
 let {
@@ -35,6 +36,8 @@ let {
 	t?: Record<string, string>;
 	onMockAction?: () => void;
 } = $props();
+
+const displayBody = $derived(selectedSentEmail ? normalizeMailBodySpacing(selectedSentEmail.body) : "");
 </script>
 
 <main class="mail-detail flex min-w-0 flex-col bg-white">
@@ -78,7 +81,7 @@ let {
 						<div class="ml-auto shrink-0 text-xs text-[#6E6E73]">{selectedSentMessage?.timestamp}</div>
 					</div>
 				</div>
-				<div class="whitespace-pre-wrap text-[15px] leading-7 text-[#1D1D1F]">{selectedSentEmail.body}</div>
+				<div class="whitespace-pre-wrap text-[15px] leading-7 text-[#1D1D1F]">{displayBody}</div>
 
 				{#if isBusy}
 					<div class="mt-8 flex items-center gap-2 text-sm text-[#6E6E73]">

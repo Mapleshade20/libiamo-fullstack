@@ -10,8 +10,10 @@ import IndentIncrease from "@lucide/svelte/icons/indent-increase";
 import Italic from "@lucide/svelte/icons/italic";
 import List from "@lucide/svelte/icons/list";
 import ListOrdered from "@lucide/svelte/icons/list-ordered";
+import Redo2 from "@lucide/svelte/icons/redo-2";
 import Strikethrough from "@lucide/svelte/icons/strikethrough";
 import Underline from "@lucide/svelte/icons/underline";
+import Undo2 from "@lucide/svelte/icons/undo-2";
 
 export type ComposeActiveFormats = {
 	bold: boolean;
@@ -49,6 +51,8 @@ let {
 	onIndent = () => {},
 	onSetAlignment = (_align: "left" | "center" | "right" | "justify") => {},
 	onClearFormatting = () => {},
+	onUndo = () => {},
+	onRedo = () => {},
 }: {
 	activeFormats?: ComposeActiveFormats;
 	editorDisabled?: boolean;
@@ -61,10 +65,15 @@ let {
 	onIndent?: () => void;
 	onSetAlignment?: (align: "left" | "center" | "right" | "justify") => void;
 	onClearFormatting?: () => void;
+	onUndo?: () => void;
+	onRedo?: () => void;
 } = $props();
 </script>
 
 <div class="format-toolbar flex flex-wrap items-center gap-1 border-b border-black/10 bg-white px-3 py-2">
+	<button type="button" class="format-button" title={t.undo} disabled={editorDisabled} onclick={onUndo}><Undo2 size={16} /></button>
+	<button type="button" class="format-button" title={t.redo} disabled={editorDisabled} onclick={onRedo}><Redo2 size={16} /></button>
+	<div class="mx-1 h-5 w-px bg-black/10"></div>
 	<button
 		type="button"
 		class="format-button"
