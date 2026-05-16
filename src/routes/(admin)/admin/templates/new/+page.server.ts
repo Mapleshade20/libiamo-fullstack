@@ -1,10 +1,23 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
-import { template, templateVariant } from "$lib/server/db/schema";
-import type { Actions } from "./$types";
+import { template, templateContribution, templateVariant } from "$lib/server/db/schema";
+import type { Actions, PageServerLoad } from "./$types";
+
+export const load: PageServerLoad = async (event) => {
+	const contributionId = event.url.searchParams.get("fromContribution");
+	if (!contributionId) return { contributionData: null };
+
+	const id = Number(contributionId);
+	if (Number.isNaN(id)) return { contributionData: null };
+
+	const [contribution] = await db.select().from(templateContribution).where(eq(templateContribution.id, id)).limit(1);
+
+	return { contributionData: contribution ?? null };
+};
 
 export const actions: Actions = {
 	default: async (event) => {
@@ -20,8 +33,8 @@ export const actions: Actions = {
 		if (!userId) return fail(401);
 
 		const isTranslate = result.data.interactionType === "translate";
+		const fromContributionId = Number(formData.get("fromContributionId"));
 
-		// Translate templates don't use variants
 		if (isTranslate) {
 			await db.insert(template).values({
 				...result.data,
@@ -34,7 +47,6 @@ export const actions: Actions = {
 				return fail(400, { message: variantResult.error, values: raw });
 			}
 
-			// Create template + first variant in a single transaction
 			await db.transaction(async (tx) => {
 				const [newTemplate] = await tx
 					.insert(template)
@@ -51,6 +63,11 @@ export const actions: Actions = {
 					openingState: variantResult.openingState,
 				});
 			});
+		}
+
+		// Mark contribution as approved if created from a contribution
+		if (fromContributionId && !Number.isNaN(fromContributionId)) {
+			await db.update(templateContribution).set({ status: "approved", reviewedBy: userId }).where(eq(templateContribution.id, fromContributionId));
 		}
 
 		return redirect(302, "/admin/templates");

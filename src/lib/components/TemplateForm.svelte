@@ -59,6 +59,12 @@ interface Props {
 	submitLabel?: string;
 	cancelHref?: string;
 	hideAdminFields?: boolean;
+	/** Pre-fill variant slots in create mode */
+	initialSlotValues?: Record<string, string>;
+	/** Pre-fill opening state in create mode */
+	initialOpeningState?: Record<string, unknown>;
+	/** Extra hidden fields added inside the form */
+	extraHiddenFields?: Record<string, string>;
 }
 
 let {
@@ -69,6 +75,9 @@ let {
 	submitLabel = "Save",
 	cancelHref = "/admin/templates",
 	hideAdminFields = false,
+	initialSlotValues,
+	initialOpeningState,
+	extraHiddenFields,
 }: Props = $props();
 let mainFormEl: HTMLFormElement | null = null;
 
@@ -256,12 +265,12 @@ function updateDraftOpeningState(id: number, state: Record<string, unknown>) {
 }
 
 // ── Create mode: first variant state ─────────────────────────────
-let firstVariantSlots = $state<Record<string, string>>({});
-let firstVariantOpeningState = $state<Record<string, unknown>>({});
+let firstVariantSlots = $state(untrack(() => initialSlotValues ?? {}));
+let firstVariantOpeningState = $state(untrack(() => initialOpeningState ?? {}));
 
 // Reset opening state when UI changes in create mode
 $effect(() => {
-	if (!isEditMode) {
+	if (!isEditMode && !initialOpeningState) {
 		firstVariantOpeningState = getDefaultOpeningState(selectedUi) as Record<string, unknown>;
 	}
 });
@@ -288,6 +297,12 @@ function jsonStr(val: unknown): string {
 </script>
 
 <form method="POST" {action} use:enhance class="space-y-8" bind:this={mainFormEl} oninvalidcapture={handleInvalidCapture}>
+	{#if extraHiddenFields}
+		{#each Object.entries(extraHiddenFields) as [ name, val ]}
+			<input type="hidden" {name} value={val}>
+		{/each}
+	{/if}
+
 	{#if form?.message}
 		<p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
 	{/if}

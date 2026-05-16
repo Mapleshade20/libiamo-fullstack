@@ -1,5 +1,5 @@
 <script lang="ts">
-import Check from "@lucide/svelte/icons/check";
+import Pencil from "@lucide/svelte/icons/pencil";
 import X from "@lucide/svelte/icons/x";
 import { enhance } from "$app/forms";
 import { Badge } from "$lib/components/ui/badge";
@@ -163,12 +163,13 @@ function fmtDate(d: Date | null): string {
 	{#if c.status === "pending"}
 		<div class="h-px bg-border"></div>
 		<div class="flex items-center gap-3">
-			<form method="POST" action="?/approve" use:enhance>
-				<Button type="submit" class="bg-green-600 hover:bg-green-700 text-white">
-					<Check size={16} class="mr-1.5" />
-					Approve
+			<a href="/admin/templates/new?fromContribution={c.id}">
+				<Button class="bg-green-600 hover:bg-green-700 text-white">
+					<Pencil size={16} class="mr-1.5" />
+					Edit &amp; Approve
 				</Button>
-			</form>
+			</a>
+
 			<form method="POST" action="?/reject" use:enhance class="flex items-center gap-2">
 				<input
 					type="text"

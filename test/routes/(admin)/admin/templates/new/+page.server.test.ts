@@ -1,22 +1,24 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { actions } from "$routes/(admin)/admin/templates/new/+page.server";
+import { actions, load } from "$routes/(admin)/admin/templates/new/+page.server";
 
 // ── Hoisted mock factories ───────────────────────────────────────────────
 
-const { mockReturning, mockValues, mockTransaction } = vi.hoisted(() => {
+const { mockReturning, mockValues, mockTransaction, mockUpdateWhere, mockSelectLimit } = vi.hoisted(() => {
 	const mockReturning = vi.fn().mockResolvedValue([{ id: 1 }]);
 	const mockValues = vi.fn(() => ({ returning: mockReturning }));
 	const mockTransaction = vi.fn();
-	return { mockReturning, mockValues, mockTransaction };
+	const mockUpdateWhere = vi.fn();
+	const mockSelectLimit = vi.fn();
+	return { mockReturning, mockValues, mockTransaction, mockUpdateWhere, mockSelectLimit };
 });
 
 vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: vi.fn(() => ({ values: mockValues })),
+		update: vi.fn(() => ({ set: vi.fn(() => ({ where: mockUpdateWhere })) })),
+		select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: mockSelectLimit })) })) })),
 		transaction: async (cb: any) => {
-			// First call: tx.insert(template).values(...).returning(...) -> [{ id: 1 }]
-			// Second call: tx.insert(templateVariant).values(...)
 			const tx = {
 				insert: vi.fn(() => ({ values: mockValues })),
 			};
@@ -27,9 +29,8 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	template: {
-		id: "id",
-	},
+	template: { id: "id" },
+	templateContribution: { id: "id" },
 	templateVariant: {},
 }));
 
@@ -67,6 +68,29 @@ describe("Admin Templates New +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockReturning.mockResolvedValue([{ id: 1 }]);
+		mockUpdateWhere.mockResolvedValue(undefined);
+		mockSelectLimit.mockResolvedValue([]);
+	});
+
+	describe("load", () => {
+		it("returns null contributionData when no fromContribution param", async () => {
+			const event = { url: { searchParams: new URLSearchParams() } } as any;
+			const result = (await load(event)) as { contributionData: unknown };
+			expect(result.contributionData).toBeNull();
+		});
+
+		it("returns null contributionData when fromContribution is NaN", async () => {
+			const event = { url: { searchParams: new URLSearchParams("fromContribution=abc") } } as any;
+			const result = (await load(event)) as { contributionData: unknown };
+			expect(result.contributionData).toBeNull();
+		});
+
+		it("returns contribution data when fromContribution is valid", async () => {
+			mockSelectLimit.mockResolvedValue([{ id: 5, titleBase: "Test" }]);
+			const event = { url: { searchParams: new URLSearchParams("fromContribution=5") } } as any;
+			const result = (await load(event)) as { contributionData: Record<string, unknown> };
+			expect(result.contributionData).toBeDefined();
+		});
 	});
 
 	describe("default action", () => {
@@ -105,7 +129,7 @@ describe("Admin Templates New +page.server", () => {
 			const entries = {
 				...validTemplateEntries,
 				ui: "discord",
-				firstVariantOpeningState: JSON.stringify({ serverName: "My Server" }), // missing channelName
+				firstVariantOpeningState: JSON.stringify({ serverName: "My Server" }),
 			};
 			const event = createEvent(entries);
 
@@ -126,10 +150,23 @@ describe("Admin Templates New +page.server", () => {
 			expect(mockTransaction).toHaveBeenCalled();
 		});
 
+		it("marks contribution as approved when fromContributionId is provided", async () => {
+			const entries = {
+				...validTemplateEntries,
+				fromContributionId: "5",
+			};
+			const event = createEvent(entries);
+
+			await expect(actions.default(event)).rejects.toMatchObject({
+				status: 302,
+				location: "/admin/templates",
+			});
+		});
+
 		it("handles empty optional fields correctly", async () => {
 			const entries = {
 				...validTemplateEntries,
-				titleBase: "Simple chat", // no slots
+				titleBase: "Simple chat",
 				firstVariantSlotValues: "{}",
 			};
 			const event = createEvent(entries);
@@ -143,7 +180,7 @@ describe("Admin Templates New +page.server", () => {
 		it("handles invalid JSON in slot values gracefully", async () => {
 			const entries = {
 				...validTemplateEntries,
-				titleBase: "Simple chat", // no slots
+				titleBase: "Simple chat",
 				firstVariantSlotValues: "not-valid-json",
 			};
 			const event = createEvent(entries);
