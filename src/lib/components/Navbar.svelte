@@ -33,6 +33,7 @@ const appItems: NavItem[] = $derived([
 const adminItems: NavItem[] = [
 	{ href: "/admin/templates", label: "Templates" },
 	{ href: "/admin/schedule", label: "Schedule" },
+	{ href: "/admin/reviews", label: "Reviews" },
 	{ href: "/", label: "\u2190 App", exact: true },
 ];
 

@@ -4,10 +4,10 @@ import { actions, load } from "$routes/(app)/contribute/+page.server";
 
 // ── Hoisted mock factories ───────────────────────────────────────────────
 
-const { mockInsert } = vi.hoisted(() => {
+const { mockInsert, mockValues } = vi.hoisted(() => {
 	const mockValues = vi.fn();
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockInsert };
+	return { mockInsert, mockValues };
 });
 
 vi.mock("$lib/server/db", () => ({
@@ -111,6 +111,10 @@ describe("Contribute +page.server", () => {
 			});
 
 			expect(mockInsert).toHaveBeenCalled();
+			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
+			expect(inserted?.status).toBe("pending");
+			expect(inserted?.createdBy).toBe("user-1");
+			expect(inserted?.submittedAt).toBeInstanceOf(Date);
 		});
 
 		it("creates contribution with variant for non-translate type", async () => {
@@ -122,6 +126,12 @@ describe("Contribute +page.server", () => {
 			});
 
 			expect(mockInsert).toHaveBeenCalled();
+			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
+			expect(inserted?.status).toBe("pending");
+			expect(inserted?.createdBy).toBe("user-1");
+			expect(inserted?.submittedAt).toBeInstanceOf(Date);
+			expect(inserted?.slotValues).toBeDefined();
+			expect(inserted?.openingState).toBeDefined();
 		});
 
 		it("returns 400 when variant is missing required slots", async () => {
@@ -194,7 +204,7 @@ describe("Contribute +page.server", () => {
 			expect(result.data?.errors?.ui).toBeDefined();
 		});
 
-		it("sets createdBy, status pending, and submittedAt on insert", async () => {
+		it("sets createdBy from different user", async () => {
 			const event = createEvent(validEntries, "contributor-42");
 
 			await expect(actions.default(event)).rejects.toMatchObject({
@@ -202,6 +212,8 @@ describe("Contribute +page.server", () => {
 			});
 
 			expect(mockInsert).toHaveBeenCalled();
+			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
+			expect(inserted?.createdBy).toBe("contributor-42");
 		});
 	});
 });
