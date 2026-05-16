@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
 export const user = pgTable("user", {
@@ -80,28 +80,24 @@ export const verification = pgTable(
 	(table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const userApiKey = pgTable(
-	"user_api_key",
-	{
-		userId: text("user_id")
-			.primaryKey()
-			.references(() => user.id, { onDelete: "cascade" }),
-		encryptedKey: text("encrypted_key").notNull(),
-		baseUrl: text("base_url").notNull(),
-		model: text("model").notNull(),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => /* @__PURE__ */ new Date())
-			.notNull(),
-	},
-	(t) => [uniqueIndex("user_api_key_user_id_idx").on(t.userId)],
-);
+export const userApiKey = pgTable("user_api_key", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	encryptedKey: text("encrypted_key").notNull(),
+	baseUrl: text("base_url").notNull(),
+	model: text("model").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ many, one }) => ({
 	sessions: many(session),
 	accounts: many(account),
-	apiKey: many(userApiKey),
+	apiKey: one(userApiKey),
 }));
 
 export const userApiKeyRelations = relations(userApiKey, ({ one }) => ({

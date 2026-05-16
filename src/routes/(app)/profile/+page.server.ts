@@ -77,6 +77,9 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	updateProfile: async (event) => {
+		const userId = event.locals.user?.id;
+		if (!userId) return fail(401);
+
 		const formData = await event.request.formData();
 		const raw = {
 			name: formData.get("name")?.toString() ?? undefined,
@@ -109,9 +112,6 @@ export const actions: Actions = {
 		}
 
 		// Handle BYOK API key: overwrite-style update
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
-
 		const apiKey = result.data.apiKey?.trim();
 		if (apiKey) {
 			const apiBaseUrl = result.data.apiBaseUrl?.trim();
