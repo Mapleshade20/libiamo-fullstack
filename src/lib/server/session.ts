@@ -7,9 +7,31 @@ import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, createStructuredOutput } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
-function appendMessages(ctx: string, label: string, items: Array<Record<string, string | undefined>>): string {
+const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
+
+function stringifyMessageValue(value: unknown): string | undefined {
+	if (value === undefined || value === null || value === "") return undefined;
+	return String(value);
+}
+
+function orderedMessageValues(item: Record<string, unknown>): string[] {
+	const usedKeys = new Set<string>();
+	const ordered = MESSAGE_FIELD_ORDER.flatMap((key) => {
+		usedKeys.add(key);
+		const value = stringifyMessageValue(item[key]);
+		return value ? [value] : [];
+	});
+	const remaining = Object.entries(item).flatMap(([key, value]) => {
+		if (usedKeys.has(key)) return [];
+		const rendered = stringifyMessageValue(value);
+		return rendered ? [rendered] : [];
+	});
+	return [...ordered, ...remaining];
+}
+
+function appendMessages(ctx: string, label: string, items: Array<Record<string, unknown>>): string {
 	if (!items.length) return ctx;
-	const lines = items.map((c) => `- ${Object.values(c).filter(Boolean).join(": ")}`);
+	const lines = items.map((item) => `- ${orderedMessageValues(item).join(": ")}`);
 	return `${ctx}\n${label}:\n${lines.join("\n")}`;
 }
 
@@ -246,6 +268,7 @@ export type SendMessageOptions = {
 export async function sendMessage(
 	sessionId: number,
 	userMessage: string,
+	userId: string,
 	clientMessageId?: string,
 	options: SendMessageOptions = {},
 ): Promise<SendMessageResult> {
@@ -357,7 +380,7 @@ export async function sendMessage(
 
 	let output: z.infer<typeof AgentReplySchema>;
 	try {
-		output = await createStructuredOutput(AgentReplySchema, history);
+		output = await createStructuredOutput(AgentReplySchema, history, {}, userId);
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -470,7 +493,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		{ role: "user", content: "Please evaluate this conversation." },
 	];
 
-	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages);
+	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages, {}, session.userId);
 
 	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
 
@@ -556,7 +579,7 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 		{ role: "user", content: `Give me hints for my next reply in ${learningLanguageName}.` },
 	];
 
-	return await createStructuredOutput(HintSchema, messages);
+	return await createStructuredOutput(HintSchema, messages, {}, session.userId);
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

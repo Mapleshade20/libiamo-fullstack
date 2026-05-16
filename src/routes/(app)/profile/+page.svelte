@@ -175,6 +175,68 @@ function applyDetectedTimezone() {
 				</select>
 				<Button type="submit" variant="secondary">Switch</Button>
 			</form>
+			{#if form?.message}
+				<p class="text-sm text-red-600">{form.message}</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header> <Card.Title>API Key (BYOK)</Card.Title> </Card.Header>
+		<Card.Content>
+			{#if data.hasApiKey}
+				<p class="mb-4 text-sm text-green-700">&#x2705; Your own API key is configured.</p>
+			{:else}
+				<p class="mb-4 text-sm text-muted-foreground">No custom API key set. The default platform key is used for AI responses.</p>
+			{/if}
+
+			{#if form?.message}
+				<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
+			{/if}
+
+			<form
+				method="POST"
+				action="?/updateProfile"
+				use:enhance={() => {
+					return async ({ update }) => {
+						await update({ reset: false });
+					};
+				}}
+				class="space-y-3"
+			>
+				<div class="space-y-2">
+					<Label for="apiKey">API Key</Label>
+					<Input
+						id="apiKey"
+						name="apiKey"
+						type="password"
+						placeholder={data.hasApiKey ? "•••••••• (leave empty to keep current)" : "Enter your API key"}
+					/>
+					{#if form?.errors?.apiKey}
+						<p class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
+					{/if}
+				</div>
+				<div class="space-y-2">
+					<Label for="apiBaseUrl">Base URL</Label>
+					<Input id="apiBaseUrl" name="apiBaseUrl" value={form?.values?.apiBaseUrl ?? ""} placeholder="https://api.openai.com/v1" />
+					{#if form?.errors?.apiBaseUrl}
+						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
+					{/if}
+				</div>
+				<div class="space-y-2">
+					<Label for="apiModel">Model</Label>
+					<Input id="apiModel" name="apiModel" value={form?.values?.apiModel ?? ""} placeholder="gpt-4o" />
+					{#if form?.errors?.apiModel}
+						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
+					{/if}
+				</div>
+				<div class="flex gap-3">
+					<Button type="submit">{data.hasApiKey ? "Update API Key" : "Save API Key"}</Button>
+					{#if data.hasApiKey}
+						<Button type="submit" formaction="?/clearApiKey" variant="outline">Remove API Key</Button>
+					{/if}
+				</div>
+			</form>
 		</Card.Content>
 	</Card.Root>
 

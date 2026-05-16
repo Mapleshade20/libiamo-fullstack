@@ -1,5 +1,9 @@
+import { eq } from "drizzle-orm";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
+import { decryptApiKey } from "./api-key-crypto";
+import { db } from "./db";
+import { userApiKey } from "./db/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -58,9 +62,15 @@ type ChatCompletionResponse = {
 	};
 };
 
-// ── Env helpers ───────────────────────────────────────────────────────
+// ── Config resolution ─────────────────────────────────────────────────
 
-function getOpenAIConfig() {
+type OpenAIConfig = {
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+};
+
+function getEnvOpenAIConfig(): OpenAIConfig {
 	const apiKey = env.OPENAI_API_KEY?.trim();
 	if (!apiKey) {
 		throw new Error("OPENAI_API_KEY is not set. Please set OPENAI_API_KEY in .env");
@@ -78,11 +88,33 @@ function getOpenAIConfig() {
 
 	const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
 
-	return {
-		apiKey,
-		baseUrl,
-		model,
-	};
+	return { apiKey, baseUrl, model };
+}
+
+async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null> {
+	const row = await db.query.userApiKey.findFirst({
+		where: eq(userApiKey.userId, userId),
+	});
+
+	if (!row) return null;
+
+	const apiKey = decryptApiKey(row.encryptedKey);
+	const baseUrl = row.baseUrl.endsWith("/") ? row.baseUrl.slice(0, -1) : row.baseUrl;
+
+	return { apiKey, baseUrl, model: row.model };
+}
+
+async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
+	if (userId) {
+		const userConfig = await getUserOpenAIConfig(userId);
+		if (userConfig) {
+			debugLog("config", { source: "byok", model: userConfig.model, baseUrl: userConfig.baseUrl });
+			return userConfig;
+		}
+	}
+	const envConfig = getEnvOpenAIConfig();
+	debugLog("config", { source: "env", model: envConfig.model, baseUrl: envConfig.baseUrl });
+	return envConfig;
 }
 
 // ── Debug helpers ─────────────────────────────────────────────────────
@@ -183,17 +215,21 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 
 // ── Core LLM function using fetch ─────────────────────────────────────
 
-async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}): Promise<OpenAIResponse> {
+async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
 	validateMessages(messages);
 
-	const { apiKey, baseUrl, model } = getOpenAIConfig();
+	const { apiKey, baseUrl, model } = await resolveOpenAIConfig(userId);
 	const endpoint = `${baseUrl}/chat/completions`;
-	const requestBody = {
+	const requestBody: Record<string, unknown> = {
 		model,
 		messages: mergeAdjacentMessages(messages),
-		temperature: options.temperature ?? 0.7,
 		max_tokens: options.maxTokens ?? 4096,
 	};
+
+	// Only include temperature if explicitly requested (some models only accept specific values)
+	if (options.temperature !== undefined) {
+		requestBody.temperature = options.temperature;
+	}
 
 	debugLog("request", {
 		url: endpoint,
@@ -264,10 +300,11 @@ export async function createStructuredOutput<T extends z.ZodType>(
 	schema: T,
 	messages: ChatMessage[],
 	options: OpenAIOptions = {},
+	userId?: string,
 ): Promise<z.infer<T>> {
 	validateMessages(messages);
 
-	const firstResult = await createChatCompletion(messages, options);
+	const firstResult = await createChatCompletion(messages, options, userId);
 	const firstText = firstResult.content.trim();
 
 	try {
@@ -288,8 +325,8 @@ export async function createStructuredOutput<T extends z.ZodType>(
 			],
 			{
 				...options,
-				temperature: 0,
 			},
+			userId,
 		);
 
 		const retryText = retryResult.content.trim();
@@ -304,7 +341,7 @@ export async function createStructuredOutput<T extends z.ZodType>(
 
 // ── High-level chat functions ─────────────────────────────────────────
 
-export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<ConversationTurnResult> {
+export async function createSingleTurnChat(input: SingleTurnChatInput, userId?: string): Promise<ConversationTurnResult> {
 	if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim()) {
 		throw new Error("systemPrompt is required");
 	}
@@ -324,7 +361,7 @@ export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<
 		},
 	];
 
-	const reply = await createChatCompletion(requestMessages, input.options ?? {});
+	const reply = await createChatCompletion(requestMessages, input.options ?? {}, userId);
 
 	return {
 		reply,
@@ -332,7 +369,7 @@ export async function createSingleTurnChat(input: SingleTurnChatInput): Promise<
 	};
 }
 
-export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<ConversationTurnResult> {
+export async function createMultiTurnChat(input: MultiTurnChatInput, userId?: string): Promise<ConversationTurnResult> {
 	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
 		throw new Error("userMessage is required");
 	}
@@ -388,7 +425,7 @@ export async function createMultiTurnChat(input: MultiTurnChatInput): Promise<Co
 		},
 	];
 
-	const reply = await createChatCompletion(requestMessages, input.options ?? {});
+	const reply = await createChatCompletion(requestMessages, input.options ?? {}, userId);
 
 	return {
 		reply,

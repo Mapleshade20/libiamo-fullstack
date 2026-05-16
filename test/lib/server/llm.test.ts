@@ -14,6 +14,16 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
+vi.mock("$lib/server/db", () => ({
+	db: {
+		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(null) } },
+	},
+}));
+
+vi.mock("$lib/server/api-key-crypto", () => ({
+	decryptApiKey: vi.fn((c: string) => `decrypted:${c}`),
+}));
+
 function createChatCompletionResponse(content: string) {
 	return new Response(
 		JSON.stringify({
@@ -140,6 +150,20 @@ describe("client createStructuredOutput", () => {
 		expect(loggedText).not.toContain("test-key");
 		expect(loggedText).not.toContain("Authorization");
 	});
+
+	it.each(["1", "yes", "on"])("enables debug logging when LLM_DEBUG=%s", async (value) => {
+		mockEnv.LLM_DEBUG = value;
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
+		const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
+
+		expect(infoSpy).toHaveBeenCalled();
+	});
 	it("recovers provider output with a newline between the opening quote and key name", async () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"\nreply":"¡Hola!","terminate":false}'));
 		vi.stubGlobal("fetch", fetchMock);
@@ -173,7 +197,7 @@ describe("client createStructuredOutput", () => {
 
 		const secondPayload = JSON.parse(String((secondCall[1] as RequestInit).body));
 
-		expect(secondPayload.temperature).toBe(0);
+		expect(secondPayload.temperature).toBeUndefined();
 		expect(secondPayload.messages).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -196,6 +220,160 @@ describe("client createStructuredOutput", () => {
 
 		await expect(createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }])).rejects.toThrow(
 			"LLM returned invalid structured JSON",
+		);
+	});
+
+	it("rethrows first error when retry JSON parses successfully but fails schema validation", async () => {
+		const fetchMock = vi
+			.fn<FetchLike>()
+			.mockResolvedValueOnce(createChatCompletionResponse('{"content":"bad"}'))
+			.mockResolvedValueOnce(createChatCompletionResponse('{"content":"still bad"}'));
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }])).rejects.toThrow(
+			"LLM returned invalid structured JSON",
+		);
+	});
+});
+
+// ── Core LLM function (createChatCompletion) ─────────────────────────
+describe("createChatCompletion", () => {
+	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+	beforeEach(() => {
+		vi.restoreAllMocks();
+		mockEnv.LLM_DEBUG = "";
+	});
+
+	it("throws on non-200 API response", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => new Response("Server Error", { status: 500 }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "hi" }])).rejects.toThrow("OpenAI API error (500)");
+	});
+
+	it("throws on API error in response body", async () => {
+		const fetchMock = vi.fn<FetchLike>(
+			async () =>
+				new Response(JSON.stringify({ error: { message: "Model not found" } }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "hi" }])).rejects.toThrow("OpenAI API error: Model not found");
+	});
+
+	it("throws on empty content in response", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse(""));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "hi" }])).rejects.toThrow("LLM returned empty content");
+	});
+
+	it("uses BYOK config when userId is provided and user has a valid API key", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce({
+			userId: "byok-user",
+			encryptedKey: "test-cipher",
+			baseUrl: "https://user-api.example.com/v1",
+			model: "user-model",
+		} as any);
+
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		const result = await createStructuredOutput(schema, [{ role: "system", content: "hi" }], {}, "byok-user");
+
+		expect(result).toEqual({ content: "ok" });
+		// Verify it used the BYOK config URL
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const [url] = fetchMock.mock.calls[0] as unknown as [string];
+		expect(url).toBe("https://user-api.example.com/v1/chat/completions");
+	});
+
+	it("falls back to env config when user has no BYOK row", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		// findFirst returns undefined — no BYOK row at all
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		const result = await createStructuredOutput(schema, [{ role: "system", content: "hi" }], {}, "byok-user");
+
+		expect(result).toEqual({ content: "ok" });
+		const [url] = fetchMock.mock.calls[0] as unknown as [string];
+		expect(url).toBe("https://example.com/v1/chat/completions"); // env URL
+	});
+
+	it("throws on network error from fetch", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => {
+			throw new Error("ECONNREFUSED");
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await expect(createStructuredOutput(schema, [{ role: "system", content: "hi" }])).rejects.toThrow("ECONNREFUSED");
+	});
+
+	it("handles debugLog JSON.stringify failure gracefully", async () => {
+		mockEnv.LLM_DEBUG = "true";
+		const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"content":"ok"}'));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+
+		await createStructuredOutput(schema, [{ role: "system", content: "hi" }]);
+
+		expect(infoSpy).toHaveBeenCalled();
+	});
+});
+
+describe("validateMessages", () => {
+	it("rejects empty array", async () => {
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+		await expect(createStructuredOutput(schema, [])).rejects.toThrow("messages must contain at least one item");
+	});
+
+	it("rejects invalid role", async () => {
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+		await expect(createStructuredOutput(schema, [{ role: "invalid" as any, content: "hi" }])).rejects.toThrow("each message.role must be one of");
+	});
+
+	it("rejects empty or whitespace-only content", async () => {
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ content: z.string() });
+		await expect(createStructuredOutput(schema, [{ role: "user", content: "" }])).rejects.toThrow("each message.content must be a non-empty string");
+		await expect(createStructuredOutput(schema, [{ role: "user", content: "   " }])).rejects.toThrow(
+			"each message.content must be a non-empty string",
 		);
 	});
 });

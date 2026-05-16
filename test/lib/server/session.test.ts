@@ -12,6 +12,12 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
+vi.mock("$lib/server/db", () => ({
+	db: {
+		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(null) } },
+	},
+}));
+
 import { createMultiTurnChat, createSingleTurnChat } from "$lib/server/llm";
 
 function createJsonResponse(body: unknown, status = 200): Response {
