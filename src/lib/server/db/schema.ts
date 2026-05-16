@@ -61,6 +61,50 @@ export const template = pgTable(
 	],
 );
 
+// ── templateContribution ──────────────────────────────────────────────
+export const templateContribution = pgTable("template_contribution", {
+	id: serial("id").primaryKey(),
+	language: languageCodeEnum("language").notNull(),
+	interactionType: interactionTypeEnum("interaction_type").notNull(),
+	ui: uiVariantEnum("ui").notNull(),
+	cadence: cadenceEnum("cadence").notNull(),
+	agentStartsFirst: boolean("agent_starts_first").default(true).notNull(),
+
+	titleBase: text("title_base").notNull(),
+	shortObjectiveBase: text("short_objective_base"),
+	descriptionBase: text("description_base"),
+	objectivesBase: text("objectives_base").array(),
+	agentPromptBase: text("agent_prompt_base"),
+	materialsMd: text("materials_md"),
+	translationBase: jsonb("translation_base").$type<string[][]>(),
+	tags: text("tags").array(),
+
+	slotValues: jsonb("slot_values").notNull().default({}),
+	openingState: jsonb("opening_state").notNull().default({}),
+
+	maxTurns: integer("max_turns"),
+	estimatedWords: integer("estimated_words"),
+	difficulty: integer("difficulty").notNull(),
+	pointReward: integer("point_reward").notNull(),
+	gemReward: integer("gem_reward").notNull(),
+
+	status: text("status", { enum: ["approved", "pending", "rejected"] })
+		.$type<"approved" | "pending" | "rejected">()
+		.default("pending")
+		.notNull(),
+	createdBy: text("created_by")
+		.notNull()
+		.references(() => user.id),
+	reviewedBy: text("reviewed_by").references(() => user.id),
+	reviewNotes: text("review_notes"),
+	submittedAt: timestamp("submitted_at"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => new Date())
+		.notNull(),
+});
+
 // ── templateVariant ───────────────────────────────────────────────────
 export const templateVariant = pgTable(
 	"template_variant",
@@ -198,6 +242,19 @@ export const templateVariantRelations = relations(templateVariant, ({ one, many 
 		references: [template.id],
 	}),
 	tasks: many(task),
+}));
+
+export const templateContributionRelations = relations(templateContribution, ({ one }) => ({
+	createdByUser: one(user, {
+		fields: [templateContribution.createdBy],
+		references: [user.id],
+		relationName: "contributionCreatedBy",
+	}),
+	reviewedByUser: one(user, {
+		fields: [templateContribution.reviewedBy],
+		references: [user.id],
+		relationName: "contributionReviewedBy",
+	}),
 }));
 
 export const translationAttemptRelations = relations(translationAttempt, ({ one }) => ({
