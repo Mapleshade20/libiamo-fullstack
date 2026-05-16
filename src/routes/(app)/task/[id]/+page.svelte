@@ -13,7 +13,7 @@ let task = $derived(data.task);
 
 const objectives = $derived(task.objectives ?? []);
 
-const IMPLEMENTED_UIS = ["discord"];
+const IMPLEMENTED_UIS = ["discord", "apple_mail"];
 let isPracticeEnabled = $derived(IMPLEMENTED_UIS.includes(task.templateUi));
 let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
 let lang = $derived(task.language as LanguageCode);

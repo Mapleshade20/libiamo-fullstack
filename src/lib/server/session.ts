@@ -243,6 +243,10 @@ export type SendMessageOptions = {
 	maxTurns?: number | null;
 };
 
+export type SubmitOneShotResult = {
+	turnCount: number;
+};
+
 export async function sendMessage(
 	sessionId: number,
 	userMessage: string,
@@ -387,6 +391,49 @@ export async function sendMessage(
 	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }
 
+export async function submitOneShotMessage(
+	sessionId: number,
+	userMessage: string,
+	clientMessageId?: string,
+	options: { maxTurns?: number | null } = {},
+): Promise<SubmitOneShotResult> {
+	const trimmedUserMessage = userMessage.trim();
+	if (!trimmedUserMessage) {
+		throw new Error("userMessage is required");
+	}
+
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: {
+			messages: { orderBy: asc(sessionMessage.createdAt) },
+		},
+	});
+
+	if (!session) throw new Error("Session not found");
+	if (session.status !== "in_progress") throw new Error("Session not in progress");
+
+	if (clientMessageId) {
+		const existingState = getExistingUserMessageState(session.messages, clientMessageId);
+		if (existingState?.userMessage) {
+			return { turnCount: countVisibleUserTurns(session.messages) };
+		}
+	}
+
+	const maxTurns = options.maxTurns ?? 0;
+	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
+		throw new Error("Maximum conversation turns reached");
+	}
+
+	await db.insert(sessionMessage).values({
+		sessionId,
+		role: "user",
+		content: trimmedUserMessage,
+		llmMetadata: clientMessageId ? { clientMessageId, failed: false } : undefined,
+	});
+
+	return { turnCount: countVisibleUserTurns(session.messages) + 1 };
+}
+
 function buildTutorPrompt(
 	objectives: string[],
 	scenarioContext: string,
@@ -498,6 +545,24 @@ export type HintResult = {
 	hints: Array<{ text: string; translation: string }>;
 };
 
+export type MailHintResult = {
+	mailHint: {
+		nextSection: {
+			title: string;
+			text: string;
+		};
+		nextSentence: {
+			title: string;
+			text: string;
+		};
+		checklist: Array<{
+			text: string;
+			done: boolean;
+			note: string;
+		}>;
+	};
+};
+
 const HintSchema = z.object({
 	hints: z
 		.array(
@@ -508,6 +573,29 @@ const HintSchema = z.object({
 		)
 		.min(1)
 		.max(3),
+});
+
+const MailHintSchema = z.object({
+	mailHint: z.object({
+		nextSection: z.object({
+			title: z.string().describe("A short label for what this suggested paragraph does."),
+			text: z.string().describe("A complete paragraph or section the student can append to the email body."),
+		}),
+		nextSentence: z.object({
+			title: z.string().describe("A short label for this next-sentence suggestion."),
+			text: z.string().describe("One natural next sentence the student can append to the email body."),
+		}),
+		checklist: z
+			.array(
+				z.object({
+					text: z.string().describe("A concise checklist item for a good email response."),
+					done: z.boolean().describe("Whether the current draft already satisfies this item."),
+					note: z.string().describe("A brief explanation or reminder for the student."),
+				}),
+			)
+			.min(3)
+			.max(6),
+	}),
 });
 
 export async function generateHint(sessionId: number): Promise<HintResult> {
@@ -557,6 +645,66 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 	];
 
 	return await createStructuredOutput(HintSchema, messages);
+}
+
+export async function generateMailHint(sessionId: number, draft: { to?: string; subject?: string; body?: string }): Promise<MailHintResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: {
+			messages: { orderBy: asc(sessionMessage.createdAt) },
+			task: true,
+		},
+	});
+
+	if (!session) throw new Error("Session not found");
+	if (!session.task) throw new Error("Task not found");
+
+	const learningLanguageName = getLanguageEnglishName(session.task.language);
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; scenarioContext?: string };
+	const existingMessages = session.messages
+		.filter((m) => !isHiddenUserMessage(m))
+		.map((m) => `[${m.role}] ${m.content}`)
+		.join("\n");
+
+	const prompt = `You are an expert language tutor helping a student write a one-shot email in ${learningLanguageName}.
+
+	## Mail Task Context
+	${snapshot.systemPrompt}
+
+	## Already Submitted Messages
+	${existingMessages || "(No submitted email yet)"}
+
+	## Current Unsaved Draft
+	To: ${draft.to || "(empty)"}
+	Subject: ${draft.subject || "(empty)"}
+	Body:
+	${draft.body || "(empty)"}
+
+	## Instructions
+	Provide practical writing help for the student's current email draft.
+	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
+	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
+	3. Do not write a full replacement email unless the draft is empty; prefer the next useful section.
+	4. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
+	5. Mark checklist items done only when the current draft clearly satisfies them.
+
+	Respond in JSON format:
+	{
+		"mailHint": {
+			"nextSection": { "title": "string", "text": "paragraph to append" },
+			"nextSentence": { "title": "string", "text": "one next sentence" },
+			"checklist": [
+				{ "text": "checklist item", "done": true, "note": "brief note" }
+			]
+		}
+	}`;
+
+	const messages: ChatMessage[] = [
+		{ role: "system", content: prompt },
+		{ role: "user", content: `Help me improve and continue this one-shot email in ${learningLanguageName}.` },
+	];
+
+	return await createStructuredOutput(MailHintSchema, messages);
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {
