@@ -1,7 +1,4 @@
 <script lang="ts">
-import Check from "@lucide/svelte/icons/check";
-import X from "@lucide/svelte/icons/x";
-import { enhance } from "$app/forms";
 import { Badge } from "$lib/components/ui/badge";
 import * as Table from "$lib/components/ui/table";
 import { type LanguageCode } from "$lib/constants";
@@ -36,7 +33,7 @@ function formatDate(date: Date | null): string {
 				{#each data.pendingContributions as c}
 					<Table.Row>
 						<Table.Cell>{c.id}</Table.Cell>
-						<Table.Cell class="max-w-[200px] truncate">{c.titleBase}</Table.Cell>
+						<Table.Cell class="max-w-[200px] truncate"> <a href="/admin/reviews/{c.id}" class="hover:underline">{c.titleBase}</a> </Table.Cell>
 						<Table.Cell><Badge variant="outline">{(c.language as LanguageCode).toUpperCase()}</Badge></Table.Cell>
 						<Table.Cell class="text-xs">{c.interactionType}</Table.Cell>
 						<Table.Cell>
@@ -47,29 +44,7 @@ function formatDate(date: Date | null): string {
 						</Table.Cell>
 						<Table.Cell class="text-xs text-muted-foreground">{formatDate(c.submittedAt)}</Table.Cell>
 						<Table.Cell>
-							<div class="flex items-center gap-2">
-								<form method="POST" action="?/approve" use:enhance>
-									<input type="hidden" name="id" value={c.id}>
-									<button
-										type="submit"
-										class="flex items-center gap-1 rounded px-2 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-									>
-										<Check size={12} />
-										Approve
-									</button>
-								</form>
-
-								<form method="POST" action="?/reject" use:enhance>
-									<input type="hidden" name="id" value={c.id}>
-									<button
-										type="submit"
-										class="flex items-center gap-1 rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-									>
-										<X size={12} />
-										Reject
-									</button>
-								</form>
-							</div>
+							<a href="/admin/reviews/{c.id}" class="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"> Review </a>
 						</Table.Cell>
 					</Table.Row>
 				{/each}
