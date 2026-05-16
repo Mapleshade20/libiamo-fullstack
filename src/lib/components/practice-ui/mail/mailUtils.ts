@@ -1,6 +1,18 @@
 import { normalizeText } from "../../utils/messageUtils";
 import type { DraftEmail } from "./types";
 
+function escapeHtml(value: string) {
+	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+export function plainTextToDraftHtml(value: string) {
+	if (!value) return "";
+	return value
+		.split("\n")
+		.map((line) => `<div>${line ? escapeHtml(line) : "<br>"}</div>`)
+		.join("");
+}
+
 export function formatDraftMessage(value: DraftEmail, noSubjectLabel: string) {
 	const subject = normalizeText(value.subject, noSubjectLabel);
 	return `To: ${value.to.trim()}\nSubject: ${subject}\n\n${value.body.trim()}`;
@@ -14,5 +26,6 @@ export function parseDraftFromMessage(text: string, noSubjectLabel: string): Dra
 		to: toMatch?.[1]?.trim() ?? "",
 		subject: subjectMatch?.[1]?.trim() ?? noSubjectLabel,
 		body,
+		bodyHtml: plainTextToDraftHtml(body),
 	};
 }

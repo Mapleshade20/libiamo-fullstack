@@ -1,5 +1,6 @@
 <script lang="ts">
 import Archive from "@lucide/svelte/icons/archive";
+import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import Paperclip from "@lucide/svelte/icons/paperclip";
 import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -42,9 +43,21 @@ let {
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.trash}><Trash2 size={18} /></button>
 		<div class="mx-1 h-6 w-px bg-black/10"></div>
 		<button type="button" class="icon-button" onclick={onMockAction} title="Attach"><Paperclip size={18} /></button>
-		<div class="ml-auto text-xs font-medium text-[#6E6E73]">
-			{isCompleted ? t.questCompleted : isInitializing || isSubmitting ? t.evaluating : ""}
-		</div>
+		{#if isCompleted}
+			<div
+				class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#34C759]/25 bg-[#EAF8EE] px-3 py-1 text-xs font-semibold text-[#1F7A38]"
+			>
+				<CheckCircle2 size={14} />
+				{t.questCompleted}
+			</div>
+		{:else if isInitializing || isSubmitting}
+			<div
+				class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#3478F6]/20 bg-[#EDF4FF] px-3 py-1 text-xs font-semibold text-[#2155A3]"
+			>
+				<LoaderCircle size={14} class="animate-spin" />
+				{t.evaluating}
+			</div>
+		{/if}
 	</header>
 
 	<div bind:this={messageScroll} class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">
@@ -65,9 +78,7 @@ let {
 						<div class="ml-auto shrink-0 text-xs text-[#6E6E73]">{selectedSentMessage?.timestamp}</div>
 					</div>
 				</div>
-				<div class="whitespace-pre-wrap text-[15px] leading-7 text-[#1D1D1F]" style:text-align={selectedSentEmail.bodyAlign ?? 'left'}>
-					{selectedSentEmail.body}
-				</div>
+				<div class="whitespace-pre-wrap text-[15px] leading-7 text-[#1D1D1F]">{selectedSentEmail.body}</div>
 
 				{#if isBusy}
 					<div class="mt-8 flex items-center gap-2 text-sm text-[#6E6E73]">
@@ -77,7 +88,7 @@ let {
 				{/if}
 			</article>
 		{:else}
-			<div class="flex h-full items-center justify-center text-sm text-[#6E6E73]">{t.newMessage}</div>
+			<div class="h-full bg-white" aria-label={t.inbox}></div>
 		{/if}
 	</div>
 </main>

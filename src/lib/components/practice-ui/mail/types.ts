@@ -14,7 +14,7 @@ export type DraftEmail = {
 	to: string;
 	subject: string;
 	body: string;
-	bodyAlign?: "left" | "right";
+	bodyHtml?: string;
 };
 
 export type NormalizedMailEmail = MailEmail & {
@@ -26,6 +26,9 @@ export type NormalizedMailEmail = MailEmail & {
 };
 
 export type MailHint = {
+	subjectSuggestion: {
+		text: string;
+	};
 	nextSection: {
 		title: string;
 		text: string;

@@ -547,6 +547,9 @@ export type HintResult = {
 
 export type MailHintResult = {
 	mailHint: {
+		subjectSuggestion: {
+			text: string;
+		};
 		nextSection: {
 			title: string;
 			text: string;
@@ -577,9 +580,12 @@ const HintSchema = z.object({
 
 const MailHintSchema = z.object({
 	mailHint: z.object({
+		subjectSuggestion: z.object({
+			text: z.string().describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
+		}),
 		nextSection: z.object({
 			title: z.string().describe("A short label for what this suggested paragraph does."),
-			text: z.string().describe("A complete paragraph or section the student can append to the email body."),
+			text: z.string().describe("A complete paragraph or body section the student can append to the email body. Never include a subject line."),
 		}),
 		nextSentence: z.object({
 			title: z.string().describe("A short label for this next-sentence suggestion."),
@@ -687,10 +693,13 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 	3. Do not write a full replacement email unless the draft is empty; prefer the next useful section.
 	4. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
 	5. Mark checklist items done only when the current draft clearly satisfies them.
+	6. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
+	7. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
 
 	Respond in JSON format:
 	{
 		"mailHint": {
+			"subjectSuggestion": { "text": "subject line without Subject prefix" },
 			"nextSection": { "title": "string", "text": "paragraph to append" },
 			"nextSentence": { "title": "string", "text": "one next sentence" },
 			"checklist": [

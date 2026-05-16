@@ -11,6 +11,7 @@ let { data } = $props();
 		userName={data.user.name}
 		avatarUrl={data.user.avatarUrl}
 		language={data.user.learningLanguage}
+		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
@@ -26,6 +27,7 @@ let { data } = $props();
 		userName={data.user.name}
 		avatarUrl={data.user.avatarUrl}
 		language={data.user.learningLanguage}
+		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 	/>
 {:else}

@@ -11,6 +11,7 @@ import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import { plainTextToDraftHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
 let {
@@ -29,7 +30,7 @@ let {
 	onSend = () => {},
 	onGetHint = () => {},
 	onCloseHint = () => {},
-	onInsertHint = (_text: string) => {},
+	onInsertHint = (_text: string, _kind?: "body" | "subject") => {},
 }: {
 	draft?: DraftEmail;
 	isSubmitting?: boolean;
@@ -46,17 +47,19 @@ let {
 	onSend?: () => void;
 	onGetHint?: () => void;
 	onCloseHint?: () => void;
-	onInsertHint?: (text: string) => void;
+	onInsertHint?: (text: string, kind?: "body" | "subject") => void;
 } = $props();
 
-let bodyTextarea = $state<HTMLTextAreaElement | null>(null);
-let frame = $state({ x: 0, y: 0, width: 720, height: 560 });
+let bodyEditor = $state<HTMLDivElement | null>(null);
+let frame = $state({ x: 0, y: 0, width: 900, height: 680 });
 let frameReady = $state(false);
 let viewportWidth = $state(1024);
+let lastAppliedEditorHtml = $state("");
 const isCompact = $derived(viewportWidth <= 640);
+const editorIsEmpty = $derived(!draft.body.trim());
 
-const MIN_WIDTH = 420;
-const MIN_HEIGHT = 360;
+const MIN_WIDTH = 560;
+const MIN_HEIGHT = 440;
 
 function constrainFrame(nextFrame = frame) {
 	if (typeof window === "undefined") return nextFrame;
@@ -119,47 +122,48 @@ function startResize(event: PointerEvent) {
 	window.addEventListener("pointerup", handleUp);
 }
 
+function syncDraftFromEditor() {
+	if (!bodyEditor) return;
+	const body = bodyEditor.innerText.replace(/\u00a0/g, " ").replace(/\n$/, "");
+	const bodyHtml = bodyEditor.innerHTML;
+	lastAppliedEditorHtml = bodyHtml;
+	draft = { ...draft, body, bodyHtml };
+}
+
+function focusEditor() {
+	bodyEditor?.focus();
+}
+
+function runEditorCommand(command: "justifyLeft" | "justifyRight" | "indent") {
+	if (!bodyEditor) return;
+	focusEditor();
+	document.execCommand(command, false);
+	syncDraftFromEditor();
+}
+
 function setAlignment(align: "left" | "right") {
-	draft = { ...draft, bodyAlign: align };
+	runEditorCommand(align === "right" ? "justifyRight" : "justifyLeft");
 }
 
 function indentSelection() {
-	if (!bodyTextarea) {
-		draft = { ...draft, body: draft.body ? `    ${draft.body}` : draft.body };
-		return;
-	}
+	runEditorCommand("indent");
+}
 
-	const start = bodyTextarea.selectionStart;
-	const end = bodyTextarea.selectionEnd;
-	const value = draft.body;
-	const lineStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-	const selected = value.slice(lineStart, end);
-	const indented = selected
-		.split("\n")
-		.map((line) => `    ${line}`)
-		.join("\n");
-
-	draft = {
-		...draft,
-		body: `${value.slice(0, lineStart)}${indented}${value.slice(end)}`,
-	};
-
-	requestAnimationFrame(() => {
-		if (!bodyTextarea) return;
-		bodyTextarea.selectionStart = start + 4;
-		bodyTextarea.selectionEnd = end + indented.length - selected.length;
-		bodyTextarea.focus();
-	});
+function handlePaste(event: ClipboardEvent) {
+	event.preventDefault();
+	const text = event.clipboardData?.getData("text/plain") ?? "";
+	document.execCommand("insertText", false, text);
+	syncDraftFromEditor();
 }
 
 onMount(() => {
-	const width = Math.min(720, window.innerWidth - 32);
-	const height = Math.min(560, window.innerHeight - 72);
+	const width = Math.min(920, window.innerWidth - 72);
+	const height = Math.min(700, window.innerHeight - 72);
 	frame = constrainFrame({
 		width,
 		height,
-		x: window.innerWidth - width - Math.max(16, window.innerWidth * 0.05),
-		y: window.innerHeight - height - 18,
+		x: (window.innerWidth - width) / 2,
+		y: Math.max(36, (window.innerHeight - height) / 2),
 	});
 	frameReady = true;
 
@@ -169,6 +173,14 @@ onMount(() => {
 
 	window.addEventListener("resize", handleResize);
 	return () => window.removeEventListener("resize", handleResize);
+});
+
+$effect(() => {
+	if (!bodyEditor) return;
+	const nextHtml = draft.bodyHtml ?? plainTextToDraftHtml(draft.body);
+	if (nextHtml === lastAppliedEditorHtml || nextHtml === bodyEditor.innerHTML) return;
+	bodyEditor.innerHTML = nextHtml;
+	lastAppliedEditorHtml = nextHtml;
 });
 </script>
 
@@ -202,7 +214,7 @@ onMount(() => {
 		<div class="mx-1 h-5 w-px bg-black/10"></div>
 		<button
 			type="button"
-			class="format-button {draft.bodyAlign !== 'right' ? 'active' : ''}"
+			class="format-button"
 			title={t.alignLeft}
 			disabled={isSubmitting || isCompleted || limitReached}
 			onclick={() => setAlignment("left")}
@@ -211,7 +223,7 @@ onMount(() => {
 		</button>
 		<button
 			type="button"
-			class="format-button {draft.bodyAlign === 'right' ? 'active' : ''}"
+			class="format-button"
 			title={t.alignRight}
 			disabled={isSubmitting || isCompleted || limitReached}
 			onclick={() => setAlignment("right")}
@@ -219,14 +231,23 @@ onMount(() => {
 			<AlignRight size={16} />
 		</button>
 	</div>
-	<textarea
-		bind:this={bodyTextarea}
-		bind:value={draft.body}
-		disabled={isSubmitting || isCompleted || limitReached}
-		placeholder={isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}
-		class="min-h-0 flex-1 resize-none p-4 text-[15px] leading-6 outline-none disabled:opacity-50"
-		style:text-align={draft.bodyAlign ?? 'left'}
-	></textarea>
+	<div class="editor-wrap min-h-0 flex-1">
+		{#if editorIsEmpty}
+			<div class="editor-placeholder">{isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}</div>
+		{/if}
+		<div
+			bind:this={bodyEditor}
+			class="body-editor"
+			class:is-disabled={isSubmitting || isCompleted || limitReached}
+			contenteditable={!(isSubmitting || isCompleted || limitReached)}
+			role="textbox"
+			aria-multiline="true"
+			tabindex="0"
+			oninput={syncDraftFromEditor}
+			onblur={syncDraftFromEditor}
+			onpaste={handlePaste}
+		></div>
+	</div>
 	{#if showHintPanel}
 		<div class="hint-panel border-t border-black/10 bg-[#FBFBFD] p-3">
 			<div class="mb-2 flex items-center justify-between">
@@ -242,18 +263,25 @@ onMount(() => {
 					{t.thinking}
 				</div>
 			{:else if hint}
+				{#if hint.subjectSuggestion?.text}
+					<div class="mb-3 rounded-lg border border-[#D1E3FF] bg-[#F2F7FF] p-3">
+						<div class="hint-card-title">{t.subject}</div>
+						<p class="mt-1 text-sm leading-snug text-[#1D1D1F]">{hint.subjectSuggestion.text}</p>
+						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.subjectSuggestion.text, "subject")}>{t.insert}</button>
+					</div>
+				{/if}
 				<div class="grid gap-3 md:grid-cols-[1fr_1fr]">
 					<div class="hint-card">
 						<div class="hint-card-title">{t.nextSection}</div>
 						<div class="hint-card-subtitle">{hint.nextSection.title}</div>
 						<p>{hint.nextSection.text}</p>
-						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSection.text)}>{t.insert}</button>
+						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSection.text, "body")}>{t.insert}</button>
 					</div>
 					<div class="hint-card">
 						<div class="hint-card-title">{t.nextSentence}</div>
 						<div class="hint-card-subtitle">{hint.nextSentence.title}</div>
 						<p>{hint.nextSentence.text}</p>
-						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSentence.text)}>{t.insert}</button>
+						<button type="button" class="hint-insert" onclick={() => onInsertHint(hint.nextSentence.text, "body")}>{t.insert}</button>
 					</div>
 				</div>
 				<div class="mt-3 rounded-lg border border-black/10 bg-white p-3">
@@ -370,8 +398,7 @@ onMount(() => {
 	color: #6e6e73;
 }
 
-.format-button:hover,
-.format-button.active {
+.format-button:hover {
 	background: #e5e5ea;
 	color: #1d1d1f;
 }
@@ -379,6 +406,48 @@ onMount(() => {
 .format-button:disabled {
 	cursor: not-allowed;
 	opacity: 0.45;
+}
+
+.editor-wrap {
+	position: relative;
+	overflow: auto;
+	background: white;
+}
+
+.body-editor {
+	min-height: 100%;
+	padding: 16px;
+	font-size: 15px;
+	line-height: 1.5;
+	outline: none;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.body-editor :global(div),
+.body-editor :global(p) {
+	margin: 0 0 1em;
+}
+
+.body-editor :global(div:last-child),
+.body-editor :global(p:last-child) {
+	margin-bottom: 0;
+}
+
+.body-editor.is-disabled {
+	pointer-events: none;
+	opacity: 0.5;
+}
+
+.editor-placeholder {
+	pointer-events: none;
+	position: absolute;
+	left: 16px;
+	top: 16px;
+	z-index: 1;
+	color: #8e8e93;
+	font-size: 15px;
+	line-height: 1.5;
 }
 
 .hint-panel {

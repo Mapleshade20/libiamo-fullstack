@@ -36,7 +36,12 @@ let {
 			<input
 				class="h-8 w-full rounded-lg border border-black/10 bg-white/80 pl-8 pr-2 text-sm outline-none placeholder:text-[#8E8E93] focus:border-[#3478F6]"
 				placeholder={t.search}
+				readonly
+				aria-readonly="true"
 				onfocus={onSearchFocus}
+				oninput={(event) => {
+					event.currentTarget.value = "";
+				}}
 			>
 		</div>
 	</header>

@@ -94,6 +94,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 			name: user.name || "Learner",
 			avatarUrl,
 			learningLanguage,
+			timezone: user.timezone || "UTC",
 		},
 	};
 };

@@ -5,14 +5,13 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { formatTime, getTodayDateString } from "../../utils/messageUtils";
-import { postAction } from "../apiService";
 import { buildChatMessages, type ChatMessage } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
-import { formatDraftMessage, parseDraftFromMessage } from "./mailUtils";
+import { formatDraftMessage, parseDraftFromMessage, plainTextToDraftHtml } from "./mailUtils";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailHint } from "./types";
@@ -23,10 +22,11 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
+	timeZone?: string;
 	existingSession?: any;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", existingSession = null }: Props = $props();
+let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", timeZone = "UTC", existingSession = null }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 
@@ -64,14 +64,18 @@ const selectedSentEmail = $derived(selectedSentMessage ? parseDraftFromMessage(s
 const activeView = $derived(selectedSentMessage ? "sent" : "inbox");
 const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!hasSubmittedEmail && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
-const todayLabel = $derived(getTodayDateString(language));
+const todayLabel = $derived(getTodayDateString(language, timeZone));
+
+function formatUserTime(date: Date) {
+	return formatTime(date, timeZone);
+}
 
 function getDefaultDraft(): DraftEmail {
 	return {
 		to: recipient.display,
 		subject: "",
 		body: "",
-		bodyAlign: "left",
+		bodyHtml: "",
 	};
 }
 
@@ -87,12 +91,12 @@ function loadSavedDraft(): DraftEmail {
 		const saved = localStorage.getItem(getDraftStorageKey());
 		if (!saved) return baseDraft;
 		const parsed = JSON.parse(saved) as Partial<DraftEmail>;
-		const bodyAlign: DraftEmail["bodyAlign"] = parsed.bodyAlign === "right" ? "right" : "left";
+		const body = typeof parsed.body === "string" ? parsed.body : "";
 		return {
 			...baseDraft,
 			subject: typeof parsed.subject === "string" ? parsed.subject : baseDraft.subject,
-			body: typeof parsed.body === "string" ? parsed.body : "",
-			bodyAlign,
+			body,
+			bodyHtml: typeof parsed.bodyHtml === "string" ? parsed.bodyHtml : plainTextToDraftHtml(body),
 		};
 	} catch {
 		return baseDraft;
@@ -203,14 +207,44 @@ function closeHintPanel() {
 	}
 }
 
-function insertHintText(text: string) {
-	const trimmedText = text.trim();
+function splitSubjectFromHint(text: string) {
+	const lines = text.trim().split(/\r?\n/);
+	const subjectLineIndex = lines.findIndex((line) => /^subject\s*:/i.test(line.trim()));
+	if (subjectLineIndex === -1) return { subject: "", body: text.trim() };
+
+	const subject = lines[subjectLineIndex]?.replace(/^subject\s*:/i, "").trim() ?? "";
+	const body = lines
+		.filter((_, index) => index !== subjectLineIndex)
+		.join("\n")
+		.trim();
+	return { subject, body };
+}
+
+function insertHintText(text: string, kind: "body" | "subject" = "body") {
+	const parsed = splitSubjectFromHint(text);
+	const subject =
+		kind === "subject"
+			? text
+					.trim()
+					.replace(/^subject\s*:/i, "")
+					.trim()
+			: parsed.subject;
+	const trimmedText = kind === "subject" ? "" : parsed.body;
+
+	if (subject) {
+		draft = {
+			...draft,
+			subject,
+		};
+	}
+
 	if (!trimmedText) return;
 	const trimmedBody = draft.body.trimEnd();
 	draft = {
 		...draft,
 		body: trimmedBody ? `${trimmedBody}\n\n${trimmedText}` : trimmedText,
 	};
+	draft = { ...draft, bodyHtml: plainTextToDraftHtml(draft.body) };
 }
 
 async function handleSendEmail() {
@@ -225,7 +259,7 @@ async function handleSendEmail() {
 		id: crypto.randomUUID(),
 		role: "user",
 		text: currentText,
-		timestamp: formatTime(new Date()),
+		timestamp: formatUserTime(new Date()),
 		authorName: userName,
 		avatar: avatarUrl,
 		clientMessageId,
@@ -271,7 +305,7 @@ function loadExistingSession(session: any) {
 	const sortedRawMessages = [...(session.messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 	messages = buildChatMessages({
 		rawMessages: sortedRawMessages,
-		formatTimestamp: formatTime,
+		formatTimestamp: formatUserTime,
 		userName,
 		agentName: t.tutorReply,
 		avatarUrl,
@@ -294,23 +328,6 @@ onMount(async () => {
 	setTimeout(() => {
 		isEntering = false;
 	}, 400);
-
-	if (!existingSession) {
-		isInitializing = true;
-		try {
-			const startResult = await postAction("start", null);
-			if (startResult.type === "success" && startResult.data) {
-				const currentId = startResult.data.sessionId as number;
-				sessionId = currentId;
-				lastLoadedSessionId = currentId;
-				await invalidateAll();
-			}
-		} catch (error) {
-			console.error("Initialization failed:", error);
-		} finally {
-			isInitializing = false;
-		}
-	}
 
 	const hasExistingSubmission = Array.isArray(existingSession?.messages) && existingSession.messages.some((message: any) => message.role === "user");
 	if (!isCompleted && !hasExistingSubmission) {

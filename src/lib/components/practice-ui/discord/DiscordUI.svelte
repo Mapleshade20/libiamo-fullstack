@@ -27,6 +27,7 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
+	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -38,6 +39,7 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
+	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -105,6 +107,10 @@ const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst))
 const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 
+function formatUserTime(date: Date) {
+	return formatTime(date, timeZone);
+}
+
 function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
 	messages = [
 		...messages,
@@ -112,7 +118,7 @@ function addAgentMessage(params: { text: string; deliveryState: "sent" | "pendin
 			id: crypto.randomUUID(),
 			role: "agent",
 			text: params.text,
-			timestamp: formatTime(new Date()),
+			timestamp: formatUserTime(new Date()),
 			authorName: agentUser.name,
 			avatarColor: agentUser.color,
 			deliveryState: params.deliveryState,
@@ -200,7 +206,7 @@ async function handleSend(text: string) {
 			id: crypto.randomUUID(),
 			role: "user",
 			text: currentText,
-			timestamp: formatTime(new Date()),
+			timestamp: formatUserTime(new Date()),
 			authorName: userName,
 			avatar: avatarUrl,
 			clientMessageId,
@@ -285,7 +291,7 @@ $effect(() => {
 
 			const sessionMessages = buildChatMessages({
 				rawMessages: sortedRawMessages,
-				formatTimestamp: formatTime,
+				formatTimestamp: formatUserTime,
 				userName,
 				agentName: agentUser.name,
 				avatarUrl,
@@ -344,7 +350,7 @@ onMount(async () => {
 							id: crypto.randomUUID(),
 							role: "user",
 							text: "*User joined the server*",
-							timestamp: formatTime(new Date()),
+							timestamp: formatUserTime(new Date()),
 							authorName: userName,
 							avatar: avatarUrl,
 							isHidden: true,
