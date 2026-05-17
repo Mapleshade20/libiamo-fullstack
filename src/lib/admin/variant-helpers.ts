@@ -118,7 +118,23 @@ export function getDefaultOpeningState(ui: UiVariant): OpeningState {
 		case "apple_mail":
 			return { emails: [] };
 		case "ao3":
-			return { workTitle: "", chapterTitle: "", bodyExcerpt: "", tags: [], previousComments: [] };
+			return {
+				workTitle: "",
+				authorName: "",
+				chapterTitle: "",
+				summary: "",
+				bodyExcerpt: "",
+				rating: "Teen And Up Audiences",
+				archiveWarning: "No Archive Warnings Apply",
+				categories: [],
+				fandoms: [],
+				relationships: [],
+				characters: [],
+				additionalTags: [],
+				tags: [],
+				stats: {},
+				previousComments: [],
+			};
 		case "translator":
 			return { sourceText: "" };
 	}

@@ -1,6 +1,15 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
+import {
+	type Ao3OpeningState,
+	type Ao3Target,
+	buildAo3UserPrompt,
+	findAo3Target,
+	findAo3TargetInMessages,
+	getAo3AuthorName,
+} from "$lib/components/practice-ui/ao3/helpers";
+import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -27,6 +36,44 @@ function mapStartSessionError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "Task not found") return fail(404, { error: e.message });
 	return null;
+}
+
+function getFormString(formData: FormData, key: string): string {
+	const value = formData.get(key);
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function buildAo3SendOptions(params: { openingState: Ao3OpeningState; target: Ao3Target | null; message: string; clientMessageId: string }) {
+	const responderName = params.target?.username || getAo3AuthorName(params.openingState);
+	const userCommentId = `ao3-user-${params.clientMessageId}`;
+	const agentCommentId = `ao3-agent-${params.clientMessageId}`;
+	const mode = params.target ? "reply" : "work";
+	return {
+		promptContent: buildAo3UserPrompt({
+			openingState: params.openingState,
+			comment: params.message,
+			target: params.target,
+			responderName,
+		}),
+		userDisplayContent: params.message,
+		userMetadata: {
+			ao3: {
+				commentId: userCommentId,
+				targetCommentId: params.target?.id ?? null,
+				responderName,
+				mode,
+			},
+		},
+		assistantAuthorName: responderName,
+		assistantMetadata: {
+			ao3: {
+				commentId: agentCommentId,
+				parentCommentId: userCommentId,
+				responderName,
+				mode: "reply",
+			},
+		},
+	};
 }
 
 function mapCompleteSessionError(e: unknown) {
@@ -129,7 +176,7 @@ export const actions: Actions = {
 		try {
 			const taskData = await db.query.task.findFirst({
 				where: eq(task.id, taskId),
-				with: { template: true },
+				with: { template: true, variant: true },
 			});
 			if (!taskData) {
 				return fail(404, { error: "Task not found" });
@@ -140,11 +187,50 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
-
-			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined, {
+			const sendOptions: Parameters<typeof sendMessage>[3] = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
-			});
+			};
+
+			if (taskData.template.ui === "ao3" && !hiddenUserMessage) {
+				if (!clientMessageId) return fail(400, { error: "clientMessageId is required for AO3 comments" });
+
+				const openingState = (taskData.variant?.openingState ?? {}) as Ao3OpeningState;
+				const targetCommentId = getFormString(formData, "ao3TargetCommentId") || null;
+				let target = findAo3Target(openingState, targetCommentId);
+
+				if (targetCommentId && !target) {
+					const sessionWithMessages = await db.query.practiceSession.findFirst({
+						where: eq(practiceSession.id, sessionId),
+						with: { messages: true },
+					});
+					const chatMessages = buildChatMessages({
+						rawMessages: sessionWithMessages?.messages ?? [],
+						formatTimestamp: () => "Earlier",
+						userName: user.name || "Learner",
+						agentName: getAo3AuthorName(openingState),
+						labels: {
+							retryFailedMessage: "Agent reply failed. Click Retry to try again.",
+							stillProcessingMessage: "Agent is still processing. Retry in a moment.",
+						},
+					});
+					target = findAo3TargetInMessages(chatMessages, targetCommentId);
+				}
+
+				if (targetCommentId && !target) return fail(400, { error: "Invalid AO3 reply target" });
+
+				Object.assign(
+					sendOptions,
+					buildAo3SendOptions({
+						openingState,
+						target,
+						message: formattedMessage,
+						clientMessageId,
+					}),
+				);
+			}
+
+			const result = await sendMessage(sessionId, formattedMessage, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

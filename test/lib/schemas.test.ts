@@ -174,16 +174,29 @@ describe("schemas", () => {
 		expect(result.emails[0].subject).toBe("Hi");
 	});
 
-	it("ao3OpeningStateSchema validates correctly with optional fields", () => {
+	it("ao3OpeningStateSchema validates correctly with optional fields and nested comments", () => {
 		const result = ao3OpeningStateSchema.parse({
 			workTitle: "My Fic",
-			tags: ["fluff", "romance"],
-			previousComments: [{ username: "fan123", comment: "Great story!" }],
+			authorName: "author123",
+			summary: "A fic summary",
+			fandoms: ["Example Fandom"],
+			additionalTags: ["fluff", "romance"],
+			stats: { words: "4,500", comments: "2" },
+			previousComments: [
+				{
+					id: "c1",
+					username: "fan123",
+					comment: "Great story!",
+					replies: [{ username: "author123", comment: "Thank you!" }],
+				},
+			],
 		});
 		expect(result.workTitle).toBe("My Fic");
-		expect(result.tags).toEqual(["fluff", "romance"]);
-		expect(result.chapterTitle).toBeUndefined();
+		expect(result.authorName).toBe("author123");
+		expect(result.additionalTags).toEqual(["fluff", "romance"]);
+		expect(result.stats?.words).toBe("4,500");
 		expect(result.previousComments?.[0].username).toBe("fan123");
+		expect(result.previousComments?.[0].replies?.[0].comment).toBe("Thank you!");
 	});
 
 	it("translatorOpeningStateSchema validates correctly", () => {
@@ -252,7 +265,8 @@ describe("schemas", () => {
 		expect(getEditorFields("apple_mail")).toHaveLength(1);
 		expect(getEditorFields("apple_mail")[0].type).toBe("email-list");
 
-		expect(getEditorFields("ao3")).toHaveLength(5);
+		expect(getEditorFields("ao3")).toHaveLength(10);
+		expect(getEditorFields("ao3")[9].type).toBe("ao3-comment-tree");
 
 		expect(getEditorFields("translator")).toHaveLength(1);
 		expect(getEditorFields("translator")[0].type).toBe("textarea");

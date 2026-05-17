@@ -100,7 +100,7 @@ describe("session service", () => {
 				name: "ao3",
 				ui: "ao3" as const,
 				openingState: { workTitle: "My Fanfic" },
-				requiredText: "Scenario: AO3 work page",
+				requiredText: "Scenario: AO3 work page comment thread",
 			},
 			{
 				name: "translator_with_text",
@@ -444,7 +444,7 @@ describe("session service", () => {
 			await sendMessage(123, "User message");
 
 			expect(valuesMock).toHaveBeenCalledTimes(2);
-			expect(valuesMock).toHaveBeenNthCalledWith(1, { sessionId: 123, role: "user", content: "User message" });
+			expect(valuesMock).toHaveBeenNthCalledWith(1, { sessionId: 123, role: "user", content: "User message", llmMetadata: undefined });
 			expect(valuesMock).toHaveBeenNthCalledWith(2, {
 				sessionId: 123,
 				role: "assistant",
@@ -471,6 +471,7 @@ describe("session service", () => {
 				sessionId: 123,
 				role: "user",
 				content: "Ordering check",
+				llmMetadata: undefined,
 			});
 			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.createStructuredOutput.mock.invocationCallOrder[0]);
 		});
@@ -490,6 +491,53 @@ describe("session service", () => {
 			await sendMessage(123, "  Hello  ");
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ content: "Hello" }));
+		});
+
+		it("persists prompt content with display metadata for AO3-style turns", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "Author reply",
+				terminate: false,
+			});
+			const valuesMock = vi
+				.fn()
+				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
+				.mockReturnValueOnce(undefined);
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "Visible comment", "ao3-1", {
+				promptContent: "Prompt context plus visible comment",
+				userDisplayContent: "Visible comment",
+				userMetadata: { ao3: { commentId: "ao3-user-ao3-1" } },
+				assistantAuthorName: "FicAuthor",
+				assistantMetadata: { ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
+			});
+
+			expect(valuesMock).toHaveBeenNthCalledWith(1, {
+				sessionId: 123,
+				role: "user",
+				content: "Prompt context plus visible comment",
+				llmMetadata: expect.objectContaining({
+					clientMessageId: "ao3-1",
+					displayContent: "Visible comment",
+					ao3: { commentId: "ao3-user-ao3-1" },
+				}),
+			});
+			expect(valuesMock).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({
+					role: "assistant",
+					content: "Author reply",
+					llmMetadata: expect.objectContaining({
+						assistantAuthorName: "FicAuthor",
+						ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
+					}),
+				}),
+			);
+			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
+				expect.any(Object),
+				expect.arrayContaining([expect.objectContaining({ role: "user", content: "Prompt context plus visible comment" })]),
+			);
 		});
 
 		it("persists user message even when LLM generation fails", async () => {
