@@ -27,6 +27,15 @@ describe("messageTransformer", () => {
 		expect(result).toEqual([]);
 	});
 
+	it("returns empty array when previousMessages is malformed", () => {
+		const result = getOpeningStateMessages({
+			...baseParams,
+			openingStateData: { previousMessages: null as any } as ChatOpeningState,
+		});
+
+		expect(result).toEqual([]);
+	});
+
 	it("converts previous messages to chat messages format", () => {
 		const openingStateData: ChatOpeningState = {
 			previousMessages: [
@@ -85,25 +94,6 @@ describe("messageTransformer", () => {
 		});
 	});
 
-	it("handles null text content by skipping message", () => {
-		const openingStateData: ChatOpeningState = {
-			previousMessages: [
-				{ sender: "Alice", text: "Valid message" },
-				{ sender: "Bob", text: null as any },
-				{ sender: "Charlie", text: "Another valid message" },
-			],
-		};
-
-		const result = getOpeningStateMessages({
-			...baseParams,
-			openingStateData,
-		});
-
-		expect(result).toHaveLength(2);
-		expect(result[0].text).toBe("Valid message");
-		expect(result[1].text).toBe("Another valid message");
-	});
-
 	it("handles missing sender by using agent name", () => {
 		const openingStateData: ChatOpeningState = {
 			previousMessages: [{ text: "Anonymous message" }],
@@ -120,11 +110,16 @@ describe("messageTransformer", () => {
 		});
 	});
 
-	it("skips messages with empty text content", () => {
+	it.each([
+		{ label: "null text", invalidText: null as any },
+		{ label: "empty text", invalidText: "" },
+		{ label: "whitespace text", invalidText: "   " },
+		{ label: "missing text", invalidText: undefined as any },
+	])("skips message when content is invalid ($label)", ({ invalidText }) => {
 		const openingStateData: ChatOpeningState = {
 			previousMessages: [
 				{ sender: "Alice", text: "Valid message" },
-				{ sender: "Bob", text: "" },
+				{ sender: "Bob", text: invalidText },
 				{ sender: "Charlie", text: "Another valid message" },
 			],
 		};
@@ -155,7 +150,7 @@ describe("messageTransformer", () => {
 		});
 	});
 
-	it("normalizes empty fields to empty strings", () => {
+	it("skips messages with invalid sender/text fields", () => {
 		const openingStateData: ChatOpeningState = {
 			previousMessages: [{ sender: null as any, text: null as any }],
 		};

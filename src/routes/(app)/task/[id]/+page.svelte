@@ -2,6 +2,7 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Star from "@lucide/svelte/icons/star";
+import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
@@ -13,8 +14,7 @@ let task = $derived(data.task);
 
 const objectives = $derived(task.objectives ?? []);
 
-const IMPLEMENTED_UIS = ["discord", "apple_mail"];
-let isPracticeEnabled = $derived(IMPLEMENTED_UIS.includes(task.templateUi));
+let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
 let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
 let lang = $derived(task.language as LanguageCode);
 function difficultyLabel(level: number): string {
@@ -75,7 +75,7 @@ function difficultyLabel(level: number): string {
 		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-2">Background Material</h2>
-				<div class="prose prose-neutral text-base font-light leading-relaxed">{@html renderMarkdown(task.materialsMd)}</div>
+				<div class="prose prose-neutral text-base font-light leading-relaxed whitespace-pre-wrap">{@html renderMarkdown(task.materialsMd)}</div>
 			</div>
 		{/if}
 

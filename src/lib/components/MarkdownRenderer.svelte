@@ -1,17 +1,12 @@
 <script lang="ts">
-import { marked } from "marked";
+import { renderMarkdown } from "$lib/markdown";
 import { prepareMarkdownText } from "./utils/markdownUtils";
 
 let { content = "" } = $props();
 
 const normalizedContent = $derived(prepareMarkdownText(content));
 
-const html = $derived(
-	marked.parse(normalizedContent, {
-		gfm: true,
-		breaks: true,
-	}),
-);
+const html = $derived(renderMarkdown(normalizedContent, { breaks: true }));
 </script>
 
 <div class="markdown-body">{@html html}</div>

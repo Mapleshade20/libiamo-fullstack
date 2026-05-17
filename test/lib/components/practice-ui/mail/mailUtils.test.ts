@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
+	appendPlainTextToDraftHtml,
 	formatDraftMessage,
 	normalizeMailBodySpacing,
 	parseDraftFromMessage,
@@ -16,6 +17,17 @@ describe("mailUtils", () => {
 
 		it("returns an empty string for empty input", () => {
 			expect(plainTextToDraftHtml("")).toBe("");
+		});
+	});
+
+	describe("appendPlainTextToDraftHtml", () => {
+		it("returns new html when there is no existing html", () => {
+			expect(appendPlainTextToDraftHtml("   ", "Hello")).toBe("<div>Hello</div>");
+		});
+
+		it("can append with or without a separating blank line", () => {
+			expect(appendPlainTextToDraftHtml("<div>Hello</div>", "Thanks")).toBe("<div>Hello</div><div><br></div><div>Thanks</div>");
+			expect(appendPlainTextToDraftHtml("<div>Hello</div>", "Thanks", false)).toBe("<div>Hello</div><div>Thanks</div>");
 		});
 	});
 
@@ -58,6 +70,17 @@ describe("mailUtils", () => {
 			);
 		});
 
+		it("returns a plain-text note when body html renders the same as plain body", () => {
+			expect(
+				summarizeDraftPresentation({
+					to: "Maya",
+					subject: "Hi",
+					body: "Hello",
+					bodyHtml: "<div>Hello</div>",
+				}),
+			).toBe("Presentation: plain text or no rich-text styling detected.");
+		});
+
 		it("marks rich text styling without changing the student's words", () => {
 			const result = summarizeDraftPresentation({
 				to: "Maya",
@@ -70,6 +93,18 @@ describe("mailUtils", () => {
 			expect(result).toContain("Marked email body:");
 			expect(result).toContain("**Friday**");
 			expect(result).toContain("[align=center][size=5][color=#d70015]Thanks[/color][/size][/align]");
+		});
+
+		it("marks list items and inline text decorations", () => {
+			const result = summarizeDraftPresentation({
+				to: "Maya",
+				subject: "Checklist",
+				body: "First item\nSecond item",
+				bodyHtml: "<ul><li><i>First item</i></li><li><u><s>Second item</s></u></li></ul>",
+			});
+
+			expect(result).toContain("- _First item_");
+			expect(result).toContain("- [s][u]Second item[/u][/s]");
 		});
 	});
 });
