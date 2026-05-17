@@ -1,5 +1,9 @@
+import DOMPurify from "isomorphic-dompurify";
 import { normalizeText } from "../../utils/messageUtils";
+import type { ChatMessage } from "../chatMessages";
 import type { DraftEmail } from "./types";
+
+const mailBodyHtmlMaxLength = 20000;
 
 function escapeHtml(value: string) {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -18,6 +22,19 @@ export function appendPlainTextToDraftHtml(existingHtml: string | undefined, tex
 	const nextHtml = plainTextToDraftHtml(text);
 	if (!trimmedExistingHtml) return nextHtml;
 	return `${trimmedExistingHtml}${separate ? "<div><br></div>" : ""}${nextHtml}`;
+}
+
+export function sanitizeDraftBodyHtml(value: string | undefined, maxLength = mailBodyHtmlMaxLength) {
+	const trimmed = value?.trim() ?? "";
+	if (!trimmed) return "";
+
+	const limited = trimmed.slice(0, maxLength);
+	return DOMPurify.sanitize(limited, {
+		ALLOWED_TAGS: ["b", "blockquote", "br", "div", "em", "font", "i", "li", "ol", "p", "s", "span", "strike", "strong", "u", "ul"],
+		ALLOWED_ATTR: ["align", "color", "size", "style"],
+		FORBID_TAGS: ["script", "style"],
+		ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z])/i,
+	}).trim();
 }
 
 export function normalizeMailBodySpacing(value: string) {
@@ -188,14 +205,22 @@ export function summarizeDraftPresentation(value: DraftEmail) {
 		.slice(0, 3500);
 }
 
-export function parseDraftFromMessage(text: string, noSubjectLabel: string): DraftEmail {
+export function getMailBodyHtmlFromMessage(message: ChatMessage | null | undefined) {
+	const metadata = message?.llmMetadata;
+	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+	const bodyHtml = (metadata as { mailBodyHtml?: unknown }).mailBodyHtml;
+	return typeof bodyHtml === "string" ? sanitizeDraftBodyHtml(bodyHtml) : "";
+}
+
+export function parseDraftFromMessage(text: string, noSubjectLabel: string, bodyHtmlOverride = ""): DraftEmail {
 	const toMatch = text.match(/^To:\s*(.*)$/m);
 	const subjectMatch = text.match(/^Subject:\s*(.*)$/m);
 	const body = normalizeMailBodySpacing(text.replace(/^To:[^\n]*\nSubject:[^\n]*\n\n?/, ""));
+	const bodyHtml = sanitizeDraftBodyHtml(bodyHtmlOverride);
 	return {
 		to: toMatch?.[1]?.trim() ?? "",
 		subject: subjectMatch?.[1]?.trim() ?? noSubjectLabel,
 		body,
-		bodyHtml: plainTextToDraftHtml(body),
+		bodyHtml: bodyHtml || plainTextToDraftHtml(body),
 	};
 }

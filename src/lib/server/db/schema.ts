@@ -3,6 +3,8 @@ import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, seria
 import { user } from "./auth.schema";
 import { cadenceEnum, interactionTypeEnum, languageCodeEnum, messageRoleEnum, scheduleOriginEnum, sessionStatusEnum, uiVariantEnum } from "./enums";
 
+export { user };
+
 // ── userLearningProfile ──────────────────────────────────────────────
 export const userLearningProfile = pgTable(
 	"user_learning_profile",

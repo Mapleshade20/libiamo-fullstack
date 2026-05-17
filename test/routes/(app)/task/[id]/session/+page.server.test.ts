@@ -5,6 +5,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		query: {
 			practiceSession: { findFirst: vi.fn() },
 			task: { findFirst: vi.fn() },
+			user: { findFirst: vi.fn() },
 		},
 		select: vi.fn(),
 	},
@@ -27,9 +28,10 @@ import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 describe("session page server", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
+		mockDb.query.user.findFirst.mockResolvedValue(null);
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", timezone: "UTC" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
@@ -94,6 +96,21 @@ describe("session page server", () => {
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.existingSession).toBeNull();
+		});
+
+		it("uses the latest profile timezone from the database", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+			mockDb.query.user.findFirst.mockResolvedValue({ name: "Updated Name", timezone: "Asia/Shanghai" });
+
+			const result = (await load({
+				params: { id: mockTaskId },
+				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
+				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+			} as any)) as { user: { name: string; timezone: string } };
+
+			expect(result.user.name).toBe("Updated Name");
+			expect(result.user.timezone).toBe("Asia/Shanghai");
 		});
 
 		it("throws 401 when user not authenticated", async () => {
@@ -531,6 +548,7 @@ describe("session page server", () => {
 						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
 						clientMessageId: "mail-1",
 						presentationReport: "  Presentation: [color=red]too much[/color]  ",
+						bodyHtml: '<div>Hello <b style="color: #d70015">Maya</b><script>alert(1)</script></div>',
 					},
 				}),
 			);
@@ -539,6 +557,7 @@ describe("session page server", () => {
 			expect(mockSessionService.submitOneShotMessage).toHaveBeenCalledWith(789, "To: Maya\nSubject: Meeting\n\nHello Maya", "mail-1", {
 				maxTurns: 1,
 				presentationReport: "Presentation: [color=red]too much[/color]",
+				mailBodyHtml: '<div>Hello <b style="color: #d70015">Maya</b></div>',
 			});
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
@@ -562,7 +581,7 @@ describe("session page server", () => {
 				789,
 				"Hello",
 				undefined,
-				expect.objectContaining({ presentationReport: "x".repeat(4000) }),
+				expect.objectContaining({ presentationReport: "x".repeat(4000), mailBodyHtml: "" }),
 			);
 		});
 

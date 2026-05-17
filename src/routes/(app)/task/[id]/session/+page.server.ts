@@ -2,7 +2,9 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
+import { sanitizeDraftBodyHtml } from "$lib/components/practice-ui/mail/mailUtils";
 import { db } from "$lib/server/db";
+import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
 import {
 	completeSession,
@@ -79,6 +81,14 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
+	const userProfile = await db.query.user.findFirst({
+		where: eq(authUser.id, user.id),
+		columns: {
+			name: true,
+			timezone: true,
+		},
+	});
+
 	const parentData = await parent();
 	const avatarUrl = parentData.avatarUrl;
 	const learningLanguage = taskData.language;
@@ -91,10 +101,10 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		maxTurns: taskData.template.maxTurns || 0,
 		agentStartsFirst: taskData.template.agentStartsFirst,
 		user: {
-			name: user.name || "Learner",
+			name: userProfile?.name || user.name || "Learner",
 			avatarUrl,
 			learningLanguage,
-			timezone: user.timezone || "UTC",
+			timezone: userProfile?.timezone || user.timezone || "UTC",
 		},
 	};
 };
@@ -178,6 +188,8 @@ export const actions: Actions = {
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 		const presentationReportValue = formData.get("presentationReport");
 		const presentationReport = typeof presentationReportValue === "string" ? presentationReportValue.trim().slice(0, 4000) : "";
+		const bodyHtmlValue = formData.get("bodyHtml");
+		const mailBodyHtml = typeof bodyHtmlValue === "string" ? sanitizeDraftBodyHtml(bodyHtmlValue) : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
@@ -199,6 +211,7 @@ export const actions: Actions = {
 			const submitResult = await submitOneShotMessage(sessionId, formattedMessage, clientMessageId || undefined, {
 				maxTurns: taskData.template.maxTurns,
 				presentationReport,
+				mailBodyHtml,
 			});
 			const feedback = await completeSession(sessionId);
 

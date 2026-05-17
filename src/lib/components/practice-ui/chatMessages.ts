@@ -23,6 +23,7 @@ export type ChatMessage = {
 	deliveryState?: "sent" | "pending" | "failed";
 	clientMessageId?: string;
 	retryText?: string;
+	llmMetadata?: unknown;
 };
 
 function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean; hidden?: boolean } {
@@ -38,6 +39,16 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	}
 
 	return false;
+}
+
+function parsePersistedMessageDate(value: string | Date) {
+	if (value instanceof Date) return value;
+	const normalized = value.trim().replace(" ", "T");
+	const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+	if (!hasTimeZone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(normalized)) {
+		return new Date(`${normalized}Z`);
+	}
+	return new Date(value);
 }
 
 export function buildChatMessages({
@@ -65,12 +76,13 @@ export function buildChatMessages({
 			id: message.id.toString(),
 			role: message.role === "user" ? "user" : "agent",
 			text: message.content,
-			timestamp: formatTimestamp(new Date(message.createdAt)),
+			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: message.role === "user" ? userName : agentName,
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
+			llmMetadata: message.llmMetadata,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -83,7 +95,7 @@ export function buildChatMessages({
 				id: `retry-${message.id}`,
 				role: "agent",
 				text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
-				timestamp: formatTimestamp(new Date(message.createdAt)),
+				timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 				authorName: agentName,
 				avatarColor: agentColor,
 				deliveryState: metadata.failed === true ? "failed" : "pending",

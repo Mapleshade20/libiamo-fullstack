@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
 	appendPlainTextToDraftHtml,
 	formatDraftMessage,
+	getMailBodyHtmlFromMessage,
 	normalizeMailBodySpacing,
 	parseDraftFromMessage,
 	plainTextToDraftHtml,
+	sanitizeDraftBodyHtml,
 	summarizeDraftPresentation,
 } from "$lib/components/practice-ui/mail/mailUtils";
 
@@ -61,6 +63,55 @@ describe("mailUtils", () => {
 				bodyHtml: "<div>Hello</div><div><br></div><div>Thanks</div>",
 			});
 		});
+
+		it("uses sanitized persisted body html when parsing a sent message", () => {
+			const result = parseDraftFromMessage(
+				"To: Maya\nSubject: Update\n\nHello styled text",
+				"(No Subject)",
+				'<div>Hello <strong style="color: #d70015">styled</strong> text</div><script>alert("x")</script>',
+			);
+
+			expect(result.body).toBe("Hello styled text");
+			expect(result.bodyHtml).toBe('<div>Hello <strong style="color: #d70015">styled</strong> text</div>');
+		});
+	});
+
+	describe("sanitizeDraftBodyHtml", () => {
+		it("returns an empty string when there is no body html", () => {
+			expect(sanitizeDraftBodyHtml(undefined)).toBe("");
+			expect(getMailBodyHtmlFromMessage(null)).toBe("");
+			expect(
+				getMailBodyHtmlFromMessage({
+					id: "1",
+					role: "user",
+					text: "To: Maya\nSubject: Hi\n\nHello",
+					timestamp: "10:00",
+					authorName: "Learner",
+					llmMetadata: { mailBodyHtml: 123 },
+				}),
+			).toBe("");
+		});
+
+		it("keeps mail formatting tags while removing unsafe markup", () => {
+			expect(
+				sanitizeDraftBodyHtml(
+					'<div onclick="alert(1)"><font color="#d70015" size="5">Friday</font><img src=x onerror=alert(1)><script>alert(1)</script></div>',
+				),
+			).toBe('<div><font color="#d70015" size="5">Friday</font></div>');
+		});
+
+		it("extracts sanitized mail body html from chat message metadata", () => {
+			expect(
+				getMailBodyHtmlFromMessage({
+					id: "1",
+					role: "user",
+					text: "To: Maya\nSubject: Hi\n\nHello",
+					timestamp: "10:00",
+					authorName: "Learner",
+					llmMetadata: { mailBodyHtml: '<div><b>Hello</b><script>alert("x")</script></div>' },
+				}),
+			).toBe("<div><b>Hello</b></div>");
+		});
 	});
 
 	describe("summarizeDraftPresentation", () => {
@@ -105,6 +156,17 @@ describe("mailUtils", () => {
 
 			expect(result).toContain("- _First item_");
 			expect(result).toContain("- [s][u]Second item[/u][/s]");
+		});
+
+		it("ignores unsupported html nodes while reading rich text markers", () => {
+			const result = summarizeDraftPresentation({
+				to: "Maya",
+				subject: "Hi",
+				body: "Hello",
+				bodyHtml: "<!-- editor marker --><div><b>Hello</b></div>",
+			});
+
+			expect(result).toContain("**Hello**");
 		});
 	});
 });

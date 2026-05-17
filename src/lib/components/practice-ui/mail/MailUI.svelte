@@ -12,7 +12,14 @@ import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
-import { formatDraftMessage, parseDraftFromMessage, plainTextToDraftHtml, summarizeDraftPresentation } from "./mailUtils";
+import {
+	formatDraftMessage,
+	getMailBodyHtmlFromMessage,
+	parseDraftFromMessage,
+	plainTextToDraftHtml,
+	sanitizeDraftBodyHtml,
+	summarizeDraftPresentation,
+} from "./mailUtils";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailHint } from "./types";
@@ -62,7 +69,9 @@ const hasSubmittedEmail = $derived(sentMessages.length > 0);
 const limitReached = $derived(hasSubmittedEmail || isCompleted);
 const isBusy = $derived(isInitializing || isSubmitting);
 const selectedSentMessage = $derived(selectedSentId ? (sentMessages.find((message) => message.id === selectedSentId) ?? null) : null);
-const selectedSentEmail = $derived(selectedSentMessage ? parseDraftFromMessage(selectedSentMessage.text, t.noSubject) : null);
+const selectedSentEmail = $derived(
+	selectedSentMessage ? parseDraftFromMessage(selectedSentMessage.text, t.noSubject, getMailBodyHtmlFromMessage(selectedSentMessage)) : null,
+);
 const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!hasSubmittedEmail && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const todayLabel = $derived(getTodayDateString(language, timeZone));
@@ -169,12 +178,13 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, presentationReport: string) {
+async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, presentationReport: string, bodyHtml: string) {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
 	formData.append("presentationReport", presentationReport);
+	formData.append("bodyHtml", bodyHtml);
 
 	const res = await fetch(`?/submit`, {
 		method: "POST",
@@ -238,6 +248,7 @@ async function handleSendEmail() {
 
 	const currentText = formatDraftMessage(draft, t.noSubject);
 	const presentationReport = summarizeDraftPresentation(draft);
+	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
 	const clientMessageId = crypto.randomUUID();
 	isSubmitting = true;
 
@@ -249,6 +260,7 @@ async function handleSendEmail() {
 		authorName: userName,
 		avatar: avatarUrl,
 		clientMessageId,
+		llmMetadata: { clientMessageId, failed: false, mailBodyHtml },
 	};
 
 	messages = [...messages, sentMessage];
@@ -258,7 +270,7 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, presentationReport);
+		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, presentationReport, mailBodyHtml);
 		if (result.type === "success" && result.data) {
 			isCompleted = true;
 			feedback = result.data.feedback as TutorFeedback;
@@ -370,7 +382,9 @@ $effect(() => {
 >
 	<Overlays {showEvaluationModal} {feedback} {showToast} {t} onCloseEvaluation={() => (showEvaluationModal = false)} />
 
-	<div class="mail-window grid h-full w-full grid-cols-[240px_minmax(280px,360px)_1fr] overflow-hidden border border-black/10 bg-white shadow-2xl">
+	<div
+		class="mail-window grid h-full min-h-0 w-full grid-cols-[240px_minmax(280px,360px)_1fr] overflow-hidden border border-black/10 bg-white shadow-2xl"
+	>
 		<Sidebar
 			{showSidebar}
 			{activeMailbox}

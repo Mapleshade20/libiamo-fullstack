@@ -6,7 +6,6 @@ import Paperclip from "@lucide/svelte/icons/paperclip";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import UserCircle from "@lucide/svelte/icons/user-circle";
 import type { ChatMessage } from "../chatMessages";
-import { normalizeMailBodySpacing } from "./mailUtils";
 import type { DraftEmail } from "./types";
 
 let {
@@ -37,10 +36,10 @@ let {
 	onMockAction?: () => void;
 } = $props();
 
-const displayBody = $derived(selectedSentEmail ? normalizeMailBodySpacing(selectedSentEmail.body) : "");
+const displayBodyHtml = $derived(selectedSentEmail?.bodyHtml ?? "");
 </script>
 
-<main class="mail-detail flex min-w-0 flex-col bg-white">
+<main class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
 	<header class="toolbar flex h-13 shrink-0 items-center gap-2 border-b border-black/10 bg-[#F7F7F9]/90 px-3 backdrop-blur-xl">
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.archive}><Archive size={18} /></button>
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.trash}><Trash2 size={18} /></button>
@@ -63,7 +62,7 @@ const displayBody = $derived(selectedSentEmail ? normalizeMailBodySpacing(select
 		{/if}
 	</header>
 
-	<div bind:this={messageScroll} class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">
+	<div bind:this={messageScroll} class="detail-scroll min-h-0 flex-1 overflow-y-scroll p-5 sm:p-8">
 		{#if selectedSentEmail}
 			<article class="mx-auto max-w-3xl">
 				<div class="mb-5 border-b border-black/10 pb-5">
@@ -81,7 +80,7 @@ const displayBody = $derived(selectedSentEmail ? normalizeMailBodySpacing(select
 						<div class="ml-auto shrink-0 text-xs text-[#6E6E73]">{selectedSentMessage?.timestamp}</div>
 					</div>
 				</div>
-				<div class="whitespace-pre-wrap text-[15px] leading-7 text-[#1D1D1F]">{displayBody}</div>
+				<div class="mail-body text-[15px] leading-7 text-[#1D1D1F]">{@html displayBodyHtml}</div>
 
 				{#if isBusy}
 					<div class="mt-8 flex items-center gap-2 text-sm text-[#6E6E73]">
@@ -95,3 +94,52 @@ const displayBody = $derived(selectedSentEmail ? normalizeMailBodySpacing(select
 		{/if}
 	</div>
 </main>
+
+<style>
+.mail-body :global(div),
+.mail-body :global(p) {
+	min-height: 1.75rem;
+}
+
+.mail-body :global(ul),
+.mail-body :global(ol) {
+	margin: 0.75rem 0;
+	padding-left: 1.5rem;
+}
+
+.mail-body :global(ul) {
+	list-style: disc;
+}
+
+.mail-body :global(ol) {
+	list-style: decimal;
+}
+
+.mail-body :global(blockquote) {
+	margin: 0.75rem 0 0.75rem 1.5rem;
+}
+
+.detail-scroll {
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	scrollbar-color: rgb(142 142 147 / 0.55) rgb(242 242 247 / 0.95);
+}
+
+.detail-scroll::-webkit-scrollbar {
+	width: 12px;
+}
+
+.detail-scroll::-webkit-scrollbar-track {
+	background: rgb(242 242 247 / 0.95);
+}
+
+.detail-scroll::-webkit-scrollbar-thumb {
+	background: rgb(142 142 147 / 0.55);
+	border: 3px solid rgb(242 242 247 / 0.95);
+	border-radius: 999px;
+}
+
+.detail-scroll::-webkit-scrollbar-thumb:hover {
+	background: rgb(99 99 102 / 0.7);
+}
+</style>

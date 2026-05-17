@@ -734,6 +734,7 @@ describe("session service", () => {
 			const result = await submitOneShotMessage(123, "  To: Maya\nSubject: Hi\n\nHello  ", "mail-1", {
 				maxTurns: 1,
 				presentationReport: "  Presentation: [size=5]large[/size]  ",
+				mailBodyHtml: "  <div>Hello <b>Maya</b></div>  ",
 			});
 
 			expect(result).toEqual({ turnCount: 1 });
@@ -745,6 +746,7 @@ describe("session service", () => {
 					clientMessageId: "mail-1",
 					failed: false,
 					presentationReport: "Presentation: [size=5]large[/size]",
+					mailBodyHtml: "<div>Hello <b>Maya</b></div>",
 				},
 			});
 		});

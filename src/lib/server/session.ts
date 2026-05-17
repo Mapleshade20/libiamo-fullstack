@@ -214,7 +214,9 @@ type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	hidden?: boolean;
+	mailBodyHtml?: string;
 	model?: string;
+	presentationReport?: string;
 	raw?: unknown;
 };
 
@@ -418,7 +420,7 @@ export async function submitOneShotMessage(
 	sessionId: number,
 	userMessage: string,
 	clientMessageId?: string,
-	options: { maxTurns?: number | null; presentationReport?: string } = {},
+	options: { maxTurns?: number | null; presentationReport?: string; mailBodyHtml?: string } = {},
 ): Promise<SubmitOneShotResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) {
@@ -452,11 +454,12 @@ export async function submitOneShotMessage(
 		role: "user",
 		content: trimmedUserMessage,
 		llmMetadata:
-			clientMessageId || options.presentationReport
+			clientMessageId || options.presentationReport || options.mailBodyHtml
 				? {
 						clientMessageId,
 						failed: false,
 						presentationReport: options.presentationReport?.trim() || undefined,
+						mailBodyHtml: options.mailBodyHtml?.trim() || undefined,
 					}
 				: undefined,
 	});

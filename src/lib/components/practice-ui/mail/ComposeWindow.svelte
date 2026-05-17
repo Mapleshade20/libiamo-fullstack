@@ -6,7 +6,7 @@ import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
 import ComposeHintPanel from "./ComposeHintPanel.svelte";
 import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
-import { normalizeMailBodySpacing, plainTextToDraftHtml } from "./mailUtils";
+import { normalizeMailBodySpacing, plainTextToDraftHtml, sanitizeDraftBodyHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
 let {
@@ -275,8 +275,14 @@ function handleEditorKeydown(event: KeyboardEvent) {
 
 function handlePaste(event: ClipboardEvent) {
 	event.preventDefault();
+	const html = event.clipboardData?.getData("text/html") ?? "";
 	const text = event.clipboardData?.getData("text/plain") ?? "";
-	document.execCommand("insertText", false, text);
+	const sanitizedHtml = sanitizeDraftBodyHtml(html);
+	if (sanitizedHtml) {
+		document.execCommand("insertHTML", false, sanitizedHtml);
+	} else {
+		document.execCommand("insertText", false, text);
+	}
 	syncDraftFromEditor();
 }
 
@@ -380,6 +386,7 @@ $effect(() => {
 		onClearFormatting={clearFormatting}
 		onUndo={undoEditorChange}
 		onRedo={redoEditorChange}
+		onPreserveEditorSelection={saveEditorSelection}
 	/>
 	<ComposeBodyEditor
 		bind:editor={bodyEditor}

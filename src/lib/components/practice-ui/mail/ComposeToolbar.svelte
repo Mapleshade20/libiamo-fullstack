@@ -53,6 +53,7 @@ let {
 	onClearFormatting = () => {},
 	onUndo = () => {},
 	onRedo = () => {},
+	onPreserveEditorSelection = () => {},
 }: {
 	activeFormats?: ComposeActiveFormats;
 	editorDisabled?: boolean;
@@ -67,10 +68,30 @@ let {
 	onClearFormatting?: () => void;
 	onUndo?: () => void;
 	onRedo?: () => void;
+	onPreserveEditorSelection?: () => void;
 } = $props();
+
+function handleToolbarPointerDown(event: PointerEvent) {
+	onPreserveEditorSelection();
+	if ((event.target as HTMLElement).closest("button")) {
+		event.preventDefault();
+	}
+}
+
+function handleFontSizeChange(event: Event) {
+	const select = event.currentTarget as HTMLSelectElement;
+	const value = select.value;
+	if (value) onApplyFontSize(value);
+}
 </script>
 
-<div class="format-toolbar flex flex-wrap items-center gap-1 border-b border-black/10 bg-white px-3 py-2">
+<div
+	class="format-toolbar flex flex-wrap items-center gap-1 border-b border-black/10 bg-white px-3 py-2"
+	role="toolbar"
+	aria-label="Formatting"
+	tabindex="-1"
+	onpointerdown={handleToolbarPointerDown}
+>
 	<button type="button" class="format-button" title={t.undo} disabled={editorDisabled} onclick={onUndo}><Undo2 size={16} /></button>
 	<button type="button" class="format-button" title={t.redo} disabled={editorDisabled} onclick={onRedo}><Redo2 size={16} /></button>
 	<div class="mx-1 h-5 w-px bg-black/10"></div>
@@ -114,8 +135,8 @@ let {
 	>
 		<Strikethrough size={16} />
 	</button>
-	<select class="font-size-select" title={t.fontSize} disabled={editorDisabled} onchange={(event) => onApplyFontSize(event.currentTarget.value)}>
-		<option value="3">{t.fontSize}</option>
+	<select class="font-size-select" title={t.fontSize} disabled={editorDisabled} onchange={handleFontSizeChange}>
+		<option value="">{t.fontSize}</option>
 		{#each FONT_SIZES as size}
 			<option value={size.commandValue}>{size.label}</option>
 		{/each}

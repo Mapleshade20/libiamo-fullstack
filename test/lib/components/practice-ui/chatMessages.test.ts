@@ -159,6 +159,71 @@ describe("buildChatMessages", () => {
 		expect(result[0].isHidden).toBe(true);
 	});
 
+	it("preserves llm metadata for UI-specific message rendering", () => {
+		const llmMetadata = { clientMessageId: "mail-1", mailBodyHtml: "<div><b>Hello</b></div>" };
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "To: Maya\nSubject: Hi\n\nHello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata,
+				},
+				{ id: 2, role: "assistant", content: "Done", createdAt: new Date("2026-01-01T10:01:00Z") },
+			],
+		});
+
+		expect(result[0].llmMetadata).toBe(llmMetadata);
+	});
+
+	it("treats persisted timestamp strings without offsets as UTC", () => {
+		const seenDates: Date[] = [];
+		buildChatMessages({
+			...baseOptions,
+			formatTimestamp: (date) => {
+				seenDates.push(date);
+				return "formatted";
+			},
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00",
+				},
+			],
+		});
+
+		expect(seenDates[0]?.toISOString()).toBe("2026-05-17T05:01:00.000Z");
+	});
+
+	it("formats persisted and optimistic timestamps consistently for the same instant and timezone", () => {
+		const formatTimestamp = (date: Date) =>
+			date.toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+				timeZone: "Asia/Shanghai",
+			});
+		const optimisticTimestamp = formatTimestamp(new Date("2026-05-17T05:01:00Z"));
+
+		const result = buildChatMessages({
+			...baseOptions,
+			formatTimestamp,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00",
+				},
+			],
+		});
+
+		expect(result[0]?.timestamp).toBe(optimisticTimestamp);
+	});
+
 	it("ignores malformed llm metadata and avoids retry placeholders", () => {
 		const result = buildChatMessages({
 			...baseOptions,
