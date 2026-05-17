@@ -46,7 +46,7 @@ let hints = $state<Array<{ text: string; translation: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 
-const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached);
+const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || isWaitingRetry);
 
 $effect(() => {
 	const text = inputText;
@@ -84,7 +84,7 @@ async function handleGetHint() {
 		showHintMenu = true;
 		return;
 	}
-	if (!sessionId || isCompleted) return;
+	if (!sessionId || isCompleted || disabled) return;
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
@@ -245,6 +245,7 @@ function handleKeyDown(e: KeyboardEvent) {
 							handleGetHint();
 						}}
 						title={t.getHint}
+						{disabled}
 					>
 						<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
 					</button>
@@ -292,8 +293,10 @@ function handleKeyDown(e: KeyboardEvent) {
 						class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
 						onclick={(e) => {
 							e.stopPropagation();
+							if (disabled) return;
 							showEmojiPicker = !showEmojiPicker;
 						}}
+						{disabled}
 					>
 						<Smile size={22} />
 					</button>
