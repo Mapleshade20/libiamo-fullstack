@@ -28,6 +28,7 @@ export interface PracticeSessionOptions {
 	labels: PracticeSessionLabels;
 	joinTriggerText: string;
 	isHiddenCheck?: (message: { content: string }) => boolean;
+	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
 }
 
 function getSessionSnapshot(session: {
@@ -55,7 +56,8 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
 	const options = getOptions();
-	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, labels, joinTriggerText, isHiddenCheck } = options;
+	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, labels, joinTriggerText, isHiddenCheck, onPoolInit } =
+		options;
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 
@@ -232,6 +234,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 				const pool = initUserPool(currentId);
 				agentUser = { ...pool.agentUser };
+				onPoolInit?.(pool);
 
 				isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
 				feedback = existingSession.tutorFeedback || null;
@@ -298,6 +301,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 						const pool = initUserPool(currentId);
 						agentUser = { ...pool.agentUser };
+						onPoolInit?.(pool);
 
 						const openingMessages = getOpeningStateMessages({
 							openingStateData,

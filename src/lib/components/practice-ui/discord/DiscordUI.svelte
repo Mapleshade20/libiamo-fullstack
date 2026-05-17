@@ -1,6 +1,5 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
-import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
@@ -13,7 +12,6 @@ import MobileTopBar from "./MobileTopBar.svelte";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatUser } from "./types";
-import { initUserPool } from "./userPool";
 
 interface Props {
 	taskId?: string | number;
@@ -61,6 +59,10 @@ const session = createPracticeSession(() => ({
 	labels: sessionLabels,
 	joinTriggerText: "*User joined the server*",
 	isHiddenCheck: (m) => m.content === "*User joined the server*",
+	onPoolInit(pool) {
+		onlineUsers = pool.onlineUsers;
+		offlineUsers = pool.offlineUsers;
+	},
 }));
 
 const openingStateData = session.openingStateData;
@@ -125,13 +127,6 @@ function handleMockAction() {
 		showToast = false;
 	}, 3000);
 }
-
-onMount(() => {
-	if (!existingSession) return;
-	if (!onlineUsers.length && existingSession.id) {
-		({ onlineUsers, offlineUsers } = initUserPool(existingSession.id));
-	}
-});
 </script>
 
 <!--===================================================-->
