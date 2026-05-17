@@ -1,11 +1,9 @@
 <script lang="ts">
-import Lightbulb from "@lucide/svelte/icons/lightbulb";
-import LoaderCircle from "@lucide/svelte/icons/loader-circle";
-import Paperclip from "@lucide/svelte/icons/paperclip";
-import Send from "@lucide/svelte/icons/send";
-import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import ComposeActionBar from "./ComposeActionBar.svelte";
+import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
+import ComposeHeader from "./ComposeHeader.svelte";
 import ComposeHintPanel from "./ComposeHintPanel.svelte";
 import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
 import { normalizeMailBodySpacing, plainTextToDraftHtml } from "./mailUtils";
@@ -367,18 +365,7 @@ $effect(() => {
 	style:height={isCompact ? null : `${frame.height}px`}
 	transition:fly={{ y: 24, duration: 180 }}
 >
-	<div class="compose-titlebar flex h-11 items-center gap-2 rounded-t-xl bg-[#F2F2F7] px-4" role="presentation" onpointerdown={startDrag}>
-		<span class="text-sm font-semibold">{t.newMessage}</span>
-		<button type="button" class="ml-auto rounded p-1 text-[#6E6E73] hover:bg-black/10 hover:text-[#1D1D1F]" onclick={onClose}><X size={17} /></button>
-	</div>
-	<label class="compose-line">
-		<span>{t.to}:</span>
-		<input value={draft.to} readonly aria-readonly="true" class="readonly-field">
-	</label>
-	<label class="compose-line">
-		<span>{t.subject}:</span>
-		<input bind:value={draft.subject} disabled={isSubmitting || isCompleted || limitReached}>
-	</label>
+	<ComposeHeader bind:draft subjectDisabled={isSubmitting || isCompleted || limitReached} {t} {onClose} onStartDrag={startDrag} />
 	<ComposeToolbar
 		{activeFormats}
 		{editorDisabled}
@@ -394,60 +381,35 @@ $effect(() => {
 		onUndo={undoEditorChange}
 		onRedo={redoEditorChange}
 	/>
-	<div class="editor-wrap min-h-0 flex-1">
-		{#if editorIsEmpty}
-			<div class="editor-placeholder">{isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}</div>
-		{/if}
-		<div
-			bind:this={bodyEditor}
-			class="body-editor"
-			class:is-disabled={editorDisabled}
-			contenteditable={!editorDisabled}
-			role="textbox"
-			aria-multiline="true"
-			tabindex="0"
-			oninput={syncDraftFromEditor}
-			onkeydown={handleEditorKeydown}
-			onkeyup={saveEditorSelection}
-			onmouseup={saveEditorSelection}
-			onfocus={saveEditorSelection}
-			onblur={syncDraftFromEditor}
-			onpaste={handlePaste}
-		></div>
-	</div>
+	<ComposeBodyEditor
+		bind:editor={bodyEditor}
+		isEmpty={editorIsEmpty}
+		{editorDisabled}
+		placeholder={isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}
+		onInput={syncDraftFromEditor}
+		onKeydown={handleEditorKeydown}
+		onKeyup={saveEditorSelection}
+		onMouseup={saveEditorSelection}
+		onFocus={saveEditorSelection}
+		onBlur={syncDraftFromEditor}
+		onPaste={handlePaste}
+	/>
 	{#if showHintPanel}
 		<ComposeHintPanel {hint} {isGettingHint} {t} {onCloseHint} onInsertHint={insertHintText} />
 	{/if}
-	<div class="flex items-center gap-2 border-t border-black/10 bg-[#F7F7F9] px-4 py-3">
-		<button type="button" class="icon-button" onclick={onMockAction}><Paperclip size={17} /></button>
-		<button
-			type="button"
-			class="inline-flex items-center gap-2 rounded-md border border-[#FFD18A] bg-[#FFF7E8] px-3 py-2 text-sm font-semibold text-[#8A4B00] hover:bg-[#FFEBC2] disabled:cursor-not-allowed disabled:opacity-50"
-			disabled={!sessionId || isCompleted || isInitializing || isGettingHint || limitReached}
-			onclick={onGetHint}
-		>
-			{#if isGettingHint}
-				<LoaderCircle size={15} class="animate-spin" />
-			{:else}
-				<Lightbulb size={15} />
-			{/if}
-			{t.writingAssist}
-		</button>
-		<button
-			type="button"
-			class="ml-auto inline-flex items-center gap-2 rounded-md bg-[#3478F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0A64FF] disabled:cursor-not-allowed disabled:opacity-50"
-			disabled={!draft.to.trim() || !draft.body.trim() || isSubmitting || isCompleted || isInitializing || !sessionId || limitReached}
-			onclick={onSend}
-		>
-			{#if isSubmitting}
-				<LoaderCircle size={15} class="animate-spin" />
-				{t.sending}
-			{:else}
-				<Send size={15} />
-				{t.send}
-			{/if}
-		</button>
-	</div>
+	<ComposeActionBar
+		{draft}
+		{sessionId}
+		{isSubmitting}
+		{isCompleted}
+		{isInitializing}
+		{isGettingHint}
+		{limitReached}
+		{t}
+		{onMockAction}
+		{onGetHint}
+		{onSend}
+	/>
 	<div class="resize-grip" role="presentation" onpointerdown={startResize}></div>
 </div>
 
@@ -467,105 +429,6 @@ $effect(() => {
 
 .compose-window.frame-ready {
 	opacity: 1;
-}
-
-.compose-titlebar {
-	cursor: move;
-	user-select: none;
-}
-
-.compose-line {
-	display: flex;
-	min-height: 42px;
-	align-items: center;
-	gap: 10px;
-	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-	padding: 0 14px;
-	font-size: 0.9rem;
-}
-
-.compose-line span {
-	width: 64px;
-	color: #6e6e73;
-}
-
-.compose-line input {
-	min-width: 0;
-	flex: 1;
-	background: transparent;
-	outline: none;
-}
-
-.readonly-field {
-	color: #6e6e73;
-	cursor: default;
-}
-
-.editor-wrap {
-	position: relative;
-	overflow: auto;
-	background: white;
-}
-
-.body-editor {
-	min-height: 100%;
-	padding: 16px;
-	font-size: 15px;
-	line-height: 1.5;
-	outline: none;
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-.body-editor :global(div),
-.body-editor :global(p) {
-	min-height: 1.5em;
-	margin: 0;
-}
-
-.body-editor :global(ul),
-.body-editor :global(ol) {
-	list-style-position: outside;
-	margin: 0.4em 0;
-	padding-left: 1.6em;
-}
-
-.body-editor :global(ul) {
-	list-style-type: disc;
-}
-
-.body-editor :global(ol) {
-	list-style-type: decimal;
-}
-
-.body-editor :global(ul ul) {
-	list-style-type: circle;
-}
-
-.body-editor :global(ol ol),
-.body-editor :global(ul ol) {
-	list-style-type: lower-alpha;
-}
-
-.body-editor :global(li) {
-	padding-left: 0.1em;
-	display: list-item;
-}
-
-.body-editor.is-disabled {
-	pointer-events: none;
-	opacity: 0.5;
-}
-
-.editor-placeholder {
-	pointer-events: none;
-	position: absolute;
-	left: 16px;
-	top: 16px;
-	z-index: 1;
-	color: #8e8e93;
-	font-size: 15px;
-	line-height: 1.5;
 }
 
 .resize-grip {
@@ -592,10 +455,6 @@ $effect(() => {
 	.compose-window {
 		inset: 10px;
 		opacity: 1;
-	}
-
-	.compose-titlebar {
-		cursor: default;
 	}
 
 	.resize-grip {
