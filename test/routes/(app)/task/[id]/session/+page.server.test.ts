@@ -547,7 +547,6 @@ describe("session page server", () => {
 						sessionId: "789",
 						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
 						clientMessageId: "mail-1",
-						presentationReport: "  Presentation: [color=red]too much[/color]  ",
 						bodyHtml: '<div>Hello <b style="color: #d70015">Maya</b><script>alert(1)</script></div>',
 					},
 				}),
@@ -556,33 +555,9 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ success: true, turnCount: 1, feedback });
 			expect(mockSessionService.submitOneShotMessage).toHaveBeenCalledWith(789, "To: Maya\nSubject: Meeting\n\nHello Maya", "mail-1", {
 				maxTurns: 1,
-				presentationReport: "Presentation: [color=red]too much[/color]",
 				mailBodyHtml: '<div>Hello <b style="color: #d70015">Maya</b></div>',
 			});
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
-		});
-
-		it("caps presentation report before passing it to the session service", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.submitOneShotMessage.mockResolvedValue({ turnCount: 1 });
-			mockSessionService.completeSession.mockResolvedValue({ content: "Done", objectiveResults: [] });
-
-			await actions.submit(
-				createFormEvent({
-					values: {
-						sessionId: "789",
-						message: "Hello",
-						presentationReport: "x".repeat(4100),
-					},
-				}),
-			);
-
-			expect(mockSessionService.submitOneShotMessage).toHaveBeenCalledWith(
-				789,
-				"Hello",
-				undefined,
-				expect.objectContaining({ presentationReport: "x".repeat(4000), mailBodyHtml: "" }),
-			);
 		});
 
 		it("rejects submit for non-one-shot tasks", async () => {

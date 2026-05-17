@@ -535,40 +535,6 @@ describe("session service", () => {
 			expect(result.objectiveResults).toHaveLength(0);
 		});
 
-		it("includes email presentation notes in the evaluation prompt", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
-				...mockSession,
-				agentPromptSnapshot: {
-					systemPrompt: "Mail prompt",
-					mbti: "ENFP",
-					ui: "apple_mail",
-					scenarioContext: "Scenario: Received email",
-				},
-				messages: [
-					{
-						role: "user",
-						content: "To: Maya\nSubject: Deadline\n\nPlease reply by Friday.",
-						llmMetadata: {
-							presentationReport: "Marked email body:\nPlease reply by **Friday**.",
-						},
-					},
-				],
-				task: mockTaskObjectives,
-			});
-			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn() }) });
-			mockClient.createStructuredOutput.mockResolvedValue({
-				content: "Good email.",
-				objectiveResults: [{ text: "Use polite language", grade: "A" }],
-			});
-
-			await completeSession(123);
-
-			const messages = mockClient.createStructuredOutput.mock.calls[0]?.[1];
-			expect(messages?.[0]?.content).toContain("## Email Presentation Notes");
-			expect(messages?.[0]?.content).toContain("Marked email body:\nPlease reply by **Friday**.");
-			expect(messages?.[0]?.content).toContain("Markers such as **text**");
-		});
-
 		it("throws when session not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
@@ -726,14 +692,13 @@ describe("session service", () => {
 			messages: [],
 		};
 
-		it("persists a one-shot user message with client id and presentation report metadata", async () => {
+		it("persists a one-shot user message with client id and mail body html metadata", async () => {
 			const valuesMock = vi.fn();
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
 
 			const result = await submitOneShotMessage(123, "  To: Maya\nSubject: Hi\n\nHello  ", "mail-1", {
 				maxTurns: 1,
-				presentationReport: "  Presentation: [size=5]large[/size]  ",
 				mailBodyHtml: "  <div>Hello <b>Maya</b></div>  ",
 			});
 
@@ -745,7 +710,6 @@ describe("session service", () => {
 				llmMetadata: {
 					clientMessageId: "mail-1",
 					failed: false,
-					presentationReport: "Presentation: [size=5]large[/size]",
 					mailBodyHtml: "<div>Hello <b>Maya</b></div>",
 				},
 			});

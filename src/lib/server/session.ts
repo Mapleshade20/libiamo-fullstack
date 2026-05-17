@@ -216,7 +216,6 @@ type SessionMessageMetadata = {
 	hidden?: boolean;
 	mailBodyHtml?: string;
 	model?: string;
-	presentationReport?: string;
 	raw?: unknown;
 };
 
@@ -420,7 +419,7 @@ export async function submitOneShotMessage(
 	sessionId: number,
 	userMessage: string,
 	clientMessageId?: string,
-	options: { maxTurns?: number | null; presentationReport?: string; mailBodyHtml?: string } = {},
+	options: { maxTurns?: number | null; mailBodyHtml?: string } = {},
 ): Promise<SubmitOneShotResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) {
@@ -454,11 +453,10 @@ export async function submitOneShotMessage(
 		role: "user",
 		content: trimmedUserMessage,
 		llmMetadata:
-			clientMessageId || options.presentationReport || options.mailBodyHtml
+			clientMessageId || options.mailBodyHtml
 				? {
 						clientMessageId,
 						failed: false,
-						presentationReport: options.presentationReport?.trim() || undefined,
 						mailBodyHtml: options.mailBodyHtml?.trim() || undefined,
 					}
 				: undefined,
@@ -476,14 +474,6 @@ function buildTutorPrompt(
 	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
 	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
-	const presentationReports = userMessages
-		.map((message, index) => {
-			const metadata = message.llmMetadata as { presentationReport?: unknown } | null;
-			const report = typeof metadata?.presentationReport === "string" ? metadata.presentationReport.trim() : "";
-			return report ? `${index + 1}. ${report}` : "";
-		})
-		.filter(Boolean)
-		.join("\n");
 
 	const objectivesSection =
 		objectives.length > 0
@@ -504,17 +494,13 @@ function buildTutorPrompt(
 	## Student's Messages (evaluate these specifically)
 	${studentMessages || "(No messages from student)"}
 
-	## Email Presentation Notes
-	${presentationReports || "(No separate presentation notes)"}
-
 	## Evaluation Instructions
 	Evaluate how well the student achieved the objectives (or general fluency if none) considering:
 	- The scenario context they were responding to
 	- The full conversation flow (how they adapted to the AI's responses)
-	- The quality and appropriateness of their messages
-	- For email-style tasks, whether the message presentation is visually reasonable and appropriate. Do not treat presentation notes as student-written message text.
-	- Email Presentation Notes may include a marked copy of the email body. Markers such as **text**, [color=value]text[/color], [size=value]text[/size], or [align=value]text[/align] describe visual styling only and are not part of the student's words.
-	- Use the marked email body to judge formatting choices in context: styling a truly important deadline, heading, or key action can be appropriate, but styling ordinary words or phrases with bold/color/large fonts is usually distracting or unprofessional.
+	- The quality, clarity, and appropriateness of their messages
+	- For email-style tasks, judge the student's submitted message mainly by its content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.
+	- Do not penalize the student for lack of rich-text formatting.
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved

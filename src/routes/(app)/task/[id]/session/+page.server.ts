@@ -186,8 +186,6 @@ export const actions: Actions = {
 		const rawMessage = formData.get("message") as string;
 		const clientMessageIdValue = formData.get("clientMessageId");
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
-		const presentationReportValue = formData.get("presentationReport");
-		const presentationReport = typeof presentationReportValue === "string" ? presentationReportValue.trim().slice(0, 4000) : "";
 		const bodyHtmlValue = formData.get("bodyHtml");
 		const mailBodyHtml = typeof bodyHtmlValue === "string" ? sanitizeDraftBodyHtml(bodyHtmlValue) : "";
 
@@ -210,7 +208,6 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const submitResult = await submitOneShotMessage(sessionId, formattedMessage, clientMessageId || undefined, {
 				maxTurns: taskData.template.maxTurns,
-				presentationReport,
 				mailBodyHtml,
 			});
 			const feedback = await completeSession(sessionId);

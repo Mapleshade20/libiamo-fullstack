@@ -6,7 +6,7 @@ import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
 import ComposeHintPanel from "./ComposeHintPanel.svelte";
 import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
-import { normalizeMailBodySpacing, plainTextToDraftHtml, sanitizeDraftBodyHtml } from "./mailUtils";
+import { normalizeMailBodySpacing, plainTextToDraftHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
 let {
@@ -49,42 +49,21 @@ let frameReady = $state(false);
 let viewportWidth = $state(1024);
 let lastAppliedEditorHtml = $state("");
 let savedEditorRange = $state<Range | null>(null);
-let savedEditorSelection = $state<{ start: number; end: number } | null>(null);
+let savedEditorDomSelection = $state<SerializedEditorSelection | null>(null);
 let isRestoringSelection = false;
-let selectedFontSize = $state("3");
-let selectedTextColor = $state("#1D1D1F");
-let pendingTypingStyle = $state<TypingStyle | null>(null);
 let activeFormats = $state<ComposeActiveFormats>({
-	bold: false,
-	italic: false,
-	underline: false,
-	strikeThrough: false,
 	insertUnorderedList: false,
 	insertOrderedList: false,
 });
+
 const isCompact = $derived(viewportWidth <= 640);
 const editorIsEmpty = $derived(!draft.body.trim());
 const editorDisabled = $derived(isSubmitting || isCompleted || limitReached);
 
 const MIN_WIDTH = 560;
 const MIN_HEIGHT = 440;
-const fontSizePixelsByCommandValue: Record<string, string> = {
-	"2": "12px",
-	"3": "14px",
-	"4": "18px",
-	"5": "24px",
-};
-const commandValueByFontSizePixels: Record<string, string> = {
-	"12px": "2",
-	"14px": "3",
-	"18px": "4",
-	"24px": "5",
-};
-type EditorCommand =
-	| "bold"
-	| "italic"
-	| "underline"
-	| "strikeThrough"
+
+type StructuralEditorCommand =
 	| "justifyLeft"
 	| "justifyCenter"
 	| "justifyRight"
@@ -93,11 +72,20 @@ type EditorCommand =
 	| "outdent"
 	| "insertUnorderedList"
 	| "insertOrderedList"
-	| "foreColor"
-	| "fontSize"
-	| "removeFormat"
 	| "undo"
-	| "redo";
+	| "redo"
+	| "insertText";
+
+type SerializedSelectionPoint = {
+	path: number[];
+	offset: number;
+};
+
+type SerializedEditorSelection = {
+	anchor: SerializedSelectionPoint;
+	focus: SerializedSelectionPoint;
+	collapsed: boolean;
+};
 
 function constrainFrame(nextFrame = frame) {
 	if (typeof window === "undefined") return nextFrame;
@@ -170,243 +158,118 @@ function getPlainTextFromEditor() {
 	);
 }
 
-function updateActiveFormats() {
-	const fontSize = document.queryCommandValue("fontSize");
-	const typingStyle = getTypingStyleAtSelection();
-	activeFormats = typingStyle
-		? {
-				bold: typingStyle.bold,
-				italic: typingStyle.italic,
-				underline: typingStyle.underline,
-				strikeThrough: typingStyle.strikeThrough,
-				insertUnorderedList: document.queryCommandState("insertUnorderedList"),
-				insertOrderedList: document.queryCommandState("insertOrderedList"),
-			}
-		: {
-				bold: document.queryCommandState("bold"),
-				italic: document.queryCommandState("italic"),
-				underline: document.queryCommandState("underline"),
-				strikeThrough: document.queryCommandState("strikeThrough"),
-				insertUnorderedList: document.queryCommandState("insertUnorderedList"),
-				insertOrderedList: document.queryCommandState("insertOrderedList"),
-			};
-	if (typingStyle?.fontSize) selectedFontSize = typingStyle.fontSize;
-	else if (typeof fontSize === "string" && /^[2-5]$/.test(fontSize)) selectedFontSize = fontSize;
-	if (typingStyle?.color) selectedTextColor = typingStyle.color;
-}
-
 function selectionBelongsToEditor(range: Range) {
 	if (!bodyEditor) return false;
 	const container = range.commonAncestorContainer;
 	return bodyEditor === container || bodyEditor.contains(container);
 }
 
-type TypingStyle = {
-	bold: boolean;
-	italic: boolean;
-	underline: boolean;
-	strikeThrough: boolean;
-	color: string;
-	fontSize: string;
-};
+function getNodePath(root: Node, node: Node): number[] | null {
+	const path: number[] = [];
+	let current: Node | null = node;
 
-function getCurrentTypingStyle(): TypingStyle {
-	return {
-		bold: activeFormats.bold,
-		italic: activeFormats.italic,
-		underline: activeFormats.underline,
-		strikeThrough: activeFormats.strikeThrough,
-		color: selectedTextColor,
-		fontSize: selectedFontSize,
-	};
+	while (current && current !== root) {
+		const parent: Node | null = current.parentNode;
+		if (!parent) return null;
+		path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+		current = parent;
+	}
+
+	return current === root ? path : null;
 }
 
-function getElementFromNode(node: Node | null) {
-	if (!node) return null;
-	return node instanceof HTMLElement ? node : node.parentElement;
+function getNodeFromPath(root: Node, path: number[]): Node | null {
+	let current: Node | null = root;
+
+	for (const index of path) {
+		if (!current || index < 0 || index >= current.childNodes.length) return null;
+		current = current.childNodes[index] ?? null;
+	}
+
+	return current;
 }
 
-function normalizeCssColor(value: string) {
-	const normalized = value.trim().toLowerCase();
-	if (/^#[0-9a-f]{6}$/i.test(normalized)) return normalized.toUpperCase();
-	const match = normalized.match(/^rgb\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)\s*\)$/);
-	if (!match) return "";
-	return `#${[match[1], match[2], match[3]]
-		.map((part) => Number(part).toString(16).padStart(2, "0"))
-		.join("")
-		.toUpperCase()}`;
+function getMaxNodeOffset(node: Node) {
+	return node.nodeType === Node.TEXT_NODE ? (node.textContent?.length ?? 0) : node.childNodes.length;
 }
 
-function getFontSizeCommandValue(element: HTMLElement) {
-	const explicitSize = element.style.fontSize.trim().toLowerCase();
-	if (commandValueByFontSizePixels[explicitSize]) return commandValueByFontSizePixels[explicitSize];
-	const fontTagSize = element.tagName.toLowerCase() === "font" ? element.getAttribute("size") : null;
-	return fontTagSize && /^[2-5]$/.test(fontTagSize) ? fontTagSize : "";
-}
-
-function getTypingStyleAtSelection(): TypingStyle | null {
-	if (!bodyEditor || typeof window === "undefined") return null;
-	const selection = window.getSelection();
-	if (!selection?.rangeCount) return null;
-	const range = selection.getRangeAt(0);
+function serializeEditorSelection(selection: Selection, range: Range): SerializedEditorSelection | null {
+	if (!bodyEditor || !selection.anchorNode || !selection.focusNode) return null;
 	if (!selectionBelongsToEditor(range)) return null;
 
-	let bold = false;
-	let italic = false;
-	let underline = false;
-	let strikeThrough = false;
-	let color = "";
-	let fontSize = "";
-	let element = getElementFromNode(range.startContainer);
+	const anchorPath = getNodePath(bodyEditor, selection.anchorNode);
+	const focusPath = getNodePath(bodyEditor, selection.focusNode);
+	if (!anchorPath || !focusPath) return null;
 
-	while (element && element !== bodyEditor) {
-		const tag = element.tagName.toLowerCase();
-		const computedStyle = window.getComputedStyle(element);
-		const fontWeight = (element.style.fontWeight || computedStyle.fontWeight).trim().toLowerCase();
-		const fontStyle = (element.style.fontStyle || computedStyle.fontStyle).trim().toLowerCase();
-		const textDecoration = `${element.style.textDecorationLine || ""} ${element.style.textDecoration || ""} ${computedStyle.textDecorationLine || ""}`;
-		bold ||= tag === "b" || tag === "strong" || fontWeight === "bold" || Number.parseInt(fontWeight, 10) >= 600;
-		italic ||= tag === "i" || tag === "em" || fontStyle === "italic";
-		underline ||= tag === "u" || textDecoration.includes("underline");
-		strikeThrough ||= tag === "s" || tag === "strike" || textDecoration.includes("line-through");
-		color ||= normalizeCssColor(element.style.color || element.getAttribute("color") || computedStyle.color || "");
-		fontSize ||= getFontSizeCommandValue(element);
-		element = element.parentElement;
-	}
-
-	return { bold, italic, underline, strikeThrough, color: color || "#1D1D1F", fontSize: fontSize || "3" };
-}
-
-function applyTypingStyleToElement(element: HTMLElement, style: TypingStyle) {
-	element.style.fontWeight = style.bold ? "bold" : "normal";
-	element.style.fontStyle = style.italic ? "italic" : "normal";
-	element.style.color = style.color;
-	element.style.fontSize = fontSizePixelsByCommandValue[style.fontSize] ?? fontSizePixelsByCommandValue["3"];
-	const decorations = [style.underline ? "underline" : "", style.strikeThrough ? "line-through" : ""].filter(Boolean);
-	element.style.textDecorationLine = decorations.join(" ") || "none";
-}
-
-function setToolbarTypingStyle(style: TypingStyle) {
-	activeFormats = {
-		...activeFormats,
-		bold: style.bold,
-		italic: style.italic,
-		underline: style.underline,
-		strikeThrough: style.strikeThrough,
+	return {
+		anchor: { path: anchorPath, offset: selection.anchorOffset },
+		focus: { path: focusPath, offset: selection.focusOffset },
+		collapsed: selection.isCollapsed,
 	};
-	selectedFontSize = style.fontSize;
-	selectedTextColor = style.color;
 }
 
-function getRangeTextOffsets(range: Range) {
-	if (!bodyEditor || !selectionBelongsToEditor(range)) return null;
-	const prefixRange = document.createRange();
-	prefixRange.selectNodeContents(bodyEditor);
-	prefixRange.setEnd(range.startContainer, range.startOffset);
-	const start = prefixRange.toString().length;
-	return { start, end: start + range.toString().length };
-}
-
-function getCurrentEditorSelection() {
-	if (!bodyEditor || typeof window === "undefined") return null;
-	const selection = window.getSelection();
-	if (!selection?.rangeCount) return null;
-	return getRangeTextOffsets(selection.getRangeAt(0));
-}
-
-function getEditorRangeFromTextOffsets(start: number, end: number) {
-	if (!bodyEditor) return null;
-	const range = document.createRange();
-	const walker = document.createTreeWalker(bodyEditor, NodeFilter.SHOW_TEXT);
-	let currentOffset = 0;
-	let startSet = false;
-	let endSet = false;
-	let lastTextNode: Text | null = null;
-
-	while (walker.nextNode()) {
-		const node = walker.currentNode as Text;
-		lastTextNode = node;
-		const nextOffset = currentOffset + node.data.length;
-
-		if (!startSet && start <= nextOffset) {
-			range.setStart(node, Math.max(0, start - currentOffset));
-			startSet = true;
-		}
-
-		if (!endSet && end <= nextOffset) {
-			range.setEnd(node, Math.max(0, end - currentOffset));
-			endSet = true;
-			break;
-		}
-
-		currentOffset = nextOffset;
-	}
-
-	if (!startSet || !endSet) {
-		if (lastTextNode) {
-			const offset = lastTextNode.data.length;
-			if (!startSet) range.setStart(lastTextNode, offset);
-			if (!endSet) range.setEnd(lastTextNode, offset);
-		} else {
-			range.selectNodeContents(bodyEditor);
-			range.collapse(false);
-		}
-	}
-
-	return range;
-}
-
-function restoreEditorSelectionFromOffsets(selectionOffsets: { start: number; end: number }) {
+function restoreEditorDomSelection(saved: SerializedEditorSelection) {
 	if (!bodyEditor || typeof window === "undefined") return false;
-	const selection = window.getSelection();
-	const range = getEditorRangeFromTextOffsets(selectionOffsets.start, selectionOffsets.end);
-	if (!selection || !range) return false;
-	isRestoringSelection = true;
-	selection.removeAllRanges();
-	selection.addRange(range);
-	savedEditorRange = range.cloneRange();
-	savedEditorSelection = selectionOffsets;
-	isRestoringSelection = false;
-	return true;
-}
 
-function getCurrentSelectionRange() {
-	if (!bodyEditor || typeof window === "undefined") return null;
 	const selection = window.getSelection();
-	if (!selection?.rangeCount) return null;
-	const range = selection.getRangeAt(0);
-	return selectionBelongsToEditor(range) ? range : null;
+	if (!selection) return false;
+
+	const anchorNode = getNodeFromPath(bodyEditor, saved.anchor.path);
+	const focusNode = getNodeFromPath(bodyEditor, saved.focus.path);
+	if (!anchorNode || !focusNode) return false;
+
+	const anchorOffset = Math.min(saved.anchor.offset, getMaxNodeOffset(anchorNode));
+	const focusOffset = Math.min(saved.focus.offset, getMaxNodeOffset(focusNode));
+
+	try {
+		focusEditor();
+		selection.removeAllRanges();
+
+		if (saved.collapsed) {
+			selection.collapse(anchorNode, anchorOffset);
+		} else {
+			selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+		}
+
+		if (!selection.rangeCount) return false;
+		const range = selection.getRangeAt(0);
+		if (!selectionBelongsToEditor(range)) return false;
+
+		savedEditorRange = range.cloneRange();
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function saveEditorSelection() {
 	if (!bodyEditor || typeof window === "undefined") return;
+
 	const selection = window.getSelection();
 	if (!selection?.rangeCount) return;
 
 	const range = selection.getRangeAt(0);
 	if (!selectionBelongsToEditor(range)) return;
+
 	savedEditorRange = range.cloneRange();
-	savedEditorSelection = getRangeTextOffsets(range);
+	savedEditorDomSelection = serializeEditorSelection(selection, range);
 }
 
 function restoreEditorSelection() {
 	if (!bodyEditor || typeof window === "undefined") return;
+
 	const selection = window.getSelection();
 	if (!selection) return;
 
 	isRestoringSelection = true;
+
+	if (savedEditorDomSelection && restoreEditorDomSelection(savedEditorDomSelection)) {
+		isRestoringSelection = false;
+		return;
+	}
+
 	focusEditor();
 	selection.removeAllRanges();
-
-	if (savedEditorSelection) {
-		const range = getEditorRangeFromTextOffsets(savedEditorSelection.start, savedEditorSelection.end);
-		if (range) {
-			selection.addRange(range);
-			savedEditorRange = range.cloneRange();
-			isRestoringSelection = false;
-			return;
-		}
-	}
 
 	if (savedEditorRange && selectionBelongsToEditor(savedEditorRange)) {
 		selection.addRange(savedEditorRange);
@@ -419,7 +282,21 @@ function restoreEditorSelection() {
 	range.collapse(false);
 	selection.addRange(range);
 	savedEditorRange = range.cloneRange();
+	savedEditorDomSelection = serializeEditorSelection(selection, range);
 	isRestoringSelection = false;
+}
+
+function focusEditor() {
+	bodyEditor?.focus();
+}
+
+function updateActiveFormats() {
+	if (typeof document === "undefined") return;
+
+	activeFormats = {
+		insertUnorderedList: document.queryCommandState("insertUnorderedList"),
+		insertOrderedList: document.queryCommandState("insertOrderedList"),
+	};
 }
 
 function syncDraftFromEditor() {
@@ -432,65 +309,11 @@ function syncDraftFromEditor() {
 	updateActiveFormats();
 }
 
-function placeCaretAfter(node: Node) {
-	if (typeof window === "undefined") return;
-	const selection = window.getSelection();
-	if (!selection) return;
-	const range = document.createRange();
-	range.setStartAfter(node);
-	range.collapse(true);
-	isRestoringSelection = true;
-	selection.removeAllRanges();
-	selection.addRange(range);
-	savedEditorRange = range.cloneRange();
-	savedEditorSelection = getRangeTextOffsets(range);
-	window.setTimeout(() => {
-		isRestoringSelection = false;
-	}, 0);
-}
-
-function insertStyledTextAtSelection(text: string, style: TypingStyle) {
-	if (!bodyEditor || typeof window === "undefined") return false;
-	const selection = window.getSelection();
-	if (!selection?.rangeCount) return false;
-	const range = selection.getRangeAt(0);
-	if (!selectionBelongsToEditor(range)) return false;
-
-	range.deleteContents();
-	const span = document.createElement("span");
-	applyTypingStyleToElement(span, style);
-	span.textContent = text;
-	range.insertNode(span);
-	placeCaretAfter(span);
-	return true;
-}
-
-function focusEditor() {
-	bodyEditor?.focus();
-}
-
-function runEditorCommand(command: EditorCommand, value?: string) {
+function runEditorCommand(command: StructuralEditorCommand, value?: string) {
 	if (!bodyEditor || editorDisabled) return;
-	const selectionBeforeCommand = savedEditorSelection ?? getCurrentEditorSelection();
 	restoreEditorSelection();
 	document.execCommand(command, false, value);
-	if (selectionBeforeCommand && selectionBeforeCommand.start !== selectionBeforeCommand.end) {
-		restoreEditorSelectionFromOffsets(selectionBeforeCommand);
-	}
-	pendingTypingStyle = null;
 	syncDraftFromEditor();
-}
-
-function updateCollapsedTypingStyle(updater: (style: TypingStyle) => TypingStyle) {
-	if (!bodyEditor || editorDisabled) return false;
-	restoreEditorSelection();
-	const range = getCurrentSelectionRange();
-	if (!range?.collapsed) return false;
-	const nextStyle = updater(pendingTypingStyle ?? getTypingStyleAtSelection() ?? getCurrentTypingStyle());
-	pendingTypingStyle = nextStyle;
-	setToolbarTypingStyle(nextStyle);
-	saveEditorSelection();
-	return true;
 }
 
 function setAlignment(align: "left" | "center" | "right" | "justify") {
@@ -511,65 +334,8 @@ function outdentSelection() {
 	runEditorCommand("outdent");
 }
 
-function toggleInlineFormat(command: "bold" | "italic" | "underline" | "strikeThrough") {
-	if (
-		updateCollapsedTypingStyle((style) => ({
-			...style,
-			[command]: !style[command],
-		}))
-	) {
-		return;
-	}
-	runEditorCommand(command);
-}
-
 function toggleList(command: "insertUnorderedList" | "insertOrderedList") {
 	runEditorCommand(command);
-}
-
-function applyTextColor(color: string) {
-	if (
-		updateCollapsedTypingStyle((style) => ({
-			...style,
-			color,
-		}))
-	) {
-		return;
-	}
-	runEditorCommand("foreColor", color);
-	selectedTextColor = color;
-}
-
-function applyFontSize(value: string) {
-	if (/^[2-5]$/.test(value)) {
-		if (
-			updateCollapsedTypingStyle((style) => ({
-				...style,
-				fontSize: value,
-			}))
-		) {
-			return;
-		}
-	}
-	runEditorCommand("fontSize", value);
-	if (/^[2-5]$/.test(value)) selectedFontSize = value;
-}
-
-function clearFormatting() {
-	if (
-		updateCollapsedTypingStyle((style) => ({
-			...style,
-			bold: false,
-			italic: false,
-			underline: false,
-			strikeThrough: false,
-			color: "#1D1D1F",
-			fontSize: "3",
-		}))
-	) {
-		return;
-	}
-	runEditorCommand("removeFormat");
 }
 
 function undoEditorChange() {
@@ -586,26 +352,12 @@ function handleEditorKeydown(event: KeyboardEvent) {
 	runEditorCommand(event.shiftKey ? "outdent" : "indent");
 }
 
-function handleEditorBeforeInput(event: InputEvent) {
-	if (!pendingTypingStyle || editorDisabled || event.inputType !== "insertText" || !event.data) return;
-	event.preventDefault();
-	restoreEditorSelection();
-	if (insertStyledTextAtSelection(event.data, pendingTypingStyle)) {
-		syncDraftFromEditor();
-		setToolbarTypingStyle(pendingTypingStyle);
-	}
-}
-
 function handlePaste(event: ClipboardEvent) {
 	event.preventDefault();
-	const html = event.clipboardData?.getData("text/html") ?? "";
 	const text = event.clipboardData?.getData("text/plain") ?? "";
-	const sanitizedHtml = sanitizeDraftBodyHtml(html);
-	if (sanitizedHtml) {
-		document.execCommand("insertHTML", false, sanitizedHtml);
-	} else {
-		document.execCommand("insertText", false, text);
-	}
+	if (!text) return;
+	restoreEditorSelection();
+	document.execCommand("insertText", false, text);
 	syncDraftFromEditor();
 }
 
@@ -624,9 +376,7 @@ function splitSubjectFromHint(text: string) {
 
 function insertTextAtCursor(text: string) {
 	if (!bodyEditor || editorDisabled || !text.trim()) return;
-	restoreEditorSelection();
-	document.execCommand("insertText", false, text);
-	syncDraftFromEditor();
+	runEditorCommand("insertText", text);
 }
 
 function insertHintText(text: string, kind: "body" | "subject" = "body") {
@@ -662,7 +412,6 @@ onMount(() => {
 	function handleSelectionChange() {
 		if (isRestoringSelection) return;
 		if (bodyEditor?.contains(document.activeElement)) {
-			pendingTypingStyle = null;
 			saveEditorSelection();
 			updateActiveFormats();
 		}
@@ -699,17 +448,12 @@ $effect(() => {
 	<ComposeHeader bind:draft subjectDisabled={isSubmitting || isCompleted || limitReached} {t} {onClose} onStartDrag={startDrag} />
 	<ComposeToolbar
 		{activeFormats}
-		{selectedFontSize}
 		{editorDisabled}
 		{t}
-		onToggleInlineFormat={toggleInlineFormat}
 		onToggleList={toggleList}
-		onApplyTextColor={applyTextColor}
-		onApplyFontSize={applyFontSize}
 		onOutdent={outdentSelection}
 		onIndent={indentSelection}
 		onSetAlignment={setAlignment}
-		onClearFormatting={clearFormatting}
 		onUndo={undoEditorChange}
 		onRedo={redoEditorChange}
 		onPreserveEditorSelection={saveEditorSelection}
@@ -721,7 +465,6 @@ $effect(() => {
 		placeholder={isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}
 		onInput={syncDraftFromEditor}
 		onKeydown={handleEditorKeydown}
-		onBeforeInput={handleEditorBeforeInput}
 		onKeyup={saveEditorSelection}
 		onMouseup={saveEditorSelection}
 		onFocus={saveEditorSelection}
