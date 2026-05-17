@@ -31,6 +31,7 @@ const FONT_SIZES = [
 	{ label: "18", commandValue: "4" },
 	{ label: "24", commandValue: "5" },
 ];
+const DEFAULT_FONT_SIZE = "3";
 
 let {
 	activeFormats = {
@@ -41,6 +42,7 @@ let {
 		insertUnorderedList: false,
 		insertOrderedList: false,
 	} as ComposeActiveFormats,
+	selectedFontSize = DEFAULT_FONT_SIZE,
 	editorDisabled = false,
 	t = {} as Record<string, string>,
 	onToggleInlineFormat = (_command: "bold" | "italic" | "underline" | "strikeThrough") => {},
@@ -56,6 +58,7 @@ let {
 	onPreserveEditorSelection = () => {},
 }: {
 	activeFormats?: ComposeActiveFormats;
+	selectedFontSize?: string;
 	editorDisabled?: boolean;
 	t?: Record<string, string>;
 	onToggleInlineFormat?: (command: "bold" | "italic" | "underline" | "strikeThrough") => void;
@@ -135,10 +138,9 @@ function handleFontSizeChange(event: Event) {
 	>
 		<Strikethrough size={16} />
 	</button>
-	<select class="font-size-select" title={t.fontSize} disabled={editorDisabled} onchange={handleFontSizeChange}>
-		<option value="">{t.fontSize}</option>
+	<select class="font-size-select" aria-label={t.fontSize} title={t.fontSize} disabled={editorDisabled} onchange={handleFontSizeChange}>
 		{#each FONT_SIZES as size}
-			<option value={size.commandValue}>{size.label}</option>
+			<option value={size.commandValue} selected={selectedFontSize === size.commandValue}>{size.label}</option>
 		{/each}
 	</select>
 	<div class="color-swatches" aria-label={t.textColor}>

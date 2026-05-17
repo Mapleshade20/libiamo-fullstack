@@ -6,6 +6,7 @@ let {
 	placeholder = "",
 	onInput = () => {},
 	onKeydown = (_event: KeyboardEvent) => {},
+	onBeforeInput = (_event: InputEvent) => {},
 	onKeyup = () => {},
 	onMouseup = () => {},
 	onFocus = () => {},
@@ -18,6 +19,7 @@ let {
 	placeholder?: string;
 	onInput?: () => void;
 	onKeydown?: (event: KeyboardEvent) => void;
+	onBeforeInput?: (event: InputEvent) => void;
 	onKeyup?: () => void;
 	onMouseup?: () => void;
 	onFocus?: () => void;
@@ -40,6 +42,7 @@ let {
 		tabindex="0"
 		oninput={onInput}
 		onkeydown={onKeydown}
+		onbeforeinput={onBeforeInput}
 		onkeyup={onKeyup}
 		onmouseup={onMouseup}
 		onfocus={onFocus}
