@@ -66,21 +66,21 @@ describe("Sign-up +page.server", () => {
 		});
 	});
 
+	const createEvent = (formDataEntries: Record<string, string>) => {
+		const formData = new FormData();
+		for (const [key, value] of Object.entries(formDataEntries)) {
+			formData.append(key, value);
+		}
+
+		return {
+			request: {
+				formData: async () => formData,
+				headers: new Headers(),
+			},
+		} as any;
+	};
+
 	describe("default action", () => {
-		const createEvent = (formDataEntries: Record<string, string>) => {
-			const formData = new FormData();
-			for (const [key, value] of Object.entries(formDataEntries)) {
-				formData.append(key, value);
-			}
-
-			return {
-				request: {
-					formData: async () => formData,
-					headers: new Headers(),
-				},
-			} as any;
-		};
-
 		it("should return 400 with validation errors for invalid data", async () => {
 			const event = createEvent({
 				email: "not-an-email",

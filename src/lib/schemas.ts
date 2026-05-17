@@ -32,6 +32,18 @@ export const signInSchema = z.object({
 	password: z.string().min(1, "Password is required"),
 });
 
+const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: string }) => {
+	const hasApiKey = data.apiKey?.trim();
+	const hasBaseUrl = data.apiBaseUrl?.trim();
+	const hasModel = data.apiModel?.trim();
+	if (hasApiKey || hasBaseUrl || hasModel) {
+		if (!hasApiKey || !hasBaseUrl || !hasModel) return false;
+	}
+	return true;
+};
+
+const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
+
 export const signUpSchema = z.object({
 	email: z.email("Invalid email"),
 	password: z.string().min(8, "Password must be at least 8 characters"),
@@ -50,11 +62,19 @@ export const resetPasswordSchema = z.object({
 });
 
 // ── App ──────────────────────────────────────────────────────────────
-export const profileSchema = z.object({
-	name: z.string().max(50).optional(),
-	timezone: timezoneSchema,
-	nativeLanguage: z.string().optional(),
-});
+export const profileSchema = z
+	.object({
+		name: z.string().max(50).optional(),
+		timezone: timezoneSchema,
+		nativeLanguage: z.string().optional(),
+		apiKey: z.string().optional(),
+		apiBaseUrl: z.url().optional(),
+		apiModel: z.string().optional(),
+	})
+	.refine(byokRefine, {
+		message: byokMessage,
+		path: ["apiKey"],
+	});
 
 export const switchLanguageSchema = z.object({
 	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),

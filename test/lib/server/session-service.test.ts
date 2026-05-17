@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const USER_ID = "test-user-id";
+
 const { mockDb, mockClient } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
@@ -18,7 +20,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { completeSession, generateHint, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 describe("session service", () => {
 	beforeEach(() => {
@@ -75,6 +77,45 @@ describe("session service", () => {
 
 			expect(result.systemPrompt).toContain("Scenario: Discord");
 			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
+		});
+
+		it("formats Discord history with sender before text even when openingState stores text first", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				variant: {
+					openingState: {
+						serverName: "Amigos",
+						channelName: "general",
+						previousMessages: [{ text: "Sii ya lo vi", sender: "Mario" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("History:\n- Mario: Sii ya lo vi");
+			expect(result.systemPrompt).not.toContain("History:\n- Sii ya lo vi: Mario");
+		});
+
+		it("formats iMessage history with sender before text even when openingState stores text first", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "imessage" as const },
+				variant: {
+					openingState: {
+						previousMessages: [{ text: "¿Vienes?", sender: "Ana" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Previous:\n- Ana: ¿Vienes?");
+			expect(result.systemPrompt).not.toContain("Previous:\n- ¿Vienes?: Ana");
 		});
 
 		it.each([
@@ -156,6 +197,56 @@ describe("session service", () => {
 
 			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Failed to create session");
 		});
+
+		it("returns existing session when one already exists", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 999,
+				agentPromptSnapshot: { systemPrompt: "Cached prompt", mbti: "INTJ" },
+			});
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.sessionId).toBe(999);
+			expect(result.systemPrompt).toBe("Cached prompt");
+			expect(result.mbti).toBe("INTJ");
+		});
+
+		it("recovers from race condition when raced session exists", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(null);
+			const returningMock = vi.fn().mockRejectedValue(new Error("duplicate key"));
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce({
+				id: 888,
+				agentPromptSnapshot: { systemPrompt: "Raced prompt", mbti: "ENFP" },
+			});
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.sessionId).toBe(888);
+			expect(result.systemPrompt).toBe("Raced prompt");
+			expect(result.mbti).toBe("ENFP");
+		});
+
+		it("rethrows when race recovery finds no session", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(null);
+			const returningMock = vi.fn().mockRejectedValue(new Error("Failed to create session"));
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(null);
+
+			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Failed to create session");
+		});
+
+		it("throws generic error when race recovery fails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(null);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: vi.fn().mockRejectedValue(new Error("DB down")) }) });
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(null);
+
+			await expect(startSession(1, "user_456", "English")).rejects.toThrow("Failed to create session");
+		});
 	});
 
 	describe("sendMessage", () => {
@@ -173,7 +264,7 @@ describe("session service", () => {
 				reply: "Hello back!",
 				terminate: false,
 			});
-			const result = await sendMessage(123, "Hello!");
+			const result = await sendMessage(123, "Hello!", USER_ID);
 
 			expect(result.reply).toBe("Hello back!");
 			expect(result.turnCount).toBe(1);
@@ -185,6 +276,8 @@ describe("session service", () => {
 					expect.objectContaining({ role: "system", content: expect.stringContaining("Your MBTI type is ENFP.") }),
 					expect.objectContaining({ role: "user", content: "Hello!" }),
 				]),
+				{},
+				USER_ID,
 			);
 		});
 
@@ -201,7 +294,7 @@ describe("session service", () => {
 				reply: "Second reply",
 				terminate: false,
 			});
-			await sendMessage(123, "Second message");
+			await sendMessage(123, "Second message", USER_ID);
 
 			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
 				expect.any(Object),
@@ -211,13 +304,15 @@ describe("session service", () => {
 					expect.objectContaining({ role: "assistant", content: "First reply" }),
 					expect.objectContaining({ role: "user", content: "Second message" }),
 				]),
+				{},
+				USER_ID,
 			);
 		});
 
 		it("throws when session not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
-			await expect(sendMessage(999, "Hello")).rejects.toThrow("Session not found");
+			await expect(sendMessage(999, "Hello", USER_ID)).rejects.toThrow("Session not found");
 		});
 
 		it("throws when session not in progress", async () => {
@@ -226,12 +321,12 @@ describe("session service", () => {
 				status: "completed",
 			});
 
-			await expect(sendMessage(123, "Hello")).rejects.toThrow("Session not in progress");
+			await expect(sendMessage(123, "Hello", USER_ID)).rejects.toThrow("Session not in progress");
 		});
 
 		it("throws when userMessage is empty", async () => {
-			await expect(sendMessage(123, "")).rejects.toThrow("userMessage is required");
-			await expect(sendMessage(123, "   ")).rejects.toThrow("userMessage is required");
+			await expect(sendMessage(123, "", USER_ID)).rejects.toThrow("userMessage is required");
+			await expect(sendMessage(123, "   ", USER_ID)).rejects.toThrow("userMessage is required");
 		});
 
 		it("calculates turn count correctly", async () => {
@@ -249,7 +344,7 @@ describe("session service", () => {
 				reply: "c",
 				terminate: false,
 			});
-			const result = await sendMessage(123, "3");
+			const result = await sendMessage(123, "3", USER_ID);
 
 			expect(result.turnCount).toBe(3);
 		});
@@ -263,7 +358,7 @@ describe("session service", () => {
 				],
 			});
 
-			const result = await sendMessage(123, "Hello!", "msg-1");
+			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "Hello back!", turnCount: 1, terminated: true });
 			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
@@ -279,7 +374,7 @@ describe("session service", () => {
 				],
 			});
 
-			const result = await sendMessage(123, "Hello!", "msg-1");
+			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
 			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
@@ -291,7 +386,7 @@ describe("session service", () => {
 				messages: [{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } }],
 			});
 
-			const result = await sendMessage(123, "Hello!", "msg-1");
+			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
 			expect(mockClient.createStructuredOutput).not.toHaveBeenCalled();
@@ -304,7 +399,7 @@ describe("session service", () => {
 			});
 			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Recovered", terminate: false });
 
-			const result = await sendMessage(123, "Hello!", "msg-1");
+			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "Recovered", turnCount: 1, terminated: false });
 			expect(mockDb.update).toHaveBeenCalled();
@@ -317,6 +412,7 @@ describe("session service", () => {
 			id: 123,
 			status: "in_progress",
 			taskId: 1,
+			userId: USER_ID,
 		};
 
 		const mockTaskObjectives = {
@@ -441,7 +537,7 @@ describe("session service", () => {
 				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await sendMessage(123, "User message");
+			await sendMessage(123, "User message", USER_ID);
 
 			expect(valuesMock).toHaveBeenCalledTimes(2);
 			expect(valuesMock).toHaveBeenNthCalledWith(1, { sessionId: 123, role: "user", content: "User message" });
@@ -465,7 +561,7 @@ describe("session service", () => {
 				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await sendMessage(123, "Ordering check");
+			await sendMessage(123, "Ordering check", USER_ID);
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, {
 				sessionId: 123,
@@ -487,7 +583,7 @@ describe("session service", () => {
 				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await sendMessage(123, "  Hello  ");
+			await sendMessage(123, "  Hello  ", USER_ID);
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ content: "Hello" }));
 		});
@@ -498,7 +594,7 @@ describe("session service", () => {
 			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await expect(sendMessage(123, "Need a reply")).rejects.toThrow("LLM timeout");
+			await expect(sendMessage(123, "Need a reply", USER_ID)).rejects.toThrow("LLM timeout");
 
 			expect(valuesMock).toHaveBeenCalledTimes(1);
 			expect(valuesMock).toHaveBeenCalledWith({
@@ -517,7 +613,7 @@ describe("session service", () => {
 				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-1", failed: false } }]) });
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await expect(sendMessage(123, "Need a reply", "msg-1")).rejects.toThrow("LLM timeout");
+			await expect(sendMessage(123, "Need a reply", USER_ID, "msg-1")).rejects.toThrow("LLM timeout");
 
 			expect(mockDb.update).toHaveBeenCalled();
 		});
@@ -526,6 +622,7 @@ describe("session service", () => {
 		it("generates hints based on session history and language", async () => {
 			const mockSession = {
 				id: 123,
+				userId: USER_ID,
 				task: { language: "ja" },
 				agentPromptSnapshot: { systemPrompt: "Context" },
 				messages: [{ role: "user", content: "Hello" }],
@@ -543,12 +640,96 @@ describe("session service", () => {
 			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
 				expect.any(Object),
 				expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("JAPANESE") })]),
+				{},
+				USER_ID,
 			);
 		});
 
 		it("throws error if session is not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 			await expect(generateHint(999)).rejects.toThrow("Session not found");
+		});
+	});
+
+	describe("getSessionOrFail", () => {
+		it("returns session when userId and taskId match", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "u1",
+				taskId: 456,
+			});
+
+			const session = await getSessionOrFail(123, "u1", 456);
+			expect(session).toEqual({ id: 123, userId: "u1", taskId: 456 });
+		});
+
+		it("returns null when session not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			const session = await getSessionOrFail(999, "u1", 456);
+			expect(session).toBeNull();
+		});
+
+		it("returns null when userId does not match", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "other-user",
+				taskId: 456,
+			});
+
+			const session = await getSessionOrFail(123, "u1", 456);
+			expect(session).toBeNull();
+		});
+
+		it("returns null when taskId does not match", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "u1",
+				taskId: 999,
+			});
+
+			const session = await getSessionOrFail(123, "u1", 456);
+			expect(session).toBeNull();
+		});
+	});
+
+	describe("sendMessage maxTurns", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [],
+		};
+
+		it("throws when maxTurns is reached", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ role: "user", content: "msg1" },
+					{ role: "assistant", content: "reply1" },
+					{ role: "user", content: "msg2" },
+					{ role: "assistant", content: "reply2" },
+				],
+			});
+
+			await expect(sendMessage(123, "msg3", USER_ID, undefined, { maxTurns: 2 })).rejects.toThrow("Maximum conversation turns reached");
+		});
+
+		it("does not throw when maxTurns is 0 (unlimited)", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ role: "user", content: "msg1" },
+					{ role: "assistant", content: "reply1" },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({
+				reply: "reply2",
+				terminate: false,
+			});
+
+			const result = await sendMessage(123, "msg2", USER_ID, undefined, { maxTurns: 0 });
+			expect(result.reply).toBe("reply2");
 		});
 	});
 });

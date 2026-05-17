@@ -36,7 +36,6 @@ export const actions: Actions = {
 					email: result.data.email,
 					password: result.data.password,
 					name: result.data.name,
-					// Using validated timezone from Zod result to prevent injection/errors
 					timezone: result.data.timezone,
 					activeLanguage: result.data.activeLanguage,
 				},
