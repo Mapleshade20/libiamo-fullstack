@@ -20,7 +20,15 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
+import {
+	completeSession,
+	generateHint,
+	generateMailHint,
+	getSessionOrFail,
+	sendMessage,
+	startSession,
+	submitOneShotMessage,
+} from "$lib/server/session";
 
 describe("session service", () => {
 	beforeEach(() => {
@@ -97,6 +105,63 @@ describe("session service", () => {
 
 			expect(result.systemPrompt).toContain("History:\n- Mario: Sii ya lo vi");
 			expect(result.systemPrompt).not.toContain("History:\n- Sii ya lo vi: Mario");
+		});
+
+		it("keeps known message fields first and appends extra opening-state fields", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "reddit" as const },
+				variant: {
+					openingState: {
+						post: { title: "Introductions", body: "Say hello" },
+						previousComments: [{ text: "Hola", author: "Mina", likes: 3, empty: "" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Existing comments:\n- Mina: Hola: 3");
+			expect(result.systemPrompt).not.toContain("Hola: Mina");
+		});
+
+		it("uses a generic Mail app context when there are no received emails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: { openingState: { emails: [] } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Scenario: Mail app");
+		});
+
+		it("formats multiple received emails including optional time", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: {
+					openingState: {
+						emails: [
+							{ from: "maya@example.com", to: "me@example.com", subject: "Schedule", body: "Are you free?", time: "9:00 AM" },
+							{ from: "daniel@example.com", to: "me@example.com", subject: "Follow-up", body: "Thanks" },
+						],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Scenario: Received emails");
+			expect(result.systemPrompt).toContain("  Time: 9:00 AM");
+			expect(result.systemPrompt).toContain("Email 2:");
 		});
 
 		it("formats iMessage history with sender before text even when openingState stores text first", async () => {
@@ -470,6 +535,40 @@ describe("session service", () => {
 			expect(result.objectiveResults).toHaveLength(0);
 		});
 
+		it("includes email presentation notes in the evaluation prompt", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+				...mockSession,
+				agentPromptSnapshot: {
+					systemPrompt: "Mail prompt",
+					mbti: "ENFP",
+					ui: "apple_mail",
+					scenarioContext: "Scenario: Received email",
+				},
+				messages: [
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Deadline\n\nPlease reply by Friday.",
+						llmMetadata: {
+							presentationReport: "Marked email body:\nPlease reply by **Friday**.",
+						},
+					},
+				],
+				task: mockTaskObjectives,
+			});
+			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn() }) });
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "Good email.",
+				objectiveResults: [{ text: "Use polite language", grade: "A" }],
+			});
+
+			await completeSession(123);
+
+			const messages = mockClient.createStructuredOutput.mock.calls[0]?.[1];
+			expect(messages?.[0]?.content).toContain("## Email Presentation Notes");
+			expect(messages?.[0]?.content).toContain("Marked email body:\nPlease reply by **Friday**.");
+			expect(messages?.[0]?.content).toContain("Markers such as **text**");
+		});
+
 		it("throws when session not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
@@ -618,6 +717,76 @@ describe("session service", () => {
 			expect(mockDb.update).toHaveBeenCalled();
 		});
 	});
+
+	describe("submitOneShotMessage", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [],
+		};
+
+		it("persists a one-shot user message with client id and presentation report metadata", async () => {
+			const valuesMock = vi.fn();
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+
+			const result = await submitOneShotMessage(123, "  To: Maya\nSubject: Hi\n\nHello  ", "mail-1", {
+				maxTurns: 1,
+				presentationReport: "  Presentation: [size=5]large[/size]  ",
+			});
+
+			expect(result).toEqual({ turnCount: 1 });
+			expect(valuesMock).toHaveBeenCalledWith({
+				sessionId: 123,
+				role: "user",
+				content: "To: Maya\nSubject: Hi\n\nHello",
+				llmMetadata: {
+					clientMessageId: "mail-1",
+					failed: false,
+					presentationReport: "Presentation: [size=5]large[/size]",
+				},
+			});
+		});
+
+		it("throws when one-shot message is empty", async () => {
+			await expect(submitOneShotMessage(123, "   ")).rejects.toThrow("userMessage is required");
+		});
+
+		it("throws when one-shot session is missing", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			await expect(submitOneShotMessage(123, "Hello")).rejects.toThrow("Session not found");
+		});
+
+		it("throws when one-shot session is not in progress", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ ...mockSession, status: "completed" });
+
+			await expect(submitOneShotMessage(123, "Hello")).rejects.toThrow("Session not in progress");
+		});
+
+		it("returns the current turn count for duplicate one-shot client ids", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [{ role: "user", content: "Existing", llmMetadata: { clientMessageId: "mail-1", failed: false } }],
+			});
+
+			const result = await submitOneShotMessage(123, "Existing", "mail-1", { maxTurns: 1 });
+
+			expect(result).toEqual({ turnCount: 1 });
+			expect(mockDb.insert).not.toHaveBeenCalled();
+		});
+
+		it("throws when the one-shot max turn has already been used", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [{ role: "user", content: "Existing" }],
+			});
+
+			await expect(submitOneShotMessage(123, "Another email", undefined, { maxTurns: 1 })).rejects.toThrow("Maximum conversation turns reached");
+		});
+	});
+
 	describe("generateHint", () => {
 		it("generates hints based on session history and language", async () => {
 			const mockSession = {
@@ -648,6 +817,119 @@ describe("session service", () => {
 		it("throws error if session is not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 			await expect(generateHint(999)).rejects.toThrow("Session not found");
+		});
+	});
+
+	describe("generateMailHint", () => {
+		it("generates subject, section, sentence, and checklist suggestions from the current draft", async () => {
+			const mockSession = {
+				id: 123,
+				userId: USER_ID,
+				task: { language: "es" },
+				agentPromptSnapshot: { systemPrompt: "Reply to the scheduling email." },
+				messages: [],
+			};
+
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				mailHint: {
+					subjectSuggestion: { text: "Reunión del viernes" },
+					nextSection: { title: "Cierre", text: "Quedo atento a su respuesta." },
+					nextSentence: { title: "Siguiente frase", text: "Podemos reunirnos el viernes." },
+					checklist: [{ text: "Incluye saludo", done: true, note: "Ya está presente." }],
+				},
+			});
+
+			const result = await generateMailHint(123, {
+				to: "Maya Chen <maya@example.com>",
+				subject: "Reunión",
+				body: "Hola Maya,",
+			});
+
+			expect(result.mailHint.subjectSuggestion.text).toBe("Reunión del viernes");
+			const call = mockClient.createStructuredOutput.mock.calls[0];
+			expect(call?.[0]).toEqual(expect.any(Object));
+			expect(call?.[2]).toEqual({ temperature: 0.2, maxTokens: 1600 });
+			expect(call?.[1]).toEqual([
+				expect.objectContaining({
+					role: "system",
+					content: expect.stringContaining("Current Unsaved Draft"),
+				}),
+				expect.objectContaining({ role: "user", content: expect.stringContaining("Spanish") }),
+			]);
+			const systemPrompt = call?.[1]?.[0]?.content ?? "";
+			expect(systemPrompt).toContain("To: Maya Chen <maya@example.com>");
+			expect(systemPrompt).toContain("Subject: Reunión");
+			expect(systemPrompt).toContain("Body:\n\tHola Maya,");
+			expect(systemPrompt).toContain("SPANISH ONLY");
+			expect(systemPrompt).toContain("Put any subject-line idea ONLY in subjectSuggestion.text");
+
+			const schema = call?.[0] as { parse: (value: unknown) => unknown };
+			expect(
+				schema.parse({
+					mailHint: {
+						subjectSuggestion: null,
+						nextSection: { title: "Empty", text: "   " },
+						nextSentence: { title: "Next", text: "Podemos reunirnos el viernes." },
+						checklist: [
+							{ text: "", done: true, note: "" },
+							{ text: "Confirma la hora", done: "yes", note: "Todavía falta." },
+						],
+					},
+				}),
+			).toEqual({
+				mailHint: {
+					subjectSuggestion: { text: "" },
+					nextSection: null,
+					nextSentence: { title: "Next", text: "Podemos reunirnos el viernes." },
+					checklist: [{ text: "Confirma la hora", done: false, note: "Todavía falta." }],
+				},
+			});
+			expect(schema.parse({ mailHint: "not-an-object" })).toEqual({
+				mailHint: {
+					subjectSuggestion: { text: "" },
+					nextSection: null,
+					nextSentence: null,
+					checklist: [],
+				},
+			});
+		});
+
+		it("includes visible submitted messages and hides hidden startup messages", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: { language: "en" },
+				agentPromptSnapshot: { systemPrompt: "Mail prompt" },
+				messages: [
+					{ role: "user", content: "*User joined the server*", llmMetadata: { hidden: true } },
+					{ role: "user", content: "Previously submitted email", llmMetadata: { hidden: false } },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({
+				mailHint: { subjectSuggestion: { text: "" }, nextSection: null, nextSentence: null, checklist: [] },
+			});
+
+			await generateMailHint(123, { body: "" });
+
+			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(systemPrompt).toContain("[user] Previously submitted email");
+			expect(systemPrompt).not.toContain("*User joined the server*");
+			expect(systemPrompt).toContain("To: (empty)");
+			expect(systemPrompt).toContain("Subject: (empty)");
+			expect(systemPrompt).toContain("Body:\n\t(empty)");
+		});
+
+		it("throws when mail hint session is missing", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			await expect(generateMailHint(999, { body: "Hello" })).rejects.toThrow("Session not found");
+		});
+
+		it("throws when mail hint session has no task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
+
+			await expect(generateMailHint(123, { body: "Hello" })).rejects.toThrow("Task not found");
 		});
 	});
 
