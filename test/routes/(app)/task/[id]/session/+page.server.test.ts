@@ -161,7 +161,7 @@ describe("session page server", () => {
 				id: 456,
 				title: "Test Task",
 				language: "en",
-				template: { ui: "ao3" as const },
+				template: { ui: "reddit" as const },
 				variant: { openingState: {} },
 			};
 			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
@@ -295,6 +295,57 @@ describe("session page server", () => {
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+		});
+
+		it("builds AO3 prompt metadata for a nested comment reply", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "ao3" as const, maxTurns: 4 },
+				variant: {
+					openingState: {
+						workTitle: "My Fic",
+						authorName: "FicAuthor",
+						previousComments: [{ id: "c1", username: "ReaderA", comment: "Great start!" }],
+					},
+				},
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks!", turnCount: 1 });
+
+			const result = await actions.send(
+				createFormEvent({ values: { sessionId: "789", message: "What did you like?", clientMessageId: "ao3-msg", ao3TargetCommentId: "c1" } }),
+			);
+
+			expect(result).toMatchObject({ success: true, reply: "Thanks!" });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"What did you like?",
+				"ao3-msg",
+				expect.objectContaining({
+					maxTurns: 4,
+					promptContent: expect.stringContaining("Comment author you must roleplay as: ReaderA"),
+					userDisplayContent: "What did you like?",
+					assistantAuthorName: "ReaderA",
+					userMetadata: { ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
+				}),
+			);
+		});
+
+		it("rejects an invalid AO3 reply target", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "ao3" as const, maxTurns: 4 },
+				variant: { openingState: { workTitle: "My Fic", previousComments: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ messages: [] });
+
+			const result = await actions.send(
+				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "ao3-msg", ao3TargetCommentId: "missing" } }),
+			);
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Invalid AO3 reply target" } });
+			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
 		});
 
 		it("sends message when task language differs from active language", async () => {

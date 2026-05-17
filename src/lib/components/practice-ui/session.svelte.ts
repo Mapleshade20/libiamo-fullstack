@@ -3,6 +3,7 @@ import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { formatTime, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
+import type { Ao3MessageMetadata } from "./ao3/helpers";
 import { postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, updateMessageById } from "./chatMessages";
@@ -99,7 +100,13 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	// ── Agent message helpers ──────────────────────────────────────
 
-	function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
+	function addAgentMessage(params: {
+		text: string;
+		deliveryState: "sent" | "pending" | "failed";
+		clientMessageId?: string;
+		retryText?: string;
+		messagePatch?: Partial<ChatMessage>;
+	}) {
 		messages = [
 			...messages,
 			{
@@ -112,22 +119,24 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				deliveryState: params.deliveryState,
 				clientMessageId: params.clientMessageId,
 				retryText: params.retryText,
+				...params.messagePatch,
 			},
 		];
 	}
 
-	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string) {
+	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
 		if (result.status === "reply") {
-			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId });
+			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
 			if (result.terminated) handleComplete();
 		} else if (result.status === "pending") {
-			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId });
+			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
 			addAgentMessage({
 				text: labels.retryFailedMessage,
 				deliveryState: "failed",
 				clientMessageId,
 				retryText,
+				messagePatch: agentMessagePatch,
 			});
 		} else if (result.status === "rejected") {
 			console.warn("Backend rejected the message");
@@ -155,7 +164,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const retryText = message.retryText || message.text;
 		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId);
 
-		applySendResult(result, message.clientMessageId, retryText);
+		applySendResult(result, message.clientMessageId, retryText, {
+			authorName: message.authorName,
+			ao3: message.ao3,
+		});
 
 		await scrollToBottom();
 		await invalidateAll();
@@ -182,11 +194,30 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		}
 	}
 
-	async function handleSend(text: string) {
+	async function handleSend(
+		text: string,
+		extraFields: Record<string, string> = {},
+		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
+	) {
 		if (!text.trim() || disabled) return;
 
 		const currentText = prepareMarkdownText(text);
 		const clientMessageId = crypto.randomUUID();
+		const resolvedExtraFields = Object.fromEntries(
+			Object.entries(extraFields).map(([key, value]) => [key, value.replaceAll("{clientMessageId}", clientMessageId)]),
+		);
+		const resolveAo3Patch = (patch?: Partial<ChatMessage>) => {
+			if (!patch?.ao3) return patch;
+			const ao3 = Object.fromEntries(
+				Object.entries(patch.ao3).map(([key, value]) => [
+					key,
+					typeof value === "string" ? value.replaceAll("{clientMessageId}", clientMessageId) : value,
+				]),
+			) as Ao3MessageMetadata;
+			return { ...patch, ao3 };
+		};
+		const userPatch = resolveAo3Patch(messagePatches.user);
+		const agentPatch = resolveAo3Patch(messagePatches.agent);
 
 		isSubmitting = true;
 
@@ -200,13 +231,14 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				authorName: userName,
 				avatar: avatarUrl,
 				clientMessageId,
+				...userPatch,
 			},
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId);
+		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
 
-		applySendResult(result, clientMessageId, currentText);
+		applySendResult(result, clientMessageId, currentText, agentPatch);
 
 		await scrollToBottom();
 		await invalidateAll();

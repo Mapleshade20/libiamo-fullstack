@@ -159,6 +159,39 @@ describe("buildChatMessages", () => {
 		expect(result[0].isHidden).toBe(true);
 	});
 
+	it("uses display content and AO3 assistant author metadata when present", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Prompt-only context",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: {
+						clientMessageId: "msg-ao3",
+						displayContent: "Visible learner comment",
+						ao3: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+					},
+				},
+				{
+					id: 2,
+					role: "assistant",
+					content: "Visible reply",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: {
+						clientMessageId: "msg-ao3",
+						assistantAuthorName: "Commenter",
+						ao3: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", responderName: "Commenter" },
+					},
+				},
+			],
+		});
+
+		expect(result[0]).toMatchObject({ text: "Visible learner comment", ao3: { commentId: "ao3-user-msg-ao3" } });
+		expect(result[1]).toMatchObject({ authorName: "Commenter", ao3: { parentCommentId: "ao3-user-msg-ao3" } });
+	});
+
 	it("ignores malformed llm metadata and avoids retry placeholders", () => {
 		const result = buildChatMessages({
 			...baseOptions,

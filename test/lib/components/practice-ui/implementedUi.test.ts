@@ -3,14 +3,14 @@ import { IMPLEMENTED_PRACTICE_UIS, isPracticeUiImplemented } from "$lib/componen
 
 describe("implemented practice UI", () => {
 	it("includes currently supported chat UIs", () => {
-		expect(IMPLEMENTED_PRACTICE_UIS).toEqual(["discord", "imessage"]);
+		expect(IMPLEMENTED_PRACTICE_UIS).toEqual(["discord", "imessage", "ao3"]);
 	});
 
-	it.each(["discord", "imessage"])("returns true for implemented ui: %s", (ui) => {
+	it.each(["discord", "imessage", "ao3"])("returns true for implemented ui: %s", (ui) => {
 		expect(isPracticeUiImplemented(ui)).toBe(true);
 	});
 
-	it.each(["ao3", "apple_mail", "reddit", "translator", "", "unknown"])("returns false for non-implemented ui: %s", (ui) => {
+	it.each(["apple_mail", "reddit", "translator", "", "unknown"])("returns false for non-implemented ui: %s", (ui) => {
 		expect(isPracticeUiImplemented(ui)).toBe(false);
 	});
 
