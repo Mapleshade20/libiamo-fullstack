@@ -8,11 +8,20 @@ export type SendAttemptResult =
 	| { status: "failed" }
 	| { status: "rejected" };
 
-export async function attemptAgentReply(sessionId: number, messageText: string, clientMessageId: string): Promise<SendAttemptResult> {
+export async function attemptAgentReply(
+	sessionId: number,
+	messageText: string,
+	clientMessageId: string,
+	parentId?: string,
+): Promise<SendAttemptResult> {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
+	// Persist parentId in metadata so tree structure survives page refresh
+	if (parentId) {
+		formData.append("parentId", parentId);
+	}
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), AGENT_REPLY_TIMEOUT_MS);

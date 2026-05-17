@@ -477,7 +477,7 @@ describe("session page server", () => {
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 
 			expect(result).toEqual({ success: true, ...mockHints });
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
 		it.each([
@@ -505,6 +505,61 @@ describe("session page server", () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("passes valid contextPath array to generateHint", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			const mockHints = { hints: [{ text: "Reply", translation: "Reply" }] };
+			mockSessionService.generateHint.mockResolvedValue(mockHints);
+			const contextPath = JSON.stringify([{ author: "alice", text: "hello" }]);
+
+			const result = await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(result).toEqual({ success: true, ...mockHints });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+		});
+
+		it("ignores contextPath when it is not valid JSON", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "not-json" } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("ignores contextPath when it is a JSON object instead of array", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: '{"author":"a","text":"t"}' } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("ignores contextPath when it is an empty string", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "   " } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
 		it("returns 500 when generateHint fails", async () => {

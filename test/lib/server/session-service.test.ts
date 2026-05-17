@@ -693,6 +693,102 @@ describe("session service", () => {
 		});
 	});
 
+	describe("sendMessage parentId threading", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [],
+		};
+
+		it("builds thread history when parentId is provided and parent found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Root comment" },
+					{ id: 20, role: "assistant", content: "Reply to root", llmMetadata: { parentId: "10" } },
+					{ id: 30, role: "user", content: "Nested reply", llmMetadata: { parentId: "20" } },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Thread reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 40 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "My reply", USER_ID, "client-1", { parentId: "30" });
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			// History should contain only the thread path: root -> reply -> nested
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Root comment" }),
+				expect.objectContaining({ content: "Reply to root" }),
+				expect.objectContaining({ content: "Nested reply" }),
+				expect.objectContaining({ content: "My reply" }),
+			]);
+		});
+
+		it("falls back to full history when parentId is not found in messages", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Root" },
+					{ id: 20, role: "assistant", content: "Reply" },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Fallback reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "My reply", USER_ID, "client-2", { parentId: "999" });
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Root" }),
+				expect.objectContaining({ content: "Reply" }),
+				expect.objectContaining({ content: "My reply" }),
+			]);
+		});
+
+		it("persists user message with parentId metadata", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "Thread reply", USER_ID, "client-3", { parentId: "42" });
+
+			expect(valuesMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					llmMetadata: expect.objectContaining({ parentId: "42" }),
+				}),
+			);
+		});
+
+		it("uses full flat history when no parentId is provided", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Msg 1" },
+					{ id: 20, role: "assistant", content: "Reply 1", llmMetadata: { parentId: "10" } },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Flat reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "New msg", USER_ID);
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Msg 1" }),
+				expect.objectContaining({ content: "Reply 1" }),
+				expect.objectContaining({ content: "New msg" }),
+			]);
+		});
+	});
+
 	describe("sendMessage maxTurns", () => {
 		const mockSession = {
 			id: 123,

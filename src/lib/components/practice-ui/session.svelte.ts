@@ -54,8 +54,17 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
-	const options = getOptions();
-	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, labels, joinTriggerText, isHiddenCheck } = options;
+	// Use $derived to keep values reactive after invalidateAll() re-runs getOptions().
+	// One-time destructuring would capture stale values and never update.
+	const userName = $derived(getOptions().userName);
+	const avatarUrl = $derived(getOptions().avatarUrl);
+	const existingSession = $derived(getOptions().existingSession);
+	const openingState = $derived(getOptions().openingState);
+	const maxTurns = $derived(getOptions().maxTurns);
+	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
+	const labels = $derived(getOptions().labels);
+	const joinTriggerText = $derived(getOptions().joinTriggerText);
+	const isHiddenCheck = $derived(getOptions().isHiddenCheck);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 
@@ -97,7 +106,14 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	// ── Agent message helpers ──────────────────────────────────────
 
+	// Tracks which user message the next agent reply should be nested under.
+	// Set in handleSend, consumed in addAgentMessage.
+	let pendingAgentParentId: string | undefined;
+
 	function addAgentMessage(params: { text: string; deliveryState: "sent" | "pending" | "failed"; clientMessageId?: string; retryText?: string }) {
+		const agentParentId = pendingAgentParentId;
+		pendingAgentParentId = undefined;
+
 		messages = [
 			...messages,
 			{
@@ -110,6 +126,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				deliveryState: params.deliveryState,
 				clientMessageId: params.clientMessageId,
 				retryText: params.retryText,
+				parentId: agentParentId,
 			},
 		];
 	}
@@ -180,7 +197,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		}
 	}
 
-	async function handleSend(text: string) {
+	async function handleSend(text: string, parentId?: string) {
 		if (!text.trim() || disabled) return;
 
 		const currentText = prepareMarkdownText(text);
@@ -188,21 +205,28 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		isSubmitting = true;
 
+		// Generate the user message ID upfront so we can bind the agent reply to it.
+		const userMsgId = crypto.randomUUID();
+
+		// The next agent reply will be a child of this user message.
+		pendingAgentParentId = userMsgId;
+
 		messages = [
 			...messages,
 			{
-				id: crypto.randomUUID(),
+				id: userMsgId,
 				role: "user",
 				text: currentText,
 				timestamp: formatTime(new Date()),
 				authorName: userName,
 				avatar: avatarUrl,
 				clientMessageId,
+				parentId,
 			},
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId);
+		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, parentId);
 
 		applySendResult(result, clientMessageId, currentText);
 
@@ -347,6 +371,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	});
 
 	return {
+		get replyingToId() {
+			return pendingAgentParentId ?? null;
+		},
 		get sessionId() {
 			return sessionId;
 		},

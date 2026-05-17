@@ -23,11 +23,12 @@ export type ChatMessage = {
 	deliveryState?: "sent" | "pending" | "failed";
 	clientMessageId?: string;
 	retryText?: string;
+	parentId?: string;
 };
 
-function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean; hidden?: boolean } {
+function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean; hidden?: boolean; parentId?: string } {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as { clientMessageId?: string; failed?: boolean; hidden?: boolean };
+	return value as { clientMessageId?: string; failed?: boolean; hidden?: boolean; parentId?: string };
 }
 
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
@@ -71,6 +72,7 @@ export function buildChatMessages({
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
+			parentId: metadata.parentId,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -89,6 +91,9 @@ export function buildChatMessages({
 				deliveryState: metadata.failed === true ? "failed" : "pending",
 				clientMessageId: metadata.clientMessageId,
 				retryText: message.content,
+				// Inherit parentId from the user message so the placeholder stays nested
+				// under the correct parent comment instead of falling to the root level.
+				parentId: mappedMessage.id,
 			} satisfies ChatMessage,
 		];
 	});

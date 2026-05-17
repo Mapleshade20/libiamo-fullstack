@@ -141,9 +141,14 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
+			// Extract parentId for threaded comment nesting (Reddit-style)
+			const parentIdRaw = formData.get("parentId");
+			const parentId = typeof parentIdRaw === "string" && parentIdRaw.trim() ? parentIdRaw.trim() : undefined;
+
 			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
+				parentId,
 			});
 			return { success: true, ...result };
 		} catch (e) {
@@ -195,11 +200,26 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
 
+		// Extract optional contextPath (ancestor comment chain for threaded UIs like Reddit)
+		let contextPath: Array<{ author: string; text: string }> | undefined;
+		const contextPathRaw = formData.get("contextPath");
+		if (typeof contextPathRaw === "string" && contextPathRaw.trim()) {
+			try {
+				const parsed = JSON.parse(contextPathRaw);
+				// Defensive validation: ensure parsed value is an array of expected shape
+				if (Array.isArray(parsed)) {
+					contextPath = parsed;
+				}
+			} catch {
+				// Invalid JSON – ignore and generate hint without context
+			}
+		}
+
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const result = await generateHint(sessionId);
+			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {
 			console.error(e);

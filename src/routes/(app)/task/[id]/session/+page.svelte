@@ -1,6 +1,7 @@
 <script lang="ts">
 import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
 import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
+import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
 
 let { data } = $props();
 </script>
@@ -18,6 +19,17 @@ let { data } = $props();
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<IMessageUI
+		taskId={data.taskId}
+		userName={data.user.name}
+		avatarUrl={data.user.avatarUrl}
+		language={data.user.learningLanguage}
+		existingSession={data.existingSession}
+		openingState={data.task.variant?.openingState}
+		maxTurns={data.task.template.maxTurns ?? 0}
+		agentStartsFirst={data.agentStartsFirst}
+	/>
+{:else if data.task.template.ui === "reddit"}
+	<RedditUI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.user.avatarUrl}

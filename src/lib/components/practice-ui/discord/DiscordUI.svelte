@@ -127,9 +127,17 @@ function handleMockAction() {
 }
 
 onMount(() => {
-	if (!existingSession) return;
-	if (!onlineUsers.length && existingSession.id) {
+	// Initialize user pool for existing sessions on first mount
+	if (existingSession?.id && !onlineUsers.length) {
 		({ onlineUsers, offlineUsers } = initUserPool(existingSession.id));
+	}
+});
+
+// Reactive: init user pool once sessionId becomes available for new sessions
+$effect(() => {
+	const sid = session.sessionId;
+	if (sid && !onlineUsers.length) {
+		({ onlineUsers, offlineUsers } = initUserPool(sid));
 	}
 });
 </script>

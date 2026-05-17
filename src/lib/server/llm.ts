@@ -210,6 +210,18 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 		}
 	}
 
+	// Defensive fallback: if the schema expects a "reply" field (AgentReplySchema),
+	// wrap the raw text as { reply: rawText, terminate: false } so the conversation
+	// continues instead of crashing with a 500 error.
+	try {
+		const shape = (schema as any)._def?.shape?.();
+		if (shape && "reply" in shape) {
+			return schema.parse({ reply: text, terminate: false }) as z.infer<T>;
+		}
+	} catch {
+		// Fallback also failed – fall through to throw
+	}
+
 	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 500)}`);
 }
 
