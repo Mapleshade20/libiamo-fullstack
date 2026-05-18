@@ -29,6 +29,7 @@ export interface PracticeSessionOptions {
 	labels: PracticeSessionLabels;
 	joinTriggerText: string;
 	isHiddenCheck?: (message: { content: string }) => boolean;
+	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
 }
 
 function getSessionSnapshot(session: {
@@ -67,8 +68,19 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
 	const options = getOptions();
-	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, timeZone, labels, joinTriggerText, isHiddenCheck } =
-		options;
+	const {
+		userName,
+		avatarUrl,
+		existingSession,
+		openingState,
+		maxTurns,
+		agentStartsFirst,
+		timeZone,
+		labels,
+		joinTriggerText,
+		isHiddenCheck,
+		onPoolInit,
+	} = options;
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 	const formatTimestamp = $derived(createTimeFormatter(timeZone));
@@ -225,32 +237,77 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		isSubmitting = false;
 	}
 
-	// ── Effects ────────────────────────────────────────────────────
-
-	$effect(() => {
+	function runAutoCompleteIfNeeded() {
 		if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 			hasAutoCompleted = true;
-			handleComplete();
+			void handleComplete();
 		}
-	});
+	}
 
-	$effect(() => {
-		if (existingSession) {
-			const sessionSnapshot = getSessionSnapshot(existingSession);
+	function hydrateFromExistingSession(sessionData: any) {
+		const sessionSnapshot = getSessionSnapshot(sessionData);
 
-			if (existingSession.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
-				const currentId = existingSession.id;
-				lastLoadedSessionId = currentId;
-				lastSessionSnapshot = sessionSnapshot;
+		if (sessionData.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
+			const currentId = sessionData.id;
+			lastLoadedSessionId = currentId;
+			lastSessionSnapshot = sessionSnapshot;
+			sessionId = currentId;
+
+			const pool = initUserPool(currentId);
+			agentUser = { ...pool.agentUser };
+			onPoolInit?.(pool);
+
+			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
+			feedback = sessionData.tutorFeedback || null;
+
+			if (isCompleted && feedback) showEvaluationModal = true;
+
+			const openingMessages = getOpeningStateMessages({
+				openingStateData,
+				userName,
+				agentUser,
+				avatarUrl,
+				labels: { earlier: labels.earlier },
+			});
+
+			const sortedRawMessages = [...(sessionData.messages ?? [])].sort(
+				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+			);
+
+			const sessionMessages = buildChatMessages({
+				rawMessages: sortedRawMessages,
+				formatTimestamp,
+				userName,
+				agentName: agentName,
+				avatarUrl,
+				agentColor: agentUser.color,
+				labels,
+				isHidden: isHiddenCheck ? (m) => isHiddenCheck(m as { content: string }) : undefined,
+			});
+
+			messages = [...openingMessages, ...sessionMessages];
+
+			tick().then(() => {
+				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+			});
+		}
+	}
+
+	async function initializeFreshSession() {
+		if (existingSession) return;
+
+		isInitializing = true;
+		try {
+			const startResult = await postAction("start", null);
+
+			if (startResult.type === "success" && startResult.data) {
+				const currentId = startResult.data.sessionId as number;
 				sessionId = currentId;
+				lastLoadedSessionId = currentId;
 
 				const pool = initUserPool(currentId);
 				agentUser = { ...pool.agentUser };
-
-				isCompleted = existingSession.status === "completed" || existingSession.status === "evaluated";
-				feedback = existingSession.tutorFeedback || null;
-
-				if (isCompleted && feedback) showEvaluationModal = true;
+				onPoolInit?.(pool);
 
 				const openingMessages = getOpeningStateMessages({
 					openingStateData,
@@ -260,27 +317,48 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 					labels: { earlier: labels.earlier },
 				});
 
-				const sortedRawMessages = [...(existingSession.messages ?? [])].sort(
-					(a: { createdAt: string | Date }, b: { createdAt: string | Date }) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-				);
+				if (agentStartsFirst) {
+					messages = [
+						...openingMessages,
+						{
+							id: crypto.randomUUID(),
+							role: "user",
+							text: joinTriggerText,
+							timestamp: formatTimestamp(new Date()),
+							authorName: userName,
+							avatar: avatarUrl,
+							isHidden: true,
+						},
+					];
 
-				const sessionMessages = buildChatMessages({
-					rawMessages: sortedRawMessages,
-					formatTimestamp,
-					userName,
-					agentName: agentName,
-					avatarUrl,
-					agentColor: agentUser.color,
-					labels,
-					isHidden: isHiddenCheck ? (m) => isHiddenCheck(m as { content: string }) : undefined,
-				});
+					await scrollToBottom();
 
-				messages = [...openingMessages, ...sessionMessages];
+					const result = await attemptAgentReply(currentId, joinTriggerText, `join-${currentId}`);
 
-				tick().then(() => {
-					if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-				});
+					applySendResult(result, `join-${currentId}`);
+				} else {
+					messages = [...openingMessages];
+				}
+
+				await scrollToBottom();
+				await invalidateAll();
 			}
+		} catch (error) {
+			console.error("Initialization failed:", error);
+		} finally {
+			isInitializing = false;
+		}
+	}
+
+	// ── Effects ────────────────────────────────────────────────────
+
+	$effect(() => {
+		runAutoCompleteIfNeeded();
+	});
+
+	$effect(() => {
+		if (existingSession) {
+			hydrateFromExistingSession(existingSession);
 		}
 	});
 
@@ -299,61 +377,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			isEntering = false;
 		}, 300);
 
-		void (async () => {
-			if (!existingSession) {
-				isInitializing = true;
-				try {
-					const startResult = await postAction("start", null);
-
-					if (startResult.type === "success" && startResult.data) {
-						const currentId = startResult.data.sessionId as number;
-						sessionId = currentId;
-						lastLoadedSessionId = currentId;
-
-						const pool = initUserPool(currentId);
-						agentUser = { ...pool.agentUser };
-
-						const openingMessages = getOpeningStateMessages({
-							openingStateData,
-							userName,
-							agentUser,
-							avatarUrl,
-							labels: { earlier: labels.earlier },
-						});
-
-						if (agentStartsFirst) {
-							messages = [
-								...openingMessages,
-								{
-									id: crypto.randomUUID(),
-									role: "user",
-									text: joinTriggerText,
-									timestamp: formatTimestamp(new Date()),
-									authorName: userName,
-									avatar: avatarUrl,
-									isHidden: true,
-								},
-							];
-
-							await scrollToBottom();
-
-							const result = await attemptAgentReply(currentId, joinTriggerText, `join-${currentId}`);
-
-							applySendResult(result, `join-${currentId}`);
-						} else {
-							messages = [...openingMessages];
-						}
-
-						await scrollToBottom();
-						await invalidateAll();
-					}
-				} catch (error) {
-					console.error("Initialization failed:", error);
-				} finally {
-					isInitializing = false;
-				}
-			}
-		})();
+		void initializeFreshSession();
 
 		return () => {
 			clearTimeout(enterTimeout);
@@ -439,6 +463,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		handleSend,
 		handleComplete,
 		handleRetry,
+		runAutoCompleteIfNeeded,
+		hydrateFromExistingSession,
+		initializeFreshSession,
 		scrollToBottom,
 	};
 }

@@ -10,12 +10,7 @@ export default defineConfig({
 			reporter: ["text", "lcov"],
 			provider: "v8",
 			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/practice-ui/**/*.ts", "src/lib/markdown.ts"],
-			exclude: [
-				"src/lib/components/practice-ui/types.ts",
-				"src/lib/components/practice-ui/**/types.ts",
-				"src/lib/components/practice-ui/**/i18n.ts",
-				"src/lib/components/practice-ui/session.svelte.ts",
-			],
+			exclude: ["src/lib/components/practice-ui/types.ts", "src/lib/components/practice-ui/**/types.ts", "src/lib/components/practice-ui/**/i18n.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,

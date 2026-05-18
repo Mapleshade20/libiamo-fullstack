@@ -26,6 +26,7 @@ describe("mailUtils", () => {
 	describe("appendPlainTextToDraftHtml", () => {
 		it("returns new html when there is no existing html", () => {
 			expect(appendPlainTextToDraftHtml("   ", "Hello")).toBe("<div>Hello</div>");
+			expect(appendPlainTextToDraftHtml(undefined, "Hello")).toBe("<div>Hello</div>");
 		});
 
 		it("can append with or without a separating blank line", () => {
@@ -75,6 +76,19 @@ describe("mailUtils", () => {
 			expect(result.body).toBe("Hello styled text");
 			expect(result.bodyHtml).toBe('<div style="text-align: center">Hello styled text</div>');
 		});
+
+		it("parses drafts with missing headers or no blank body separator", () => {
+			expect(parseDraftFromMessage("Body only", "(No Subject)")).toMatchObject({
+				to: "",
+				subject: "(No Subject)",
+				body: "Body only",
+			});
+			expect(parseDraftFromMessage("To: Maya\nSubject: \nBody starts immediately", "(No Subject)")).toMatchObject({
+				to: "Maya",
+				subject: "(No Subject)",
+				body: "Body starts immediately",
+			});
+		});
 	});
 
 	describe("sanitizeDraftBodyHtml", () => {
@@ -99,6 +113,10 @@ describe("mailUtils", () => {
 					'<div onclick="alert(1)" style="text-align: right; color: #d70015; font-size: 24px">Friday</div><blockquote style="margin-left: 40px; font-weight: bold">Thanks</blockquote><img src=x onerror=alert(1)><script>alert(1)</script>',
 				),
 			).toBe('<div style="text-align: right">Friday</div><blockquote style="margin-left: 40px">Thanks</blockquote>');
+		});
+
+		it("drops unsupported or malformed style declarations", () => {
+			expect(sanitizeDraftBodyHtml('<div style="color: red; broken">Hello</div>')).toBe("<div>Hello</div>");
 		});
 
 		it("extracts sanitized mail body html from chat message metadata", () => {
@@ -132,6 +150,11 @@ describe("mailUtils", () => {
 
 		it("marks blockquote indentation when no explicit indent is present", () => {
 			expect(summarizeMailBodyLayout("<blockquote>Please review this.</blockquote>")).toBe("[indent=blockquote] Please review this.");
+		});
+
+		it("summarizes plain text and gracefully treats an unfinished tag as text", () => {
+			expect(summarizeMailBodyLayout("Plain text only")).toBe("Plain text only");
+			expect(summarizeMailBodyLayout("<div>Hello <unfinished")).toBe("Hello");
 		});
 	});
 
@@ -168,6 +191,23 @@ describe("mailUtils", () => {
 				fromAddress: "maya@example.com",
 				displayFrom: "maya@example.com",
 				time: "",
+			});
+		});
+
+		it("handles unusual sender strings", () => {
+			expect(normalizeMailEmails([{ from: "", to: "learner@example.com", subject: "Hi", body: "", time: "Now" }])[0]).toMatchObject({
+				fromName: "",
+				fromAddress: "",
+				displayFrom: "",
+				time: "Now",
+			});
+			expect(normalizeMailEmails([{ from: "maya>", to: "learner@example.com", subject: "Hi", body: "" }])[0]).toMatchObject({
+				fromName: "maya>",
+				fromAddress: "maya>",
+			});
+			expect(normalizeMailEmails([{ from: "<maya@example.com>", to: "learner@example.com", subject: "Hi", body: "" }])[0]).toMatchObject({
+				fromName: "maya@example.com",
+				displayFrom: "maya@example.com",
 			});
 		});
 	});

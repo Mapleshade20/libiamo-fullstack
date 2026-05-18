@@ -96,6 +96,41 @@ function getStyleProperty(attributes: string, property: string) {
 	return "";
 }
 
+function tokenizeHtml(value: string) {
+	const tokens: Array<{ tag?: string; text?: string }> = [];
+	let index = 0;
+
+	while (index < value.length) {
+		const tagStart = value.indexOf("<", index);
+		if (tagStart === -1) {
+			tokens.push({ text: value.slice(index) });
+			break;
+		}
+
+		if (tagStart > index) tokens.push({ text: value.slice(index, tagStart) });
+
+		const tagEnd = value.indexOf(">", tagStart + 1);
+		if (tagEnd === -1) {
+			tokens.push({ text: value.slice(tagStart) });
+			break;
+		}
+
+		tokens.push({ tag: value.slice(tagStart + 1, tagEnd) });
+		index = tagEnd + 1;
+	}
+
+	return tokens;
+}
+
+function getTagName(tagToken: string) {
+	let index = tagToken.startsWith("/") ? 1 : 0;
+	while (index < tagToken.length && /\s/.test(tagToken[index])) index += 1;
+
+	const start = index;
+	while (index < tagToken.length && /[a-z0-9]/i.test(tagToken[index])) index += 1;
+	return tagToken.slice(start, index).toLowerCase();
+}
+
 function getLayoutContext(tag: string, attributes: string, parent?: LayoutContext): LayoutContext {
 	const align = getAttributeValue(attributes, "align") || getStyleProperty(attributes, "text-align") || parent?.align;
 	const indent = getStyleProperty(attributes, "margin-left") || getStyleProperty(attributes, "padding-left") || parent?.indent;
@@ -128,7 +163,6 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 	const contexts: LayoutContext[] = [];
 	let buffer = "";
 	const blockTags = new Set(["blockquote", "div", "li", "ol", "p", "ul"]);
-	const tokenPattern = /<([^>]+)>|([^<]+)/g;
 
 	function flushLine() {
 		const line = summarizeLayoutLine(buffer, contexts);
@@ -136,19 +170,16 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 		buffer = "";
 	}
 
-	for (const match of html.matchAll(tokenPattern)) {
-		const tagToken = match[1];
-		const textToken = match[2];
-
-		if (textToken) {
-			buffer += textToken;
+	for (const token of tokenizeHtml(html)) {
+		if (token.text) {
+			buffer += token.text;
 			continue;
 		}
 
-		if (!tagToken) continue;
+		const tagToken = token.tag;
+		if (tagToken === undefined) continue;
 		const isClosing = tagToken.startsWith("/");
-		const tagMatch = tagToken.match(/^\/?\s*([a-z0-9]+)/i);
-		const tag = tagMatch?.[1]?.toLowerCase();
+		const tag = getTagName(tagToken);
 		if (!tag) continue;
 
 		if (tag === "br") {
@@ -188,13 +219,30 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 	return lines.join("\n").slice(0, 3500);
 }
 
-export function normalizeMailBodySpacing(value: string) {
+function trimHorizontalWhitespace(value: string) {
 	return value
-		.replace(/\r\n?/g, "\n")
-		.replace(/[ \t]+\n/g, "\n")
-		.replace(/\n[ \t]+/g, "\n")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
+		.split("\n")
+		.map((line) => line.replace(/^[ \t]+/, "").replace(/[ \t]+$/, ""))
+		.join("\n");
+}
+
+export function normalizeMailBodySpacing(value: string) {
+	const normalizedLines = trimHorizontalWhitespace(value.replace(/\r\n?/g, "\n")).split("\n");
+	const compactedLines: string[] = [];
+	let blankCount = 0;
+
+	for (const line of normalizedLines) {
+		if (line === "") {
+			blankCount += 1;
+			if (blankCount <= 1) compactedLines.push(line);
+			continue;
+		}
+
+		blankCount = 0;
+		compactedLines.push(line);
+	}
+
+	return compactedLines.join("\n").trim();
 }
 
 export function formatDraftMessage(value: DraftEmail, noSubjectLabel: string) {
@@ -204,13 +252,21 @@ export function formatDraftMessage(value: DraftEmail, noSubjectLabel: string) {
 
 function splitMailAddress(value: string) {
 	const trimmed = value.trim();
-	const angleMatch = trimmed.match(/^(.*?)\s*<([^>]+)>$/);
-	if (!angleMatch) {
+	if (!trimmed.endsWith(">")) {
 		return { name: trimmed || value, address: trimmed };
 	}
 
-	const name = angleMatch[1]?.trim().replace(/^"|"$/g, "") || angleMatch[2].trim();
-	return { name, address: angleMatch[2].trim() };
+	const angleStart = trimmed.lastIndexOf("<");
+	if (angleStart === -1) return { name: trimmed || value, address: trimmed };
+
+	const address = trimmed.slice(angleStart + 1, -1).trim();
+	const rawName = trimmed.slice(0, angleStart).trim();
+	const name = stripWrappingQuotes(rawName) || address;
+	return { name, address };
+}
+
+function stripWrappingQuotes(value: string) {
+	return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1).trim() : value;
 }
 
 export function normalizeMailEmails(emails: MailEmail[] | undefined, fallbackTime = ""): NormalizedMailEmail[] {
@@ -237,14 +293,21 @@ export function getMailBodyHtmlFromMessage(message: ChatMessage | null | undefin
 }
 
 export function parseDraftFromMessage(text: string, noSubjectLabel: string, bodyHtmlOverride = ""): DraftEmail {
-	const toMatch = text.match(/^To:\s*(.*)$/m);
-	const subjectMatch = text.match(/^Subject:\s*(.*)$/m);
-	const body = normalizeMailBodySpacing(text.replace(/^To:[^\n]*\nSubject:[^\n]*\n\n?/, ""));
+	const lines = text.split("\n");
+	const to = readHeaderLine(lines, "To:");
+	const subject = readHeaderLine(lines, "Subject:");
+	const bodyStart = lines[0]?.startsWith("To:") && lines[1]?.startsWith("Subject:") ? (lines[2] === "" ? 3 : 2) : 0;
+	const body = normalizeMailBodySpacing(lines.slice(bodyStart).join("\n"));
 	const bodyHtml = sanitizeDraftBodyHtml(bodyHtmlOverride);
 	return {
-		to: toMatch?.[1]?.trim() ?? "",
-		subject: subjectMatch?.[1]?.trim() ?? noSubjectLabel,
+		to,
+		subject: subject || noSubjectLabel,
 		body,
 		bodyHtml: bodyHtml || plainTextToDraftHtml(body),
 	};
+}
+
+function readHeaderLine(lines: string[], header: string) {
+	const line = lines.find((candidate) => candidate.startsWith(header));
+	return line ? line.slice(header.length).trim() : "";
 }
