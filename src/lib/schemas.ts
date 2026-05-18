@@ -81,11 +81,64 @@ export const switchLanguageSchema = z.object({
 });
 
 // ── Admin ────────────────────────────────────────────────────────────
+
+const templateContentFields = {
+	titleBase: z.string().min(1, "Title is required"),
+	shortObjectiveBase: z.string().optional(),
+	descriptionBase: z.string().optional(),
+	materialsMd: z.string().optional(),
+	objectivesBase: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+	translationBase: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return null;
+			const paragraphs = v
+				.split(/\n\s*\n/)
+				.map((para) =>
+					para
+						.split("\n")
+						.map((s) => s.trim())
+						.filter(Boolean),
+				)
+				.filter((para) => para.length > 0);
+			return paragraphs.length > 0 ? paragraphs : null;
+		}),
+	tags: z
+		.string()
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+};
+
+const templateCore = {
+	language: z.enum(LANGUAGE_CODES),
+	interactionType: z.enum(INTERACTION_TYPES),
+	ui: z.enum(UI_VARIANTS),
+	...templateContentFields,
+};
+
+const translateUiRefine = (data: { interactionType: string; ui: string }) => (data.interactionType === "translate") === (data.ui === "translator");
+
+const translateUiMessage = 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise';
+
 export const templateSchema = z
 	.object({
-		language: z.enum(LANGUAGE_CODES),
-		interactionType: z.enum(INTERACTION_TYPES),
-		ui: z.enum(UI_VARIANTS),
+		...templateCore,
 		cadence: z.enum(CADENCES),
 		difficulty: z.coerce.number().int().min(1).max(3),
 		maxTurns: z.coerce.number().int().min(0).optional(),
@@ -96,61 +149,12 @@ export const templateSchema = z
 			.string()
 			.optional()
 			.transform((v) => v === "on"),
-
-		agentStartsFirst: z
-			.string()
-			.optional()
-			.transform((v) => v === "on"),
-
-		titleBase: z.string().min(1, "Title is required"),
-		shortObjectiveBase: z.string().optional(),
-		descriptionBase: z.string().optional(),
+		agentStartsFirst: z.any().transform((v) => v === "on"),
 		agentPromptBase: z.string().optional(),
-		materialsMd: z.string().optional(),
-		// objectives: newline-separated string → string[]
-		objectivesBase: z
-			.string()
-			.optional()
-			.transform((v) => {
-				if (!v) return [];
-				return v
-					.split("\n")
-					.map((s) => s.trim())
-					.filter(Boolean);
-			}),
-		// translationBase: text → string[][] (paragraphs of sentences)
-		translationBase: z
-			.string()
-			.optional()
-			.transform((v) => {
-				if (!v) return null;
-				const paragraphs = v
-					.split(/\n\s*\n/)
-					.map((para) =>
-						para
-							.split("\n")
-							.map((s) => s.trim())
-							.filter(Boolean),
-					)
-					.filter((para) => para.length > 0);
-				return paragraphs.length > 0 ? paragraphs : null;
-			}),
-		// tags: comma-separated string → string[]
-		tags: z
-			.string()
-			.optional()
-			.transform((v) => {
-				if (!v) return [];
-				return v
-					.split(",")
-					.map((s) => s.trim())
-					.filter(Boolean);
-			}),
 	})
-	.refine((data) => (data.interactionType === "translate") === (data.ui === "translator"), {
-		message: 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise',
-		path: ["ui"],
-	});
+	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
+
+export const templateContributionSchema = z.object({ ...templateCore }).refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({

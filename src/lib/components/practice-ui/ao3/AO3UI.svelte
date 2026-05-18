@@ -78,7 +78,13 @@ const relationships = $derived(opening.relationships?.filter(Boolean) ?? []);
 const characters = $derived(opening.characters?.filter(Boolean) ?? []);
 const additionalTags = $derived(getAo3AdditionalTags(opening));
 const stats = $derived(opening.stats ?? {});
-const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl }));
+const commentTree = $derived(
+	buildAo3CommentTree({
+		openingState: opening,
+		messages: session.messages,
+		userAvatarUrl: avatarUrl,
+	}),
+);
 const commentCount = $derived(countAo3Comments(commentTree));
 const characterLimit = 10000;
 
@@ -168,7 +174,16 @@ async function handleGetHint() {
 		});
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
-			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
+			hints = (
+				(
+					result.data as {
+						hints?: Array<{
+							text: string;
+							translation?: string;
+						}>;
+					}
+				).hints ?? []
+			).filter((hint) => Boolean(hint.text));
 		}
 	} catch (error) {
 		if (!(error instanceof DOMException && error.name === "AbortError")) console.error("Failed to get hints:", error);
@@ -236,7 +251,9 @@ function scrollToTop(event: MouseEvent) {
 					type="button"
 					class="rounded border border-[#ccc] bg-[#eee] px-3 py-1 text-sm text-[#444] shadow-inner hover:text-[#900] disabled:opacity-50"
 					onclick={session.handleComplete}
-					disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
+					disabled={session.isCompleting ||
+						session.isSubmitting ||
+						session.isInitializing}
 				>
 					{session.isCompleting ? t.evaluating : t.finishTask}
 				</button>
@@ -269,8 +286,13 @@ function scrollToTop(event: MouseEvent) {
 				{/if}
 				<dt class="pt-1 text-right font-bold">Stats:</dt>
 				<dd class="pb-1">
-					Published: {stats.published ?? "2026-05-18"} &nbsp; Words: {stats.words ?? "4,500"} &nbsp; Chapters: {stats.chapters ?? "1/?"} &nbsp;
-					Comments: {stats.comments ?? commentCount} &nbsp; Kudos: {stats.kudos ?? "63"} &nbsp; Bookmarks: {stats.bookmarks ?? "12"} &nbsp; Hits:
+					Published: {stats.published ?? "2026-05-18"} &nbsp; Words:
+					{stats.words ??
+						"4,500"}
+					&nbsp; Chapters: {stats.chapters ?? "1/?"} &nbsp; Comments: {stats.comments ?? commentCount} &nbsp; Kudos:
+					{stats.kudos ??
+						"63"}
+					&nbsp; Bookmarks: {stats.bookmarks ?? "12"} &nbsp; Hits:
 					{stats.hits ?? "400"}
 				</dd>
 			</dl>
@@ -315,12 +337,17 @@ function scrollToTop(event: MouseEvent) {
 						<h4 class="m-0 text-base font-normal">{t.commentAs} <strong>{userName}</strong></h4>
 						{#if replyTarget}
 							<p class="mt-1 text-sm text-[#666]">
-								{t.replyTo} <strong>{replyTarget.username}</strong> ·
+								{t.replyTo}
+								<strong>{replyTarget.username}</strong>
+								·
 								<button type="button" class="text-[#900] underline" onclick={cancelReply}>{t.cancelReply}</button>
 							</p>
 						{/if}
 					</div>
-					<p class="m-0 text-xs">{t.plainText} <a href="/" class="text-[#900]" onclick={preventNavigation}>?</a></p>
+					<p class="m-0 text-xs">
+						{t.plainText}
+						<a href="/" class="text-[#900]" onclick={preventNavigation}>?</a>
+					</p>
 				</div>
 				<textarea
 					bind:value={commentText}
@@ -337,16 +364,35 @@ function scrollToTop(event: MouseEvent) {
 							<button
 								type="button"
 								class="ao3-action inline-flex items-center gap-1 whitespace-nowrap"
-								onclick={(event) => { event.stopPropagation(); showHintMenu ? closeHintMenu() : handleGetHint(); }}
+								onclick={(event) => {
+									event.stopPropagation();
+									showHintMenu
+										? closeHintMenu()
+										: handleGetHint();
+								}}
 								disabled={!session.sessionId || disabled}
 							>
-								<Lightbulb size={14} class={isGettingHint ? "animate-pulse text-[#900]" : ""} /> {t.getHint}
+								<Lightbulb
+									size={14}
+									class={isGettingHint
+										? "animate-pulse text-[#900]"
+										: ""}
+								/>
+								{t.getHint}
 							</button>
 							{#if showHintMenu}
 								<div class="absolute right-0 bottom-[calc(100%+8px)] z-20 w-80 border border-[#ccc] bg-white shadow-xl">
 									<div class="flex items-center justify-between border-b border-[#ddd] bg-[#eee] px-3 py-2 text-sm font-bold">
 										<span>{t.hintTitle}</span>
-										<button type="button" onclick={(event) => { event.stopPropagation(); closeHintMenu(); }}>×</button>
+										<button
+											type="button"
+											onclick={(event) => {
+												event.stopPropagation();
+												closeHintMenu();
+											}}
+										>
+											×
+										</button>
 									</div>
 									<div class="max-h-64 overflow-y-auto p-2">
 										{#if isGettingHint}
@@ -355,7 +401,12 @@ function scrollToTop(event: MouseEvent) {
 											<p class="py-5 text-center text-sm text-[#666]">{t.noHints}</p>
 										{:else}
 											{#each hints as hint}
-												<button type="button" class="block w-full p-2 text-left hover:bg-[#f3efec]" onclick={() => selectHint(hint.text)}>
+												<button
+													type="button"
+													class="block w-full p-2 text-left hover:bg-[#f3efec]"
+													onclick={() =>
+														selectHint(hint.text)}
+												>
 													<span class="text-sm">{hint.text}</span>
 													{#if hint.translation}
 														<span class="mt-1 block text-xs text-[#666]">{hint.translation}</span>
@@ -400,7 +451,12 @@ function scrollToTop(event: MouseEvent) {
 							<div class="flex items-center justify-between border border-[#ddd] bg-[#f9f9f9] p-3">
 								<span class="pr-4 text-sm">{obj.text}</span>
 								<span
-									class="rounded px-2 py-1 text-xs font-bold {obj.grade === 'A' ? 'bg-green-600 text-white' : obj.grade === 'B' ? 'bg-yellow-300 text-black' : 'bg-red-600 text-white'}"
+									class="rounded px-2 py-1 text-xs font-bold {obj.grade ===
+									'A'
+										? 'bg-green-600 text-white'
+										: obj.grade === 'B'
+											? 'bg-yellow-300 text-black'
+											: 'bg-red-600 text-white'}"
 									>{obj.grade}</span
 								>
 							</div>
@@ -438,7 +494,14 @@ function scrollToTop(event: MouseEvent) {
 						<p class="mt-2 text-sm italic text-[#666]">{t.stillProcessingMessage}</p>
 					{/if}
 					{#if comment.deliveryState === "failed" && comment.messageId}
-						<button type="button" class="ao3-action mt-2" onclick={() => session.handleRetry(comment.messageId ?? "")}>{t.retry}</button>
+						<button
+							type="button"
+							class="ao3-action mt-2"
+							onclick={() =>
+								session.handleRetry(comment.messageId ?? "")}
+						>
+							{t.retry}
+						</button>
 					{/if}
 				</div>
 			</div>

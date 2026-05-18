@@ -1,10 +1,23 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
 import { db } from "$lib/server/db";
-import { template, templateVariant } from "$lib/server/db/schema";
-import type { Actions } from "./$types";
+import { template, templateContribution, templateVariant } from "$lib/server/db/schema";
+import type { Actions, PageServerLoad } from "./$types";
+
+export const load: PageServerLoad = async (event) => {
+	const contributionId = event.url.searchParams.get("fromContribution");
+	if (!contributionId) return { contributionData: null };
+
+	const id = Number(contributionId);
+	if (Number.isNaN(id)) return { contributionData: null };
+
+	const [contribution] = await db.select().from(templateContribution).where(eq(templateContribution.id, id)).limit(1);
+
+	return { contributionData: contribution ?? null };
+};
 
 export const actions: Actions = {
 	default: async (event) => {
@@ -20,13 +33,39 @@ export const actions: Actions = {
 		if (!userId) return fail(401);
 
 		const isTranslate = result.data.interactionType === "translate";
+		const fromContributionId = Number(formData.get("fromContributionId"));
+		const hasContribution = fromContributionId && !Number.isNaN(fromContributionId);
 
-		// Translate templates don't use variants
+		// Verify the contribution exists and is pending before proceeding
+		if (hasContribution) {
+			const [contribution] = await db
+				.select({ status: templateContribution.status })
+				.from(templateContribution)
+				.where(eq(templateContribution.id, fromContributionId))
+				.limit(1);
+
+			if (!contribution) return fail(404, { message: "Contribution not found" });
+			if (contribution.status !== "pending") return fail(400, { message: "Already reviewed" });
+		}
+
 		if (isTranslate) {
-			await db.insert(template).values({
-				...result.data,
-				createdBy: userId,
-			});
+			if (hasContribution) {
+				await db.transaction(async (tx) => {
+					await tx.insert(template).values({
+						...result.data,
+						createdBy: userId,
+					});
+					await tx
+						.update(templateContribution)
+						.set({ status: "approved", reviewedBy: userId })
+						.where(and(eq(templateContribution.id, fromContributionId), eq(templateContribution.status, "pending")));
+				});
+			} else {
+				await db.insert(template).values({
+					...result.data,
+					createdBy: userId,
+				});
+			}
 		} else {
 			const parsed = parseTemplateForm(formData);
 			const variantResult = prepareVariantPayload(result.data, parsed.slotValues, parsed.openingState, "First variant");
@@ -34,7 +73,6 @@ export const actions: Actions = {
 				return fail(400, { message: variantResult.error, values: raw });
 			}
 
-			// Create template + first variant in a single transaction
 			await db.transaction(async (tx) => {
 				const [newTemplate] = await tx
 					.insert(template)
@@ -50,6 +88,13 @@ export const actions: Actions = {
 					slotValues: variantResult.slotValues,
 					openingState: variantResult.openingState,
 				});
+
+				if (hasContribution) {
+					await tx
+						.update(templateContribution)
+						.set({ status: "approved", reviewedBy: userId })
+						.where(and(eq(templateContribution.id, fromContributionId), eq(templateContribution.status, "pending")));
+				}
 			});
 		}
 

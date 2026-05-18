@@ -6,7 +6,7 @@ describe("implemented practice UI", () => {
 		expect(IMPLEMENTED_PRACTICE_UIS).toEqual(["discord", "imessage", "ao3", "reddit"]);
 	});
 
-	it.each(["discord", "imessage", "ao3"])("returns true for implemented ui: %s", (ui) => {
+	it.each(["discord", "imessage", "ao3", "reddit"])("returns true for implemented ui: %s", (ui) => {
 		expect(isPracticeUiImplemented(ui)).toBe(true);
 	});
 
