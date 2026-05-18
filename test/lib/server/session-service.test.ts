@@ -601,7 +601,7 @@ describe("session service", () => {
 				.mockReturnValueOnce(undefined);
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
-			await sendMessage(123, "Visible comment", "ao3-1", {
+			await sendMessage(123, "Visible comment", USER_ID, "ao3-1", {
 				promptContent: "Prompt context plus visible comment",
 				userDisplayContent: "Visible comment",
 				userMetadata: { ao3: { commentId: "ao3-user-ao3-1" } },
@@ -633,6 +633,8 @@ describe("session service", () => {
 			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
 				expect.any(Object),
 				expect.arrayContaining([expect.objectContaining({ role: "user", content: "Prompt context plus visible comment" })]),
+				{},
+				USER_ID,
 			);
 		});
 

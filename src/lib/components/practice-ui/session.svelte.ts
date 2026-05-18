@@ -162,7 +162,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		isSubmitting = true;
 
 		const retryText = message.retryText || message.text;
-		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId);
+		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
+		const retryExtraFields: Record<string, string> = {};
+		if (originalUserMessage?.ao3?.targetCommentId) {
+			retryExtraFields.ao3TargetCommentId = originalUserMessage.ao3.targetCommentId;
+		}
+		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, retryExtraFields);
 
 		applySendResult(result, message.clientMessageId, retryText, {
 			authorName: message.authorName,

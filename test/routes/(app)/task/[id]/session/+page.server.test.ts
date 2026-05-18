@@ -320,8 +320,10 @@ describe("session page server", () => {
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
 				789,
 				"What did you like?",
+				"user_123",
 				"ao3-msg",
 				expect.objectContaining({
+					hiddenUserMessage: false,
 					maxTurns: 4,
 					promptContent: expect.stringContaining("Comment author you must roleplay as: ReaderA"),
 					userDisplayContent: "What did you like?",

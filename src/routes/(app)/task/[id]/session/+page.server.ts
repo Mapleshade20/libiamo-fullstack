@@ -187,7 +187,7 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
-			const sendOptions: Parameters<typeof sendMessage>[3] = {
+			const sendOptions: Parameters<typeof sendMessage>[4] = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
 			};
