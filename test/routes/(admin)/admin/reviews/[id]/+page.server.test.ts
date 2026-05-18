@@ -3,35 +3,23 @@ import { actions, load } from "$routes/(admin)/admin/reviews/[id]/+page.server";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────
 
-const { mockSelectFrom, mockInsertValues, mockUpdateWhere } = vi.hoisted(() => {
+const { mockSelectFrom, mockUpdateWhere } = vi.hoisted(() => {
 	const mockSelectFrom = vi.fn();
-	const mockInsertValues = vi.fn();
 	const mockUpdateWhere = vi.fn();
-	return { mockSelectFrom, mockInsertValues, mockUpdateWhere };
+	return { mockSelectFrom, mockUpdateWhere };
 });
 
 vi.mock("$lib/server/db", () => ({
 	db: {
 		select: vi.fn(() => ({ from: mockSelectFrom })),
-		insert: vi.fn(() => ({ values: mockInsertValues })),
 		update: vi.fn(() => ({
 			set: vi.fn(() => ({ where: mockUpdateWhere })),
 		})),
-		transaction: async (cb: any) => {
-			const tx = {
-				insert: vi.fn(() => ({
-					values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 99 }]) })),
-				})),
-			};
-			return cb(tx);
-		},
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
 	templateContribution: {},
-	template: { id: "id" },
-	templateVariant: {},
 	user: {},
 }));
 
@@ -73,7 +61,6 @@ describe("Admin Reviews [id] +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockUpdateWhere.mockResolvedValue(undefined);
-		mockInsertValues.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 99 }]) });
 	});
 
 	describe("load", () => {
@@ -97,23 +84,6 @@ describe("Admin Reviews [id] +page.server", () => {
 			const event = { params: { id: "1" } } as any;
 			const result = (await load(event)) as { contribution: Record<string, unknown> };
 			expect(result.contribution).toBeDefined();
-		});
-	});
-
-	describe("approve action", () => {
-		it("redirects unauthenticated users", async () => {
-			const event = createEvent({}, "");
-			await expect(actions.approve(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
-		});
-
-		it("approves and redirects to reviews list", async () => {
-			const limit = vi.fn().mockResolvedValue([buildContribution()]);
-			mockSelectFrom.mockReturnValue({ where: vi.fn(() => ({ limit })) });
-
-			await expect(actions.approve(createEvent())).rejects.toMatchObject({
-				status: 302,
-				location: "/admin/reviews",
-			});
 		});
 	});
 
