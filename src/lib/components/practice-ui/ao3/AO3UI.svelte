@@ -88,6 +88,7 @@ let showHintMenu = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
+let scrollContainer: HTMLDivElement;
 
 const disabled = $derived(session.disabled);
 const remainingCharacters = $derived(Math.max(0, characterLimit - commentText.length));
@@ -192,6 +193,15 @@ function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
 	if (!target.closest(".ao3-hint-wrapper") && showHintMenu) closeHintMenu();
 }
+
+function preventNavigation(event: MouseEvent) {
+	event.preventDefault();
+}
+
+function scrollToTop(event: MouseEvent) {
+	event.preventDefault();
+	scrollContainer?.scrollTo({ top: 0, behavior: "smooth" });
+}
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -202,9 +212,11 @@ function handleWindowClick(event: MouseEvent) {
 	</div>
 {/if}
 
-<div class="fixed inset-0 z-[999] overflow-y-auto bg-white text-[#2a2a2a] ao3-root">
+<div bind:this={scrollContainer} class="fixed inset-0 z-[999] overflow-y-auto bg-white text-[#2a2a2a] ao3-root">
 	<header class="flex items-center justify-between border-b-[5px] border-black bg-[#900] px-[5%] py-2.5 text-white">
-		<h1 class="m-0 font-[Georgia,serif] text-[1.5em] font-normal"><a href="/" class="text-white no-underline">Archive of Our Own</a></h1>
+		<h1 class="m-0 font-[Georgia,serif] text-[1.5em] font-normal">
+			<a href="/" class="text-white no-underline" onclick={preventNavigation}>Archive of Our Own</a>
+		</h1>
 		<nav class="hidden md:block">
 			<ul class="m-0 flex list-none gap-4 p-0 text-sm font-bold">
 				<li><span>Hi, {userName}!</span></li>
@@ -233,9 +245,9 @@ function handleWindowClick(event: MouseEvent) {
 		<section class="mb-8 border border-[#ccc] bg-[#eee] p-2.5">
 			<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1 md:grid-cols-[150px_1fr]">
 				<dt class="pt-1 text-right font-bold">Rating:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]">{rating}</a></dd>
+				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]" onclick={preventNavigation}>{rating}</a></dd>
 				<dt class="pt-1 text-right font-bold">Archive Warning:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]">{warning}</a></dd>
+				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]" onclick={preventNavigation}>{warning}</a></dd>
 				{#if tagList(categories).length}
 					<dt class="pt-1 text-right font-bold">Category:</dt>
 					<dd class="border-b border-[#ddd] pb-1">{tagList(categories).join(", ")}</dd>
@@ -265,7 +277,7 @@ function handleWindowClick(event: MouseEvent) {
 
 		<section class="mb-8 border-b border-[#ccc] pb-4 text-center">
 			<h2 class="m-0 font-[Georgia,serif] text-3xl">{workTitle}</h2>
-			<h3 class="m-0 mt-1 text-lg font-normal"><a href="/" class="text-[#900]">{authorName}</a></h3>
+			<h3 class="m-0 mt-1 text-lg font-normal"><a href="/" class="text-[#900]" onclick={preventNavigation}>{authorName}</a></h3>
 			{#if summary}
 				<div class="mx-auto mt-4 max-w-[800px] border border-[#ccc] bg-[#fdfdfd] p-4 text-left">
 					<p class="font-bold">Summary:</p>
@@ -280,7 +292,7 @@ function handleWindowClick(event: MouseEvent) {
 		</section>
 
 		<ul class="my-6 flex list-none flex-wrap justify-center gap-2 p-0">
-			<li><a href="#top" class="ao3-action">↑ Top</a></li>
+			<li><a href="#top" class="ao3-action" onclick={scrollToTop}>↑ Top</a></li>
 			<li><button type="button" class="ao3-action">{t.kudos}</button></li>
 			<li><button type="button" class="ao3-action">{t.bookmark}</button></li>
 			<li><button type="button" class="ao3-action">{t.hideComments} ({commentCount})</button></li>
@@ -288,7 +300,8 @@ function handleWindowClick(event: MouseEvent) {
 
 		<div class="mb-8 border-y border-[#eee] bg-[#f9f9f9] p-4">
 			<p class="m-0">
-				<a href="/" class="text-[#900]">Licht_Yumi</a>, <a href="/" class="text-[#900]">Silver3</a>, and many guests left kudos on this work!
+				<a href="/" class="text-[#900]" onclick={preventNavigation}>Licht_Yumi</a>,
+				<a href="/" class="text-[#900]" onclick={preventNavigation}>Silver3</a>, and many guests left kudos on this work!
 			</p>
 		</div>
 
@@ -306,7 +319,7 @@ function handleWindowClick(event: MouseEvent) {
 							</p>
 						{/if}
 					</div>
-					<p class="m-0 text-xs">{t.plainText} <a href="/" class="text-[#900]">?</a></p>
+					<p class="m-0 text-xs">{t.plainText} <a href="/" class="text-[#900]" onclick={preventNavigation}>?</a></p>
 				</div>
 				<textarea
 					bind:value={commentText}
@@ -322,7 +335,7 @@ function handleWindowClick(event: MouseEvent) {
 						<div class="ao3-hint-wrapper relative">
 							<button
 								type="button"
-								class="ao3-action inline-flex items-center gap-1"
+								class="ao3-action inline-flex items-center gap-1 whitespace-nowrap"
 								onclick={(event) => { event.stopPropagation(); showHintMenu ? closeHintMenu() : handleGetHint(); }}
 								disabled={!session.sessionId || disabled}
 							>
@@ -396,7 +409,7 @@ function handleWindowClick(event: MouseEvent) {
 			</div>
 			<div class="flex justify-end gap-2 border-t border-[#ddd] bg-[#f3efec] p-4">
 				<button type="button" class="ao3-action" onclick={() => (session.showEvaluationModal = false)}>{t.closeReview}</button>
-				<a href="/" class="ao3-action">{t.returnHall}</a>
+				<a href="/" class="ao3-action" onclick={preventNavigation}>{t.returnHall}</a>
 			</div>
 		</div>
 	</div>
@@ -406,7 +419,10 @@ function handleWindowClick(event: MouseEvent) {
 	<li class="mb-4" style={`margin-left: ${Math.min(comment.depth, 5) * 2}%`}>
 		<article class="rounded border border-[#ddd] bg-white shadow-sm">
 			<div class="flex items-center justify-between border-b border-[#ddd] bg-[#eee] px-4 py-2 text-[13px]">
-				<span><a href="/" class="text-base font-bold text-[#900]">{comment.username}</a> on {comment.chapterTitle ?? chapterTitle}</span>
+				<span
+					><a href="/" class="text-base font-bold text-[#900]" onclick={preventNavigation}>{comment.username}</a>
+					on {comment.chapterTitle ?? chapterTitle}</span
+				>
 				<span class="text-[#666]">{comment.timestamp ?? t.earlier}</span>
 			</div>
 			<div class="flex min-h-[100px] gap-4 p-4">
@@ -436,7 +452,6 @@ function handleWindowClick(event: MouseEvent) {
 						{t.reply}
 					</button>
 				</li>
-				<li><a href="#comments" class="text-[#900]">Thread</a></li>
 			</ul>
 		</article>
 		{#if comment.replies.length > 0}
