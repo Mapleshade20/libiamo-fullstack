@@ -33,12 +33,23 @@ export interface PracticeSessionOptions {
 
 function getSessionSnapshot(session: {
 	status?: unknown;
-	messages?: Array<{ id: unknown; status?: unknown; content?: unknown; clientMessageId?: unknown; createdAt?: unknown }>;
+	messages?: Array<{ id: unknown; status?: unknown; content?: unknown; clientMessageId?: unknown; createdAt?: unknown; llmMetadata?: unknown }>;
 }): string {
 	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
-		.map((m) => [m.id, m.status, m.content, (m as any).clientMessageId ?? "", m.createdAt].join(":"))
+		.map((m) => [m.id, m.status, m.content, (m as any).clientMessageId ?? "", stableMetadataSnapshot(m.llmMetadata), m.createdAt].join(":"))
 		.join("|");
 	return `${session.status ?? ""}::${messagesSnapshot}`;
+}
+
+function stableMetadataSnapshot(value: unknown) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+	const metadata = value as { clientMessageId?: unknown; failed?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
+	return JSON.stringify({
+		clientMessageId: metadata.clientMessageId ?? "",
+		failed: metadata.failed === true,
+		hidden: metadata.hidden === true,
+		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? metadata.mailBodyHtml : "",
+	});
 }
 
 /**

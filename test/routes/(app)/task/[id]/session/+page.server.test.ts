@@ -547,7 +547,7 @@ describe("session page server", () => {
 						sessionId: "789",
 						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
 						clientMessageId: "mail-1",
-						bodyHtml: '<div>Hello <b style="color: #d70015">Maya</b><script>alert(1)</script></div>',
+						bodyHtml: '<div style="text-align: center; color: #d70015">Hello <b>Maya</b><script>alert(1)</script></div>',
 					},
 				}),
 			);
@@ -555,7 +555,7 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ success: true, turnCount: 1, feedback });
 			expect(mockSessionService.submitOneShotMessage).toHaveBeenCalledWith(789, "To: Maya\nSubject: Meeting\n\nHello Maya", "mail-1", {
 				maxTurns: 1,
-				mailBodyHtml: '<div>Hello <b style="color: #d70015">Maya</b></div>',
+				mailBodyHtml: '<div style="text-align: center">Hello Maya</div>',
 			});
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});

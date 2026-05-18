@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
@@ -471,7 +472,13 @@ function buildTutorPrompt(
 	messages: { role: string; content: string; llmMetadata?: unknown }[],
 	learningLanguage: string,
 ): string {
-	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
+	const conversationHistory = messages
+		.map((m) => {
+			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
+			if (!mailBodyLayout) return `[${m.role}] ${m.content}`;
+			return `[${m.role}] ${m.content}\n\nEmail body layout:\n${mailBodyLayout}`;
+		})
+		.join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
 	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
 
@@ -500,7 +507,6 @@ function buildTutorPrompt(
 	- The full conversation flow (how they adapted to the AI's responses)
 	- The quality, clarity, and appropriateness of their messages
 	- For email-style tasks, judge the student's submitted message mainly by its content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.
-	- Do not penalize the student for lack of rich-text formatting.
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved
@@ -517,6 +523,12 @@ function buildTutorPrompt(
 	],
 	"content": "overall feedback on student's performance"
 	}`;
+}
+
+function getMailBodyHtmlMetadata(metadata: unknown) {
+	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+	const value = (metadata as { mailBodyHtml?: unknown }).mailBodyHtml;
+	return typeof value === "string" ? value.trim() : "";
 }
 
 export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {

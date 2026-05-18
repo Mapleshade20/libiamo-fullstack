@@ -491,7 +491,7 @@ describe("session service", () => {
 				...mockSession,
 				agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
 				messages: [
-					{ role: "user", content: "Hello" },
+					{ role: "user", content: "Hello", llmMetadata: { mailBodyHtml: '<div style="text-align: center">Hello</div>' } },
 					{ role: "assistant", content: "Hi there" },
 				],
 				task: mockTaskObjectives,
@@ -511,6 +511,7 @@ describe("session service", () => {
 
 			expect(result.content).toBe("Good job!");
 			expect(result.objectiveResults).toHaveLength(2);
+			expect(mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
 			expect(mockDb.update).toHaveBeenCalledTimes(2);
 		});
 
@@ -699,7 +700,7 @@ describe("session service", () => {
 
 			const result = await submitOneShotMessage(123, "  To: Maya\nSubject: Hi\n\nHello  ", "mail-1", {
 				maxTurns: 1,
-				mailBodyHtml: "  <div>Hello <b>Maya</b></div>  ",
+				mailBodyHtml: '  <div style="text-align: center">Hello Maya</div>  ',
 			});
 
 			expect(result).toEqual({ turnCount: 1 });
@@ -710,7 +711,7 @@ describe("session service", () => {
 				llmMetadata: {
 					clientMessageId: "mail-1",
 					failed: false,
-					mailBodyHtml: "<div>Hello <b>Maya</b></div>",
+					mailBodyHtml: '<div style="text-align: center">Hello Maya</div>',
 				},
 			});
 		});
@@ -851,6 +852,14 @@ describe("session service", () => {
 					checklist: [{ text: "Confirma la hora", done: false, note: "Todavía falta." }],
 				},
 			});
+			expect(schema.parse({ mailHint: { checklist: null } })).toEqual({
+				mailHint: {
+					subjectSuggestion: { text: "" },
+					nextSection: null,
+					nextSentence: null,
+					checklist: [],
+				},
+			});
 			expect(schema.parse({ mailHint: "not-an-object" })).toEqual({
 				mailHint: {
 					subjectSuggestion: { text: "" },
@@ -884,6 +893,28 @@ describe("session service", () => {
 			expect(systemPrompt).toContain("To: (empty)");
 			expect(systemPrompt).toContain("Subject: (empty)");
 			expect(systemPrompt).toContain("Body:\n\t(empty)");
+		});
+
+		it("throws when normal hint session has no task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
+
+			await expect(generateHint(123)).rejects.toThrow("Task not found");
+		});
+
+		it("uses an empty-history placeholder for normal hints", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: { language: "en" },
+				agentPromptSnapshot: { systemPrompt: "Context" },
+				messages: [],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ hints: [] });
+
+			await generateHint(123);
+
+			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(systemPrompt).toContain("(No messages yet)");
 		});
 
 		it("throws when mail hint session is missing", async () => {

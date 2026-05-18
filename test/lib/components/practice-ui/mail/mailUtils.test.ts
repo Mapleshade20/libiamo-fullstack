@@ -5,10 +5,11 @@ import {
 	formatDraftMessage,
 	getMailBodyHtmlFromMessage,
 	normalizeMailBodySpacing,
+	normalizeMailEmails,
 	parseDraftFromMessage,
 	plainTextToDraftHtml,
 	sanitizeDraftBodyHtml,
-	summarizeDraftPresentation,
+	summarizeMailBodyLayout,
 } from "$lib/components/practice-ui/mail/mailUtils";
 
 describe("mailUtils", () => {
@@ -68,11 +69,11 @@ describe("mailUtils", () => {
 			const result = parseDraftFromMessage(
 				"To: Maya\nSubject: Update\n\nHello styled text",
 				"(No Subject)",
-				'<div>Hello <strong style="color: #d70015">styled</strong> text</div><script>alert("x")</script>',
+				'<div style="text-align: center; color: #d70015">Hello <strong>styled</strong> text</div><script>alert("x")</script>',
 			);
 
 			expect(result.body).toBe("Hello styled text");
-			expect(result.bodyHtml).toBe('<div>Hello <strong style="color: #d70015">styled</strong> text</div>');
+			expect(result.bodyHtml).toBe('<div style="text-align: center">Hello styled text</div>');
 		});
 	});
 
@@ -92,12 +93,12 @@ describe("mailUtils", () => {
 			).toBe("");
 		});
 
-		it("keeps mail formatting tags while removing unsafe markup", () => {
+		it("keeps mail layout html while removing unsafe and decorative markup", () => {
 			expect(
 				sanitizeDraftBodyHtml(
-					'<div onclick="alert(1)"><font color="#d70015" size="5">Friday</font><img src=x onerror=alert(1)><script>alert(1)</script></div>',
+					'<div onclick="alert(1)" style="text-align: right; color: #d70015; font-size: 24px">Friday</div><blockquote style="margin-left: 40px; font-weight: bold">Thanks</blockquote><img src=x onerror=alert(1)><script>alert(1)</script>',
 				),
-			).toBe('<div><font color="#d70015" size="5">Friday</font></div>');
+			).toBe('<div style="text-align: right">Friday</div><blockquote style="margin-left: 40px">Thanks</blockquote>');
 		});
 
 		it("extracts sanitized mail body html from chat message metadata", () => {
@@ -108,65 +109,66 @@ describe("mailUtils", () => {
 					text: "To: Maya\nSubject: Hi\n\nHello",
 					timestamp: "10:00",
 					authorName: "Learner",
-					llmMetadata: { mailBodyHtml: '<div><b>Hello</b><script>alert("x")</script></div>' },
+					llmMetadata: { mailBodyHtml: '<div style="padding-left: 40px"><b>Hello</b><script>alert("x")</script></div>' },
 				}),
-			).toBe("<div><b>Hello</b></div>");
+			).toBe('<div style="padding-left: 40px">Hello</div>');
 		});
 	});
 
-	describe("summarizeDraftPresentation", () => {
-		it("returns a plain-text note when there is no rich body html", () => {
-			expect(summarizeDraftPresentation({ to: "Maya", subject: "Hi", body: "Hello" })).toBe(
-				"Presentation: plain text or no rich-text styling detected.",
+	describe("summarizeMailBodyLayout", () => {
+		it("summarizes alignment, indentation, and list structure without raw html", () => {
+			expect(
+				summarizeMailBodyLayout(
+					'<div style="text-align: center; color: #d70015">Hello</div><blockquote style="margin-left: 40px"><div>Thanks</div></blockquote><ol><li>First</li><li style="padding-left: 20px">Second</li></ol>',
+				),
+			).toBe("[align=center] Hello\n[indent=40px] Thanks\n1. First\n2. [indent=20px] Second");
+		});
+
+		it("handles br tags, inherited layout, unordered lists, and entity decoding", () => {
+			expect(summarizeMailBodyLayout('<div style="text-align: right">Hello&nbsp;&amp;<br>bye</div><ul><li>One</li><li>Two</li></ul>')).toBe(
+				"[align=right] Hello &\n[align=right] bye\n- One\n- Two",
 			);
 		});
 
-		it("returns a plain-text note when body html renders the same as plain body", () => {
+		it("marks blockquote indentation when no explicit indent is present", () => {
+			expect(summarizeMailBodyLayout("<blockquote>Please review this.</blockquote>")).toBe("[indent=blockquote] Please review this.");
+		});
+	});
+
+	describe("normalizeMailEmails", () => {
+		it("normalizes sender display data, preview, and fallback time", () => {
 			expect(
-				summarizeDraftPresentation({
-					to: "Maya",
-					subject: "Hi",
-					body: "Hello",
-					bodyHtml: "<div>Hello</div>",
-				}),
-			).toBe("Presentation: plain text or no rich-text styling detected.");
+				normalizeMailEmails(
+					[{ from: '"Maya Chen" <maya@example.com>', to: "learner@example.com", subject: "Update", body: "Hello\n\n\nThanks" }],
+					"Today",
+				),
+			).toEqual([
+				{
+					id: "inbox-0",
+					from: '"Maya Chen" <maya@example.com>',
+					to: "learner@example.com",
+					subject: "Update",
+					body: "Hello\n\n\nThanks",
+					fromName: "Maya Chen",
+					fromAddress: "maya@example.com",
+					displayFrom: "Maya Chen <maya@example.com>",
+					preview: "Hello\n\nThanks",
+					time: "Today",
+				},
+			]);
 		});
 
-		it("marks rich text styling without changing the student's words", () => {
-			const result = summarizeDraftPresentation({
-				to: "Maya",
-				subject: "Deadline",
-				body: "Please reply by Friday.\nThanks",
-				bodyHtml: '<div>Please reply by <b>Friday</b>.</div><div style="text-align: center"><font color="#d70015" size="5">Thanks</font></div>',
-			});
-
-			expect(result).toContain("Style markup rules");
-			expect(result).toContain("Marked email body:");
-			expect(result).toContain("**Friday**");
-			expect(result).toContain("[align=center][size=5][color=#d70015]Thanks[/color][/size][/align]");
+		it("returns an empty list for missing opening emails", () => {
+			expect(normalizeMailEmails(undefined)).toEqual([]);
 		});
 
-		it("marks list items and inline text decorations", () => {
-			const result = summarizeDraftPresentation({
-				to: "Maya",
-				subject: "Checklist",
-				body: "First item\nSecond item",
-				bodyHtml: "<ul><li><i>First item</i></li><li><u><s>Second item</s></u></li></ul>",
+		it("handles sender values without angle-bracket addresses", () => {
+			expect(normalizeMailEmails([{ from: "maya@example.com", to: "learner@example.com", subject: "Hi", body: "" }])[0]).toMatchObject({
+				fromName: "maya@example.com",
+				fromAddress: "maya@example.com",
+				displayFrom: "maya@example.com",
+				time: "",
 			});
-
-			expect(result).toContain("- _First item_");
-			expect(result).toContain("- [s][u]Second item[/u][/s]");
-		});
-
-		it("ignores unsupported html nodes while reading rich text markers", () => {
-			const result = summarizeDraftPresentation({
-				to: "Maya",
-				subject: "Hi",
-				body: "Hello",
-				bodyHtml: "<!-- editor marker --><div><b>Hello</b></div>",
-			});
-
-			expect(result).toContain("**Hello**");
 		});
 	});
 });

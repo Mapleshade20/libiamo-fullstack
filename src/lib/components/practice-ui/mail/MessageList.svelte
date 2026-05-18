@@ -10,12 +10,14 @@ let {
 	sentMessages = [] as ChatMessage[],
 	draft = { to: "", subject: "", body: "" } as DraftEmail,
 	draftCount = 0,
+	selectedInboxId = null as string | null,
 	selectedSentId = null as string | null,
 	activeView = "inbox",
 	todayLabel = "",
 	t = {} as Record<string, string>,
 	onOpenSidebar = () => {},
 	onSearchFocus = () => {},
+	onSelectInboxMessage = (_messageId: string) => {},
 	onSelectSentMessage = (_messageId: string) => {},
 	onSelectDraftMessage = () => {},
 }: {
@@ -23,12 +25,14 @@ let {
 	sentMessages?: ChatMessage[];
 	draft?: DraftEmail;
 	draftCount?: number;
+	selectedInboxId?: string | null;
 	selectedSentId?: string | null;
 	activeView?: "inbox" | "sent" | "drafts";
 	todayLabel?: string;
 	t?: Record<string, string>;
 	onOpenSidebar?: () => void;
 	onSearchFocus?: () => void;
+	onSelectInboxMessage?: (messageId: string) => void;
 	onSelectSentMessage?: (messageId: string) => void;
 	onSelectDraftMessage?: () => void;
 } = $props();
@@ -58,7 +62,11 @@ const draftPreview = $derived(draft.body.trim() || t.composePlaceholder);
 		<div class="px-4 pb-2 pt-4 text-2xl font-bold tracking-tight">{title}</div>
 		{#if activeView === "inbox"}
 			{#each inboxEmails as email}
-				<button type="button" class="message-row selected">
+				<button
+					type="button"
+					class="message-row {selectedInboxId === email.id || (!selectedInboxId && email.id === inboxEmails[0]?.id) ? 'selected' : ''}"
+					onclick={() => onSelectInboxMessage(email.id)}
+				>
 					<div class="flex items-baseline gap-2">
 						<span class="truncate text-sm font-semibold">{email.fromName}</span>
 						<span class="ml-auto shrink-0 text-xs text-[#6E6E73]">{email.time || todayLabel}</span>

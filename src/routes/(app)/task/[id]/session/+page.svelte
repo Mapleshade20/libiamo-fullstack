@@ -38,6 +38,7 @@ let { data } = $props();
 		language={data.user.learningLanguage}
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
+		openingState={data.task.variant?.openingState}
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">

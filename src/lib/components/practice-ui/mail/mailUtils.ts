@@ -1,7 +1,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import { normalizeText } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
-import type { DraftEmail } from "./types";
+import type { DraftEmail, MailEmail, NormalizedMailEmail } from "./types";
 
 const mailBodyHtmlMaxLength = 20000;
 
@@ -29,12 +29,163 @@ export function sanitizeDraftBodyHtml(value: string | undefined, maxLength = mai
 	if (!trimmed) return "";
 
 	const limited = trimmed.slice(0, maxLength);
-	return DOMPurify.sanitize(limited, {
-		ALLOWED_TAGS: ["b", "blockquote", "br", "div", "em", "font", "i", "li", "ol", "p", "s", "span", "strike", "strong", "u", "ul"],
-		ALLOWED_ATTR: ["align", "color", "size", "style"],
+	const sanitized = DOMPurify.sanitize(limited, {
+		ALLOWED_TAGS: ["blockquote", "br", "div", "li", "ol", "p", "span", "ul"],
+		ALLOWED_ATTR: ["align", "style"],
 		FORBID_TAGS: ["script", "style"],
 		ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z])/i,
-	}).trim();
+	});
+
+	return stripUnsupportedDraftStyles(sanitized).trim();
+}
+
+function stripUnsupportedDraftStyles(value: string) {
+	return value.replace(/\sstyle="([^"]*)"/gi, (_match, rawStyle: string) => {
+		const kept = rawStyle
+			.split(";")
+			.map((part) => part.trim())
+			.filter(Boolean)
+			.map((part) => {
+				const separatorIndex = part.indexOf(":");
+				if (separatorIndex === -1) return "";
+				const property = part.slice(0, separatorIndex).trim().toLowerCase();
+				const styleValue = part.slice(separatorIndex + 1).trim();
+				if (!["text-align", "margin-left", "padding-left"].includes(property)) return "";
+				return `${property}: ${styleValue}`;
+			})
+			.filter(Boolean)
+			.join("; ");
+
+		return kept ? ` style="${kept}"` : "";
+	});
+}
+
+type LayoutContext = {
+	tag: string;
+	align?: string;
+	indent?: string;
+	listType?: "ul" | "ol";
+	nextIndex?: number;
+	itemPrefix?: string;
+};
+
+function decodeHtmlEntities(value: string) {
+	return value
+		.replace(/&nbsp;/g, " ")
+		.replace(/&amp;/g, "&")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#039;/g, "'");
+}
+
+function getAttributeValue(attributes: string, name: string) {
+	const match = attributes.match(new RegExp(`\\s${name}="([^"]*)"`, "i"));
+	return match?.[1]?.trim() ?? "";
+}
+
+function getStyleProperty(attributes: string, property: string) {
+	const style = getAttributeValue(attributes, "style");
+	const parts = style.split(";").map((part) => part.trim());
+	for (const part of parts) {
+		const separatorIndex = part.indexOf(":");
+		if (separatorIndex === -1) continue;
+		const key = part.slice(0, separatorIndex).trim().toLowerCase();
+		if (key === property) return part.slice(separatorIndex + 1).trim();
+	}
+	return "";
+}
+
+function getLayoutContext(tag: string, attributes: string, parent?: LayoutContext): LayoutContext {
+	const align = getAttributeValue(attributes, "align") || getStyleProperty(attributes, "text-align") || parent?.align;
+	const indent = getStyleProperty(attributes, "margin-left") || getStyleProperty(attributes, "padding-left") || parent?.indent;
+	return { tag, align, indent };
+}
+
+function summarizeLayoutLine(text: string, contexts: LayoutContext[]) {
+	const normalizedText = decodeHtmlEntities(text).replace(/\s+/g, " ").trim();
+	if (!normalizedText) return "";
+
+	const listItem = [...contexts].reverse().find((context) => context.itemPrefix);
+	const align = [...contexts].reverse().find((context) => context.align)?.align;
+	const indent = [...contexts].reverse().find((context) => context.indent)?.indent;
+	const inBlockquote = contexts.some((context) => context.tag === "blockquote");
+
+	const markers = [];
+	if (align && align !== "left" && align !== "start") markers.push(`align=${align}`);
+	if (indent) markers.push(`indent=${indent}`);
+	else if (inBlockquote) markers.push("indent=blockquote");
+
+	const markerText = markers.length ? `[${markers.join(", ")}] ` : "";
+	return `${listItem?.itemPrefix ?? ""}${markerText}${normalizedText}`;
+}
+
+export function summarizeMailBodyLayout(value: string | undefined, maxLength = mailBodyHtmlMaxLength) {
+	const html = sanitizeDraftBodyHtml(value, maxLength);
+	if (!html) return "";
+
+	const lines: string[] = [];
+	const contexts: LayoutContext[] = [];
+	let buffer = "";
+	const blockTags = new Set(["blockquote", "div", "li", "ol", "p", "ul"]);
+	const tokenPattern = /<([^>]+)>|([^<]+)/g;
+
+	function flushLine() {
+		const line = summarizeLayoutLine(buffer, contexts);
+		if (line) lines.push(line);
+		buffer = "";
+	}
+
+	for (const match of html.matchAll(tokenPattern)) {
+		const tagToken = match[1];
+		const textToken = match[2];
+
+		if (textToken) {
+			buffer += textToken;
+			continue;
+		}
+
+		if (!tagToken) continue;
+		const isClosing = tagToken.startsWith("/");
+		const tagMatch = tagToken.match(/^\/?\s*([a-z0-9]+)/i);
+		const tag = tagMatch?.[1]?.toLowerCase();
+		if (!tag) continue;
+
+		if (tag === "br") {
+			flushLine();
+			continue;
+		}
+
+		if (isClosing) {
+			if (blockTags.has(tag)) flushLine();
+			const index = contexts.map((context) => context.tag).lastIndexOf(tag);
+			if (index !== -1) contexts.splice(index, 1);
+			continue;
+		}
+
+		if (blockTags.has(tag) && buffer.trim()) flushLine();
+
+		if (tag === "ul" || tag === "ol") {
+			contexts.push({ tag, listType: tag, nextIndex: 1 });
+			continue;
+		}
+
+		const parent = contexts.at(-1);
+		if (tag === "li") {
+			const listContext = [...contexts].reverse().find((context) => context.listType);
+			const itemPrefix = listContext?.listType === "ol" ? `${listContext.nextIndex ?? 1}. ` : "- ";
+			if (listContext?.listType === "ol") listContext.nextIndex = (listContext.nextIndex ?? 1) + 1;
+			contexts.push({ ...getLayoutContext(tag, tagToken, parent), itemPrefix });
+			continue;
+		}
+
+		if (tag === "blockquote" || tag === "div" || tag === "p" || tag === "span") {
+			contexts.push(getLayoutContext(tag, tagToken, parent));
+		}
+	}
+
+	flushLine();
+	return lines.join("\n").slice(0, 3500);
 }
 
 export function normalizeMailBodySpacing(value: string) {
@@ -51,158 +202,31 @@ export function formatDraftMessage(value: DraftEmail, noSubjectLabel: string) {
 	return `To: ${value.to.trim()}\nSubject: ${subject}\n\n${normalizeMailBodySpacing(value.body)}`;
 }
 
-type PresentationState = {
-	bold: boolean;
-	italic: boolean;
-	underline: boolean;
-	strike: boolean;
-	color: string;
-	fontSize: string;
-	largeFont: boolean;
-	align: string;
-};
+function splitMailAddress(value: string) {
+	const trimmed = value.trim();
+	const angleMatch = trimmed.match(/^(.*?)\s*<([^>]+)>$/);
+	if (!angleMatch) {
+		return { name: trimmed || value, address: trimmed };
+	}
 
-const defaultPresentationState: PresentationState = {
-	bold: false,
-	italic: false,
-	underline: false,
-	strike: false,
-	color: "",
-	fontSize: "",
-	largeFont: false,
-	align: "",
-};
-
-function normalizeTextNode(value: string) {
-	return value.replace(/\s+/g, " ");
+	const name = angleMatch[1]?.trim().replace(/^"|"$/g, "") || angleMatch[2].trim();
+	return { name, address: angleMatch[2].trim() };
 }
 
-function getStyleValue(element: HTMLElement, property: string) {
-	return element.style.getPropertyValue(property).trim().toLowerCase();
-}
-
-function isBoldElement(element: HTMLElement) {
-	const tag = element.tagName.toLowerCase();
-	const weight = getStyleValue(element, "font-weight");
-	return tag === "b" || tag === "strong" || weight === "bold" || Number.parseInt(weight, 10) >= 600;
-}
-
-function parseFontSizeValue(value: string) {
-	const normalized = value.trim().toLowerCase();
-	const pixelMatch = normalized.match(/^(\d+(?:\.\d+)?)px$/);
-	const pointMatch = normalized.match(/^(\d+(?:\.\d+)?)pt$/);
-	if (pixelMatch) return { value: normalized, large: Number(pixelMatch[1]) >= 22 };
-	if (pointMatch) return { value: normalized, large: Number(pointMatch[1]) >= 16 };
-	return { value: normalized, large: false };
-}
-
-function getElementPresentationState(element: HTMLElement, inherited: PresentationState): PresentationState {
-	const tag = element.tagName.toLowerCase();
-	const textDecoration = getStyleValue(element, "text-decoration");
-	const color = getStyleValue(element, "color") || element.getAttribute("color")?.trim().toLowerCase() || inherited.color;
-	const styleFontSize = getStyleValue(element, "font-size");
-	const fontTagSize = tag === "font" ? (element.getAttribute("size")?.trim() ?? "") : "";
-	const parsedFontSize = parseFontSizeValue(styleFontSize || fontTagSize);
-	const align = getStyleValue(element, "text-align") || element.getAttribute("align")?.trim().toLowerCase() || inherited.align;
-
-	return {
-		bold: inherited.bold || isBoldElement(element),
-		italic: inherited.italic || tag === "i" || tag === "em" || getStyleValue(element, "font-style") === "italic",
-		underline: inherited.underline || tag === "u" || textDecoration.includes("underline"),
-		strike: inherited.strike || tag === "s" || tag === "strike" || textDecoration.includes("line-through"),
-		color,
-		fontSize: parsedFontSize.value || inherited.fontSize,
-		largeFont: inherited.largeFont || parsedFontSize.large || (tag === "font" && Number.parseInt(fontTagSize, 10) >= 5),
-		align,
-	};
-}
-
-function hasInlinePresentation(state: PresentationState) {
-	return state.bold || state.italic || state.underline || state.strike || Boolean(state.color) || Boolean(state.fontSize) || state.largeFont;
-}
-
-function compactStyleValue(value: string) {
-	return value.replace(/\s+/g, "");
-}
-
-function wrapCoreText(value: string, wrap: (core: string) => string) {
-	if (!value.trim()) return value;
-	const leading = value.match(/^\s*/)?.[0] ?? "";
-	const trailing = value.match(/\s*$/)?.[0] ?? "";
-	const core = value.slice(leading.length, value.length - trailing.length);
-	return `${leading}${wrap(core)}${trailing}`;
-}
-
-function applyPresentationMarkers(text: string, state: PresentationState) {
-	if (!hasInlinePresentation(state)) return text;
-
-	return wrapCoreText(text, (core) => {
-		let marked = core;
-		if (state.bold) marked = `**${marked}**`;
-		if (state.italic) marked = `_${marked}_`;
-		if (state.underline) marked = `[u]${marked}[/u]`;
-		if (state.strike) marked = `[s]${marked}[/s]`;
-		if (state.color) marked = `[color=${compactStyleValue(state.color)}]${marked}[/color]`;
-		if (state.fontSize || state.largeFont) marked = `[size=${compactStyleValue(state.fontSize || "large")}]${marked}[/size]`;
-		return marked;
+export function normalizeMailEmails(emails: MailEmail[] | undefined, fallbackTime = ""): NormalizedMailEmail[] {
+	return (Array.isArray(emails) ? emails : []).map((email, index) => {
+		const from = splitMailAddress(email.from || "");
+		const body = normalizeMailBodySpacing(email.body || "");
+		return {
+			...email,
+			id: `inbox-${index}`,
+			fromName: from.name,
+			fromAddress: from.address,
+			displayFrom: from.address && from.name !== from.address ? `${from.name} <${from.address}>` : from.name,
+			preview: body,
+			time: email.time || fallbackTime,
+		};
 	});
-}
-
-function renderMarkedBody(node: Node, inherited = defaultPresentationState): string {
-	if (node.nodeType === Node.TEXT_NODE) {
-		return applyPresentationMarkers(normalizeTextNode(node.textContent ?? ""), inherited);
-	}
-
-	if (!(node instanceof HTMLElement)) {
-		return Array.from(node.childNodes)
-			.map((child) => renderMarkedBody(child, inherited))
-			.join("");
-	}
-
-	const tag = node.tagName.toLowerCase();
-	if (tag === "br") return "\n";
-
-	const nextState = getElementPresentationState(node, inherited);
-	const renderedChildren = Array.from(node.childNodes)
-		.map((child) => renderMarkedBody(child, nextState))
-		.join("");
-
-	if (tag === "li") return `- ${renderedChildren.trim()}\n`;
-	if (tag === "ul" || tag === "ol") return renderedChildren;
-
-	const blockText =
-		nextState.align === "center" || nextState.align === "right" ? `[align=${nextState.align}]${renderedChildren.trim()}[/align]` : renderedChildren;
-
-	if (tag === "div" || tag === "p") return `${blockText}\n`;
-	return blockText;
-}
-
-function compactMarkedBody(value: string) {
-	return value
-		.replace(/[ \t]+\n/g, "\n")
-		.replace(/\n[ \t]+/g, "\n")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
-}
-
-export function summarizeDraftPresentation(value: DraftEmail) {
-	if (typeof DOMParser === "undefined" || !value.bodyHtml?.trim()) {
-		return "Presentation: plain text or no rich-text styling detected.";
-	}
-
-	const doc = new DOMParser().parseFromString(value.bodyHtml, "text/html");
-	const markedBody = compactMarkedBody(renderMarkedBody(doc.body));
-	const plainBody = compactMarkedBody(value.body);
-
-	if (!markedBody || markedBody === plainBody) return "Presentation: plain text or no rich-text styling detected.";
-
-	return [
-		"Style markup rules: markers describe visual formatting only and are not part of the student's words. **text**=bold, _text_=italic, [u]text[/u]=underline, [s]text[/s]=strikethrough, [color=value]text[/color]=colored text, [size=value]text[/size]=changed font size, [align=value]text[/align]=block alignment.",
-		"Evaluation rule: professional emails should usually use plain, consistent body text. Emphasis is appropriate for genuinely important deadlines, headings, or key actions, but styling ordinary words or using color/large fonts casually is distracting and should lower presentation quality.",
-		`Marked email body:\n${markedBody}`,
-	]
-		.join("\n")
-		.slice(0, 3500);
 }
 
 export function getMailBodyHtmlFromMessage(message: ChatMessage | null | undefined) {

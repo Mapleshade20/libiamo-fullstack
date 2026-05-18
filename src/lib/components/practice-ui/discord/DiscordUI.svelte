@@ -1,6 +1,5 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
-import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
@@ -129,10 +128,9 @@ function handleMockAction() {
 	}, 3000);
 }
 
-onMount(() => {
-	if (!existingSession) return;
-	if (!onlineUsers.length && existingSession.id) {
-		({ onlineUsers, offlineUsers } = initUserPool(existingSession.id));
+$effect(() => {
+	if (!onlineUsers.length && session.sessionId) {
+		({ onlineUsers, offlineUsers } = initUserPool(session.sessionId));
 	}
 });
 </script>

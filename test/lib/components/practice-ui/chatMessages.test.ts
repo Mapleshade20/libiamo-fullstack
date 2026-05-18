@@ -160,7 +160,7 @@ describe("buildChatMessages", () => {
 	});
 
 	it("preserves llm metadata for UI-specific message rendering", () => {
-		const llmMetadata = { clientMessageId: "mail-1", mailBodyHtml: "<div><b>Hello</b></div>" };
+		const llmMetadata = { clientMessageId: "mail-1", mailBodyHtml: '<div style="text-align: center">Hello</div>' };
 		const result = buildChatMessages({
 			...baseOptions,
 			rawMessages: [
@@ -197,6 +197,27 @@ describe("buildChatMessages", () => {
 		});
 
 		expect(seenDates[0]?.toISOString()).toBe("2026-05-17T05:01:00.000Z");
+	});
+
+	it("normalizes persisted timestamp strings that include offsets", () => {
+		const seenDates: Date[] = [];
+		buildChatMessages({
+			...baseOptions,
+			formatTimestamp: (date) => {
+				seenDates.push(date);
+				return "formatted";
+			},
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00+08:00",
+				},
+			],
+		});
+
+		expect(seenDates[0]?.toISOString()).toBe("2026-05-16T21:01:00.000Z");
 	});
 
 	it("formats persisted and optimistic timestamps consistently for the same instant and timezone", () => {

@@ -15,14 +15,14 @@ import MessageList from "./MessageList.svelte";
 import {
 	formatDraftMessage,
 	getMailBodyHtmlFromMessage,
+	normalizeMailEmails,
 	parseDraftFromMessage,
 	plainTextToDraftHtml,
 	sanitizeDraftBodyHtml,
-	summarizeDraftPresentation,
 } from "./mailUtils";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
-import type { DraftEmail, MailHint } from "./types";
+import type { DraftEmail, MailHint, MailOpeningState } from "./types";
 import { getMailContact } from "./userPool";
 
 interface Props {
@@ -32,9 +32,18 @@ interface Props {
 	language?: string;
 	timeZone?: string;
 	existingSession?: any;
+	openingState?: unknown;
 }
 
-let { taskId = "", userName = "Learner", avatarUrl = "", language = "en", timeZone = "UTC", existingSession = null }: Props = $props();
+let {
+	taskId = "",
+	userName = "Learner",
+	avatarUrl = "",
+	language = "en",
+	timeZone = "UTC",
+	existingSession = null,
+	openingState = null,
+}: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 
@@ -54,6 +63,7 @@ let isGettingHint = $state(false);
 let feedback = $state<TutorFeedback | null>(null);
 let mailHint = $state<MailHint | null>(null);
 let messages = $state<ChatMessage[]>([]);
+let selectedInboxId = $state<string | null>(null);
 let selectedSentId = $state<string | null>(null);
 let activeMailbox = $state<"inbox" | "sent" | "drafts">("inbox");
 let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
@@ -63,7 +73,9 @@ let messageScroll = $state<HTMLElement | null>(null);
 let hintAbortController: AbortController | null = null;
 
 const recipient = $derived(getMailContact(taskId || sessionId || userName));
-const inboxEmails = $derived([]);
+const todayLabel = $derived(getTodayDateString(language, timeZone));
+const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
+const inboxEmails = $derived(normalizeMailEmails(openingStateData.emails, todayLabel));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
 const hasSubmittedEmail = $derived(sentMessages.length > 0);
 const limitReached = $derived(hasSubmittedEmail || isCompleted);
@@ -72,9 +84,15 @@ const selectedSentMessage = $derived(selectedSentId ? (sentMessages.find((messag
 const selectedSentEmail = $derived(
 	selectedSentMessage ? parseDraftFromMessage(selectedSentMessage.text, t.noSubject, getMailBodyHtmlFromMessage(selectedSentMessage)) : null,
 );
+const selectedInboxEmail = $derived(
+	activeMailbox === "inbox"
+		? selectedInboxId
+			? (inboxEmails.find((email) => email.id === selectedInboxId) ?? null)
+			: (inboxEmails[0] ?? null)
+		: null,
+);
 const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!hasSubmittedEmail && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
-const todayLabel = $derived(getTodayDateString(language, timeZone));
 const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 function getDefaultDraft(): DraftEmail {
@@ -118,6 +136,7 @@ function openComposer(useSavedDraft = false) {
 }
 
 function newMessage() {
+	selectedInboxId = null;
 	selectedSentId = null;
 	if (draftCount > 0) {
 		showCompose = true;
@@ -128,6 +147,7 @@ function newMessage() {
 }
 
 function selectInbox() {
+	selectedInboxId = selectedInboxId ?? inboxEmails[0]?.id ?? null;
 	selectedSentId = null;
 	activeMailbox = "inbox";
 	showCompose = false;
@@ -135,6 +155,7 @@ function selectInbox() {
 }
 
 function selectSentMailbox() {
+	selectedInboxId = null;
 	activeMailbox = "sent";
 	showSidebar = false;
 	showCompose = false;
@@ -144,6 +165,7 @@ function selectSentMailbox() {
 }
 
 function selectDraftMailbox() {
+	selectedInboxId = null;
 	selectedSentId = null;
 	activeMailbox = "drafts";
 	showCompose = false;
@@ -151,6 +173,7 @@ function selectDraftMailbox() {
 }
 
 function selectSentMessage(messageId: string) {
+	selectedInboxId = null;
 	selectedSentId = messageId;
 	activeMailbox = "sent";
 	showCompose = false;
@@ -159,9 +182,18 @@ function selectSentMessage(messageId: string) {
 
 function selectDraftMessage() {
 	if (draftCount <= 0) return;
+	selectedInboxId = null;
 	selectedSentId = null;
 	activeMailbox = "drafts";
 	showCompose = true;
+	showSidebar = false;
+}
+
+function selectInboxMessage(messageId: string) {
+	selectedInboxId = messageId;
+	selectedSentId = null;
+	activeMailbox = "inbox";
+	showCompose = false;
 	showSidebar = false;
 }
 
@@ -178,12 +210,11 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, presentationReport: string, bodyHtml: string) {
+async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, bodyHtml: string) {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
-	formData.append("presentationReport", presentationReport);
 	formData.append("bodyHtml", bodyHtml);
 
 	const res = await fetch(`?/submit`, {
@@ -247,7 +278,6 @@ async function handleSendEmail() {
 	if (!draft.to.trim() || !draft.body.trim()) return;
 
 	const currentText = formatDraftMessage(draft, t.noSubject);
-	const presentationReport = summarizeDraftPresentation(draft);
 	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
 	const clientMessageId = crypto.randomUUID();
 	isSubmitting = true;
@@ -270,7 +300,7 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, presentationReport, mailBodyHtml);
+		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, mailBodyHtml);
 		if (result.type === "success" && result.data) {
 			isCompleted = true;
 			feedback = result.data.feedback as TutorFeedback;
@@ -405,18 +435,21 @@ $effect(() => {
 			{sentMessages}
 			{draft}
 			{draftCount}
+			{selectedInboxId}
 			{selectedSentId}
 			activeView={activeMailbox}
 			{todayLabel}
 			{t}
 			onOpenSidebar={() => (showSidebar = true)}
 			onSearchFocus={handleMockAction}
+			onSelectInboxMessage={selectInboxMessage}
 			onSelectSentMessage={selectSentMessage}
 			onSelectDraftMessage={selectDraftMessage}
 		/>
 
 		<DetailPane
 			bind:messageScroll
+			{selectedInboxEmail}
 			{selectedSentEmail}
 			{selectedSentMessage}
 			{todayLabel}

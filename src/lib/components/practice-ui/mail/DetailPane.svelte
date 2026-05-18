@@ -6,10 +6,12 @@ import Paperclip from "@lucide/svelte/icons/paperclip";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import UserCircle from "@lucide/svelte/icons/user-circle";
 import type { ChatMessage } from "../chatMessages";
-import type { DraftEmail } from "./types";
+import { plainTextToDraftHtml } from "./mailUtils";
+import type { DraftEmail, NormalizedMailEmail } from "./types";
 
 let {
 	messageScroll = $bindable(null as HTMLElement | null),
+	selectedInboxEmail = null as NormalizedMailEmail | null,
 	selectedSentEmail = null as DraftEmail | null,
 	selectedSentMessage = null as ChatMessage | null,
 	todayLabel = "",
@@ -23,6 +25,7 @@ let {
 	onMockAction = () => {},
 }: {
 	messageScroll?: HTMLElement | null;
+	selectedInboxEmail?: NormalizedMailEmail | null;
 	selectedSentEmail?: DraftEmail | null;
 	selectedSentMessage?: ChatMessage | null;
 	todayLabel?: string;
@@ -36,7 +39,26 @@ let {
 	onMockAction?: () => void;
 } = $props();
 
-const displayBodyHtml = $derived(selectedSentEmail?.bodyHtml ?? "");
+const detailEmail = $derived(
+	selectedSentEmail
+		? {
+				subject: selectedSentEmail.subject,
+				fromName: userName,
+				to: selectedSentEmail.to,
+				time: selectedSentMessage?.timestamp ?? todayLabel,
+				bodyHtml: selectedSentEmail.bodyHtml ?? "",
+			}
+		: selectedInboxEmail
+			? {
+					subject: selectedInboxEmail.subject,
+					fromName: selectedInboxEmail.displayFrom,
+					to: selectedInboxEmail.to,
+					time: selectedInboxEmail.time || todayLabel,
+					bodyHtml: plainTextToDraftHtml(selectedInboxEmail.body),
+				}
+			: null,
+);
+const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
 </script>
 
 <main class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
@@ -63,21 +85,21 @@ const displayBodyHtml = $derived(selectedSentEmail?.bodyHtml ?? "");
 	</header>
 
 	<div bind:this={messageScroll} class="detail-scroll min-h-0 flex-1 overflow-y-scroll p-5 sm:p-8">
-		{#if selectedSentEmail}
+		{#if detailEmail}
 			<article class="mx-auto max-w-3xl">
 				<div class="mb-5 border-b border-black/10 pb-5">
-					<h1 class="text-2xl font-semibold tracking-tight">{selectedSentEmail.subject || t.noSubject}</h1>
+					<h1 class="text-2xl font-semibold tracking-tight">{detailEmail.subject || t.noSubject}</h1>
 					<div class="mt-4 flex items-start gap-3 text-sm">
-						{#if avatarUrl}
+						{#if selectedSentEmail && avatarUrl}
 							<img src={avatarUrl} alt="" class="h-10 w-10 rounded-full object-cover">
 						{:else}
 							<UserCircle size={40} class="text-[#8E8E93]" />
 						{/if}
 						<div class="min-w-0">
-							<div class="font-semibold">{userName}</div>
-							<div class="truncate text-[#6E6E73]">{t.to}: {selectedSentEmail.to}</div>
+							<div class="font-semibold">{detailEmail.fromName}</div>
+							<div class="truncate text-[#6E6E73]">{t.to}: {detailEmail.to}</div>
 						</div>
-						<div class="ml-auto shrink-0 text-xs text-[#6E6E73]">{selectedSentMessage?.timestamp}</div>
+						<div class="ml-auto shrink-0 text-xs text-[#6E6E73]">{detailEmail.time}</div>
 					</div>
 				</div>
 				<div class="mail-body text-[15px] leading-7 text-[#1D1D1F]">{@html displayBodyHtml}</div>

@@ -48,7 +48,7 @@ function parsePersistedMessageDate(value: string | Date) {
 	if (!hasTimeZone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(normalized)) {
 		return new Date(`${normalized}Z`);
 	}
-	return new Date(value);
+	return new Date(normalized);
 }
 
 export function buildChatMessages({

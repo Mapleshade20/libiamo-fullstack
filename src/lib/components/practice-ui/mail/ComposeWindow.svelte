@@ -5,8 +5,8 @@ import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
 import ComposeHintPanel from "./ComposeHintPanel.svelte";
-import ComposeToolbar, { type ComposeActiveFormats } from "./ComposeToolbar.svelte";
-import { normalizeMailBodySpacing, plainTextToDraftHtml } from "./mailUtils";
+import ComposeToolbar, { type ComposeActiveLayouts } from "./ComposeToolbar.svelte";
+import { normalizeMailBodySpacing, plainTextToDraftHtml, sanitizeDraftBodyHtml } from "./mailUtils";
 import type { DraftEmail, MailHint } from "./types";
 
 let {
@@ -51,7 +51,7 @@ let lastAppliedEditorHtml = $state("");
 let savedEditorRange = $state<Range | null>(null);
 let savedEditorDomSelection = $state<SerializedEditorSelection | null>(null);
 let isRestoringSelection = false;
-let activeFormats = $state<ComposeActiveFormats>({
+let activeLayouts = $state<ComposeActiveLayouts>({
 	insertUnorderedList: false,
 	insertOrderedList: false,
 });
@@ -74,6 +74,7 @@ type StructuralEditorCommand =
 	| "insertOrderedList"
 	| "undo"
 	| "redo"
+	| "insertHTML"
 	| "insertText";
 
 type SerializedSelectionPoint = {
@@ -290,10 +291,10 @@ function focusEditor() {
 	bodyEditor?.focus();
 }
 
-function updateActiveFormats() {
+function updateActiveLayouts() {
 	if (typeof document === "undefined") return;
 
-	activeFormats = {
+	activeLayouts = {
 		insertUnorderedList: document.queryCommandState("insertUnorderedList"),
 		insertOrderedList: document.queryCommandState("insertOrderedList"),
 	};
@@ -306,7 +307,7 @@ function syncDraftFromEditor() {
 	lastAppliedEditorHtml = bodyHtml;
 	draft = { ...draft, body, bodyHtml };
 	saveEditorSelection();
-	updateActiveFormats();
+	updateActiveLayouts();
 }
 
 function runEditorCommand(command: StructuralEditorCommand, value?: string) {
@@ -354,6 +355,12 @@ function handleEditorKeydown(event: KeyboardEvent) {
 
 function handlePaste(event: ClipboardEvent) {
 	event.preventDefault();
+	const html = sanitizeDraftBodyHtml(event.clipboardData?.getData("text/html"));
+	if (html) {
+		runEditorCommand("insertHTML", html);
+		return;
+	}
+
 	const text = event.clipboardData?.getData("text/plain") ?? "";
 	if (!text) return;
 	restoreEditorSelection();
@@ -413,7 +420,7 @@ onMount(() => {
 		if (isRestoringSelection) return;
 		if (bodyEditor?.contains(document.activeElement)) {
 			saveEditorSelection();
-			updateActiveFormats();
+			updateActiveLayouts();
 		}
 	}
 
@@ -447,7 +454,7 @@ $effect(() => {
 >
 	<ComposeHeader bind:draft subjectDisabled={isSubmitting || isCompleted || limitReached} {t} {onClose} onStartDrag={startDrag} />
 	<ComposeToolbar
-		{activeFormats}
+		{activeLayouts}
 		{editorDisabled}
 		{t}
 		onToggleList={toggleList}
