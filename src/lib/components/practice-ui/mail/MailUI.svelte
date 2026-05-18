@@ -6,7 +6,7 @@ import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { postAction } from "../apiService";
-import { buildChatMessages, type ChatMessage } from "../chatMessages";
+import { buildChatMessages, type ChatMessage, parsePersistedMessageDate } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
@@ -332,7 +332,9 @@ function loadExistingSession(session: any) {
 	isCompleted = session.status === "completed" || session.status === "evaluated";
 	feedback = session.tutorFeedback || null;
 
-	const sortedRawMessages = [...(session.messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+	const sortedRawMessages = [...(session.messages ?? [])].sort(
+		(a, b) => parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
+	);
 	messages = buildChatMessages({
 		rawMessages: sortedRawMessages,
 		formatTimestamp,

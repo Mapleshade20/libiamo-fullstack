@@ -38,6 +38,7 @@ let {
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
+const IMESSAGE_JOIN_TRIGGER_TEXT = "*Session started*";
 const sessionLabels = {
 	get stillProcessingMessage() {
 		return t.stillProcessingMessage;
@@ -60,8 +61,9 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
-	joinTriggerText: "*User joined the server*",
-	isHiddenCheck: (m) => m.content === "*User joined the server*",
+	joinTriggerText: IMESSAGE_JOIN_TRIGGER_TEXT,
+	// Keep old marker support so existing sessions stay hidden.
+	isHiddenCheck: (m) => m.content === IMESSAGE_JOIN_TRIGGER_TEXT || m.content === "*User joined the server*",
 }));
 
 const emojiConv = new EmojiConvertor();

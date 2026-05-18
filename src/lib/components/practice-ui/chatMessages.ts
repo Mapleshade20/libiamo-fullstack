@@ -41,7 +41,7 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	return false;
 }
 
-function parsePersistedMessageDate(value: string | Date) {
+export function parsePersistedMessageDate(value: string | Date) {
 	if (value instanceof Date) return value;
 	const normalized = value.trim().replace(" ", "T");
 	const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);

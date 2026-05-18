@@ -5,7 +5,7 @@ import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import { postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, updateMessageById } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
 import { getOpeningStateMessages } from "./messageTransformer";
@@ -271,7 +271,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			});
 
 			const sortedRawMessages = [...(sessionData.messages ?? [])].sort(
-				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) =>
+					parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
 			);
 
 			const sessionMessages = buildChatMessages({

@@ -97,7 +97,7 @@ export const i18n = {
 		insert: "Insertar",
 		done: "Hecho",
 		toDo: "Pendiente",
-		thinking: "El tutor esta pensando...",
+		thinking: "El tutor está pensando...",
 		undo: "Deshacer",
 		redo: "Rehacer",
 		indent: "Sangrar",
