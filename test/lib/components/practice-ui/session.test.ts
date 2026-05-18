@@ -147,7 +147,7 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 		await session.handleSend("Hello there");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String));
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Great reply")).toBe(true);
 		expect(mocks.invalidateAll).toHaveBeenCalled();
@@ -183,9 +183,45 @@ describe("createPracticeSession", () => {
 
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(303, "Original learner message", "msg-5");
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(303, "Original learner message", "msg-5", {});
 		expect(session.messages.find((message) => message.id === failedMessage?.id)?.isHidden).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Recovered response")).toBe(true);
+	});
+
+	it("retries AO3 replies with their original target comment id", async () => {
+		mocks.attemptAgentReply.mockResolvedValue({
+			status: "reply",
+			text: "Recovered AO3 response",
+			terminated: false,
+		});
+		const existingSession = {
+			id: 304,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{
+					id: 6,
+					role: "user",
+					content: "Prompt-only AO3 context",
+					createdAt: "2026-05-18T00:00:00.000Z",
+					llmMetadata: {
+						clientMessageId: "ao3-msg-6",
+						failed: true,
+						displayContent: "Original AO3 reply",
+						ao3: { commentId: "ao3-user-ao3-msg-6", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" },
+					},
+				},
+			],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await waitForPromises();
+
+		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
+		await session.handleRetry(failedMessage?.id ?? "");
+
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { ao3TargetCommentId: "c1" });
 	});
 
 	it("starts a fresh session and sends hidden join trigger when agent starts first", async () => {

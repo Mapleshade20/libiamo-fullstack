@@ -4,7 +4,8 @@ import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
+import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
+import { completeSession, generateHint, getSessionOrFail, type SendMessageOptions, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -129,7 +130,7 @@ export const actions: Actions = {
 		try {
 			const taskData = await db.query.task.findFirst({
 				where: eq(task.id, taskId),
-				with: { template: true },
+				with: { template: true, variant: true },
 			});
 			if (!taskData) {
 				return fail(404, { error: "Task not found" });
@@ -140,11 +141,27 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
-
-			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, {
+			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
-			});
+			};
+
+			if (!hiddenUserMessage) {
+				const uiOptions = await buildPracticeUiSendOptions({
+					ui: taskData.template.ui,
+					formData,
+					openingState: taskData.variant?.openingState,
+					sessionId,
+					message: formattedMessage,
+					clientMessageId,
+					userName: user.name || "Learner",
+				});
+
+				if (!uiOptions.ok) return fail(uiOptions.status, { error: uiOptions.error });
+				Object.assign(sendOptions, uiOptions.options);
+			}
+
+			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

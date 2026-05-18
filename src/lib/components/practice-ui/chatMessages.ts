@@ -1,3 +1,5 @@
+import type { Ao3MessageMetadata } from "./ao3/helpers";
+
 type PersistedSessionMessage = {
 	id: number | string;
 	role: string;
@@ -9,6 +11,15 @@ type PersistedSessionMessage = {
 type RetryLabels = {
 	retryFailedMessage: string;
 	stillProcessingMessage: string;
+};
+
+type MessageMetadata = {
+	clientMessageId?: string;
+	failed?: boolean;
+	hidden?: boolean;
+	displayContent?: string;
+	assistantAuthorName?: string;
+	ao3?: Ao3MessageMetadata;
 };
 
 export type ChatMessage = {
@@ -23,11 +34,12 @@ export type ChatMessage = {
 	deliveryState?: "sent" | "pending" | "failed";
 	clientMessageId?: string;
 	retryText?: string;
+	ao3?: Ao3MessageMetadata;
 };
 
-function getMessageMetadata(value: unknown): { clientMessageId?: string; failed?: boolean; hidden?: boolean } {
+function getMessageMetadata(value: unknown): MessageMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as { clientMessageId?: string; failed?: boolean; hidden?: boolean };
+	return value as MessageMetadata;
 }
 
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
@@ -64,33 +76,42 @@ export function buildChatMessages({
 		const mappedMessage = {
 			id: message.id.toString(),
 			role: message.role === "user" ? "user" : "agent",
-			text: message.content,
+			text: metadata.displayContent ?? message.content,
 			timestamp: formatTimestamp(new Date(message.createdAt)),
-			authorName: message.role === "user" ? userName : agentName,
+			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName),
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
+			ao3: metadata.ao3,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
 			return [mappedMessage];
 		}
 
-		return [
-			mappedMessage,
-			{
-				id: `retry-${message.id}`,
-				role: "agent",
-				text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
-				timestamp: formatTimestamp(new Date(message.createdAt)),
-				authorName: agentName,
-				avatarColor: agentColor,
-				deliveryState: metadata.failed === true ? "failed" : "pending",
-				clientMessageId: metadata.clientMessageId,
-				retryText: message.content,
-			} satisfies ChatMessage,
-		];
+		const retryPlaceholder = {
+			id: `retry-${message.id}`,
+			role: "agent",
+			text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
+			timestamp: formatTimestamp(new Date(message.createdAt)),
+			authorName: metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName,
+			avatarColor: agentColor,
+			deliveryState: metadata.failed === true ? "failed" : "pending",
+			clientMessageId: metadata.clientMessageId,
+			retryText: metadata.displayContent ?? message.content,
+			...(metadata.ao3
+				? {
+						ao3: {
+							...metadata.ao3,
+							commentId: metadata.clientMessageId ? `ao3-agent-${metadata.clientMessageId}` : `retry-${message.id}`,
+							parentCommentId: metadata.ao3.commentId ?? (metadata.clientMessageId ? `ao3-user-${metadata.clientMessageId}` : undefined),
+						},
+					}
+				: {}),
+		} satisfies ChatMessage;
+
+		return [mappedMessage, retryPlaceholder];
 	});
 }
 

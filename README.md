@@ -63,7 +63,8 @@ Persona & agent prompt
 - Persona selection happens at practice session start: a random MBTI-based persona prefix is prepended to the task's resolved agent prompt and saved in the session prompt snapshot.
 
 Validation and UI
-- Opening state shapes are validated in TypeScript with per-UI Zod schemas.
+- Opening state shapes are validated in TypeScript with per-UI Zod schemas. AO3 variants support work metadata plus nested `previousComments` so learners can reply at any thread depth.
+- Practice UI components live under `src/lib/components/practice-ui/`; Discord, iMessage, and AO3 are implemented for active sessions.
 - materialsMd is authored in Markdown and rendered at display time (use a safe renderer / sanitizer in production).
 
 ## Features
