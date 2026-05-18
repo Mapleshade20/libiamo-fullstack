@@ -220,10 +220,21 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 }
 
 function trimHorizontalWhitespace(value: string) {
-	return value
-		.split("\n")
-		.map((line) => line.replace(/^[ \t]+/, "").replace(/[ \t]+$/, ""))
-		.join("\n");
+	return value.split("\n").map(trimLineSpaces).join("\n");
+}
+
+function trimLineSpaces(value: string) {
+	let start = 0;
+	let end = value.length;
+
+	while (start < end && isHorizontalWhitespace(value[start])) start += 1;
+	while (end > start && isHorizontalWhitespace(value[end - 1])) end -= 1;
+
+	return value.slice(start, end);
+}
+
+function isHorizontalWhitespace(value: string | undefined) {
+	return value === " " || value === "\t";
 }
 
 export function normalizeMailBodySpacing(value: string) {
