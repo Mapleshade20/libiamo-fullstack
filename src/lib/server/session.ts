@@ -446,13 +446,13 @@ export async function sendMessage(
 				llmMetadata:
 					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
 						? {
-							...options.userMetadata,
-							clientMessageId,
-							failed: false,
-							hidden: options.hiddenUserMessage === true,
-							displayContent,
-							parentId: options.parentId,
-						}
+								...options.userMetadata,
+								clientMessageId,
+								failed: false,
+								hidden: options.hiddenUserMessage === true,
+								displayContent,
+								parentId: options.parentId,
+							}
 						: undefined,
 			})
 			.returning();
@@ -480,17 +480,17 @@ export async function sendMessage(
 		activeMessages = activeMessages.map((message) =>
 			message === existingUserMessage
 				? {
-					...message,
-					llmMetadata: {
-						...getMessageMetadata(message.llmMetadata),
-						...options.userMetadata,
-						clientMessageId,
-						failed: false,
-						hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
-						displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
-						parentId: options.parentId ?? getMessageMetadata(message.llmMetadata).parentId,
-					},
-				}
+						...message,
+						llmMetadata: {
+							...getMessageMetadata(message.llmMetadata),
+							...options.userMetadata,
+							clientMessageId,
+							failed: false,
+							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
+							parentId: options.parentId ?? getMessageMetadata(message.llmMetadata).parentId,
+						},
+					}
 				: message,
 		);
 	}

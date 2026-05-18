@@ -280,15 +280,15 @@ export type FieldDef =
 	| { type: "email-list"; key: string; label: string }
 	| { type: "ao3-comment-tree"; key: string; label: string }
 	| {
-		type: "comment-list";
-		key: string;
-		label: string;
-		authorField?: string;
-		textField?: string;
-		authorPlaceholder?: string;
-		textPlaceholder?: string;
-		withVotes?: boolean;
-	}
+			type: "comment-list";
+			key: string;
+			label: string;
+			authorField?: string;
+			textField?: string;
+			authorPlaceholder?: string;
+			textPlaceholder?: string;
+			withVotes?: boolean;
+	  }
 	| { type: "group"; key: string; label: string; fields: FieldDef[] }
 	| { type: "row"; fields: FieldDef[] };
 

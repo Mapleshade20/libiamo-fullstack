@@ -105,12 +105,12 @@ export function buildChatMessages({
 			retryText: metadata.displayContent ?? message.content,
 			...(metadata.ao3
 				? {
-					ao3: {
-						...metadata.ao3,
-						commentId: metadata.clientMessageId ? `ao3-agent-${metadata.clientMessageId}` : `retry-${message.id}`,
-						parentCommentId: metadata.ao3.commentId ?? (metadata.clientMessageId ? `ao3-user-${metadata.clientMessageId}` : undefined),
-					},
-				}
+						ao3: {
+							...metadata.ao3,
+							commentId: metadata.clientMessageId ? `ao3-agent-${metadata.clientMessageId}` : `retry-${message.id}`,
+							parentCommentId: metadata.ao3.commentId ?? (metadata.clientMessageId ? `ao3-user-${metadata.clientMessageId}` : undefined),
+						},
+					}
 				: {}),
 			parentId: mappedMessage.id,
 		} satisfies ChatMessage;

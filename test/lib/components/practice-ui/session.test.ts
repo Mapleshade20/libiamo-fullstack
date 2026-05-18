@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice-ui/session.svelte";
 
 const mocks = vi.hoisted(() => ({
-	tick: vi.fn(async () => { }),
-	invalidateAll: vi.fn(async () => { }),
+	tick: vi.fn(async () => {}),
+	invalidateAll: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	attemptAgentReply: vi.fn(),
 	initUserPool: vi.fn(),
@@ -92,7 +92,7 @@ describe("resolveAgentName", () => {
 describe("createPracticeSession", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(onMount).mockImplementation(() => { });
+		vi.mocked(onMount).mockImplementation(() => {});
 		mocks.initUserPool.mockReturnValue({
 			agentUser: {
 				id: "agent",
@@ -274,7 +274,7 @@ describe("createPracticeSession", () => {
 		mocks.attemptAgentReply.mockResolvedValue({
 			status: "rejected",
 		});
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const existingSession = {
 			id: 607,
 			status: "in_progress",
@@ -325,7 +325,7 @@ describe("createPracticeSession", () => {
 
 	it("handles complete failures without leaving loading state", async () => {
 		mocks.postAction.mockRejectedValue(new Error("complete error"));
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const existingSession = {
 			id: 701,
 			status: "in_progress",
@@ -387,7 +387,7 @@ describe("createPracticeSession", () => {
 
 	it("handles initialization failure and resets initializing state", async () => {
 		mocks.postAction.mockRejectedValue(new Error("start error"));
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const session = createSession(
 			createOptions({
 				existingSession: null,
