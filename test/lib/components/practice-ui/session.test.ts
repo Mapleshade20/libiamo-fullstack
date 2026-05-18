@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	tick: vi.fn(async () => {}),
 	invalidateAll: vi.fn(async () => {}),
 	postAction: vi.fn(),
+	completeAction: vi.fn(),
 	attemptAgentReply: vi.fn(),
 	initUserPool: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock("$app/navigation", () => ({
 
 vi.mock("$lib/components/practice-ui/apiService", () => ({
 	postAction: mocks.postAction,
+	completeAction: mocks.completeAction,
 }));
 
 vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
@@ -259,7 +261,7 @@ describe("createPracticeSession", () => {
 			text: "Final reply",
 			terminated: true,
 		});
-		mocks.postAction.mockResolvedValue({
+		mocks.completeAction.mockResolvedValue({
 			type: "success",
 			data: {
 				feedback: {
@@ -280,7 +282,7 @@ describe("createPracticeSession", () => {
 		await session.handleSend("Finish this");
 		await waitForPromises();
 
-		expect(mocks.postAction).toHaveBeenCalledWith("complete", 203);
+		expect(mocks.completeAction).toHaveBeenCalledWith(203);
 		expect(session.isCompleted).toBe(true);
 	});
 
@@ -506,13 +508,13 @@ describe("createPracticeSession", () => {
 		session.runAutoCompleteIfNeeded();
 		await waitForPromises();
 
-		expect(mocks.postAction).toHaveBeenCalledWith("complete", 505);
+		expect(mocks.completeAction).toHaveBeenCalledWith(505);
 		expect(session.isCompleted).toBe(true);
 		expect(session.showEvaluationModal).toBe(true);
 	});
 
 	it("handles complete failures without leaving loading state", async () => {
-		mocks.postAction.mockRejectedValue(new Error("complete error"));
+		mocks.completeAction.mockRejectedValue(new Error("complete error"));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const existingSession = {
 			id: 701,
@@ -530,7 +532,7 @@ describe("createPracticeSession", () => {
 	});
 
 	it("leaves completion state unchanged when complete returns no data", async () => {
-		mocks.postAction.mockResolvedValue({
+		mocks.completeAction.mockResolvedValue({
 			type: "error",
 		});
 		const existingSession = {
@@ -553,7 +555,7 @@ describe("createPracticeSession", () => {
 
 		await session.handleComplete();
 
-		expect(mocks.postAction).not.toHaveBeenCalled();
+		expect(mocks.completeAction).not.toHaveBeenCalled();
 	});
 
 	it("hydrates using sorted messages and custom hidden check", async () => {

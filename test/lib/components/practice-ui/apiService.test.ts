@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { postAction } from "$lib/components/practice-ui/apiService";
+import { completeAction, getMailHintAction, postAction, requestAgentOpeningAction } from "$lib/components/practice-ui/apiService";
 
 global.fetch = vi.fn();
 vi.mock("$app/forms", () => ({
@@ -54,6 +54,59 @@ describe("apiService", () => {
 
 			expect(formData instanceof FormData).toBe(true);
 			expect(formData.get("sessionId")).toBe("12345");
+		});
+	});
+
+	describe("completeAction", () => {
+		it("posts to the shared complete action", async () => {
+			const mockResponse = { type: "success", data: { feedback: { content: "Done" } } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			const result = await completeAction(99);
+
+			expect(result).toEqual(mockResponse);
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[0]).toBe("?/complete");
+			expect(fetchCall[1].body.get("sessionId")).toBe("99");
+		});
+	});
+
+	describe("requestAgentOpeningAction", () => {
+		it("posts the Mail join trigger with deterministic client id", async () => {
+			const mockResponse = { type: "success", data: { reply: "Hello" } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			const result = await requestAgentOpeningAction(42);
+
+			expect(result).toEqual(mockResponse);
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[0]).toBe("?/send");
+			expect(fetchCall[1].body.get("sessionId")).toBe("42");
+			expect(fetchCall[1].body.get("message")).toBe("*User joined the server*");
+			expect(fetchCall[1].body.get("clientMessageId")).toBe("join-42");
+		});
+	});
+
+	describe("getMailHintAction", () => {
+		it("posts the current Mail draft to the hint action", async () => {
+			const mockResponse = { type: "success", data: { mailHint: { checklist: [] } } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			const result = await getMailHintAction(7, { to: "Maya", subject: "Update", body: "Hello" });
+
+			expect(result).toEqual(mockResponse);
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[0]).toBe("?/hint");
+			expect(fetchCall[1].body.get("sessionId")).toBe("7");
+			expect(fetchCall[1].body.get("to")).toBe("Maya");
+			expect(fetchCall[1].body.get("subject")).toBe("Update");
+			expect(fetchCall[1].body.get("body")).toBe("Hello");
 		});
 	});
 });

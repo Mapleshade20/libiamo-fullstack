@@ -219,6 +219,66 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 	return lines.join("\n").slice(0, 3500);
 }
 
+export function parseAgentMailReply(text: string, fallbackSubject: string) {
+	const lines = text.replace(/\r\n?/g, "\n").split("\n");
+	let subject = "";
+	let hasExplicitSubject = false;
+	const bodyLines: string[] = [];
+	let skippingLeadingHeaders = true;
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		const subjectMatch = trimmed.match(/^subject:\s*(.+)$/i);
+		if (skippingLeadingHeaders && subjectMatch) {
+			subject = subjectMatch[1].trim();
+			hasExplicitSubject = true;
+			continue;
+		}
+		if (skippingLeadingHeaders && /^(from|to|cc|bcc|date):\s*/i.test(trimmed)) continue;
+		if (skippingLeadingHeaders && trimmed === "") continue;
+
+		skippingLeadingHeaders = false;
+		bodyLines.push(line);
+	}
+
+	const body = bodyLines.join("\n").trim() || text.trim();
+	return {
+		subject: subject || fallbackSubject,
+		body,
+		hasExplicitSubject,
+	};
+}
+
+export function normalizeReplySubject(subject: string, noSubjectLabel: string) {
+	const trimmed = subject.trim() || noSubjectLabel;
+	const withoutRepeatedReplyPrefixes = trimmed.replace(/^(?:\s*re:\s*)+/i, "");
+	return /^re:/i.test(trimmed) ? `Re: ${withoutRepeatedReplyPrefixes || noSubjectLabel}` : trimmed;
+}
+
+export function ensureReplySubject(subject: string, noSubjectLabel: string) {
+	const normalized = normalizeReplySubject(subject, noSubjectLabel);
+	return /^re:/i.test(normalized) ? normalized : `Re: ${normalized}`;
+}
+
+export function normalizeAgentSignature(body: string, fallbackName: string) {
+	const mbtiPattern = /\b(?:INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)\b/;
+	const lines = body.split("\n");
+	const closingIndex = lines.findLastIndex((line) => /^\s*(best|regards|sincerely|thanks|thank you)[,!]?\s*$/i.test(line));
+	const signatureIndex = closingIndex === -1 ? -1 : lines.findIndex((line, index) => index > closingIndex && line.trim());
+
+	if (signatureIndex !== -1) {
+		lines[signatureIndex] = fallbackName;
+	} else if (lines.some((line) => mbtiPattern.test(line))) {
+		for (let index = lines.length - 1; index >= 0; index -= 1) {
+			if (!lines[index].trim()) continue;
+			if (mbtiPattern.test(lines[index])) lines[index] = fallbackName;
+			break;
+		}
+	}
+
+	return lines.join("\n").trim();
+}
+
 function trimHorizontalWhitespace(value: string) {
 	return value.split("\n").map(trimLineSpaces).join("\n");
 }

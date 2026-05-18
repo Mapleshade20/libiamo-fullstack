@@ -365,6 +365,8 @@ describe("session page server", () => {
 					hiddenUserMessage: false,
 					maxTurns: 3,
 					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
+					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
+					promptContent: expect.stringContaining("Learner email body layout:\n[align=center] Hello Maya"),
 				}),
 			);
 		});
@@ -396,7 +398,39 @@ describe("session page server", () => {
 				expect.objectContaining({
 					hiddenUserMessage: true,
 					maxTurns: 3,
-					promptContent: expect.stringContaining("Learner display name: Test User."),
+					promptContent: expect.stringContaining("Learner profile display name: Test User."),
+				}),
+			);
+		});
+
+		it("uses the latest profile name in Apple Mail prompt context", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockDb.query.user.findFirst.mockResolvedValue({ name: "Profile Name" });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Profile Name,", turnCount: 0 });
+
+			await actions.send(
+				createFormEvent({
+					user: { ...mockUser, name: "Stale Name" },
+					values: {
+						sessionId: "789",
+						message: "*User joined the server*",
+						clientMessageId: "join-789",
+					},
+				}),
+			);
+
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"*User joined the server*",
+				"user_123",
+				"join-789",
+				expect.objectContaining({
+					promptContent: expect.stringContaining("Learner profile display name: Profile Name."),
 				}),
 			);
 		});

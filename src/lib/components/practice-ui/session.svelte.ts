@@ -4,7 +4,7 @@ import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import type { Ao3MessageMetadata } from "./ao3/helpers";
-import { postAction } from "./apiService";
+import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
@@ -207,7 +207,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (!sessionId || isCompleting || isCompleted) return;
 		isCompleting = true;
 		try {
-			const result = await postAction("complete", sessionId);
+			const result = await completeAction(sessionId);
 
 			if (result.type === "success" && result.data) {
 				isCompleted = true;

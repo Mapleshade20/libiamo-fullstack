@@ -2,10 +2,14 @@
 import { describe, expect, it } from "vitest";
 import {
 	appendPlainTextToDraftHtml,
+	ensureReplySubject,
 	formatDraftMessage,
 	getMailBodyHtmlFromMessage,
+	normalizeAgentSignature,
 	normalizeMailBodySpacing,
 	normalizeMailEmails,
+	normalizeReplySubject,
+	parseAgentMailReply,
 	parseDraftFromMessage,
 	plainTextToDraftHtml,
 	sanitizeDraftBodyHtml,
@@ -88,6 +92,36 @@ describe("mailUtils", () => {
 				subject: "(No Subject)",
 				body: "Body starts immediately",
 			});
+		});
+	});
+
+	describe("agent reply cleanup", () => {
+		it("extracts leading mail headers from agent replies", () => {
+			expect(parseAgentMailReply("Subject: Updated timeline\nFrom: Maya\n\nThanks for the update.", "Fallback")).toEqual({
+				subject: "Updated timeline",
+				body: "Thanks for the update.",
+				hasExplicitSubject: true,
+			});
+		});
+
+		it("falls back to the previous subject when no explicit subject exists", () => {
+			expect(parseAgentMailReply("Thanks for the update.", "Project update")).toEqual({
+				subject: "Project update",
+				body: "Thanks for the update.",
+				hasExplicitSubject: false,
+			});
+		});
+
+		it("normalizes repeated reply prefixes without forcing explicit new subjects into replies", () => {
+			expect(normalizeReplySubject("Re: Re: Project update", "(No Subject)")).toBe("Re: Project update");
+			expect(normalizeReplySubject("New timeline", "(No Subject)")).toBe("New timeline");
+			expect(ensureReplySubject("Re: Re: Project update", "(No Subject)")).toBe("Re: Project update");
+			expect(ensureReplySubject("Project update", "(No Subject)")).toBe("Re: Project update");
+		});
+
+		it("replaces MBTI-like signatures with the sender name", () => {
+			expect(normalizeAgentSignature("Sounds good.\n\nBest,\nINTJ", "Maya")).toBe("Sounds good.\n\nBest,\nMaya");
+			expect(normalizeAgentSignature("Thanks,\n\nENFP", "Maya")).toBe("Thanks,\n\nMaya");
 		});
 	});
 
