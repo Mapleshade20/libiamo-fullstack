@@ -22,6 +22,21 @@ type MessageMetadata = {
 	ao3?: Ao3MessageMetadata;
 };
 
+type SessionSnapshotMessage = {
+	id: unknown;
+	status?: unknown;
+	content?: unknown;
+	clientMessageId?: unknown;
+	createdAt?: unknown;
+	llmMetadata?: unknown;
+};
+
+type SessionSnapshotInput = {
+	status?: unknown;
+	tutorFeedback?: unknown;
+	messages?: SessionSnapshotMessage[];
+};
+
 export type ChatMessage = {
 	id: string;
 	role: "user" | "agent";
@@ -37,6 +52,33 @@ export type ChatMessage = {
 	llmMetadata?: unknown;
 	ao3?: Ao3MessageMetadata;
 };
+
+function compactStringSnapshot(value: string) {
+	let hash = 0x811c9dc5;
+	for (let index = 0; index < value.length; index += 1) {
+		hash ^= value.charCodeAt(index);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return `${value.length}:${(hash >>> 0).toString(36)}`;
+}
+
+export function stableMetadataSnapshot(value: unknown) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+	const metadata = value as { clientMessageId?: unknown; failed?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
+	return JSON.stringify({
+		clientMessageId: metadata.clientMessageId ?? "",
+		failed: metadata.failed === true,
+		hidden: metadata.hidden === true,
+		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? compactStringSnapshot(metadata.mailBodyHtml) : "",
+	});
+}
+
+export function getSessionSnapshot(session: SessionSnapshotInput): string {
+	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
+		.map((m) => [m.id, m.status, m.content, m.clientMessageId ?? "", stableMetadataSnapshot(m.llmMetadata), m.createdAt].join(":"))
+		.join("|");
+	return `${session.status ?? ""}:${session.tutorFeedback ? "feedback" : ""}:${messagesSnapshot}`;
+}
 
 function getMessageMetadata(value: unknown): MessageMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};

@@ -843,7 +843,7 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 		{ role: "user", content: `Help me improve and continue this email in ${learningLanguageName}.` },
 	];
 
-	return await createStructuredOutput(MailHintSchema, messages, { temperature: 0.2, maxTokens: 1600 });
+	return await createStructuredOutput(MailHintSchema, messages, { temperature: 0.2, maxTokens: 1600 }, session.userId);
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

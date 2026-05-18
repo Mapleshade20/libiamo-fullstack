@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { buildChatMessages, updateMessageById } from "$lib/components/practice-ui/chatMessages";
+import { buildChatMessages, getSessionSnapshot, stableMetadataSnapshot, updateMessageById } from "$lib/components/practice-ui/chatMessages";
 
 const labels = {
 	retryFailedMessage: "Agent reply failed. Click Retry to try again.",
@@ -324,6 +324,34 @@ describe("buildChatMessages", () => {
 			text: "Hello",
 			clientMessageId: undefined,
 		});
+	});
+});
+
+describe("session snapshots", () => {
+	it("includes metadata state changes while bounding mail body HTML", () => {
+		const largeMailBody = `<p>${"Hello ".repeat(200)}</p>`;
+
+		const snapshot = getSessionSnapshot({
+			status: "active",
+			messages: [
+				{
+					id: 1,
+					status: "sent",
+					content: "To: Maya\nSubject: Hi\n\nHello",
+					createdAt: "2026-01-01 10:00:00",
+					llmMetadata: { clientMessageId: "mail-1", failed: true, hidden: false, mailBodyHtml: largeMailBody },
+				},
+			],
+		});
+
+		expect(snapshot).toContain('"failed":true');
+		expect(snapshot).toContain('"mailBodyHtml"');
+		expect(snapshot).not.toContain(largeMailBody);
+		expect(snapshot.length).toBeLessThan(260);
+	});
+
+	it("uses different bounded mail body snapshots for changed HTML", () => {
+		expect(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello</p>" })).not.toEqual(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello!</p>" }));
 	});
 });
 

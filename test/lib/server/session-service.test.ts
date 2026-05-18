@@ -835,6 +835,7 @@ describe("session service", () => {
 			const call = mockClient.createStructuredOutput.mock.calls[0];
 			expect(call?.[0]).toEqual(expect.any(Object));
 			expect(call?.[2]).toEqual({ temperature: 0.2, maxTokens: 1600 });
+			expect(call?.[3]).toBe(USER_ID);
 			expect(call?.[1]).toEqual([
 				expect.objectContaining({
 					role: "system",

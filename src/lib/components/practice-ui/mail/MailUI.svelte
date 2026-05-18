@@ -6,7 +6,7 @@ import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, getMailHintAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
-import { buildChatMessages, type ChatMessage, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
@@ -54,7 +54,7 @@ const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 
 let sessionId = $state<number | null>(null);
 let lastLoadedSessionId = $state<number | null>(null);
-let lastServerMessageCount = $state(0);
+let lastSessionSnapshot = $state("");
 let isInitializing = $state(false);
 let isSubmitting = $state(false);
 let isCompleting = $state(false);
@@ -396,11 +396,11 @@ async function handleSendEmail() {
 }
 
 function loadExistingSession(session: any) {
-	const serverMsgCount = session.messages?.length || 0;
-	if (session.id === lastLoadedSessionId && serverMsgCount <= lastServerMessageCount) return;
+	const sessionSnapshot = getSessionSnapshot(session);
+	if (session.id === lastLoadedSessionId && sessionSnapshot === lastSessionSnapshot) return;
 
 	lastLoadedSessionId = session.id;
-	lastServerMessageCount = serverMsgCount;
+	lastSessionSnapshot = sessionSnapshot;
 	sessionId = session.id;
 	isCompleted = session.status === "completed" || session.status === "evaluated";
 	feedback = session.tutorFeedback || null;

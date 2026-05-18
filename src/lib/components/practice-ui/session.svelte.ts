@@ -6,7 +6,7 @@ import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils
 import type { Ao3MessageMetadata } from "./ao3/helpers";
 import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
 import { getOpeningStateMessages } from "./messageTransformer";
@@ -31,27 +31,6 @@ export interface PracticeSessionOptions {
 	joinTriggerText: string;
 	isHiddenCheck?: (message: { content: string }) => boolean;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
-}
-
-function getSessionSnapshot(session: {
-	status?: unknown;
-	messages?: Array<{ id: unknown; status?: unknown; content?: unknown; clientMessageId?: unknown; createdAt?: unknown; llmMetadata?: unknown }>;
-}): string {
-	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
-		.map((m) => [m.id, m.status, m.content, (m as any).clientMessageId ?? "", stableMetadataSnapshot(m.llmMetadata), m.createdAt].join(":"))
-		.join("|");
-	return `${session.status ?? ""}::${messagesSnapshot}`;
-}
-
-function stableMetadataSnapshot(value: unknown) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-	const metadata = value as { clientMessageId?: unknown; failed?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
-	return JSON.stringify({
-		clientMessageId: metadata.clientMessageId ?? "",
-		failed: metadata.failed === true,
-		hidden: metadata.hidden === true,
-		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? metadata.mailBodyHtml : "",
-	});
 }
 
 /**
