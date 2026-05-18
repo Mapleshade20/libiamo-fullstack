@@ -22,6 +22,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
 
+import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
@@ -384,7 +385,7 @@ describe("session page server", () => {
 				createFormEvent({
 					values: {
 						sessionId: "789",
-						message: "*User joined the server*",
+						message: MAIL_AGENT_OPENING_MESSAGE,
 						clientMessageId: "join-789",
 					},
 				}),
@@ -392,13 +393,22 @@ describe("session page server", () => {
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
 				789,
-				"*User joined the server*",
+				MAIL_AGENT_OPENING_MESSAGE,
 				"user_123",
 				"join-789",
 				expect.objectContaining({
 					hiddenUserMessage: true,
 					maxTurns: 3,
 					promptContent: expect.stringContaining("Learner profile display name: Test User."),
+				}),
+			);
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				expect.any(Number),
+				expect.any(String),
+				expect.any(String),
+				expect.any(String),
+				expect.objectContaining({
+					promptContent: expect.stringContaining("Use the task template, agent prompt, and scenario/opening-state context"),
 				}),
 			);
 		});

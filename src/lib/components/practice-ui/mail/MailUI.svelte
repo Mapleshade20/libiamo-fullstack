@@ -9,6 +9,7 @@ import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
+import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
@@ -447,15 +448,18 @@ onMount(async () => {
 	const hasExistingMessages =
 		Array.isArray(existingSession?.messages) &&
 		existingSession.messages.some((message: any) => message.role === "user" || message.role === "assistant");
-	if (!isCompleted && !hasExistingMessages && !agentStartsFirst) {
+	const hasTemplateOpeningEmails = Array.isArray(openingStateData.emails) && openingStateData.emails.length > 0;
+	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails && !agentStartsFirst) {
 		openComposer(true);
 		draftStorageReady = true;
 	}
 
-	if (existingSession?.id && !hasExistingMessages && agentStartsFirst) {
+	if (hasTemplateOpeningEmails) {
+		draftStorageReady = true;
+	} else if (existingSession?.id && !hasExistingMessages && agentStartsFirst) {
 		isInitializing = true;
 		try {
-			const result = await requestAgentOpeningAction(existingSession.id);
+			const result = await requestAgentOpeningAction(existingSession.id, MAIL_AGENT_OPENING_MESSAGE);
 			if (result.type === "success" && result.data) {
 				await invalidateAll();
 			} else {
@@ -476,8 +480,10 @@ onMount(async () => {
 				sessionId = startResult.data.sessionId as number;
 				lastLoadedSessionId = sessionId;
 				if (agentStartsFirst) {
-					const openingResult = await requestAgentOpeningAction(sessionId);
-					if (openingResult.type !== "success") openComposer(true);
+					if (!hasTemplateOpeningEmails) {
+						const openingResult = await requestAgentOpeningAction(sessionId, MAIL_AGENT_OPENING_MESSAGE);
+						if (openingResult.type !== "success") openComposer(true);
+					}
 				} else {
 					openComposer(true);
 				}

@@ -2,6 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
+import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -22,7 +23,7 @@ const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
 function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
-	return message.trim() === "*User joined the server*" && clientMessageId === `join-${sessionId}`;
+	return (message.trim() === "*User joined the server*" || message.trim() === MAIL_AGENT_OPENING_MESSAGE) && clientMessageId === `join-${sessionId}`;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -179,7 +180,13 @@ export const actions: Actions = {
 				"After the learner self-identifies in the email thread, use the learner's own stated name instead.",
 			].join("\n");
 			if (hiddenUserMessage && taskData.template.ui === "apple_mail") {
-				sendOptions.promptContent = [rawMessage, mailNameInstruction].join("\n");
+				sendOptions.promptContent = [
+					"This is an internal Apple Mail practice trigger, not a learner-authored email.",
+					"Use the task template, agent prompt, and scenario/opening-state context already provided in the system prompt to write the first visible email.",
+					"If that context describes a specific incoming message or situation, follow it closely. Only invent a concise plausible initiating email when the template does not provide one.",
+					"Do not welcome the learner to the app, do not say you will help draft the email, and do not speak as a tutor or assistant.",
+					mailNameInstruction,
+				].join("\n");
 			}
 
 			if (!hiddenUserMessage) {

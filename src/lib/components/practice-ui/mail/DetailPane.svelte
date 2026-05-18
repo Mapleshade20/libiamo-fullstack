@@ -83,37 +83,36 @@ const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.trash}><Trash2 size={18} /></button>
 		<div class="mx-1 h-6 w-px bg-black/10"></div>
 		<button type="button" class="icon-button" onclick={onMockAction} title="Attach"><Paperclip size={18} /></button>
-		{#if isCompleted}
-			<div
-				class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#34C759]/25 bg-[#EAF8EE] px-3 py-1 text-xs font-semibold text-[#1F7A38]"
-			>
-				<CheckCircle2 size={14} />
-				{t.questCompleted}
-			</div>
-		{:else if isInitializing || isSubmitting || isCompleting}
-			<div
-				class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#3478F6]/20 bg-[#EDF4FF] px-3 py-1 text-xs font-semibold text-[#2155A3]"
-			>
-				<LoaderCircle size={14} class="animate-spin" />
-				{isCompleting ? t.evaluating : isSubmitting ? t.waitingForReply : t.loadingMail}
-			</div>
-		{:else if !isCompleted}
-			<div class="ml-auto flex items-center gap-2">
+		<div class="ml-auto flex items-center gap-2">
+			{#if isCompleted}
+				<div
+					class="inline-flex items-center gap-1.5 rounded-full border border-[#34C759]/25 bg-[#EAF8EE] px-3 py-1 text-xs font-semibold text-[#1F7A38]"
+				>
+					<CheckCircle2 size={14} />
+					{t.questCompleted}
+				</div>
+			{:else}
+				{#if isInitializing || isSubmitting || isCompleting}
+					<div
+						class="inline-flex items-center gap-1.5 rounded-full border border-[#3478F6]/20 bg-[#EDF4FF] px-3 py-1 text-xs font-semibold text-[#2155A3]"
+					>
+						<LoaderCircle size={14} class="animate-spin" />
+						{isCompleting ? t.evaluating : isSubmitting ? t.waitingForReply : t.loadingMail}
+					</div>
+				{/if}
 				{#if remainingTurns !== null}
 					<div class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73]">{remainingTurnsLabel}</div>
 				{/if}
-				{#if canFinish}
-					<button
-						type="button"
-						class="rounded-full bg-[#3478F6] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0A64FF] disabled:opacity-50"
-						onclick={() => onComplete()}
-						disabled={isSubmitting || isInitializing || isCompleting}
-					>
-						{t.finishTask}
-					</button>
-				{/if}
-			</div>
-		{/if}
+				<button
+					type="button"
+					class="rounded-full bg-[#3478F6] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0A64FF] disabled:cursor-not-allowed disabled:opacity-50"
+					onclick={() => onComplete()}
+					disabled={!canFinish || isBusy || isSubmitting || isInitializing || isCompleting}
+				>
+					{t.finishTask}
+				</button>
+			{/if}
+		</div>
 	</header>
 
 	<div bind:this={messageScroll} class="detail-scroll min-h-0 flex-1 overflow-y-scroll p-5 sm:p-8">
