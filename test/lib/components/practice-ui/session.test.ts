@@ -1,3 +1,4 @@
+import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice-ui/session.svelte";
 
@@ -91,6 +92,7 @@ describe("resolveAgentName", () => {
 describe("createPracticeSession", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		vi.mocked(onMount).mockImplementation(() => {});
 		mocks.initUserPool.mockReturnValue({
 			agentUser: {
 				id: "agent",
@@ -212,6 +214,46 @@ describe("createPracticeSession", () => {
 		expect(session.messages.some((message) => message.deliveryState === "pending")).toBe(true);
 	});
 
+	it("adds failed placeholder and retry text when send attempt fails", async () => {
+		mocks.attemptAgentReply.mockResolvedValue({
+			status: "failed",
+		});
+		const existingSession = {
+			id: 606,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await session.handleSend("Need help");
+
+		const failed = session.messages.find((message) => message.deliveryState === "failed");
+		expect(failed?.text).toBe("Reply failed. Retry.");
+		expect(failed?.retryText).toBe("Need help");
+	});
+
+	it("warns and avoids agent placeholder when send is rejected", async () => {
+		mocks.attemptAgentReply.mockResolvedValue({
+			status: "rejected",
+		});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const existingSession = {
+			id: 607,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await session.handleSend("Try send");
+
+		expect(warnSpy).toHaveBeenCalledWith("Backend rejected the message");
+		expect(session.messages.some((message) => message.role === "agent" && message.clientMessageId)).toBe(false);
+	});
+
 	it("auto-completes when turn limit is reached without waiting-retry state", async () => {
 		mocks.postAction.mockResolvedValue({
 			type: "success",
@@ -243,5 +285,133 @@ describe("createPracticeSession", () => {
 		expect(mocks.postAction).toHaveBeenCalledWith("complete", 505);
 		expect(session.isCompleted).toBe(true);
 		expect(session.showEvaluationModal).toBe(true);
+	});
+
+	it("handles complete failures without leaving loading state", async () => {
+		mocks.postAction.mockRejectedValue(new Error("complete error"));
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const existingSession = {
+			id: 701,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [],
+		};
+		const session = createSession(createOptions({ existingSession }));
+		session.hydrateFromExistingSession(existingSession);
+
+		await session.handleComplete();
+
+		expect(errorSpy).toHaveBeenCalledWith("Completion failed:", expect.any(Error));
+		expect(session.isCompleting).toBe(false);
+	});
+
+	it("hydrates using sorted messages and custom hidden check", async () => {
+		const existingSession = {
+			id: 702,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{ id: 9, role: "assistant", content: "new", createdAt: "2026-05-18T02:00:00.000Z" },
+				{ id: 8, role: "assistant", content: "legacy hidden marker", createdAt: "2026-05-18T01:00:00.000Z" },
+			],
+		};
+		const session = createSession(
+			createOptions({
+				existingSession,
+				isHiddenCheck: (message) => message.content.includes("hidden marker"),
+			}),
+		);
+
+		session.hydrateFromExistingSession(existingSession);
+		await waitForPromises();
+
+		const mapped = session.messages.filter((message) => message.role === "agent");
+		expect(mapped[0]?.text).toBe("legacy hidden marker");
+		expect(mapped[0]?.isHidden).toBe(true);
+		expect(mapped[1]?.text).toBe("new");
+	});
+
+	it("initializes without agent-first reply when agentStartsFirst is false", async () => {
+		mocks.postAction.mockResolvedValue({
+			type: "success",
+			data: { sessionId: 703 },
+		});
+		const session = createSession(
+			createOptions({
+				existingSession: null,
+				agentStartsFirst: false,
+			}),
+		);
+
+		await session.initializeFreshSession();
+
+		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(session.messages.some((message) => message.isHidden)).toBe(false);
+	});
+
+	it("handles initialization failure and resets initializing state", async () => {
+		mocks.postAction.mockRejectedValue(new Error("start error"));
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const session = createSession(
+			createOptions({
+				existingSession: null,
+			}),
+		);
+
+		await session.initializeFreshSession();
+
+		expect(errorSpy).toHaveBeenCalledWith("Initialization failed:", expect.any(Error));
+		expect(session.isInitializing).toBe(false);
+	});
+
+	it("executes onMount setup and cleanup hooks", async () => {
+		const cleanups: Array<() => void> = [];
+		vi.useFakeTimers();
+		vi.mocked(onMount).mockImplementation((callback: any) => {
+			const cleanup = callback();
+			if (typeof cleanup === "function") cleanups.push(cleanup);
+		});
+		const session = createSession(
+			createOptions({
+				existingSession: {
+					id: 704,
+					status: "in_progress",
+					tutorFeedback: null,
+					messages: [],
+				},
+			}),
+		);
+
+		expect(session.isEntering).toBe(true);
+		vi.advanceTimersByTime(300);
+		expect(session.isEntering).toBe(false);
+
+		for (const cleanup of cleanups) cleanup();
+		vi.useRealTimers();
+	});
+
+	it("exposes derived and mutable state getters/setters", () => {
+		const session = createSession(createOptions());
+
+		expect(session.sessionId).toBeNull();
+		expect(session.isSubmitting).toBe(false);
+		expect(session.isCompleting).toBe(false);
+		expect(session.isCompleted).toBe(false);
+		expect(session.feedback).toBeNull();
+		expect(session.inputText).toBe("");
+		session.inputText = "hello";
+		expect(session.inputText).toBe("hello");
+		expect(session.chatContainer).toBeNull();
+		session.chatContainer = { scrollTop: 0, scrollHeight: 100 } as any;
+		expect(session.chatContainer?.scrollHeight).toBe(100);
+		expect(session.isTyping).toBe(false);
+		expect(session.remainingTurns).toBeNull();
+		expect(session.disabled).toBe(true);
+		expect(session.agentName).toBe("Agent");
+		expect(session.openingStateData).toEqual({});
+		session.showEvaluationModal = true;
+		expect(session.showEvaluationModal).toBe(true);
+		session.isEntering = false;
+		expect(session.isEntering).toBe(false);
 	});
 });

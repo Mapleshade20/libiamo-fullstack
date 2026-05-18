@@ -45,6 +45,11 @@ describe("getBubbleGroupPosition", () => {
 
 		expect(getBubbleGroupPosition(messages, 1)).toBe("single");
 	});
+
+	it("returns single for out-of-range index", () => {
+		const messages = [createMessage({ id: "1", role: "agent" })];
+		expect(getBubbleGroupPosition(messages, 99)).toBe("single");
+	});
 });
 
 describe("resolveAgentName", () => {
