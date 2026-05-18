@@ -11,6 +11,26 @@ vi.mock("@sveltejs/kit", () => ({
 	}),
 }));
 
+vi.mock("$lib/server/db", () => ({
+	db: {
+		select: vi.fn(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn().mockResolvedValue([{ count: 0 }]),
+			})),
+		})),
+	},
+}));
+
+vi.mock("$lib/server/db/schema", () => ({
+	templateContribution: { status: "status" },
+}));
+
+vi.mock("drizzle-orm", () => {
+	const eq = vi.fn(() => "eq");
+	const sql = vi.fn(() => "sql") as unknown as typeof import("drizzle-orm").sql;
+	return { eq, sql };
+});
+
 describe("(admin) Layout Server Load", () => {
 	it("should redirect to /sign-in if no user exists", async () => {
 		const event = { locals: { user: null } } as any;
@@ -31,6 +51,6 @@ describe("(admin) Layout Server Load", () => {
 		const event = { locals: { user: adminUser } } as any;
 
 		const result = await load(event);
-		expect(result).toEqual({ user: adminUser });
+		expect(result).toEqual({ user: adminUser, pendingReviewCount: 0 });
 	});
 });
