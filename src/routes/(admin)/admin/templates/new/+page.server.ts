@@ -1,5 +1,5 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
@@ -34,12 +34,38 @@ export const actions: Actions = {
 
 		const isTranslate = result.data.interactionType === "translate";
 		const fromContributionId = Number(formData.get("fromContributionId"));
+		const hasContribution = fromContributionId && !Number.isNaN(fromContributionId);
+
+		// Verify the contribution exists and is pending before proceeding
+		if (hasContribution) {
+			const [contribution] = await db
+				.select({ status: templateContribution.status })
+				.from(templateContribution)
+				.where(eq(templateContribution.id, fromContributionId))
+				.limit(1);
+
+			if (!contribution) return fail(404, { message: "Contribution not found" });
+			if (contribution.status !== "pending") return fail(400, { message: "Already reviewed" });
+		}
 
 		if (isTranslate) {
-			await db.insert(template).values({
-				...result.data,
-				createdBy: userId,
-			});
+			if (hasContribution) {
+				await db.transaction(async (tx) => {
+					await tx.insert(template).values({
+						...result.data,
+						createdBy: userId,
+					});
+					await tx
+						.update(templateContribution)
+						.set({ status: "approved", reviewedBy: userId })
+						.where(and(eq(templateContribution.id, fromContributionId), eq(templateContribution.status, "pending")));
+				});
+			} else {
+				await db.insert(template).values({
+					...result.data,
+					createdBy: userId,
+				});
+			}
 		} else {
 			const parsed = parseTemplateForm(formData);
 			const variantResult = prepareVariantPayload(result.data, parsed.slotValues, parsed.openingState, "First variant");
@@ -62,12 +88,14 @@ export const actions: Actions = {
 					slotValues: variantResult.slotValues,
 					openingState: variantResult.openingState,
 				});
-			});
-		}
 
-		// Mark contribution as approved if created from a contribution
-		if (fromContributionId && !Number.isNaN(fromContributionId)) {
-			await db.update(templateContribution).set({ status: "approved", reviewedBy: userId }).where(eq(templateContribution.id, fromContributionId));
+				if (hasContribution) {
+					await tx
+						.update(templateContribution)
+						.set({ status: "approved", reviewedBy: userId })
+						.where(and(eq(templateContribution.id, fromContributionId), eq(templateContribution.status, "pending")));
+				}
+			});
 		}
 
 		return redirect(302, "/admin/templates");

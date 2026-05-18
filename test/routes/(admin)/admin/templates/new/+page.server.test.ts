@@ -21,6 +21,7 @@ vi.mock("$lib/server/db", () => ({
 		transaction: async (cb: any) => {
 			const tx = {
 				insert: vi.fn(() => ({ values: mockValues })),
+				update: vi.fn(() => ({ set: vi.fn(() => ({ where: mockUpdateWhere })) })),
 			};
 			mockTransaction(cb);
 			return cb(tx);
@@ -66,7 +67,7 @@ const validTemplateEntries: Record<string, string> = {
 
 describe("Admin Templates New +page.server", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 		mockReturning.mockResolvedValue([{ id: 1 }]);
 		mockUpdateWhere.mockResolvedValue(undefined);
 		mockSelectLimit.mockResolvedValue([]);
@@ -151,6 +152,8 @@ describe("Admin Templates New +page.server", () => {
 		});
 
 		it("marks contribution as approved when fromContributionId is provided", async () => {
+			mockSelectLimit.mockResolvedValueOnce([{ status: "pending" }]);
+
 			const entries = {
 				...validTemplateEntries,
 				fromContributionId: "5",
@@ -161,6 +164,35 @@ describe("Admin Templates New +page.server", () => {
 				status: 302,
 				location: "/admin/templates",
 			});
+
+			expect(mockTransaction).toHaveBeenCalled();
+		});
+
+		it("returns 404 when fromContributionId does not exist", async () => {
+			const entries = {
+				...validTemplateEntries,
+				fromContributionId: "999",
+			};
+			const event = createEvent(entries);
+
+			const result = (await actions.default(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(404);
+		});
+
+		it("returns 400 when contribution is already reviewed", async () => {
+			mockSelectLimit.mockResolvedValueOnce([{ status: "approved" }]);
+
+			const entries = {
+				...validTemplateEntries,
+				fromContributionId: "5",
+			};
+			const event = createEvent(entries);
+
+			const result = (await actions.default(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toBe("Already reviewed");
 		});
 
 		it("handles empty optional fields correctly", async () => {
