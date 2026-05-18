@@ -83,14 +83,44 @@ function buildIMessageContext(openingState: Record<string, unknown>): string {
 	return ctx;
 }
 
+function flattenAo3ContextComments(
+	comments: Array<{ username?: string; comment?: string; replies?: unknown }> = [],
+): Array<Record<string, string | undefined>> {
+	return comments.flatMap((comment) => [
+		{ username: comment.username, comment: comment.comment },
+		...flattenAo3ContextComments(
+			Array.isArray(comment.replies) ? (comment.replies as Array<{ username?: string; comment?: string; replies?: unknown }>) : [],
+		),
+	]);
+}
+
 function buildAo3Context(openingState: Record<string, unknown>): string {
 	const work = openingState.workTitle as string | undefined;
+	const author = openingState.authorName as string | undefined;
+	const chapter = openingState.chapterTitle as string | undefined;
+	const summary = openingState.summary as string | undefined;
 	const excerpt = openingState.bodyExcerpt as string | undefined;
-	const comments = openingState.previousComments as Array<{ username?: string; comment?: string }> | undefined;
-	let ctx = "Scenario: AO3 work page";
+	const rating = openingState.rating as string | undefined;
+	const warning = openingState.archiveWarning as string | undefined;
+	const fandoms = openingState.fandoms as string[] | undefined;
+	const tags = (
+		[...((openingState.additionalTags as string[] | undefined) ?? []), ...((openingState.tags as string[] | undefined) ?? [])] as string[]
+	).filter(Boolean);
+	const comments = openingState.previousComments as Array<{ username?: string; comment?: string; replies?: unknown }> | undefined;
+	let ctx = "Scenario: AO3 work page comment thread";
 	if (work) ctx += `\nWork: ${work}`;
+	if (author) ctx += `\nAuthor: ${author}`;
+	if (chapter) ctx += `\nChapter: ${chapter}`;
+	if (rating) ctx += `\nRating: ${rating}`;
+	if (warning) ctx += `\nArchive Warning: ${warning}`;
+	if (fandoms?.length) ctx += `\nFandoms: ${fandoms.join(", ")}`;
+	if (tags.length) ctx += `\nAdditional Tags: ${tags.join(", ")}`;
+	if (summary) ctx += `\nSummary: ${summary}`;
 	if (excerpt) ctx += `\nExcerpt: ${excerpt}`;
-	if (comments?.length) ctx = appendMessages(ctx, "Existing comments", comments as Array<Record<string, string | undefined>>);
+	const flattenedComments = flattenAo3ContextComments(comments ?? []);
+	if (flattenedComments.length) ctx = appendMessages(ctx, "Existing nested comments", flattenedComments);
+	ctx +=
+		"\nRoleplay rule: each learner comment may target a different AO3 commenter. When the learner prompt specifies a comment author to roleplay as, reply only as that person for that turn.";
 	return ctx;
 }
 
@@ -216,6 +246,9 @@ type SessionMessageMetadata = {
 	failed?: boolean;
 	hidden?: boolean;
 	mailBodyHtml?: string;
+	displayContent?: string;
+	assistantAuthorName?: string;
+	ao3?: unknown;
 	model?: string;
 	raw?: unknown;
 };
@@ -227,6 +260,10 @@ function getMessageMetadata(value: unknown): SessionMessageMetadata {
 
 function isHiddenUserMessage(message: { role: string; llmMetadata?: unknown }): boolean {
 	return message.role === "user" && getMessageMetadata(message.llmMetadata).hidden === true;
+}
+
+function getMessageDisplayContent(message: { content: string; llmMetadata?: unknown }): string {
+	return getMessageMetadata(message.llmMetadata).displayContent ?? message.content;
 }
 
 function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unknown }>): number {
@@ -265,6 +302,11 @@ const AgentReplySchema = z.object({
 export type SendMessageOptions = {
 	hiddenUserMessage?: boolean;
 	maxTurns?: number | null;
+	promptContent?: string;
+	userDisplayContent?: string;
+	userMetadata?: Record<string, unknown>;
+	assistantAuthorName?: string;
+	assistantMetadata?: Record<string, unknown>;
 };
 
 export type SubmitOneShotResult = {
@@ -282,6 +324,8 @@ export async function sendMessage(
 	if (!trimmedUserMessage) {
 		throw new Error("userMessage is required");
 	}
+	const trimmedPromptContent = options.promptContent?.trim() || trimmedUserMessage;
+	const displayContent = options.userDisplayContent?.trim();
 
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -336,7 +380,7 @@ export async function sendMessage(
 		history.push({ role: m.role, content: m.content });
 	}
 	if (!existingUserMessage) {
-		history.push({ role: "user", content: trimmedUserMessage });
+		history.push({ role: "user", content: trimmedPromptContent });
 	}
 
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
@@ -346,9 +390,17 @@ export async function sendMessage(
 			.values({
 				sessionId,
 				role: "user",
-				content: trimmedUserMessage,
+				content: trimmedPromptContent,
 				llmMetadata:
-					clientMessageId || options.hiddenUserMessage ? { clientMessageId, failed: false, hidden: options.hiddenUserMessage === true } : undefined,
+					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
+						? {
+								...options.userMetadata,
+								clientMessageId,
+								failed: false,
+								hidden: options.hiddenUserMessage === true,
+								displayContent,
+							}
+						: undefined,
 			})
 			.returning();
 		const insertedUserMessage = insertedMessages[0];
@@ -362,9 +414,11 @@ export async function sendMessage(
 			.set({
 				llmMetadata: {
 					...getMessageMetadata(existingUserMessage.llmMetadata),
+					...options.userMetadata,
 					clientMessageId,
 					failed: false,
 					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
 				},
 			})
 			.where(eq(sessionMessage.id, existingUserMessage.id));
@@ -375,9 +429,11 @@ export async function sendMessage(
 						...message,
 						llmMetadata: {
 							...getMessageMetadata(message.llmMetadata),
+							...options.userMetadata,
 							clientMessageId,
 							failed: false,
 							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
 						},
 					}
 				: message,
@@ -394,9 +450,11 @@ export async function sendMessage(
 				.set({
 					llmMetadata: {
 						...getMessageMetadata(existingUserMessage.llmMetadata),
+						...options.userMetadata,
 						clientMessageId,
 						failed: true,
 						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+						displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
 					},
 				})
 				.where(eq(sessionMessage.id, existingUserMessage.id));
@@ -408,7 +466,13 @@ export async function sendMessage(
 		sessionId,
 		role: "assistant",
 		content: output.reply,
-		llmMetadata: { model: "structured-output", raw: output },
+		llmMetadata: {
+			...options.assistantMetadata,
+			...(clientMessageId ? { clientMessageId } : {}),
+			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
+			model: "structured-output",
+			raw: output,
+		},
 	});
 
 	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
@@ -553,7 +617,13 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	const prompt = buildTutorPrompt(
 		objectives,
 		scenarioContext,
-		session.messages.filter((m) => !isHiddenUserMessage(m)).map((m) => ({ role: m.role, content: m.content, llmMetadata: m.llmMetadata })),
+		session.messages
+			.filter((m) => !isHiddenUserMessage(m))
+			.map((m) => ({
+				role: m.role,
+				content: getMessageDisplayContent(m),
+				llmMetadata: m.llmMetadata,
+			})),
 		learningLanguageName,
 	);
 
@@ -688,7 +758,7 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 	const history = session.messages
 		.filter((m) => !isHiddenUserMessage(m))
-		.map((m) => `[${m.role}] ${m.content}`)
+		.map((m) => `[${m.role}] ${getMessageDisplayContent(m)}`)
 		.join("\n");
 
 	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.

@@ -211,19 +211,53 @@ export const appleMailOpeningStateSchema = z.object({
 	),
 });
 
+export type Ao3CommentInput = {
+	id?: string;
+	username: string;
+	comment: string;
+	timestamp?: string;
+	chapterTitle?: string;
+	iconUrl?: string;
+	replies?: Ao3CommentInput[];
+};
+
+const ao3CommentSchema: z.ZodType<Ao3CommentInput> = z.object({
+	id: z.string().optional(),
+	username: z.string(),
+	comment: z.string(),
+	timestamp: z.string().optional(),
+	chapterTitle: z.string().optional(),
+	iconUrl: z.string().optional(),
+	replies: z.lazy(() => z.array(ao3CommentSchema)).optional(),
+});
+
 export const ao3OpeningStateSchema = z.object({
 	workTitle: z.string(),
+	authorName: z.string().optional(),
 	chapterTitle: z.string().optional(),
+	summary: z.string().optional(),
 	bodyExcerpt: z.string().optional(),
+	rating: z.string().optional(),
+	archiveWarning: z.string().optional(),
+	categories: z.array(z.string()).optional(),
+	fandoms: z.array(z.string()).optional(),
+	relationships: z.array(z.string()).optional(),
+	characters: z.array(z.string()).optional(),
+	additionalTags: z.array(z.string()).optional(),
 	tags: z.array(z.string()).optional(),
-	previousComments: z
-		.array(
-			z.object({
-				username: z.string(),
-				comment: z.string(),
-			}),
-		)
+	stats: z
+		.object({
+			published: z.string().optional(),
+			updated: z.string().optional(),
+			words: z.string().optional(),
+			chapters: z.string().optional(),
+			comments: z.string().optional(),
+			kudos: z.string().optional(),
+			bookmarks: z.string().optional(),
+			hits: z.string().optional(),
+		})
 		.optional(),
+	previousComments: z.array(ao3CommentSchema).optional(),
 });
 
 export const translatorOpeningStateSchema = z.object({
@@ -237,6 +271,7 @@ export type FieldDef =
 	| { type: "number"; key: string; label: string; placeholder?: string }
 	| { type: "message-list"; key: string; label: string; withTimestamp?: boolean }
 	| { type: "email-list"; key: string; label: string }
+	| { type: "ao3-comment-tree"; key: string; label: string }
 	| {
 			type: "comment-list";
 			key: string;
@@ -304,20 +339,28 @@ export const openingStateSchemas = {
 	} satisfies OpeningStateEditorMeta),
 	ao3: ao3OpeningStateSchema.meta({
 		fields: [
-			{ type: "text", key: "workTitle", label: "Work Title", required: true },
-			{ type: "text", key: "chapterTitle", label: "Chapter Title (optional)" },
-			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt (optional)", rows: 3 },
-			{ type: "text", key: "tags", label: "Tags (comma-separated)", placeholder: "Angst, Fluff, Slow Burn" },
 			{
-				type: "comment-list",
-				key: "previousComments",
-				label: "Previous Comments",
-				authorField: "username",
-				textField: "comment",
-				authorPlaceholder: "Username",
-				textPlaceholder: "Comment",
-				withVotes: false,
+				type: "row",
+				fields: [
+					{ type: "text", key: "workTitle", label: "Work Title", required: true },
+					{ type: "text", key: "authorName", label: "Author Name", placeholder: "FicAuthor" },
+				],
 			},
+			{ type: "text", key: "chapterTitle", label: "Chapter Title (optional)" },
+			{ type: "textarea", key: "summary", label: "Summary (optional)", rows: 3 },
+			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt (optional)", rows: 4 },
+			{
+				type: "row",
+				fields: [
+					{ type: "text", key: "rating", label: "Rating", placeholder: "Teen And Up Audiences" },
+					{ type: "text", key: "archiveWarning", label: "Archive Warning", placeholder: "No Archive Warnings Apply" },
+				],
+			},
+			{ type: "text", key: "fandoms", label: "Fandoms (comma-separated)", placeholder: "Original Work, Example Fandom" },
+			{ type: "text", key: "relationships", label: "Relationships (comma-separated)" },
+			{ type: "text", key: "characters", label: "Characters (comma-separated)" },
+			{ type: "text", key: "additionalTags", label: "Additional Tags (comma-separated)", placeholder: "Angst, Fluff, Slow Burn" },
+			{ type: "ao3-comment-tree", key: "previousComments", label: "Previous Comments" },
 		],
 	} satisfies OpeningStateEditorMeta),
 	translator: translatorOpeningStateSchema.meta({
