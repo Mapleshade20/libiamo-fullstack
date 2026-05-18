@@ -177,40 +177,21 @@ describe("session page server", () => {
 			expect(result.task.template.ui).toBe("imessage");
 		});
 
-		it("throws 501 when UI is not implemented", async () => {
-			const unimplementedTask = {
-				id: 456,
-				title: "Test Task",
-				language: "en",
-				template: { ui: "reddit" as const },
-				variant: { openingState: {} },
-			};
-			mockDb.query.task.findFirst.mockResolvedValue(unimplementedTask);
-
-			await expect(
-				load({
-					params: { id: mockTaskId },
-					locals: { user: mockUser },
-					parent: async () => ({ avatarUrl: "https://mock.com" }),
-				} as any),
-			).rejects.toMatchObject({ status: 501 });
-		});
-
-		it("allows apple_mail tasks", async () => {
-			const mailTask = {
+		it.each(["apple_mail", "reddit"] as const)("allows %s tasks", async (ui) => {
+			const implementedTask = {
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
+				template: { ui, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
 			};
-			mockDb.query.task.findFirst.mockResolvedValue(mailTask);
+			mockDb.query.task.findFirst.mockResolvedValue(implementedTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
 				parent: async () => ({ avatarUrl: "https://mock.com/avatar.png" }),
-			} as any)) as { task: typeof mailTask; existingSession: null };
+			} as any)) as { task: typeof implementedTask; existingSession: null };
 
-			expect(result.task).toEqual(mailTask);
+			expect(result.task).toEqual(implementedTask);
 			expect(result.existingSession).toBeNull();
 		});
 	});
@@ -746,7 +727,7 @@ describe("session page server", () => {
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 
 			expect(result).toEqual({ success: true, ...mockHints });
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
 		it("routes apple_mail hints to generateMailHint with the current draft", async () => {
@@ -811,6 +792,61 @@ describe("session page server", () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue(null);
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("passes valid contextPath array to generateHint", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			const mockHints = { hints: [{ text: "Reply", translation: "Reply" }] };
+			mockSessionService.generateHint.mockResolvedValue(mockHints);
+			const contextPath = JSON.stringify([{ author: "alice", text: "hello" }]);
+
+			const result = await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(result).toEqual({ success: true, ...mockHints });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+		});
+
+		it("ignores contextPath when it is not valid JSON", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "not-json" } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("ignores contextPath when it is a JSON object instead of array", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: '{"author":"a","text":"t"}' } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("ignores contextPath when it is an empty string", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "   " } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
 		it("returns 500 when generateHint fails", async () => {

@@ -253,6 +253,7 @@ type SessionMessageMetadata = {
 	ao3?: unknown;
 	model?: string;
 	raw?: unknown;
+	parentId?: string;
 };
 
 function getMessageMetadata(value: unknown): SessionMessageMetadata {
@@ -296,6 +297,35 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	};
 }
 
+/**
+ * Build a single-thread history path from root to the target message.
+ * Traces parentId backwards through the message metadata, then reverses
+ * to produce a chronological root → ... → target chain.
+ *
+ * Used for Reddit-style nested UI to provide precise thread context instead of all messages.
+ */
+function buildThreadHistory(
+	allMessages: Array<{ id: number; role: string; content: string; llmMetadata?: unknown }>,
+	targetMessageId: number,
+): Array<{ id: number; role: string; content: string }> {
+	const byId = new Map<number, (typeof allMessages)[number]>();
+	for (const m of allMessages) byId.set(m.id, m);
+
+	const chain: Array<{ id: number; role: string; content: string }> = [];
+	let current = byId.get(targetMessageId);
+
+	while (current) {
+		chain.push({ id: current.id, role: current.role, content: current.content });
+		const parentId = getMessageMetadata(current.llmMetadata).parentId;
+		if (!parentId) break;
+		const parentNum = Number(parentId);
+		current = byId.get(parentNum);
+	}
+
+	chain.reverse();
+	return chain;
+}
+
 const AgentReplySchema = z.object({
 	reply: z.string().describe("Your conversational reply to the user."),
 	terminate: z.boolean().describe("true ONLY IF you are severely offended or the user explicitly says goodbye"),
@@ -309,6 +339,7 @@ export type SendMessageOptions = {
 	userMetadata?: Record<string, unknown>;
 	assistantAuthorName?: string;
 	assistantMetadata?: Record<string, unknown>;
+	parentId?: string;
 };
 
 export async function sendMessage(
@@ -377,12 +408,39 @@ export async function sendMessage(
 			: 'Set "terminate" to true ONLY IF you are severely offended or the user explicitly says goodbye.';
 	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean }. ${terminationRule}`;
 
+	// Build LLM history.
+	// parentId controls history context precision (threaded vs full).
+	// The agent reply is ALWAYS parented to the user message for correct nesting.
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
-	for (const m of activeMessages) {
-		history.push({ role: m.role, content: m.content });
-	}
 	if (!existingUserMessage) {
-		history.push({ role: "user", content: trimmedPromptContent });
+		if (options.parentId) {
+			// Threaded reply: build context from root → parent only, then append current message
+			const parentNum = Number(options.parentId);
+			const parentMessage = activeMessages.find((m) => String(m.id) === options.parentId || m.id === parentNum);
+			if (parentMessage) {
+				const threadPath = buildThreadHistory(activeMessages, parentMessage.id);
+				for (const m of threadPath) {
+					history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+				}
+			} else {
+				// Parent not found; fall back to full history
+				for (const m of activeMessages) {
+					history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+				}
+			}
+			history.push({ role: "user", content: trimmedPromptContent });
+		} else {
+			// No threading: full flat history + current message
+			for (const m of activeMessages) {
+				history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+			}
+			history.push({ role: "user", content: trimmedPromptContent });
+		}
+	} else {
+		// Retry: existing user message is already in activeMessages
+		for (const m of activeMessages) {
+			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+		}
 	}
 
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
@@ -401,6 +459,7 @@ export async function sendMessage(
 								failed: false,
 								hidden: options.hiddenUserMessage === true,
 								displayContent,
+								parentId: options.parentId,
 							}
 						: undefined,
 			})
@@ -421,6 +480,7 @@ export async function sendMessage(
 					failed: false,
 					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
 					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
+					parentId: options.parentId ?? getMessageMetadata(existingUserMessage.llmMetadata).parentId,
 				},
 			})
 			.where(eq(sessionMessage.id, existingUserMessage.id));
@@ -436,6 +496,7 @@ export async function sendMessage(
 							failed: false,
 							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
 							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
+							parentId: options.parentId ?? getMessageMetadata(message.llmMetadata).parentId,
 						},
 					}
 				: message,
@@ -464,6 +525,10 @@ export async function sendMessage(
 		throw error;
 	}
 
+	// Insert agent reply. parentId is ALWAYS the user message's DB ID so nesting
+	// survives page refresh. Without this, agent replies become root-level after reload.
+	const agentParentId = existingUserMessage?.id ? String(existingUserMessage.id) : undefined;
+
 	await db.insert(sessionMessage).values({
 		sessionId,
 		role: "assistant",
@@ -474,6 +539,7 @@ export async function sendMessage(
 			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
 			model: "structured-output",
 			raw: output,
+			parentId: agentParentId,
 		},
 	});
 
@@ -729,7 +795,12 @@ function buildMailHintThreadContext(messages: Array<{ role: string; content: str
 		.join("\n\n");
 }
 
-export async function generateHint(sessionId: number): Promise<HintResult> {
+export type ContextComment = {
+	author: string;
+	text: string;
+};
+
+export async function generateHint(sessionId: number, contextPath?: ContextComment[]): Promise<HintResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
@@ -749,20 +820,27 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 		.map((m) => `[${m.role}] ${getMessageDisplayContent(m)}`)
 		.join("\n");
 
+	// Build context section from the ancestor comment path (precise thread extraction)
+	let contextSection = "";
+	if (contextPath && contextPath.length > 0) {
+		const threadLines = contextPath.map((c, i) => `${"  ".repeat(i)}u/${c.author}: ${c.text}`).join("\n");
+		contextSection = `\n## Reply Context (comment thread from root to the comment being replied to)\n${threadLines}\n`;
+	}
+
 	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
 
     ## Roleplay Rules & Context
     ${snapshot.systemPrompt}
 
     ## Conversation History
-    ${history || "(No messages yet)"}
+    ${history || "(No messages yet)"}${contextSection}
 
     ## Critical Instructions
     Suggest 3 natural ways for the student to reply.
     1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
     2. The suggestions must be consistent with the persona and context provided above.
     3. The "translation" field should provide an English translation of that suggestion.
-
+${contextPath && contextPath.length > 0 ? "    4. The suggestions should be relevant to the specific comment thread shown in the Reply Context section.\n" : ""}
     Respond in JSON format:
     {
       "hints": [

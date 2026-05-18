@@ -20,6 +20,7 @@ type MessageMetadata = {
 	displayContent?: string;
 	assistantAuthorName?: string;
 	ao3?: Ao3MessageMetadata;
+	parentId?: string;
 };
 
 type SessionSnapshotMessage = {
@@ -51,6 +52,7 @@ export type ChatMessage = {
 	retryText?: string;
 	llmMetadata?: unknown;
 	ao3?: Ao3MessageMetadata;
+	parentId?: string;
 };
 
 function compactStringSnapshot(value: string) {
@@ -138,6 +140,7 @@ export function buildChatMessages({
 			clientMessageId: metadata.clientMessageId,
 			llmMetadata: message.llmMetadata,
 			ao3: metadata.ao3,
+			parentId: metadata.parentId,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -164,6 +167,7 @@ export function buildChatMessages({
 						},
 					}
 				: {}),
+			parentId: mappedMessage.id,
 		} satisfies ChatMessage;
 
 		return [mappedMessage, retryPlaceholder];

@@ -47,20 +47,19 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
-	const options = getOptions();
-	const {
-		userName,
-		avatarUrl,
-		existingSession,
-		openingState,
-		maxTurns,
-		agentStartsFirst,
-		timeZone,
-		labels,
-		joinTriggerText,
-		isHiddenCheck,
-		onPoolInit,
-	} = options;
+	// Use $derived to keep values reactive after invalidateAll() re-runs getOptions().
+	// One-time destructuring would capture stale values and never update.
+	const userName = $derived(getOptions().userName);
+	const avatarUrl = $derived(getOptions().avatarUrl);
+	const existingSession = $derived(getOptions().existingSession);
+	const openingState = $derived(getOptions().openingState);
+	const maxTurns = $derived(getOptions().maxTurns);
+	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
+	const timeZone = $derived(getOptions().timeZone);
+	const labels = $derived(getOptions().labels);
+	const joinTriggerText = $derived(getOptions().joinTriggerText);
+	const isHiddenCheck = $derived(getOptions().isHiddenCheck);
+	const onPoolInit = $derived(getOptions().onPoolInit);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 	const formatTimestamp = $derived(createTimeFormatter(timeZone));
@@ -102,7 +101,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
 
 	// ── Agent message helpers ──────────────────────────────────────
-
+	let pendingAgentParentId: string | undefined;
 	function addAgentMessage(params: {
 		text: string;
 		deliveryState: "sent" | "pending" | "failed";
@@ -110,6 +109,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		retryText?: string;
 		messagePatch?: Partial<ChatMessage>;
 	}) {
+		// Tracks which user message the next agent reply should be nested under.
+		// Set in handleSend, consumed in addAgentMessage.
+
+		const agentParentId = pendingAgentParentId;
+		pendingAgentParentId = undefined;
+
 		messages = [
 			...messages,
 			{
@@ -123,6 +128,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				clientMessageId: params.clientMessageId,
 				retryText: params.retryText,
 				...params.messagePatch,
+				parentId: agentParentId,
 			},
 		];
 	}
@@ -204,6 +210,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	async function handleSend(
 		text: string,
+		parentId?: string,
 		extraFields: Record<string, string> = {},
 		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
 	) {
@@ -229,10 +236,16 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		isSubmitting = true;
 
+		// Generate the user message ID upfront so we can bind the agent reply to it.
+		const userMsgId = crypto.randomUUID();
+
+		// The next agent reply will be a child of this user message.
+		pendingAgentParentId = userMsgId;
+
 		messages = [
 			...messages,
 			{
-				id: crypto.randomUUID(),
+				id: userMsgId,
 				role: "user",
 				text: currentText,
 				timestamp: formatTimestamp(new Date()),
@@ -240,11 +253,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				avatar: avatarUrl,
 				clientMessageId,
 				...userPatch,
+				parentId,
 			},
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
+		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields, parentId);
 
 		applySendResult(result, clientMessageId, currentText, agentPatch);
 
@@ -402,6 +416,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	});
 
 	return {
+		get replyingToId() {
+			return pendingAgentParentId ?? null;
+		},
 		get sessionId() {
 			return sessionId;
 		},

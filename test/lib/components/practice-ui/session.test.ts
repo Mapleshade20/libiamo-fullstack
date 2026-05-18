@@ -249,7 +249,7 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 		await session.handleSend("Hello there");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {}, undefined);
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Great reply")).toBe(true);
 		expect(mocks.invalidateAll).toHaveBeenCalled();

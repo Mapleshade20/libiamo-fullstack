@@ -648,7 +648,7 @@ describe("session service", () => {
 				sessionId: 123,
 				role: "assistant",
 				content: "AI reply",
-				llmMetadata: { model: "structured-output", raw: { reply: "AI reply", terminate: false } },
+				llmMetadata: { model: "structured-output", parentId: "1", raw: { reply: "AI reply", terminate: false } },
 			});
 		});
 
@@ -1027,6 +1027,102 @@ describe("session service", () => {
 		});
 	});
 
+	describe("sendMessage parentId threading", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [],
+		};
+
+		it("builds thread history when parentId is provided and parent found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Root comment" },
+					{ id: 20, role: "assistant", content: "Reply to root", llmMetadata: { parentId: "10" } },
+					{ id: 30, role: "user", content: "Nested reply", llmMetadata: { parentId: "20" } },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Thread reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 40 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "My reply", USER_ID, "client-1", { parentId: "30" });
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			// History should contain only the thread path: root -> reply -> nested
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Root comment" }),
+				expect.objectContaining({ content: "Reply to root" }),
+				expect.objectContaining({ content: "Nested reply" }),
+				expect.objectContaining({ content: "My reply" }),
+			]);
+		});
+
+		it("falls back to full history when parentId is not found in messages", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Root" },
+					{ id: 20, role: "assistant", content: "Reply" },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Fallback reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "My reply", USER_ID, "client-2", { parentId: "999" });
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Root" }),
+				expect.objectContaining({ content: "Reply" }),
+				expect.objectContaining({ content: "My reply" }),
+			]);
+		});
+
+		it("persists user message with parentId metadata", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "Thread reply", USER_ID, "client-3", { parentId: "42" });
+
+			expect(valuesMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					llmMetadata: expect.objectContaining({ parentId: "42" }),
+				}),
+			);
+		});
+
+		it("uses full flat history when no parentId is provided", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Msg 1" },
+					{ id: 20, role: "assistant", content: "Reply 1", llmMetadata: { parentId: "10" } },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Flat reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "New msg", USER_ID);
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Msg 1" }),
+				expect.objectContaining({ content: "Reply 1" }),
+				expect.objectContaining({ content: "New msg" }),
+			]);
+		});
+	});
+
 	describe("sendMessage maxTurns", () => {
 		const mockSession = {
 			id: 123,
@@ -1064,6 +1160,202 @@ describe("session service", () => {
 
 			const result = await sendMessage(123, "msg2", USER_ID, undefined, { maxTurns: 0 });
 			expect(result.reply).toBe("reply2");
+		});
+	});
+
+	describe("buildRedditContext", () => {
+		const redditTask = {
+			id: 1,
+			agentPrompt: "You are a Reddit user.",
+			language: "en",
+			template: { ui: "reddit" as const },
+			variant: { openingState: {} },
+		};
+
+		beforeEach(() => {
+			const returningMock = vi.fn().mockResolvedValue([{ id: 1 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+		});
+
+		it("includes post title and body when both are present", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { title: "Best way to learn French?", body: "Any advice?" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Scenario: Reddit post");
+			expect(result.systemPrompt).toContain("Title: Best way to learn French?");
+			expect(result.systemPrompt).toContain("Content: Any advice?");
+		});
+
+		it("shows only the title line when post has no body", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { title: "Title only post" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Title: Title only post");
+			expect(result.systemPrompt).not.toContain("Content:");
+		});
+
+		it("shows only the content line when post has no title", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { body: "Body only post" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).not.toContain("Title:");
+			expect(result.systemPrompt).toContain("Content: Body only post");
+		});
+
+		it("adds existing comments section when previousComments are provided", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: {
+					openingState: {
+						post: { title: "Learning Spanish tips?" },
+						previousComments: [
+							{ author: "SpanishPro", text: "Use Anki for vocab." },
+							{ author: "TravellerJane", text: "Immersion works best!" },
+						],
+					},
+				},
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Existing comments");
+			expect(result.systemPrompt).toContain("SpanishPro");
+			expect(result.systemPrompt).toContain("Use Anki for vocab.");
+			expect(result.systemPrompt).toContain("TravellerJane");
+		});
+
+		it("shows the base label with no extra lines when post is empty", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: {} } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Scenario: Reddit post");
+			expect(result.systemPrompt).not.toContain("Title:");
+			expect(result.systemPrompt).not.toContain("Content:");
+			expect(result.systemPrompt).not.toContain("Existing comments");
+		});
+	});
+
+	describe("generateHint with contextPath", () => {
+		const mockHintSession = {
+			id: 123,
+			userId: USER_ID,
+			task: { language: "es" },
+			agentPromptSnapshot: { systemPrompt: "Reddit roleplay context" },
+			messages: [{ role: "assistant", content: "Feel free to reply to any comment." }],
+		};
+
+		it("adds comment thread context to the prompt when contextPath is provided", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				hints: [{ text: "¡Me parece bien!", translation: "Sounds good to me!" }],
+			});
+
+			const contextPath = [
+				{ author: "OriginalPoster", text: "Has anyone tried this method?" },
+				{ author: "Replier", text: "Yes, it works great!" },
+			];
+
+			const result = await generateHint(123, contextPath);
+
+			expect(result.hints).toHaveLength(1);
+
+			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const systemContent = promptMessages[0].content as string;
+
+			expect(systemContent).toContain("Reply Context");
+			expect(systemContent).toContain("u/OriginalPoster: Has anyone tried this method?");
+			expect(systemContent).toContain("  u/Replier: Yes, it works great!");
+			expect(systemContent).toContain("4. The suggestions should be relevant");
+		});
+
+		it("skips the context section when contextPath is an empty array", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				hints: [{ text: "Hola", translation: "Hello" }],
+			});
+
+			await generateHint(123, []);
+
+			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const systemContent = promptMessages[0].content as string;
+
+			expect(systemContent).not.toContain("Reply Context");
+			expect(systemContent).not.toContain("4. The suggestions should be relevant");
+		});
+
+		it("throws when the session has no task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: null,
+				agentPromptSnapshot: { systemPrompt: "..." },
+				messages: [],
+			});
+
+			await expect(generateHint(123)).rejects.toThrow("Task not found");
+		});
+	});
+
+	describe("sendMessage retry with parentId", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [
+				{
+					id: 5,
+					role: "user",
+					content: "My failed comment",
+					llmMetadata: {
+						clientMessageId: "msg-retry",
+						failed: true,
+						parentId: "3",
+					},
+				},
+			],
+		};
+
+		it("updates the existing user message with the original parentId when retrying", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Retry reply", terminate: false });
+
+			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
+			mockDb.update.mockReturnValue({ set: setMock });
+
+			await sendMessage(123, "My failed comment", USER_ID, "msg-retry");
+
+			const updateCall = setMock.mock.calls[0][0];
+			expect(updateCall.llmMetadata.failed).toBe(false);
+			expect(updateCall.llmMetadata.parentId).toBe("3");
+		});
+
+		it("uses the new parentId from options when retrying with a different parent", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Retry reply", terminate: false });
+
+			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
+			mockDb.update.mockReturnValue({ set: setMock });
+
+			await sendMessage(123, "My failed comment", USER_ID, "msg-retry", { parentId: "99" });
+
+			const updateCall = setMock.mock.calls[0][0];
+			expect(updateCall.llmMetadata.parentId).toBe("99");
 		});
 	});
 });

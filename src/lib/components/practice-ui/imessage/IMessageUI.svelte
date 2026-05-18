@@ -112,7 +112,16 @@ async function handleGetHint() {
 		});
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
-			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
+			hints = (
+				(
+					result.data as {
+						hints?: Array<{
+							text: string;
+							translation?: string;
+						}>;
+					}
+				).hints ?? []
+			).filter((hint) => Boolean(hint.text));
 		}
 	} catch (error) {
 		if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -239,9 +248,13 @@ onMount(() => {
 								type="button"
 								class="rounded-full bg-[#0A84FF] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0062CC] disabled:opacity-50"
 								onclick={session.handleComplete}
-								disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
+								disabled={session.isCompleting ||
+									session.isSubmitting ||
+									session.isInitializing}
 							>
-								{session.isCompleting ? t.evaluating : t.finishTask}
+								{session.isCompleting
+									? t.evaluating
+									: t.finishTask}
 							</button>
 						{/if}
 					</div>
@@ -255,11 +268,20 @@ onMount(() => {
 					</div>
 
 					{#each renderableMessages as msg, index (msg.id)}
-						<div class="mb-1.5 flex flex-col {msg.role === 'user' ? 'items-end' : 'items-start'}">
+						<div
+							class="mb-1.5 flex flex-col {msg.role === 'user'
+								? 'items-end'
+								: 'items-start'}"
+						>
 							{#if showIncomingSender(index)}
 								<span class="mb-1 ml-2 hidden text-[11px] text-[#8E8E93] md:block">{contactName}</span>
 							{/if}
-							<div class="max-w-[82%] px-3 py-2 text-[15px] leading-5 shadow-sm md:max-w-[68%] {getBubbleClasses(msg, index)}">
+							<div
+								class="max-w-[82%] px-3 py-2 text-[15px] leading-5 shadow-sm md:max-w-[68%] {getBubbleClasses(
+									msg,
+									index,
+								)}"
+							>
 								<MarkdownRenderer content={emojiConv.replace_colons(msg.text)} />
 							</div>
 							{#if msg.role === "agent" && msg.deliveryState === "failed"}
@@ -314,16 +336,22 @@ onMount(() => {
 									class="flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D1D6] bg-white text-[#8E8E93] transition-colors hover:text-[#1C1C1E] disabled:opacity-50"
 									title={t.getHint}
 									onclick={(event) => {
-									event.stopPropagation();
-									if (showHintMenu) {
-										closeHintMenu();
-									} else {
-										handleGetHint();
-									}
-								}}
-									disabled={!session.sessionId || session.disabled}
+										event.stopPropagation();
+										if (showHintMenu) {
+											closeHintMenu();
+										} else {
+											handleGetHint();
+										}
+									}}
+									disabled={!session.sessionId ||
+										session.disabled}
 								>
-									<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
+									<Lightbulb
+										size={16}
+										class={isGettingHint
+											? "animate-pulse text-[#FF9F0A]"
+											: ""}
+									/>
 								</button>
 
 								{#if showHintMenu}
@@ -336,9 +364,9 @@ onMount(() => {
 												type="button"
 												class="text-sm text-[#8E8E93] hover:text-[#1C1C1E]"
 												onclick={(event) => {
-												event.stopPropagation();
-												closeHintMenu();
-											}}
+													event.stopPropagation();
+													closeHintMenu();
+												}}
 											>
 												&times;
 											</button>
@@ -353,7 +381,10 @@ onMount(() => {
 													<button
 														type="button"
 														class="w-full rounded-lg border border-transparent px-2.5 py-2 text-left hover:border-[#E5E5EA] hover:bg-[#F7F7FA]"
-														onclick={() => selectHint(hint.text)}
+														onclick={() =>
+															selectHint(
+																hint.text,
+															)}
 													>
 														<p class="text-sm text-[#1C1C1E]">{hint.text}</p>
 														{#if hint.translation}
@@ -371,12 +402,17 @@ onMount(() => {
 								class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
 								aria-label={t.sendMessage}
 								onclick={() => {
-								if (!session.inputText.trim() || session.disabled) return;
-								const text = session.inputText;
-								session.inputText = "";
-								session.handleSend(text);
-							}}
-								disabled={!session.inputText.trim() || session.disabled}
+									if (
+										!session.inputText.trim() ||
+										session.disabled
+									)
+										return;
+									const text = session.inputText;
+									session.inputText = "";
+									session.handleSend(text);
+								}}
+								disabled={!session.inputText.trim() ||
+									session.disabled}
 							>
 								<ArrowUp size={16} />
 							</button>
@@ -405,7 +441,12 @@ onMount(() => {
 							<div class="flex items-center justify-between rounded-xl bg-[#F2F2F7] px-3 py-2">
 								<span class="pr-4 text-sm text-[#1C1C1E]">{obj.text}</span>
 								<span
-									class="rounded-md px-2 py-1 text-xs font-bold {obj.grade === 'A' ? 'bg-[#34C759] text-white' : obj.grade === 'B' ? 'bg-[#FFD60A] text-[#1C1C1E]' : 'bg-[#FF3B30] text-white'}"
+									class="rounded-md px-2 py-1 text-xs font-bold {obj.grade ===
+									'A'
+										? 'bg-[#34C759] text-white'
+										: obj.grade === 'B'
+											? 'bg-[#FFD60A] text-[#1C1C1E]'
+											: 'bg-[#FF3B30] text-white'}"
 								>
 									{obj.grade}
 								</span>
