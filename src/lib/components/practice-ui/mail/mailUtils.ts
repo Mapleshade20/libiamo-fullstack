@@ -219,6 +219,96 @@ export function summarizeMailBodyLayout(value: string | undefined, maxLength = m
 	return lines.join("\n").slice(0, 3500);
 }
 
+export function parseAgentMailReply(text: string, fallbackSubject: string) {
+	const lines = text.replace(/\r\n?/g, "\n").split("\n");
+	let subject = "";
+	let hasExplicitSubject = false;
+	const bodyLines: string[] = [];
+	let skippingLeadingHeaders = true;
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		const subjectValue = readHeaderValue(trimmed, "subject");
+		if (skippingLeadingHeaders && subjectValue !== null) {
+			subject = subjectValue;
+			hasExplicitSubject = true;
+			continue;
+		}
+		if (skippingLeadingHeaders && isSkippableMailHeader(trimmed)) continue;
+		if (skippingLeadingHeaders && trimmed === "") continue;
+
+		skippingLeadingHeaders = false;
+		bodyLines.push(line);
+	}
+
+	const body = bodyLines.join("\n").trim() || text.trim();
+	return {
+		subject: subject || fallbackSubject,
+		body,
+		hasExplicitSubject,
+	};
+}
+
+export function normalizeReplySubject(subject: string, noSubjectLabel: string) {
+	const trimmed = subject.trim() || noSubjectLabel;
+	const withoutRepeatedReplyPrefixes = stripReplyPrefixes(trimmed);
+	return withoutRepeatedReplyPrefixes === trimmed ? trimmed : `Re: ${withoutRepeatedReplyPrefixes || noSubjectLabel}`;
+}
+
+export function ensureReplySubject(subject: string, noSubjectLabel: string) {
+	const normalized = normalizeReplySubject(subject, noSubjectLabel);
+	return hasReplyPrefix(normalized) ? normalized : `Re: ${normalized}`;
+}
+
+function readHeaderValue(line: string, headerName: string) {
+	const separatorIndex = line.indexOf(":");
+	if (separatorIndex === -1) return null;
+	if (line.slice(0, separatorIndex).trim().toLowerCase() !== headerName) return null;
+	return line.slice(separatorIndex + 1).trim();
+}
+
+function isSkippableMailHeader(line: string) {
+	return ["from", "to", "cc", "bcc", "date"].some((header) => readHeaderValue(line, header) !== null);
+}
+
+function hasReplyPrefix(value: string) {
+	return value.slice(0, 3).toLowerCase() === "re:";
+}
+
+function stripReplyPrefixes(value: string) {
+	let index = 0;
+	let consumedPrefix = false;
+
+	while (index < value.length) {
+		while (value[index] === " " || value[index] === "\t") index += 1;
+		if (value.slice(index, index + 3).toLowerCase() !== "re:") break;
+		consumedPrefix = true;
+		index += 3;
+		while (value[index] === " " || value[index] === "\t") index += 1;
+	}
+
+	return consumedPrefix ? value.slice(index).trim() : value;
+}
+
+export function normalizeAgentSignature(body: string, fallbackName: string) {
+	const mbtiPattern = /\b(?:INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)\b/;
+	const lines = body.split("\n");
+	const closingIndex = lines.findLastIndex((line) => /^\s*(best|regards|sincerely|thanks|thank you)[,!]?\s*$/i.test(line));
+	const signatureIndex = closingIndex === -1 ? -1 : lines.findIndex((line, index) => index > closingIndex && line.trim());
+
+	if (signatureIndex !== -1) {
+		lines[signatureIndex] = fallbackName;
+	} else if (lines.some((line) => mbtiPattern.test(line))) {
+		for (let index = lines.length - 1; index >= 0; index -= 1) {
+			if (!lines[index].trim()) continue;
+			if (mbtiPattern.test(lines[index])) lines[index] = fallbackName;
+			break;
+		}
+	}
+
+	return lines.join("\n").trim();
+}
+
 function trimHorizontalWhitespace(value: string) {
 	return value.split("\n").map(trimLineSpaces).join("\n");
 }

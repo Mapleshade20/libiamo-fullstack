@@ -20,14 +20,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import {
-	completeSession,
-	generateHint,
-	generateMailHint,
-	getSessionOrFail,
-	sendMessage,
-	startSession,
-} from "$lib/server/session";
+import { completeSession, generateHint, generateMailHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 describe("session service", () => {
 	beforeEach(() => {

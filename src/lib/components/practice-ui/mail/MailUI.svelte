@@ -2,11 +2,11 @@
 import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
-import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
-import { postAction } from "../apiService";
-import { buildChatMessages, type ChatMessage, parsePersistedMessageDate } from "../chatMessages";
+import { completeAction, getMailHintAction, postAction, requestAgentOpeningAction } from "../apiService";
+import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
+import { buildChatMessages, type ChatMessage, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
@@ -21,6 +21,7 @@ import {
 	sanitizeDraftBodyHtml,
 } from "./mailUtils";
 import Overlays from "./Overlays.svelte";
+import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "./presentation";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailHint, MailOpeningState } from "./types";
 import { getMailContact } from "./userPool";
@@ -68,6 +69,7 @@ let isGettingHint = $state(false);
 let feedback = $state<TutorFeedback | null>(null);
 let mailHint = $state<MailHint | null>(null);
 let messages = $state<ChatMessage[]>([]);
+let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
 let selectedSentId = $state<string | null>(null);
 let activeMailbox = $state<"inbox" | "sent" | "drafts">("inbox");
@@ -83,9 +85,21 @@ const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
 const agentMessages = $derived(messages.filter((m) => m.role === "agent" && !m.isHidden));
 const currentTurns = $derived(sentMessages.length);
+const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
+const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
 const limitReached = $derived(isCompleted || (maxTurns > 0 && currentTurns >= maxTurns));
-const isBusy = $derived(isInitializing || isSubmitting || isCompleting);
-const generatedInboxEmails = $derived(buildGeneratedInboxEmails(agentMessages));
+const isBusy = $derived(isInitializing || isSubmitting || isCompleting || isAnyMessagePending);
+const generatedInboxEmails = $derived(
+	buildGeneratedInboxEmails({
+		messages,
+		agentMessages,
+		recipient,
+		userName,
+		noSubjectLabel: t.noSubject,
+		tutorReplyLabel: t.tutorReply,
+		fallbackTime: todayLabel,
+	}),
+);
 const inboxEmails = $derived([...normalizeMailEmails(openingStateData.emails, todayLabel), ...generatedInboxEmails]);
 const selectedSentMessage = $derived(selectedSentId ? (sentMessages.find((message) => message.id === selectedSentId) ?? null) : null);
 const selectedSentEmail = $derived(
@@ -101,7 +115,7 @@ const selectedInboxEmail = $derived(
 const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
-const canFinish = $derived(Boolean(sessionId) && !isCompleted && !isInitializing);
+const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
 const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 function getDefaultDraft(): DraftEmail {
@@ -135,85 +149,6 @@ function loadSavedDraft(): DraftEmail {
 	} catch {
 		return baseDraft;
 	}
-}
-
-function buildGeneratedInboxEmails(agentMailMessages: ChatMessage[]) {
-	return agentMailMessages.map((message, index) => {
-		const previousUserMessage = [...messages]
-			.slice(0, messages.findIndex((candidate) => candidate.id === message.id))
-			.reverse()
-			.find((candidate) => candidate.role === "user" && !candidate.isHidden);
-		const previousDraft = previousUserMessage ? parseDraftFromMessage(previousUserMessage.text, t.noSubject) : null;
-		const parsedReply = parseAgentMailReply(message.text, previousDraft?.subject || t.noSubject);
-		const subject = parsedReply.subject;
-		const body = normalizeAgentSignature(parsedReply.body, recipient.name);
-		const fromName = !message.authorName || message.authorName === t.tutorReply ? recipient.name : message.authorName;
-		const fromAddress = recipient.email;
-		const displaySubject = previousDraft ? ensureReplySubject(subject) : subject;
-
-		return {
-			id: `agent-${message.id || index}`,
-			from: `${fromName} <${fromAddress}>`,
-			to: userName,
-			subject: displaySubject,
-			body,
-			time: message.timestamp || todayLabel,
-			fromName,
-			fromAddress,
-			displayFrom: `${fromName} <${fromAddress}>`,
-			preview: body,
-		};
-	});
-}
-
-function parseAgentMailReply(text: string, fallbackSubject: string) {
-	const lines = text.replace(/\r\n?/g, "\n").split("\n");
-	let subject = "";
-	const bodyLines: string[] = [];
-	let skippingLeadingHeaders = true;
-
-	for (const line of lines) {
-		const trimmed = line.trim();
-		const subjectMatch = trimmed.match(/^subject:\s*(.+)$/i);
-		if (skippingLeadingHeaders && subjectMatch) {
-			subject = subjectMatch[1].trim();
-			continue;
-		}
-		if (skippingLeadingHeaders && /^(from|to|cc|bcc|date):\s*/i.test(trimmed)) continue;
-		if (skippingLeadingHeaders && trimmed === "") continue;
-
-		skippingLeadingHeaders = false;
-		bodyLines.push(line);
-	}
-
-	const body = bodyLines.join("\n").trim() || text.trim();
-	return {
-		subject: subject || fallbackSubject,
-		body,
-	};
-}
-
-function ensureReplySubject(subject: string) {
-	return /^re:/i.test(subject) ? subject : `Re: ${subject}`;
-}
-
-function normalizeAgentSignature(body: string, fallbackName: string) {
-	const mbtiPattern = /\b(?:INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)\b/;
-	const lines = body.split("\n");
-	const closingIndex = lines.findLastIndex((line) => /^\s*(best|regards|sincerely|thanks|thank you)[,!]?\s*$/i.test(line));
-	const signatureIndex = closingIndex === -1 ? -1 : lines.findIndex((line, index) => index > closingIndex && line.trim());
-
-	if (signatureIndex !== -1) {
-		lines[signatureIndex] = fallbackName;
-	} else if (lines.some((line) => mbtiPattern.test(line))) {
-		for (let index = lines.length - 1; index >= 0; index -= 1) {
-			if (!lines[index].trim()) continue;
-			if (mbtiPattern.test(lines[index])) lines[index] = fallbackName;
-			break;
-		}
-	}
-
-	return lines.join("\n").trim();
 }
 
 function openComposer(useSavedDraft = false) {
@@ -298,42 +233,27 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-async function sendMailEmail(sessionId: number, messageText: string, clientMessageId: string, bodyHtml: string) {
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	formData.append("message", messageText);
-	formData.append("clientMessageId", clientMessageId);
-	formData.append("bodyHtml", bodyHtml);
-
-	const res = await fetch(`?/send`, {
-		method: "POST",
-		body: formData,
+function appendAgentMessageFromSendResult(
+	result: SendAttemptResult,
+	clientMessageId: string,
+	retryText: string,
+	agentMessageId = crypto.randomUUID(),
+) {
+	const agentMessage = buildAgentMessageFromSendResult({
+		result,
+		clientMessageId,
+		retryText,
+		recipient,
+		timestamp: formatTimestamp(new Date()),
+		stillProcessingMessage: t.stillProcessingMessage,
+		retryFailedMessage: t.retryFailedMessage,
+		id: agentMessageId,
 	});
-	return deserialize(await res.text());
-}
+	if (!agentMessage) return;
 
-async function requestAgentOpening(sessionId: number) {
-	const clientMessageId = `join-${sessionId}`;
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	formData.append("message", "*User joined the server*");
-	formData.append("clientMessageId", clientMessageId);
-
-	const res = await fetch(`?/send`, {
-		method: "POST",
-		body: formData,
-	});
-	return deserialize(await res.text());
-}
-
-async function completeMailSession(sessionId: number) {
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	const res = await fetch(`?/complete`, {
-		method: "POST",
-		body: formData,
-	});
-	return deserialize(await res.text());
+	messages = [...messages, agentMessage];
+	selectedInboxId = `agent-${agentMessage.id}`;
+	activeMailbox = "inbox";
 }
 
 async function handleComplete(force = false) {
@@ -341,7 +261,7 @@ async function handleComplete(force = false) {
 
 	isCompleting = true;
 	try {
-		const result = await completeMailSession(sessionId);
+		const result = await completeAction(sessionId);
 		if (result.type === "success" && result.data) {
 			isCompleted = true;
 			feedback = result.data.feedback as TutorFeedback;
@@ -372,18 +292,7 @@ async function handleGetHint() {
 	hintAbortController = new AbortController();
 
 	try {
-		const formData = new FormData();
-		formData.append("sessionId", String(sessionId));
-		formData.append("to", draft.to);
-		formData.append("subject", draft.subject);
-		formData.append("body", draft.body);
-
-		const res = await fetch(`?/hint`, {
-			method: "POST",
-			body: formData,
-			signal: hintAbortController.signal,
-		});
-		const result = deserialize(await res.text());
+		const result = await getMailHintAction(sessionId, draft, hintAbortController.signal);
 		if (result.type === "success" && result.data) {
 			mailHint = (result.data as any).mailHint as MailHint;
 		}
@@ -408,13 +317,38 @@ function closeHintPanel() {
 	}
 }
 
+async function handleRetry(messageId: string) {
+	if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
+
+	const message = messages.find((m) => m.id === messageId);
+	if (!message?.clientMessageId) return;
+
+	messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
+	await scrollToMessageBottom();
+
+	isSubmitting = true;
+	try {
+		const retryText = message.retryText || message.text;
+		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
+		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
+		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
+
+		appendAgentMessageFromSendResult(result, message.clientMessageId, retryText);
+		await invalidateAll();
+	} finally {
+		await scrollToMessageBottom();
+		isSubmitting = false;
+	}
+}
+
 async function handleSendEmail() {
-	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached) return;
+	if (isSubmitting || isCompleted || isInitializing || !sessionId || limitReached || isWaitingRetry) return;
 	if (!draft.to.trim() || !draft.body.trim()) return;
 
 	const currentText = formatDraftMessage(draft, t.noSubject);
 	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
 	const clientMessageId = crypto.randomUUID();
+	const expectedTurnCount = currentTurns + 1;
 	isSubmitting = true;
 
 	const sentMessage: ChatMessage = {
@@ -435,30 +369,14 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await sendMailEmail(sessionId, currentText, clientMessageId, mailBodyHtml);
-		if (result.type === "success" && result.data) {
-			const reply = String((result.data as any).reply ?? "").trim();
-			if (reply) {
-				const agentMessageId = crypto.randomUUID();
-				messages = [
-					...messages,
-					{
-						id: agentMessageId,
-						role: "agent",
-						text: reply,
-						timestamp: formatTimestamp(new Date()),
-						authorName: recipient.name,
-						avatarColor: "bg-[#3478F6]",
-					},
-				];
-				selectedInboxId = `agent-${agentMessageId}`;
-				activeMailbox = "inbox";
-			}
+		const result = await attemptAgentReply(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
+		if (result.status === "reply" || result.status === "pending" || result.status === "failed") {
+			appendAgentMessageFromSendResult(result, clientMessageId, currentText);
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
-			if (maxTurns > 0 && ((result.data as any).turnCount ?? currentTurns + 1) >= maxTurns) {
+			if (maxTurns > 0 && expectedTurnCount >= maxTurns && result.status === "reply") {
 				await handleComplete(true);
-			} else if ((result.data as any).terminated === true) {
+			} else if (result.status === "reply" && result.terminated === true) {
 				await handleComplete(true);
 			}
 			await invalidateAll();
@@ -501,8 +419,13 @@ function loadExistingSession(session: any) {
 	});
 
 	if (isCompleted && feedback) showEvaluationModal = true;
-	if (!selectedInboxId && messages.some((m) => m.role === "agent" && !m.isHidden)) {
-		selectedInboxId = `agent-${messages.filter((m) => m.role === "agent" && !m.isHidden).at(-1)?.id}`;
+	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden);
+	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
+	if (
+		(!selectedInboxId || (activeMailbox === "inbox" && selectedInboxId.startsWith("agent-") && !selectedGeneratedInboxExists)) &&
+		visibleAgentMessages.length
+	) {
+		selectedInboxId = `agent-${visibleAgentMessages.at(-1)?.id}`;
 		activeMailbox = "inbox";
 		showCompose = false;
 	} else if (!selectedSentId && messages.some((m) => m.role === "user" && !m.isHidden)) {
@@ -522,7 +445,8 @@ onMount(async () => {
 	}, 400);
 
 	const hasExistingMessages =
-		Array.isArray(existingSession?.messages) && existingSession.messages.some((message: any) => message.role === "user" || message.role === "assistant");
+		Array.isArray(existingSession?.messages) &&
+		existingSession.messages.some((message: any) => message.role === "user" || message.role === "assistant");
 	if (!isCompleted && !hasExistingMessages && !agentStartsFirst) {
 		openComposer(true);
 		draftStorageReady = true;
@@ -531,7 +455,7 @@ onMount(async () => {
 	if (existingSession?.id && !hasExistingMessages && agentStartsFirst) {
 		isInitializing = true;
 		try {
-			const result = await requestAgentOpening(existingSession.id);
+			const result = await requestAgentOpeningAction(existingSession.id);
 			if (result.type === "success" && result.data) {
 				await invalidateAll();
 			} else {
@@ -552,7 +476,7 @@ onMount(async () => {
 				sessionId = startResult.data.sessionId as number;
 				lastLoadedSessionId = sessionId;
 				if (agentStartsFirst) {
-					const openingResult = await requestAgentOpening(sessionId);
+					const openingResult = await requestAgentOpeningAction(sessionId);
 					if (openingResult.type !== "success") openComposer(true);
 				} else {
 					openComposer(true);
@@ -572,6 +496,32 @@ onMount(async () => {
 
 $effect(() => {
 	if (!showCompose) closeHintPanel();
+});
+
+$effect(() => {
+	if (
+		limitReached &&
+		currentTurns > 0 &&
+		!isWaitingRetry &&
+		!isAnyMessagePending &&
+		!isSubmitting &&
+		!isCompleting &&
+		!isCompleted &&
+		sessionId &&
+		!hasAutoCompleted
+	) {
+		hasAutoCompleted = true;
+		void handleComplete(true);
+	}
+});
+
+$effect(() => {
+	if (isAnyMessagePending && !isSubmitting && sessionId) {
+		const interval = setInterval(() => {
+			invalidateAll();
+		}, 3000);
+		return () => clearInterval(interval);
+	}
 });
 
 $effect(() => {
@@ -650,6 +600,7 @@ $effect(() => {
 			{canFinish}
 			onMockAction={handleMockAction}
 			onComplete={handleComplete}
+			onRetry={handleRetry}
 		/>
 	</div>
 

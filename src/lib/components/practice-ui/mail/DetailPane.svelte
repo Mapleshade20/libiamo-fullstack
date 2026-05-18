@@ -3,6 +3,7 @@ import Archive from "@lucide/svelte/icons/archive";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import Paperclip from "@lucide/svelte/icons/paperclip";
+import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import UserCircle from "@lucide/svelte/icons/user-circle";
 import type { ChatMessage } from "../chatMessages";
@@ -27,6 +28,7 @@ let {
 	canFinish = false,
 	onMockAction = () => {},
 	onComplete = () => {},
+	onRetry = (_messageId: string) => {},
 }: {
 	messageScroll?: HTMLElement | null;
 	selectedInboxEmail?: NormalizedMailEmail | null;
@@ -45,6 +47,7 @@ let {
 	canFinish?: boolean;
 	onMockAction?: () => void;
 	onComplete?: () => void;
+	onRetry?: (messageId: string) => void;
 } = $props();
 
 const detailEmail = $derived(
@@ -55,6 +58,8 @@ const detailEmail = $derived(
 				to: selectedSentEmail.to,
 				time: selectedSentMessage?.timestamp ?? todayLabel,
 				bodyHtml: selectedSentEmail.bodyHtml ?? "",
+				deliveryState: undefined,
+				messageId: undefined,
 			}
 		: selectedInboxEmail
 			? {
@@ -63,13 +68,13 @@ const detailEmail = $derived(
 					to: selectedInboxEmail.to,
 					time: selectedInboxEmail.time || todayLabel,
 					bodyHtml: plainTextToDraftHtml(selectedInboxEmail.body),
+					deliveryState: selectedInboxEmail.deliveryState,
+					messageId: selectedInboxEmail.messageId,
 				}
 			: null,
 );
 const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
-const remainingTurnsLabel = $derived(
-	remainingTurns === null ? "" : (t.turnsLeft || "Up to {count} more").replace("{count}", String(remainingTurns)),
-);
+const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft || "Up to {count} more").replace("{count}", String(remainingTurns)));
 </script>
 
 <main class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
@@ -95,9 +100,7 @@ const remainingTurnsLabel = $derived(
 		{:else if !isCompleted}
 			<div class="ml-auto flex items-center gap-2">
 				{#if remainingTurns !== null}
-					<div class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73]">
-						{remainingTurnsLabel}
-					</div>
+					<div class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73]">{remainingTurnsLabel}</div>
 				{/if}
 				{#if canFinish}
 					<button
@@ -137,6 +140,22 @@ const remainingTurnsLabel = $derived(
 					<div class="mt-8 flex items-center gap-2 text-sm text-[#6E6E73]">
 						<LoaderCircle size={16} class="animate-spin" />
 						{isCompleting ? t.evaluating : isSubmitting ? t.waitingForReply : t.loadingMail}
+					</div>
+				{/if}
+				{#if detailEmail.deliveryState === "failed" && detailEmail.messageId}
+					<button
+						type="button"
+						class="mt-6 inline-flex items-center gap-2 rounded-full border border-[#D70015]/20 bg-[#FFF1F2] px-3 py-1.5 text-sm font-semibold text-[#B00020] transition-colors hover:bg-[#FFE4E6]"
+						onclick={() => onRetry(detailEmail.messageId ?? "")}
+						disabled={isBusy || isCompleted}
+					>
+						<RotateCcw size={15} />
+						{t.retry}
+					</button>
+				{:else if detailEmail.deliveryState === "pending"}
+					<div class="mt-6 flex items-center gap-2 text-sm text-[#6E6E73]">
+						<LoaderCircle size={16} class="animate-spin" />
+						{t.stillProcessingMessage}
 					</div>
 				{/if}
 			</article>

@@ -23,6 +23,10 @@ export type NormalizedMailEmail = MailEmail & {
 	fromName: string;
 	fromAddress: string;
 	displayFrom: string;
+	deliveryState?: "sent" | "pending" | "failed";
+	clientMessageId?: string;
+	retryText?: string;
+	messageId?: string;
 };
 
 export type MailHint = {
