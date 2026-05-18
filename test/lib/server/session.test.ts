@@ -18,7 +18,8 @@ vi.mock("$lib/server/db", () => ({
 	},
 }));
 
-import { createMultiTurnChat, createSingleTurnChat } from "$lib/server/llm";
+import { z } from "zod";
+import { createMultiTurnChat, createSingleTurnChat, createStructuredOutput } from "$lib/server/llm";
 
 function createJsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -233,6 +234,83 @@ describe("chat client wrappers", () => {
 				{ role: "system", content: "You are a tutor." },
 				{ role: "user", content: "Hi there" },
 			]);
+		});
+	});
+
+	describe("createStructuredOutput", () => {
+		it("parses valid JSON output against the schema", async () => {
+			const schema = z.object({
+				reply: z.string(),
+				terminate: z.boolean(),
+			});
+			const fetchMock = vi.fn<FetchLike>();
+			fetchMock.mockResolvedValueOnce(
+				createJsonResponse({
+					choices: [{ message: { content: '{"reply":"Hello!","terminate":false}' } }],
+				}),
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await createStructuredOutput(schema, [
+				{ role: "system", content: "You are a tutor." },
+				{ role: "user", content: "Hi" },
+			]);
+
+			expect(result).toEqual({ reply: "Hello!", terminate: false });
+		});
+
+		it("retries once when first response is invalid JSON", async () => {
+			const schema = z.object({
+				reply: z.string(),
+				terminate: z.boolean(),
+			});
+			const fetchMock = vi.fn<FetchLike>();
+			fetchMock
+				.mockResolvedValueOnce(
+					createJsonResponse({
+						choices: [{ message: { content: "Just plain text" } }],
+					}),
+				)
+				.mockResolvedValueOnce(
+					createJsonResponse({
+						choices: [{ message: { content: '{"reply":"Recovered","terminate":false}' } }],
+					}),
+				);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await createStructuredOutput(schema, [
+				{ role: "system", content: "You are a tutor." },
+				{ role: "user", content: "Hi" },
+			]);
+
+			expect(result).toEqual({ reply: "Recovered", terminate: false });
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+		});
+
+		it("throws when both first and retry responses are invalid JSON", async () => {
+			const schema = z.object({
+				translation: z.string(),
+			});
+			const fetchMock = vi.fn<FetchLike>();
+			fetchMock
+				.mockResolvedValueOnce(
+					createJsonResponse({
+						choices: [{ message: { content: "Not valid JSON for this schema" } }],
+					}),
+				)
+				.mockResolvedValueOnce(
+					createJsonResponse({
+						choices: [{ message: { content: "Still not valid" } }],
+					}),
+				);
+			vi.stubGlobal("fetch", fetchMock);
+
+			await expect(
+				createStructuredOutput(schema, [
+					{ role: "system", content: "Translate." },
+					{ role: "user", content: "Hello" },
+				]),
+			).rejects.toThrow("LLM returned invalid structured JSON");
 		});
 	});
 

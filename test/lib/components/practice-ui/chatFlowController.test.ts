@@ -130,4 +130,22 @@ describe("attemptAgentReply", () => {
 		const result = await attemptAgentReply(1, "Hi", "client-1");
 		expect(result).toEqual({ status: "failed" } satisfies SendAttemptResult);
 	});
+
+	it("appends parentId to FormData when provided", async () => {
+		await mockReply("OK", false);
+
+		await attemptAgentReply(42, "Hello", "msg-1", {}, "parent-99");
+
+		const fetchCall = (global.fetch as any).mock.calls[0];
+		expect(fetchCall[1].body.get("parentId")).toBe("parent-99");
+	});
+
+	it("does not append parentId when omitted", async () => {
+		await mockReply("OK", false);
+
+		await attemptAgentReply(42, "Hello", "msg-1");
+
+		const fetchCall = (global.fetch as any).mock.calls[0];
+		expect(fetchCall[1].body.get("parentId")).toBeNull();
+	});
 });

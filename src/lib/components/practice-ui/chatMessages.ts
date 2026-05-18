@@ -20,6 +20,7 @@ type MessageMetadata = {
 	displayContent?: string;
 	assistantAuthorName?: string;
 	ao3?: Ao3MessageMetadata;
+	parentId?: string;
 };
 
 export type ChatMessage = {
@@ -35,6 +36,7 @@ export type ChatMessage = {
 	clientMessageId?: string;
 	retryText?: string;
 	ao3?: Ao3MessageMetadata;
+	parentId?: string;
 };
 
 function getMessageMetadata(value: unknown): MessageMetadata {
@@ -84,6 +86,7 @@ export function buildChatMessages({
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
 			ao3: metadata.ao3,
+			parentId: metadata.parentId,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -109,6 +112,7 @@ export function buildChatMessages({
 						},
 					}
 				: {}),
+			parentId: mappedMessage.id,
 		} satisfies ChatMessage;
 
 		return [mappedMessage, retryPlaceholder];
