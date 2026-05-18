@@ -40,6 +40,7 @@ describe("buildChatMessages", () => {
 			clientMessageId: "msg-1",
 			retryText: "Hello",
 		});
+		expect(result[1].ao3).toBeUndefined();
 	});
 
 	it("adds a pending retry placeholder after an unfinished persisted user turn", () => {
@@ -190,6 +191,30 @@ describe("buildChatMessages", () => {
 
 		expect(result[0]).toMatchObject({ text: "Visible learner comment", ao3: { commentId: "ao3-user-msg-ao3" } });
 		expect(result[1]).toMatchObject({ authorName: "Commenter", ao3: { parentCommentId: "ao3-user-msg-ao3" } });
+	});
+
+	it("adds AO3 metadata to retry placeholders only for AO3 persisted messages", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Prompt-only context",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: {
+						clientMessageId: "msg-ao3",
+						failed: true,
+						displayContent: "Visible learner comment",
+						ao3: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+					},
+				},
+			],
+		});
+
+		expect(result[1]).toMatchObject({
+			ao3: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+		});
 	});
 
 	it("ignores malformed llm metadata and avoids retry placeholders", () => {

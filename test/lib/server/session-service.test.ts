@@ -545,7 +545,7 @@ describe("session service", () => {
 				sessionId: 123,
 				role: "assistant",
 				content: "AI reply",
-				llmMetadata: expect.any(Object),
+				llmMetadata: { model: "structured-output", raw: { reply: "AI reply", terminate: false } },
 			});
 		});
 

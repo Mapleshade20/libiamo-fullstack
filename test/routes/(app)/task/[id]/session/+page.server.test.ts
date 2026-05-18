@@ -350,6 +350,49 @@ describe("session page server", () => {
 			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
 		});
 
+		it("retries failed AO3 turns from persisted metadata even if the target no longer resolves", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "ao3" as const, maxTurns: 4 },
+				variant: { openingState: { workTitle: "My Fic", authorName: "FicAuthor", previousComments: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				messages: [
+					{
+						id: 12,
+						role: "user",
+						content: "Persisted prompt context from original failed turn",
+						createdAt: new Date("2026-01-01T10:00:00Z"),
+						llmMetadata: {
+							clientMessageId: "ao3-msg",
+							failed: true,
+							displayContent: "Hello again",
+							ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" },
+						},
+					},
+				],
+			});
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Recovered", turnCount: 1 });
+
+			const result = await actions.send(
+				createFormEvent({ values: { sessionId: "789", message: "Hello again", clientMessageId: "ao3-msg", ao3TargetCommentId: "missing" } }),
+			);
+
+			expect(result).toMatchObject({ success: true, reply: "Recovered" });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"Hello again",
+				"user_123",
+				"ao3-msg",
+				expect.objectContaining({
+					assistantAuthorName: "ReaderA",
+					userDisplayContent: "Hello again",
+					userMetadata: { ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" } },
+				}),
+			);
+		});
+
 		it("sends message when task language differs from active language", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, language: "es" });
 			mockSessionService.getSessionOrFail.mockResolvedValue({

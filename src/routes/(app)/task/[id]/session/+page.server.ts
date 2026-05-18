@@ -2,6 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import {
+	type Ao3MessageMetadata,
 	type Ao3OpeningState,
 	type Ao3Target,
 	buildAo3UserPrompt,
@@ -41,6 +42,56 @@ function mapStartSessionError(e: unknown) {
 function getFormString(formData: FormData, key: string): string {
 	const value = formData.get(key);
 	return typeof value === "string" ? value.trim() : "";
+}
+
+type Ao3PersistedMessage = {
+	role: string;
+	content: string;
+	llmMetadata?: unknown;
+};
+
+type Ao3PersistedMetadata = {
+	clientMessageId?: string;
+	failed?: boolean;
+	displayContent?: string;
+	ao3?: Ao3MessageMetadata;
+};
+
+function getAo3PersistedMetadata(value: unknown): Ao3PersistedMetadata {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return value as Ao3PersistedMetadata;
+}
+
+function buildAo3RetrySendOptions(params: {
+	messages: Ao3PersistedMessage[];
+	openingState: Ao3OpeningState;
+	clientMessageId: string;
+}): Parameters<typeof sendMessage>[4] | null {
+	const originalUserMessage = params.messages.find((message) => {
+		const metadata = getAo3PersistedMetadata(message.llmMetadata);
+		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.ao3;
+	});
+	if (!originalUserMessage) return null;
+
+	const metadata = getAo3PersistedMetadata(originalUserMessage.llmMetadata);
+	const ao3 = metadata.ao3;
+	if (!ao3) return null;
+
+	const responderName = ao3.responderName || getAo3AuthorName(params.openingState);
+	const userCommentId = ao3.commentId || `ao3-user-${params.clientMessageId}`;
+	return {
+		userDisplayContent: metadata.displayContent,
+		userMetadata: { ao3 },
+		assistantAuthorName: responderName,
+		assistantMetadata: {
+			ao3: {
+				commentId: `ao3-agent-${params.clientMessageId}`,
+				parentCommentId: userCommentId,
+				responderName,
+				mode: "reply",
+			},
+		},
+	};
 }
 
 function buildAo3SendOptions(params: { openingState: Ao3OpeningState; target: Ao3Target | null; message: string; clientMessageId: string }) {
@@ -196,38 +247,48 @@ export const actions: Actions = {
 				if (!clientMessageId) return fail(400, { error: "clientMessageId is required for AO3 comments" });
 
 				const openingState = (taskData.variant?.openingState ?? {}) as Ao3OpeningState;
-				const targetCommentId = getFormString(formData, "ao3TargetCommentId") || null;
-				let target = findAo3Target(openingState, targetCommentId);
+				const sessionWithMessages = await db.query.practiceSession.findFirst({
+					where: eq(practiceSession.id, sessionId),
+					with: { messages: true },
+				});
+				const retryOptions = buildAo3RetrySendOptions({
+					messages: sessionWithMessages?.messages ?? [],
+					openingState,
+					clientMessageId,
+				});
 
-				if (targetCommentId && !target) {
-					const sessionWithMessages = await db.query.practiceSession.findFirst({
-						where: eq(practiceSession.id, sessionId),
-						with: { messages: true },
-					});
-					const chatMessages = buildChatMessages({
-						rawMessages: sessionWithMessages?.messages ?? [],
-						formatTimestamp: () => "Earlier",
-						userName: user.name || "Learner",
-						agentName: getAo3AuthorName(openingState),
-						labels: {
-							retryFailedMessage: "Agent reply failed. Click Retry to try again.",
-							stillProcessingMessage: "Agent is still processing. Retry in a moment.",
-						},
-					});
-					target = findAo3TargetInMessages(chatMessages, targetCommentId);
+				if (retryOptions) {
+					Object.assign(sendOptions, retryOptions);
+				} else {
+					const targetCommentId = getFormString(formData, "ao3TargetCommentId") || null;
+					let target = findAo3Target(openingState, targetCommentId);
+
+					if (targetCommentId && !target) {
+						const chatMessages = buildChatMessages({
+							rawMessages: sessionWithMessages?.messages ?? [],
+							formatTimestamp: () => "Earlier",
+							userName: user.name || "Learner",
+							agentName: getAo3AuthorName(openingState),
+							labels: {
+								retryFailedMessage: "Agent reply failed. Click Retry to try again.",
+								stillProcessingMessage: "Agent is still processing. Retry in a moment.",
+							},
+						});
+						target = findAo3TargetInMessages(chatMessages, targetCommentId);
+					}
+
+					if (targetCommentId && !target) return fail(400, { error: "Invalid AO3 reply target" });
+
+					Object.assign(
+						sendOptions,
+						buildAo3SendOptions({
+							openingState,
+							target,
+							message: formattedMessage,
+							clientMessageId,
+						}),
+					);
 				}
-
-				if (targetCommentId && !target) return fail(400, { error: "Invalid AO3 reply target" });
-
-				Object.assign(
-					sendOptions,
-					buildAo3SendOptions({
-						openingState,
-						target,
-						message: formattedMessage,
-						clientMessageId,
-					}),
-				);
 			}
 
 			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);

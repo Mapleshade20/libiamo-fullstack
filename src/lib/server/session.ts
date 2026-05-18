@@ -462,8 +462,8 @@ export async function sendMessage(
 		content: output.reply,
 		llmMetadata: {
 			...options.assistantMetadata,
-			clientMessageId,
-			assistantAuthorName: options.assistantAuthorName,
+			...(clientMessageId ? { clientMessageId } : {}),
+			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
 			model: "structured-output",
 			raw: output,
 		},
