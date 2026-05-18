@@ -208,7 +208,6 @@ function handleWindowClick(event: MouseEvent) {
 		<nav class="hidden md:block">
 			<ul class="m-0 flex list-none gap-4 p-0 text-sm font-bold">
 				<li><span>Hi, {userName}!</span></li>
-				<li><a href={`/task/${taskId}`} class="text-white no-underline">{t.returnTask}</a></li>
 				{#if session.remainingTurns !== null && !session.isCompleted}
 					<li><span>{t.turnsLeft}: {session.remainingTurns}</span></li>
 				{/if}
@@ -456,14 +455,9 @@ function handleWindowClick(event: MouseEvent) {
 	font-size: 14px;
 	line-height: 1.5;
 }
-.ao3-root :global(a) {
-	color: #900;
-	text-decoration: none;
-}
 .ao3-root :global(a:hover),
 .ao3-root :global(a:focus) {
 	border-bottom: 1px dotted #900;
-	color: #a00;
 }
 .ao3-action {
 	display: inline-block;
