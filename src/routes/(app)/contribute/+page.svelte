@@ -17,13 +17,16 @@ function formatDate(d: Date | null): string {
 	<h1 class="text-3xl md:text-4xl text-gray-800 font-medium">Contribute a Template</h1>
 
 	{#if success}
-		<p class="rounded-md bg-green-50 p-4 text-sm text-green-700">
-			Your template has been submitted for review. An admin will review it soon. Thanks for your contribution!
-		</p>
+		<div class="rounded-md bg-green-50 p-4 space-y-2">
+			<p class="text-sm text-green-700">Your template has been submitted for review. An admin will review it soon. Thanks for your contribution!</p>
+			<a href="/" class="inline-block text-sm font-medium text-green-700 underline underline-offset-2 hover:text-green-800">
+				&larr; Back to Quests
+			</a>
+		</div>
+	{:else}
+		<p class="text-muted-foreground">Propose a new learning scenario. Your submission will be reviewed by an admin before it goes live.</p>
+		<TemplateForm {form} submitLabel="Submit for Review" cancelHref="/" hideAdminFields />
 	{/if}
-
-	<p class="text-muted-foreground">Propose a new learning scenario. Your submission will be reviewed by an admin before it goes live.</p>
-	<TemplateForm {form} submitLabel="Submit for Review" cancelHref="/" hideAdminFields />
 
 	<!-- Contribution History -->
 	{#if data.contributions && data.contributions.length > 0}
