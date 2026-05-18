@@ -19,6 +19,9 @@ export async function attemptAgentReply(
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
+	for (const [key, value] of Object.entries(extraFields)) {
+		formData.append(key, value);
+	}
 
 	// Append extra fields (e.g. ao3-specific metadata)
 	for (const [key, value] of Object.entries(extraFields)) {

@@ -1,10 +1,10 @@
 <script lang="ts">
-import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
-import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
-import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
-import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
+	import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
+	import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
+	import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
+	import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
 
-let { data } = $props();
+	let { data } = $props();
 </script>
 
 {#if data.task.template.ui === "discord"}
@@ -53,6 +53,8 @@ let { data } = $props();
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">
-		<p class="text-muted-foreground text-sm uppercase tracking-widest">{data.task.template.ui} interface not yet implemented</p>
+		<p class="text-muted-foreground text-sm uppercase tracking-widest">
+			{data.task.template.ui} interface not yet implemented
+		</p>
 	</div>
 {/if}
