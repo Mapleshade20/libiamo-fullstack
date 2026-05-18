@@ -1,6 +1,7 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
+import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
@@ -66,8 +67,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		},
 	});
 
-	const IMPLEMENTED_UIS = ["discord"];
-	if (!IMPLEMENTED_UIS.includes(taskData.template.ui)) {
+	if (!isPracticeUiImplemented(taskData.template.ui)) {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
