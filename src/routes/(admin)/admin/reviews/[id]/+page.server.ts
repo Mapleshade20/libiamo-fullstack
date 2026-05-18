@@ -1,5 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { templateContribution, user } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
@@ -50,10 +50,22 @@ export const actions: Actions = {
 		const id = Number(event.params.id);
 		if (Number.isNaN(id)) return fail(400);
 
+		const [contribution] = await db
+			.select({ status: templateContribution.status })
+			.from(templateContribution)
+			.where(eq(templateContribution.id, id))
+			.limit(1);
+
+		if (!contribution) return fail(404, { message: "Contribution not found" });
+		if (contribution.status !== "pending") return fail(400, { message: "Already reviewed" });
+
 		const formData = await event.request.formData();
 		const reviewNotes = (formData.get("reviewNotes") as string) || null;
 
-		await db.update(templateContribution).set({ status: "rejected", reviewedBy: adminId, reviewNotes }).where(eq(templateContribution.id, id));
+		await db
+			.update(templateContribution)
+			.set({ status: "rejected", reviewedBy: adminId, reviewNotes })
+			.where(and(eq(templateContribution.id, id), eq(templateContribution.status, "pending")));
 
 		throw redirect(302, "/admin/reviews");
 	},

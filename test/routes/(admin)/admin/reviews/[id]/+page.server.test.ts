@@ -25,7 +25,8 @@ vi.mock("$lib/server/db/schema", () => ({
 
 vi.mock("drizzle-orm", () => {
 	const eq = vi.fn(() => "eq");
-	return { eq };
+	const and = vi.fn((...args: unknown[]) => args);
+	return { and, eq };
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -94,10 +95,30 @@ describe("Admin Reviews [id] +page.server", () => {
 		});
 
 		it("rejects and redirects to reviews list", async () => {
+			const limit = vi.fn().mockResolvedValue([{ status: "pending" }]);
+			mockSelectFrom.mockReturnValue({ where: vi.fn(() => ({ limit })) });
+
 			await expect(actions.reject(createEvent())).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/reviews",
 			});
+		});
+
+		it("returns 400 when contribution is already reviewed", async () => {
+			const limit = vi.fn().mockResolvedValue([{ status: "approved" }]);
+			mockSelectFrom.mockReturnValue({ where: vi.fn(() => ({ limit })) });
+
+			const result = (await actions.reject(createEvent())) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toBe("Already reviewed");
+		});
+
+		it("returns 404 when contribution not found", async () => {
+			const limit = vi.fn().mockResolvedValue([]);
+			mockSelectFrom.mockReturnValue({ where: vi.fn(() => ({ limit })) });
+
+			const result = (await actions.reject(createEvent())) as any;
+			expect(result.status).toBe(404);
 		});
 	});
 });
