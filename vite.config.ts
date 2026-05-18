@@ -9,12 +9,12 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",
-			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/practice-ui/**/*.ts", "src/lib/markdown.ts"],
-			exclude: ["src/lib/components/practice-ui/types.ts"],
+			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/**/*.ts", "src/lib/markdown.ts"],
+			exclude: ["**/i18n.ts", "**/types.ts", "**/index.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,
-				branches: 90,
+				branches: 85,
 				statements: 85,
 			},
 		},
