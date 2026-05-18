@@ -27,7 +27,6 @@ import {
 	getSessionOrFail,
 	sendMessage,
 	startSession,
-	submitOneShotMessage,
 } from "$lib/server/session";
 
 describe("session service", () => {
@@ -515,6 +514,51 @@ describe("session service", () => {
 			expect(mockDb.update).toHaveBeenCalledTimes(2);
 		});
 
+		it("asks mail evaluation to consider every learner email and the whole exchange", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+				...mockSession,
+				agentPromptSnapshot: { systemPrompt: "Mail prompt", mbti: "ENFP", ui: "apple_mail", scenarioContext: "Scenario: Received email" },
+				messages: [
+					{
+						role: "assistant",
+						content: "Please send an update.",
+					},
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Update\n\nHello Maya,\nI finished the draft.",
+						llmMetadata: { mailBodyHtml: "<div>Hello Maya,</div><div>I finished the draft.</div>" },
+					},
+					{
+						role: "assistant",
+						content: "Could you include next steps?",
+					},
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Re: Update\n\nI will send the final version tomorrow.",
+					},
+				],
+				task: mockTaskObjectives,
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
+				objectiveResults: [{ text: "Use polite language", grade: "A" }],
+			});
+
+			await completeSession(123);
+
+			const prompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(prompt).toContain("Full Conversation History");
+			expect(prompt).toContain("[assistant] Please send an update.");
+			expect(prompt).toContain("[assistant] Could you include next steps?");
+			expect(prompt).toContain("To: Maya\nSubject: Update");
+			expect(prompt).toContain("To: Maya\nSubject: Re: Update");
+			expect(prompt).toContain("consider EVERY learner-sent email");
+			expect(prompt).toContain("whole email exchange");
+			expect(prompt).toContain("grades should remain per objective, not per email");
+			expect(prompt).toContain("Mention specific emails only when useful");
+			expect(prompt).toContain("Email body layout:\nHello Maya,\nI finished the draft.");
+		});
+
 		it("handles empty objectives", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
 				...mockSession,
@@ -735,75 +779,6 @@ describe("session service", () => {
 		});
 	});
 
-	describe("submitOneShotMessage", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Test prompt." },
-			messages: [],
-		};
-
-		it("persists a one-shot user message with client id and mail body html metadata", async () => {
-			const valuesMock = vi.fn();
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-
-			const result = await submitOneShotMessage(123, "  To: Maya\nSubject: Hi\n\nHello  ", "mail-1", {
-				maxTurns: 1,
-				mailBodyHtml: '  <div style="text-align: center">Hello Maya</div>  ',
-			});
-
-			expect(result).toEqual({ turnCount: 1 });
-			expect(valuesMock).toHaveBeenCalledWith({
-				sessionId: 123,
-				role: "user",
-				content: "To: Maya\nSubject: Hi\n\nHello",
-				llmMetadata: {
-					clientMessageId: "mail-1",
-					failed: false,
-					mailBodyHtml: '<div style="text-align: center">Hello Maya</div>',
-				},
-			});
-		});
-
-		it("throws when one-shot message is empty", async () => {
-			await expect(submitOneShotMessage(123, "   ")).rejects.toThrow("userMessage is required");
-		});
-
-		it("throws when one-shot session is missing", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-
-			await expect(submitOneShotMessage(123, "Hello")).rejects.toThrow("Session not found");
-		});
-
-		it("throws when one-shot session is not in progress", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ ...mockSession, status: "completed" });
-
-			await expect(submitOneShotMessage(123, "Hello")).rejects.toThrow("Session not in progress");
-		});
-
-		it("returns the current turn count for duplicate one-shot client ids", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [{ role: "user", content: "Existing", llmMetadata: { clientMessageId: "mail-1", failed: false } }],
-			});
-
-			const result = await submitOneShotMessage(123, "Existing", "mail-1", { maxTurns: 1 });
-
-			expect(result).toEqual({ turnCount: 1 });
-			expect(mockDb.insert).not.toHaveBeenCalled();
-		});
-
-		it("throws when the one-shot max turn has already been used", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [{ role: "user", content: "Existing" }],
-			});
-
-			await expect(submitOneShotMessage(123, "Another email", undefined, { maxTurns: 1 })).rejects.toThrow("Maximum conversation turns reached");
-		});
-	});
-
 	describe("generateHint", () => {
 		it("generates hints based on session history and language", async () => {
 			const mockSession = {
@@ -920,7 +895,7 @@ describe("session service", () => {
 			});
 		});
 
-		it("includes visible submitted messages and hides hidden startup messages", async () => {
+		it("includes recent visible submitted mail thread and hides hidden startup messages", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,
 				userId: USER_ID,
@@ -928,7 +903,12 @@ describe("session service", () => {
 				agentPromptSnapshot: { systemPrompt: "Mail prompt" },
 				messages: [
 					{ role: "user", content: "*User joined the server*", llmMetadata: { hidden: true } },
-					{ role: "user", content: "Previously submitted email", llmMetadata: { hidden: false } },
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Status\n\nPreviously submitted email",
+						llmMetadata: { hidden: false, mailBodyHtml: '<div style="text-align: center">Previously submitted email</div>' },
+					},
+					{ role: "assistant", content: "Thanks, please add the timeline.", llmMetadata: null },
 				],
 			});
 			mockClient.createStructuredOutput.mockResolvedValue({
@@ -938,11 +918,42 @@ describe("session service", () => {
 			await generateMailHint(123, { body: "" });
 
 			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
-			expect(systemPrompt).toContain("[user] Previously submitted email");
+			expect(systemPrompt).toContain("Recent Submitted Mail Thread");
+			expect(systemPrompt).toContain("[Learner sent]");
+			expect(systemPrompt).toContain("Previously submitted email");
+			expect(systemPrompt).toContain("Body layout:\n[align=center] Previously submitted email");
+			expect(systemPrompt).toContain("[Received reply]");
+			expect(systemPrompt).toContain("Thanks, please add the timeline.");
 			expect(systemPrompt).not.toContain("*User joined the server*");
 			expect(systemPrompt).toContain("To: (empty)");
 			expect(systemPrompt).toContain("Subject: (empty)");
 			expect(systemPrompt).toContain("Body:\n\t(empty)");
+		});
+
+		it("caps mail hint thread context to recent messages", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: { language: "en" },
+				agentPromptSnapshot: { systemPrompt: "Mail prompt" },
+				messages: Array.from({ length: 10 }, (_, index) => ({
+					role: index % 2 === 0 ? "user" : "assistant",
+					content: `message-${index + 1}`,
+					llmMetadata: null,
+				})),
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({
+				mailHint: { subjectSuggestion: { text: "" }, nextSection: null, nextSentence: null, checklist: [] },
+			});
+
+			await generateMailHint(123, { body: "Draft" });
+
+			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(systemPrompt).toContain("(2 earlier submitted messages omitted)");
+			expect(systemPrompt).not.toMatch(/^message-1$/m);
+			expect(systemPrompt).not.toMatch(/^message-2$/m);
+			expect(systemPrompt).toContain("message-3");
+			expect(systemPrompt).toContain("message-10");
 		});
 
 		it("throws when normal hint session has no task", async () => {

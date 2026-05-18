@@ -33,6 +33,8 @@ interface Props {
 	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
+	maxTurns?: number;
+	agentStartsFirst?: boolean;
 }
 
 let {
@@ -43,6 +45,8 @@ let {
 	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
+	maxTurns = 0,
+	agentStartsFirst = true,
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -52,6 +56,7 @@ let lastLoadedSessionId = $state<number | null>(null);
 let lastServerMessageCount = $state(0);
 let isInitializing = $state(false);
 let isSubmitting = $state(false);
+let isCompleting = $state(false);
 let isCompleted = $state(false);
 let isEntering = $state(true);
 let showEvaluationModal = $state(false);
@@ -75,11 +80,13 @@ let hintAbortController: AbortController | null = null;
 const recipient = $derived(getMailContact(taskId || sessionId || userName));
 const todayLabel = $derived(getTodayDateString(language, timeZone));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
-const inboxEmails = $derived(normalizeMailEmails(openingStateData.emails, todayLabel));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
-const hasSubmittedEmail = $derived(sentMessages.length > 0);
-const limitReached = $derived(hasSubmittedEmail || isCompleted);
-const isBusy = $derived(isInitializing || isSubmitting);
+const agentMessages = $derived(messages.filter((m) => m.role === "agent" && !m.isHidden));
+const currentTurns = $derived(sentMessages.length);
+const limitReached = $derived(isCompleted || (maxTurns > 0 && currentTurns >= maxTurns));
+const isBusy = $derived(isInitializing || isSubmitting || isCompleting);
+const generatedInboxEmails = $derived(buildGeneratedInboxEmails(agentMessages));
+const inboxEmails = $derived([...normalizeMailEmails(openingStateData.emails, todayLabel), ...generatedInboxEmails]);
 const selectedSentMessage = $derived(selectedSentId ? (sentMessages.find((message) => message.id === selectedSentId) ?? null) : null);
 const selectedSentEmail = $derived(
 	selectedSentMessage ? parseDraftFromMessage(selectedSentMessage.text, t.noSubject, getMailBodyHtmlFromMessage(selectedSentMessage)) : null,
@@ -92,7 +99,9 @@ const selectedInboxEmail = $derived(
 		: null,
 );
 const sentCount = $derived(sentMessages.length);
-const draftCount = $derived(!hasSubmittedEmail && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
+const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
+const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
+const canFinish = $derived(Boolean(sessionId) && !isCompleted && !isInitializing);
 const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 function getDefaultDraft(): DraftEmail {
@@ -126,6 +135,85 @@ function loadSavedDraft(): DraftEmail {
 	} catch {
 		return baseDraft;
 	}
+}
+
+function buildGeneratedInboxEmails(agentMailMessages: ChatMessage[]) {
+	return agentMailMessages.map((message, index) => {
+		const previousUserMessage = [...messages]
+			.slice(0, messages.findIndex((candidate) => candidate.id === message.id))
+			.reverse()
+			.find((candidate) => candidate.role === "user" && !candidate.isHidden);
+		const previousDraft = previousUserMessage ? parseDraftFromMessage(previousUserMessage.text, t.noSubject) : null;
+		const parsedReply = parseAgentMailReply(message.text, previousDraft?.subject || t.noSubject);
+		const subject = parsedReply.subject;
+		const body = normalizeAgentSignature(parsedReply.body, recipient.name);
+		const fromName = !message.authorName || message.authorName === t.tutorReply ? recipient.name : message.authorName;
+		const fromAddress = recipient.email;
+		const displaySubject = previousDraft ? ensureReplySubject(subject) : subject;
+
+		return {
+			id: `agent-${message.id || index}`,
+			from: `${fromName} <${fromAddress}>`,
+			to: userName,
+			subject: displaySubject,
+			body,
+			time: message.timestamp || todayLabel,
+			fromName,
+			fromAddress,
+			displayFrom: `${fromName} <${fromAddress}>`,
+			preview: body,
+		};
+	});
+}
+
+function parseAgentMailReply(text: string, fallbackSubject: string) {
+	const lines = text.replace(/\r\n?/g, "\n").split("\n");
+	let subject = "";
+	const bodyLines: string[] = [];
+	let skippingLeadingHeaders = true;
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		const subjectMatch = trimmed.match(/^subject:\s*(.+)$/i);
+		if (skippingLeadingHeaders && subjectMatch) {
+			subject = subjectMatch[1].trim();
+			continue;
+		}
+		if (skippingLeadingHeaders && /^(from|to|cc|bcc|date):\s*/i.test(trimmed)) continue;
+		if (skippingLeadingHeaders && trimmed === "") continue;
+
+		skippingLeadingHeaders = false;
+		bodyLines.push(line);
+	}
+
+	const body = bodyLines.join("\n").trim() || text.trim();
+	return {
+		subject: subject || fallbackSubject,
+		body,
+	};
+}
+
+function ensureReplySubject(subject: string) {
+	return /^re:/i.test(subject) ? subject : `Re: ${subject}`;
+}
+
+function normalizeAgentSignature(body: string, fallbackName: string) {
+	const mbtiPattern = /\b(?:INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)\b/;
+	const lines = body.split("\n");
+	const closingIndex = lines.findLastIndex((line) => /^\s*(best|regards|sincerely|thanks|thank you)[,!]?\s*$/i.test(line));
+	const signatureIndex = closingIndex === -1 ? -1 : lines.findIndex((line, index) => index > closingIndex && line.trim());
+
+	if (signatureIndex !== -1) {
+		lines[signatureIndex] = fallbackName;
+	} else if (lines.some((line) => mbtiPattern.test(line))) {
+		for (let index = lines.length - 1; index >= 0; index -= 1) {
+			if (!lines[index].trim()) continue;
+			if (mbtiPattern.test(lines[index])) lines[index] = fallbackName;
+			break;
+		}
+	}
+
+	return lines.join("\n").trim();
 }
 
 function openComposer(useSavedDraft = false) {
@@ -210,18 +298,65 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-async function submitOneShotEmail(sessionId: number, messageText: string, clientMessageId: string, bodyHtml: string) {
+async function sendMailEmail(sessionId: number, messageText: string, clientMessageId: string, bodyHtml: string) {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
 	formData.append("clientMessageId", clientMessageId);
 	formData.append("bodyHtml", bodyHtml);
 
-	const res = await fetch(`?/submit`, {
+	const res = await fetch(`?/send`, {
 		method: "POST",
 		body: formData,
 	});
 	return deserialize(await res.text());
+}
+
+async function requestAgentOpening(sessionId: number) {
+	const clientMessageId = `join-${sessionId}`;
+	const formData = new FormData();
+	formData.append("sessionId", String(sessionId));
+	formData.append("message", "*User joined the server*");
+	formData.append("clientMessageId", clientMessageId);
+
+	const res = await fetch(`?/send`, {
+		method: "POST",
+		body: formData,
+	});
+	return deserialize(await res.text());
+}
+
+async function completeMailSession(sessionId: number) {
+	const formData = new FormData();
+	formData.append("sessionId", String(sessionId));
+	const res = await fetch(`?/complete`, {
+		method: "POST",
+		body: formData,
+	});
+	return deserialize(await res.text());
+}
+
+async function handleComplete(force = false) {
+	if (!sessionId || isCompleted || isInitializing || (!force && isSubmitting) || isCompleting) return;
+
+	isCompleting = true;
+	try {
+		const result = await completeMailSession(sessionId);
+		if (result.type === "success" && result.data) {
+			isCompleted = true;
+			feedback = result.data.feedback as TutorFeedback;
+			showEvaluationModal = true;
+			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
+			draft = getDefaultDraft();
+			await invalidateAll();
+		} else {
+			console.error("Mail completion was rejected:", result);
+		}
+	} catch (error) {
+		console.error("Mail completion failed:", error);
+	} finally {
+		isCompleting = false;
+	}
 }
 
 async function handleGetHint() {
@@ -300,20 +435,40 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await submitOneShotEmail(sessionId, currentText, clientMessageId, mailBodyHtml);
+		const result = await sendMailEmail(sessionId, currentText, clientMessageId, mailBodyHtml);
 		if (result.type === "success" && result.data) {
-			isCompleted = true;
-			feedback = result.data.feedback as TutorFeedback;
-			showEvaluationModal = true;
+			const reply = String((result.data as any).reply ?? "").trim();
+			if (reply) {
+				const agentMessageId = crypto.randomUUID();
+				messages = [
+					...messages,
+					{
+						id: agentMessageId,
+						role: "agent",
+						text: reply,
+						timestamp: formatTimestamp(new Date()),
+						authorName: recipient.name,
+						avatarColor: "bg-[#3478F6]",
+					},
+				];
+				selectedInboxId = `agent-${agentMessageId}`;
+				activeMailbox = "inbox";
+			}
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
+			draft = getDefaultDraft();
+			if (maxTurns > 0 && ((result.data as any).turnCount ?? currentTurns + 1) >= maxTurns) {
+				await handleComplete(true);
+			} else if ((result.data as any).terminated === true) {
+				await handleComplete(true);
+			}
 			await invalidateAll();
 		} else {
-			console.error("One-shot submission was rejected:", result);
+			console.error("Mail submission was rejected:", result);
 			messages = messages.filter((message) => message.id !== sentMessage.id);
 			showCompose = true;
 		}
 	} catch (error) {
-		console.error("One-shot submission failed:", error);
+		console.error("Mail submission failed:", error);
 		messages = messages.filter((message) => message.id !== sentMessage.id);
 		showCompose = true;
 	} finally {
@@ -346,7 +501,11 @@ function loadExistingSession(session: any) {
 	});
 
 	if (isCompleted && feedback) showEvaluationModal = true;
-	if (!selectedSentId && messages.some((m) => m.role === "user" && !m.isHidden)) {
+	if (!selectedInboxId && messages.some((m) => m.role === "agent" && !m.isHidden)) {
+		selectedInboxId = `agent-${messages.filter((m) => m.role === "agent" && !m.isHidden).at(-1)?.id}`;
+		activeMailbox = "inbox";
+		showCompose = false;
+	} else if (!selectedSentId && messages.some((m) => m.role === "user" && !m.isHidden)) {
 		selectedSentId = messages.filter((m) => m.role === "user" && !m.isHidden).at(-1)?.id ?? null;
 		activeMailbox = "sent";
 		showCompose = false;
@@ -362,19 +521,42 @@ onMount(async () => {
 		isEntering = false;
 	}, 400);
 
-	const hasExistingSubmission = Array.isArray(existingSession?.messages) && existingSession.messages.some((message: any) => message.role === "user");
-	if (!isCompleted && !hasExistingSubmission) {
+	const hasExistingMessages =
+		Array.isArray(existingSession?.messages) && existingSession.messages.some((message: any) => message.role === "user" || message.role === "assistant");
+	if (!isCompleted && !hasExistingMessages && !agentStartsFirst) {
 		openComposer(true);
 		draftStorageReady = true;
 	}
 
-	if (!existingSession) {
+	if (existingSession?.id && !hasExistingMessages && agentStartsFirst) {
+		isInitializing = true;
+		try {
+			const result = await requestAgentOpening(existingSession.id);
+			if (result.type === "success" && result.data) {
+				await invalidateAll();
+			} else {
+				openComposer(true);
+			}
+		} catch (error) {
+			console.error("Mail opening message failed:", error);
+			openComposer(true);
+		} finally {
+			draftStorageReady = true;
+			isInitializing = false;
+		}
+	} else if (!existingSession) {
 		isInitializing = true;
 		try {
 			const startResult = await postAction("start", null);
 			if (startResult.type === "success" && startResult.data) {
 				sessionId = startResult.data.sessionId as number;
 				lastLoadedSessionId = sessionId;
+				if (agentStartsFirst) {
+					const openingResult = await requestAgentOpening(sessionId);
+					if (openingResult.type !== "success") openComposer(true);
+				} else {
+					openComposer(true);
+				}
 				await invalidateAll();
 			} else {
 				console.error("Mail session initialization was rejected:", startResult);
@@ -382,6 +564,7 @@ onMount(async () => {
 		} catch (error) {
 			console.error("Mail session initialization failed:", error);
 		} finally {
+			draftStorageReady = true;
 			isInitializing = false;
 		}
 	}
@@ -392,7 +575,7 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (!draftStorageReady || isCompleted || hasSubmittedEmail) return;
+	if (!draftStorageReady || isCompleted || limitReached) return;
 	if (typeof localStorage === "undefined") return;
 	localStorage.setItem(getDraftStorageKey(), JSON.stringify(draft));
 });
@@ -460,9 +643,13 @@ $effect(() => {
 			{isCompleted}
 			{isInitializing}
 			{isSubmitting}
+			{isCompleting}
 			{isBusy}
 			{t}
+			{remainingTurns}
+			{canFinish}
 			onMockAction={handleMockAction}
+			onComplete={handleComplete}
 		/>
 	</div>
 

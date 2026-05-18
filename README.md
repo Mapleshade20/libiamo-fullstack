@@ -42,7 +42,7 @@ Roles
 
 Template vs Template Variant vs Task
 - Template: the reusable content blueprint. Key columns now include:
-  - interactionType (enum: chat, oneshot, slow, translate)
+  - interactionType (enum: chat, slow, translate)
   - cadence (enum: weekly, daily)
   - objectivesBase (text[] — ordered by array index)
   - materialsMd (Markdown background material)

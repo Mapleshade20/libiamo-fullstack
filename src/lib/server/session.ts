@@ -48,7 +48,9 @@ function buildRedditContext(openingState: Record<string, unknown>): string {
 
 function buildMailContext(openingState: Record<string, unknown>): string {
 	const emails = openingState.emails as Array<{ from?: string; to?: string; subject?: string; body?: string; time?: string }> | undefined;
-	if (!emails?.length) return "Scenario: Mail app";
+	const roleplayRule =
+		"Roleplay rule: when you reply to the learner, write a natural email reply body only. Do not include markdown fences, JSON, or header lines such as Subject:, From:, or To: in the reply text. If you include a sign-off, sign with the email sender's normal name, never with an MBTI/personality label.";
+	if (!emails?.length) return `Scenario: Mail app\n${roleplayRule}`;
 
 	const emailLines = emails.map((e, i) => {
 		const parts = [
@@ -62,7 +64,7 @@ function buildMailContext(openingState: Record<string, unknown>): string {
 		return parts.join("\n");
 	});
 
-	return `Scenario: Received email${emails.length > 1 ? "s" : ""}\n${emailLines.join("\n\n")}`;
+	return `Scenario: Received email${emails.length > 1 ? "s" : ""}\n${emailLines.join("\n\n")}\n${roleplayRule}`;
 }
 
 function buildDiscordContext(openingState: Record<string, unknown>): string {
@@ -309,10 +311,6 @@ export type SendMessageOptions = {
 	assistantMetadata?: Record<string, unknown>;
 };
 
-export type SubmitOneShotResult = {
-	turnCount: number;
-};
-
 export async function sendMessage(
 	sessionId: number,
 	userMessage: string,
@@ -370,10 +368,14 @@ export async function sendMessage(
 		throw new Error("Maximum conversation turns reached");
 	}
 
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
 	// Inject exact JSON schema format to bypass provider compatibility issues
-	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean (true ONLY IF you are severely offended or the user explicitly says goodbye) }`;
+	const terminationRule =
+		snapshot.ui === "apple_mail"
+			? 'For email practice, set "terminate" to true only when the learner explicitly says they are finished OR the email exchange has clearly reached a natural endpoint and no further learner response is needed. When unsure, use false.'
+			: 'Set "terminate" to true ONLY IF you are severely offended or the user explicitly says goodbye.';
+	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean }. ${terminationRule}`;
 
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
 	for (const m of activeMessages) {
@@ -480,62 +482,14 @@ export async function sendMessage(
 	return { reply: output.reply, turnCount, terminated: output.terminate === true };
 }
 
-export async function submitOneShotMessage(
-	sessionId: number,
-	userMessage: string,
-	clientMessageId?: string,
-	options: { maxTurns?: number | null; mailBodyHtml?: string } = {},
-): Promise<SubmitOneShotResult> {
-	const trimmedUserMessage = userMessage.trim();
-	if (!trimmedUserMessage) {
-		throw new Error("userMessage is required");
-	}
-
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
-
-	if (clientMessageId) {
-		const existingState = getExistingUserMessageState(session.messages, clientMessageId);
-		if (existingState?.userMessage) {
-			return { turnCount: countVisibleUserTurns(session.messages) };
-		}
-	}
-
-	const maxTurns = options.maxTurns ?? 0;
-	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
-		throw new Error("Maximum conversation turns reached");
-	}
-
-	await db.insert(sessionMessage).values({
-		sessionId,
-		role: "user",
-		content: trimmedUserMessage,
-		llmMetadata:
-			clientMessageId || options.mailBodyHtml
-				? {
-						clientMessageId,
-						failed: false,
-						mailBodyHtml: options.mailBodyHtml?.trim() || undefined,
-					}
-				: undefined,
-	});
-
-	return { turnCount: countVisibleUserTurns(session.messages) + 1 };
-}
-
 function buildTutorPrompt(
 	objectives: string[],
 	scenarioContext: string,
 	messages: { role: string; content: string; llmMetadata?: unknown }[],
 	learningLanguage: string,
+	ui?: string,
 ): string {
+	const isMailPractice = ui === "apple_mail";
 	const conversationHistory = messages
 		.map((m) => {
 			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
@@ -544,7 +498,13 @@ function buildTutorPrompt(
 		})
 		.join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
-	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
+	const studentMessages = userMessages
+		.map((m, i) => {
+			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
+			const layout = mailBodyLayout ? `\nEmail body layout:\n${mailBodyLayout}` : "";
+			return `${i + 1}. ${m.content}${layout}`;
+		})
+		.join("\n\n");
 
 	const objectivesSection =
 		objectives.length > 0
@@ -570,7 +530,14 @@ function buildTutorPrompt(
 	- The scenario context they were responding to
 	- The full conversation flow (how they adapted to the AI's responses)
 	- The quality, clarity, and appropriateness of their messages
-	- For email-style tasks, judge the student's submitted message mainly by its content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.
+	${
+		isMailPractice
+			? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
+	- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
+	- The "objectiveResults" grades should remain per objective, not per email.
+	- In the "content" feedback, summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
+			: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing."
+	}
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved
@@ -625,6 +592,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 				llmMetadata: m.llmMetadata,
 			})),
 		learningLanguageName,
+		snapshot.ui,
 	);
 
 	const messages: ChatMessage[] = [
@@ -741,6 +709,26 @@ const MailHintSchema = z.object({
 		.default(emptyMailHint),
 });
 
+const MAIL_HINT_THREAD_MESSAGE_LIMIT = 8;
+
+function buildMailHintThreadContext(messages: Array<{ role: string; content: string; llmMetadata?: unknown }>) {
+	const visibleMessages = messages.filter((m) => !isHiddenUserMessage(m));
+	if (!visibleMessages.length) return "(No submitted email thread yet)";
+
+	const omittedCount = Math.max(0, visibleMessages.length - MAIL_HINT_THREAD_MESSAGE_LIMIT);
+	const recentMessages = visibleMessages.slice(-MAIL_HINT_THREAD_MESSAGE_LIMIT);
+	const renderedMessages = recentMessages.map((message, index) => {
+		const label = message.role === "user" ? "Learner sent" : "Received reply";
+		const bodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(message.llmMetadata));
+		const layout = bodyLayout ? `\nBody layout:\n${bodyLayout}` : "";
+		return `${omittedCount + index + 1}. [${label}]\n${getMessageDisplayContent(message)}${layout}`;
+	});
+
+	return [`${omittedCount ? `(${omittedCount} earlier submitted message${omittedCount === 1 ? "" : "s"} omitted)` : ""}`, ...renderedMessages]
+		.filter(Boolean)
+		.join("\n\n");
+}
+
 export async function generateHint(sessionId: number): Promise<HintResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -804,18 +792,15 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 
 	const learningLanguageName = getLanguageEnglishName(session.task.language);
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; scenarioContext?: string };
-	const existingMessages = session.messages
-		.filter((m) => !isHiddenUserMessage(m))
-		.map((m) => `[${m.role}] ${m.content}`)
-		.join("\n");
+	const mailThreadContext = buildMailHintThreadContext(session.messages);
 
-	const prompt = `You are an expert language tutor helping a student write a one-shot email in ${learningLanguageName}.
+	const prompt = `You are an expert language tutor helping a student write an email in ${learningLanguageName}.
 
 	## Mail Task Context
 	${snapshot.systemPrompt}
 
-	## Already Submitted Messages
-	${existingMessages || "(No submitted email yet)"}
+	## Recent Submitted Mail Thread
+	${mailThreadContext}
 
 	## Current Unsaved Draft
 	To: ${draft.to || "(empty)"}
@@ -825,6 +810,7 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 
 	## Instructions
 	Provide practical writing help for the student's current email draft. Keep the JSON compact.
+	Use the recent submitted mail thread to understand where the conversation is, what has already been asked or answered, and what the current draft should do next.
 	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY when those objects are present.
 	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
 	3. Provide both nextSentence and nextSection when each would help. They should serve different purposes, not duplicate the same idea.
@@ -854,7 +840,7 @@ export async function generateMailHint(sessionId: number, draft: { to?: string; 
 
 	const messages: ChatMessage[] = [
 		{ role: "system", content: prompt },
-		{ role: "user", content: `Help me improve and continue this one-shot email in ${learningLanguageName}.` },
+		{ role: "user", content: `Help me improve and continue this email in ${learningLanguageName}.` },
 	];
 
 	return await createStructuredOutput(MailHintSchema, messages, { temperature: 0.2, maxTokens: 1600 });

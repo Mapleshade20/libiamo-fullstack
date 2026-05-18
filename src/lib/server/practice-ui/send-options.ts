@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Ao3OpeningState } from "$lib/components/practice-ui/ao3/helpers";
+import { sanitizeDraftBodyHtml } from "$lib/components/practice-ui/mail/mailUtils";
 import type { UiVariant } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
@@ -50,5 +51,14 @@ export async function buildPracticeUiSendOptions(params: {
 	userName: string;
 }): Promise<PracticeUiSendOptionsResult> {
 	if (params.ui === "ao3") return buildAo3PracticeUiSendOptions(params);
+	if (params.ui === "apple_mail") {
+		const bodyHtml = sanitizeDraftBodyHtml(getFormString(params.formData, "bodyHtml"));
+		return {
+			ok: true,
+			options: {
+				userMetadata: bodyHtml ? { mailBodyHtml: bodyHtml } : undefined,
+			},
+		};
+	}
 	return { ok: true, options: {} };
 }

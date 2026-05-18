@@ -2,7 +2,6 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
-import { sanitizeDraftBodyHtml } from "$lib/components/practice-ui/mail/mailUtils";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -15,7 +14,6 @@ import {
 	type SendMessageOptions,
 	sendMessage,
 	startSession,
-	submitOneShotMessage,
 } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -165,6 +163,13 @@ export const actions: Actions = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
 			};
+			if (hiddenUserMessage && taskData.template.ui === "apple_mail") {
+				sendOptions.promptContent = [
+					rawMessage,
+					`Learner display name: ${user.name || "Learner"}.`,
+					"When writing the opening email, address the learner by this name if a direct greeting is appropriate.",
+				].join("\n");
+			}
 
 			if (!hiddenUserMessage) {
 				const uiOptions = await buildPracticeUiSendOptions({
@@ -189,57 +194,6 @@ export const actions: Actions = {
 
 			console.error("Failed to send message:", e);
 			return fail(500, { error: "Failed to send message" });
-		}
-	},
-
-	submit: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const taskId = Number.parseInt(params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const rawMessage = formData.get("message") as string;
-		const clientMessageIdValue = formData.get("clientMessageId");
-		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
-		const bodyHtmlValue = formData.get("bodyHtml");
-		const mailBodyHtml = typeof bodyHtmlValue === "string" ? sanitizeDraftBodyHtml(bodyHtmlValue) : "";
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
-
-		try {
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				with: { template: true },
-			});
-			if (!taskData) return fail(404, { error: "Task not found" });
-			if (taskData.template.interactionType !== "oneshot") {
-				return fail(400, { error: "Submit is only available for one-shot tasks" });
-			}
-
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const formattedMessage = emojiConverter.replace_unified(rawMessage);
-			const submitResult = await submitOneShotMessage(sessionId, formattedMessage, clientMessageId || undefined, {
-				maxTurns: taskData.template.maxTurns,
-				mailBodyHtml,
-			});
-			const feedback = await completeSession(sessionId);
-
-			return { success: true, ...submitResult, feedback };
-		} catch (e) {
-			const mappedSendError = mapSendMessageError(e);
-			if (mappedSendError) return mappedSendError;
-
-			const mappedCompleteError = mapCompleteSessionError(e);
-			if (mappedCompleteError) return mappedCompleteError;
-
-			console.error("Failed to submit one-shot session:", e);
-			return fail(500, { error: "Failed to submit session" });
 		}
 	},
 

@@ -31,12 +31,11 @@ export function getLanguageEnglishName(code: string): string {
 	return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
 }
 
-export const INTERACTION_TYPES = ["chat", "oneshot", "slow", "translate"] as const;
+export const INTERACTION_TYPES = ["chat", "slow", "translate"] as const;
 export type InteractionType = (typeof INTERACTION_TYPES)[number];
 
 export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 	chat: "Chat",
-	oneshot: "One-shot",
 	slow: "Slow Reply",
 	translate: "Translate",
 };

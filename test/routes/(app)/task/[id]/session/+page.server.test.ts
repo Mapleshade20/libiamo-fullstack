@@ -12,7 +12,6 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 	mockSessionService: {
 		startSession: vi.fn(),
 		sendMessage: vi.fn(),
-		submitOneShotMessage: vi.fn(),
 		completeSession: vi.fn(),
 		generateHint: vi.fn(),
 		generateMailHint: vi.fn(),
@@ -199,7 +198,7 @@ describe("session page server", () => {
 		it("allows apple_mail tasks", async () => {
 			const mailTask = {
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 1, interactionType: "oneshot" },
+				template: { ui: "apple_mail" as const, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
 			};
 			mockDb.query.task.findFirst.mockResolvedValue(mailTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
@@ -334,6 +333,72 @@ describe("session page server", () => {
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+		});
+
+		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks for your email.", turnCount: 1 });
+
+			const result = await actions.send(
+				createFormEvent({
+					values: {
+						sessionId: "789",
+						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
+						clientMessageId: "mail-1",
+						bodyHtml: '<div style="text-align: center; color: #d70015">Hello <b>Maya</b><script>alert(1)</script></div>',
+					},
+				}),
+			);
+
+			expect(result).toMatchObject({ success: true, reply: "Thanks for your email.", turnCount: 1 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"To: Maya\nSubject: Meeting\n\nHello Maya",
+				"user_123",
+				"mail-1",
+				expect.objectContaining({
+					hiddenUserMessage: false,
+					maxTurns: 3,
+					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
+				}),
+			);
+		});
+
+		it("passes learner display name to Apple Mail agent-first opening prompts", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Test User,", turnCount: 0 });
+
+			await actions.send(
+				createFormEvent({
+					values: {
+						sessionId: "789",
+						message: "*User joined the server*",
+						clientMessageId: "join-789",
+					},
+				}),
+			);
+
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"*User joined the server*",
+				"user_123",
+				"join-789",
+				expect.objectContaining({
+					hiddenUserMessage: true,
+					maxTurns: 3,
+					promptContent: expect.stringContaining("Learner display name: Test User."),
+				}),
+			);
 		});
 
 		it("builds AO3 prompt metadata for a nested comment reply", async () => {
@@ -617,80 +682,6 @@ describe("session page server", () => {
 
 			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
-		});
-	});
-
-	describe("actions.submit", () => {
-		beforeEach(() => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 1, interactionType: "oneshot" },
-			});
-		});
-
-		it("submits one-shot mail and returns feedback", async () => {
-			const feedback = {
-				content: "Good job!",
-				objectiveResults: [{ text: "Write a clear email", grade: "A" as const }],
-			};
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.submitOneShotMessage.mockResolvedValue({ turnCount: 1 });
-			mockSessionService.completeSession.mockResolvedValue(feedback);
-
-			const result = await actions.submit(
-				createFormEvent({
-					values: {
-						sessionId: "789",
-						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
-						clientMessageId: "mail-1",
-						bodyHtml: '<div style="text-align: center; color: #d70015">Hello <b>Maya</b><script>alert(1)</script></div>',
-					},
-				}),
-			);
-
-			expect(result).toMatchObject({ success: true, turnCount: 1, feedback });
-			expect(mockSessionService.submitOneShotMessage).toHaveBeenCalledWith(789, "To: Maya\nSubject: Meeting\n\nHello Maya", "mail-1", {
-				maxTurns: 1,
-				mailBodyHtml: '<div style="text-align: center">Hello Maya</div>',
-			});
-			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
-		});
-
-		it("rejects submit for non-one-shot tasks", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "discord" as const, maxTurns: 0, interactionType: "chat" } });
-
-			const result = await actions.submit(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Submit is only available for one-shot tasks" } });
-			expect(mockSessionService.submitOneShotMessage).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 403 when one-shot maximum turns are reached", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.submitOneShotMessage.mockRejectedValue(new Error("Maximum conversation turns reached"));
-
-			const result = await actions.submit(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-
-			expect(result).toMatchObject({ status: 403, data: { error: "Maximum conversation turns reached" } });
-		});
-
-		it("maps completeSession errors after one-shot submit", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.submitOneShotMessage.mockResolvedValue({ turnCount: 1 });
-			mockSessionService.completeSession.mockRejectedValue(new Error("Session not found"));
-
-			const result = await actions.submit(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-
-			expect(result).toMatchObject({ status: 404, data: { error: "Session not found" } });
-		});
-
-		it("returns fail 500 for unexpected submit failures", async () => {
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.submitOneShotMessage.mockRejectedValue({ error: "weird" });
-
-			const result = await actions.submit(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to submit session" } });
 		});
 	});
 

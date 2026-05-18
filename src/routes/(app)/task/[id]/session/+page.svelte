@@ -40,6 +40,8 @@ let { data } = $props();
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
+		maxTurns={data.task.template.maxTurns ?? 0}
+		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else if data.task.template.ui === "ao3"}
 	<AO3UI

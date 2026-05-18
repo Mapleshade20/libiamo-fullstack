@@ -20,9 +20,13 @@ let {
 	isCompleted = false,
 	isInitializing = false,
 	isSubmitting = false,
+	isCompleting = false,
 	isBusy = false,
 	t = {} as Record<string, string>,
+	remainingTurns = null as number | null,
+	canFinish = false,
 	onMockAction = () => {},
+	onComplete = () => {},
 }: {
 	messageScroll?: HTMLElement | null;
 	selectedInboxEmail?: NormalizedMailEmail | null;
@@ -34,9 +38,13 @@ let {
 	isCompleted?: boolean;
 	isInitializing?: boolean;
 	isSubmitting?: boolean;
+	isCompleting?: boolean;
 	isBusy?: boolean;
 	t?: Record<string, string>;
+	remainingTurns?: number | null;
+	canFinish?: boolean;
 	onMockAction?: () => void;
+	onComplete?: () => void;
 } = $props();
 
 const detailEmail = $derived(
@@ -59,6 +67,9 @@ const detailEmail = $derived(
 			: null,
 );
 const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
+const remainingTurnsLabel = $derived(
+	remainingTurns === null ? "" : (t.turnsLeft || "Up to {count} more").replace("{count}", String(remainingTurns)),
+);
 </script>
 
 <main class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
@@ -74,12 +85,30 @@ const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
 				<CheckCircle2 size={14} />
 				{t.questCompleted}
 			</div>
-		{:else if isInitializing || isSubmitting}
+		{:else if isInitializing || isSubmitting || isCompleting}
 			<div
 				class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#3478F6]/20 bg-[#EDF4FF] px-3 py-1 text-xs font-semibold text-[#2155A3]"
 			>
 				<LoaderCircle size={14} class="animate-spin" />
-				{t.evaluating}
+				{isCompleting ? t.evaluating : isSubmitting ? t.waitingForReply : t.loadingMail}
+			</div>
+		{:else if !isCompleted}
+			<div class="ml-auto flex items-center gap-2">
+				{#if remainingTurns !== null}
+					<div class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73]">
+						{remainingTurnsLabel}
+					</div>
+				{/if}
+				{#if canFinish}
+					<button
+						type="button"
+						class="rounded-full bg-[#3478F6] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0A64FF] disabled:opacity-50"
+						onclick={() => onComplete()}
+						disabled={isSubmitting || isInitializing || isCompleting}
+					>
+						{t.finishTask}
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</header>
@@ -107,7 +136,7 @@ const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
 				{#if isBusy}
 					<div class="mt-8 flex items-center gap-2 text-sm text-[#6E6E73]">
 						<LoaderCircle size={16} class="animate-spin" />
-						{isSubmitting ? t.sending : t.evaluating}
+						{isCompleting ? t.evaluating : isSubmitting ? t.waitingForReply : t.loadingMail}
 					</div>
 				{/if}
 			</article>
