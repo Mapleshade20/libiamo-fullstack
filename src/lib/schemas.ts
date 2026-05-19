@@ -187,6 +187,24 @@ export const discordOpeningStateSchema = z.object({
 		.default([]),
 });
 
+export type RedditCommentInput = {
+	id?: string;
+	author: string;
+	text: string;
+	timestamp?: string;
+	votes?: number;
+	replies?: RedditCommentInput[];
+};
+
+const redditCommentSchema: z.ZodType<RedditCommentInput> = z.object({
+	id: z.string().optional(),
+	author: z.string(),
+	text: z.string(),
+	timestamp: z.string().optional(),
+	votes: z.number().optional(),
+	replies: z.lazy(() => z.array(redditCommentSchema)).optional(),
+});
+
 export const redditOpeningStateSchema = z.object({
 	post: z.object({
 		title: z.string(),
@@ -195,15 +213,7 @@ export const redditOpeningStateSchema = z.object({
 		author: z.string(),
 		votes: z.number().optional(),
 	}),
-	previousComments: z
-		.array(
-			z.object({
-				author: z.string(),
-				text: z.string(),
-				votes: z.number().optional(),
-			}),
-		)
-		.optional(),
+	previousComments: z.array(redditCommentSchema).optional(),
 });
 
 export const appleMailOpeningStateSchema = z.object({
@@ -278,7 +288,20 @@ export type FieldDef =
 	| { type: "number"; key: string; label: string; placeholder?: string }
 	| { type: "message-list"; key: string; label: string; withTimestamp?: boolean }
 	| { type: "email-list"; key: string; label: string }
-	| { type: "ao3-comment-tree"; key: string; label: string }
+	| {
+			type: "comment-tree";
+			key: string;
+			label: string;
+			authorField?: string;
+			textField?: string;
+			authorLabel?: string;
+			textLabel?: string;
+			authorPlaceholder?: string;
+			textPlaceholder?: string;
+			withTimestamp?: boolean;
+			withIconUrl?: boolean;
+			withVotes?: boolean;
+	  }
 	| {
 			type: "comment-list";
 			key: string;
@@ -338,7 +361,17 @@ export const openingStateSchemas = {
 					{ type: "textarea", key: "body", label: "Body", rows: 3 },
 				],
 			},
-			{ type: "comment-list", key: "previousComments", label: "Previous Comments" },
+			{
+				type: "comment-tree",
+				key: "previousComments",
+				label: "Previous Comments",
+				authorField: "author",
+				textField: "text",
+				authorLabel: "Author",
+				textLabel: "Comment",
+				withTimestamp: true,
+				withVotes: true,
+			},
 		],
 	} satisfies OpeningStateEditorMeta),
 	apple_mail: appleMailOpeningStateSchema.meta({
@@ -367,7 +400,17 @@ export const openingStateSchemas = {
 			{ type: "text", key: "relationships", label: "Relationships (comma-separated)" },
 			{ type: "text", key: "characters", label: "Characters (comma-separated)" },
 			{ type: "text", key: "additionalTags", label: "Additional Tags (comma-separated)", placeholder: "Angst, Fluff, Slow Burn" },
-			{ type: "ao3-comment-tree", key: "previousComments", label: "Previous Comments" },
+			{
+				type: "comment-tree",
+				key: "previousComments",
+				label: "Previous Comments",
+				authorField: "username",
+				textField: "comment",
+				authorLabel: "Username",
+				textLabel: "Comment",
+				withTimestamp: true,
+				withIconUrl: true,
+			},
 		],
 	} satisfies OpeningStateEditorMeta),
 	translator: translatorOpeningStateSchema.meta({

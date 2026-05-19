@@ -7,10 +7,12 @@ export type RedditPost = {
 };
 
 export type RedditComment = {
+	id?: string;
 	author: string;
 	text: string;
+	timestamp?: string;
 	votes?: number;
-	parentId?: string;
+	replies?: RedditComment[];
 };
 
 export type RedditOpeningState = {
@@ -30,7 +32,7 @@ export type CommentTreeNode = {
 	role?: "user" | "agent";
 	depth: number;
 	children: CommentTreeNode[];
-	parentId?: string;
+	parentId?: string | null;
 	onRetry?: (id: string) => void;
 	onReply?: (text: string, parentId: string) => void;
 };

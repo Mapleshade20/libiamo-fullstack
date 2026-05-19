@@ -142,13 +142,9 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
-			const parentIdRaw = formData.get("parentId");
-			const parentId = typeof parentIdRaw === "string" && parentIdRaw.trim() ? parentIdRaw.trim() : undefined;
-
 			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
-				parentId,
 			};
 
 			if (!hiddenUserMessage) {

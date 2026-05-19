@@ -1,4 +1,5 @@
 import type { Ao3MessageMetadata } from "./ao3/helpers";
+import type { CommentThreadMetadata } from "./commentThread";
 
 type PersistedSessionMessage = {
 	id: number | string;
@@ -20,7 +21,7 @@ type MessageMetadata = {
 	displayContent?: string;
 	assistantAuthorName?: string;
 	ao3?: Ao3MessageMetadata;
-	parentId?: string;
+	thread?: CommentThreadMetadata;
 };
 
 export type ChatMessage = {
@@ -36,7 +37,7 @@ export type ChatMessage = {
 	clientMessageId?: string;
 	retryText?: string;
 	ao3?: Ao3MessageMetadata;
-	parentId?: string;
+	thread?: CommentThreadMetadata;
 };
 
 function getMessageMetadata(value: unknown): MessageMetadata {
@@ -80,13 +81,16 @@ export function buildChatMessages({
 			role: message.role === "user" ? "user" : "agent",
 			text: metadata.displayContent ?? message.content,
 			timestamp: formatTimestamp(new Date(message.createdAt)),
-			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName),
+			authorName:
+				message.role === "user"
+					? userName
+					: (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? metadata.ao3?.responderName ?? agentName),
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
 			ao3: metadata.ao3,
-			parentId: metadata.parentId,
+			thread: metadata.thread,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -98,7 +102,7 @@ export function buildChatMessages({
 			role: "agent",
 			text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
 			timestamp: formatTimestamp(new Date(message.createdAt)),
-			authorName: metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName,
+			authorName: metadata.assistantAuthorName ?? metadata.thread?.responderName ?? metadata.ao3?.responderName ?? agentName,
 			avatarColor: agentColor,
 			deliveryState: metadata.failed === true ? "failed" : "pending",
 			clientMessageId: metadata.clientMessageId,
@@ -112,7 +116,15 @@ export function buildChatMessages({
 						},
 					}
 				: {}),
-			parentId: mappedMessage.id,
+			...(metadata.thread
+				? {
+						thread: {
+							...metadata.thread,
+							commentId: metadata.clientMessageId ? `reddit-agent-${metadata.clientMessageId}` : `retry-${message.id}`,
+							parentCommentId: metadata.thread.commentId ?? (metadata.clientMessageId ? `reddit-user-${metadata.clientMessageId}` : undefined),
+						},
+					}
+				: {}),
 		} satisfies ChatMessage;
 
 		return [mappedMessage, retryPlaceholder];

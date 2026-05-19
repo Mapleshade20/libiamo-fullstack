@@ -96,7 +96,7 @@ function updateListItem(key: string, index: number, field: string, val: unknown)
 	setList(key, items);
 }
 
-function updateAo3CommentAt(
+function updateCommentAt(
 	items: Record<string, unknown>[],
 	path: number[],
 	updater: (item: Record<string, unknown>) => Record<string, unknown>,
@@ -106,43 +106,42 @@ function updateAo3CommentAt(
 		if (index !== head) return item;
 		if (rest.length === 0) return updater(item);
 		const replies = Array.isArray(item.replies) ? (item.replies as Record<string, unknown>[]) : [];
-		return { ...item, replies: updateAo3CommentAt(replies, rest, updater) };
+		return { ...item, replies: updateCommentAt(replies, rest, updater) };
 	});
 }
 
-function removeAo3CommentAt(items: Record<string, unknown>[], path: number[]): Record<string, unknown>[] {
+function removeCommentAt(items: Record<string, unknown>[], path: number[]): Record<string, unknown>[] {
 	const [head, ...rest] = path;
 	if (rest.length === 0) return items.filter((_, index) => index !== head);
 	return items.map((item, index) => {
 		if (index !== head) return item;
 		const replies = Array.isArray(item.replies) ? (item.replies as Record<string, unknown>[]) : [];
-		return { ...item, replies: removeAo3CommentAt(replies, rest) };
+		return { ...item, replies: removeCommentAt(replies, rest) };
 	});
 }
 
-function updateAo3CommentField(key: string, path: number[], field: string, val: unknown) {
+function updateTreeCommentField(key: string, path: number[], field: string, val: unknown) {
 	setList(
 		key,
-		updateAo3CommentAt(getList(key), path, (item) => ({ ...item, [field]: val })),
+		updateCommentAt(getList(key), path, (item) => ({ ...item, [field]: val })),
 	);
 }
 
-function addAo3Reply(key: string, path: number[]) {
-	const newReply = { username: "", comment: "", timestamp: "", replies: [] };
+function addTreeReply(key: string, path: number[], defaultItem: Record<string, unknown>) {
 	setList(
 		key,
-		updateAo3CommentAt(getList(key), path, (item) => ({
+		updateCommentAt(getList(key), path, (item) => ({
 			...item,
-			replies: [...(Array.isArray(item.replies) ? (item.replies as Record<string, unknown>[]) : []), newReply],
+			replies: [...(Array.isArray(item.replies) ? (item.replies as Record<string, unknown>[]) : []), defaultItem],
 		})),
 	);
 }
 
-function removeAo3Comment(key: string, path: number[]) {
-	setList(key, removeAo3CommentAt(getList(key), path));
+function removeTreeComment(key: string, path: number[]) {
+	setList(key, removeCommentAt(getList(key), path));
 }
 
-function getAo3Replies(comment: Record<string, unknown>): Record<string, unknown>[] {
+function getTreeReplies(comment: Record<string, unknown>): Record<string, unknown>[] {
 	return Array.isArray(comment.replies) ? (comment.replies as Record<string, unknown>[]) : [];
 }
 
@@ -298,19 +297,16 @@ const fields = $derived(getEditorFields(ui));
 				>+ Add Email</Button
 			>
 		</fieldset>
-	{:else if field.type === "ao3-comment-tree"}
+	{:else if field.type === "comment-tree"}
+		{@const authorField = field.authorField ?? "author"}
+		{@const textField = field.textField ?? "text"}
+		{@const defaultItem = { [authorField]: "", [textField]: "", timestamp: "", replies: [] }}
 		<fieldset class="space-y-3">
 			<legend class="text-sm font-medium">{field.label}</legend>
 			{#each getList(field.key) as comment, i (i)}
-				{@render renderAo3Comment(field.key, comment, [i], 0)}
+				{@render renderTreeComment(field, comment, [i], 0)}
 			{/each}
-			<Button
-				type="button"
-				variant="outline"
-				size="sm"
-				onclick={() => addListItem(field.key, { username: "", comment: "", timestamp: "", replies: [] })}
-				>+ Add Top-level Comment</Button
-			>
+			<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, defaultItem)}>+ Add Top-level Comment</Button>
 		</fieldset>
 	{:else if field.type === "comment-list"}
 		{@const authorField = field.authorField ?? "author"}
@@ -373,41 +369,67 @@ const fields = $derived(getEditorFields(ui));
 	{/if}
 {/snippet}
 
-{#snippet renderAo3Comment(key: string, comment: Record<string, unknown>, path: number[], depth: number)}
+{#snippet renderTreeComment(field: Extract<FieldDef, { type: "comment-tree" }>, comment: Record<string, unknown>, path: number[], depth: number)}
+	{@const authorField = field.authorField ?? "author"}
+	{@const textField = field.textField ?? "text"}
+	{@const defaultReply = { [authorField]: "", [textField]: "", timestamp: "", replies: [] }}
 	<div class="space-y-2 rounded border border-input p-3" style={`margin-left: ${Math.min(depth, 4) * 1.25}rem`}>
 		<div class="flex items-center justify-between gap-2">
 			<span class="text-xs text-muted-foreground">Comment {path.map((n) => n + 1).join(".")}</span>
 			<div class="flex gap-1">
-				<Button type="button" variant="ghost" size="sm" onclick={() => addAo3Reply(key, path)}>Reply</Button>
-				<Button type="button" variant="ghost" size="sm" onclick={() => removeAo3Comment(key, path)}>×</Button>
+				<Button type="button" variant="ghost" size="sm" onclick={() => addTreeReply(field.key, path, defaultReply)}>Reply</Button>
+				<Button type="button" variant="ghost" size="sm" onclick={() => removeTreeComment(field.key, path)}>×</Button>
 			</div>
 		</div>
 		<div class="grid gap-2 sm:grid-cols-2">
 			<div class="space-y-1">
-				<Label class="text-xs">Username</Label>
-				<Input value={String(comment.username ?? "")} oninput={(e) => updateAo3CommentField(key, path, "username", e.currentTarget.value)} />
-			</div>
-			<div class="space-y-1">
-				<Label class="text-xs">Timestamp</Label>
+				<Label class="text-xs">{field.authorLabel ?? "Author"}</Label>
 				<Input
-					value={String(comment.timestamp ?? "")}
-					placeholder="Sun 20 Apr 2025 11:05PM"
-					oninput={(e) => updateAo3CommentField(key, path, "timestamp", e.currentTarget.value)}
+					value={String(comment[authorField] ?? "")}
+					placeholder={field.authorPlaceholder}
+					oninput={(e) => updateTreeCommentField(field.key, path, authorField, e.currentTarget.value)}
 				/>
 			</div>
+			{#if field.withTimestamp}
+				<div class="space-y-1">
+					<Label class="text-xs">Timestamp</Label>
+					<Input
+						value={String(comment.timestamp ?? "")}
+						placeholder="2 hr. ago"
+						oninput={(e) => updateTreeCommentField(field.key, path, "timestamp", e.currentTarget.value)}
+					/>
+				</div>
+			{/if}
+			{#if field.withVotes}
+				<div class="space-y-1">
+					<Label class="text-xs">Votes</Label>
+					<Input
+						type="number"
+						value={comment.votes ?? ""}
+						oninput={(e) => updateTreeCommentField(field.key, path, "votes", e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
+					/>
+				</div>
+			{/if}
 		</div>
+		{#if field.withIconUrl}
+			<div class="space-y-1">
+				<Label class="text-xs">Icon URL (optional)</Label>
+				<Input value={String(comment.iconUrl ?? "")} oninput={(e) => updateTreeCommentField(field.key, path, "iconUrl", e.currentTarget.value)} />
+			</div>
+		{/if}
 		<div class="space-y-1">
-			<Label class="text-xs">Icon URL (optional)</Label>
-			<Input value={String(comment.iconUrl ?? "")} oninput={(e) => updateAo3CommentField(key, path, "iconUrl", e.currentTarget.value)} />
+			<Label class="text-xs">{field.textLabel ?? "Comment"}</Label>
+			<Textarea
+				rows={3}
+				value={String(comment[textField] ?? "")}
+				placeholder={field.textPlaceholder}
+				oninput={(e) => updateTreeCommentField(field.key, path, textField, e.currentTarget.value)}
+			/>
 		</div>
-		<div class="space-y-1">
-			<Label class="text-xs">Comment</Label>
-			<Textarea rows={3} value={String(comment.comment ?? "")} oninput={(e) => updateAo3CommentField(key, path, "comment", e.currentTarget.value)} />
-		</div>
-		{#if getAo3Replies(comment).length > 0}
+		{#if getTreeReplies(comment).length > 0}
 			<div class="space-y-2 pt-1">
-				{#each getAo3Replies(comment) as reply, i (i)}
-					{@render renderAo3Comment(key, reply, [...path, i], depth + 1)}
+				{#each getTreeReplies(comment) as reply, i (i)}
+					{@render renderTreeComment(field, reply, [...path, i], depth + 1)}
 				{/each}
 			</div>
 		{/if}

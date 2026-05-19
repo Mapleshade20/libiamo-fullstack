@@ -238,13 +238,16 @@ describe("schemas", () => {
 		expect(result.success).toBe(false);
 	});
 
-	it("redditOpeningStateSchema validates correctly", () => {
+	it("redditOpeningStateSchema validates correctly with nested comments", () => {
 		const result = redditOpeningStateSchema.parse({
 			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1", votes: 42 },
-			previousComments: [{ author: "commenter", text: "Nice post", votes: 5 }],
+			previousComments: [
+				{ id: "c1", author: "commenter", text: "Nice post", timestamp: "2 hr. ago", votes: 5, replies: [{ author: "op", text: "Thanks!" }] },
+			],
 		});
 		expect(result.post.subreddit).toBe("r/test");
 		expect(result.previousComments?.[0].author).toBe("commenter");
+		expect(result.previousComments?.[0].replies?.[0].text).toBe("Thanks!");
 	});
 
 	it("appleMailOpeningStateSchema validates correctly", () => {
@@ -341,13 +344,13 @@ describe("schemas", () => {
 
 		expect(getEditorFields("reddit")).toHaveLength(2);
 		expect(getEditorFields("reddit")[0].type).toBe("group");
-		expect(getEditorFields("reddit")[1].type).toBe("comment-list");
+		expect(getEditorFields("reddit")[1].type).toBe("comment-tree");
 
 		expect(getEditorFields("apple_mail")).toHaveLength(1);
 		expect(getEditorFields("apple_mail")[0].type).toBe("email-list");
 
 		expect(getEditorFields("ao3")).toHaveLength(10);
-		expect(getEditorFields("ao3")[9].type).toBe("ao3-comment-tree");
+		expect(getEditorFields("ao3")[9].type).toBe("comment-tree");
 
 		expect(getEditorFields("translator")).toHaveLength(1);
 		expect(getEditorFields("translator")[0].type).toBe("textarea");

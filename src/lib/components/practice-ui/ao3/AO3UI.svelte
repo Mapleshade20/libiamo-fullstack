@@ -121,7 +121,6 @@ function submitComment() {
 	replyTarget = null;
 	session.handleSend(
 		text,
-		undefined,
 		{ ao3TargetCommentId: target?.id ?? "" },
 		{
 			user: {
