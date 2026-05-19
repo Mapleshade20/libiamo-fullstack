@@ -9,15 +9,8 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",
-			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/practice-ui/**/*.ts", "src/lib/markdown.ts"],
-			exclude: [
-				"**/i18n.ts",
-				"**/types.ts",
-				"**/index.ts",
-				"src/lib/components/utils/*.ts",
-				"src/lib/components/practice-ui/session.svelte.ts",
-				"**/mockData.ts",
-			],
+			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/**/*.ts", "src/lib/markdown.ts"],
+			exclude: ["**/i18n.ts", "**/types.ts", "**/index.ts", "src/lib/components/utils/*.ts"],
 			thresholds: {
 				lines: 85,
 				functions: 70,

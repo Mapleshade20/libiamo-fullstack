@@ -56,18 +56,9 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
-	// Use $derived to keep values reactive after invalidateAll() re-runs getOptions().
-	// One-time destructuring would capture stale values and never update.
-	const userName = $derived(getOptions().userName);
-	const avatarUrl = $derived(getOptions().avatarUrl);
-	const existingSession = $derived(getOptions().existingSession);
-	const openingState = $derived(getOptions().openingState);
-	const maxTurns = $derived(getOptions().maxTurns);
-	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
-	const labels = $derived(getOptions().labels);
-	const joinTriggerText = $derived(getOptions().joinTriggerText);
-	const isHiddenCheck = $derived(getOptions().isHiddenCheck);
-	const onPoolInit = $derived(getOptions().onPoolInit);
+	const options = getOptions();
+	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, labels, joinTriggerText, isHiddenCheck, onPoolInit } =
+		options;
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 
