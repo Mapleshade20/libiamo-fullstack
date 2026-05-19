@@ -7,7 +7,7 @@ import Search from "@lucide/svelte/icons/search";
 import Settings from "@lucide/svelte/icons/settings";
 import TrendingUp from "@lucide/svelte/icons/trending-up";
 import { fade, fly } from "svelte/transition";
-import { FEATURED_GAMES } from "./mockData";
+import { FEATURED_GAMES } from "./data";
 import { getAvatarColor } from "./utils";
 
 let {
