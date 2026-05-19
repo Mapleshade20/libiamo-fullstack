@@ -115,7 +115,7 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456", "English");
 
-			expect(result.systemPrompt).toContain("Existing comments:\n- Mina: Hola: 3");
+			expect(result.systemPrompt).toContain("Existing nested comments:\n- Mina: Hola");
 			expect(result.systemPrompt).not.toContain("Hola: Mina");
 		});
 
@@ -648,7 +648,7 @@ describe("session service", () => {
 				sessionId: 123,
 				role: "assistant",
 				content: "AI reply",
-				llmMetadata: { model: "structured-output", parentId: "1", raw: { reply: "AI reply", terminate: false } },
+				llmMetadata: { model: "structured-output", raw: { reply: "AI reply", terminate: false } },
 			});
 		});
 
@@ -707,9 +707,9 @@ describe("session service", () => {
 			await sendMessage(123, "Visible comment", USER_ID, "ao3-1", {
 				promptContent: "Prompt context plus visible comment",
 				userDisplayContent: "Visible comment",
-				userMetadata: { ao3: { commentId: "ao3-user-ao3-1" } },
+				userMetadata: { thread: { commentId: "ao3-user-ao3-1" } },
 				assistantAuthorName: "FicAuthor",
-				assistantMetadata: { ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
+				assistantMetadata: { thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
 			});
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, {
@@ -719,7 +719,7 @@ describe("session service", () => {
 				llmMetadata: expect.objectContaining({
 					clientMessageId: "ao3-1",
 					displayContent: "Visible comment",
-					ao3: { commentId: "ao3-user-ao3-1" },
+					thread: { commentId: "ao3-user-ao3-1" },
 				}),
 			});
 			expect(valuesMock).toHaveBeenNthCalledWith(
@@ -729,7 +729,7 @@ describe("session service", () => {
 					content: "Author reply",
 					llmMetadata: expect.objectContaining({
 						assistantAuthorName: "FicAuthor",
-						ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
+						thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
 					}),
 				}),
 			);
@@ -869,7 +869,7 @@ describe("session service", () => {
 		});
 	});
 
-	describe("sendMessage parentId threading", () => {
+	describe("sendMessage history", () => {
 		const mockSession = {
 			id: 123,
 			status: "in_progress",
@@ -877,76 +877,12 @@ describe("session service", () => {
 			messages: [],
 		};
 
-		it("builds thread history when parentId is provided and parent found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ id: 10, role: "user", content: "Root comment" },
-					{ id: 20, role: "assistant", content: "Reply to root", llmMetadata: { parentId: "10" } },
-					{ id: 30, role: "user", content: "Nested reply", llmMetadata: { parentId: "20" } },
-				],
-			});
-			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Thread reply", terminate: false });
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 40 }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "My reply", USER_ID, "client-1", { parentId: "30" });
-
-			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
-			// History should contain only the thread path: root -> reply -> nested
-			expect(historyArg).toEqual([
-				expect.objectContaining({ role: "system" }),
-				expect.objectContaining({ content: "Root comment" }),
-				expect.objectContaining({ content: "Reply to root" }),
-				expect.objectContaining({ content: "Nested reply" }),
-				expect.objectContaining({ content: "My reply" }),
-			]);
-		});
-
-		it("falls back to full history when parentId is not found in messages", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ id: 10, role: "user", content: "Root" },
-					{ id: 20, role: "assistant", content: "Reply" },
-				],
-			});
-			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Fallback reply", terminate: false });
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "My reply", USER_ID, "client-2", { parentId: "999" });
-
-			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
-			expect(historyArg).toEqual([
-				expect.objectContaining({ role: "system" }),
-				expect.objectContaining({ content: "Root" }),
-				expect.objectContaining({ content: "Reply" }),
-				expect.objectContaining({ content: "My reply" }),
-			]);
-		});
-
-		it("persists user message with parentId metadata", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Reply", terminate: false });
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "Thread reply", USER_ID, "client-3", { parentId: "42" });
-
-			expect(valuesMock).toHaveBeenCalledWith(
-				expect.objectContaining({
-					llmMetadata: expect.objectContaining({ parentId: "42" }),
-				}),
-			);
-		});
-
-		it("uses full flat history when no parentId is provided", async () => {
+		it("uses full flat history; threaded UIs provide target context via promptContent", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				...mockSession,
 				messages: [
 					{ id: 10, role: "user", content: "Msg 1" },
-					{ id: 20, role: "assistant", content: "Reply 1", llmMetadata: { parentId: "10" } },
+					{ id: 20, role: "assistant", content: "Reply 1" },
 				],
 			});
 			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Flat reply", terminate: false });
@@ -1063,7 +999,7 @@ describe("session service", () => {
 					openingState: {
 						post: { title: "Learning Spanish tips?" },
 						previousComments: [
-							{ author: "SpanishPro", text: "Use Anki for vocab." },
+							{ author: "SpanishPro", text: "Use Anki for vocab.", replies: [{ author: "OP", text: "Thanks!" }] },
 							{ author: "TravellerJane", text: "Immersion works best!" },
 						],
 					},
@@ -1072,10 +1008,10 @@ describe("session service", () => {
 
 			const result = await startSession(1, USER_ID);
 
-			expect(result.systemPrompt).toContain("Existing comments");
-			expect(result.systemPrompt).toContain("SpanishPro");
-			expect(result.systemPrompt).toContain("Use Anki for vocab.");
-			expect(result.systemPrompt).toContain("TravellerJane");
+			expect(result.systemPrompt).toContain("Existing nested comments");
+			expect(result.systemPrompt).toContain("- SpanishPro: Use Anki for vocab.");
+			expect(result.systemPrompt).toContain("  - OP: Thanks!");
+			expect(result.systemPrompt).toContain("- TravellerJane: Immersion works best!");
 		});
 
 		it("shows the base label with no extra lines when post is empty", async () => {
@@ -1154,7 +1090,7 @@ describe("session service", () => {
 		});
 	});
 
-	describe("sendMessage retry with parentId", () => {
+	describe("sendMessage retry with generic thread metadata", () => {
 		const mockSession = {
 			id: 123,
 			status: "in_progress",
@@ -1167,37 +1103,26 @@ describe("session service", () => {
 					llmMetadata: {
 						clientMessageId: "msg-retry",
 						failed: true,
-						parentId: "3",
+						thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1" },
 					},
 				},
 			],
 		};
 
-		it("updates the existing user message with the original parentId when retrying", async () => {
+		it("updates the existing user message while preserving/merging thread metadata", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
 			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Retry reply", terminate: false });
 
 			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
 			mockDb.update.mockReturnValue({ set: setMock });
 
-			await sendMessage(123, "My failed comment", USER_ID, "msg-retry");
+			await sendMessage(123, "My failed comment", USER_ID, "msg-retry", {
+				userMetadata: { thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" } },
+			});
 
 			const updateCall = setMock.mock.calls[0][0];
 			expect(updateCall.llmMetadata.failed).toBe(false);
-			expect(updateCall.llmMetadata.parentId).toBe("3");
-		});
-
-		it("uses the new parentId from options when retrying with a different parent", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Retry reply", terminate: false });
-
-			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
-			mockDb.update.mockReturnValue({ set: setMock });
-
-			await sendMessage(123, "My failed comment", USER_ID, "msg-retry", { parentId: "99" });
-
-			const updateCall = setMock.mock.calls[0][0];
-			expect(updateCall.llmMetadata.parentId).toBe("99");
+			expect(updateCall.llmMetadata.thread).toEqual({ commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" });
 		});
 	});
 });

@@ -49,6 +49,22 @@ async function getLearnerProfileName(user: { id: string; name?: string | null })
 	return userProfile?.name || user.name || "Learner";
 }
 
+function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
+	if (typeof value !== "string" || !value.trim()) return undefined;
+
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) return undefined;
+		const contextPath = parsed.filter(
+			(item): item is { author: string; text: string } =>
+				Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof item.author === "string" && typeof item.text === "string",
+		);
+		return contextPath.length ? contextPath : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export const load: PageServerLoad = async ({ params, locals, parent }) => {
 	const user = locals.user;
 	if (!user) throw error(401, "Unauthorized");
@@ -162,13 +178,9 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
-			const parentIdRaw = formData.get("parentId");
-			const parentId = typeof parentIdRaw === "string" && parentIdRaw.trim() ? parentIdRaw.trim() : undefined;
-
 			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
-				parentId,
 			};
 			const learnerProfileName = taskData.template.ui === "apple_mail" ? await getLearnerProfileName(user) : user.name || "Learner";
 			const mailNameInstruction = [
@@ -265,30 +277,11 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
 
-		// Extract optional contextPath (ancestor comment chain for threaded UIs like Reddit)
-		let contextPath: Array<{ author: string; text: string }> | undefined;
-		const contextPathRaw = formData.get("contextPath");
-		if (typeof contextPathRaw === "string" && contextPathRaw.trim()) {
-			try {
-				const parsed = JSON.parse(contextPathRaw);
-				// Defensive validation: ensure parsed value is an array of expected shape
-				if (Array.isArray(parsed)) {
-					contextPath = parsed;
-				}
-			} catch {
-				// Invalid JSON – ignore and generate hint without context
-			}
-		}
+		const contextPath = parseHintContextPath(formData.get("contextPath"));
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
-
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				with: { template: true },
-			});
-			if (!taskData) return fail(404, { error: "Task not found" });
 
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };

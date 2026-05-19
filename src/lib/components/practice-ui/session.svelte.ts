@@ -3,10 +3,10 @@ import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import type { Ao3MessageMetadata } from "./ao3/helpers";
 import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
+import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
 import { getOpeningStateMessages } from "./messageTransformer";
@@ -78,6 +78,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let isInitializing = $state(false);
 	let feedback = $state<TutorFeedback | null>(null);
 	let messages = $state<ChatMessage[]>([]);
+	let pendingReplyTargetId = $state<string | null>(null);
 	let agentUser = $state<ChatUser>({
 		id: "agent",
 		name: "Agent",
@@ -101,7 +102,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
 
 	// ── Agent message helpers ──────────────────────────────────────
-	let pendingAgentParentId: string | undefined;
 	function addAgentMessage(params: {
 		text: string;
 		deliveryState: "sent" | "pending" | "failed";
@@ -109,12 +109,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		retryText?: string;
 		messagePatch?: Partial<ChatMessage>;
 	}) {
-		// Tracks which user message the next agent reply should be nested under.
-		// Set in handleSend, consumed in addAgentMessage.
-
-		const agentParentId = pendingAgentParentId;
-		pendingAgentParentId = undefined;
-
+		pendingReplyTargetId = null;
 		messages = [
 			...messages,
 			{
@@ -128,7 +123,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				clientMessageId: params.clientMessageId,
 				retryText: params.retryText,
 				...params.messagePatch,
-				parentId: agentParentId,
 			},
 		];
 	}
@@ -173,14 +167,14 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const retryExtraFields: Record<string, string> = {};
-		if (originalUserMessage?.ao3?.targetCommentId) {
-			retryExtraFields.ao3TargetCommentId = originalUserMessage.ao3.targetCommentId;
+		if (originalUserMessage?.thread?.targetCommentId) {
+			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
 		}
 		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, retryExtraFields);
 
 		applySendResult(result, message.clientMessageId, retryText, {
 			authorName: message.authorName,
-			ao3: message.ao3,
+			thread: message.thread,
 		});
 
 		await scrollToBottom();
@@ -210,7 +204,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	async function handleSend(
 		text: string,
-		parentId?: string,
 		extraFields: Record<string, string> = {},
 		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
 	) {
@@ -221,26 +214,29 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const resolvedExtraFields = Object.fromEntries(
 			Object.entries(extraFields).map(([key, value]) => [key, value.replaceAll("{clientMessageId}", clientMessageId)]),
 		);
-		const resolveAo3Patch = (patch?: Partial<ChatMessage>) => {
-			if (!patch?.ao3) return patch;
-			const ao3 = Object.fromEntries(
-				Object.entries(patch.ao3).map(([key, value]) => [
+		const resolveThreadMetadata = <T extends CommentThreadMetadata>(metadata?: T) => {
+			if (!metadata) return metadata;
+			return Object.fromEntries(
+				Object.entries(metadata).map(([key, value]) => [
 					key,
 					typeof value === "string" ? value.replaceAll("{clientMessageId}", clientMessageId) : value,
 				]),
-			) as Ao3MessageMetadata;
-			return { ...patch, ao3 };
+			) as T;
 		};
-		const userPatch = resolveAo3Patch(messagePatches.user);
-		const agentPatch = resolveAo3Patch(messagePatches.agent);
+		const resolveMessagePatch = (patch?: Partial<ChatMessage>) =>
+			patch
+				? {
+						...patch,
+						thread: resolveThreadMetadata(patch.thread),
+					}
+				: patch;
+		const userPatch = resolveMessagePatch(messagePatches.user);
+		const agentPatch = resolveMessagePatch(messagePatches.agent);
 
 		isSubmitting = true;
 
-		// Generate the user message ID upfront so we can bind the agent reply to it.
 		const userMsgId = crypto.randomUUID();
-
-		// The next agent reply will be a child of this user message.
-		pendingAgentParentId = userMsgId;
+		pendingReplyTargetId = userPatch?.thread?.commentId ?? null;
 
 		messages = [
 			...messages,
@@ -253,12 +249,11 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				avatar: avatarUrl,
 				clientMessageId,
 				...userPatch,
-				parentId,
 			},
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields, parentId);
+		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
 
 		applySendResult(result, clientMessageId, currentText, agentPatch);
 
@@ -417,7 +412,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	return {
 		get replyingToId() {
-			return pendingAgentParentId ?? null;
+			return pendingReplyTargetId;
 		},
 		get sessionId() {
 			return sessionId;

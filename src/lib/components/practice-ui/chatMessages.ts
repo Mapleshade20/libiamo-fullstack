@@ -1,4 +1,4 @@
-import type { Ao3MessageMetadata } from "./ao3/helpers";
+import type { CommentThreadMetadata } from "./commentThread";
 
 type PersistedSessionMessage = {
 	id: number | string;
@@ -19,8 +19,7 @@ type MessageMetadata = {
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
-	ao3?: Ao3MessageMetadata;
-	parentId?: string;
+	thread?: CommentThreadMetadata;
 };
 
 type SessionSnapshotMessage = {
@@ -51,8 +50,7 @@ export type ChatMessage = {
 	clientMessageId?: string;
 	retryText?: string;
 	llmMetadata?: unknown;
-	ao3?: Ao3MessageMetadata;
-	parentId?: string;
+	thread?: CommentThreadMetadata;
 };
 
 function compactStringSnapshot(value: string) {
@@ -107,6 +105,11 @@ export function parsePersistedMessageDate(value: string | Date) {
 	return new Date(normalized);
 }
 
+function getRetryAgentCommentId(userCommentId: string | undefined, clientMessageId: string, persistedMessageId: number | string): string {
+	if (userCommentId?.includes("-user-")) return userCommentId.replace("-user-", "-agent-");
+	return `thread-agent-${clientMessageId || persistedMessageId}`;
+}
+
 export function buildChatMessages({
 	rawMessages,
 	formatTimestamp,
@@ -133,14 +136,13 @@ export function buildChatMessages({
 			role: message.role === "user" ? "user" : "agent",
 			text: metadata.displayContent ?? message.content,
 			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
-			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName),
+			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName),
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
 			llmMetadata: message.llmMetadata,
-			ao3: metadata.ao3,
-			parentId: metadata.parentId,
+			thread: metadata.thread,
 		} satisfies ChatMessage;
 
 		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
@@ -152,22 +154,21 @@ export function buildChatMessages({
 			role: "agent",
 			text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
 			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
-			authorName: metadata.assistantAuthorName ?? metadata.ao3?.responderName ?? agentName,
+			authorName: metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName,
 			avatarColor: agentColor,
 			deliveryState: metadata.failed === true ? "failed" : "pending",
 			clientMessageId: metadata.clientMessageId,
 			retryText: metadata.displayContent ?? message.content,
 			llmMetadata: message.llmMetadata,
-			...(metadata.ao3
+			...(metadata.thread
 				? {
-						ao3: {
-							...metadata.ao3,
-							commentId: metadata.clientMessageId ? `ao3-agent-${metadata.clientMessageId}` : `retry-${message.id}`,
-							parentCommentId: metadata.ao3.commentId ?? (metadata.clientMessageId ? `ao3-user-${metadata.clientMessageId}` : undefined),
+						thread: {
+							...metadata.thread,
+							commentId: getRetryAgentCommentId(metadata.thread.commentId, metadata.clientMessageId, message.id),
+							parentCommentId: metadata.thread.commentId,
 						},
 					}
 				: {}),
-			parentId: mappedMessage.id,
 		} satisfies ChatMessage;
 
 		return [mappedMessage, retryPlaceholder];

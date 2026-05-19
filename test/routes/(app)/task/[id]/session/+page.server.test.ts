@@ -441,7 +441,7 @@ describe("session page server", () => {
 			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks!", turnCount: 1 });
 
 			const result = await actions.send(
-				createFormEvent({ values: { sessionId: "789", message: "What did you like?", clientMessageId: "ao3-msg", ao3TargetCommentId: "c1" } }),
+				createFormEvent({ values: { sessionId: "789", message: "What did you like?", clientMessageId: "ao3-msg", threadTargetCommentId: "c1" } }),
 			);
 
 			expect(result).toMatchObject({ success: true, reply: "Thanks!" });
@@ -456,7 +456,7 @@ describe("session page server", () => {
 					promptContent: expect.stringContaining("Comment author you must roleplay as: ReaderA"),
 					userDisplayContent: "What did you like?",
 					assistantAuthorName: "ReaderA",
-					userMetadata: { ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
+					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
 				}),
 			);
 		});
@@ -471,7 +471,7 @@ describe("session page server", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({ messages: [] });
 
 			const result = await actions.send(
-				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "ao3-msg", ao3TargetCommentId: "missing" } }),
+				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "ao3-msg", threadTargetCommentId: "missing" } }),
 			);
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid AO3 reply target" } });
@@ -496,7 +496,7 @@ describe("session page server", () => {
 							clientMessageId: "ao3-msg",
 							failed: true,
 							displayContent: "Hello again",
-							ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" },
+							thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" },
 						},
 					},
 				],
@@ -504,7 +504,7 @@ describe("session page server", () => {
 			mockSessionService.sendMessage.mockResolvedValue({ reply: "Recovered", turnCount: 1 });
 
 			const result = await actions.send(
-				createFormEvent({ values: { sessionId: "789", message: "Hello again", clientMessageId: "ao3-msg", ao3TargetCommentId: "missing" } }),
+				createFormEvent({ values: { sessionId: "789", message: "Hello again", clientMessageId: "ao3-msg", threadTargetCommentId: "missing" } }),
 			);
 
 			expect(result).toMatchObject({ success: true, reply: "Recovered" });
@@ -516,7 +516,7 @@ describe("session page server", () => {
 				expect.objectContaining({
 					assistantAuthorName: "ReaderA",
 					userDisplayContent: "Hello again",
-					userMetadata: { ao3: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" } },
+					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" } },
 				}),
 			);
 		});
@@ -821,6 +821,20 @@ describe("session page server", () => {
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: '{"author":"a","text":"t"}' } }));
 
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("filters malformed contextPath entries before calling generateHint", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			const contextPath = JSON.stringify([{}, { author: 123, text: null }, { author: "alice", text: "hello" }]);
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
 		});
 
 		it("ignores contextPath when it is an empty string", async () => {

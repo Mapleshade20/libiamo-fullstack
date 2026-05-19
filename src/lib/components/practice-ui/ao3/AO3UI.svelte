@@ -121,11 +121,10 @@ function submitComment() {
 	replyTarget = null;
 	session.handleSend(
 		text,
-		undefined,
-		{ ao3TargetCommentId: target?.id ?? "" },
+		{ threadTargetCommentId: target?.id ?? "" },
 		{
 			user: {
-				ao3: {
+				thread: {
 					commentId: "ao3-user-{clientMessageId}",
 					targetCommentId: target?.id ?? null,
 					responderName,
@@ -134,7 +133,7 @@ function submitComment() {
 			},
 			agent: {
 				authorName: responderName,
-				ao3: {
+				thread: {
 					commentId: "ao3-agent-{clientMessageId}",
 					parentCommentId: "ao3-user-{clientMessageId}",
 					responderName,
@@ -410,7 +409,7 @@ function scrollToTop(event: MouseEvent) {
 			</div>
 			<div class="flex justify-end gap-2 border-t border-[#ddd] bg-[#f3efec] p-4">
 				<button type="button" class="ao3-action" onclick={() => (session.showEvaluationModal = false)}>{t.closeReview}</button>
-				<a href="/" class="ao3-action" onclick={preventNavigation}>{t.returnHall}</a>
+				<a href="/" class="ao3-action">{t.returnHall}</a>
 			</div>
 		</div>
 	</div>

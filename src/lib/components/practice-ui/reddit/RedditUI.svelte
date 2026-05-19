@@ -7,12 +7,13 @@ import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
 import CommunityPanel from "./CommunityPanel.svelte";
 import Header from "./Header.svelte";
+import { buildRedditCommentTree, countRedditComments, getRedditCommentVotes, type RedditRenderableComment } from "./helpers";
 import { i18n } from "./i18n";
 import Overlays from "./Overlays.svelte";
 import PostCard from "./PostCard.svelte";
 import Sidebar from "./Sidebar.svelte";
-import type { CommentTreeNode, ContextComment, RedditComment, RedditOpeningState } from "./types";
-import { getAvatarColor, seededInt } from "./utils";
+import type { CommentTreeNode, ContextComment, RedditOpeningState } from "./types";
+import { getAvatarColor } from "./utils";
 
 interface Props {
 	taskId?: string | number;
@@ -73,14 +74,8 @@ const post = $derived({
 	author: typedState.post?.author || "unknown",
 	votes: typedState.post?.votes ?? 1,
 });
-const previousComments = $derived<RedditComment[]>(typedState.previousComments ?? []);
-
-// Visible session messages (exclude hidden join trigger)
-const renderableMessages = $derived(session.messages.filter((m) => !m.isHidden));
-
-// ── Comment tree parent tracking ────────────────────────────────────
-// parentId is directly embedded in each ChatMessage via handleSend/addAgentMessage.
-// The tree builder reads msg.parentId directly — no separate tracking needed.
+const visibleMessages = $derived(session.messages.filter((message) => message.deliveryState !== "pending"));
+const renderableCommentTree = $derived(buildRedditCommentTree({ openingState: typedState, messages: visibleMessages }));
 
 // Top-level input text (separate from inline reply inputs which manage their own state)
 let topLevelInput = $state("");
@@ -88,89 +83,88 @@ let topLevelInput = $state("");
 // Global disabled: all editors locked while agent is generating
 const allDisabled = $derived(session.disabled);
 
+const userAvatarColor = $derived(getAvatarColor(userName));
+
+function findRenderableComment(comments: RedditRenderableComment[], id: string): RedditRenderableComment | null {
+	for (const comment of comments) {
+		if (comment.id === id) return comment;
+		const child = findRenderableComment(comment.replies, id);
+		if (child) return child;
+	}
+	return null;
+}
+
+function sendComment(text: string, targetId: string | null) {
+	const trimmed = text.trim();
+	if (!trimmed || allDisabled) return;
+	const target = targetId ? findRenderableComment(renderableCommentTree, targetId) : null;
+	const responderName = target?.author || post.author;
+	const mode = target ? "reply" : "post";
+	session.handleSend(
+		trimmed,
+		{ threadTargetCommentId: target?.id ?? "" },
+		{
+			user: {
+				thread: {
+					commentId: "reddit-user-{clientMessageId}",
+					targetCommentId: target?.id ?? null,
+					responderName,
+					mode,
+				},
+			},
+			agent: {
+				authorName: responderName,
+				thread: {
+					commentId: "reddit-agent-{clientMessageId}",
+					parentCommentId: "reddit-user-{clientMessageId}",
+					responderName,
+					mode: "reply",
+				},
+			},
+		},
+	);
+}
+
 // ── Handle top-level comment submit ──────────────────────────────────
 
 function handleTopLevelSubmit(text: string) {
-	if (!text.trim() || allDisabled) return;
-	session.handleSend(text);
+	sendComment(text, null);
 }
 
 // ── Handle inline reply submit ───────────────────────────────────────
 
 function handleReplyToComment(text: string, parentId: string) {
-	if (!text.trim() || allDisabled) return;
-	session.handleSend(text, parentId);
+	sendComment(text, parentId);
 }
 
 // ── Build comment tree ───────────────────────────────────────────────
 
-const userAvatarColor = $derived(getAvatarColor(userName));
+function toTreeNode(comment: RedditRenderableComment): CommentTreeNode {
+	const messageId = comment.messageId;
+	return {
+		id: comment.id,
+		author: comment.author,
+		authorColor: comment.role === "agent" ? session.agentUser.color : comment.role === "user" ? userAvatarColor : getAvatarColor(comment.author),
+		authorAvatarUrl: comment.role === "user" ? avatarUrl : undefined,
+		text: comment.text,
+		timestamp: comment.timestamp ?? t.earlier,
+		baseVotes: getRedditCommentVotes(comment, comment.id, comment.role === "user" ? 1 : 10, comment.role === "user" ? 60 : 800),
+		depth: comment.depth,
+		children: comment.replies.map(toTreeNode),
+		parentId: comment.parentId,
+		deliveryState: comment.deliveryState,
+		role: comment.role,
+		onRetry: comment.role === "agent" && messageId ? () => session.handleRetry(messageId) : undefined,
+		onReply: handleReplyToComment,
+	};
+}
 
-const commentTree = $derived.by(() => {
-	const allNodes: CommentTreeNode[] = [];
-	const nodeMap = new Map<string, CommentTreeNode>();
-
-	// Add previousComments (template data) – include onReply so nested replies work
-	previousComments.forEach((comment, i) => {
-		const id = `prev-${i}`;
-		const node: CommentTreeNode = {
-			id,
-			author: comment.author,
-			authorColor: getAvatarColor(comment.author),
-			text: comment.text,
-			timestamp: t.earlier,
-			baseVotes: comment.votes ?? seededInt(comment.author + String(i), 10, 800),
-			depth: 0,
-			children: [],
-			parentId: comment.parentId,
-			onReply: handleReplyToComment,
-		};
-		nodeMap.set(id, node);
-		allNodes.push(node);
-	});
-
-	// Add session messages — parentId comes directly from ChatMessage metadata
-	renderableMessages.forEach((msg) => {
-		const node: CommentTreeNode = {
-			id: msg.id,
-			author: msg.authorName,
-			authorColor: msg.role === "user" ? userAvatarColor : session.agentUser.color,
-			authorAvatarUrl: msg.role === "user" ? avatarUrl : undefined,
-			text: msg.text,
-			timestamp: msg.timestamp,
-			baseVotes: msg.role === "user" ? seededInt(msg.id, 1, 60) : seededInt(msg.id, 15, 350),
-			depth: 0,
-			children: [],
-			deliveryState: msg.deliveryState,
-			role: msg.role,
-			onRetry: msg.role === "agent" ? session.handleRetry : undefined,
-			onReply: handleReplyToComment,
-			parentId: msg.parentId,
-		};
-		nodeMap.set(msg.id, node);
-		allNodes.push(node);
-	});
-
-	// Build tree from flat list
-	const rootNodes: CommentTreeNode[] = [];
-
-	allNodes.forEach((node) => {
-		if (node.parentId && nodeMap.has(node.parentId)) {
-			const parent = nodeMap.get(node.parentId) as CommentTreeNode;
-			node.depth = parent.depth + 1;
-			parent.children.push(node);
-		} else {
-			rootNodes.push(node);
-		}
-	});
-
-	return rootNodes;
-});
+const commentTree = $derived(renderableCommentTree.map(toTreeNode));
 
 // Post context for hint generation: post author + body as root ancestor
 const postContext = $derived<ContextComment[]>([{ author: post.author, text: post.body || post.title }]);
 
-const totalCommentCount = $derived(previousComments.length + renderableMessages.length);
+const totalCommentCount = $derived(countRedditComments(renderableCommentTree));
 
 // ── Toast for mock actions ───────────────────────────────────────────
 
@@ -307,8 +301,6 @@ let showMobileMenu = $state(false);
 								sessionId={session.sessionId}
 								{t}
 								onMockAction={handleMockAction}
-								replyingToId={session.replyingToId}
-								isAgentTyping={session.isTyping}
 							/>
 						{/each}
 

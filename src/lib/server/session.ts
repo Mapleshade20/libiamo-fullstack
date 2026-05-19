@@ -36,13 +36,31 @@ function appendMessages(ctx: string, label: string, items: Array<Record<string, 
 	return `${ctx}\n${label}:\n${lines.join("\n")}`;
 }
 
+function formatRedditContextComments(comments: Array<{ author?: string; text?: string; replies?: unknown }> = [], depth = 0): string[] {
+	return comments.flatMap((comment) => {
+		const author = stringifyMessageValue(comment.author);
+		const text = stringifyMessageValue(comment.text);
+		const currentLine = author || text ? [`${"  ".repeat(depth)}- ${[author, text].filter(Boolean).join(": ")}`] : [];
+		const replyLines = formatRedditContextComments(
+			Array.isArray(comment.replies) ? (comment.replies as Array<{ author?: string; text?: string; replies?: unknown }>) : [],
+			depth + 1,
+		);
+		return [...currentLine, ...replyLines];
+	});
+}
+
 function buildRedditContext(openingState: Record<string, unknown>): string {
-	const post = openingState.post as { title?: string; body?: string } | undefined;
-	const comments = openingState.previousComments as Array<{ author?: string; text?: string }> | undefined;
-	let ctx = "Scenario: Reddit post";
+	const post = openingState.post as { title?: string; body?: string; author?: string; subreddit?: string } | undefined;
+	const comments = openingState.previousComments as Array<{ author?: string; text?: string; replies?: unknown }> | undefined;
+	let ctx = "Scenario: Reddit post comment thread";
+	if (post?.subreddit) ctx += `\nSubreddit: ${post.subreddit}`;
+	if (post?.author) ctx += `\nPost author: ${post.author}`;
 	if (post?.title) ctx += `\nTitle: ${post.title}`;
 	if (post?.body) ctx += `\nContent: ${post.body}`;
-	if (comments?.length) ctx = appendMessages(ctx, "Existing comments", comments as Array<Record<string, string | undefined>>);
+	const commentLines = formatRedditContextComments(comments ?? []);
+	if (commentLines.length) ctx += `\nExisting nested comments:\n${commentLines.join("\n")}`;
+	ctx +=
+		"\nRoleplay rule: each learner comment may target a different Reddit commenter. When the learner prompt specifies a comment author to roleplay as, reply only as that person for that turn.";
 	return ctx;
 }
 
@@ -250,10 +268,9 @@ type SessionMessageMetadata = {
 	mailBodyHtml?: string;
 	displayContent?: string;
 	assistantAuthorName?: string;
-	ao3?: unknown;
+	thread?: unknown;
 	model?: string;
 	raw?: unknown;
-	parentId?: string;
 };
 
 function getMessageMetadata(value: unknown): SessionMessageMetadata {
@@ -297,35 +314,6 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	};
 }
 
-/**
- * Build a single-thread history path from root to the target message.
- * Traces parentId backwards through the message metadata, then reverses
- * to produce a chronological root → ... → target chain.
- *
- * Used for Reddit-style nested UI to provide precise thread context instead of all messages.
- */
-function buildThreadHistory(
-	allMessages: Array<{ id: number; role: string; content: string; llmMetadata?: unknown }>,
-	targetMessageId: number,
-): Array<{ id: number; role: string; content: string }> {
-	const byId = new Map<number, (typeof allMessages)[number]>();
-	for (const m of allMessages) byId.set(m.id, m);
-
-	const chain: Array<{ id: number; role: string; content: string }> = [];
-	let current = byId.get(targetMessageId);
-
-	while (current) {
-		chain.push({ id: current.id, role: current.role, content: current.content });
-		const parentId = getMessageMetadata(current.llmMetadata).parentId;
-		if (!parentId) break;
-		const parentNum = Number(parentId);
-		current = byId.get(parentNum);
-	}
-
-	chain.reverse();
-	return chain;
-}
-
 const AgentReplySchema = z.object({
 	reply: z.string().describe("Your conversational reply to the user."),
 	terminate: z.boolean().describe("true ONLY IF you are severely offended or the user explicitly says goodbye"),
@@ -339,7 +327,6 @@ export type SendMessageOptions = {
 	userMetadata?: Record<string, unknown>;
 	assistantAuthorName?: string;
 	assistantMetadata?: Record<string, unknown>;
-	parentId?: string;
 };
 
 export async function sendMessage(
@@ -408,34 +395,14 @@ export async function sendMessage(
 			: 'Set "terminate" to true ONLY IF you are severely offended or the user explicitly says goodbye.';
 	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean }. ${terminationRule}`;
 
-	// Build LLM history.
-	// parentId controls history context precision (threaded vs full).
-	// The agent reply is ALWAYS parented to the user message for correct nesting.
+	// Build LLM history. Threaded UIs provide precise target context through promptContent
+	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
 	if (!existingUserMessage) {
-		if (options.parentId) {
-			// Threaded reply: build context from root → parent only, then append current message
-			const parentNum = Number(options.parentId);
-			const parentMessage = activeMessages.find((m) => String(m.id) === options.parentId || m.id === parentNum);
-			if (parentMessage) {
-				const threadPath = buildThreadHistory(activeMessages, parentMessage.id);
-				for (const m of threadPath) {
-					history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-				}
-			} else {
-				// Parent not found; fall back to full history
-				for (const m of activeMessages) {
-					history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-				}
-			}
-			history.push({ role: "user", content: trimmedPromptContent });
-		} else {
-			// No threading: full flat history + current message
-			for (const m of activeMessages) {
-				history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-			}
-			history.push({ role: "user", content: trimmedPromptContent });
+		for (const m of activeMessages) {
+			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
 		}
+		history.push({ role: "user", content: trimmedPromptContent });
 	} else {
 		// Retry: existing user message is already in activeMessages
 		for (const m of activeMessages) {
@@ -459,7 +426,6 @@ export async function sendMessage(
 								failed: false,
 								hidden: options.hiddenUserMessage === true,
 								displayContent,
-								parentId: options.parentId,
 							}
 						: undefined,
 			})
@@ -480,7 +446,6 @@ export async function sendMessage(
 					failed: false,
 					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
 					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-					parentId: options.parentId ?? getMessageMetadata(existingUserMessage.llmMetadata).parentId,
 				},
 			})
 			.where(eq(sessionMessage.id, existingUserMessage.id));
@@ -496,7 +461,6 @@ export async function sendMessage(
 							failed: false,
 							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
 							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
-							parentId: options.parentId ?? getMessageMetadata(message.llmMetadata).parentId,
 						},
 					}
 				: message,
@@ -525,10 +489,6 @@ export async function sendMessage(
 		throw error;
 	}
 
-	// Insert agent reply. parentId is ALWAYS the user message's DB ID so nesting
-	// survives page refresh. Without this, agent replies become root-level after reload.
-	const agentParentId = existingUserMessage?.id ? String(existingUserMessage.id) : undefined;
-
 	await db.insert(sessionMessage).values({
 		sessionId,
 		role: "assistant",
@@ -539,7 +499,6 @@ export async function sendMessage(
 			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
 			model: "structured-output",
 			raw: output,
-			parentId: agentParentId,
 		},
 	});
 

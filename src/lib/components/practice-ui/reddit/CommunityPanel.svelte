@@ -2,7 +2,7 @@
 import CalendarDays from "@lucide/svelte/icons/calendar-days";
 import Shield from "@lucide/svelte/icons/shield";
 import Users from "@lucide/svelte/icons/users";
-import { COMMUNITY_RULES, RELATED_SUBREDDITS } from "./mockData";
+import { COMMUNITY_RULES, RELATED_SUBREDDITS } from "./data";
 import { getAvatarColor, seededInt } from "./utils";
 
 let {

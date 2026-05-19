@@ -1,13 +1,13 @@
-import {
-	type Ao3OpeningState,
-	type Ao3Target,
-	buildAo3UserPrompt,
-	findAo3Target,
-	findAo3TargetInMessages,
-	getAo3AuthorName,
-} from "$lib/components/practice-ui/ao3/helpers";
 import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
-import type { CommentThreadMetadata } from "$lib/components/practice-ui/commentThread";
+import {
+	buildRedditUserPrompt,
+	findRedditTarget,
+	findRedditTargetInMessages,
+	getRedditPostAuthor,
+	type RedditMessageMetadata,
+	type RedditTarget,
+} from "$lib/components/practice-ui/reddit/helpers";
+import type { RedditOpeningState } from "$lib/components/practice-ui/reddit/types";
 import type { SendMessageOptions } from "$lib/server/session";
 
 type PersistedSessionMessage = {
@@ -18,42 +18,42 @@ type PersistedSessionMessage = {
 	llmMetadata?: unknown;
 };
 
-type Ao3PersistedMetadata = {
+type RedditPersistedMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	displayContent?: string;
-	thread?: CommentThreadMetadata;
+	thread?: RedditMessageMetadata;
 };
 
-function getAo3PersistedMetadata(value: unknown): Ao3PersistedMetadata {
+function getRedditPersistedMetadata(value: unknown): RedditPersistedMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as Ao3PersistedMetadata;
+	return value as RedditPersistedMetadata;
 }
 
-function buildAo3RetrySendOptions(params: {
+function buildRedditRetrySendOptions(params: {
 	messages: PersistedSessionMessage[];
-	openingState: Ao3OpeningState;
+	openingState: RedditOpeningState;
 	clientMessageId: string;
 }): SendMessageOptions | null {
 	const originalUserMessage = params.messages.find((message) => {
-		const metadata = getAo3PersistedMetadata(message.llmMetadata);
+		const metadata = getRedditPersistedMetadata(message.llmMetadata);
 		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.thread;
 	});
 	if (!originalUserMessage) return null;
 
-	const metadata = getAo3PersistedMetadata(originalUserMessage.llmMetadata);
+	const metadata = getRedditPersistedMetadata(originalUserMessage.llmMetadata);
 	const thread = metadata.thread;
 	if (!thread) return null;
 
-	const responderName = thread.responderName || getAo3AuthorName(params.openingState);
-	const userCommentId = thread.commentId || `ao3-user-${params.clientMessageId}`;
+	const responderName = thread.responderName || getRedditPostAuthor(params.openingState);
+	const userCommentId = thread.commentId || `reddit-user-${params.clientMessageId}`;
 	return {
 		userDisplayContent: metadata.displayContent,
 		userMetadata: { thread },
 		assistantAuthorName: responderName,
 		assistantMetadata: {
 			thread: {
-				commentId: `ao3-agent-${params.clientMessageId}`,
+				commentId: `reddit-agent-${params.clientMessageId}`,
 				parentCommentId: userCommentId,
 				responderName,
 				mode: "reply",
@@ -62,18 +62,18 @@ function buildAo3RetrySendOptions(params: {
 	};
 }
 
-function buildAo3NewTurnSendOptions(params: {
-	openingState: Ao3OpeningState;
-	target: Ao3Target | null;
+function buildRedditNewTurnSendOptions(params: {
+	openingState: RedditOpeningState;
+	target: RedditTarget | null;
 	message: string;
 	clientMessageId: string;
 }): SendMessageOptions {
-	const responderName = params.target?.username || getAo3AuthorName(params.openingState);
-	const userCommentId = `ao3-user-${params.clientMessageId}`;
-	const agentCommentId = `ao3-agent-${params.clientMessageId}`;
-	const mode = params.target ? "reply" : "work";
+	const responderName = params.target?.username || getRedditPostAuthor(params.openingState);
+	const userCommentId = `reddit-user-${params.clientMessageId}`;
+	const agentCommentId = `reddit-agent-${params.clientMessageId}`;
+	const mode = params.target ? "reply" : "post";
 	return {
-		promptContent: buildAo3UserPrompt({
+		promptContent: buildRedditUserPrompt({
 			openingState: params.openingState,
 			comment: params.message,
 			target: params.target,
@@ -100,46 +100,46 @@ function buildAo3NewTurnSendOptions(params: {
 	};
 }
 
-function findAo3TargetAcrossOpeningAndSession(params: {
-	openingState: Ao3OpeningState;
+function findRedditTargetAcrossOpeningAndSession(params: {
+	openingState: RedditOpeningState;
 	messages: PersistedSessionMessage[];
 	targetCommentId: string | null;
 	userName: string;
-}): Ao3Target | null {
-	let target = findAo3Target(params.openingState, params.targetCommentId);
+}): RedditTarget | null {
+	let target = findRedditTarget(params.openingState, params.targetCommentId);
 	if (!params.targetCommentId || target) return target;
 
 	const chatMessages = buildChatMessages({
 		rawMessages: params.messages,
 		formatTimestamp: () => "Earlier",
 		userName: params.userName,
-		agentName: getAo3AuthorName(params.openingState),
+		agentName: getRedditPostAuthor(params.openingState),
 		labels: {
 			retryFailedMessage: "Agent reply failed. Click Retry to try again.",
 			stillProcessingMessage: "Agent is still processing. Retry in a moment.",
 		},
 	});
-	target = findAo3TargetInMessages(chatMessages, params.targetCommentId);
+	target = findRedditTargetInMessages(chatMessages, params.targetCommentId);
 
 	return target;
 }
 
-export function buildAo3SendOptions(params: {
-	openingState: Ao3OpeningState;
+export function buildRedditSendOptions(params: {
+	openingState: RedditOpeningState;
 	messages: PersistedSessionMessage[];
 	targetCommentId: string | null;
 	message: string;
 	clientMessageId: string;
 	userName: string;
 }): SendMessageOptions | null {
-	const retryOptions = buildAo3RetrySendOptions({
+	const retryOptions = buildRedditRetrySendOptions({
 		messages: params.messages,
 		openingState: params.openingState,
 		clientMessageId: params.clientMessageId,
 	});
 	if (retryOptions) return retryOptions;
 
-	const target = findAo3TargetAcrossOpeningAndSession({
+	const target = findRedditTargetAcrossOpeningAndSession({
 		openingState: params.openingState,
 		messages: params.messages,
 		targetCommentId: params.targetCommentId,
@@ -147,7 +147,7 @@ export function buildAo3SendOptions(params: {
 	});
 	if (params.targetCommentId && !target) return null;
 
-	return buildAo3NewTurnSendOptions({
+	return buildRedditNewTurnSendOptions({
 		openingState: params.openingState,
 		target,
 		message: params.message,

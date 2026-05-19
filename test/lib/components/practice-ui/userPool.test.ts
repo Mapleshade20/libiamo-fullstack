@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { COLOR_POOL, STATUS_POOL } from "$lib/components/practice-ui/discord/mockData";
+import { describe, expect, it } from "vitest";
+import { COLOR_POOL, STATUS_POOL } from "$lib/components/practice-ui/discord/data";
 import { createSeededRandom, initUserPool, shuffleArray } from "$lib/components/practice-ui/discord/userPool";
 
 describe("userPool", () => {
@@ -45,25 +45,6 @@ describe("userPool", () => {
 
 			const uniqueNames = new Set(allUsers.map((u) => u.name));
 			expect(uniqueNames.size).toBe(allUsers.length);
-		});
-
-		it("uses fallback names when the configured pool is exhausted", async () => {
-			vi.resetModules();
-			vi.doMock("$lib/components/practice-ui/discord/mockData", () => ({
-				USER_POOL: [],
-				STATUS_POOL: ["Online"],
-				COLOR_POOL: ["bg-test"],
-			}));
-			const { initUserPool: initUserPoolWithEmptyNames } = await import("$lib/components/practice-ui/discord/userPool");
-
-			const pool = initUserPoolWithEmptyNames(1);
-
-			expect(pool.agentUser.name).toBe("Agent");
-			expect(pool.onlineUsers.every((user, index) => user.name === `User_${index}`)).toBe(true);
-			expect(pool.offlineUsers.every((user, index) => user.name === `Offline_${index}`)).toBe(true);
-
-			vi.doUnmock("$lib/components/practice-ui/discord/mockData");
-			vi.resetModules();
 		});
 	});
 

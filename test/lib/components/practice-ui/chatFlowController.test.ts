@@ -148,4 +148,13 @@ describe("attemptAgentReply", () => {
 		const fetchCall = (global.fetch as any).mock.calls[0];
 		expect(fetchCall[1].body.get("parentId")).toBeNull();
 	});
+
+	it("appends extra fields to FormData", async () => {
+		await mockReply("OK", false);
+
+		await attemptAgentReply(42, "Hello", "msg-1", { threadTargetCommentId: "reddit-c1" });
+
+		const fetchCall = (global.fetch as any).mock.calls[0];
+		expect(fetchCall[1].body.get("threadTargetCommentId")).toBe("reddit-c1");
+	});
 });
