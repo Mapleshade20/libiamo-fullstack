@@ -604,9 +604,9 @@ describe("session service", () => {
 			await sendMessage(123, "Visible comment", USER_ID, "ao3-1", {
 				promptContent: "Prompt context plus visible comment",
 				userDisplayContent: "Visible comment",
-				userMetadata: { ao3: { commentId: "ao3-user-ao3-1" } },
+				userMetadata: { thread: { commentId: "ao3-user-ao3-1" } },
 				assistantAuthorName: "FicAuthor",
-				assistantMetadata: { ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
+				assistantMetadata: { thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
 			});
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, {
@@ -616,7 +616,7 @@ describe("session service", () => {
 				llmMetadata: expect.objectContaining({
 					clientMessageId: "ao3-1",
 					displayContent: "Visible comment",
-					ao3: { commentId: "ao3-user-ao3-1" },
+					thread: { commentId: "ao3-user-ao3-1" },
 				}),
 			});
 			expect(valuesMock).toHaveBeenNthCalledWith(
@@ -626,7 +626,7 @@ describe("session service", () => {
 					content: "Author reply",
 					llmMetadata: expect.objectContaining({
 						assistantAuthorName: "FicAuthor",
-						ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
+						thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
 					}),
 				}),
 			);

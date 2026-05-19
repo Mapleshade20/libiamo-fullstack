@@ -121,10 +121,10 @@ function submitComment() {
 	replyTarget = null;
 	session.handleSend(
 		text,
-		{ ao3TargetCommentId: target?.id ?? "" },
+		{ threadTargetCommentId: target?.id ?? "" },
 		{
 			user: {
-				ao3: {
+				thread: {
 					commentId: "ao3-user-{clientMessageId}",
 					targetCommentId: target?.id ?? null,
 					responderName,
@@ -133,7 +133,7 @@ function submitComment() {
 			},
 			agent: {
 				authorName: responderName,
-				ao3: {
+				thread: {
 					commentId: "ao3-agent-{clientMessageId}",
 					parentCommentId: "ao3-user-{clientMessageId}",
 					responderName,

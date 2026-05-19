@@ -208,7 +208,7 @@ describe("createPracticeSession", () => {
 						clientMessageId: "ao3-msg-6",
 						failed: true,
 						displayContent: "Original AO3 reply",
-						ao3: { commentId: "ao3-user-ao3-msg-6", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" },
+						thread: { commentId: "ao3-user-ao3-msg-6", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" },
 					},
 				},
 			],
@@ -221,7 +221,7 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { ao3TargetCommentId: "c1" });
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { threadTargetCommentId: "c1" });
 	});
 
 	it("retries generic threaded replies with their original target comment id", async () => {

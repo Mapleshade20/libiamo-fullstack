@@ -262,7 +262,6 @@ type SessionMessageMetadata = {
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
-	ao3?: unknown;
 	thread?: unknown;
 	model?: string;
 	raw?: unknown;

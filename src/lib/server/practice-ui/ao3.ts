@@ -1,5 +1,4 @@
 import {
-	type Ao3MessageMetadata,
 	type Ao3OpeningState,
 	type Ao3Target,
 	buildAo3UserPrompt,
@@ -8,6 +7,7 @@ import {
 	getAo3AuthorName,
 } from "$lib/components/practice-ui/ao3/helpers";
 import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
+import type { CommentThreadMetadata } from "$lib/components/practice-ui/commentThread";
 import type { SendMessageOptions } from "$lib/server/session";
 
 type PersistedSessionMessage = {
@@ -22,7 +22,7 @@ type Ao3PersistedMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	displayContent?: string;
-	ao3?: Ao3MessageMetadata;
+	thread?: CommentThreadMetadata;
 };
 
 function getAo3PersistedMetadata(value: unknown): Ao3PersistedMetadata {
@@ -37,22 +37,22 @@ function buildAo3RetrySendOptions(params: {
 }): SendMessageOptions | null {
 	const originalUserMessage = params.messages.find((message) => {
 		const metadata = getAo3PersistedMetadata(message.llmMetadata);
-		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.ao3;
+		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.thread;
 	});
 	if (!originalUserMessage) return null;
 
 	const metadata = getAo3PersistedMetadata(originalUserMessage.llmMetadata);
-	const ao3 = metadata.ao3;
-	if (!ao3) return null;
+	const thread = metadata.thread;
+	if (!thread) return null;
 
-	const responderName = ao3.responderName || getAo3AuthorName(params.openingState);
-	const userCommentId = ao3.commentId || `ao3-user-${params.clientMessageId}`;
+	const responderName = thread.responderName || getAo3AuthorName(params.openingState);
+	const userCommentId = thread.commentId || `ao3-user-${params.clientMessageId}`;
 	return {
 		userDisplayContent: metadata.displayContent,
-		userMetadata: { ao3 },
+		userMetadata: { thread },
 		assistantAuthorName: responderName,
 		assistantMetadata: {
-			ao3: {
+			thread: {
 				commentId: `ao3-agent-${params.clientMessageId}`,
 				parentCommentId: userCommentId,
 				responderName,
@@ -81,7 +81,7 @@ function buildAo3NewTurnSendOptions(params: {
 		}),
 		userDisplayContent: params.message,
 		userMetadata: {
-			ao3: {
+			thread: {
 				commentId: userCommentId,
 				targetCommentId: params.target?.id ?? null,
 				responderName,
@@ -90,7 +90,7 @@ function buildAo3NewTurnSendOptions(params: {
 		},
 		assistantAuthorName: responderName,
 		assistantMetadata: {
-			ao3: {
+			thread: {
 				commentId: agentCommentId,
 				parentCommentId: userCommentId,
 				responderName,

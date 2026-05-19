@@ -3,7 +3,6 @@ import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { formatTime, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import type { Ao3MessageMetadata } from "./ao3/helpers";
 import { postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, updateMessageById } from "./chatMessages";
@@ -166,9 +165,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const retryExtraFields: Record<string, string> = {};
-		if (originalUserMessage?.ao3?.targetCommentId) {
-			retryExtraFields.ao3TargetCommentId = originalUserMessage.ao3.targetCommentId;
-		}
 		if (originalUserMessage?.thread?.targetCommentId) {
 			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
 		}
@@ -176,7 +172,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		applySendResult(result, message.clientMessageId, retryText, {
 			authorName: message.authorName,
-			ao3: message.ao3,
 			thread: message.thread,
 		});
 
@@ -217,7 +212,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const resolvedExtraFields = Object.fromEntries(
 			Object.entries(extraFields).map(([key, value]) => [key, value.replaceAll("{clientMessageId}", clientMessageId)]),
 		);
-		const resolveThreadMetadata = <T extends Ao3MessageMetadata | CommentThreadMetadata>(metadata?: T) => {
+		const resolveThreadMetadata = <T extends CommentThreadMetadata>(metadata?: T) => {
 			if (!metadata) return metadata;
 			return Object.fromEntries(
 				Object.entries(metadata).map(([key, value]) => [
@@ -230,7 +225,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			patch
 				? {
 						...patch,
-						ao3: resolveThreadMetadata(patch.ao3),
 						thread: resolveThreadMetadata(patch.thread),
 					}
 				: patch;
@@ -240,7 +234,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		isSubmitting = true;
 
 		const userMsgId = crypto.randomUUID();
-		pendingReplyTargetId = userPatch?.thread?.commentId ?? userPatch?.ao3?.commentId ?? null;
+		pendingReplyTargetId = userPatch?.thread?.commentId ?? null;
 
 		messages = [
 			...messages,

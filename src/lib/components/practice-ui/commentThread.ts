@@ -123,7 +123,7 @@ export function findOpeningCommentTarget<TOpeningComment extends Record<string, 
 }
 
 export function getThreadMetadata(message: ChatMessage, config?: Pick<CommentThreadConfig, "getMetadata">): CommentThreadMetadata {
-	return config?.getMetadata?.(message) ?? message.thread ?? message.ao3 ?? {};
+	return config?.getMetadata?.(message) ?? message.thread ?? {};
 }
 
 export function getCommentIdForMessage(message: ChatMessage, config: Pick<CommentThreadConfig, "idPrefix" | "getMetadata">): string {

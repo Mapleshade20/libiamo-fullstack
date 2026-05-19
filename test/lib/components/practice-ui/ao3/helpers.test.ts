@@ -63,7 +63,7 @@ describe("AO3 helpers", () => {
 				timestamp: "now",
 				authorName: "Learner",
 				clientMessageId: "msg-1",
-				ao3: { commentId: "ao3-user-msg-1", targetCommentId: "c1", responderName: "WispPattio", mode: "reply" },
+				thread: { commentId: "ao3-user-msg-1", targetCommentId: "c1", responderName: "WispPattio", mode: "reply" },
 			},
 			{
 				id: "a1",
@@ -72,7 +72,7 @@ describe("AO3 helpers", () => {
 				timestamp: "now",
 				authorName: "WispPattio",
 				clientMessageId: "msg-1",
-				ao3: { commentId: "ao3-agent-msg-1", parentCommentId: "ao3-user-msg-1", responderName: "WispPattio" },
+				thread: { commentId: "ao3-agent-msg-1", parentCommentId: "ao3-user-msg-1", responderName: "WispPattio" },
 			},
 		];
 

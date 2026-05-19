@@ -38,7 +38,7 @@ async function buildAo3PracticeUiSendOptions(params: BuildPracticeUiSendOptionsP
 	const options = buildAo3SendOptions({
 		openingState: (params.openingState ?? {}) as Ao3OpeningState,
 		messages: await getSessionMessages(params.sessionId),
-		targetCommentId: getFormString(params.formData, "ao3TargetCommentId") || null,
+		targetCommentId: getFormString(params.formData, "threadTargetCommentId") || null,
 		message: params.message,
 		clientMessageId: params.clientMessageId,
 		userName: params.userName,

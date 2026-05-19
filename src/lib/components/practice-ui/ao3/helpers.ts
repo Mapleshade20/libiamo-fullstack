@@ -3,7 +3,6 @@ import {
 	buildCommentThreadTree,
 	buildTargetedCommentPrompt,
 	type CommentThreadConfig,
-	type CommentThreadMetadata,
 	type CommentThreadRenderableComment,
 	type CommentThreadTarget,
 	countThreadComments,
@@ -55,10 +54,6 @@ export type Ao3OpeningState = {
 	previousComments?: Ao3CommentNode[];
 };
 
-export type Ao3MessageMetadata = CommentThreadMetadata & {
-	mode?: "work" | "reply";
-};
-
 export type Ao3Target = CommentThreadTarget & {
 	username: string;
 	comment: string;
@@ -81,7 +76,7 @@ const ao3ThreadConfig: CommentThreadConfig<Ao3CommentNode> = {
 	getText: (comment) => comment.comment,
 	getReplies: (comment) => comment.replies,
 	getTimestamp: (comment) => comment.timestamp,
-	getMetadata: (message) => message.ao3,
+	getMetadata: (message) => message.thread,
 };
 
 function toAo3Target(target: CommentThreadTarget): Ao3Target {
