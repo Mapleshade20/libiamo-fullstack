@@ -140,6 +140,7 @@ function handleReplyToComment(text: string, parentId: string) {
 // ── Build comment tree ───────────────────────────────────────────────
 
 function toTreeNode(comment: RedditRenderableComment): CommentTreeNode {
+	const messageId = comment.messageId;
 	return {
 		id: comment.id,
 		author: comment.author,
@@ -153,7 +154,7 @@ function toTreeNode(comment: RedditRenderableComment): CommentTreeNode {
 		parentId: comment.parentId,
 		deliveryState: comment.deliveryState,
 		role: comment.role,
-		onRetry: comment.role === "agent" ? () => session.handleRetry(comment.messageId!) : undefined,
+		onRetry: comment.role === "agent" && messageId ? () => session.handleRetry(messageId) : undefined,
 		onReply: handleReplyToComment,
 	};
 }
