@@ -626,6 +626,20 @@ describe("session page server", () => {
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
+		it("filters malformed contextPath entries before calling generateHint", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			const contextPath = JSON.stringify([{}, { author: 123, text: null }, { author: "alice", text: "hello" }]);
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+		});
+
 		it("ignores contextPath when it is an empty string", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,

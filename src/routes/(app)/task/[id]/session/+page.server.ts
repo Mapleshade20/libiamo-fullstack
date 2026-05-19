@@ -38,6 +38,22 @@ function mapCompleteSessionError(e: unknown) {
 	return null;
 }
 
+function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
+	if (typeof value !== "string" || !value.trim()) return undefined;
+
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) return undefined;
+		const contextPath = parsed.filter(
+			(item): item is { author: string; text: string } =>
+				Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof item.author === "string" && typeof item.text === "string",
+		);
+		return contextPath.length ? contextPath : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export const load: PageServerLoad = async ({ params, locals, parent }) => {
 	const user = locals.user;
 	if (!user) throw error(401, "Unauthorized");
@@ -213,20 +229,7 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
 
-		// Extract optional contextPath (ancestor comment chain for threaded UIs like Reddit)
-		let contextPath: Array<{ author: string; text: string }> | undefined;
-		const contextPathRaw = formData.get("contextPath");
-		if (typeof contextPathRaw === "string" && contextPathRaw.trim()) {
-			try {
-				const parsed = JSON.parse(contextPathRaw);
-				// Defensive validation: ensure parsed value is an array of expected shape
-				if (Array.isArray(parsed)) {
-					contextPath = parsed;
-				}
-			} catch {
-				// Invalid JSON – ignore and generate hint without context
-			}
-		}
+		const contextPath = parseHintContextPath(formData.get("contextPath"));
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);

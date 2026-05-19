@@ -52,6 +52,11 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	return false;
 }
 
+function getRetryAgentCommentId(userCommentId: string | undefined, clientMessageId: string, persistedMessageId: number | string): string {
+	if (userCommentId?.includes("-user-")) return userCommentId.replace("-user-", "-agent-");
+	return `thread-agent-${clientMessageId || persistedMessageId}`;
+}
+
 export function buildChatMessages({
 	rawMessages,
 	formatTimestamp,
@@ -104,7 +109,7 @@ export function buildChatMessages({
 				? {
 						thread: {
 							...metadata.thread,
-							commentId: metadata.thread.commentId?.replace("-user-", "-agent-") ?? `agent-${metadata.clientMessageId ?? message.id}`,
+							commentId: getRetryAgentCommentId(metadata.thread.commentId, metadata.clientMessageId, message.id),
 							parentCommentId: metadata.thread.commentId,
 						},
 					}

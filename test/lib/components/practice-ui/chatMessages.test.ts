@@ -217,6 +217,30 @@ describe("buildChatMessages", () => {
 		});
 	});
 
+	it("uses a distinct generic retry agent comment id when the user comment id has no user marker", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 12,
+					role: "user",
+					content: "Prompt-only context",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: {
+						clientMessageId: "msg-custom",
+						failed: true,
+						thread: { commentId: "custom-comment-id", targetCommentId: "c1", responderName: "Commenter" },
+					},
+				},
+			],
+		});
+
+		expect(result[1]).toMatchObject({
+			thread: { commentId: "thread-agent-msg-custom", parentCommentId: "custom-comment-id" },
+		});
+		expect(result[1].thread?.commentId).not.toBe(result[1].thread?.parentCommentId);
+	});
+
 	it("ignores malformed llm metadata and avoids retry placeholders", () => {
 		const result = buildChatMessages({
 			...baseOptions,

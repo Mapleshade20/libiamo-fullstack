@@ -35,15 +35,17 @@ function appendMessages(ctx: string, label: string, items: Array<Record<string, 
 	return `${ctx}\n${label}:\n${lines.join("\n")}`;
 }
 
-function flattenRedditContextComments(
-	comments: Array<{ author?: string; text?: string; replies?: unknown }> = [],
-): Array<Record<string, string | undefined>> {
-	return comments.flatMap((comment) => [
-		{ author: comment.author, text: comment.text },
-		...flattenRedditContextComments(
+function formatRedditContextComments(comments: Array<{ author?: string; text?: string; replies?: unknown }> = [], depth = 0): string[] {
+	return comments.flatMap((comment) => {
+		const author = stringifyMessageValue(comment.author);
+		const text = stringifyMessageValue(comment.text);
+		const currentLine = author || text ? [`${"  ".repeat(depth)}- ${[author, text].filter(Boolean).join(": ")}`] : [];
+		const replyLines = formatRedditContextComments(
 			Array.isArray(comment.replies) ? (comment.replies as Array<{ author?: string; text?: string; replies?: unknown }>) : [],
-		),
-	]);
+			depth + 1,
+		);
+		return [...currentLine, ...replyLines];
+	});
 }
 
 function buildRedditContext(openingState: Record<string, unknown>): string {
@@ -54,8 +56,8 @@ function buildRedditContext(openingState: Record<string, unknown>): string {
 	if (post?.author) ctx += `\nPost author: ${post.author}`;
 	if (post?.title) ctx += `\nTitle: ${post.title}`;
 	if (post?.body) ctx += `\nContent: ${post.body}`;
-	const flattenedComments = flattenRedditContextComments(comments ?? []);
-	if (flattenedComments.length) ctx = appendMessages(ctx, "Existing nested comments", flattenedComments);
+	const commentLines = formatRedditContextComments(comments ?? []);
+	if (commentLines.length) ctx += `\nExisting nested comments:\n${commentLines.join("\n")}`;
 	ctx +=
 		"\nRoleplay rule: each learner comment may target a different Reddit commenter. When the learner prompt specifies a comment author to roleplay as, reply only as that person for that turn.";
 	return ctx;

@@ -873,7 +873,7 @@ describe("session service", () => {
 					openingState: {
 						post: { title: "Learning Spanish tips?" },
 						previousComments: [
-							{ author: "SpanishPro", text: "Use Anki for vocab." },
+							{ author: "SpanishPro", text: "Use Anki for vocab.", replies: [{ author: "OP", text: "Thanks!" }] },
 							{ author: "TravellerJane", text: "Immersion works best!" },
 						],
 					},
@@ -883,9 +883,9 @@ describe("session service", () => {
 			const result = await startSession(1, USER_ID);
 
 			expect(result.systemPrompt).toContain("Existing nested comments");
-			expect(result.systemPrompt).toContain("SpanishPro");
-			expect(result.systemPrompt).toContain("Use Anki for vocab.");
-			expect(result.systemPrompt).toContain("TravellerJane");
+			expect(result.systemPrompt).toContain("- SpanishPro: Use Anki for vocab.");
+			expect(result.systemPrompt).toContain("  - OP: Thanks!");
+			expect(result.systemPrompt).toContain("- TravellerJane: Immersion works best!");
 		});
 
 		it("shows the base label with no extra lines when post is empty", async () => {
