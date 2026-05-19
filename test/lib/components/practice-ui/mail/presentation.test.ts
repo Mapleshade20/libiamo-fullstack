@@ -69,6 +69,28 @@ describe("mail presentation", () => {
 		).toBe("Re: New timeline");
 	});
 
+	it("uses the recipient display without an empty angle address", () => {
+		const messages = buildMessages("Thanks for the update.");
+		const agentMessage = messages[1];
+		expect(agentMessage).toBeDefined();
+
+		expect(
+			buildGeneratedInboxEmails({
+				messages,
+				agentMessages: agentMessage ? [agentMessage] : [],
+				recipient: { name: "Maya Chen", email: "", display: "Maya Chen" },
+				userName: "Learner",
+				noSubjectLabel: "(No Subject)",
+				tutorReplyLabel: "Tutor response",
+				fallbackTime: "Today",
+			})[0],
+		).toMatchObject({
+			from: "Maya Chen",
+			displayFrom: "Maya Chen",
+			fromAddress: "",
+		});
+	});
+
 	it("builds agent messages for send result states", () => {
 		expect(
 			buildAgentMessageFromSendResult({

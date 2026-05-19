@@ -4,6 +4,11 @@ import { ensureReplySubject, normalizeAgentSignature, normalizeReplySubject, par
 import type { NormalizedMailEmail } from "./types";
 import type { MailContact } from "./userPool";
 
+function formatContactDisplay(name: string, email: string) {
+	if (email && name && name !== email) return `${name} <${email}>`;
+	return name || email;
+}
+
 export function buildGeneratedInboxEmails({
 	messages,
 	agentMessages,
@@ -35,18 +40,19 @@ export function buildGeneratedInboxEmails({
 		const body = normalizeAgentSignature(parsedReply.body, recipient.name);
 		const fromName = !message.authorName || message.authorName === tutorReplyLabel ? recipient.name : message.authorName;
 		const fromAddress = recipient.email;
+		const displayFrom = formatContactDisplay(fromName, fromAddress);
 		const displaySubject = previousDraft && !parsedReply.hasExplicitSubject ? ensureReplySubject(subject, noSubjectLabel) : subject;
 
 		return {
 			id: `agent-${message.id || index}`,
-			from: `${fromName} <${fromAddress}>`,
+			from: displayFrom,
 			to: userName,
 			subject: displaySubject,
 			body,
 			time: message.timestamp || fallbackTime,
 			fromName,
 			fromAddress,
-			displayFrom: `${fromName} <${fromAddress}>`,
+			displayFrom,
 			preview: body,
 			deliveryState: message.deliveryState,
 			clientMessageId: message.clientMessageId,

@@ -25,7 +25,7 @@ import Overlays from "./Overlays.svelte";
 import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "./presentation";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailOpeningState } from "./types";
-import { getMailContact } from "./userPool";
+import { getMailContact, getMailContactFromOpeningEmails } from "./userPool";
 
 interface Props {
 	taskId?: string | number;
@@ -76,9 +76,9 @@ let draftStorageReady = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
 
-const recipient = $derived(getMailContact(taskId || sessionId || userName));
 const todayLabel = $derived(getTodayDateString(language, timeZone));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
+const recipient = $derived(getMailContactFromOpeningEmails(openingStateData.emails, getMailContact(taskId || sessionId || userName)));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
 const agentMessages = $derived(messages.filter((m) => m.role === "agent" && !m.isHidden));
 const currentTurns = $derived(sentMessages.length);
