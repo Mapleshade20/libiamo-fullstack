@@ -67,7 +67,7 @@ export type Ao3RenderableComment = CommentThreadRenderableComment & {
 	replies: Ao3RenderableComment[];
 };
 
-export const DEFAULT_AO3_ICON = "https://archiveofourown.org/images/skins/iconsets/default/icon_user.png";
+export const DEFAULT_AO3_ICON = "/ao3/icon_user.png";
 
 const ao3ThreadConfig: CommentThreadConfig<Ao3CommentNode> = {
 	idPrefix: "ao3",
