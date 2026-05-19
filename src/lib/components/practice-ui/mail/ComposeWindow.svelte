@@ -4,10 +4,9 @@ import { fly } from "svelte/transition";
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
-import ComposeHintPanel from "./ComposeHintPanel.svelte";
 import ComposeToolbar, { type ComposeActiveLayouts } from "./ComposeToolbar.svelte";
 import { normalizeMailBodySpacing, plainTextToDraftHtml, sanitizeDraftBodyHtml } from "./mailUtils";
-import type { DraftEmail, MailHint } from "./types";
+import type { DraftEmail } from "./types";
 
 let {
 	draft = $bindable({ to: "", subject: "", body: "" } as DraftEmail),
@@ -16,15 +15,10 @@ let {
 	isInitializing = false,
 	limitReached = false,
 	sessionId = null as number | null,
-	hint = null as MailHint | null,
-	isGettingHint = false,
-	showHintPanel = false,
 	t = {} as Record<string, string>,
 	onClose = () => {},
 	onMockAction = () => {},
 	onSend = () => {},
-	onGetHint = () => {},
-	onCloseHint = () => {},
 }: {
 	draft?: DraftEmail;
 	isSubmitting?: boolean;
@@ -32,15 +26,10 @@ let {
 	isInitializing?: boolean;
 	limitReached?: boolean;
 	sessionId?: number | null;
-	hint?: MailHint | null;
-	isGettingHint?: boolean;
-	showHintPanel?: boolean;
 	t?: Record<string, string>;
 	onClose?: () => void;
 	onMockAction?: () => void;
 	onSend?: () => void;
-	onGetHint?: () => void;
-	onCloseHint?: () => void;
 } = $props();
 
 let bodyEditor = $state<HTMLDivElement | null>(null);
@@ -368,39 +357,6 @@ function handlePaste(event: ClipboardEvent) {
 	syncDraftFromEditor();
 }
 
-function splitSubjectFromHint(text: string) {
-	const lines = text.trim().split(/\r?\n/);
-	const subjectLineIndex = lines.findIndex((line) => /^subject\s*:/i.test(line.trim()));
-	if (subjectLineIndex === -1) return { subject: "", body: text.trim() };
-
-	const subject = lines[subjectLineIndex]?.replace(/^subject\s*:/i, "").trim() ?? "";
-	const body = lines
-		.filter((_, index) => index !== subjectLineIndex)
-		.join("\n")
-		.trim();
-	return { subject, body };
-}
-
-function insertTextAtCursor(text: string) {
-	if (!bodyEditor || editorDisabled || !text.trim()) return;
-	runEditorCommand("insertText", text);
-}
-
-function insertHintText(text: string, kind: "body" | "subject" = "body") {
-	const parsed = splitSubjectFromHint(text);
-	const subject =
-		kind === "subject"
-			? text
-					.trim()
-					.replace(/^subject\s*:/i, "")
-					.trim()
-			: parsed.subject;
-	const bodyText = kind === "subject" ? "" : parsed.body;
-
-	if (subject) draft = { ...draft, subject };
-	if (bodyText) insertTextAtCursor(bodyText);
-}
-
 onMount(() => {
 	const width = Math.min(920, window.innerWidth - 72);
 	const height = Math.min(700, window.innerHeight - 72);
@@ -478,22 +434,7 @@ $effect(() => {
 		onBlur={syncDraftFromEditor}
 		onPaste={handlePaste}
 	/>
-	{#if showHintPanel}
-		<ComposeHintPanel {hint} {isGettingHint} {t} {onCloseHint} onInsertHint={insertHintText} />
-	{/if}
-	<ComposeActionBar
-		{draft}
-		{sessionId}
-		{isSubmitting}
-		{isCompleted}
-		{isInitializing}
-		{isGettingHint}
-		{limitReached}
-		{t}
-		{onMockAction}
-		{onGetHint}
-		{onSend}
-	/>
+	<ComposeActionBar {draft} {sessionId} {isSubmitting} {isCompleted} {isInitializing} {limitReached} {t} {onMockAction} {onSend} />
 	<div class="resize-grip" role="presentation" onpointerdown={startResize}></div>
 </div>
 

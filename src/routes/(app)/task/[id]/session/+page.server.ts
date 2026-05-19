@@ -8,15 +8,7 @@ import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
-import {
-	completeSession,
-	generateHint,
-	generateMailHint,
-	getSessionOrFail,
-	type SendMessageOptions,
-	sendMessage,
-	startSession,
-} from "$lib/server/session";
+import { completeSession, generateHint, getSessionOrFail, type SendMessageOptions, sendMessage, startSession } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -297,15 +289,6 @@ export const actions: Actions = {
 				with: { template: true },
 			});
 			if (!taskData) return fail(404, { error: "Task not found" });
-
-			if (taskData.template.ui === "apple_mail") {
-				const result = await generateMailHint(sessionId, {
-					to: formData.get("to")?.toString() ?? "",
-					subject: formData.get("subject")?.toString() ?? "",
-					body: formData.get("body")?.toString() ?? "",
-				});
-				return { success: true, ...result };
-			}
 
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };

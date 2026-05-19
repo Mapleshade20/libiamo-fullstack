@@ -14,7 +14,6 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		sendMessage: vi.fn(),
 		completeSession: vi.fn(),
 		generateHint: vi.fn(),
-		generateMailHint: vi.fn(),
 		getSessionOrFail: vi.fn(),
 	},
 }));
@@ -730,22 +729,15 @@ describe("session page server", () => {
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
-		it("routes apple_mail hints to generateMailHint with the current draft", async () => {
-			const mockMailHint = {
-				mailHint: {
-					subjectSuggestion: { text: "Meeting update" },
-					nextSection: { title: "Closing", text: "Thank you for your time." },
-					nextSentence: null,
-					checklist: [],
-				},
-			};
+		it("uses the shared hint generator for apple_mail after mail hints are removed", async () => {
+			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
 			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "apple_mail" as const } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateMailHint.mockResolvedValue(mockMailHint);
+			mockSessionService.generateHint.mockResolvedValue(mockHints);
 
 			const result = await actions.hint(
 				createFormEvent({
@@ -758,13 +750,8 @@ describe("session page server", () => {
 				}),
 			);
 
-			expect(result).toEqual({ success: true, ...mockMailHint });
-			expect(mockSessionService.generateMailHint).toHaveBeenCalledWith(123, {
-				to: "Maya Chen <maya@example.com>",
-				subject: "Schedule",
-				body: "Hello Maya,",
-			});
-			expect(mockSessionService.generateHint).not.toHaveBeenCalled();
+			expect(result).toEqual({ success: true, ...mockHints });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
 		});
 
 		it.each([

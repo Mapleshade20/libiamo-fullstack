@@ -694,27 +694,6 @@ export type HintResult = {
 	hints: Array<{ text: string; translation: string }>;
 };
 
-export type MailHintResult = {
-	mailHint: {
-		subjectSuggestion: {
-			text: string;
-		};
-		nextSection: {
-			title: string;
-			text: string;
-		} | null;
-		nextSentence: {
-			title: string;
-			text: string;
-		} | null;
-		checklist: Array<{
-			text: string;
-			done: boolean;
-			note: string;
-		}>;
-	};
-};
-
 const HintSchema = z.object({
 	hints: z
 		.array(
@@ -726,74 +705,6 @@ const HintSchema = z.object({
 		.min(1)
 		.max(3),
 });
-
-const emptyMailHint = {
-	subjectSuggestion: { text: "" },
-	nextSection: null,
-	nextSentence: null,
-	checklist: [],
-};
-
-const MailHintSectionSchema = z
-	.object({
-		title: z.string().catch("").default("").describe("A short label for this suggestion."),
-		text: z.string().catch("").default("").describe("Suggested email body text. Never include a subject line."),
-	})
-	.catch({ title: "", text: "" });
-
-const OptionalMailHintSectionSchema = MailHintSectionSchema.nullish().transform((section) => {
-	if (!section?.text?.trim()) return null;
-	return section;
-});
-
-const MailHintChecklistItemSchema = z
-	.object({
-		text: z.string().catch("").default("").describe("A concise checklist item for a good email response."),
-		done: z.boolean().catch(false).default(false).describe("Whether the current draft already satisfies this item."),
-		note: z.string().catch("").default("").describe("A brief explanation or reminder for the student."),
-	})
-	.catch({ text: "", done: false, note: "" });
-
-const MailHintSchema = z.object({
-	mailHint: z
-		.object({
-			subjectSuggestion: z
-				.object({
-					text: z.string().catch("").default("").describe("A concise email subject line suggestion. Do not include the literal prefix 'Subject:'."),
-				})
-				.catch({ text: "" })
-				.nullish()
-				.transform((suggestion) => suggestion ?? { text: "" }),
-			nextSection: OptionalMailHintSectionSchema.default(null),
-			nextSentence: OptionalMailHintSectionSchema.default(null),
-			checklist: z
-				.array(MailHintChecklistItemSchema)
-				.nullish()
-				.transform((items) => (items ?? []).filter((item) => item.text.trim() || item.note.trim()).slice(0, 6)),
-		})
-		.catch(emptyMailHint)
-		.default(emptyMailHint),
-});
-
-const MAIL_HINT_THREAD_MESSAGE_LIMIT = 8;
-
-function buildMailHintThreadContext(messages: Array<{ role: string; content: string; llmMetadata?: unknown }>) {
-	const visibleMessages = messages.filter((m) => !isHiddenUserMessage(m));
-	if (!visibleMessages.length) return "(No submitted email thread yet)";
-
-	const omittedCount = Math.max(0, visibleMessages.length - MAIL_HINT_THREAD_MESSAGE_LIMIT);
-	const recentMessages = visibleMessages.slice(-MAIL_HINT_THREAD_MESSAGE_LIMIT);
-	const renderedMessages = recentMessages.map((message, index) => {
-		const label = message.role === "user" ? "Learner sent" : "Received reply";
-		const bodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(message.llmMetadata));
-		const layout = bodyLayout ? `\nBody layout:\n${bodyLayout}` : "";
-		return `${omittedCount + index + 1}. [${label}]\n${getMessageDisplayContent(message)}${layout}`;
-	});
-
-	return [`${omittedCount ? `(${omittedCount} earlier submitted message${omittedCount === 1 ? "" : "s"} omitted)` : ""}`, ...renderedMessages]
-		.filter(Boolean)
-		.join("\n\n");
-}
 
 export type ContextComment = {
 	author: string;
@@ -854,74 +765,6 @@ ${contextPath && contextPath.length > 0 ? "    4. The suggestions should be rele
 	];
 
 	return await createStructuredOutput(HintSchema, messages, {}, session.userId);
-}
-
-export async function generateMailHint(sessionId: number, draft: { to?: string; subject?: string; body?: string }): Promise<MailHintResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
-			task: true,
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (!session.task) throw new Error("Task not found");
-
-	const learningLanguageName = getLanguageEnglishName(session.task.language);
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; scenarioContext?: string };
-	const mailThreadContext = buildMailHintThreadContext(session.messages);
-
-	const prompt = `You are an expert language tutor helping a student write an email in ${learningLanguageName}.
-
-	## Mail Task Context
-	${snapshot.systemPrompt}
-
-	## Recent Submitted Mail Thread
-	${mailThreadContext}
-
-	## Current Unsaved Draft
-	To: ${draft.to || "(empty)"}
-	Subject: ${draft.subject || "(empty)"}
-	Body:
-	${draft.body || "(empty)"}
-
-	## Instructions
-	Provide practical writing help for the student's current email draft. Keep the JSON compact.
-	Use the recent submitted mail thread to understand where the conversation is, what has already been asked or answered, and what the current draft should do next.
-	1. The nextSection.text and nextSentence.text MUST be written in ${learningLanguageName.toUpperCase()} ONLY when those objects are present.
-	2. The checklist text and notes should be concise and written in ${learningLanguageName.toUpperCase()} where possible.
-	3. Provide both nextSentence and nextSection when each would help. They should serve different purposes, not duplicate the same idea.
-	4. nextSentence should be one concise sentence that can be inserted at the cursor or used as an immediate local continuation.
-	5. nextSection should be a useful paragraph or short section for the next missing part of the email, such as a closing request, summary, next steps, sign-off, or missing task response.
-	6. If the draft is nearly complete, nextSentence can suggest a final transition while nextSection can suggest a polished closing/signature block.
-	7. Return either field as null only when that specific type of help would not add value.
-	8. Do not write a full replacement email unless the draft is empty.
-	9. Respect email conventions: greeting, purpose, response to the prompt, appropriate tone, clear closing.
-	10. Mark checklist items done only when the current draft clearly satisfies them.
-	11. Put any subject-line idea ONLY in subjectSuggestion.text. Do NOT include "Subject:" or a subject line inside nextSection.text or nextSentence.text.
-	12. nextSection.text and nextSentence.text must be body text only, ready to insert into the message body.
-	13. Return up to 6 checklist items, each with concise text and a short note.
-	14. Return ONLY JSON. Do not use Markdown code fences.
-
-	Respond in JSON format:
-	{
-		"mailHint": {
-			"subjectSuggestion": { "text": "subject line without Subject prefix" },
-			"nextSection": { "title": "string", "text": "paragraph to append" },
-			"nextSentence": { "title": "string", "text": "one next sentence" },
-			"checklist": [
-				{ "text": "checklist item", "done": true, "note": "brief note" }
-			]
-		}
-	}`;
-
-	const messages: ChatMessage[] = [
-		{ role: "system", content: prompt },
-		{ role: "user", content: `Help me improve and continue this email in ${learningLanguageName}.` },
-	];
-
-	return await createStructuredOutput(MailHintSchema, messages, { temperature: 0.2, maxTokens: 1600 }, session.userId);
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

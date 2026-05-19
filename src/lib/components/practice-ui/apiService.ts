@@ -30,12 +30,3 @@ export function requestAgentOpeningAction(sessionId: number | string, message = 
 	formData.append("clientMessageId", `join-${sessionId}`);
 	return sendFormAction("send", formData);
 }
-
-export function getMailHintAction(sessionId: number | string, draft: { to: string; subject: string; body: string }, signal?: AbortSignal) {
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	formData.append("to", draft.to);
-	formData.append("subject", draft.subject);
-	formData.append("body", draft.body);
-	return sendFormAction("hint", formData, signal);
-}

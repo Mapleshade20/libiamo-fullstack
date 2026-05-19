@@ -28,22 +28,3 @@ export type NormalizedMailEmail = MailEmail & {
 	retryText?: string;
 	messageId?: string;
 };
-
-export type MailHint = {
-	subjectSuggestion?: {
-		text: string;
-	} | null;
-	nextSection?: {
-		title: string;
-		text: string;
-	} | null;
-	nextSentence?: {
-		title: string;
-		text: string;
-	} | null;
-	checklist?: Array<{
-		text: string;
-		done: boolean;
-		note: string;
-	}>;
-};

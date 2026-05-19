@@ -4,7 +4,7 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
-import { completeAction, getMailHintAction, postAction, requestAgentOpeningAction } from "../apiService";
+import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
@@ -24,7 +24,7 @@ import {
 import Overlays from "./Overlays.svelte";
 import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "./presentation";
 import Sidebar from "./Sidebar.svelte";
-import type { DraftEmail, MailHint, MailOpeningState } from "./types";
+import type { DraftEmail, MailOpeningState } from "./types";
 import { getMailContact } from "./userPool";
 
 interface Props {
@@ -65,10 +65,7 @@ let showEvaluationModal = $state(false);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
-let showHintPanel = $state(false);
-let isGettingHint = $state(false);
 let feedback = $state<TutorFeedback | null>(null);
-let mailHint = $state<MailHint | null>(null);
 let messages = $state<ChatMessage[]>([]);
 let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
@@ -78,7 +75,6 @@ let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
 let draftStorageReady = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
-let hintAbortController: AbortController | null = null;
 
 const recipient = $derived(getMailContact(taskId || sessionId || userName));
 const todayLabel = $derived(getTodayDateString(language, timeZone));
@@ -154,7 +150,6 @@ function loadSavedDraft(): DraftEmail {
 
 function openComposer(useSavedDraft = false) {
 	draft = useSavedDraft ? loadSavedDraft() : getDefaultDraft();
-	mailHint = null;
 	showCompose = true;
 	showSidebar = false;
 }
@@ -277,44 +272,6 @@ async function handleComplete(force = false) {
 		console.error("Mail completion failed:", error);
 	} finally {
 		isCompleting = false;
-	}
-}
-
-async function handleGetHint() {
-	if (isGettingHint) {
-		showHintPanel = true;
-		return;
-	}
-	if (!sessionId || isCompleted || isInitializing || limitReached) return;
-
-	isGettingHint = true;
-	showHintPanel = true;
-	mailHint = null;
-	hintAbortController = new AbortController();
-
-	try {
-		const result = await getMailHintAction(sessionId, draft, hintAbortController.signal);
-		if (result.type === "success" && result.data) {
-			mailHint = (result.data as any).mailHint as MailHint;
-		}
-	} catch (error) {
-		if (error instanceof DOMException && error.name === "AbortError") {
-			console.log("Mail hint request was aborted by user.");
-		} else {
-			console.error("Failed to get mail hints:", error);
-		}
-	} finally {
-		isGettingHint = false;
-		hintAbortController = null;
-	}
-}
-
-function closeHintPanel() {
-	showHintPanel = false;
-	if (isGettingHint && hintAbortController) {
-		hintAbortController.abort();
-		isGettingHint = false;
-		hintAbortController = null;
 	}
 }
 
@@ -501,10 +458,6 @@ onMount(async () => {
 });
 
 $effect(() => {
-	if (!showCompose) closeHintPanel();
-});
-
-$effect(() => {
 	if (
 		limitReached &&
 		currentTurns > 0 &&
@@ -622,15 +575,10 @@ $effect(() => {
 			{isInitializing}
 			{limitReached}
 			{sessionId}
-			hint={mailHint}
-			{isGettingHint}
-			{showHintPanel}
 			{t}
 			onClose={() => (showCompose = false)}
 			onMockAction={handleMockAction}
 			onSend={handleSendEmail}
-			onGetHint={handleGetHint}
-			onCloseHint={closeHintPanel}
 		/>
 	{/if}
 </div>

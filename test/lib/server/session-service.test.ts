@@ -20,7 +20,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { completeSession, generateHint, generateMailHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
+import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 describe("session service", () => {
 	beforeEach(() => {
@@ -803,152 +803,6 @@ describe("session service", () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 			await expect(generateHint(999)).rejects.toThrow("Session not found");
 		});
-	});
-
-	describe("generateMailHint", () => {
-		it("generates subject, section, sentence, and checklist suggestions from the current draft", async () => {
-			const mockSession = {
-				id: 123,
-				userId: USER_ID,
-				task: { language: "es" },
-				agentPromptSnapshot: { systemPrompt: "Reply to the scheduling email." },
-				messages: [],
-			};
-
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createStructuredOutput.mockResolvedValue({
-				mailHint: {
-					subjectSuggestion: { text: "Reunión del viernes" },
-					nextSection: { title: "Cierre", text: "Quedo atento a su respuesta." },
-					nextSentence: { title: "Siguiente frase", text: "Podemos reunirnos el viernes." },
-					checklist: [{ text: "Incluye saludo", done: true, note: "Ya está presente." }],
-				},
-			});
-
-			const result = await generateMailHint(123, {
-				to: "Maya Chen <maya@example.com>",
-				subject: "Reunión",
-				body: "Hola Maya,",
-			});
-
-			expect(result.mailHint.subjectSuggestion.text).toBe("Reunión del viernes");
-			const call = mockClient.createStructuredOutput.mock.calls[0];
-			expect(call?.[0]).toEqual(expect.any(Object));
-			expect(call?.[2]).toEqual({ temperature: 0.2, maxTokens: 1600 });
-			expect(call?.[3]).toBe(USER_ID);
-			expect(call?.[1]).toEqual([
-				expect.objectContaining({
-					role: "system",
-					content: expect.stringContaining("Current Unsaved Draft"),
-				}),
-				expect.objectContaining({ role: "user", content: expect.stringContaining("Spanish") }),
-			]);
-			const systemPrompt = call?.[1]?.[0]?.content ?? "";
-			expect(systemPrompt).toContain("To: Maya Chen <maya@example.com>");
-			expect(systemPrompt).toContain("Subject: Reunión");
-			expect(systemPrompt).toContain("Body:\n\tHola Maya,");
-			expect(systemPrompt).toContain("SPANISH ONLY");
-			expect(systemPrompt).toContain("Put any subject-line idea ONLY in subjectSuggestion.text");
-
-			const schema = call?.[0] as { parse: (value: unknown) => unknown };
-			expect(
-				schema.parse({
-					mailHint: {
-						subjectSuggestion: null,
-						nextSection: { title: "Empty", text: "   " },
-						nextSentence: { title: "Next", text: "Podemos reunirnos el viernes." },
-						checklist: [
-							{ text: "", done: true, note: "" },
-							{ text: "Confirma la hora", done: "yes", note: "Todavía falta." },
-						],
-					},
-				}),
-			).toEqual({
-				mailHint: {
-					subjectSuggestion: { text: "" },
-					nextSection: null,
-					nextSentence: { title: "Next", text: "Podemos reunirnos el viernes." },
-					checklist: [{ text: "Confirma la hora", done: false, note: "Todavía falta." }],
-				},
-			});
-			expect(schema.parse({ mailHint: { checklist: null } })).toEqual({
-				mailHint: {
-					subjectSuggestion: { text: "" },
-					nextSection: null,
-					nextSentence: null,
-					checklist: [],
-				},
-			});
-			expect(schema.parse({ mailHint: "not-an-object" })).toEqual({
-				mailHint: {
-					subjectSuggestion: { text: "" },
-					nextSection: null,
-					nextSentence: null,
-					checklist: [],
-				},
-			});
-		});
-
-		it("includes recent visible submitted mail thread and hides hidden startup messages", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 123,
-				userId: USER_ID,
-				task: { language: "en" },
-				agentPromptSnapshot: { systemPrompt: "Mail prompt" },
-				messages: [
-					{ role: "user", content: "*User joined the server*", llmMetadata: { hidden: true } },
-					{
-						role: "user",
-						content: "To: Maya\nSubject: Status\n\nPreviously submitted email",
-						llmMetadata: { hidden: false, mailBodyHtml: '<div style="text-align: center">Previously submitted email</div>' },
-					},
-					{ role: "assistant", content: "Thanks, please add the timeline.", llmMetadata: null },
-				],
-			});
-			mockClient.createStructuredOutput.mockResolvedValue({
-				mailHint: { subjectSuggestion: { text: "" }, nextSection: null, nextSentence: null, checklist: [] },
-			});
-
-			await generateMailHint(123, { body: "" });
-
-			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
-			expect(systemPrompt).toContain("Recent Submitted Mail Thread");
-			expect(systemPrompt).toContain("[Learner sent]");
-			expect(systemPrompt).toContain("Previously submitted email");
-			expect(systemPrompt).toContain("Body layout:\n[align=center] Previously submitted email");
-			expect(systemPrompt).toContain("[Received reply]");
-			expect(systemPrompt).toContain("Thanks, please add the timeline.");
-			expect(systemPrompt).not.toContain("*User joined the server*");
-			expect(systemPrompt).toContain("To: (empty)");
-			expect(systemPrompt).toContain("Subject: (empty)");
-			expect(systemPrompt).toContain("Body:\n\t(empty)");
-		});
-
-		it("caps mail hint thread context to recent messages", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 123,
-				userId: USER_ID,
-				task: { language: "en" },
-				agentPromptSnapshot: { systemPrompt: "Mail prompt" },
-				messages: Array.from({ length: 10 }, (_, index) => ({
-					role: index % 2 === 0 ? "user" : "assistant",
-					content: `message-${index + 1}`,
-					llmMetadata: null,
-				})),
-			});
-			mockClient.createStructuredOutput.mockResolvedValue({
-				mailHint: { subjectSuggestion: { text: "" }, nextSection: null, nextSentence: null, checklist: [] },
-			});
-
-			await generateMailHint(123, { body: "Draft" });
-
-			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
-			expect(systemPrompt).toContain("(2 earlier submitted messages omitted)");
-			expect(systemPrompt).not.toMatch(/^message-1$/m);
-			expect(systemPrompt).not.toMatch(/^message-2$/m);
-			expect(systemPrompt).toContain("message-3");
-			expect(systemPrompt).toContain("message-10");
-		});
 
 		it("throws when normal hint session has no task", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
@@ -970,18 +824,6 @@ describe("session service", () => {
 
 			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
 			expect(systemPrompt).toContain("(No messages yet)");
-		});
-
-		it("throws when mail hint session is missing", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-
-			await expect(generateMailHint(999, { body: "Hello" })).rejects.toThrow("Session not found");
-		});
-
-		it("throws when mail hint session has no task", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
-
-			await expect(generateMailHint(123, { body: "Hello" })).rejects.toThrow("Task not found");
 		});
 	});
 
