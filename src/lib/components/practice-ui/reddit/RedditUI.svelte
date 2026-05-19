@@ -153,7 +153,7 @@ function toTreeNode(comment: RedditRenderableComment): CommentTreeNode {
 		parentId: comment.parentId,
 		deliveryState: comment.deliveryState,
 		role: comment.role,
-		onRetry: comment.role === "agent" ? session.handleRetry : undefined,
+		onRetry: comment.role === "agent" ? () => session.handleRetry(comment.messageId!) : undefined,
 		onReply: handleReplyToComment,
 	};
 }
