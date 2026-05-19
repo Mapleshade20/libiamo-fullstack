@@ -40,7 +40,7 @@ describe("buildChatMessages", () => {
 			clientMessageId: "msg-1",
 			retryText: "Hello",
 		});
-		expect(result[1].ao3).toBeUndefined();
+		expect(result[1].thread).toBeUndefined();
 	});
 
 	it("adds a pending retry placeholder after an unfinished persisted user turn", () => {
@@ -172,7 +172,7 @@ describe("buildChatMessages", () => {
 					llmMetadata: {
 						clientMessageId: "msg-ao3",
 						displayContent: "Visible learner comment",
-						ao3: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+						thread: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
 					},
 				},
 				{
@@ -183,14 +183,14 @@ describe("buildChatMessages", () => {
 					llmMetadata: {
 						clientMessageId: "msg-ao3",
 						assistantAuthorName: "Commenter",
-						ao3: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", responderName: "Commenter" },
+						thread: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", responderName: "Commenter" },
 					},
 				},
 			],
 		});
 
-		expect(result[0]).toMatchObject({ text: "Visible learner comment", ao3: { commentId: "ao3-user-msg-ao3" } });
-		expect(result[1]).toMatchObject({ authorName: "Commenter", ao3: { parentCommentId: "ao3-user-msg-ao3" } });
+		expect(result[0]).toMatchObject({ text: "Visible learner comment", thread: { commentId: "ao3-user-msg-ao3" } });
+		expect(result[1]).toMatchObject({ authorName: "Commenter", thread: { parentCommentId: "ao3-user-msg-ao3" } });
 	});
 
 	it("adds AO3 metadata to retry placeholders only for AO3 persisted messages", () => {
@@ -206,15 +206,39 @@ describe("buildChatMessages", () => {
 						clientMessageId: "msg-ao3",
 						failed: true,
 						displayContent: "Visible learner comment",
-						ao3: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+						thread: { commentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
 					},
 				},
 			],
 		});
 
 		expect(result[1]).toMatchObject({
-			ao3: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
+			thread: { commentId: "ao3-agent-msg-ao3", parentCommentId: "ao3-user-msg-ao3", targetCommentId: "c1", responderName: "Commenter" },
 		});
+	});
+
+	it("uses a distinct generic retry agent comment id when the user comment id has no user marker", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 12,
+					role: "user",
+					content: "Prompt-only context",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: {
+						clientMessageId: "msg-custom",
+						failed: true,
+						thread: { commentId: "custom-comment-id", targetCommentId: "c1", responderName: "Commenter" },
+					},
+				},
+			],
+		});
+
+		expect(result[1]).toMatchObject({
+			thread: { commentId: "thread-agent-msg-custom", parentCommentId: "custom-comment-id" },
+		});
+		expect(result[1].thread?.commentId).not.toBe(result[1].thread?.parentCommentId);
 	});
 
 	it("ignores malformed llm metadata and avoids retry placeholders", () => {

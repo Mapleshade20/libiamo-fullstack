@@ -604,9 +604,9 @@ describe("session service", () => {
 			await sendMessage(123, "Visible comment", USER_ID, "ao3-1", {
 				promptContent: "Prompt context plus visible comment",
 				userDisplayContent: "Visible comment",
-				userMetadata: { ao3: { commentId: "ao3-user-ao3-1" } },
+				userMetadata: { thread: { commentId: "ao3-user-ao3-1" } },
 				assistantAuthorName: "FicAuthor",
-				assistantMetadata: { ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
+				assistantMetadata: { thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
 			});
 
 			expect(valuesMock).toHaveBeenNthCalledWith(1, {
@@ -616,7 +616,7 @@ describe("session service", () => {
 				llmMetadata: expect.objectContaining({
 					clientMessageId: "ao3-1",
 					displayContent: "Visible comment",
-					ao3: { commentId: "ao3-user-ao3-1" },
+					thread: { commentId: "ao3-user-ao3-1" },
 				}),
 			});
 			expect(valuesMock).toHaveBeenNthCalledWith(
@@ -626,7 +626,7 @@ describe("session service", () => {
 					content: "Author reply",
 					llmMetadata: expect.objectContaining({
 						assistantAuthorName: "FicAuthor",
-						ao3: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
+						thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
 					}),
 				}),
 			);
@@ -743,6 +743,38 @@ describe("session service", () => {
 		});
 	});
 
+	describe("sendMessage history", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [],
+		};
+
+		it("uses full flat history; threaded UIs provide target context via promptContent", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				messages: [
+					{ id: 10, role: "user", content: "Msg 1" },
+					{ id: 20, role: "assistant", content: "Reply 1" },
+				],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Flat reply", terminate: false });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await sendMessage(123, "New msg", USER_ID);
+
+			const historyArg = mockClient.createStructuredOutput.mock.calls[0][1];
+			expect(historyArg).toEqual([
+				expect.objectContaining({ role: "system" }),
+				expect.objectContaining({ content: "Msg 1" }),
+				expect.objectContaining({ content: "Reply 1" }),
+				expect.objectContaining({ content: "New msg" }),
+			]);
+		});
+	});
+
 	describe("sendMessage maxTurns", () => {
 		const mockSession = {
 			id: 123,
@@ -780,6 +812,191 @@ describe("session service", () => {
 
 			const result = await sendMessage(123, "msg2", USER_ID, undefined, { maxTurns: 0 });
 			expect(result.reply).toBe("reply2");
+		});
+	});
+
+	describe("buildRedditContext", () => {
+		const redditTask = {
+			id: 1,
+			agentPrompt: "You are a Reddit user.",
+			language: "en",
+			template: { ui: "reddit" as const },
+			variant: { openingState: {} },
+		};
+
+		beforeEach(() => {
+			const returningMock = vi.fn().mockResolvedValue([{ id: 1 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+		});
+
+		it("includes post title and body when both are present", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { title: "Best way to learn French?", body: "Any advice?" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Scenario: Reddit post");
+			expect(result.systemPrompt).toContain("Title: Best way to learn French?");
+			expect(result.systemPrompt).toContain("Content: Any advice?");
+		});
+
+		it("shows only the title line when post has no body", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { title: "Title only post" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Title: Title only post");
+			expect(result.systemPrompt).not.toContain("Content:");
+		});
+
+		it("shows only the content line when post has no title", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: { body: "Body only post" } } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).not.toContain("Title:");
+			expect(result.systemPrompt).toContain("Content: Body only post");
+		});
+
+		it("adds existing comments section when previousComments are provided", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: {
+					openingState: {
+						post: { title: "Learning Spanish tips?" },
+						previousComments: [
+							{ author: "SpanishPro", text: "Use Anki for vocab.", replies: [{ author: "OP", text: "Thanks!" }] },
+							{ author: "TravellerJane", text: "Immersion works best!" },
+						],
+					},
+				},
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Existing nested comments");
+			expect(result.systemPrompt).toContain("- SpanishPro: Use Anki for vocab.");
+			expect(result.systemPrompt).toContain("  - OP: Thanks!");
+			expect(result.systemPrompt).toContain("- TravellerJane: Immersion works best!");
+		});
+
+		it("shows the base label with no extra lines when post is empty", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...redditTask,
+				variant: { openingState: { post: {} } },
+			});
+
+			const result = await startSession(1, USER_ID);
+
+			expect(result.systemPrompt).toContain("Scenario: Reddit post");
+			expect(result.systemPrompt).not.toContain("Title:");
+			expect(result.systemPrompt).not.toContain("Content:");
+			expect(result.systemPrompt).not.toContain("Existing comments");
+		});
+	});
+
+	describe("generateHint with contextPath", () => {
+		const mockHintSession = {
+			id: 123,
+			userId: USER_ID,
+			task: { language: "es" },
+			agentPromptSnapshot: { systemPrompt: "Reddit roleplay context" },
+			messages: [{ role: "assistant", content: "Feel free to reply to any comment." }],
+		};
+
+		it("adds comment thread context to the prompt when contextPath is provided", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				hints: [{ text: "¡Me parece bien!", translation: "Sounds good to me!" }],
+			});
+
+			const contextPath = [
+				{ author: "OriginalPoster", text: "Has anyone tried this method?" },
+				{ author: "Replier", text: "Yes, it works great!" },
+			];
+
+			const result = await generateHint(123, contextPath);
+
+			expect(result.hints).toHaveLength(1);
+
+			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const systemContent = promptMessages[0].content as string;
+
+			expect(systemContent).toContain("Reply Context");
+			expect(systemContent).toContain("u/OriginalPoster: Has anyone tried this method?");
+			expect(systemContent).toContain("  u/Replier: Yes, it works great!");
+			expect(systemContent).toContain("4. The suggestions should be relevant");
+		});
+
+		it("skips the context section when contextPath is an empty array", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
+			mockClient.createStructuredOutput.mockResolvedValue({
+				hints: [{ text: "Hola", translation: "Hello" }],
+			});
+
+			await generateHint(123, []);
+
+			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const systemContent = promptMessages[0].content as string;
+
+			expect(systemContent).not.toContain("Reply Context");
+			expect(systemContent).not.toContain("4. The suggestions should be relevant");
+		});
+
+		it("throws when the session has no task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: null,
+				agentPromptSnapshot: { systemPrompt: "..." },
+				messages: [],
+			});
+
+			await expect(generateHint(123)).rejects.toThrow("Task not found");
+		});
+	});
+
+	describe("sendMessage retry with generic thread metadata", () => {
+		const mockSession = {
+			id: 123,
+			status: "in_progress",
+			agentPromptSnapshot: { systemPrompt: "Test prompt." },
+			messages: [
+				{
+					id: 5,
+					role: "user",
+					content: "My failed comment",
+					llmMetadata: {
+						clientMessageId: "msg-retry",
+						failed: true,
+						thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1" },
+					},
+				},
+			],
+		};
+
+		it("updates the existing user message while preserving/merging thread metadata", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockResolvedValue({ reply: "Retry reply", terminate: false });
+
+			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
+			mockDb.update.mockReturnValue({ set: setMock });
+
+			await sendMessage(123, "My failed comment", USER_ID, "msg-retry", {
+				userMetadata: { thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" } },
+			});
+
+			const updateCall = setMock.mock.calls[0][0];
+			expect(updateCall.llmMetadata.failed).toBe(false);
+			expect(updateCall.llmMetadata.thread).toEqual({ commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" });
 		});
 	});
 });

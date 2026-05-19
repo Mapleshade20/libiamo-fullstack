@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLOR_POOL, STATUS_POOL } from "$lib/components/practice-ui/discord/mockData";
+import { COLOR_POOL, STATUS_POOL } from "$lib/components/practice-ui/discord/data";
 import { createSeededRandom, initUserPool, shuffleArray } from "$lib/components/practice-ui/discord/userPool";
 
 describe("userPool", () => {

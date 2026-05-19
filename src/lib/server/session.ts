@@ -35,13 +35,31 @@ function appendMessages(ctx: string, label: string, items: Array<Record<string, 
 	return `${ctx}\n${label}:\n${lines.join("\n")}`;
 }
 
+function formatRedditContextComments(comments: Array<{ author?: string; text?: string; replies?: unknown }> = [], depth = 0): string[] {
+	return comments.flatMap((comment) => {
+		const author = stringifyMessageValue(comment.author);
+		const text = stringifyMessageValue(comment.text);
+		const currentLine = author || text ? [`${"  ".repeat(depth)}- ${[author, text].filter(Boolean).join(": ")}`] : [];
+		const replyLines = formatRedditContextComments(
+			Array.isArray(comment.replies) ? (comment.replies as Array<{ author?: string; text?: string; replies?: unknown }>) : [],
+			depth + 1,
+		);
+		return [...currentLine, ...replyLines];
+	});
+}
+
 function buildRedditContext(openingState: Record<string, unknown>): string {
-	const post = openingState.post as { title?: string; body?: string } | undefined;
-	const comments = openingState.previousComments as Array<{ author?: string; text?: string }> | undefined;
-	let ctx = "Scenario: Reddit post";
+	const post = openingState.post as { title?: string; body?: string; author?: string; subreddit?: string } | undefined;
+	const comments = openingState.previousComments as Array<{ author?: string; text?: string; replies?: unknown }> | undefined;
+	let ctx = "Scenario: Reddit post comment thread";
+	if (post?.subreddit) ctx += `\nSubreddit: ${post.subreddit}`;
+	if (post?.author) ctx += `\nPost author: ${post.author}`;
 	if (post?.title) ctx += `\nTitle: ${post.title}`;
 	if (post?.body) ctx += `\nContent: ${post.body}`;
-	if (comments?.length) ctx = appendMessages(ctx, "Existing comments", comments as Array<Record<string, string | undefined>>);
+	const commentLines = formatRedditContextComments(comments ?? []);
+	if (commentLines.length) ctx += `\nExisting nested comments:\n${commentLines.join("\n")}`;
+	ctx +=
+		"\nRoleplay rule: each learner comment may target a different Reddit commenter. When the learner prompt specifies a comment author to roleplay as, reply only as that person for that turn.";
 	return ctx;
 }
 
@@ -246,7 +264,7 @@ type SessionMessageMetadata = {
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
-	ao3?: unknown;
+	thread?: unknown;
 	model?: string;
 	raw?: unknown;
 };
@@ -369,12 +387,19 @@ export async function sendMessage(
 	// Inject exact JSON schema format to bypass provider compatibility issues
 	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean (true ONLY IF you are severely offended or the user explicitly says goodbye) }`;
 
+	// Build LLM history. Threaded UIs provide precise target context through promptContent
+	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
-	for (const m of activeMessages) {
-		history.push({ role: m.role, content: m.content });
-	}
 	if (!existingUserMessage) {
+		for (const m of activeMessages) {
+			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+		}
 		history.push({ role: "user", content: trimmedPromptContent });
+	} else {
+		// Retry: existing user message is already in activeMessages
+		for (const m of activeMessages) {
+			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+		}
 	}
 
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
@@ -597,7 +622,12 @@ const HintSchema = z.object({
 		.max(3),
 });
 
-export async function generateHint(sessionId: number): Promise<HintResult> {
+export type ContextComment = {
+	author: string;
+	text: string;
+};
+
+export async function generateHint(sessionId: number, contextPath?: ContextComment[]): Promise<HintResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
@@ -617,20 +647,27 @@ export async function generateHint(sessionId: number): Promise<HintResult> {
 		.map((m) => `[${m.role}] ${getMessageDisplayContent(m)}`)
 		.join("\n");
 
+	// Build context section from the ancestor comment path (precise thread extraction)
+	let contextSection = "";
+	if (contextPath && contextPath.length > 0) {
+		const threadLines = contextPath.map((c, i) => `${"  ".repeat(i)}u/${c.author}: ${c.text}`).join("\n");
+		contextSection = `\n## Reply Context (comment thread from root to the comment being replied to)\n${threadLines}\n`;
+	}
+
 	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
 
     ## Roleplay Rules & Context
     ${snapshot.systemPrompt}
 
     ## Conversation History
-    ${history || "(No messages yet)"}
+    ${history || "(No messages yet)"}${contextSection}
 
     ## Critical Instructions
     Suggest 3 natural ways for the student to reply.
     1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
     2. The suggestions must be consistent with the persona and context provided above.
     3. The "translation" field should provide an English translation of that suggestion.
-
+${contextPath && contextPath.length > 0 ? "    4. The suggestions should be relevant to the specific comment thread shown in the Reply Context section.\n" : ""}
     Respond in JSON format:
     {
       "hints": [

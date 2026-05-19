@@ -1,4 +1,4 @@
-import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./mockData";
+import { COLOR_POOL, STATUS_POOL, USER_POOL } from "./data";
 import type { ChatUser } from "./types";
 
 export function createSeededRandom(seed: number) {

@@ -1,4 +1,19 @@
 import type { ChatMessage } from "../chatMessages";
+import {
+	buildCommentThreadTree,
+	buildTargetedCommentPrompt,
+	type CommentThreadConfig,
+	type CommentThreadRenderableComment,
+	type CommentThreadTarget,
+	countThreadComments,
+	findOpeningCommentTarget,
+	findTargetInMessages,
+	flattenOpeningComments,
+	getCommentIdForMessage,
+	getParentCommentIdForMessage,
+	getTargetsFromMessages,
+	normalizeThreadText,
+} from "../commentThread";
 
 export type Ao3CommentNode = {
 	id?: string;
@@ -39,37 +54,37 @@ export type Ao3OpeningState = {
 	previousComments?: Ao3CommentNode[];
 };
 
-export type Ao3MessageMetadata = {
-	commentId?: string;
-	targetCommentId?: string | null;
-	parentCommentId?: string | null;
-	responderName?: string;
-	mode?: "work" | "reply";
-};
-
-export type Ao3Target = {
-	id: string;
+export type Ao3Target = CommentThreadTarget & {
 	username: string;
 	comment: string;
-	depth: number;
-	parentId: string | null;
-	timestamp?: string;
 };
 
-export type Ao3RenderableComment = Ao3Target & {
+export type Ao3RenderableComment = CommentThreadRenderableComment & {
+	username: string;
+	comment: string;
 	chapterTitle?: string;
 	iconUrl?: string;
 	replies: Ao3RenderableComment[];
-	source: "opening" | "session";
-	messageId?: string;
-	deliveryState?: "sent" | "pending" | "failed";
-	retryText?: string;
 };
 
-export const DEFAULT_AO3_ICON = "https://archiveofourown.org/images/skins/iconsets/default/icon_user.png";
+export const DEFAULT_AO3_ICON = "/ao3/icon_user.png";
+
+const ao3ThreadConfig: CommentThreadConfig<Ao3CommentNode> = {
+	idPrefix: "ao3",
+	defaultAuthor: "Anonymous",
+	getAuthor: (comment) => comment.username,
+	getText: (comment) => comment.comment,
+	getReplies: (comment) => comment.replies,
+	getTimestamp: (comment) => comment.timestamp,
+	getMetadata: (message) => message.thread,
+};
+
+function toAo3Target(target: CommentThreadTarget): Ao3Target {
+	return { ...target, username: target.author, comment: target.text };
+}
 
 export function normalizeAo3Text(value: unknown, fallback = ""): string {
-	return typeof value === "string" && value.trim() ? value.trim() : fallback;
+	return normalizeThreadText(value, fallback);
 }
 
 export function getAo3AuthorName(openingState: Ao3OpeningState, fallback = "FicAuthor"): string {
@@ -82,84 +97,22 @@ export function getAo3AdditionalTags(openingState: Ao3OpeningState): string[] {
 	);
 }
 
-function makeOpeningCommentId(path: number[], comment: Ao3CommentNode): string {
-	return normalizeAo3Text(comment.id, `opening-${path.join("-")}`);
-}
-
 export function flattenAo3Comments(comments: Ao3CommentNode[] = [], depth = 0, parentId: string | null = null, path: number[] = []): Ao3Target[] {
-	return comments.flatMap((comment, index) => {
-		const currentPath = [...path, index];
-		const id = makeOpeningCommentId(currentPath, comment);
-		const target: Ao3Target = {
-			id,
-			username: normalizeAo3Text(comment.username, "Anonymous"),
-			comment: normalizeAo3Text(comment.comment),
-			depth,
-			parentId,
-			timestamp: normalizeAo3Text(comment.timestamp) || undefined,
-		};
-		return [target, ...flattenAo3Comments(comment.replies ?? [], depth + 1, id, currentPath)];
-	});
-}
-
-function makeOpeningTree(comments: Ao3CommentNode[] = [], depth = 0, parentId: string | null = null, path: number[] = []): Ao3RenderableComment[] {
-	return comments.map((comment, index) => {
-		const currentPath = [...path, index];
-		const id = makeOpeningCommentId(currentPath, comment);
-		return {
-			id,
-			username: normalizeAo3Text(comment.username, "Anonymous"),
-			comment: normalizeAo3Text(comment.comment),
-			depth,
-			parentId,
-			timestamp: normalizeAo3Text(comment.timestamp) || undefined,
-			chapterTitle: normalizeAo3Text(comment.chapterTitle) || undefined,
-			iconUrl: normalizeAo3Text(comment.iconUrl, DEFAULT_AO3_ICON),
-			replies: makeOpeningTree(comment.replies ?? [], depth + 1, id, currentPath),
-			source: "opening",
-		};
-	});
+	return flattenOpeningComments(comments, ao3ThreadConfig, depth, parentId, path).map(toAo3Target);
 }
 
 export function findAo3Target(openingState: Ao3OpeningState, targetCommentId: string | null | undefined): Ao3Target | null {
-	if (!targetCommentId) return null;
-	return flattenAo3Comments(openingState.previousComments ?? []).find((target) => target.id === targetCommentId) ?? null;
-}
-
-function getMessageAo3(message: ChatMessage): Ao3MessageMetadata {
-	return message.ao3 ?? {};
-}
-
-function getCommentIdForMessage(message: ChatMessage): string {
-	const ao3 = getMessageAo3(message);
-	if (ao3.commentId) return ao3.commentId;
-	if (message.role === "user" && message.clientMessageId) return `ao3-user-${message.clientMessageId}`;
-	if (message.role === "agent" && message.clientMessageId) return `ao3-agent-${message.clientMessageId}`;
-	return `ao3-${message.role}-${message.id}`;
-}
-
-function getParentIdForMessage(message: ChatMessage): string | null {
-	const ao3 = getMessageAo3(message);
-	if (message.role === "user") return ao3.targetCommentId ?? null;
-	return ao3.parentCommentId ?? (message.clientMessageId ? `ao3-user-${message.clientMessageId}` : null);
+	const target = findOpeningCommentTarget(openingState.previousComments ?? [], ao3ThreadConfig, targetCommentId);
+	return target ? toAo3Target(target) : null;
 }
 
 export function getAo3TargetsFromMessages(messages: ChatMessage[]): Ao3Target[] {
-	return messages
-		.filter((message) => !message.isHidden)
-		.map((message) => ({
-			id: getCommentIdForMessage(message),
-			username: message.authorName,
-			comment: message.text,
-			depth: 0,
-			parentId: getParentIdForMessage(message),
-			timestamp: message.timestamp,
-		}));
+	return getTargetsFromMessages(messages, ao3ThreadConfig).map(toAo3Target);
 }
 
 export function findAo3TargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): Ao3Target | null {
-	if (!targetCommentId) return null;
-	return getAo3TargetsFromMessages(messages).find((target) => target.id === targetCommentId) ?? null;
+	const target = findTargetInMessages(messages, ao3ThreadConfig, targetCommentId);
+	return target ? toAo3Target(target) : null;
 }
 
 export function resolveAo3Responder(openingState: Ao3OpeningState, target: Ao3Target | null): string {
@@ -174,32 +127,16 @@ export function buildAo3UserPrompt(params: {
 }): string {
 	const workTitle = normalizeAo3Text(params.openingState.workTitle, "this work");
 	const authorName = getAo3AuthorName(params.openingState);
-	const base = params.target
-		? `The learner replied to this AO3 comment on "${workTitle}":\nComment author you must roleplay as: ${params.responderName}\nOriginal comment: ${params.target.comment}`
-		: `The learner left a new top-level AO3 comment on "${workTitle}" by ${authorName}. You must roleplay as the work author, ${params.responderName}.`;
-
-	return `${base}\n\nLearner's comment:\n${params.comment}\n\nReply as ${params.responderName} with only the AO3 comment text. Stay in character as that commenter for this turn only.`;
-}
-
-function attachComment(root: Ao3RenderableComment[], comment: Ao3RenderableComment) {
-	if (!comment.parentId) {
-		root.push(comment);
-		return;
-	}
-
-	const stack = [...root];
-	while (stack.length) {
-		const current = stack.shift();
-		if (!current) continue;
-		if (current.id === comment.parentId) {
-			comment.depth = current.depth + 1;
-			current.replies.push(comment);
-			return;
-		}
-		stack.push(...current.replies);
-	}
-
-	root.push(comment);
+	return buildTargetedCommentPrompt({
+		surfaceName: "AO3",
+		containerDescription: `"${workTitle}"${params.target ? "" : ` by ${authorName}`}`,
+		containerAuthorName: "the work author",
+		comment: params.comment,
+		target: params.target,
+		responderName: params.responderName,
+		topLevelActionDescription: "new top-level AO3 comment",
+		replyActionDescription: "replied to this AO3 comment",
+	});
 }
 
 export function buildAo3CommentTree(params: {
@@ -208,31 +145,26 @@ export function buildAo3CommentTree(params: {
 	userAvatarUrl?: string;
 	agentIconUrl?: string;
 }): Ao3RenderableComment[] {
-	const root = makeOpeningTree(params.openingState.previousComments ?? []);
-
-	for (const message of params.messages) {
-		if (message.isHidden) continue;
-		const parentId = getParentIdForMessage(message);
-		const comment: Ao3RenderableComment = {
-			id: getCommentIdForMessage(message),
-			username: message.authorName,
-			comment: message.text,
-			depth: 0,
-			parentId,
-			timestamp: message.timestamp,
+	return buildCommentThreadTree<Ao3CommentNode, Ao3RenderableComment>({
+		openingComments: params.openingState.previousComments ?? [],
+		messages: params.messages,
+		config: ao3ThreadConfig,
+		mapOpeningComment: (comment, base) => ({
+			username: base.author,
+			comment: base.text,
+			chapterTitle: normalizeAo3Text(comment.chapterTitle) || undefined,
+			iconUrl: normalizeAo3Text(comment.iconUrl, DEFAULT_AO3_ICON),
+		}),
+		mapMessageComment: (message, base) => ({
+			username: base.author,
+			comment: base.text,
 			iconUrl: message.role === "user" ? params.userAvatarUrl || DEFAULT_AO3_ICON : params.agentIconUrl || DEFAULT_AO3_ICON,
-			replies: [],
-			source: "session",
-			messageId: message.id,
-			deliveryState: message.deliveryState,
-			retryText: message.retryText,
-		};
-		attachComment(root, comment);
-	}
-
-	return root;
+		}),
+	});
 }
 
 export function countAo3Comments(comments: Ao3RenderableComment[]): number {
-	return comments.reduce((count, comment) => count + 1 + countAo3Comments(comment.replies), 0);
+	return countThreadComments(comments);
 }
+
+export { getCommentIdForMessage as getAo3CommentIdForMessage, getParentCommentIdForMessage as getAo3ParentCommentIdForMessage };

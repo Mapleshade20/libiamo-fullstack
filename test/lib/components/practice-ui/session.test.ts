@@ -208,7 +208,7 @@ describe("createPracticeSession", () => {
 						clientMessageId: "ao3-msg-6",
 						failed: true,
 						displayContent: "Original AO3 reply",
-						ao3: { commentId: "ao3-user-ao3-msg-6", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" },
+						thread: { commentId: "ao3-user-ao3-msg-6", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" },
 					},
 				},
 			],
@@ -221,7 +221,43 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { ao3TargetCommentId: "c1" });
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { threadTargetCommentId: "c1" });
+	});
+
+	it("retries generic threaded replies with their original target comment id", async () => {
+		mocks.attemptAgentReply.mockResolvedValue({
+			status: "reply",
+			text: "Recovered Reddit response",
+			terminated: false,
+		});
+		const existingSession = {
+			id: 305,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{
+					id: 7,
+					role: "user",
+					content: "Prompt-only Reddit context",
+					createdAt: "2026-05-18T00:00:00.000Z",
+					llmMetadata: {
+						clientMessageId: "reddit-msg-7",
+						failed: true,
+						displayContent: "Original Reddit reply",
+						thread: { commentId: "reddit-user-reddit-msg-7", targetCommentId: "c1", responderName: "CommenterA", mode: "reply" },
+					},
+				},
+			],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await waitForPromises();
+
+		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
+		await session.handleRetry(failedMessage?.id ?? "");
+
+		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
 	});
 
 	it("starts a fresh session and sends hidden join trigger when agent starts first", async () => {
