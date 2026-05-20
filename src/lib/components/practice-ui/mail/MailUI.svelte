@@ -128,6 +128,10 @@ function getDraftStorageKey() {
 	return `mail-draft:${taskId || "current"}`;
 }
 
+function hasDraftContent(value: DraftEmail) {
+	return Boolean(value.subject.trim() || value.body.trim());
+}
+
 function loadSavedDraft(): DraftEmail {
 	const baseDraft = getDefaultDraft();
 	if (typeof localStorage === "undefined") return baseDraft;
@@ -145,6 +149,23 @@ function loadSavedDraft(): DraftEmail {
 		};
 	} catch {
 		return baseDraft;
+	}
+}
+
+function persistDraft(nextDraft = draft) {
+	if (!draftStorageReady || isCompleted || limitReached) return;
+	if (typeof localStorage === "undefined") return;
+
+	try {
+		const storageKey = getDraftStorageKey();
+		if (!hasDraftContent(nextDraft)) {
+			localStorage.removeItem(storageKey);
+			return;
+		}
+
+		localStorage.setItem(storageKey, JSON.stringify(nextDraft));
+	} catch {
+		// Some browsers can reject storage in restricted contexts; keep the UI usable.
 	}
 }
 
@@ -406,6 +427,10 @@ onMount(async () => {
 		Array.isArray(existingSession?.messages) &&
 		existingSession.messages.some((message: any) => message.role === "user" || message.role === "assistant");
 	const hasTemplateOpeningEmails = Array.isArray(openingStateData.emails) && openingStateData.emails.length > 0;
+	const savedDraft = loadSavedDraft();
+	const hasSavedDraft = hasDraftContent(savedDraft);
+	if (!isCompleted && hasSavedDraft) draft = savedDraft;
+
 	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails && !agentStartsFirst) {
 		openComposer(true);
 		draftStorageReady = true;
@@ -484,9 +509,7 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (!draftStorageReady || isCompleted || limitReached) return;
-	if (typeof localStorage === "undefined") return;
-	localStorage.setItem(getDraftStorageKey(), JSON.stringify(draft));
+	persistDraft();
 });
 </script>
 
@@ -579,6 +602,7 @@ $effect(() => {
 			onClose={() => (showCompose = false)}
 			onMockAction={handleMockAction}
 			onSend={handleSendEmail}
+			onPersistDraft={persistDraft}
 		/>
 	{/if}
 </div>

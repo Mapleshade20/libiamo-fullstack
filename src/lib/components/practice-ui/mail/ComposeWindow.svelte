@@ -19,6 +19,7 @@ let {
 	onClose = () => {},
 	onMockAction = () => {},
 	onSend = () => {},
+	onPersistDraft = (_draft: DraftEmail) => {},
 }: {
 	draft?: DraftEmail;
 	isSubmitting?: boolean;
@@ -30,6 +31,7 @@ let {
 	onClose?: () => void;
 	onMockAction?: () => void;
 	onSend?: () => void;
+	onPersistDraft?: (draft: DraftEmail) => void;
 } = $props();
 
 let bodyEditor = $state<HTMLDivElement | null>(null);
@@ -293,10 +295,21 @@ function syncDraftFromEditor() {
 	if (!bodyEditor) return;
 	const body = getPlainTextFromEditor();
 	const bodyHtml = bodyEditor.innerHTML;
+	const nextDraft = { ...draft, body, bodyHtml };
 	lastAppliedEditorHtml = bodyHtml;
-	draft = { ...draft, body, bodyHtml };
+	draft = nextDraft;
+	onPersistDraft(nextDraft);
 	saveEditorSelection();
 	updateActiveLayouts();
+}
+
+function persistCurrentDraft() {
+	if (bodyEditor) {
+		syncDraftFromEditor();
+		return;
+	}
+
+	onPersistDraft(draft);
 }
 
 function runEditorCommand(command: StructuralEditorCommand, value?: string) {
@@ -380,11 +393,25 @@ onMount(() => {
 		}
 	}
 
+	function handlePagePersistence() {
+		persistCurrentDraft();
+	}
+
+	function handleVisibilityChange() {
+		if (document.visibilityState === "hidden") persistCurrentDraft();
+	}
+
 	window.addEventListener("resize", handleResize);
+	window.addEventListener("beforeunload", handlePagePersistence);
+	window.addEventListener("pagehide", handlePagePersistence);
 	document.addEventListener("selectionchange", handleSelectionChange);
+	document.addEventListener("visibilitychange", handleVisibilityChange);
 	return () => {
 		window.removeEventListener("resize", handleResize);
+		window.removeEventListener("beforeunload", handlePagePersistence);
+		window.removeEventListener("pagehide", handlePagePersistence);
 		document.removeEventListener("selectionchange", handleSelectionChange);
+		document.removeEventListener("visibilitychange", handleVisibilityChange);
 	};
 });
 
@@ -408,7 +435,14 @@ $effect(() => {
 	style:height={isCompact ? null : `${frame.height}px`}
 	transition:fly={{ y: 24, duration: 180 }}
 >
-	<ComposeHeader bind:draft subjectDisabled={isSubmitting || isCompleted || limitReached} {t} {onClose} onStartDrag={startDrag} />
+	<ComposeHeader
+		bind:draft
+		subjectDisabled={isSubmitting || isCompleted || limitReached}
+		{t}
+		{onClose}
+		onStartDrag={startDrag}
+		onDraftChange={onPersistDraft}
+	/>
 	<ComposeToolbar
 		{activeLayouts}
 		{editorDisabled}

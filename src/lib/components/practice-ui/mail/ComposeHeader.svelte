@@ -8,13 +8,20 @@ let {
 	t = {} as Record<string, string>,
 	onClose = () => {},
 	onStartDrag = (_event: PointerEvent) => {},
+	onDraftChange = (_draft: DraftEmail) => {},
 }: {
 	draft?: DraftEmail;
 	subjectDisabled?: boolean;
 	t?: Record<string, string>;
 	onClose?: () => void;
 	onStartDrag?: (event: PointerEvent) => void;
+	onDraftChange?: (draft: DraftEmail) => void;
 } = $props();
+
+function handleSubjectInput(event: Event) {
+	draft = { ...draft, subject: (event.currentTarget as HTMLInputElement).value };
+	onDraftChange(draft);
+}
 </script>
 
 <div class="compose-titlebar flex h-11 items-center gap-2 rounded-t-xl bg-[#F2F2F7] px-4" role="presentation" onpointerdown={onStartDrag}>
@@ -28,7 +35,7 @@ let {
 </label>
 <label class="compose-line">
 	<span>{t.subject}:</span>
-	<input bind:value={draft.subject} disabled={subjectDisabled}>
+	<input value={draft.subject} disabled={subjectDisabled} oninput={handleSubjectInput}>
 </label>
 
 <style>
