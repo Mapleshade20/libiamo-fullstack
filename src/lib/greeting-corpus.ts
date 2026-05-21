@@ -21,7 +21,7 @@ export const subtitlePool: Record<LanguageCode, string[]> = {
 		"Bon courage pour les tâches qui vous attendent aujourd'hui.",
 		"Prêt à avancer sur vos projets du jour ?",
 		"Chaque petite étape vous rapproche de votre but.",
-		"Reprenons exactement là où vous vous êtes arrêté.",
+		"Reprenons exactement là où vous vous êtes arrêté·e.",
 		"Une nouvelle journée pour accomplir vos quêtes.",
 	],
 	es: [
