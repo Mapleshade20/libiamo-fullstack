@@ -50,3 +50,13 @@ export function getRandomSubtitle(lang: LanguageCode): string {
 	const pool = subtitlePool[lang] ?? subtitlePool.en;
 	return pool[Math.floor(Math.random() * pool.length)];
 }
+
+/** Deterministic longest subtitle per language, used as layout placeholder to prevent typewriter reflow. */
+export function getFallbackSubtitle(lang: LanguageCode): string {
+	const pool = subtitlePool[lang] ?? subtitlePool.en;
+	let longest = pool[0];
+	for (let i = 1; i < pool.length; i++) {
+		if (pool[i].length > longest.length) longest = pool[i];
+	}
+	return longest;
+}
