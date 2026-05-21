@@ -121,7 +121,7 @@ Evaluate the translations and respond with ONLY a JSON object (no markdown fence
   "overallScore": "<A, B, or C>",
   "overallFeedback": "<brief overall comment on translation quality>",
   "highlights": [
-    {"key": "<paragraph-index-sentence-index>", "type": "good" | "bad", "feedback": "<specific comment>"}
+    {"key": "<paragraph-index-sentence-index>", "type": "good" | "bad", "feedback": "<specific comment>", "grammarNote": "<for bad highlights: one-sentence explanation of the grammar rule or error>"}
   ]
 }
 
@@ -135,7 +135,8 @@ CRITICAL RULES FOR FEEDBACK:
 2. When commenting on a translation, QUOTE FROM THE USER'S ${langName.toUpperCase()} TRANSLATION (not the original source). Always quote the exact words the user wrote.
 3. Be specific about what is wrong and how to fix it
 4. Focus on: accuracy, grammatical correctness, appropriate register, natural phrasing
-5. You MUST provide a highlight entry for EVERY single sentence key in the source text. Do NOT skip or omit any sentence. If a sentence has no issues, still include it with type "good" and brief positive feedback.`;
+5. You MUST provide a highlight entry for EVERY single sentence key in the source text. Do NOT skip or omit any sentence. If a sentence has no issues, still include it with type "good" and brief positive feedback.
+6. For "bad" highlights, ALWAYS include a "grammarNote" field: a one-sentence explanation of the grammar rule or error (e.g., "The verb 'enfocar' requires the reflexive 'se' and preposition 'en' — it should be 'se centra en' or 'está enfocada en'."). For "good" highlights, omit the grammarNote field.`;
 }
 
 /** Flatten passages (string[][]) into a numbered sentence list */
@@ -156,7 +157,7 @@ async function evaluateTranslation(
 ): Promise<{
 	overallScore?: string;
 	overallFeedback?: string;
-	highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
+	highlights?: { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string }[];
 }> {
 	const sentences = flattenPassages(passages);
 
@@ -195,6 +196,42 @@ ${translationLines}`;
 		// If not valid JSON, return the raw content as feedback
 		return { overallFeedback: jsonStr };
 	}
+}
+
+/** Build a prompt for generating a reference model translation */
+function buildModelTranslationPrompt(targetLang: LanguageCode): string {
+	const langName = LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	return `You are an expert ${langName} translator. Translate the following sentences into natural, fluent ${langName}. Return ONLY a JSON object mapping each sentence key to its translation (no markdown fences, no extra text).
+
+Example format:
+{
+  "0-0": "translated sentence here",
+  "0-1": "another translation"
+}`;
+}
+
+/** Build a prompt for explaining a specific grammar/translation feedback in detail */
+function buildExplainFeedbackPrompt(targetLang: LanguageCode): string {
+	const langName = LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	return `You are an expert ${langName} language tutor. A learner received the following feedback on their ${langName} translation. Your job is to expand on this feedback with a detailed, pedagogical explanation.
+
+## Response Format
+Respond in Markdown. Structure your explanation as follows:
+
+1. **What went wrong** — Explain the specific error in the learner's translation.
+2. **The rule** — Explain the relevant grammar rule, usage convention, or idiom.
+3. **Examples** — Provide 2-3 example sentences showing correct usage (with translations).
+4. **Related expressions** — Mention any alternative ways to express the same idea, or related patterns.
+
+Keep the tone encouraging and instructive. Use the learner's target language (${langName}) for examples, with English explanations where helpful.`;
+}
+
+/** Check if a sentence is too short to be worth translating/evaluating */
+function isShortSentence(text: string): boolean {
+	const trimmed = text.trim();
+	if (trimmed.length === 0) return true;
+	const wordCount = trimmed.split(/\s+/).length;
+	return wordCount <= 3 || trimmed.length <= 20;
 }
 
 export const actions: Actions = {
@@ -245,8 +282,30 @@ export const actions: Actions = {
 		// Evaluate via Agent API using the global hardcoded prompt
 		if (tpl?.translationBase) {
 			try {
+				const fullPassages = tpl.translationBase as string[][];
+				// Filter out short sentences for evaluation
+				const allSentences = flattenPassages(fullPassages);
+				const shortKeys = new Set(allSentences.filter((s) => isShortSentence(s.text)).map((s) => s.key));
+				const evaluablePassages = fullPassages.map((p) => p.filter((s) => !isShortSentence(s))).filter((p) => p.length > 0);
+				const evaluableTranslations: Record<string, string> = {};
+				for (const [key, val] of Object.entries(parsed.translations)) {
+					if (!shortKeys.has(key)) {
+						evaluableTranslations[key] = val;
+					}
+				}
+
 				const evalPrompt = buildTranslationEvalPrompt(tpl.language as LanguageCode);
-				const evaluation = await evaluateTranslation(evalPrompt, tpl.translationBase as string[][], parsed.translations);
+				// If all sentences were filtered as short, skip LLM evaluation
+				let evaluation: {
+					overallScore?: string;
+					overallFeedback?: string;
+					highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
+				};
+				if (evaluablePassages.length === 0) {
+					evaluation = {};
+				} else {
+					evaluation = await evaluateTranslation(evalPrompt, evaluablePassages, evaluableTranslations);
+				}
 				await db
 					.update(translationAttempt)
 					.set({ status: "evaluated", evaluation, updatedAt: new Date() })
@@ -262,5 +321,98 @@ export const actions: Actions = {
 		}
 
 		return { success: true };
+	},
+
+	generateModelTranslation: async (event) => {
+		const user = requireUser(event);
+
+		const templateId = Number(event.params.id);
+		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+
+		const [tpl] = await db
+			.select({
+				translationBase: template.translationBase,
+				language: template.language,
+			})
+			.from(template)
+			.where(eq(template.id, templateId))
+			.limit(1);
+
+		if (!tpl?.translationBase) return fail(404, { error: "Template has no translation base" });
+
+		const passages = tpl.translationBase as string[][];
+		const sentences = flattenPassages(passages);
+
+		const sourceLines = sentences.map((s) => `[${s.key}] ${s.text}`).join("\n");
+		const prompt = buildModelTranslationPrompt(tpl.language as LanguageCode);
+
+		try {
+			const { reply } = await createSingleTurnChat(
+				{
+					systemPrompt: prompt,
+					userMessage: `Translate these sentences:\n${sourceLines}`,
+					options: { temperature: 0.5, maxTokens: 4096 },
+				},
+				user.id,
+			);
+
+			let jsonStr = reply.content.trim();
+			const fenceStart = jsonStr.indexOf("```");
+			if (fenceStart !== -1) {
+				let after = jsonStr.slice(fenceStart + 3);
+				if (after.startsWith("json")) after = after.slice(4);
+				after = after.trimStart();
+				const fenceEnd = after.indexOf("```");
+				if (fenceEnd !== -1) jsonStr = after.slice(0, fenceEnd).trim();
+			}
+
+			const modelTranslations = JSON.parse(jsonStr) as Record<string, string>;
+			return { success: true, modelTranslations };
+		} catch (err) {
+			console.error("Model translation generation failed:", err);
+			return fail(500, { error: "Failed to generate model translation. Please try again." });
+		}
+	},
+
+	explainFeedback: async (event) => {
+		const user = requireUser(event);
+
+		const formData = await event.request.formData();
+		const sourceSentence = formData.get("sourceSentence");
+		const userTranslation = formData.get("userTranslation");
+		const feedback = formData.get("feedback");
+		const language = formData.get("language");
+
+		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
+			return fail(400, { error: "Missing source sentence" });
+		}
+		if (!userTranslation || typeof userTranslation !== "string" || !userTranslation.trim()) {
+			return fail(400, { error: "Missing user translation" });
+		}
+		if (!feedback || typeof feedback !== "string" || !feedback.trim()) {
+			return fail(400, { error: "Missing feedback" });
+		}
+		if (!language || typeof language !== "string") {
+			return fail(400, { error: "Missing language" });
+		}
+
+		const prompt = buildExplainFeedbackPrompt(language as LanguageCode);
+		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+
+		try {
+			const { reply } = await createSingleTurnChat(
+				{
+					systemPrompt: prompt,
+					userMessage: `Source sentence: "${sourceSentence.trim()}"\n\nLearner's ${langName} translation: "${userTranslation.trim()}"\n\nThe feedback they received: "${feedback.trim()}"\n\nPlease expand on this feedback with a detailed explanation.`,
+					options: { temperature: 0.7, maxTokens: 4096 },
+				},
+				user.id,
+			);
+
+			return { success: true, explanation: reply.content };
+		} catch (err) {
+			console.error("Explain feedback failed:", err);
+			return fail(500, { error: "Failed to generate explanation. Please try again." });
+		}
 	},
 };

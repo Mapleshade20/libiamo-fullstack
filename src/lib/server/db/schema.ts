@@ -204,7 +204,7 @@ export const translationAttempt = pgTable(
 		evaluation: jsonb("evaluation").$type<{
 			overallScore?: string;
 			overallFeedback?: string;
-			highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
+			highlights?: { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string }[];
 		}>(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
