@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { postAction } from "$lib/components/practice-ui/apiService";
+import { completeAction, postAction, requestAgentOpeningAction } from "$lib/components/practice-ui/apiService";
+import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 
 global.fetch = vi.fn();
 vi.mock("$app/forms", () => ({
@@ -54,6 +55,53 @@ describe("apiService", () => {
 
 			expect(formData instanceof FormData).toBe(true);
 			expect(formData.get("sessionId")).toBe("12345");
+		});
+	});
+
+	describe("completeAction", () => {
+		it("posts to the shared complete action", async () => {
+			const mockResponse = { type: "success", data: { feedback: { content: "Done" } } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			const result = await completeAction(99);
+
+			expect(result).toEqual(mockResponse);
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[0]).toBe("?/complete");
+			expect(fetchCall[1].body.get("sessionId")).toBe("99");
+		});
+	});
+
+	describe("requestAgentOpeningAction", () => {
+		it("posts the Mail join trigger with deterministic client id", async () => {
+			const mockResponse = { type: "success", data: { reply: "Hello" } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			const result = await requestAgentOpeningAction(42);
+
+			expect(result).toEqual(mockResponse);
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[0]).toBe("?/send");
+			expect(fetchCall[1].body.get("sessionId")).toBe("42");
+			expect(fetchCall[1].body.get("message")).toBe("*User joined the server*");
+			expect(fetchCall[1].body.get("clientMessageId")).toBe("join-42");
+		});
+
+		it("can post the Mail-specific agent opening trigger", async () => {
+			const mockResponse = { type: "success", data: { reply: "Hello" } };
+			(global.fetch as any).mockResolvedValue({
+				text: () => Promise.resolve(JSON.stringify(mockResponse)),
+			});
+
+			await requestAgentOpeningAction(42, MAIL_AGENT_OPENING_MESSAGE);
+
+			const fetchCall = (global.fetch as any).mock.calls[0];
+			expect(fetchCall[1].body.get("message")).toBe(MAIL_AGENT_OPENING_MESSAGE);
+			expect(fetchCall[1].body.get("clientMessageId")).toBe("join-42");
 		});
 	});
 });

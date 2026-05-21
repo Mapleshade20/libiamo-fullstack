@@ -20,6 +20,7 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
+	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -31,6 +32,7 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
+	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -58,6 +60,7 @@ const session = createPracticeSession(() => ({
 	openingState,
 	maxTurns,
 	agentStartsFirst,
+	timeZone,
 	labels: sessionLabels,
 	joinTriggerText: "*User joined the server*",
 	isHiddenCheck: (m) => m.content === "*User joined the server*",

@@ -5,6 +5,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		query: {
 			practiceSession: { findFirst: vi.fn() },
 			task: { findFirst: vi.fn() },
+			user: { findFirst: vi.fn() },
 		},
 		select: vi.fn(),
 	},
@@ -20,14 +21,16 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
 
+import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
+		mockDb.query.user.findFirst.mockResolvedValue(null);
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", timezone: "UTC" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
@@ -76,6 +79,8 @@ describe("session page server", () => {
 			expect(result.task).toEqual(mockTask);
 			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
+			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
+			expect(sessionQuery.orderBy({ startedAt: "startedAt" }, { desc: (value: string) => `desc:${value}` })).toEqual(["desc:startedAt"]);
 		});
 
 		it("returns null existingSession when no in-progress session", async () => {
@@ -90,6 +95,21 @@ describe("session page server", () => {
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.existingSession).toBeNull();
+		});
+
+		it("uses the latest profile timezone from the database", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+			mockDb.query.user.findFirst.mockResolvedValue({ name: "Updated Name", timezone: "Asia/Shanghai" });
+
+			const result = (await load({
+				params: { id: mockTaskId },
+				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
+				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+			} as any)) as { user: { name: string; timezone: string } };
+
+			expect(result.user.name).toBe("Updated Name");
+			expect(result.user.timezone).toBe("Asia/Shanghai");
 		});
 
 		it("throws 401 when user not authenticated", async () => {
@@ -154,6 +174,24 @@ describe("session page server", () => {
 			} as any)) as { task: typeof imessageTask };
 
 			expect(result.task.template.ui).toBe("imessage");
+		});
+
+		it.each(["apple_mail", "reddit"] as const)("allows %s tasks", async (ui) => {
+			const implementedTask = {
+				...mockTask,
+				template: { ui, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
+			};
+			mockDb.query.task.findFirst.mockResolvedValue(implementedTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+
+			const result = (await load({
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+				parent: async () => ({ avatarUrl: "https://mock.com/avatar.png" }),
+			} as any)) as { task: typeof implementedTask; existingSession: null };
+
+			expect(result.task).toEqual(implementedTask);
+			expect(result.existingSession).toBeNull();
 		});
 	});
 
@@ -276,6 +314,115 @@ describe("session page server", () => {
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
 			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+		});
+
+		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks for your email.", turnCount: 1 });
+
+			const result = await actions.send(
+				createFormEvent({
+					values: {
+						sessionId: "789",
+						message: "To: Maya\nSubject: Meeting\n\nHello Maya",
+						clientMessageId: "mail-1",
+						bodyHtml: '<div style="text-align: center; color: #d70015">Hello <b>Maya</b><script>alert(1)</script></div>',
+					},
+				}),
+			);
+
+			expect(result).toMatchObject({ success: true, reply: "Thanks for your email.", turnCount: 1 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"To: Maya\nSubject: Meeting\n\nHello Maya",
+				"user_123",
+				"mail-1",
+				expect.objectContaining({
+					hiddenUserMessage: false,
+					maxTurns: 3,
+					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
+					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
+					promptContent: expect.stringContaining("Learner email body layout:\n[align=center] Hello Maya"),
+				}),
+			);
+		});
+
+		it("passes learner display name to Apple Mail agent-first opening prompts", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Test User,", turnCount: 0 });
+
+			await actions.send(
+				createFormEvent({
+					values: {
+						sessionId: "789",
+						message: MAIL_AGENT_OPENING_MESSAGE,
+						clientMessageId: "join-789",
+					},
+				}),
+			);
+
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				MAIL_AGENT_OPENING_MESSAGE,
+				"user_123",
+				"join-789",
+				expect.objectContaining({
+					hiddenUserMessage: true,
+					maxTurns: 3,
+					promptContent: expect.stringContaining("Learner profile display name: Test User."),
+				}),
+			);
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				expect.any(Number),
+				expect.any(String),
+				expect.any(String),
+				expect.any(String),
+				expect.objectContaining({
+					promptContent: expect.stringContaining("Use the task template, agent prompt, and scenario/opening-state context"),
+				}),
+			);
+		});
+
+		it("uses the latest profile name in Apple Mail prompt context", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockDb.query.user.findFirst.mockResolvedValue({ name: "Profile Name" });
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Profile Name,", turnCount: 0 });
+
+			await actions.send(
+				createFormEvent({
+					user: { ...mockUser, name: "Stale Name" },
+					values: {
+						sessionId: "789",
+						message: "*User joined the server*",
+						clientMessageId: "join-789",
+					},
+				}),
+			);
+
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+				789,
+				"*User joined the server*",
+				"user_123",
+				"join-789",
+				expect.objectContaining({
+					promptContent: expect.stringContaining("Learner profile display name: Profile Name."),
+				}),
+			);
 		});
 
 		it("builds AO3 prompt metadata for a nested comment reply", async () => {
@@ -402,6 +549,15 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
 		});
 
+		it("returns fail 404 when send task lookup fails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue(null);
+
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
+
+			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+		});
+
 		it.each([
 			{
 				name: "unauthenticated user",
@@ -451,6 +607,18 @@ describe("session page server", () => {
 				taskId: 456,
 			});
 			mockSessionService.sendMessage.mockRejectedValue({ some: "object error" });
+
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
+		});
+
+		it("returns 500 for unexpected Error failures", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.sendMessage.mockRejectedValue(new Error("Unexpected transport error"));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
@@ -542,6 +710,10 @@ describe("session page server", () => {
 	});
 
 	describe("actions.hint", () => {
+		beforeEach(() => {
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+		});
+
 		it("returns success with hints when called correctly", async () => {
 			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
 			mockSessionService.getSessionOrFail.mockResolvedValue({
@@ -552,6 +724,31 @@ describe("session page server", () => {
 			mockSessionService.generateHint.mockResolvedValue(mockHints);
 
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
+
+			expect(result).toEqual({ success: true, ...mockHints });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+		});
+
+		it("uses the shared hint generator for apple_mail after mail hints are removed", async () => {
+			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "apple_mail" as const } });
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue(mockHints);
+
+			const result = await actions.hint(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						to: "Maya Chen <maya@example.com>",
+						subject: "Schedule",
+						body: "Hello Maya,",
+					},
+				}),
+			);
 
 			expect(result).toEqual({ success: true, ...mockHints });
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);

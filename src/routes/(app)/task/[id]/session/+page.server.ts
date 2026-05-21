@@ -2,7 +2,10 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
+import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
+import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { db } from "$lib/server/db";
+import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import { completeSession, generateHint, getSessionOrFail, type SendMessageOptions, sendMessage, startSession } from "$lib/server/session";
@@ -12,7 +15,7 @@ const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
 function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
-	return message.trim() === "*User joined the server*" && clientMessageId === `join-${sessionId}`;
+	return (message.trim() === "*User joined the server*" || message.trim() === MAIL_AGENT_OPENING_MESSAGE) && clientMessageId === `join-${sessionId}`;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -36,6 +39,14 @@ function mapCompleteSessionError(e: unknown) {
 	if (e.message === "Task not found") return fail(404, { error: e.message });
 	if (e.message === "Session not in progress or completed") return fail(409, { error: e.message });
 	return null;
+}
+
+async function getLearnerProfileName(user: { id: string; name?: string | null }) {
+	const userProfile = await db.query.user.findFirst({
+		where: eq(authUser.id, user.id),
+		columns: { name: true },
+	});
+	return userProfile?.name || user.name || "Learner";
 }
 
 function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
@@ -88,6 +99,14 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
+	const userProfile = await db.query.user.findFirst({
+		where: eq(authUser.id, user.id),
+		columns: {
+			name: true,
+			timezone: true,
+		},
+	});
+
 	const parentData = await parent();
 	const avatarUrl = parentData.avatarUrl;
 	const learningLanguage = taskData.language;
@@ -100,9 +119,10 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		maxTurns: taskData.template.maxTurns || 0,
 		agentStartsFirst: taskData.template.agentStartsFirst,
 		user: {
-			name: user.name || "Learner",
+			name: userProfile?.name || user.name || "Learner",
 			avatarUrl,
 			learningLanguage,
+			timezone: userProfile?.timezone || user.timezone || "UTC",
 		},
 	};
 };
@@ -162,6 +182,21 @@ export const actions: Actions = {
 				hiddenUserMessage,
 				maxTurns: taskData.template.maxTurns,
 			};
+			const learnerProfileName = taskData.template.ui === "apple_mail" ? await getLearnerProfileName(user) : user.name || "Learner";
+			const mailNameInstruction = [
+				`Learner profile display name: ${learnerProfileName}.`,
+				"Use this profile name for the first direct greeting if the learner has not clearly introduced another preferred name.",
+				"After the learner self-identifies in the email thread, use the learner's own stated name instead.",
+			].join("\n");
+			if (hiddenUserMessage && taskData.template.ui === "apple_mail") {
+				sendOptions.promptContent = [
+					"This is an internal Apple Mail practice trigger, not a learner-authored email.",
+					"Use the task template, agent prompt, and scenario/opening-state context already provided in the system prompt to write the first visible email.",
+					"If that context describes a specific incoming message or situation, follow it closely. Only invent a concise plausible initiating email when the template does not provide one.",
+					"Do not welcome the learner to the app, do not say you will help draft the email, and do not speak as a tutor or assistant.",
+					mailNameInstruction,
+				].join("\n");
+			}
 
 			if (!hiddenUserMessage) {
 				const uiOptions = await buildPracticeUiSendOptions({
@@ -176,6 +211,19 @@ export const actions: Actions = {
 
 				if (!uiOptions.ok) return fail(uiOptions.status, { error: uiOptions.error });
 				Object.assign(sendOptions, uiOptions.options);
+				if (taskData.template.ui === "apple_mail") {
+					const mailBodyHtml =
+						sendOptions.userMetadata && typeof sendOptions.userMetadata.mailBodyHtml === "string" ? sendOptions.userMetadata.mailBodyHtml : "";
+					const mailBodyLayout = summarizeMailBodyLayout(mailBodyHtml);
+					const mailFormatInstruction = [
+						mailBodyLayout
+							? `Learner email body layout:\n${mailBodyLayout}`
+							: "Learner email body layout: plain text or no special formatting detected.",
+						"Use this layout context when interpreting the learner's message. If your email reply benefits from structure, use clear plain-text paragraphs, indentation, or list markers that preserve the intended email formatting.",
+					].join("\n");
+					sendOptions.promptContent = [formattedMessage, mailNameInstruction, mailFormatInstruction].join("\n\n");
+					sendOptions.userDisplayContent = formattedMessage;
+				}
 			}
 
 			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);

@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
@@ -65,7 +66,9 @@ function buildRedditContext(openingState: Record<string, unknown>): string {
 
 function buildMailContext(openingState: Record<string, unknown>): string {
 	const emails = openingState.emails as Array<{ from?: string; to?: string; subject?: string; body?: string; time?: string }> | undefined;
-	if (!emails?.length) return "Scenario: Mail app";
+	const roleplayRule =
+		"Roleplay rule: when you reply to the learner, write a natural email reply body only. Do not include markdown fences, JSON, or header lines such as Subject:, From:, or To: in the reply text. If you include a sign-off, sign with the email sender's normal name, never with an MBTI/personality label.";
+	if (!emails?.length) return `Scenario: Mail app\n${roleplayRule}`;
 
 	const emailLines = emails.map((e, i) => {
 		const parts = [
@@ -79,7 +82,7 @@ function buildMailContext(openingState: Record<string, unknown>): string {
 		return parts.join("\n");
 	});
 
-	return `Scenario: Received email${emails.length > 1 ? "s" : ""}\n${emailLines.join("\n\n")}`;
+	return `Scenario: Received email${emails.length > 1 ? "s" : ""}\n${emailLines.join("\n\n")}\n${roleplayRule}`;
 }
 
 function buildDiscordContext(openingState: Record<string, unknown>): string {
@@ -262,6 +265,7 @@ type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	hidden?: boolean;
+	mailBodyHtml?: string;
 	displayContent?: string;
 	assistantAuthorName?: string;
 	thread?: unknown;
@@ -382,10 +386,14 @@ export async function sendMessage(
 		throw new Error("Maximum conversation turns reached");
 	}
 
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
 	// Inject exact JSON schema format to bypass provider compatibility issues
-	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean (true ONLY IF you are severely offended or the user explicitly says goodbye) }`;
+	const terminationRule =
+		snapshot.ui === "apple_mail"
+			? 'For email practice, set "terminate" to true only when the learner explicitly says they are finished OR the email exchange has clearly reached a natural endpoint and no further learner response is needed. When unsure, use false.'
+			: 'Set "terminate" to true ONLY IF you are severely offended or the user explicitly says goodbye.';
+	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean }. ${terminationRule}`;
 
 	// Build LLM history. Threaded UIs provide precise target context through promptContent
 	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
@@ -502,12 +510,26 @@ export async function sendMessage(
 function buildTutorPrompt(
 	objectives: string[],
 	scenarioContext: string,
-	messages: { role: string; content: string }[],
+	messages: { role: string; content: string; llmMetadata?: unknown }[],
 	learningLanguage: string,
+	ui?: string,
 ): string {
-	const conversationHistory = messages.map((m) => `[${m.role}] ${m.content}`).join("\n\n");
+	const isMailPractice = ui === "apple_mail";
+	const conversationHistory = messages
+		.map((m) => {
+			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
+			if (!mailBodyLayout) return `[${m.role}] ${m.content}`;
+			return `[${m.role}] ${m.content}\n\nEmail body layout:\n${mailBodyLayout}`;
+		})
+		.join("\n\n");
 	const userMessages = messages.filter((m) => m.role === "user");
-	const studentMessages = userMessages.map((m, i) => `${i + 1}. ${m.content}`).join("\n");
+	const studentMessages = userMessages
+		.map((m, i) => {
+			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
+			const layout = mailBodyLayout ? `\nEmail body layout:\n${mailBodyLayout}` : "";
+			return `${i + 1}. ${m.content}${layout}`;
+		})
+		.join("\n\n");
 
 	const objectivesSection =
 		objectives.length > 0
@@ -532,7 +554,15 @@ function buildTutorPrompt(
 	Evaluate how well the student achieved the objectives (or general fluency if none) considering:
 	- The scenario context they were responding to
 	- The full conversation flow (how they adapted to the AI's responses)
-	- The quality and appropriateness of their messages
+	- The quality, clarity, and appropriateness of their messages
+	${
+		isMailPractice
+			? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
+	- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
+	- The "objectiveResults" grades should remain per objective, not per email.
+	- In the "content" feedback, summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
+			: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing."
+	}
 
 	Grade each objective (or general fluency) as:
 	- A: Excellent - fully achieved
@@ -549,6 +579,12 @@ function buildTutorPrompt(
 	],
 	"content": "overall feedback on student's performance"
 	}`;
+}
+
+function getMailBodyHtmlMetadata(metadata: unknown) {
+	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+	const value = (metadata as { mailBodyHtml?: unknown }).mailBodyHtml;
+	return typeof value === "string" ? value.trim() : "";
 }
 
 export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
@@ -573,8 +609,15 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	const prompt = buildTutorPrompt(
 		objectives,
 		scenarioContext,
-		session.messages.filter((m) => !isHiddenUserMessage(m)).map((m) => ({ role: m.role, content: getMessageDisplayContent(m) })),
+		session.messages
+			.filter((m) => !isHiddenUserMessage(m))
+			.map((m) => ({
+				role: m.role,
+				content: getMessageDisplayContent(m),
+				llmMetadata: m.llmMetadata,
+			})),
 		learningLanguageName,
+		snapshot.ui,
 	);
 
 	const messages: ChatMessage[] = [

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Ao3OpeningState } from "$lib/components/practice-ui/ao3/helpers";
+import { sanitizeDraftBodyHtml } from "$lib/components/practice-ui/mail/mailUtils";
 import type { RedditOpeningState } from "$lib/components/practice-ui/reddit/types";
 import type { UiVariant } from "$lib/constants";
 import { db } from "$lib/server/db";
@@ -75,5 +76,14 @@ export async function buildPracticeUiSendOptions(params: {
 }): Promise<PracticeUiSendOptionsResult> {
 	if (params.ui === "ao3") return buildAo3PracticeUiSendOptions(params);
 	if (params.ui === "reddit") return buildRedditPracticeUiSendOptions(params);
+	if (params.ui === "apple_mail") {
+		const bodyHtml = sanitizeDraftBodyHtml(getFormString(params.formData, "bodyHtml"));
+		return {
+			ok: true,
+			options: {
+				userMetadata: bodyHtml ? { mailBodyHtml: bodyHtml } : undefined,
+			},
+		};
+	}
 	return { ok: true, options: {} };
 }

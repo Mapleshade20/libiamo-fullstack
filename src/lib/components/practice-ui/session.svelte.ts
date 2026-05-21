@@ -1,11 +1,11 @@
 import { onMount, tick } from "svelte";
 import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../utils/markdownUtils";
-import { formatTime, normalizeText } from "../utils/messageUtils";
+import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import { postAction } from "./apiService";
+import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, updateMessageById } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
@@ -26,20 +26,11 @@ export interface PracticeSessionOptions {
 	openingState: unknown;
 	maxTurns: number;
 	agentStartsFirst: boolean;
+	timeZone?: string;
 	labels: PracticeSessionLabels;
 	joinTriggerText: string;
 	isHiddenCheck?: (message: { content: string }) => boolean;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
-}
-
-function getSessionSnapshot(session: {
-	status?: unknown;
-	messages?: Array<{ id: unknown; status?: unknown; content?: unknown; clientMessageId?: unknown; createdAt?: unknown }>;
-}): string {
-	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
-		.map((m) => [m.id, m.status, m.content, (m as any).clientMessageId ?? "", m.createdAt].join(":"))
-		.join("|");
-	return `${session.status ?? ""}::${messagesSnapshot}`;
 }
 
 /**
@@ -56,11 +47,22 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
-	const options = getOptions();
-	const { userName, avatarUrl, existingSession, openingState, maxTurns, agentStartsFirst, labels, joinTriggerText, isHiddenCheck, onPoolInit } =
-		options;
+	// Use $derived to keep values reactive after invalidateAll() re-runs getOptions().
+	// One-time destructuring would capture stale values and never update.
+	const userName = $derived(getOptions().userName);
+	const avatarUrl = $derived(getOptions().avatarUrl);
+	const existingSession = $derived(getOptions().existingSession);
+	const openingState = $derived(getOptions().openingState);
+	const maxTurns = $derived(getOptions().maxTurns);
+	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
+	const timeZone = $derived(getOptions().timeZone);
+	const labels = $derived(getOptions().labels);
+	const joinTriggerText = $derived(getOptions().joinTriggerText);
+	const isHiddenCheck = $derived(getOptions().isHiddenCheck);
+	const onPoolInit = $derived(getOptions().onPoolInit);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
+	const formatTimestamp = $derived(createTimeFormatter(timeZone));
 
 	// ── State ──────────────────────────────────────────────────────
 
@@ -114,7 +116,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				id: crypto.randomUUID(),
 				role: "agent",
 				text: params.text,
-				timestamp: formatTime(new Date()),
+				timestamp: formatTimestamp(new Date()),
 				authorName: agentName,
 				avatarColor: agentUser.color,
 				deliveryState: params.deliveryState,
@@ -184,7 +186,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (!sessionId || isCompleting || isCompleted) return;
 		isCompleting = true;
 		try {
-			const result = await postAction("complete", sessionId);
+			const result = await completeAction(sessionId);
 
 			if (result.type === "success" && result.data) {
 				isCompleted = true;
@@ -242,7 +244,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				id: userMsgId,
 				role: "user",
 				text: currentText,
-				timestamp: formatTime(new Date()),
+				timestamp: formatTimestamp(new Date()),
 				authorName: userName,
 				avatar: avatarUrl,
 				clientMessageId,
@@ -294,12 +296,13 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			});
 
 			const sortedRawMessages = [...(sessionData.messages ?? [])].sort(
-				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) =>
+					parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
 			);
 
 			const sessionMessages = buildChatMessages({
 				rawMessages: sortedRawMessages,
-				formatTimestamp: formatTime,
+				formatTimestamp,
 				userName,
 				agentName: agentName,
 				avatarUrl,
@@ -347,7 +350,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 							id: crypto.randomUUID(),
 							role: "user",
 							text: joinTriggerText,
-							timestamp: formatTime(new Date()),
+							timestamp: formatTimestamp(new Date()),
 							authorName: userName,
 							avatar: avatarUrl,
 							isHidden: true,
