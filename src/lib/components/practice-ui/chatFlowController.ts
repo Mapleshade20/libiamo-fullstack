@@ -13,7 +13,6 @@ export async function attemptAgentReply(
 	messageText: string,
 	clientMessageId: string,
 	extraFields: Record<string, string> = {},
-	parentId?: string,
 ): Promise<SendAttemptResult> {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
@@ -22,11 +21,6 @@ export async function attemptAgentReply(
 	// Append extra fields (e.g. ao3-specific metadata)
 	for (const [key, value] of Object.entries(extraFields)) {
 		formData.append(key, value);
-	}
-
-	// Persist parentId in metadata so tree structure survives page refresh (reddit)
-	if (parentId) {
-		formData.append("parentId", parentId);
 	}
 
 	const controller = new AbortController();
