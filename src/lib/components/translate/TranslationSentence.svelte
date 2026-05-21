@@ -1,9 +1,11 @@
 <script lang="ts">
 import Loader from "@lucide/svelte/icons/loader-circle";
 import Send from "@lucide/svelte/icons/send";
+import { untrack } from "svelte";
 import { renderMarkdown } from "$lib/markdown";
 
 type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
+type QAPair = { question: string; answer?: string };
 
 interface Props {
 	sentence: string;
@@ -20,7 +22,9 @@ interface Props {
 	tutorAnswer?: string;
 	loadingTutorAnswer: boolean;
 	tutorError: string;
-	onAskTutor: (question: string) => void;
+	onAskTutor: (question: string, history: QAPair[]) => void;
+	onQaChange: (history: QAPair[]) => void;
+	qaHistory: QAPair[];
 	onToggle: () => void;
 	onBlur: () => void;
 	onTranslationChange: (value: string) => void;
@@ -42,6 +46,8 @@ let {
 	loadingTutorAnswer,
 	tutorError,
 	onAskTutor,
+	onQaChange,
+	qaHistory,
 	onToggle,
 	onBlur,
 	onTranslationChange,
@@ -50,10 +56,27 @@ let {
 let showAskBubble = $state(false);
 let askQuestion = $state("");
 
+// Sync incoming answers to the latest unanswered question
+$effect(() => {
+	if (!tutorAnswer) return;
+	untrack(() => {
+		for (let i = qaHistory.length - 1; i >= 0; i--) {
+			if (!qaHistory[i].answer) {
+				const updated = [...qaHistory];
+				updated[i] = { ...updated[i], answer: tutorAnswer };
+				onQaChange(updated);
+				break;
+			}
+		}
+	});
+});
+
 function handleAsk() {
 	const q = askQuestion.trim();
 	if (!q) return;
-	onAskTutor(q);
+	const updated = [...qaHistory, { question: q }];
+	onQaChange(updated);
+	onAskTutor(q, updated);
 	askQuestion = "";
 }
 </script>
@@ -125,14 +148,14 @@ function handleAsk() {
 				<button
 					type="button"
 					onclick={onShowReference}
-					class="text-left text-sm italic
+					class="group text-left text-sm italic
 					{highlight && isAnnotated
 						? (highlight.type === 'good' ? 'text-green-800' : 'text-red-800')
 						: 'text-muted-foreground'}
 					hover:underline"
-					title="Click to see reference translation"
 				>
 					{translation}
+					<span class="ml-1 opacity-0 group-hover:opacity-100 text-[10px] text-muted-foreground transition-opacity">Click to show reference…</span>
 				</button>
 			{:else if loadingReference}
 				<div class="space-y-1">
@@ -145,15 +168,12 @@ function handleAsk() {
 				</div>
 			{:else if reference}
 				<div class="space-y-1">
-					<button
-						type="button"
-						onclick={onShowReference}
-						class="text-left text-sm italic text-muted-foreground/60 hover:text-foreground transition-colors"
-						title="Regenerate reference translation"
+					<p
+						class="text-sm italic {highlight && isAnnotated ? (highlight.type === 'good' ? 'text-green-800' : 'text-red-800') : 'text-muted-foreground'}"
 					>
-						{reference}
-					</button>
-					<p class="text-xs text-muted-foreground/40">↑ reference</p>
+						{translation}
+					</p>
+					<p class="text-xs text-muted-foreground/40">↑ reference: {reference}</p>
 				</div>
 			{/if}
 
@@ -191,13 +211,16 @@ function handleAsk() {
 							</div>
 
 							<!-- Loading / answer / error -->
-							{#if loadingTutorAnswer}
-								<p class="mt-2 text-xs text-muted-foreground flex items-center gap-1"><Loader size={11} class="animate-spin" /> Thinking…</p>
-							{:else if tutorAnswer}
-								<div class="mt-2 prose prose-sm prose-neutral max-w-none text-xs">{@html renderMarkdown(tutorAnswer)}</div>
-							{:else if tutorError}
-								<p class="mt-2 text-xs text-red-400">{tutorError}</p>
-							{/if}
+							{#each qaHistory as qa}
+								<p class="mt-2 text-xs text-foreground/70 italic">Q: {qa.question}</p>
+								{#if qa.answer}
+									<div class="mt-1 prose prose-sm prose-neutral max-w-none text-xs">{@html renderMarkdown(qa.answer)}</div>
+								{:else if loadingTutorAnswer}
+									<p class="mt-1 text-xs text-muted-foreground flex items-center gap-1"><Loader size={11} class="animate-spin" /> Thinking…</p>
+								{:else if tutorError}
+									<p class="mt-1 text-xs text-red-400">{tutorError}</p>
+								{/if}
+							{/each}
 						</div>
 					{/if}
 				</div>

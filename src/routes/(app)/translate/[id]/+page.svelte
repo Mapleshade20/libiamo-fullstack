@@ -8,6 +8,7 @@ import Languages from "@lucide/svelte/icons/languages";
 import Save from "@lucide/svelte/icons/save";
 import Send from "@lucide/svelte/icons/send";
 import Star from "@lucide/svelte/icons/star";
+import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import EvaluationSummary from "$lib/components/translate/EvaluationSummary.svelte";
 import TranslationSentence from "$lib/components/translate/TranslationSentence.svelte";
@@ -55,6 +56,7 @@ let allShort = $derived(effectiveTotal === 0 && totalSentences > 0);
 let sentenceReferences = $state<Record<string, string>>({});
 let loadingReferences = $state<Set<string>>(new Set());
 let referenceErrors = $state<Record<string, string>>({});
+let qaHistories = $state<Record<string, { question: string; answer?: string }[]>>({});
 let tutorAnswers = $state<Record<string, string>>({});
 let loadingTutorAnswers = $state<Set<string>>(new Set());
 let tutorErrors = $state<Record<string, string>>({});
@@ -62,6 +64,26 @@ let saveIndicator = $state<string | null>(null);
 let lastSavedValue = $state<string>("");
 let saveTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 let lastSaveError = $state(false);
+
+// localStorage persistence
+let storageKey = $derived(`translate-${tpl.id}`);
+function persistRefs() {
+	if (typeof localStorage === "undefined") return;
+	try {
+		localStorage.setItem(`${storageKey}-refs`, JSON.stringify(sentenceReferences));
+	} catch {
+		/* ignore */
+	}
+}
+function persistQA() {
+	if (typeof localStorage === "undefined") return;
+	try {
+		localStorage.setItem(`${storageKey}-qa`, JSON.stringify(qaHistories));
+	} catch {
+		/* ignore */
+	}
+}
+
 let initialized = false;
 $effect(() => {
 	if (initialized) return;
@@ -69,6 +91,17 @@ $effect(() => {
 	if (data.attempt?.translations) {
 		translations = { ...(data.attempt.translations as Record<string, string>) };
 		lastSavedValue = JSON.stringify(translations);
+	}
+	// Restore ephemeral data from localStorage
+	if (typeof localStorage !== "undefined") {
+		try {
+			const refs = localStorage.getItem(`${storageKey}-refs`);
+			if (refs) sentenceReferences = JSON.parse(refs);
+			const qa = localStorage.getItem(`${storageKey}-qa`);
+			if (qa) qaHistories = JSON.parse(qa);
+		} catch {
+			/* ignore */
+		}
 	}
 	if (attemptStatus === "draft") translating = true;
 	if (isDone) {
@@ -170,11 +203,12 @@ async function handleShowReference(key: string, sourceSentence: string) {
 		f.set("sourceSentence", sourceSentence);
 		f.set("language", lang);
 		const res = await fetch("?/translateSentence", { method: "POST", body: f });
-		const r = await res.json();
-		if (res.ok && r.success) {
-			sentenceReferences = { ...sentenceReferences, [key]: r.translation as string };
+		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		if (r.type === "success" && r.data) {
+			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
+			persistRefs();
 		} else {
-			referenceErrors = { ...referenceErrors, [key]: r.error ?? "Failed to translate. You may need to configure your own API key." };
+			referenceErrors = { ...referenceErrors, [key]: r.data?.error ?? "Failed to translate. You may need to configure your own API key." };
 		}
 	} catch {
 		referenceErrors = { ...referenceErrors, [key]: "Failed to connect. You may need to configure your own API key." };
@@ -190,24 +224,32 @@ function findSourceSentence(key: string): string {
 	}
 	return "";
 }
-async function handleAskTutor(key: string, question: string) {
+async function handleAskTutor(key: string, question: string, history: { question: string; answer?: string }[]) {
 	const highlight = getHighlight(key);
 	if (!highlight) return;
 	loadingTutorAnswers = new Set([...loadingTutorAnswers, key]);
 	tutorErrors = { ...tutorErrors, [key]: "" };
 	try {
+		// Build context from previous Q&A
+		let context = "";
+		if (history.length > 1) {
+			context = "\n\nPrevious conversation:\n";
+			for (const qa of history.slice(0, -1)) {
+				context += `Q: ${qa.question}\nA: ${qa.answer ?? "(no answer yet)"}\n`;
+			}
+		}
 		const f = new FormData();
 		f.set("sourceSentence", findSourceSentence(key));
 		f.set("userTranslation", translations[key] ?? "");
 		f.set("feedback", highlight.feedback);
-		f.set("question", question);
+		f.set("question", question + context);
 		f.set("language", lang);
 		const res = await fetch("?/askTutor", { method: "POST", body: f });
-		const r = await res.json();
-		if (res.ok && r.success) {
-			tutorAnswers = { ...tutorAnswers, [key]: r.answer as string };
+		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		if (r.type === "success" && r.data) {
+			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
 		} else {
-			tutorErrors = { ...tutorErrors, [key]: r.error ?? "Failed to get answer. You may need to configure your own API key." };
+			tutorErrors = { ...tutorErrors, [key]: r.data?.error ?? "Failed to get answer. You may need to configure your own API key." };
 		}
 	} catch {
 		tutorErrors = { ...tutorErrors, [key]: "Failed to connect. You may need to configure your own API key." };
@@ -315,7 +357,9 @@ $effect(() => {
 										onToggle={() => {}}
 										onBlur={() => {}}
 										onTranslationChange={() => {}}
-										onAskTutor={(q: string) => handleAskTutor(key, q)}
+										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
+										qaHistory={qaHistories[key] ?? []}
+										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
 									/>
 								{/each}
 							</div>
@@ -397,7 +441,9 @@ $effect(() => {
 										onToggle={() => toggleSentence(key)}
 										onBlur={handleBlur}
 										onTranslationChange={(v: string) => { translations = { ...translations, [key]: v }; }}
-										onAskTutor={(q: string) => handleAskTutor(key, q)}
+										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
+										qaHistory={qaHistories[key] ?? []}
+										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
 									/>
 								{/each}
 							</div>
