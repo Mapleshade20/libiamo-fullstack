@@ -72,7 +72,6 @@ let selectedInboxId = $state<string | null>(null);
 let selectedSentId = $state<string | null>(null);
 let activeMailbox = $state<"inbox" | "sent" | "drafts">("inbox");
 let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
-let draftStorageReady = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
 
@@ -153,7 +152,7 @@ function loadSavedDraft(): DraftEmail {
 }
 
 function persistDraft(nextDraft = draft) {
-	if (!draftStorageReady || isCompleted || limitReached) return;
+	if (isCompleted || limitReached) return;
 	if (typeof localStorage === "undefined") return;
 
 	try {
@@ -433,12 +432,9 @@ onMount(async () => {
 
 	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails && !agentStartsFirst) {
 		openComposer(true);
-		draftStorageReady = true;
 	}
 
-	if (hasTemplateOpeningEmails) {
-		draftStorageReady = true;
-	} else if (existingSession?.id && !hasExistingMessages && agentStartsFirst) {
+	if (!hasTemplateOpeningEmails && existingSession?.id && !hasExistingMessages && agentStartsFirst) {
 		isInitializing = true;
 		try {
 			const result = await requestAgentOpeningAction(existingSession.id, MAIL_AGENT_OPENING_MESSAGE);
@@ -451,7 +447,6 @@ onMount(async () => {
 			console.error("Mail opening message failed:", error);
 			openComposer(true);
 		} finally {
-			draftStorageReady = true;
 			isInitializing = false;
 		}
 	} else if (!existingSession) {
@@ -476,7 +471,6 @@ onMount(async () => {
 		} catch (error) {
 			console.error("Mail session initialization failed:", error);
 		} finally {
-			draftStorageReady = true;
 			isInitializing = false;
 		}
 	}
@@ -506,10 +500,6 @@ $effect(() => {
 		}, 3000);
 		return () => clearInterval(interval);
 	}
-});
-
-$effect(() => {
-	persistDraft();
 });
 </script>
 
