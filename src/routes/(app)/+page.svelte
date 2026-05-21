@@ -8,6 +8,7 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { goto } from "$app/navigation";
 import TaskCard from "$lib/components/TaskCard.svelte";
+import { getGreeting, getRandomSubtitle } from "$lib/greeting-corpus";
 import { type LanguageCode, t } from "$lib/i18n";
 import { captureTaskEnterTransition } from "$lib/task-transition";
 
@@ -15,6 +16,34 @@ let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
+let displayedSubtitle = $state("");
+let typingTimer: ReturnType<typeof setInterval> | null = null;
+
+function startTypewriter(text: string, speed = 40) {
+	if (typingTimer !== null) clearInterval(typingTimer);
+	displayedSubtitle = "";
+	let i = 0;
+	const timer = setInterval(() => {
+		if (i < text.length) {
+			displayedSubtitle += text[i];
+			i++;
+		} else {
+			clearInterval(timer);
+			typingTimer = null;
+		}
+	}, speed);
+	typingTimer = timer;
+}
+
+$effect(() => {
+	startTypewriter(getRandomSubtitle(lang));
+	return () => {
+		if (typingTimer !== null) {
+			clearInterval(typingTimer);
+			typingTimer = null;
+		}
+	};
+});
 
 function toggleFlip(id: number) {
 	flippedId = flippedId === id ? null : id;
@@ -62,8 +91,8 @@ const uiIcons: Record<string, Component> = {
 <div class="space-y-10">
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
-			Welcome back, {data.user.name}.<br>
-			<span class="text-gray-500 italic">Which world will you inhabit today?</span>
+			{getGreeting(lang, data.user.name)}<br>
+			<span class="text-gray-500 italic">{displayedSubtitle}</span>
 		</h1>
 	</section>
 
