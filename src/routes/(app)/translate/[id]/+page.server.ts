@@ -370,7 +370,7 @@ export const actions: Actions = {
 			return { success: true, modelTranslations };
 		} catch (err) {
 			console.error("Model translation generation failed:", err);
-			return fail(500, { error: "Failed to generate model translation. Please try again." });
+			return fail(500, { error: "Failed to generate model translation. You may need to configure your own API key." });
 		}
 	},
 
@@ -412,7 +412,85 @@ export const actions: Actions = {
 			return { success: true, explanation: reply.content };
 		} catch (err) {
 			console.error("Explain feedback failed:", err);
-			return fail(500, { error: "Failed to generate explanation. Please try again." });
+			return fail(500, { error: "Failed to generate explanation. You may need to configure your own API key." });
+		}
+	},
+
+	translateSentence: async (event) => {
+		const user = requireUser(event);
+
+		const formData = await event.request.formData();
+		const sourceSentence = formData.get("sourceSentence");
+		const language = formData.get("language");
+
+		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
+			return fail(400, { error: "Missing source sentence" });
+		}
+		if (!language || typeof language !== "string") {
+			return fail(400, { error: "Missing language" });
+		}
+
+		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+
+		try {
+			const { reply } = await createSingleTurnChat(
+				{
+					systemPrompt: `You are an expert ${langName} translator. Translate the following sentence into natural, fluent ${langName}. Return ONLY the translation, no extra text, no quotes, no explanation.`,
+					userMessage: sourceSentence.trim(),
+					options: { temperature: 0.3, maxTokens: 512 },
+				},
+				user.id,
+			);
+
+			return { success: true, translation: reply.content.trim() };
+		} catch (err) {
+			console.error("Sentence translation failed:", err);
+			return fail(500, { error: "Failed to translate sentence. You may need to configure your own API key." });
+		}
+	},
+
+	askTutor: async (event) => {
+		const user = requireUser(event);
+
+		const formData = await event.request.formData();
+		const sourceSentence = formData.get("sourceSentence");
+		const userTranslation = formData.get("userTranslation");
+		const feedback = formData.get("feedback");
+		const question = formData.get("question");
+		const language = formData.get("language");
+
+		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
+			return fail(400, { error: "Missing source sentence" });
+		}
+		if (!userTranslation || typeof userTranslation !== "string" || !userTranslation.trim()) {
+			return fail(400, { error: "Missing user translation" });
+		}
+		if (!feedback || typeof feedback !== "string" || !feedback.trim()) {
+			return fail(400, { error: "Missing feedback" });
+		}
+		if (!question || typeof question !== "string" || !question.trim()) {
+			return fail(400, { error: "Missing question" });
+		}
+		if (!language || typeof language !== "string") {
+			return fail(400, { error: "Missing language" });
+		}
+
+		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+
+		try {
+			const { reply } = await createSingleTurnChat(
+				{
+					systemPrompt: `You are an expert ${langName} language tutor. A learner received feedback on their translation. Answer their follow-up question helpfully and concisely in Markdown. Reference the original sentence and feedback in your answer.`,
+					userMessage: `Source sentence: "${sourceSentence.trim()}"\n\nLearner's translation: "${userTranslation.trim()}"\n\nFeedback received: "${feedback.trim()}"\n\nLearner's question: ${question.trim()}`,
+					options: { temperature: 0.7, maxTokens: 2048 },
+				},
+				user.id,
+			);
+
+			return { success: true, answer: reply.content };
+		} catch (err) {
+			console.error("Ask tutor failed:", err);
+			return fail(500, { error: "Failed to get answer. You may need to configure your own API key." });
 		}
 	},
 };
