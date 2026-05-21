@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { buildChatMessages, updateMessageById } from "$lib/components/practice-ui/chatMessages";
+import { buildChatMessages, getSessionSnapshot, stableMetadataSnapshot, updateMessageById } from "$lib/components/practice-ui/chatMessages";
 
 const labels = {
 	retryFailedMessage: "Agent reply failed. Click Retry to try again.",
@@ -160,6 +160,25 @@ describe("buildChatMessages", () => {
 		expect(result[0].isHidden).toBe(true);
 	});
 
+	it("preserves llm metadata for UI-specific message rendering", () => {
+		const llmMetadata = { clientMessageId: "mail-1", mailBodyHtml: '<div style="text-align: center">Hello</div>' };
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "To: Maya\nSubject: Hi\n\nHello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata,
+				},
+				{ id: 2, role: "assistant", content: "Done", createdAt: new Date("2026-01-01T10:01:00Z") },
+			],
+		});
+
+		expect(result[0].llmMetadata).toBe(llmMetadata);
+	});
+
 	it("uses display content and AO3 assistant author metadata when present", () => {
 		const result = buildChatMessages({
 			...baseOptions,
@@ -191,6 +210,73 @@ describe("buildChatMessages", () => {
 
 		expect(result[0]).toMatchObject({ text: "Visible learner comment", thread: { commentId: "ao3-user-msg-ao3" } });
 		expect(result[1]).toMatchObject({ authorName: "Commenter", thread: { parentCommentId: "ao3-user-msg-ao3" } });
+	});
+
+	it("treats persisted timestamp strings without offsets as UTC", () => {
+		const seenDates: Date[] = [];
+		buildChatMessages({
+			...baseOptions,
+			formatTimestamp: (date) => {
+				seenDates.push(date);
+				return "formatted";
+			},
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00",
+				},
+			],
+		});
+
+		expect(seenDates[0]?.toISOString()).toBe("2026-05-17T05:01:00.000Z");
+	});
+
+	it("normalizes persisted timestamp strings that include offsets", () => {
+		const seenDates: Date[] = [];
+		buildChatMessages({
+			...baseOptions,
+			formatTimestamp: (date) => {
+				seenDates.push(date);
+				return "formatted";
+			},
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00+08:00",
+				},
+			],
+		});
+
+		expect(seenDates[0]?.toISOString()).toBe("2026-05-16T21:01:00.000Z");
+	});
+
+	it("formats persisted and optimistic timestamps consistently for the same instant and timezone", () => {
+		const formatTimestamp = (date: Date) =>
+			date.toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+				timeZone: "Asia/Shanghai",
+			});
+		const optimisticTimestamp = formatTimestamp(new Date("2026-05-17T05:01:00Z"));
+
+		const result = buildChatMessages({
+			...baseOptions,
+			formatTimestamp,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-17 05:01:00",
+				},
+			],
+		});
+
+		expect(result[0]?.timestamp).toBe(optimisticTimestamp);
 	});
 
 	it("adds AO3 metadata to retry placeholders only for AO3 persisted messages", () => {
@@ -262,6 +348,34 @@ describe("buildChatMessages", () => {
 			text: "Hello",
 			clientMessageId: undefined,
 		});
+	});
+});
+
+describe("session snapshots", () => {
+	it("includes metadata state changes while bounding mail body HTML", () => {
+		const largeMailBody = `<p>${"Hello ".repeat(200)}</p>`;
+
+		const snapshot = getSessionSnapshot({
+			status: "active",
+			messages: [
+				{
+					id: 1,
+					status: "sent",
+					content: "To: Maya\nSubject: Hi\n\nHello",
+					createdAt: "2026-01-01 10:00:00",
+					llmMetadata: { clientMessageId: "mail-1", failed: true, hidden: false, mailBodyHtml: largeMailBody },
+				},
+			],
+		});
+
+		expect(snapshot).toContain('"failed":true');
+		expect(snapshot).toContain('"mailBodyHtml"');
+		expect(snapshot).not.toContain(largeMailBody);
+		expect(snapshot.length).toBeLessThan(260);
+	});
+
+	it("uses different bounded mail body snapshots for changed HTML", () => {
+		expect(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello</p>" })).not.toEqual(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello!</p>" }));
 	});
 });
 

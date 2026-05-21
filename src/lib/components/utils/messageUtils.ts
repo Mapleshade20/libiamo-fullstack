@@ -4,17 +4,37 @@ export function normalizeText(value: unknown, fallback: string) {
 	return trimmed || fallback;
 }
 
-export function formatTime(date: Date) {
-	return date.toLocaleTimeString([], {
+export function formatTime(date: Date, timeZone?: string) {
+	const options: Intl.DateTimeFormatOptions = {
 		hour: "2-digit",
 		minute: "2-digit",
-	});
+	};
+	if (timeZone) options.timeZone = timeZone;
+
+	try {
+		return date.toLocaleTimeString([], options);
+	} catch {
+		const { timeZone: _timeZone, ...fallbackOptions } = options;
+		return date.toLocaleTimeString([], fallbackOptions);
+	}
 }
 
-export function getTodayDateString(language: string) {
-	return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, {
+export function createTimeFormatter(timeZone?: string) {
+	return (date: Date) => formatTime(date, timeZone);
+}
+
+export function getTodayDateString(language: string, timeZone?: string) {
+	const options: Intl.DateTimeFormatOptions = {
 		year: "numeric",
 		month: "long",
 		day: "numeric",
-	}).format(new Date());
+	};
+	if (timeZone) options.timeZone = timeZone;
+
+	try {
+		return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, options).format(new Date());
+	} catch {
+		const { timeZone: _timeZone, ...fallbackOptions } = options;
+		return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, fallbackOptions).format(new Date());
+	}
 }

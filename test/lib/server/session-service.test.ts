@@ -99,6 +99,63 @@ describe("session service", () => {
 			expect(result.systemPrompt).not.toContain("History:\n- Sii ya lo vi: Mario");
 		});
 
+		it("keeps known message fields first and appends extra opening-state fields", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "reddit" as const },
+				variant: {
+					openingState: {
+						post: { title: "Introductions", body: "Say hello" },
+						previousComments: [{ text: "Hola", author: "Mina", likes: 3, empty: "" }],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Existing nested comments:\n- Mina: Hola");
+			expect(result.systemPrompt).not.toContain("Hola: Mina");
+		});
+
+		it("uses a generic Mail app context when there are no received emails", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: { openingState: { emails: [] } },
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Scenario: Mail app");
+		});
+
+		it("formats multiple received emails including optional time", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const },
+				variant: {
+					openingState: {
+						emails: [
+							{ from: "maya@example.com", to: "me@example.com", subject: "Schedule", body: "Are you free?", time: "9:00 AM" },
+							{ from: "daniel@example.com", to: "me@example.com", subject: "Follow-up", body: "Thanks" },
+						],
+					},
+				},
+			});
+			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
+			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
+
+			const result = await startSession(1, "user_456", "English");
+
+			expect(result.systemPrompt).toContain("Scenario: Received emails");
+			expect(result.systemPrompt).toContain("  Time: 9:00 AM");
+			expect(result.systemPrompt).toContain("Email 2:");
+		});
+
 		it("formats iMessage history with sender before text even when openingState stores text first", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
@@ -426,7 +483,7 @@ describe("session service", () => {
 				...mockSession,
 				agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
 				messages: [
-					{ role: "user", content: "Hello" },
+					{ role: "user", content: "Hello", llmMetadata: { mailBodyHtml: '<div style="text-align: center">Hello</div>' } },
 					{ role: "assistant", content: "Hi there" },
 				],
 				task: mockTaskObjectives,
@@ -446,7 +503,53 @@ describe("session service", () => {
 
 			expect(result.content).toBe("Good job!");
 			expect(result.objectiveResults).toHaveLength(2);
+			expect(mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
 			expect(mockDb.update).toHaveBeenCalledTimes(2);
+		});
+
+		it("asks mail evaluation to consider every learner email and the whole exchange", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+				...mockSession,
+				agentPromptSnapshot: { systemPrompt: "Mail prompt", mbti: "ENFP", ui: "apple_mail", scenarioContext: "Scenario: Received email" },
+				messages: [
+					{
+						role: "assistant",
+						content: "Please send an update.",
+					},
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Update\n\nHello Maya,\nI finished the draft.",
+						llmMetadata: { mailBodyHtml: "<div>Hello Maya,</div><div>I finished the draft.</div>" },
+					},
+					{
+						role: "assistant",
+						content: "Could you include next steps?",
+					},
+					{
+						role: "user",
+						content: "To: Maya\nSubject: Re: Update\n\nI will send the final version tomorrow.",
+					},
+				],
+				task: mockTaskObjectives,
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({
+				content: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
+				objectiveResults: [{ text: "Use polite language", grade: "A" }],
+			});
+
+			await completeSession(123);
+
+			const prompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(prompt).toContain("Full Conversation History");
+			expect(prompt).toContain("[assistant] Please send an update.");
+			expect(prompt).toContain("[assistant] Could you include next steps?");
+			expect(prompt).toContain("To: Maya\nSubject: Update");
+			expect(prompt).toContain("To: Maya\nSubject: Re: Update");
+			expect(prompt).toContain("consider EVERY learner-sent email");
+			expect(prompt).toContain("whole email exchange");
+			expect(prompt).toContain("grades should remain per objective, not per email");
+			expect(prompt).toContain("Mention specific emails only when useful");
+			expect(prompt).toContain("Email body layout:\nHello Maya,\nI finished the draft.");
 		});
 
 		it("handles empty objectives", async () => {
@@ -668,6 +771,7 @@ describe("session service", () => {
 			expect(mockDb.update).toHaveBeenCalled();
 		});
 	});
+
 	describe("generateHint", () => {
 		it("generates hints based on session history and language", async () => {
 			const mockSession = {
@@ -698,6 +802,28 @@ describe("session service", () => {
 		it("throws error if session is not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 			await expect(generateHint(999)).rejects.toThrow("Session not found");
+		});
+
+		it("throws when normal hint session has no task", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
+
+			await expect(generateHint(123)).rejects.toThrow("Task not found");
+		});
+
+		it("uses an empty-history placeholder for normal hints", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: { language: "en" },
+				agentPromptSnapshot: { systemPrompt: "Context" },
+				messages: [],
+			});
+			mockClient.createStructuredOutput.mockResolvedValue({ hints: [] });
+
+			await generateHint(123);
+
+			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			expect(systemPrompt).toContain("(No messages yet)");
 		});
 	});
 

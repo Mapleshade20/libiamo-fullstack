@@ -22,6 +22,21 @@ type MessageMetadata = {
 	thread?: CommentThreadMetadata;
 };
 
+type SessionSnapshotMessage = {
+	id: unknown;
+	status?: unknown;
+	content?: unknown;
+	clientMessageId?: unknown;
+	createdAt?: unknown;
+	llmMetadata?: unknown;
+};
+
+type SessionSnapshotInput = {
+	status?: unknown;
+	tutorFeedback?: unknown;
+	messages?: SessionSnapshotMessage[];
+};
+
 export type ChatMessage = {
 	id: string;
 	role: "user" | "agent";
@@ -34,8 +49,36 @@ export type ChatMessage = {
 	deliveryState?: "sent" | "pending" | "failed";
 	clientMessageId?: string;
 	retryText?: string;
+	llmMetadata?: unknown;
 	thread?: CommentThreadMetadata;
 };
+
+function compactStringSnapshot(value: string) {
+	let hash = 0x811c9dc5;
+	for (let index = 0; index < value.length; index += 1) {
+		hash ^= value.charCodeAt(index);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return `${value.length}:${(hash >>> 0).toString(36)}`;
+}
+
+export function stableMetadataSnapshot(value: unknown) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+	const metadata = value as { clientMessageId?: unknown; failed?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
+	return JSON.stringify({
+		clientMessageId: metadata.clientMessageId ?? "",
+		failed: metadata.failed === true,
+		hidden: metadata.hidden === true,
+		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? compactStringSnapshot(metadata.mailBodyHtml) : "",
+	});
+}
+
+export function getSessionSnapshot(session: SessionSnapshotInput): string {
+	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
+		.map((m) => [m.id, m.status, m.content, m.clientMessageId ?? "", stableMetadataSnapshot(m.llmMetadata), m.createdAt].join(":"))
+		.join("|");
+	return `${session.status ?? ""}:${session.tutorFeedback ? "feedback" : ""}:${messagesSnapshot}`;
+}
 
 function getMessageMetadata(value: unknown): MessageMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -50,6 +93,16 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	}
 
 	return false;
+}
+
+export function parsePersistedMessageDate(value: string | Date) {
+	if (value instanceof Date) return value;
+	const normalized = value.trim().replace(" ", "T");
+	const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+	if (!hasTimeZone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(normalized)) {
+		return new Date(`${normalized}Z`);
+	}
+	return new Date(normalized);
 }
 
 function getRetryAgentCommentId(userCommentId: string | undefined, clientMessageId: string, persistedMessageId: number | string): string {
@@ -82,12 +135,13 @@ export function buildChatMessages({
 			id: message.id.toString(),
 			role: message.role === "user" ? "user" : "agent",
 			text: metadata.displayContent ?? message.content,
-			timestamp: formatTimestamp(new Date(message.createdAt)),
+			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName),
 			avatar: message.role === "user" ? avatarUrl : undefined,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
+			llmMetadata: message.llmMetadata,
 			thread: metadata.thread,
 		} satisfies ChatMessage;
 
@@ -99,12 +153,13 @@ export function buildChatMessages({
 			id: `retry-${message.id}`,
 			role: "agent",
 			text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
-			timestamp: formatTimestamp(new Date(message.createdAt)),
+			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName,
 			avatarColor: agentColor,
 			deliveryState: metadata.failed === true ? "failed" : "pending",
 			clientMessageId: metadata.clientMessageId,
 			retryText: metadata.displayContent ?? message.content,
+			llmMetadata: message.llmMetadata,
 			...(metadata.thread
 				? {
 						thread: {

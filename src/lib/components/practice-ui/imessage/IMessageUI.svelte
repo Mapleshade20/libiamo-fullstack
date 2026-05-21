@@ -18,6 +18,7 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
+	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -29,6 +30,7 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
+	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -57,6 +59,7 @@ const session = createPracticeSession(() => ({
 	openingState,
 	maxTurns,
 	agentStartsFirst,
+	timeZone,
 	labels: sessionLabels,
 	joinTriggerText: IMESSAGE_JOIN_TRIGGER_TEXT,
 	// Keep old marker support so existing sessions stay hidden.
@@ -247,7 +250,7 @@ onMount(() => {
 				<div bind:this={session.chatContainer} class="flex-1 overflow-y-auto px-3 py-4 md:bg-[#F9F9FB] md:px-8 md:py-6">
 					<div class="mb-4 flex items-center justify-center md:hidden">
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
-						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language)}</span>
+						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, timeZone)}</span>
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 					</div>
 
@@ -311,13 +314,13 @@ onMount(() => {
 									class="flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D1D6] bg-white text-[#8E8E93] transition-colors hover:text-[#1C1C1E] disabled:opacity-50"
 									title={t.getHint}
 									onclick={(event) => {
-									event.stopPropagation();
-									if (showHintMenu) {
-										closeHintMenu();
-									} else {
-										handleGetHint();
-									}
-								}}
+										event.stopPropagation();
+										if (showHintMenu) {
+											closeHintMenu();
+										} else {
+											handleGetHint();
+										}
+									}}
 									disabled={!session.sessionId || session.disabled}
 								>
 									<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
@@ -333,9 +336,9 @@ onMount(() => {
 												type="button"
 												class="text-sm text-[#8E8E93] hover:text-[#1C1C1E]"
 												onclick={(event) => {
-												event.stopPropagation();
-												closeHintMenu();
-											}}
+													event.stopPropagation();
+													closeHintMenu();
+												}}
 											>
 												&times;
 											</button>
@@ -369,10 +372,10 @@ onMount(() => {
 								aria-label={t.sendMessage}
 								onclick={() => {
 								if (!session.inputText.trim() || session.disabled) return;
-								const text = session.inputText;
-								session.inputText = "";
-								session.handleSend(text);
-							}}
+									const text = session.inputText;
+									session.inputText = "";
+									session.handleSend(text);
+								}}
 								disabled={!session.inputText.trim() || session.disabled}
 							>
 								<ArrowUp size={16} />

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	tick: vi.fn(async () => {}),
 	invalidateAll: vi.fn(async () => {}),
 	postAction: vi.fn(),
+	completeAction: vi.fn(),
 	attemptAgentReply: vi.fn(),
 	initUserPool: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock("$app/navigation", () => ({
 
 vi.mock("$lib/components/practice-ui/apiService", () => ({
 	postAction: mocks.postAction,
+	completeAction: mocks.completeAction,
 }));
 
 vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
@@ -76,6 +78,21 @@ describe("resolveAgentName", () => {
 		expect(name).toBe("Roddy");
 	});
 
+	it("skips user-authored opening messages and reads author fallback", () => {
+		const name = resolveAgentName(
+			{
+				previousMessages: [
+					{ sender: "Learner", text: "self" },
+					{ author: "Maya", text: "from author field" },
+				],
+			} as any,
+			"Learner",
+			"Agent",
+		);
+
+		expect(name).toBe("Maya");
+	});
+
 	it("falls back when opening messages are malformed", () => {
 		const name = resolveAgentName(
 			{
@@ -129,6 +146,91 @@ describe("createPracticeSession", () => {
 		expect(session.messages.length).toBeGreaterThan(0);
 	});
 
+	it("shows existing completed feedback and scrolls hydrated messages", async () => {
+		const chatContainer = { scrollTop: 0, scrollHeight: 240 };
+		const existingSession = {
+			id: 102,
+			status: "completed",
+			tutorFeedback: {
+				content: "Done",
+				objectiveResults: [],
+			},
+			messages: [{ id: 1, role: "assistant", content: "Finished", createdAt: "2026-05-18T00:00:00.000Z" }],
+		};
+		const session = createSession(createOptions({ existingSession }));
+		session.chatContainer = chatContainer as any;
+
+		session.hydrateFromExistingSession(existingSession);
+		await waitForPromises();
+
+		expect(session.isCompleted).toBe(true);
+		expect(session.showEvaluationModal).toBe(true);
+		expect(chatContainer.scrollTop).toBe(240);
+	});
+
+	it("skips hydration when the server snapshot has not changed", async () => {
+		const existingSession = {
+			id: 103,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [{ id: 1, role: "assistant", content: "Hello", createdAt: "2026-05-18T00:00:00.000Z" }],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		session.hydrateFromExistingSession(existingSession);
+
+		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
+	});
+
+	it("rehydrates when metadata changes even if message content is stable", async () => {
+		const existingSession = {
+			id: 104,
+			status: "evaluated",
+			tutorFeedback: null,
+			messages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: "2026-05-18T00:00:00.000Z",
+					llmMetadata: { clientMessageId: "msg-1", failed: false, hidden: false, mailBodyHtml: 123 },
+				},
+			],
+		};
+		const updatedSession = {
+			...existingSession,
+			messages: [
+				{
+					...existingSession.messages[0],
+					llmMetadata: { clientMessageId: "msg-1", failed: true, hidden: true, mailBodyHtml: "<div>Hello</div>" },
+				},
+			],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		session.hydrateFromExistingSession(updatedSession);
+
+		expect(mocks.initUserPool).toHaveBeenCalledTimes(2);
+		expect(session.isCompleted).toBe(true);
+	});
+
+	it("hydrates sessions without a message array", () => {
+		const existingSession = {
+			id: 105,
+			status: null,
+			tutorFeedback: null,
+			messages: undefined,
+		};
+		const session = createSession(createOptions({ existingSession: null, timeZone: "Asia/Tokyo" }));
+
+		session.hydrateFromExistingSession(existingSession);
+
+		expect(session.sessionId).toBe(105);
+		expect(session.messages).toEqual([]);
+	});
+
 	it("sends user message and appends agent reply", async () => {
 		mocks.attemptAgentReply.mockResolvedValue({
 			status: "reply",
@@ -151,6 +253,46 @@ describe("createPracticeSession", () => {
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Great reply")).toBe(true);
 		expect(mocks.invalidateAll).toHaveBeenCalled();
+	});
+
+	it("completes when a sent reply terminates the session", async () => {
+		mocks.attemptAgentReply.mockResolvedValue({
+			status: "reply",
+			text: "Final reply",
+			terminated: true,
+		});
+		mocks.completeAction.mockResolvedValue({
+			type: "success",
+			data: {
+				feedback: {
+					content: "Completed",
+					objectiveResults: [],
+				},
+			},
+		});
+		const existingSession = {
+			id: 203,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await session.handleSend("Finish this");
+		await waitForPromises();
+
+		expect(mocks.completeAction).toHaveBeenCalledWith(203);
+		expect(session.isCompleted).toBe(true);
+	});
+
+	it("ignores empty or disabled sends", async () => {
+		const session = createSession(createOptions({ existingSession: null }));
+
+		await session.handleSend("   ");
+		await session.handleSend("hello");
+
+		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
 	});
 
 	it("retries failed placeholder with persisted retry text", async () => {
@@ -186,6 +328,54 @@ describe("createPracticeSession", () => {
 		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(303, "Original learner message", "msg-5", {});
 		expect(session.messages.find((message) => message.id === failedMessage?.id)?.isHidden).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Recovered response")).toBe(true);
+	});
+
+	it("scrolls manually when a chat container is bound", async () => {
+		const session = createSession(createOptions());
+		const chatContainer = { scrollTop: 0, scrollHeight: 88 };
+		session.chatContainer = chatContainer as any;
+
+		await session.scrollToBottom();
+
+		expect(chatContainer.scrollTop).toBe(88);
+	});
+
+	it("ignores retry when the message is missing retry metadata", async () => {
+		const existingSession = {
+			id: 304,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [{ id: 5, role: "assistant", content: "No retry", createdAt: "2026-05-18T00:00:00.000Z" }],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await session.handleRetry(session.messages[0]?.id ?? "");
+
+		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+	});
+
+	it("ignores retry while completion state blocks actions", async () => {
+		const existingSession = {
+			id: 305,
+			status: "completed",
+			tutorFeedback: null,
+			messages: [
+				{
+					id: 5,
+					role: "user",
+					content: "Original learner message",
+					createdAt: "2026-05-18T00:00:00.000Z",
+					llmMetadata: { clientMessageId: "msg-5", failed: true },
+				},
+			],
+		};
+		const session = createSession(createOptions({ existingSession }));
+
+		session.hydrateFromExistingSession(existingSession);
+		await session.handleRetry(session.messages.find((message) => message.deliveryState === "failed")?.id ?? "");
+
+		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
 	});
 
 	it("retries AO3 replies with their original target comment id", async () => {
@@ -354,13 +544,13 @@ describe("createPracticeSession", () => {
 		session.runAutoCompleteIfNeeded();
 		await waitForPromises();
 
-		expect(mocks.postAction).toHaveBeenCalledWith("complete", 505);
+		expect(mocks.completeAction).toHaveBeenCalledWith(505);
 		expect(session.isCompleted).toBe(true);
 		expect(session.showEvaluationModal).toBe(true);
 	});
 
 	it("handles complete failures without leaving loading state", async () => {
-		mocks.postAction.mockRejectedValue(new Error("complete error"));
+		mocks.completeAction.mockRejectedValue(new Error("complete error"));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const existingSession = {
 			id: 701,
@@ -375,6 +565,33 @@ describe("createPracticeSession", () => {
 
 		expect(errorSpy).toHaveBeenCalledWith("Completion failed:", expect.any(Error));
 		expect(session.isCompleting).toBe(false);
+	});
+
+	it("leaves completion state unchanged when complete returns no data", async () => {
+		mocks.completeAction.mockResolvedValue({
+			type: "error",
+		});
+		const existingSession = {
+			id: 705,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [],
+		};
+		const session = createSession(createOptions({ existingSession }));
+		session.hydrateFromExistingSession(existingSession);
+
+		await session.handleComplete();
+
+		expect(session.isCompleted).toBe(false);
+		expect(session.isCompleting).toBe(false);
+	});
+
+	it("ignores complete when no active session is available", async () => {
+		const session = createSession(createOptions({ existingSession: null }));
+
+		await session.handleComplete();
+
+		expect(mocks.completeAction).not.toHaveBeenCalled();
 	});
 
 	it("hydrates using sorted messages and custom hidden check", async () => {
@@ -419,6 +636,23 @@ describe("createPracticeSession", () => {
 
 		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
 		expect(session.messages.some((message) => message.isHidden)).toBe(false);
+	});
+
+	it("leaves a fresh session uninitialized when start does not return data", async () => {
+		mocks.postAction.mockResolvedValue({
+			type: "error",
+		});
+		const session = createSession(
+			createOptions({
+				existingSession: null,
+			}),
+		);
+
+		await session.initializeFreshSession();
+
+		expect(session.sessionId).toBeNull();
+		expect(session.isInitializing).toBe(false);
+		expect(mocks.initUserPool).not.toHaveBeenCalled();
 	});
 
 	it("handles initialization failure and resets initializing state", async () => {
