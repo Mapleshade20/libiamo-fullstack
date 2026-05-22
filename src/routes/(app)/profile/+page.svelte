@@ -6,7 +6,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
-import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form, data } = $props();
 
@@ -20,15 +20,24 @@ const localeByLanguage = {
 // Start with server-rendered list (progressive enhancement fallback),
 // then replace with localized labels on the client.
 let allTimezones = $state<{ value: string; label: string }[]>([]);
+let localizedNativeLanguageOptions = $state<{ value: string; label: string }[]>([]);
 
 const timezoneOptions = $derived(allTimezones.length > 0 ? allTimezones : (data.serverTimezones ?? []));
+const nativeLanguageOptions = $derived(
+	localizedNativeLanguageOptions.length > 0 ? localizedNativeLanguageOptions : (data.serverNativeLanguages ?? []),
+);
 
 let timezoneInputValue = $state("");
+let nativeLanguageInputValue = $state("");
 let detectedTimezone = $state("");
 
 $effect(() => {
 	const val = form?.values?.timezone ?? data.user.timezone ?? "";
 	timezoneInputValue = val;
+});
+
+$effect(() => {
+	nativeLanguageInputValue = form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "";
 });
 
 onMount(() => {
@@ -37,6 +46,7 @@ onMount(() => {
 
 	// Rebuild the list with localized labels on the client side
 	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
+	localizedNativeLanguageOptions = getNativeLanguageOptions(lang);
 
 	try {
 		const rawTimezones = Intl.supportedValuesOf("timeZone");
@@ -149,14 +159,20 @@ function applyDetectedTimezone() {
 
 				<div class="space-y-2">
 					<Label for="nativeLanguage">Native Language</Label>
-					<Input
+					<select
 						id="nativeLanguage"
 						name="nativeLanguage"
-						value={form?.values?.nativeLanguage ??
-							data.user.nativeLanguage ??
-							""}
-						placeholder="e.g. zh-CN, ja, ko"
-					/>
+						bind:value={nativeLanguageInputValue}
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					>
+						<option value="">Select your native language</option>
+						{#each nativeLanguageOptions as language}
+							<option value={language.value}>{language.label}</option>
+						{/each}
+					</select>
+					{#if form?.errors?.nativeLanguage}
+						<p class="text-sm text-red-600">{form.errors.nativeLanguage[0]}</p>
+					{/if}
 				</div>
 
 				<Button type="submit">Save</Button>

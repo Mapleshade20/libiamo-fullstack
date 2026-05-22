@@ -71,9 +71,13 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-vi.mock("$lib/server/llm", () => ({
-	createSingleTurnChat: mockCreateSingleTurnChat,
-}));
+vi.mock("$lib/server/llm", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("$lib/server/llm")>();
+	return {
+		...actual,
+		createSingleTurnChat: mockCreateSingleTurnChat,
+	};
+});
 
 // ── Helpers ────────────────────────────────────────────────────────
 function createLoadEvent(params: { id: string }, user: any = { id: "u1", activeLanguage: "en" }) {
@@ -96,6 +100,7 @@ function createActionEvent(entries: Record<string, string>, params: { id: string
 describe("(app) translate/[id] +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockCreateSingleTurnChat.mockReset();
 	});
 
 	// ── Load ──────────────────────────────────────────────────────
@@ -295,7 +300,7 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("evaluates and marks as evaluated on success", async () => {
-			const translations = { "0-0": "Bonjour", "0-1": "Au revoir" };
+			const translations = { "0-0": "Bonjour le monde", "0-1": "Au revoir mon ami" };
 			const evaluation = {
 				overallScore: "A",
 				overallFeedback: "Great job",
@@ -307,7 +312,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
-			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello", "Goodbye"]], language: "fr" }]);
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you", "Goodbye my dear friend"]], language: "fr" }]);
 
 			// Insert (new attempt, no attemptId)
 			mockReturning.mockResolvedValueOnce([{ id: 99 }]);
@@ -326,11 +331,11 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("returns 500 when LLM evaluation fails", async () => {
-			const translations = { "0-0": "Bonjour" };
+			const translations = { "0-0": "Bonjour le monde" };
 
 			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
-			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you"]], language: "fr" }]);
 
 			// Insert
 			mockReturning.mockResolvedValueOnce([{ id: 100 }]);
@@ -361,12 +366,12 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("handles LLM response with markdown fences", async () => {
-			const translations = { "0-0": "Ciao" };
+			const translations = { "0-0": "Ciao mondo, come stai" };
 			const evaluation = { overallScore: "B", overallFeedback: "Decent" };
 
 			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
-			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "it" }]);
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you"]], language: "it" }]);
 			mockReturning.mockResolvedValueOnce([{ id: 102 }]);
 
 			// LLM wraps JSON in markdown fences
@@ -381,11 +386,11 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("handles LLM returning non-JSON plain text (catch block)", async () => {
-			const translations = { "0-0": "Bonjour" };
+			const translations = { "0-0": "Bonjour le monde" };
 
 			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
-			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you"]], language: "fr" }]);
 
 			// Insert (no attemptId)
 			mockReturning.mockResolvedValueOnce([{ id: 103 }]);
@@ -408,11 +413,11 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("updates existing attempt when attemptId provided (no insert)", async () => {
-			const translations = { "0-0": "Hola" };
+			const translations = { "0-0": "Hola mundo, cómo estás hoy" };
 
 			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
-			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "es" }]);
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you today"]], language: "es" }]);
 
 			// Update path returning (scoped update with userId + templateId)
 			mockReturning.mockResolvedValueOnce([{ id: 55 }]);
@@ -430,6 +435,414 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(mockInsert).not.toHaveBeenCalled();
 			// Should have called set for the initial draft save AND the final evaluated update
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: "evaluated", evaluation }));
+		});
+
+		// ── Short sentence filtering ──
+		it("filters out short sentences (le 3 words) from evaluation", async () => {
+			const translations = { "0-0": "Hi", "0-1": "Bonjour le monde" };
+
+			// Template with one short sentence ("Hello") and one normal ("Goodbye world, it was nice")
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello", "Goodbye world, it was nice"]], language: "fr" }]);
+			mockReturning.mockResolvedValueOnce([{ id: 200 }]);
+
+			const evaluation = { overallScore: "A", overallFeedback: "Good" };
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: JSON.stringify(evaluation) },
+			});
+
+			await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
+
+			// Verify the LLM was called but only with non-short sentences
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			const userMessage = callArgs.userMessage as string;
+			// Should NOT contain the short sentence "Hello"
+			expect(userMessage).not.toContain("[0-0] Hello");
+			// Should contain the normal sentence
+			expect(userMessage).toContain("Goodbye world, it was nice");
+		});
+
+		it("filters out short sentences (le 20 chars) from evaluation", async () => {
+			const translations = { "0-0": "Ok", "0-1": "This is a longer sentence that needs translation" };
+
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([
+				{ translationBase: [["Dear Mr. Smith", "This is a longer sentence that needs translation"]], language: "fr" },
+			]);
+			mockReturning.mockResolvedValueOnce([{ id: 201 }]);
+
+			const evaluation = { overallScore: "B", overallFeedback: "Okay" };
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: JSON.stringify(evaluation) },
+			});
+
+			await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
+
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			const userMessage = callArgs.userMessage as string;
+			// "Dear Mr. Smith" is 14 chars, should be filtered
+			expect(userMessage).not.toContain("Dear Mr. Smith");
+			expect(userMessage).toContain("This is a longer sentence");
+		});
+
+		it("still marks as evaluated when all sentences are short", async () => {
+			const translations = { "0-0": "Hi" };
+
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hi"]], language: "fr" }]);
+			mockReturning.mockResolvedValueOnce([{ id: 202 }]);
+
+			const result = await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
+
+			// Should succeed without calling LLM (no evaluable passages)
+			expect(result).toEqual({ success: true });
+			expect(mockCreateSingleTurnChat).not.toHaveBeenCalled();
+			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: "evaluated" }));
+		});
+	});
+
+	// ── generateModelTranslation action ───────────────────────────
+	describe("generateModelTranslation action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.generateModelTranslation(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 for invalid template id", async () => {
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "abc" }))) as any;
+			expect(result.status).toBe(400);
+		});
+
+		it("returns 404 when template has no translationBase", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: null, language: "fr" }]);
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
+			expect(result.status).toBe(404);
+		});
+
+		it("returns 404 when template not found", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([]);
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "999" }))) as any;
+			expect(result.status).toBe(404);
+		});
+
+		it("returns model translations on success", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello", "Goodbye"]], language: "fr" }]);
+
+			const modelTranslations = { "0-0": "Bonjour", "0-1": "Au revoir" };
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: JSON.stringify(modelTranslations) },
+			});
+
+			const result = await actions.generateModelTranslation(createActionEvent({}, { id: "1" }));
+			expect(result).toEqual({ success: true, modelTranslations });
+		});
+
+		it("handles JSON wrapped in markdown fences", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hi"]], language: "es" }]);
+
+			const modelTranslations = { "0-0": "Hola" };
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: `\`\`\`json\n${JSON.stringify(modelTranslations)}\n\`\`\`` },
+			});
+
+			const result = await actions.generateModelTranslation(createActionEvent({}, { id: "1" }));
+			expect(result).toEqual({ success: true, modelTranslations });
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
+
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to generate model translation. You may need to configure your own API key.");
+		});
+
+		it("returns 500 when LLM response is not valid JSON", async () => {
+			mockWhere.mockReturnValueOnce({ limit: mockLimit });
+			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
+
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: "not valid json at all" },
+			});
+
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
+			expect(result.status).toBe(500);
+		});
+	});
+
+	// ── explainFeedback action ────────────────────────────────────
+	describe("explainFeedback action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.explainFeedback(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 when sourceSentence is missing", async () => {
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						userTranslation: "hola",
+						feedback: "wrong word",
+						language: "es",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing source sentence");
+		});
+
+		it("returns 400 when userTranslation is missing", async () => {
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						feedback: "wrong word",
+						language: "es",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing user translation");
+		});
+
+		it("returns 400 when feedback is missing", async () => {
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "hola",
+						language: "es",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing feedback");
+		});
+
+		it("returns 400 when language is missing", async () => {
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "hola",
+						feedback: "wrong word",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns explanation on success", async () => {
+			const explanation = "## What went wrong\n\nThe verb form is incorrect...";
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: explanation },
+			});
+
+			const result = await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "I go to school",
+						userTranslation: "Je aller à l'école",
+						feedback: "'aller' should be conjugated as 'vais'",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			);
+
+			expect(result).toEqual({ success: true, explanation });
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "Bonjour",
+						feedback: "Fine but informal",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to generate explanation. You may need to configure your own API key.");
+		});
+	});
+
+	// ── translateSentence action ──────────────────────────────────
+	describe("translateSentence action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.translateSentence(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 when sourceSentence is missing", async () => {
+			const result = (await actions.translateSentence(createActionEvent({ language: "fr" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing source sentence");
+		});
+
+		it("returns 400 when sourceSentence is empty", async () => {
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "   ", language: "fr" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 when language is missing", async () => {
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns translation on success", async () => {
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: "Bonjour le monde" },
+			});
+
+			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hello world", language: "fr" }, { id: "1" }));
+
+			expect(result).toEqual({ success: true, translation: "Bonjour le monde" });
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			expect(callArgs.systemPrompt).toContain("Français");
+			expect(callArgs.userMessage).toBe("Hello world");
+		});
+
+		it("trims whitespace from translation", async () => {
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: "  ¡Hola!  " },
+			});
+
+			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hi", language: "es" }, { id: "1" }));
+
+			expect(result).toEqual({ success: true, translation: "¡Hola!" });
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }))) as any;
+
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to translate sentence. You may need to configure your own API key.");
+		});
+	});
+
+	// ── askTutor action ───────────────────────────────────────────
+	describe("askTutor action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.askTutor(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 when sourceSentence is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent({ userTranslation: "hola", feedback: "wrong", question: "why?", language: "es" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing source sentence");
+		});
+
+		it("returns 400 when userTranslation is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent({ sourceSentence: "Hello", feedback: "wrong", question: "why?", language: "es" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing user translation");
+		});
+
+		it("returns 400 when feedback is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", question: "why?", language: "es" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing feedback");
+		});
+
+		it("returns 400 when question is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", language: "es" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing question");
+		});
+
+		it("returns 400 when language is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "why?" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns answer on success", async () => {
+			const answer = "The verb should be conjugated because...";
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: answer },
+			});
+
+			const result = await actions.askTutor(
+				createActionEvent(
+					{
+						sourceSentence: "I eat",
+						userTranslation: "Je mange",
+						feedback: "Perfect!",
+						question: "Why is it 'mange' and not 'manges'?",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			);
+
+			expect(result).toEqual({ success: true, answer });
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			expect(callArgs.systemPrompt).toContain("Français");
+			expect(callArgs.userMessage).toContain("I eat");
+			expect(callArgs.userMessage).toContain("Je mange");
+			expect(callArgs.userMessage).toContain("Perfect!");
+			expect(callArgs.userMessage).toContain("Why is it");
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "Bonjour",
+						feedback: "Good",
+						question: "Is there a better word?",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to get answer. You may need to configure your own API key.");
 		});
 	});
 });

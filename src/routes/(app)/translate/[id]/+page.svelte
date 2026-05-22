@@ -1,21 +1,23 @@
 <script lang="ts">
+import AlertCircle from "@lucide/svelte/icons/alert-circle";
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
 import Clock from "@lucide/svelte/icons/clock";
 import Gem from "@lucide/svelte/icons/gem";
 import Languages from "@lucide/svelte/icons/languages";
-import Loader from "@lucide/svelte/icons/loader-circle";
 import Save from "@lucide/svelte/icons/save";
 import Send from "@lucide/svelte/icons/send";
 import Star from "@lucide/svelte/icons/star";
-import Trophy from "@lucide/svelte/icons/trophy";
+import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import EvaluationSummary from "$lib/components/translate/EvaluationSummary.svelte";
+import TranslationSentence from "$lib/components/translate/TranslationSentence.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { type LanguageCode, t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
 
-type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string };
+type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
 type Evaluation = {
 	overallScore?: string;
 	overallFeedback?: string;
@@ -54,6 +56,48 @@ let evaluating = $state(false);
 // The effective evaluation to display
 let evaluation = $derived<Evaluation | null>(liveEvaluation ?? savedEvaluation);
 
+function isShort(text: string): boolean {
+	const t = text.trim();
+	if (t.length === 0) return true;
+	return t.split(/\s+/).length <= 3 || t.length <= 20;
+}
+
+// Computed
+let totalSentences = $derived(passages.reduce((s, p) => s + p.length, 0));
+let shortKeys = $derived(new Set(passages.flatMap((p, pi) => p.map((_, si) => sentenceKey(pi, si)).filter((_, si) => isShort(p[si])))));
+let effectiveTotal = $derived(totalSentences - shortKeys.size);
+let allShort = $derived(effectiveTotal === 0 && totalSentences > 0);
+let sentenceReferences = $state<Record<string, string>>({});
+let loadingReferences = $state<Set<string>>(new Set());
+let referenceErrors = $state<Record<string, string>>({});
+let qaHistories = $state<Record<string, { question: string; answer?: string }[]>>({});
+let tutorAnswers = $state<Record<string, string>>({});
+let loadingTutorAnswers = $state<Set<string>>(new Set());
+let tutorErrors = $state<Record<string, string>>({});
+let saveIndicator = $state<string | null>(null);
+let lastSavedValue = $state<string>("");
+let saveTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+let lastSaveError = $state(false);
+
+// localStorage persistence
+let storageKey = $derived(`translate-${tpl.id}`);
+function persistRefs() {
+	if (typeof localStorage === "undefined") return;
+	try {
+		localStorage.setItem(`${storageKey}-refs`, JSON.stringify(sentenceReferences));
+	} catch {
+		/* ignore */
+	}
+}
+function persistQA() {
+	if (typeof localStorage === "undefined") return;
+	try {
+		localStorage.setItem(`${storageKey}-qa`, JSON.stringify(qaHistories));
+	} catch {
+		/* ignore */
+	}
+}
+
 // Initialize once on mount
 let initialized = false;
 $effect(() => {
@@ -61,6 +105,18 @@ $effect(() => {
 	initialized = true;
 	if (data.attempt?.translations) {
 		translations = { ...(data.attempt.translations as Record<string, string>) };
+		lastSavedValue = JSON.stringify(translations);
+	}
+	// Restore ephemeral data from localStorage
+	if (typeof localStorage !== "undefined") {
+		try {
+			const refs = localStorage.getItem(`${storageKey}-refs`);
+			if (refs) sentenceReferences = JSON.parse(refs);
+			const qa = localStorage.getItem(`${storageKey}-qa`);
+			if (qa) qaHistories = JSON.parse(qa);
+		} catch {
+			/* ignore */
+		}
 	}
 	if (attemptStatus === "draft") {
 		translating = true;
@@ -74,11 +130,8 @@ $effect(() => {
 	}
 });
 
-// Computed
-let totalSentences = $derived(passages.reduce((sum, p) => sum + p.length, 0));
-const translatedCount = $derived(Object.keys(translations).filter((k) => translations[k]?.trim()).length);
-const allTranslated = $derived(translatedCount === totalSentences && totalSentences > 0);
-
+const effectiveTranslatedCount = $derived(Object.entries(translations).filter(([k, v]) => !shortKeys.has(k) && v?.trim()).length);
+const allTranslated = $derived(allShort || (effectiveTranslatedCount >= effectiveTotal && effectiveTotal > 0));
 function sentenceKey(pi: number, si: number): string {
 	return `${pi}-${si}`;
 }
@@ -103,14 +156,6 @@ function difficultyLabel(level: number): string {
 function getHighlight(key: string): EvalHighlight | undefined {
 	return evaluation?.highlights?.find((h) => h.key === key);
 }
-
-function scoreColor(score?: string): string {
-	if (!score) return "text-foreground";
-	if (score === "A") return "text-green-600";
-	if (score === "B") return "text-yellow-600";
-	return "text-red-600";
-}
-
 async function handleSaveDraft() {
 	saving = true;
 	saveError = null;
@@ -186,12 +231,107 @@ async function handleSubmit() {
 		saving = false;
 	}
 }
+async function handleShowReference(key: string, sourceSentence: string) {
+	loadingReferences = new Set([...loadingReferences, key]);
+	referenceErrors = { ...referenceErrors, [key]: "" };
+	try {
+		const form = new FormData();
+		form.set("sourceSentence", sourceSentence);
+		form.set("language", lang);
+		const res = await fetch("?/translateSentence", { method: "POST", body: form });
+		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		if (r.type === "success" && r.data) {
+			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
+			persistRefs();
+		} else {
+			referenceErrors = { ...referenceErrors, [key]: r.data?.error ?? "Failed to translate. You may need to configure your own API key." };
+		}
+	} catch {
+		referenceErrors = { ...referenceErrors, [key]: "Failed to connect. You may need to configure your own API key." };
+	} finally {
+		loadingReferences = new Set([...loadingReferences].filter((k) => k !== key));
+	}
+}
+function findSourceSentence(key: string): string {
+	for (const para of passages) {
+		for (let si = 0; si < para.length; si++) {
+			if (sentenceKey(passages.indexOf(para), si) === key) return para[si];
+		}
+	}
+	return "";
+}
+async function handleAskTutor(key: string, question: string, history: { question: string; answer?: string }[]) {
+	const highlight = getHighlight(key);
+	if (!highlight) return;
+	loadingTutorAnswers = new Set([...loadingTutorAnswers, key]);
+	tutorErrors = { ...tutorErrors, [key]: "" };
+	try {
+		// Build context from previous Q&A
+		let context = "";
+		if (history.length > 1) {
+			context = "\n\nPrevious conversation:\n";
+			for (const qa of history.slice(0, -1)) {
+				context += `Q: ${qa.question}\nA: ${qa.answer ?? "(no answer yet)"}\n`;
+			}
+		}
+		const form = new FormData();
+		form.set("sourceSentence", findSourceSentence(key));
+		form.set("userTranslation", translations[key] ?? "");
+		form.set("feedback", highlight.feedback);
+		form.set("question", question + context);
+		form.set("language", lang);
+		const res = await fetch("?/askTutor", { method: "POST", body: form });
+		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		if (r.type === "success" && r.data) {
+			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
+		} else {
+			tutorErrors = { ...tutorErrors, [key]: r.data?.error ?? "Failed to get answer. You may need to configure your own API key." };
+		}
+	} catch {
+		tutorErrors = { ...tutorErrors, [key]: "Failed to connect. You may need to configure your own API key." };
+	} finally {
+		loadingTutorAnswers = new Set([...loadingTutorAnswers].filter((k) => k !== key));
+	}
+}
+async function handleBlur() {
+	const cv = JSON.stringify(translations);
+	if (cv === lastSavedValue) return;
+	if (saveTimer) clearTimeout(saveTimer);
+	saveTimer = setTimeout(async () => {
+		const vts = JSON.stringify(translations);
+		if (vts === lastSavedValue) return;
+		try {
+			saveIndicator = "Saving...";
+			const form = new FormData();
+			form.set("translations", JSON.stringify(translations));
+			if (attemptId) form.set("attemptId", String(attemptId));
+			const res = await fetch("?/saveDraft", { method: "POST", body: form });
+			if (res.ok) {
+				lastSavedValue = vts;
+				saveIndicator = "Saved";
+				lastSaveError = false;
+				setTimeout(() => {
+					if (saveIndicator === "Saved") saveIndicator = null;
+				}, 2000);
+				await invalidateAll();
+			} else {
+				lastSaveError = true;
+				saveIndicator = null;
+			}
+		} catch {
+			lastSaveError = true;
+			saveIndicator = null;
+		}
+	}, 500);
+}
+$effect(() => {
+	return () => {
+		if (saveTimer) clearTimeout(saveTimer);
+	};
+});
 </script>
-
 <div class="fixed inset-0 bg-card"></div>
-
 <div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
-	<!-- Back button -->
 	{#if translating}
 		<button
 			type="button"
@@ -207,54 +347,27 @@ async function handleSubmit() {
 			<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "common.back")}</span>
 		</a>
 	{/if}
-
 	<div class="mt-12 flex-1 flex flex-col">
-		<!-- Header -->
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
-					<Languages size={12} class="mr-1" />
-					Translation
-				</Badge>
-				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(tpl.difficulty)} </span>
+				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest"><Languages size={12} class="mr-1" />Translation</Badge>
+				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{difficultyLabel(tpl.difficulty)}</span>
 				{#if isDone || submitted}
-					<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest bg-green-100 text-green-700 border-green-200">
-						<Check size={10} class="mr-0.5" />
-						Done
-					</Badge>
+					<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest bg-green-100 text-green-700 border-green-200"
+						><Check size={10} class="mr-0.5" />Done</Badge
+					>
 				{/if}
 			</div>
 			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{tpl.title}</h1>
 		</div>
-
-		<!-- Evaluation summary (right below the title) -->
 		{#if evaluation && !translating}
-			<div class="mt-6 max-w-xl">
-				<div class="p-5 rounded-xl bg-foreground/5 border border-border space-y-4">
-					<div class="flex items-center gap-2 mb-2">
-						<Trophy size={14} strokeWidth={1.5} class="text-muted-foreground" />
-						<h2 class="text-xs font-bold uppercase tracking-widest text-muted-foreground">Evaluation</h2>
-					</div>
-					{#if evaluation.overallScore}
-						<div class="flex items-center gap-3">
-							<span class="text-4xl font-serif {scoreColor(evaluation.overallScore)}">{evaluation.overallScore}</span>
-						</div>
-					{/if}
-					{#if evaluation.overallFeedback}
-						<p class="text-sm text-muted-foreground leading-relaxed">{evaluation.overallFeedback}</p>
-					{/if}
-				</div>
-			</div>
+			<div class="mt-6 max-w-xl"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} /></div>
 		{/if}
-
 		{#if !translating}
-			<!-- ═══ Preview Mode ═══ -->
 			{#if tpl.description}
 				<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{tpl.description}</p>
 			{/if}
-
 			{#if isDone && passages.length > 0}
-				<!-- Annotated translation view (shown when evaluated/submitted) -->
 				<div class="mt-10">
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Your Translation</h2>
 					<div class="space-y-4 max-w-xl">
@@ -262,46 +375,34 @@ async function handleSubmit() {
 							<div class="space-y-1">
 								{#each paragraph as sentence, si}
 									{@const key = sentenceKey(pi, si)}
-									{@const highlight = getHighlight(key)}
-									{@const isAnnotated = visibleHighlightKeys.has(key)}
-									{@const translation = translations[key]}
-									<div>
-										<p class="text-base font-light leading-relaxed text-foreground">{sentence}</p>
-										{#if translation}
-											<div
-												class="ml-4 pl-3 border-l-2 py-1
-												{highlight && isAnnotated
-													? (highlight.type === 'good'
-														? 'border-green-400 bg-green-50/70'
-														: 'border-red-400 bg-red-50/70')
-													: 'border-foreground/10'}"
-											>
-												<p
-													class="text-sm italic
-													{highlight && isAnnotated
-														? (highlight.type === 'good' ? 'text-green-800' : 'text-red-800')
-														: 'text-muted-foreground'}"
-												>
-													{translation}
-												</p>
-												{#if highlight && isAnnotated}
-													<div
-														class="mt-1.5 text-xs leading-relaxed
-														{highlight.type === 'good' ? 'text-green-700' : 'text-red-700'}"
-													>
-														{highlight.feedback}
-													</div>
-												{/if}
-											</div>
-										{/if}
-									</div>
+									<TranslationSentence
+										{sentence}
+										sentenceKey={key}
+										translation={translations[key] ?? ""}
+										highlight={getHighlight(key)}
+										isAnnotated={visibleHighlightKeys.has(key)}
+										isShort={shortKeys.has(key)}
+										mode="submitted"
+										isActive={false}
+										reference={sentenceReferences[key]}
+										loadingReference={loadingReferences.has(key)}
+										onShowReference={() => handleShowReference(key, sentence)}
+										tutorAnswer={tutorAnswers[key]}
+										loadingTutorAnswer={loadingTutorAnswers.has(key)}
+										tutorError={tutorErrors[key] ?? ""}
+										onToggle={() => {}}
+										onBlur={() => {}}
+										onTranslationChange={() => {}}
+										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
+										qaHistory={qaHistories[key] ?? []}
+										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
+									/>
 								{/each}
 							</div>
 						{/each}
 					</div>
 				</div>
 			{:else if passages.length > 0}
-				<!-- Plain source text (not yet done) -->
 				<div class="mt-10">
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Source Text</h2>
 					<div class="space-y-4 max-w-xl">
@@ -315,7 +416,6 @@ async function handleSubmit() {
 					</div>
 				</div>
 			{/if}
-
 			{#if tpl.materialsMd}
 				<div class="mt-10">
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
@@ -323,120 +423,64 @@ async function handleSubmit() {
 				</div>
 			{/if}
 		{:else}
-			<!-- ═══ Translation Mode ═══ -->
 			{#if totalSentences > 0}
 				<div class="mt-8">
-					<!-- Progress bar (hidden after submit) -->
-					{#if !submitted}
+					{#if allShort}
+						<div class="mb-6 p-4 rounded-xl bg-foreground/5 border border-border">
+							<p class="text-sm text-muted-foreground">
+								All sentences in this section are short (excluded from evaluation). You can still translate them below.
+							</p>
+						</div>
+					{/if}
+					{#if !submitted && !allShort}
 						<div class="mb-6">
 							<div class="flex items-center justify-between mb-2">
-								<span class="text-xs font-bold uppercase tracking-widest text-muted-foreground"> {translatedCount}/{totalSentences} sentences </span>
-								<span class="text-xs text-muted-foreground"> {Math.round((translatedCount / totalSentences) * 100)}% </span>
+								<span class="text-xs font-bold uppercase tracking-widest text-muted-foreground"
+									>{effectiveTranslatedCount}/{effectiveTotal}
+									sentences</span
+								>
+								<span class="text-xs text-muted-foreground"
+									>{effectiveTotal > 0 ? Math.round((effectiveTranslatedCount / effectiveTotal) * 100) : 0}%</span
+								>
 							</div>
 							<div class="h-1.5 w-full bg-border rounded-full overflow-hidden">
 								<div
 									class="h-full bg-foreground rounded-full transition-all duration-500"
-									style="width: {(translatedCount / totalSentences) * 100}%"
+									style="width: {effectiveTotal > 0 ? (effectiveTranslatedCount / effectiveTotal) * 100 : 0}%"
 								></div>
 							</div>
 						</div>
 					{/if}
-
-					<!-- Evaluation summary in translation mode (compact) -->
 					{#if evaluation && submitted}
-						<div class="mb-6 p-4 rounded-xl bg-foreground/5 border border-border space-y-3">
-							<div class="flex items-center gap-2">
-								<Trophy size={14} strokeWidth={1.5} class="text-muted-foreground" />
-								<span class="text-xs font-bold uppercase tracking-widest text-muted-foreground">Evaluation</span>
-								{#if evaluating}
-									<Loader size={14} class="animate-spin text-muted-foreground" />
-								{/if}
-							</div>
-							{#if evaluation.overallScore}
-								<div class="flex items-center gap-3">
-									<span class="text-4xl font-serif {scoreColor(evaluation.overallScore)}">{evaluation.overallScore}</span>
-								</div>
-							{/if}
-							{#if evaluation.overallFeedback}
-								<p class="text-sm text-muted-foreground leading-relaxed">{evaluation.overallFeedback}</p>
-							{/if}
-						</div>
+						<div class="mb-6"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} compact /></div>
 					{/if}
-
-					<!-- Passages with inline translation & annotations -->
 					<div class="space-y-6 max-w-xl">
 						{#each passages as paragraph, pi}
 							<div class="space-y-1">
 								{#each paragraph as sentence, si}
 									{@const key = sentenceKey(pi, si)}
-									{@const done = translations[key]?.trim()}
-									{@const highlight = getHighlight(key)}
-									{@const isAnnotated = visibleHighlightKeys.has(key)}
-									<div class="group">
-										<!-- Source sentence -->
-										<div
-											role="button"
-											tabindex={submitted ? -1 : 0}
-											onclick={() => { if (!submitted) toggleSentence(key); }}
-											onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !submitted) { e.preventDefault(); toggleSentence(key); } }}
-											class="w-full text-left rounded-lg px-3 py-2 transition-colors {submitted ? 'cursor-default' : 'cursor-pointer'} {done && !submitted
-												? 'bg-foreground/5'
-												: ''} {activeKey === key && !submitted
-												? 'ring-1 ring-foreground/20'
-												: ''}"
-										>
-											<span class="text-base font-light leading-relaxed text-foreground">{sentence}</span>
-										</div>
-
-										<!-- Translation input (expanded, only before submit) -->
-										{#if activeKey === key && !submitted}
-											<div class="mt-1 ml-4 pl-3 border-l-2 border-foreground/20">
-												<textarea
-													class="w-full min-h-[60px] resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
-													placeholder="Enter your translation..."
-													bind:value={translations[key]}
-													rows={2}
-												></textarea>
-											</div>
-										{/if}
-
-										<!-- Show translation with annotation (after submit) -->
-										{#if done && submitted}
-											<div
-												class="ml-4 pl-3 border-l-2 py-1 transition-all duration-500
-												{highlight && isAnnotated
-													? (highlight.type === 'good'
-														? 'border-green-400 bg-green-50/70'
-														: 'border-red-400 bg-red-50/70')
-													: submitted
-														? 'border-foreground/10'
-														: 'border-foreground/10'}"
-											>
-												<p
-													class="text-sm italic
-													{highlight && isAnnotated
-														? (highlight.type === 'good' ? 'text-green-800' : 'text-red-800')
-														: 'text-muted-foreground'}"
-												>
-													{translations[key]}
-												</p>
-												<!-- Annotation feedback -->
-												{#if highlight && isAnnotated}
-													<div
-														class="mt-1.5 text-xs leading-relaxed animate-fade-in
-														{highlight.type === 'good' ? 'text-green-700' : 'text-red-700'}"
-													>
-														{highlight.feedback}
-													</div>
-												{/if}
-											</div>
-										{/if}
-
-										<!-- Show existing translation (when not expanded, before submit) -->
-										{#if done && activeKey !== key && !submitted}
-											<p class="ml-4 pl-3 border-l-2 border-foreground/10 text-sm text-muted-foreground py-1 italic">{translations[key]}</p>
-										{/if}
-									</div>
+									<TranslationSentence
+										{sentence}
+										sentenceKey={key}
+										translation={translations[key] ?? ""}
+										highlight={getHighlight(key)}
+										isAnnotated={visibleHighlightKeys.has(key)}
+										isShort={shortKeys.has(key)}
+										mode={submitted ? "submitted" : "editing"}
+										isActive={activeKey === key}
+										reference={sentenceReferences[key]}
+										loadingReference={loadingReferences.has(key)}
+										onShowReference={() => handleShowReference(key, sentence)}
+										tutorAnswer={tutorAnswers[key]}
+										loadingTutorAnswer={loadingTutorAnswers.has(key)}
+										tutorError={tutorErrors[key] ?? ""}
+										onToggle={() => toggleSentence(key)}
+										onBlur={handleBlur}
+										onTranslationChange={(v: string) => { translations = { ...translations, [key]: v }; }}
+										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
+										qaHistory={qaHistories[key] ?? []}
+										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
+									/>
 								{/each}
 							</div>
 						{/each}
@@ -444,55 +488,44 @@ async function handleSubmit() {
 				</div>
 			{/if}
 		{/if}
-
-		<!-- Footer -->
 		<div class="mt-auto pt-12 pb-4">
 			<div class="h-px w-full bg-border mb-6"></div>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-4 text-sm text-muted-foreground">
-					<span class="flex items-center gap-1.5">
-						<Star size={14} strokeWidth={1.5} />
-						{tpl.pointReward}
-						pts
-					</span>
-					<span class="flex items-center gap-1.5">
-						<Gem size={14} strokeWidth={1.5} />
-						{tpl.gemReward}
-						gems
-					</span>
+					<span class="flex items-center gap-1.5"><Star size={14} strokeWidth={1.5} />{tpl.pointReward} pts</span>
+					<span class="flex items-center gap-1.5"><Gem size={14} strokeWidth={1.5} />{tpl.gemReward} gems</span>
 					{#if tpl.estimatedWords}
-						<span class="flex items-center gap-1.5"> <Clock size={14} strokeWidth={1.5} />~{tpl.estimatedWords} words </span>
+						<span class="flex items-center gap-1.5"><Clock size={14} strokeWidth={1.5} />~{tpl.estimatedWords} words</span>
+					{/if}
+					{#if saveIndicator}
+						<span class="text-xs text-muted-foreground animate-fade-in">{saveIndicator}</span>
+					{/if}
+					{#if lastSaveError}
+						<span class="flex items-center gap-1 text-xs text-amber-600"><AlertCircle size={12} /> Auto-save failed</span>
 					{/if}
 				</div>
 				<div class="flex gap-2">
 					{#if !translating}
-						<!-- Preview mode: only show Start if not done -->
 						{#if canTranslate && !submitted}
-							<Button onclick={startTranslation} class="px-8"> {attemptStatus === "draft" ? "Continue Translation" : "Start Translation"} </Button>
+							<Button onclick={startTranslation} class="px-8">{attemptStatus === "draft" ? "Continue Translation" : "Start Translation"}</Button>
 						{/if}
 					{:else if !submitted}
-						<!-- Translation mode (before submit): save & submit -->
 						{#if saveError}
 							<span class="text-sm text-red-600">{saveError}</span>
 						{/if}
 						{#if submitError}
 							<span class="text-sm text-red-600">{submitError}</span>
 						{/if}
-						<Button variant="outline" onclick={handleSaveDraft} disabled={saving}>
-							<Save size={14} class="mr-1.5" />
-							{saving ? "Saving..." : "Save Draft"}
-						</Button>
-						<Button onclick={handleSubmit} disabled={!allTranslated || saving}>
-							<Send size={14} class="mr-1.5" />
-							Submit
-						</Button>
+						<Button variant="outline" onclick={handleSaveDraft} disabled={saving}
+							><Save size={14} class="mr-1.5" />{saving ? "Saving..." : "Save Draft"}</Button
+						>
+						<Button onclick={handleSubmit} disabled={!allTranslated || saving}><Send size={14} class="mr-1.5" />Submit</Button>
 					{/if}
 				</div>
 			</div>
 		</div>
 	</div>
 </div>
-
 <style>
 @keyframes fade-in {
 	from {

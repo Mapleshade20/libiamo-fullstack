@@ -55,6 +55,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
 		// Common
 		"common.save": "Save",
+		"common.retry": "Retry",
 		"common.cancel": "Cancel",
 		"common.delete": "Delete",
 		"common.create": "Create",
@@ -66,6 +67,13 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"hall.reviewReport": "Review Report",
 		"task.startPractice": "Start Practice",
 		"task.comingSoon": "Coming Soon",
+		"task.usefulExpressions": "Useful Expressions",
+		"task.usefulExpressions.title": "Useful Expressions for This Task",
+		"task.usefulExpressions.generating": "Generating useful expressions...",
+		"task.usefulExpressions.showTranslation": "Show Translation",
+		"task.usefulExpressions.hideTranslation": "Hide Translation",
+		"task.usefulExpressions.translating": "Translating...",
+		"task.usefulExpressions.error": "Failed to generate expressions. Please try again.",
 	},
 	es: {
 		"nav.home": "Salón de Misiones",
@@ -113,6 +121,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "No hay contenido disponible para traducir todavía.",
 
 		"common.save": "Guardar",
+		"common.retry": "Reintentar",
 		"common.cancel": "Cancelar",
 		"common.delete": "Eliminar",
 		"common.create": "Crear",
@@ -124,6 +133,13 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"hall.reviewReport": "Revisar Informe",
 		"task.startPractice": "Comenzar Práctica",
 		"task.comingSoon": "Próximamente",
+		"task.usefulExpressions": "Expresiones Útiles",
+		"task.usefulExpressions.title": "Expresiones Útiles para Esta Tarea",
+		"task.usefulExpressions.generating": "Generando expresiones útiles...",
+		"task.usefulExpressions.showTranslation": "Mostrar Traducción",
+		"task.usefulExpressions.hideTranslation": "Ocultar Traducción",
+		"task.usefulExpressions.translating": "Traduciendo...",
+		"task.usefulExpressions.error": "Error al generar expresiones. Inténtalo de nuevo.",
 	},
 	fr: {
 		"nav.home": "Salle des Quêtes",
@@ -171,6 +187,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "Aucun contenu disponible pour la traduction pour le moment.",
 
 		"common.save": "Enregistrer",
+		"common.retry": "Réessayer",
 		"common.cancel": "Annuler",
 		"common.delete": "Supprimer",
 		"common.create": "Créer",
@@ -182,6 +199,13 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"hall.reviewReport": "Voir le Rapport",
 		"task.startPractice": "Commencer la Pratique",
 		"task.comingSoon": "Bientôt Disponible",
+		"task.usefulExpressions": "Expressions Utiles",
+		"task.usefulExpressions.title": "Expressions Utiles pour Cette Tâche",
+		"task.usefulExpressions.generating": "Génération d'expressions utiles...",
+		"task.usefulExpressions.showTranslation": "Afficher la Traduction",
+		"task.usefulExpressions.hideTranslation": "Masquer la Traduction",
+		"task.usefulExpressions.translating": "Traduction en cours...",
+		"task.usefulExpressions.error": "Échec de la génération. Veuillez réessayer.",
 	},
 	ja: {
 		"nav.home": "クエストホール",
@@ -229,6 +253,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "現在翻訳可能なコンテンツはありません。",
 
 		"common.save": "保存",
+		"common.retry": "再試行",
 		"common.cancel": "キャンセル",
 		"common.delete": "削除",
 		"common.create": "作成",
@@ -240,6 +265,13 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"hall.reviewReport": "レポートを確認",
 		"task.startPractice": "練習を開始",
 		"task.comingSoon": "近日公開",
+		"task.usefulExpressions": "便利な表現",
+		"task.usefulExpressions.title": "このタスクの便利な表現",
+		"task.usefulExpressions.generating": "便利な表現を生成中...",
+		"task.usefulExpressions.showTranslation": "翻訳を表示",
+		"task.usefulExpressions.hideTranslation": "翻訳を隠す",
+		"task.usefulExpressions.translating": "翻訳中...",
+		"task.usefulExpressions.error": "生成に失敗しました。もう一度お試しください。",
 	},
 };
 
