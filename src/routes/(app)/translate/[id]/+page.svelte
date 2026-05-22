@@ -131,7 +131,7 @@ $effect(() => {
 });
 
 const effectiveTranslatedCount = $derived(Object.entries(translations).filter(([k, v]) => !shortKeys.has(k) && v?.trim()).length);
-const allTranslated = $derived(effectiveTranslatedCount >= effectiveTotal && effectiveTotal > 0);
+const allTranslated = $derived(allShort || (effectiveTranslatedCount >= effectiveTotal && effectiveTotal > 0));
 function sentenceKey(pi: number, si: number): string {
 	return `${pi}-${si}`;
 }

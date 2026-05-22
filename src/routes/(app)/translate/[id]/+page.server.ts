@@ -24,6 +24,27 @@ function validateLanguageCode(code: unknown): LanguageCode {
 	return "en";
 }
 
+/** Extract a required non-empty string field from FormData, or null */
+function getFormString(formData: FormData, field: string): string | null {
+	const value = formData.get(field);
+	if (!value || typeof value !== "string" || !value.trim()) return null;
+	return value.trim();
+}
+
+/** Validate language code and return its display name */
+function getLangName(code: unknown): string {
+	return LANGUAGE_LABELS[validateLanguageCode(code)];
+}
+
+/** Handle LLM errors with auth-specific messaging */
+function handleLlmError(err: unknown, fallback: string) {
+	console.error(fallback, err);
+	if (err instanceof OpenAIAuthError) {
+		return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+	}
+	return fail(500, { error: fallback });
+}
+
 /** Template filter conditions shared by load and action auth checks */
 const translateTemplateFilter = (templateId: number, userLanguage: string) =>
 	and(
@@ -130,9 +151,14 @@ export const load: PageServerLoad = async (event) => {
 	};
 };
 
+/** Resolve a display name for a language code, with fallback for runtime-cast values */
+function promptLangName(targetLang: LanguageCode): string {
+	return LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+}
+
 /** Build the global translation evaluation prompt for the given target language */
 function buildTranslationEvalPrompt(targetLang: LanguageCode): string {
-	const langName = LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} translation evaluator. The user will provide original source sentences (with keys like [0-1]) and their ${langName} translations (with the same keys).
 
 Evaluate the translations and respond with ONLY a JSON object (no markdown fences):
@@ -171,15 +197,13 @@ function flattenPassages(passages: string[][]): { key: string; text: string }[] 
 
 async function evaluateTranslation(
 	agentPromptBase: string,
-	passages: string[][],
+	sentences: { key: string; text: string }[],
 	translations: Record<string, string>,
 ): Promise<{
 	overallScore?: string;
 	overallFeedback?: string;
 	highlights?: { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string }[];
 }> {
-	const sentences = flattenPassages(passages);
-
 	const sourceLines = sentences.map((s) => `[${s.key}] ${s.text}`).join("\n");
 	const translationLines = sentences.map((s) => `[${s.key}] ${translations[s.key] ?? "(missing)"}`).join("\n");
 
@@ -209,7 +233,7 @@ ${translationLines}`;
 
 /** Build a prompt for generating a reference model translation */
 function buildModelTranslationPrompt(targetLang: LanguageCode): string {
-	const langName = LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} translator. Translate the following sentences into natural, fluent ${langName}. Return ONLY a JSON object mapping each sentence key to its translation (no markdown fences, no extra text).
 
 Example format:
@@ -221,7 +245,7 @@ Example format:
 
 /** Build a prompt for explaining a specific grammar/translation feedback in detail */
 function buildExplainFeedbackPrompt(targetLang: LanguageCode): string {
-	const langName = LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} language tutor. A learner received the following feedback on their ${langName} translation. Your job is to expand on this feedback with a detailed, pedagogical explanation.
 
 ## Response Format
@@ -288,14 +312,13 @@ export const actions: Actions = {
 		if (tpl?.translationBase) {
 			try {
 				const fullPassages = tpl.translationBase as string[][];
-				// Filter out short sentences for evaluation
+				// Build evaluable sentence list preserving original keys
 				const allSentences = flattenPassages(fullPassages);
-				const shortKeys = new Set(allSentences.filter((s) => isShortSentence(s.text)).map((s) => s.key));
-				const evaluablePassages = fullPassages.map((p) => p.filter((s) => !isShortSentence(s))).filter((p) => p.length > 0);
+				const evaluableSentences = allSentences.filter((s) => !isShortSentence(s.text));
 				const evaluableTranslations: Record<string, string> = {};
-				for (const [key, val] of Object.entries(parsed.translations)) {
-					if (!shortKeys.has(key)) {
-						evaluableTranslations[key] = val;
+				for (const s of evaluableSentences) {
+					if (parsed.translations[s.key]?.trim()) {
+						evaluableTranslations[s.key] = parsed.translations[s.key];
 					}
 				}
 
@@ -306,10 +329,10 @@ export const actions: Actions = {
 					overallFeedback?: string;
 					highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
 				};
-				if (evaluablePassages.length === 0) {
+				if (evaluableSentences.length === 0) {
 					evaluation = {};
 				} else {
-					evaluation = await evaluateTranslation(evalPrompt, evaluablePassages, evaluableTranslations);
+					evaluation = await evaluateTranslation(evalPrompt, evaluableSentences, evaluableTranslations);
 				}
 				await db
 					.update(translationAttempt)
@@ -378,133 +401,90 @@ export const actions: Actions = {
 
 	explainFeedback: async (event) => {
 		const user = requireUser(event);
-
 		const formData = await event.request.formData();
-		const sourceSentence = formData.get("sourceSentence");
-		const userTranslation = formData.get("userTranslation");
-		const feedback = formData.get("feedback");
+
+		const sourceSentence = getFormString(formData, "sourceSentence");
+		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
+		const userTranslation = getFormString(formData, "userTranslation");
+		if (!userTranslation) return fail(400, { error: "Missing user translation" });
+		const feedback = getFormString(formData, "feedback");
+		if (!feedback) return fail(400, { error: "Missing feedback" });
 		const language = formData.get("language");
+		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
 
-		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
-			return fail(400, { error: "Missing source sentence" });
-		}
-		if (!userTranslation || typeof userTranslation !== "string" || !userTranslation.trim()) {
-			return fail(400, { error: "Missing user translation" });
-		}
-		if (!feedback || typeof feedback !== "string" || !feedback.trim()) {
-			return fail(400, { error: "Missing feedback" });
-		}
-		if (!language || typeof language !== "string") {
-			return fail(400, { error: "Missing language" });
-		}
-
-		const validLang = validateLanguageCode(language);
-		const prompt = buildExplainFeedbackPrompt(validLang);
-		const langName = LANGUAGE_LABELS[validLang];
+		const langName = getLangName(language);
+		const prompt = buildExplainFeedbackPrompt(validateLanguageCode(language));
 
 		try {
 			const { reply } = await createSingleTurnChat(
 				{
 					systemPrompt: prompt,
-					userMessage: `Source sentence: "${sourceSentence.trim()}"\n\nLearner's ${langName} translation: "${userTranslation.trim()}"\n\nThe feedback they received: "${feedback.trim()}"\n\nPlease expand on this feedback with a detailed explanation.`,
+					userMessage: `Source sentence: "${sourceSentence}"\n\nLearner's ${langName} translation: "${userTranslation}"\n\nThe feedback they received: "${feedback}"\n\nPlease expand on this feedback with a detailed explanation.`,
 					options: { temperature: 0.7, maxTokens: 4096 },
 				},
 				user.id,
 			);
-
 			return { success: true, explanation: reply.content };
 		} catch (err) {
-			console.error("Explain feedback failed:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to generate explanation. You may need to configure your own API key." });
+			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
 		}
 	},
 
 	translateSentence: async (event) => {
 		const user = requireUser(event);
-
 		const formData = await event.request.formData();
-		const sourceSentence = formData.get("sourceSentence");
+
+		const sourceSentence = getFormString(formData, "sourceSentence");
+		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
 		const language = formData.get("language");
+		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
 
-		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
-			return fail(400, { error: "Missing source sentence" });
-		}
-		if (!language || typeof language !== "string") {
-			return fail(400, { error: "Missing language" });
-		}
-
-		const validLang = validateLanguageCode(language);
-		const langName = LANGUAGE_LABELS[validLang];
+		const langName = getLangName(language);
 
 		try {
 			const { reply } = await createSingleTurnChat(
 				{
 					systemPrompt: `You are an expert ${langName} translator. Translate the following sentence into natural, fluent ${langName}. Return ONLY the translation, no extra text, no quotes, no explanation.`,
-					userMessage: sourceSentence.trim(),
+					userMessage: sourceSentence,
 					options: { temperature: 0.3, maxTokens: 512 },
 				},
 				user.id,
 			);
-
 			return { success: true, translation: reply.content.trim() };
 		} catch (err) {
-			console.error("Sentence translation failed:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to translate sentence. You may need to configure your own API key." });
+			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
 		}
 	},
 
 	askTutor: async (event) => {
 		const user = requireUser(event);
-
 		const formData = await event.request.formData();
-		const sourceSentence = formData.get("sourceSentence");
-		const userTranslation = formData.get("userTranslation");
-		const feedback = formData.get("feedback");
-		const question = formData.get("question");
+
+		const sourceSentence = getFormString(formData, "sourceSentence");
+		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
+		const userTranslation = getFormString(formData, "userTranslation");
+		if (!userTranslation) return fail(400, { error: "Missing user translation" });
+		const feedback = getFormString(formData, "feedback");
+		if (!feedback) return fail(400, { error: "Missing feedback" });
+		const question = getFormString(formData, "question");
+		if (!question) return fail(400, { error: "Missing question" });
 		const language = formData.get("language");
+		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
 
-		if (!sourceSentence || typeof sourceSentence !== "string" || !sourceSentence.trim()) {
-			return fail(400, { error: "Missing source sentence" });
-		}
-		if (!userTranslation || typeof userTranslation !== "string" || !userTranslation.trim()) {
-			return fail(400, { error: "Missing user translation" });
-		}
-		if (!feedback || typeof feedback !== "string" || !feedback.trim()) {
-			return fail(400, { error: "Missing feedback" });
-		}
-		if (!question || typeof question !== "string" || !question.trim()) {
-			return fail(400, { error: "Missing question" });
-		}
-		if (!language || typeof language !== "string") {
-			return fail(400, { error: "Missing language" });
-		}
-
-		const validLang = validateLanguageCode(language);
-		const langName = LANGUAGE_LABELS[validLang];
+		const langName = getLangName(language);
 
 		try {
 			const { reply } = await createSingleTurnChat(
 				{
 					systemPrompt: `You are an expert ${langName} language tutor. A learner received feedback on their translation. Answer their follow-up question helpfully and concisely in Markdown. Reference the original sentence and feedback in your answer.`,
-					userMessage: `Source sentence: "${sourceSentence.trim()}"\n\nLearner's translation: "${userTranslation.trim()}"\n\nFeedback received: "${feedback.trim()}"\n\nLearner's question: ${question.trim()}`,
+					userMessage: `Source sentence: "${sourceSentence}"\n\nLearner's translation: "${userTranslation}"\n\nFeedback received: "${feedback}"\n\nLearner's question: ${question}`,
 					options: { temperature: 0.7, maxTokens: 2048 },
 				},
 				user.id,
 			);
-
 			return { success: true, answer: reply.content };
 		} catch (err) {
-			console.error("Ask tutor failed:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to get answer. You may need to configure your own API key." });
+			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");
 		}
 	},
 };
