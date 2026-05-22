@@ -23,16 +23,23 @@ type Evaluation = {
 	overallFeedback?: string;
 	highlights?: EvalHighlight[];
 };
+
 let { data } = $props();
 let tpl = $derived(data.template);
 let lang = $derived(tpl.language as LanguageCode);
+
+// translationBase is string[][] (paragraphs → sentences)
 type Passage = string[][];
 let passages = $derived<Passage>((tpl.translationBase as Passage) ?? []);
+
+// Reactive values from attempt data
 let attemptId = $derived<number | null>(data.attempt?.id ?? null);
 let attemptStatus = $derived<string>(data.attempt?.status ?? "");
 let canTranslate = $derived(attemptStatus === "" || attemptStatus === "draft");
 let isDone = $derived(attemptStatus === "submitted" || attemptStatus === "evaluated");
 let savedEvaluation = $derived<Evaluation | null>(data.attempt?.evaluation ?? null);
+
+// State
 let translating = $state(false);
 let translations = $state<Record<string, string>>({});
 let activeKey = $state<string | null>(null);
@@ -40,15 +47,22 @@ let saving = $state(false);
 let saveError = $state<string | null>(null);
 let submitted = $state(false);
 let submitError = $state<string | null>(null);
+
+// Live evaluation state (after submit)
 let liveEvaluation = $state<Evaluation | null>(null);
 let visibleHighlightKeys = $state<Set<string>>(new Set());
 let evaluating = $state(false);
+
+// The effective evaluation to display
 let evaluation = $derived<Evaluation | null>(liveEvaluation ?? savedEvaluation);
+
 function isShort(text: string): boolean {
 	const t = text.trim();
 	if (t.length === 0) return true;
 	return t.split(/\s+/).length <= 3 || t.length <= 20;
 }
+
+// Computed
 let totalSentences = $derived(passages.reduce((s, p) => s + p.length, 0));
 let shortKeys = $derived(new Set(passages.flatMap((p, pi) => p.map((_, si) => sentenceKey(pi, si)).filter((_, si) => isShort(p[si])))));
 let effectiveTotal = $derived(totalSentences - shortKeys.size);
@@ -84,6 +98,7 @@ function persistQA() {
 	}
 }
 
+// Initialize once on mount
 let initialized = false;
 $effect(() => {
 	if (initialized) return;
@@ -103,33 +118,41 @@ $effect(() => {
 			/* ignore */
 		}
 	}
-	if (attemptStatus === "draft") translating = true;
+	if (attemptStatus === "draft") {
+		translating = true;
+	}
 	if (isDone) {
 		submitted = true;
+		// Show all highlights immediately for loaded evaluations
 		if (savedEvaluation?.highlights) {
 			visibleHighlightKeys = new Set(savedEvaluation.highlights.map((h) => h.key));
 		}
 	}
 });
-const translatedCount = $derived(Object.keys(translations).filter((k) => translations[k]?.trim()).length);
+
 const effectiveTranslatedCount = $derived(Object.entries(translations).filter(([k, v]) => !shortKeys.has(k) && v?.trim()).length);
 const allTranslated = $derived(effectiveTranslatedCount >= effectiveTotal && effectiveTotal > 0);
 function sentenceKey(pi: number, si: number): string {
 	return `${pi}-${si}`;
 }
+
 function startTranslation() {
 	translating = true;
 }
+
 function backToPreview() {
 	translating = false;
 	activeKey = null;
 }
+
 function toggleSentence(key: string) {
 	activeKey = activeKey === key ? null : key;
 }
+
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
 }
+
 function getHighlight(key: string): EvalHighlight | undefined {
 	return evaluation?.highlights?.find((h) => h.key === key);
 }
@@ -137,59 +160,72 @@ async function handleSaveDraft() {
 	saving = true;
 	saveError = null;
 	try {
-		const f = new FormData();
-		f.set("translations", JSON.stringify(translations));
-		if (attemptId) f.set("attemptId", String(attemptId));
-		const res = await fetch("?/saveDraft", { method: "POST", body: f });
+		const form = new FormData();
+		form.set("translations", JSON.stringify(translations));
+		if (attemptId) form.set("attemptId", String(attemptId));
+		const res = await fetch("?/saveDraft", { method: "POST", body: form });
 		if (!res.ok) {
-			const d = await res.json().catch(() => null);
-			saveError = d?.error ?? "Failed to save draft.";
+			const errData = await res.json().catch(() => null);
+			saveError = errData?.error ?? "Failed to save draft. Please try again.";
 			return;
 		}
 		await invalidateAll();
 	} catch {
-		saveError = "Failed to save draft.";
+		saveError = "Failed to save draft. Please try again.";
 	} finally {
 		saving = false;
 	}
 }
+
 async function handleSubmit() {
 	if (!allTranslated) return;
 	saving = true;
 	evaluating = true;
 	submitted = true;
 	submitError = null;
+	// Don't exit translation mode — stay for in-place annotation
+
 	try {
-		const f = new FormData();
-		f.set("translations", JSON.stringify(translations));
-		if (attemptId) f.set("attemptId", String(attemptId));
-		const res = await fetch("?/submit", { method: "POST", body: f });
+		const form = new FormData();
+		form.set("translations", JSON.stringify(translations));
+		if (attemptId) form.set("attemptId", String(attemptId));
+		const res = await fetch("?/submit", { method: "POST", body: form });
+
 		if (res.ok) {
 			await invalidateAll();
-			const er = data.attempt?.evaluation as Evaluation | null;
-			const etu = er?.highlights ? er : null;
-			if (etu?.highlights?.length) {
-				liveEvaluation = { ...etu, highlights: [] };
-				for (let i = 0; i < etu.highlights.length; i++) {
+			// After invalidation, savedEvaluation should be populated
+			// Animate highlights appearing one by one
+			const evalResult = data.attempt?.evaluation as Evaluation | null;
+			const evalToUse = evalResult?.highlights ? evalResult : null;
+
+			if (evalToUse?.highlights && evalToUse.highlights.length > 0) {
+				liveEvaluation = { ...evalToUse, highlights: [] };
+				// Stagger highlight animations
+				for (let i = 0; i < evalToUse.highlights.length; i++) {
 					await new Promise((r) => setTimeout(r, 400));
-					liveEvaluation = { ...etu, highlights: etu.highlights.slice(0, i + 1) };
-					visibleHighlightKeys = new Set([...visibleHighlightKeys, etu.highlights[i].key]);
+					liveEvaluation = {
+						...evalToUse,
+						highlights: evalToUse.highlights.slice(0, i + 1),
+					};
+					visibleHighlightKeys = new Set([...visibleHighlightKeys, evalToUse.highlights[i].key]);
 				}
 			} else {
-				liveEvaluation = etu;
+				liveEvaluation = evalToUse;
 			}
 		} else {
+			// LLM failed — reset to draft state so user can retry
 			submitted = false;
 			try {
-				const d = await res.json();
-				submitError = d?.error ?? "Evaluation failed.";
+				const errData = await res.json();
+				submitError = errData?.error ?? "Evaluation failed. Please try again.";
 			} catch {
-				submitError = "Evaluation failed.";
+				submitError = "Evaluation failed. Please try again.";
 			}
 		}
 	} catch {
+		// Network error — reset to draft state so user can retry
 		submitted = false;
-		submitError = "Evaluation failed.";
+		submitError = "Evaluation failed. Please try again.";
 	} finally {
 		evaluating = false;
 		saving = false;
@@ -199,10 +235,10 @@ async function handleShowReference(key: string, sourceSentence: string) {
 	loadingReferences = new Set([...loadingReferences, key]);
 	referenceErrors = { ...referenceErrors, [key]: "" };
 	try {
-		const f = new FormData();
-		f.set("sourceSentence", sourceSentence);
-		f.set("language", lang);
-		const res = await fetch("?/translateSentence", { method: "POST", body: f });
+		const form = new FormData();
+		form.set("sourceSentence", sourceSentence);
+		form.set("language", lang);
+		const res = await fetch("?/translateSentence", { method: "POST", body: form });
 		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
 		if (r.type === "success" && r.data) {
 			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
@@ -238,13 +274,13 @@ async function handleAskTutor(key: string, question: string, history: { question
 				context += `Q: ${qa.question}\nA: ${qa.answer ?? "(no answer yet)"}\n`;
 			}
 		}
-		const f = new FormData();
-		f.set("sourceSentence", findSourceSentence(key));
-		f.set("userTranslation", translations[key] ?? "");
-		f.set("feedback", highlight.feedback);
-		f.set("question", question + context);
-		f.set("language", lang);
-		const res = await fetch("?/askTutor", { method: "POST", body: f });
+		const form = new FormData();
+		form.set("sourceSentence", findSourceSentence(key));
+		form.set("userTranslation", translations[key] ?? "");
+		form.set("feedback", highlight.feedback);
+		form.set("question", question + context);
+		form.set("language", lang);
+		const res = await fetch("?/askTutor", { method: "POST", body: form });
 		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
 		if (r.type === "success" && r.data) {
 			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
@@ -266,10 +302,10 @@ async function handleBlur() {
 		if (vts === lastSavedValue) return;
 		try {
 			saveIndicator = "Saving...";
-			const f = new FormData();
-			f.set("translations", JSON.stringify(translations));
-			if (attemptId) f.set("attemptId", String(attemptId));
-			const res = await fetch("?/saveDraft", { method: "POST", body: f });
+			const form = new FormData();
+			form.set("translations", JSON.stringify(translations));
+			if (attemptId) form.set("attemptId", String(attemptId));
+			const res = await fetch("?/saveDraft", { method: "POST", body: form });
 			if (res.ok) {
 				lastSavedValue = vts;
 				saveIndicator = "Saved";
