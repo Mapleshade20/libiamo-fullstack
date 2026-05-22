@@ -684,4 +684,188 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.data?.error).toBe("Failed to generate explanation. You may need to configure your own API key.");
 		});
 	});
+
+	// ── translateSentence action ──────────────────────────────────
+	describe("translateSentence action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.translateSentence(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 when sourceSentence is missing", async () => {
+			const result = (await actions.translateSentence(
+				createActionEvent({ language: "fr" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing source sentence");
+		});
+
+		it("returns 400 when sourceSentence is empty", async () => {
+			const result = (await actions.translateSentence(
+				createActionEvent({ sourceSentence: "   ", language: "fr" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 when language is missing", async () => {
+			const result = (await actions.translateSentence(
+				createActionEvent({ sourceSentence: "Hello" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns translation on success", async () => {
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: "Bonjour le monde" },
+			});
+
+			const result = await actions.translateSentence(
+				createActionEvent({ sourceSentence: "Hello world", language: "fr" }, { id: "1" }),
+			);
+
+			expect(result).toEqual({ success: true, translation: "Bonjour le monde" });
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			expect(callArgs.systemPrompt).toContain("Français");
+			expect(callArgs.userMessage).toBe("Hello world");
+		});
+
+		it("trims whitespace from translation", async () => {
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: "  ¡Hola!  " },
+			});
+
+			const result = await actions.translateSentence(
+				createActionEvent({ sourceSentence: "Hi", language: "es" }, { id: "1" }),
+			);
+
+			expect(result).toEqual({ success: true, translation: "¡Hola!" });
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+
+			const result = (await actions.translateSentence(
+				createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }),
+			)) as any;
+
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to translate sentence. You may need to configure your own API key.");
+		});
+	});
+
+	// ── askTutor action ───────────────────────────────────────────
+	describe("askTutor action", () => {
+		it("redirects unauthenticated users", async () => {
+			await expect(actions.askTutor(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
+				status: 302,
+			});
+		});
+
+		it("returns 400 when sourceSentence is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{ userTranslation: "hola", feedback: "wrong", question: "why?", language: "es" },
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing source sentence");
+		});
+
+		it("returns 400 when userTranslation is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{ sourceSentence: "Hello", feedback: "wrong", question: "why?", language: "es" },
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing user translation");
+		});
+
+		it("returns 400 when feedback is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{ sourceSentence: "Hello", userTranslation: "hola", question: "why?", language: "es" },
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing feedback");
+		});
+
+		it("returns 400 when question is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", language: "es" },
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing question");
+		});
+
+		it("returns 400 when language is missing", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "why?" },
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns answer on success", async () => {
+			const answer = "The verb should be conjugated because...";
+			mockCreateSingleTurnChat.mockResolvedValueOnce({
+				reply: { content: answer },
+			});
+
+			const result = await actions.askTutor(
+				createActionEvent(
+					{
+						sourceSentence: "I eat",
+						userTranslation: "Je mange",
+						feedback: "Perfect!",
+						question: "Why is it 'mange' and not 'manges'?",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			);
+
+			expect(result).toEqual({ success: true, answer });
+			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
+			expect(callArgs.systemPrompt).toContain("Français");
+			expect(callArgs.userMessage).toContain("I eat");
+			expect(callArgs.userMessage).toContain("Je mange");
+			expect(callArgs.userMessage).toContain("Perfect!");
+			expect(callArgs.userMessage).toContain("Why is it");
+		});
+
+		it("returns 500 when LLM fails", async () => {
+			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "Bonjour",
+						feedback: "Good",
+						question: "Is there a better word?",
+						language: "fr",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Failed to get answer. You may need to configure your own API key.");
+		});
+	});
 });

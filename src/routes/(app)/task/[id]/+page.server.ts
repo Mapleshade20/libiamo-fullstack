@@ -1,8 +1,11 @@
-import { error, redirect } from "@sveltejs/kit";
+import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS, type LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
+import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
-import type { PageServerLoad } from "./$types";
+import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
+import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -49,10 +52,110 @@ export const load: PageServerLoad = async (event) => {
 		},
 	});
 
+	// Fetch user's native language for translation direction
+	const [userRecord] = await db
+		.select({ nativeLanguage: authUser.nativeLanguage })
+		.from(authUser)
+		.where(eq(authUser.id, user.id))
+		.limit(1);
+
+	const nativeLanguage = userRecord?.nativeLanguage ?? "en";
+
 	return {
 		task: {
 			...result,
 			sessionStatus: latestSession?.status ?? null,
 		},
+		nativeLanguage,
 	};
+};
+
+export const actions: Actions = {
+	/** Generate 2-3 useful expressions for the task in the user's native language */
+	generateExpressions: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const formData = await event.request.formData();
+		const title = formData.get("title");
+		const description = formData.get("description");
+		const objectivesRaw = formData.get("objectives");
+		const interactionType = formData.get("interactionType");
+		const ui = formData.get("ui");
+		const nativeLang = formData.get("nativeLanguage");
+		const targetLang = formData.get("targetLanguage");
+
+		if (!title || typeof title !== "string" || !title.trim()) {
+			return fail(400, { error: "Missing task title" });
+		}
+
+		let objectives: string[] | null = null;
+		if (objectivesRaw && typeof objectivesRaw === "string") {
+			try {
+				objectives = JSON.parse(objectivesRaw);
+			} catch {
+				// ignore parse errors
+			}
+		}
+
+		const uiLabel = typeof ui === "string" ? UI_VARIANT_LABELS[ui as keyof typeof UI_VARIANT_LABELS] ?? ui : undefined;
+		const interactionLabel =
+			typeof interactionType === "string"
+				? INTERACTION_TYPE_LABELS[interactionType as keyof typeof INTERACTION_TYPE_LABELS] ?? interactionType
+				: undefined;
+
+		try {
+			const expressions = await generateExpressions(
+				{
+					title: title.trim(),
+					description: typeof description === "string" ? description : null,
+					objectives,
+					uiLabel,
+					interactionType: interactionLabel,
+				},
+				(typeof nativeLang === "string" ? nativeLang : "en"),
+				(targetLang as LanguageCode) ?? "en",
+				user.id,
+			);
+
+			return { success: true, expressions };
+		} catch (err) {
+			console.error("Failed to generate expressions:", err);
+			return fail(500, { error: "Failed to generate expressions. You may need to configure your own API key." });
+		}
+	},
+
+	/** Evaluate a user's translation attempt and return feedback + correction */
+	evaluateTranslation: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const formData = await event.request.formData();
+		const sourceExpression = formData.get("sourceExpression");
+		const userTranslation = formData.get("userTranslation");
+		const nativeLang = formData.get("nativeLanguage");
+		const targetLang = formData.get("targetLanguage");
+
+		if (!sourceExpression || typeof sourceExpression !== "string" || !sourceExpression.trim()) {
+			return fail(400, { error: "Missing source expression" });
+		}
+		if (!userTranslation || typeof userTranslation !== "string" || !userTranslation.trim()) {
+			return fail(400, { error: "Missing your translation" });
+		}
+
+		try {
+			const { feedback, correction } = await evaluateUserTranslation(
+				sourceExpression.trim(),
+				userTranslation.trim(),
+				(typeof nativeLang === "string" ? nativeLang : "en"),
+				(targetLang as LanguageCode) ?? "en",
+				user.id,
+			);
+
+			return { success: true, feedback, correction };
+		} catch (err) {
+			console.error("Failed to evaluate translation:", err);
+			return fail(500, { error: "Failed to evaluate translation. You may need to configure your own API key." });
+		}
+	},
 };

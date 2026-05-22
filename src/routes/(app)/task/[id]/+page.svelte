@@ -1,8 +1,10 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
+import Languages from "@lucide/svelte/icons/languages";
 import Star from "@lucide/svelte/icons/star";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
+import TranslateModal from "$lib/components/translate/TranslateModal.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
@@ -11,12 +13,14 @@ import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
 let task = $derived(data.task);
+let nativeLanguage = $derived(data.nativeLanguage as string);
 
 const objectives = $derived(task.objectives ?? []);
 
 let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
 let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
 let lang = $derived(task.language as LanguageCode);
+let showTranslateModal = $state(false);
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
 }
@@ -90,14 +94,38 @@ function difficultyLabel(level: number): string {
 					</span>
 				</div>
 
-				{#if isFinished}
-					<Button class="px-8 bg-green-600 hover:bg-green-700 text-white" href="/task/{task.id}/session">{t(lang, "hall.reviewReport")}</Button>
-				{:else if isPracticeEnabled}
-					<Button class="px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
-				{:else}
-					<Button class="px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
-				{/if}
+				<div class="flex items-center gap-3">
+					{#if !isFinished}
+						<Button
+							variant="outline"
+							onclick={() => { showTranslateModal = true; }}
+						>
+							<Languages size={14} class="mr-1.5" />
+							{t(lang, "task.usefulExpressions")}
+						</Button>
+					{/if}
+
+					{#if isFinished}
+						<Button class="px-8 bg-green-600 hover:bg-green-700 text-white" href="/task/{task.id}/session">{t(lang, "hall.reviewReport")}</Button>
+					{:else if isPracticeEnabled}
+						<Button class="px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
+					{:else}
+						<Button class="px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>
 </div>
+
+<TranslateModal
+	show={showTranslateModal}
+	taskTitle={task.title}
+	taskDescription={task.description ?? null}
+	taskObjectives={objectives}
+	taskUi={task.templateUi}
+	taskInteractionType={task.templateInteractionType}
+	nativeLanguage={nativeLanguage}
+	targetLanguage={task.language}
+	onclose={() => { showTranslateModal = false; }}
+/>
