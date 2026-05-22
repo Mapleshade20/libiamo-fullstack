@@ -1,5 +1,5 @@
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
-import { createSingleTurnChat } from "$lib/server/llm";
+import { createSingleTurnChat, extractContentFromFence } from "$lib/server/llm";
 
 /** Resolve a language name from a code, using Intl.DisplayNames for non-learning languages */
 function languageName(code: string, fallbackLocale = "en"): string {
@@ -129,15 +129,7 @@ export async function generateExpressions(
 	);
 
 	// Parse JSON from response
-	let jsonStr = reply.content.trim();
-	const fenceStart = jsonStr.indexOf("```");
-	if (fenceStart !== -1) {
-		let after = jsonStr.slice(fenceStart + 3);
-		if (after.startsWith("json")) after = after.slice(4);
-		after = after.trimStart();
-		const fenceEnd = after.indexOf("```");
-		if (fenceEnd !== -1) jsonStr = after.slice(0, fenceEnd).trim();
-	}
+	const jsonStr = extractContentFromFence(reply.content);
 
 	try {
 		const parsed = JSON.parse(jsonStr);
@@ -146,10 +138,10 @@ export async function generateExpressions(
 		}
 		return [];
 	} catch {
-		// Fallback: try to extract lines
+		// Fallback: try to extract lines (strip leading list markers and quotes)
 		return jsonStr
 			.split("\n")
-			.map((l) => l.replace(/^[\d.\-\s"]+|"$/g, "").trim())
+			.map((l) => l.replace(/^(?:\d+[.)]\s*|["'])|["']$/g, "").trim())
 			.filter((l) => l.length > 0);
 	}
 }
@@ -178,15 +170,7 @@ export async function evaluateUserTranslation(
 		userId,
 	);
 
-	let jsonStr = reply.content.trim();
-	const fenceStart = jsonStr.indexOf("```");
-	if (fenceStart !== -1) {
-		let after = jsonStr.slice(fenceStart + 3);
-		if (after.startsWith("json")) after = after.slice(4);
-		after = after.trimStart();
-		const fenceEnd = after.indexOf("```");
-		if (fenceEnd !== -1) jsonStr = after.slice(0, fenceEnd).trim();
-	}
+	const jsonStr = extractContentFromFence(reply.content);
 
 	try {
 		const parsed = JSON.parse(jsonStr);

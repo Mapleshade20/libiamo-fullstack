@@ -1,11 +1,19 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS, type LanguageCode } from "$lib/constants";
+import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, UI_VARIANT_LABELS } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
+
+/** Validate and cast a language code, defaulting to "en" */
+function validateLanguageCode(code: unknown): LanguageCode {
+	if (typeof code === "string" && (LANGUAGE_CODES as readonly string[]).includes(code)) {
+		return code as LanguageCode;
+	}
+	return "en";
+}
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -53,11 +61,7 @@ export const load: PageServerLoad = async (event) => {
 	});
 
 	// Fetch user's native language for translation direction
-	const [userRecord] = await db
-		.select({ nativeLanguage: authUser.nativeLanguage })
-		.from(authUser)
-		.where(eq(authUser.id, user.id))
-		.limit(1);
+	const [userRecord] = await db.select({ nativeLanguage: authUser.nativeLanguage }).from(authUser).where(eq(authUser.id, user.id)).limit(1);
 
 	const nativeLanguage = userRecord?.nativeLanguage ?? "en";
 
@@ -98,10 +102,10 @@ export const actions: Actions = {
 			}
 		}
 
-		const uiLabel = typeof ui === "string" ? UI_VARIANT_LABELS[ui as keyof typeof UI_VARIANT_LABELS] ?? ui : undefined;
+		const uiLabel = typeof ui === "string" ? (UI_VARIANT_LABELS[ui as keyof typeof UI_VARIANT_LABELS] ?? ui) : undefined;
 		const interactionLabel =
 			typeof interactionType === "string"
-				? INTERACTION_TYPE_LABELS[interactionType as keyof typeof INTERACTION_TYPE_LABELS] ?? interactionType
+				? (INTERACTION_TYPE_LABELS[interactionType as keyof typeof INTERACTION_TYPE_LABELS] ?? interactionType)
 				: undefined;
 
 		try {
@@ -113,8 +117,8 @@ export const actions: Actions = {
 					uiLabel,
 					interactionType: interactionLabel,
 				},
-				(typeof nativeLang === "string" ? nativeLang : "en"),
-				(targetLang as LanguageCode) ?? "en",
+				typeof nativeLang === "string" ? nativeLang : "en",
+				validateLanguageCode(targetLang),
 				user.id,
 			);
 
@@ -147,8 +151,8 @@ export const actions: Actions = {
 			const { feedback, correction } = await evaluateUserTranslation(
 				sourceExpression.trim(),
 				userTranslation.trim(),
-				(typeof nativeLang === "string" ? nativeLang : "en"),
-				(targetLang as LanguageCode) ?? "en",
+				typeof nativeLang === "string" ? nativeLang : "en",
+				validateLanguageCode(targetLang),
 				user.id,
 			);
 

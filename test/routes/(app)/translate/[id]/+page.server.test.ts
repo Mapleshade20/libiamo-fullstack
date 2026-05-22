@@ -71,9 +71,13 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-vi.mock("$lib/server/llm", () => ({
-	createSingleTurnChat: mockCreateSingleTurnChat,
-}));
+vi.mock("$lib/server/llm", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("$lib/server/llm")>();
+	return {
+		...actual,
+		createSingleTurnChat: mockCreateSingleTurnChat,
+	};
+});
 
 // ── Helpers ────────────────────────────────────────────────────────
 function createLoadEvent(params: { id: string }, user: any = { id: "u1", activeLanguage: "en" }) {
@@ -694,24 +698,18 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("returns 400 when sourceSentence is missing", async () => {
-			const result = (await actions.translateSentence(
-				createActionEvent({ language: "fr" }, { id: "1" }),
-			)) as any;
+			const result = (await actions.translateSentence(createActionEvent({ language: "fr" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing source sentence");
 		});
 
 		it("returns 400 when sourceSentence is empty", async () => {
-			const result = (await actions.translateSentence(
-				createActionEvent({ sourceSentence: "   ", language: "fr" }, { id: "1" }),
-			)) as any;
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "   ", language: "fr" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
 		});
 
 		it("returns 400 when language is missing", async () => {
-			const result = (await actions.translateSentence(
-				createActionEvent({ sourceSentence: "Hello" }, { id: "1" }),
-			)) as any;
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing language");
 		});
@@ -721,9 +719,7 @@ describe("(app) translate/[id] +page.server", () => {
 				reply: { content: "Bonjour le monde" },
 			});
 
-			const result = await actions.translateSentence(
-				createActionEvent({ sourceSentence: "Hello world", language: "fr" }, { id: "1" }),
-			);
+			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hello world", language: "fr" }, { id: "1" }));
 
 			expect(result).toEqual({ success: true, translation: "Bonjour le monde" });
 			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
@@ -737,9 +733,7 @@ describe("(app) translate/[id] +page.server", () => {
 				reply: { content: "  ¡Hola!  " },
 			});
 
-			const result = await actions.translateSentence(
-				createActionEvent({ sourceSentence: "Hi", language: "es" }, { id: "1" }),
-			);
+			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hi", language: "es" }, { id: "1" }));
 
 			expect(result).toEqual({ success: true, translation: "¡Hola!" });
 		});
@@ -747,9 +741,7 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 500 when LLM fails", async () => {
 			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
 
-			const result = (await actions.translateSentence(
-				createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }),
-			)) as any;
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }))) as any;
 
 			expect(result.status).toBe(500);
 			expect(result.data?.error).toBe("Failed to translate sentence. You may need to configure your own API key.");
@@ -766,10 +758,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns 400 when sourceSentence is missing", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent(
-					{ userTranslation: "hola", feedback: "wrong", question: "why?", language: "es" },
-					{ id: "1" },
-				),
+				createActionEvent({ userTranslation: "hola", feedback: "wrong", question: "why?", language: "es" }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing source sentence");
@@ -777,10 +766,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns 400 when userTranslation is missing", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent(
-					{ sourceSentence: "Hello", feedback: "wrong", question: "why?", language: "es" },
-					{ id: "1" },
-				),
+				createActionEvent({ sourceSentence: "Hello", feedback: "wrong", question: "why?", language: "es" }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing user translation");
@@ -788,10 +774,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns 400 when feedback is missing", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent(
-					{ sourceSentence: "Hello", userTranslation: "hola", question: "why?", language: "es" },
-					{ id: "1" },
-				),
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", question: "why?", language: "es" }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing feedback");
@@ -799,10 +782,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns 400 when question is missing", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent(
-					{ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", language: "es" },
-					{ id: "1" },
-				),
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", language: "es" }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing question");
@@ -810,10 +790,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns 400 when language is missing", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent(
-					{ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "why?" },
-					{ id: "1" },
-				),
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "why?" }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing language");

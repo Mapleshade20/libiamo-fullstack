@@ -1,10 +1,13 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
-import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { createSingleTurnChat } from "$lib/server/llm";
+import { createSingleTurnChat, extractContentFromFence } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
+
+/** Maximum form data size for translation JSON (100KB) */
+const MAX_TRANSLATION_FORM_SIZE = 100 * 1024;
 
 /** Throw redirect if user is not authenticated */
 function requireUser(event: { locals: App.Locals }) {
@@ -13,7 +16,24 @@ function requireUser(event: { locals: App.Locals }) {
 	return user;
 }
 
-/** Parse translations and attemptId from form data */
+/** Validate and cast a language code, defaulting to "en" */
+function validateLanguageCode(code: unknown): LanguageCode {
+	if (typeof code === "string" && (LANGUAGE_CODES as readonly string[]).includes(code)) {
+		return code as LanguageCode;
+	}
+	return "en";
+}
+
+/** Template filter conditions shared by load and action auth checks */
+const translateTemplateFilter = (templateId: number, userLanguage: string) =>
+	and(
+		eq(template.id, templateId),
+		eq(template.interactionType, "translate"),
+		eq(template.isActive, true),
+		eq(template.language, userLanguage as LanguageCode),
+	);
+
+/** Parse translations and attemptId from form data, with size limit */
 function parseTranslationsForm(
 	formData: FormData,
 ): { ok: true; translations: Record<string, string>; attemptId: number | null } | { ok: false; error: string } {
@@ -21,6 +41,12 @@ function parseTranslationsForm(
 	if (!raw || typeof raw !== "string") {
 		return { ok: false, error: "Missing translations" };
 	}
+
+	// Reject oversized payloads to prevent DoS
+	if (raw.length > MAX_TRANSLATION_FORM_SIZE) {
+		return { ok: false, error: "Translation data too large" };
+	}
+
 	let translations: Record<string, string>;
 	try {
 		translations = JSON.parse(raw);
@@ -78,14 +104,7 @@ export const load: PageServerLoad = async (event) => {
 			gemReward: template.gemReward,
 		})
 		.from(template)
-		.where(
-			and(
-				eq(template.id, templateId),
-				eq(template.interactionType, "translate"),
-				eq(template.isActive, true),
-				eq(template.language, user.activeLanguage as LanguageCode),
-			),
-		)
+		.where(translateTemplateFilter(templateId, user.activeLanguage))
 		.limit(1);
 
 	if (!tpl) {
@@ -176,20 +195,10 @@ ${translationLines}`;
 		options: { temperature: 0.7, maxTokens: 4096 },
 	});
 
-	// Try to extract JSON from fenced code block
-	let jsonStr = reply.content.trim();
-	const fenceStart = jsonStr.indexOf("```");
-	if (fenceStart !== -1) {
-		let after = jsonStr.slice(fenceStart + 3);
-		if (after.startsWith("json")) after = after.slice(4);
-		after = after.trimStart();
-		const fenceEnd = after.indexOf("```");
-		if (fenceEnd !== -1) {
-			jsonStr = after.slice(0, fenceEnd).trim();
-		}
-	}
+	// Extract JSON from response, handling markdown fences
+	const jsonStr = extractContentFromFence(reply.content);
 
-	// If the entire response is valid JSON, parse it
+	// If the extracted content is valid JSON, parse it
 	try {
 		return JSON.parse(jsonStr);
 	} catch {
@@ -244,12 +253,8 @@ export const actions: Actions = {
 		const parsed = parseTranslationsForm(await event.request.formData());
 		if (!parsed.ok) return fail(400, { error: parsed.error });
 
-		// Verify template exists and is a translate template
-		const [tpl] = await db
-			.select({ id: template.id })
-			.from(template)
-			.where(and(eq(template.id, templateId), eq(template.interactionType, "translate"), eq(template.isActive, true)))
-			.limit(1);
+		// Verify template exists, is active, is a translate template, and matches user language
+		const [tpl] = await db.select({ id: template.id }).from(template).where(translateTemplateFilter(templateId, user.activeLanguage)).limit(1);
 		if (!tpl) return fail(404, { error: "Template not found" });
 
 		await upsertAttempt(user.id, templateId, parsed.translations, parsed.attemptId);
@@ -272,7 +277,7 @@ export const actions: Actions = {
 				language: template.language,
 			})
 			.from(template)
-			.where(eq(template.id, templateId))
+			.where(translateTemplateFilter(templateId, user.activeLanguage))
 			.limit(1);
 
 		if (!tpl) return fail(404, { error: "Template not found" });
@@ -335,7 +340,7 @@ export const actions: Actions = {
 				language: template.language,
 			})
 			.from(template)
-			.where(eq(template.id, templateId))
+			.where(translateTemplateFilter(templateId, user.activeLanguage))
 			.limit(1);
 
 		if (!tpl?.translationBase) return fail(404, { error: "Template has no translation base" });
@@ -356,16 +361,7 @@ export const actions: Actions = {
 				user.id,
 			);
 
-			let jsonStr = reply.content.trim();
-			const fenceStart = jsonStr.indexOf("```");
-			if (fenceStart !== -1) {
-				let after = jsonStr.slice(fenceStart + 3);
-				if (after.startsWith("json")) after = after.slice(4);
-				after = after.trimStart();
-				const fenceEnd = after.indexOf("```");
-				if (fenceEnd !== -1) jsonStr = after.slice(0, fenceEnd).trim();
-			}
-
+			const jsonStr = extractContentFromFence(reply.content);
 			const modelTranslations = JSON.parse(jsonStr) as Record<string, string>;
 			return { success: true, modelTranslations };
 		} catch (err) {
@@ -396,8 +392,9 @@ export const actions: Actions = {
 			return fail(400, { error: "Missing language" });
 		}
 
-		const prompt = buildExplainFeedbackPrompt(language as LanguageCode);
-		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+		const validLang = validateLanguageCode(language);
+		const prompt = buildExplainFeedbackPrompt(validLang);
+		const langName = LANGUAGE_LABELS[validLang];
 
 		try {
 			const { reply } = await createSingleTurnChat(
@@ -430,7 +427,8 @@ export const actions: Actions = {
 			return fail(400, { error: "Missing language" });
 		}
 
-		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+		const validLang = validateLanguageCode(language);
+		const langName = LANGUAGE_LABELS[validLang];
 
 		try {
 			const { reply } = await createSingleTurnChat(
@@ -475,7 +473,8 @@ export const actions: Actions = {
 			return fail(400, { error: "Missing language" });
 		}
 
-		const langName = LANGUAGE_LABELS[language as LanguageCode] ?? language.toUpperCase();
+		const validLang = validateLanguageCode(language);
+		const langName = LANGUAGE_LABELS[validLang];
 
 		try {
 			const { reply } = await createSingleTurnChat(

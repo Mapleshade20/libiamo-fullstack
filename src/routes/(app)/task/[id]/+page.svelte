@@ -96,10 +96,7 @@ function difficultyLabel(level: number): string {
 
 				<div class="flex items-center gap-3">
 					{#if !isFinished}
-						<Button
-							variant="outline"
-							onclick={() => { showTranslateModal = true; }}
-						>
+						<Button variant="outline" onclick={() => { showTranslateModal = true; }}>
 							<Languages size={14} class="mr-1.5" />
 							{t(lang, "task.usefulExpressions")}
 						</Button>
@@ -125,7 +122,7 @@ function difficultyLabel(level: number): string {
 	taskObjectives={objectives}
 	taskUi={task.templateUi}
 	taskInteractionType={task.templateInteractionType}
-	nativeLanguage={nativeLanguage}
+	{nativeLanguage}
 	targetLanguage={task.language}
 	onclose={() => { showTranslateModal = false; }}
 />

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import type { LanguageCode } from "$lib/constants";
+import { LANGUAGE_LABELS } from "$lib/constants";
 import { buildEvaluationPrompt, buildExpressionsPrompt } from "$lib/server/translate";
 
 // ── 1. Hoisted mocks ──────────────────────────────────────────────────
@@ -8,9 +9,13 @@ const { mockCreateSingleTurnChat } = vi.hoisted(() => {
 	return { mockCreateSingleTurnChat };
 });
 
-vi.mock("$lib/server/llm", () => ({
-	createSingleTurnChat: mockCreateSingleTurnChat,
-}));
+vi.mock("$lib/server/llm", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("$lib/server/llm")>();
+	return {
+		...actual,
+		createSingleTurnChat: mockCreateSingleTurnChat,
+	};
+});
 
 // Re-import after mocking so the mocked version is used
 const { generateExpressions, evaluateUserTranslation } = await import("$lib/server/translate");
@@ -20,9 +25,7 @@ afterEach(() => {
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────
-function lang(l: string): string {
-	return l;
-}
+const lang = (code: string): LanguageCode => code as LanguageCode;
 
 // ── 2. Prompt builders (pure functions) ───────────────────────────────
 
@@ -78,11 +81,7 @@ describe("generateExpressions", () => {
 			reply: { content: '["Could I have the check, please?", "Is this seat taken?"]' },
 		});
 
-		const result = await generateExpressions(
-			{ title: "Ordering at a café" },
-			lang("en"),
-			lang("fr"),
-		);
+		const result = await generateExpressions({ title: "Ordering at a café" }, lang("en"), lang("fr"));
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
 	});
@@ -94,11 +93,7 @@ describe("generateExpressions", () => {
 			},
 		});
 
-		const result = await generateExpressions(
-			{ title: "Shopping" },
-			lang("en"),
-			lang("es"),
-		);
+		const result = await generateExpressions({ title: "Shopping" }, lang("en"), lang("es"));
 
 		expect(result).toEqual(["How much does it cost?", "Can I pay by card?"]);
 	});
@@ -108,11 +103,7 @@ describe("generateExpressions", () => {
 			reply: { content: "[]" },
 		});
 
-		const result = await generateExpressions(
-			{ title: "Empty task" },
-			lang("en"),
-			lang("ja"),
-		);
+		const result = await generateExpressions({ title: "Empty task" }, lang("en"), lang("ja"));
 
 		expect(result).toEqual([]);
 	});
@@ -122,11 +113,7 @@ describe("generateExpressions", () => {
 			reply: { content: '{"expressions": ["one", "two"]}' },
 		});
 
-		const result = await generateExpressions(
-			{ title: "Wrapped in object" },
-			lang("en"),
-			lang("fr"),
-		);
+		const result = await generateExpressions({ title: "Wrapped in object" }, lang("en"), lang("fr"));
 
 		expect(result).toEqual([]);
 	});
@@ -138,11 +125,7 @@ describe("generateExpressions", () => {
 			},
 		});
 
-		const result = await generateExpressions(
-			{ title: "Travel" },
-			lang("en"),
-			lang("fr"),
-		);
+		const result = await generateExpressions({ title: "Travel" }, lang("en"), lang("fr"));
 
 		expect(result.length).toBe(3);
 		expect(result[0]).toContain("Hello");
@@ -156,11 +139,7 @@ describe("generateExpressions", () => {
 			reply: { content: '["Valid phrase", 123, "Another valid phrase"]' },
 		});
 
-		const result = await generateExpressions(
-			{ title: "Test" },
-			lang("en"),
-			lang("es"),
-		);
+		const result = await generateExpressions({ title: "Test" }, lang("en"), lang("es"));
 
 		expect(result).toEqual(["Valid phrase", "Another valid phrase"]);
 	});
@@ -198,8 +177,7 @@ describe("evaluateUserTranslation", () => {
 	it("parses a clean JSON response with feedback and correction", async () => {
 		mockCreateSingleTurnChat.mockResolvedValueOnce({
 			reply: {
-				content:
-					'{"feedback": "Good attempt! The word order needs adjustment.", "correction": "Je voudrais un café au lait, s\'il vous plaît."}',
+				content: '{"feedback": "Good attempt! The word order needs adjustment.", "correction": "Je voudrais un café au lait, s\'il vous plaît."}',
 			},
 		});
 
@@ -221,12 +199,7 @@ describe("evaluateUserTranslation", () => {
 			},
 		});
 
-		const result = await evaluateUserTranslation(
-			"How much does it cost?",
-			"¿Cuánto cuesta?",
-			lang("en"),
-			lang("es"),
-		);
+		const result = await evaluateUserTranslation("How much does it cost?", "¿Cuánto cuesta?", lang("en"), lang("es"));
 
 		expect(result.feedback).toBe("Perfect!");
 		expect(result.correction).toBe("¿Cuánto cuesta?");
@@ -239,12 +212,7 @@ describe("evaluateUserTranslation", () => {
 			},
 		});
 
-		const result = await evaluateUserTranslation(
-			"Good morning",
-			"Bonjour",
-			lang("en"),
-			lang("fr"),
-		);
+		const result = await evaluateUserTranslation("Good morning", "Bonjour", lang("en"), lang("fr"));
 
 		expect(result.feedback).toContain("great translation");
 		expect(result.correction).toBe("");
@@ -255,15 +223,26 @@ describe("evaluateUserTranslation", () => {
 			reply: { content: '{"feedback": "Nice!", "correction": "¿Dónde está el baño?"}' },
 		});
 
-		await evaluateUserTranslation(
-			"Where is the bathroom?",
-			"¿Dónde está el baño?",
-			lang("en"),
-			lang("es"),
-		);
+		await evaluateUserTranslation("Where is the bathroom?", "¿Dónde está el baño?", lang("en"), lang("es"));
 
 		const userMessage = mockCreateSingleTurnChat.mock.calls[0][0].userMessage as string;
 		expect(userMessage).toContain("Where is the bathroom?");
 		expect(userMessage).toContain("¿Dónde está el baño?");
+	});
+
+	it("returns empty feedback when LLM throws", async () => {
+		mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API down"));
+
+		await expect(evaluateUserTranslation("Hello", "Hola", lang("en"), lang("es"))).rejects.toThrow("API down");
+	});
+});
+
+// ── 5. generateExpressions error handling ─────────────────────────────
+
+describe("generateExpressions error handling", () => {
+	it("throws when createSingleTurnChat rejects", async () => {
+		mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("Network error"));
+
+		await expect(generateExpressions({ title: "Test" }, lang("en"), lang("fr"))).rejects.toThrow("Network error");
 	});
 });

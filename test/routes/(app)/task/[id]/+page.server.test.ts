@@ -29,9 +29,13 @@ vi.mock("$lib/server/db", () => ({
 	},
 }));
 
-vi.mock("$lib/server/llm", () => ({
-	createSingleTurnChat: mockCreateSingleTurnChat,
-}));
+vi.mock("$lib/server/llm", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("$lib/server/llm")>();
+	return {
+		...actual,
+		createSingleTurnChat: mockCreateSingleTurnChat,
+	};
+});
 
 // ── Helpers ─────────────────────────────────────────────────────────
 function createActionEvent(entries: Record<string, string>, userId = "u1") {
@@ -223,9 +227,7 @@ describe("Task detail +page.server", () => {
 				reply: { content: '```json\n["One expression", "Two expressions"]\n```' },
 			});
 
-			const result = await actions.generateExpressions(
-				createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "ja" }),
-			);
+			const result = await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "ja" }));
 
 			expect(result).toEqual({
 				success: true,
@@ -238,9 +240,7 @@ describe("Task detail +page.server", () => {
 				reply: { content: "1. Hello there\n2. How are you?\n3. Thank you" },
 			});
 
-			const result = await actions.generateExpressions(
-				createActionEvent({ title: "Greetings", nativeLanguage: "en", targetLanguage: "fr" }),
-			);
+			const result = await actions.generateExpressions(createActionEvent({ title: "Greetings", nativeLanguage: "en", targetLanguage: "fr" }));
 
 			expect(result).toEqual({
 				success: true,
@@ -252,53 +252,39 @@ describe("Task detail +page.server", () => {
 		it("returns 500 when LLM fails", async () => {
 			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
 
-			const result = (await actions.generateExpressions(
-				createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" }),
-			)) as any;
+			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe(
-				"Failed to generate expressions. You may need to configure your own API key.",
-			);
+			expect(result.data?.error).toBe("Failed to generate expressions. You may need to configure your own API key.");
 		});
 	});
 
 	// ── evaluateTranslation action ─────────────────────────────────
 	describe("evaluateTranslation action", () => {
 		it("returns 401 when user is not authenticated", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" }, ""),
-			)) as any;
+			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" }, ""))) as any;
 			expect(result.status).toBe(401);
 		});
 
 		it("returns 400 when sourceExpression is missing", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ userTranslation: "Bonjour" }),
-			)) as any;
+			const result = (await actions.evaluateTranslation(createActionEvent({ userTranslation: "Bonjour" }))) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing source expression");
 		});
 
 		it("returns 400 when sourceExpression is empty", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "   ", userTranslation: "Bonjour" }),
-			)) as any;
+			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "   ", userTranslation: "Bonjour" }))) as any;
 			expect(result.status).toBe(400);
 		});
 
 		it("returns 400 when userTranslation is missing", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "Hello" }),
-			)) as any;
+			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello" }))) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing your translation");
 		});
 
 		it("returns 400 when userTranslation is empty", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "Hello", userTranslation: "   " }),
-			)) as any;
+			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello", userTranslation: "   " }))) as any;
 			expect(result.status).toBe(400);
 		});
 
@@ -413,9 +399,7 @@ describe("Task detail +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe(
-				"Failed to evaluate translation. You may need to configure your own API key.",
-			);
+			expect(result.data?.error).toBe("Failed to evaluate translation. You may need to configure your own API key.");
 		});
 	});
 });

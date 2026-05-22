@@ -176,11 +176,25 @@ function mergeAdjacentMessages(messages: ChatMessage[]): ChatMessage[] {
 	return merged;
 }
 
-function stripJsonFences(text: string) {
+export function stripJsonFences(text: string) {
 	let cleaned = text.trim();
 	cleaned = cleaned.replace(/^`{3}(?:json)?/i, "").trim();
 	cleaned = cleaned.replace(/`{3}$/i, "").trim();
 	return cleaned;
+}
+
+/** Extract content from inside a markdown code fence, handling mid-text fences */
+export function extractContentFromFence(text: string): string {
+	const trimmed = text.trim();
+	const fenceStart = trimmed.indexOf("```");
+	if (fenceStart !== -1) {
+		let after = trimmed.slice(fenceStart + 3);
+		if (after.startsWith("json")) after = after.slice(4);
+		after = after.trimStart();
+		const fenceEnd = after.indexOf("```");
+		if (fenceEnd !== -1) return after.slice(0, fenceEnd).trim();
+	}
+	return trimmed;
 }
 
 function extractJsonObject(text: string) {
