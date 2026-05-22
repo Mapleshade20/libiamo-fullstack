@@ -7,6 +7,17 @@ import { userApiKey } from "./db/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
+/** Thrown when the API key is invalid, expired, or unauthorized (401/403) */
+export class OpenAIAuthError extends Error {
+	constructor(
+		message: string,
+		public readonly status: number,
+	) {
+		super(message);
+		this.name = "OpenAIAuthError";
+	}
+}
+
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
 	content: string;
@@ -279,7 +290,11 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 	});
 
 	if (!response.ok) {
-		throw new Error(`OpenAI API error (${response.status}): ${bodyText}`);
+		const msg = `OpenAI API error (${response.status}): ${bodyText}`;
+		if (response.status === 401 || response.status === 403) {
+			throw new OpenAIAuthError(msg, response.status);
+		}
+		throw new Error(msg);
 	}
 
 	let data: ChatCompletionResponse;

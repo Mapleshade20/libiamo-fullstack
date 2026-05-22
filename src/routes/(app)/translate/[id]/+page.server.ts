@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { createSingleTurnChat, extractContentFromFence } from "$lib/server/llm";
+import { createSingleTurnChat, extractContentFromFence, OpenAIAuthError } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -317,6 +317,9 @@ export const actions: Actions = {
 					.where(eq(translationAttempt.id, recordId));
 			} catch (err) {
 				console.error("Translation evaluation failed:", err);
+				if (err instanceof OpenAIAuthError) {
+					return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+				}
 				// Keep as "draft" — user can retry
 				return fail(500, { error: "Evaluation failed. Please try again." });
 			}
@@ -366,6 +369,9 @@ export const actions: Actions = {
 			return { success: true, modelTranslations };
 		} catch (err) {
 			console.error("Model translation generation failed:", err);
+			if (err instanceof OpenAIAuthError) {
+				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+			}
 			return fail(500, { error: "Failed to generate model translation. You may need to configure your own API key." });
 		}
 	},
@@ -409,6 +415,9 @@ export const actions: Actions = {
 			return { success: true, explanation: reply.content };
 		} catch (err) {
 			console.error("Explain feedback failed:", err);
+			if (err instanceof OpenAIAuthError) {
+				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+			}
 			return fail(500, { error: "Failed to generate explanation. You may need to configure your own API key." });
 		}
 	},
@@ -443,6 +452,9 @@ export const actions: Actions = {
 			return { success: true, translation: reply.content.trim() };
 		} catch (err) {
 			console.error("Sentence translation failed:", err);
+			if (err instanceof OpenAIAuthError) {
+				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+			}
 			return fail(500, { error: "Failed to translate sentence. You may need to configure your own API key." });
 		}
 	},
@@ -489,6 +501,9 @@ export const actions: Actions = {
 			return { success: true, answer: reply.content };
 		} catch (err) {
 			console.error("Ask tutor failed:", err);
+			if (err instanceof OpenAIAuthError) {
+				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
+			}
 			return fail(500, { error: "Failed to get answer. You may need to configure your own API key." });
 		}
 	},

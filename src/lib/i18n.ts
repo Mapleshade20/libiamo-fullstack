@@ -55,6 +55,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
 		// Common
 		"common.save": "Save",
+		"common.retry": "Retry",
 		"common.cancel": "Cancel",
 		"common.delete": "Delete",
 		"common.create": "Create",
@@ -120,6 +121,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "No hay contenido disponible para traducir todavía.",
 
 		"common.save": "Guardar",
+		"common.retry": "Reintentar",
 		"common.cancel": "Cancelar",
 		"common.delete": "Eliminar",
 		"common.create": "Crear",
@@ -185,6 +187,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "Aucun contenu disponible pour la traduction pour le moment.",
 
 		"common.save": "Enregistrer",
+		"common.retry": "Réessayer",
 		"common.cancel": "Annuler",
 		"common.delete": "Supprimer",
 		"common.create": "Créer",
@@ -250,6 +253,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"translate.empty": "現在翻訳可能なコンテンツはありません。",
 
 		"common.save": "保存",
+		"common.retry": "再試行",
 		"common.cancel": "キャンセル",
 		"common.delete": "削除",
 		"common.create": "作成",

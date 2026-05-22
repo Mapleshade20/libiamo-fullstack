@@ -109,6 +109,8 @@ async function handleCheck(idx: number) {
 		if (r.type === "success" && r.data) {
 			feedbacks = { ...feedbacks, [idx]: r.data.feedback ?? "" };
 			corrections = { ...corrections, [idx]: r.data.correction ?? "" };
+		} else if (r.type === "failure") {
+			feedbacks = { ...feedbacks, [idx]: (r.data as any)?.error ?? t(lang, "task.usefulExpressions.error") };
 		}
 	} catch {
 		if (!mounted) return;
@@ -148,9 +150,9 @@ function handleKeydown(e: KeyboardEvent) {
 	}
 }
 
-// Auto-generate when modal opens and we haven't yet
+// Auto-generate when modal opens and we haven't yet (skip if already errored)
 $effect(() => {
-	if (show && !hasGenerated && !generating) {
+	if (show && !hasGenerated && !generating && !generateError) {
 		handleGenerate();
 	}
 });
@@ -219,7 +221,7 @@ $effect(() => {
 				{:else if generateError}
 					<div class="py-6 text-center">
 						<p class="text-sm text-red-500">{generateError}</p>
-						<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.cancel")}</Button>
+						<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
 					</div>
 				{:else if expressions.length > 0}
 					<p class="text-xs text-muted-foreground leading-relaxed">
