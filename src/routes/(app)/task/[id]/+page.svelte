@@ -23,6 +23,7 @@ let lang = $derived(task.language as LanguageCode);
 let showTranslateModal = $state(false);
 let showNativeLanguagePrompt = $state(false);
 let hasNativeLanguage = $derived(typeof nativeLanguage === "string" && nativeLanguage.trim().length > 0);
+let canShowUsefulExpressions = $derived(!isFinished && (!hasNativeLanguage || nativeLanguage !== task.language));
 
 function openTranslateModal() {
 	if (!hasNativeLanguage) {
@@ -114,7 +115,7 @@ function difficultyLabel(level: number): string {
 				</div>
 
 				<div class="flex items-center gap-3">
-					{#if !isFinished}
+					{#if canShowUsefulExpressions}
 						<Button variant="outline" onclick={openTranslateModal}>
 							<Languages size={14} class="mr-1.5" />
 							{t(lang, "task.usefulExpressions")}
