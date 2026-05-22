@@ -9,6 +9,10 @@ const { mockCreateSingleTurnChat } = vi.hoisted(() => {
 	return { mockCreateSingleTurnChat };
 });
 
+vi.mock("$lib/server/db", () => ({
+	db: {},
+}));
+
 vi.mock("$lib/server/llm", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("$lib/server/llm")>();
 	return {
