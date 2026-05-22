@@ -13,7 +13,7 @@ import { renderMarkdown } from "$lib/markdown";
 
 let { data } = $props();
 let task = $derived(data.task);
-let nativeLanguage = $derived(data.nativeLanguage as string);
+let nativeLanguage = $derived(data.nativeLanguage as string | null);
 
 const objectives = $derived(task.objectives ?? []);
 
@@ -21,6 +21,18 @@ let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
 let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
 let lang = $derived(task.language as LanguageCode);
 let showTranslateModal = $state(false);
+let showNativeLanguagePrompt = $state(false);
+let hasNativeLanguage = $derived(typeof nativeLanguage === "string" && nativeLanguage.trim().length > 0);
+
+function openTranslateModal() {
+	if (!hasNativeLanguage) {
+		showNativeLanguagePrompt = true;
+		return;
+	}
+	showNativeLanguagePrompt = false;
+	showTranslateModal = true;
+}
+
 function difficultyLabel(level: number): string {
 	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
 }
@@ -83,6 +95,13 @@ function difficultyLabel(level: number): string {
 			</div>
 		{/if}
 
+		{#if showNativeLanguagePrompt}
+			<div class="mt-10 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+				Set your native language before using translation help.
+				<a href="/profile" class="font-medium underline hover:no-underline">Go to profile settings</a>.
+			</div>
+		{/if}
+
 		<div class="mt-auto pt-12 pb-4">
 			<div class="h-px w-full bg-border mb-6"></div>
 			<div class="flex items-center justify-between">
@@ -96,7 +115,7 @@ function difficultyLabel(level: number): string {
 
 				<div class="flex items-center gap-3">
 					{#if !isFinished}
-						<Button variant="outline" onclick={() => { showTranslateModal = true; }}>
+						<Button variant="outline" onclick={openTranslateModal}>
 							<Languages size={14} class="mr-1.5" />
 							{t(lang, "task.usefulExpressions")}
 						</Button>
@@ -115,14 +134,16 @@ function difficultyLabel(level: number): string {
 	</div>
 </div>
 
-<TranslateModal
-	show={showTranslateModal}
-	taskTitle={task.title}
-	taskDescription={task.description ?? null}
-	taskObjectives={objectives}
-	taskUi={task.templateUi}
-	taskInteractionType={task.templateInteractionType}
-	{nativeLanguage}
-	targetLanguage={task.language}
-	onclose={() => { showTranslateModal = false; }}
-/>
+{#if hasNativeLanguage && nativeLanguage}
+	<TranslateModal
+		show={showTranslateModal}
+		taskTitle={task.title}
+		taskDescription={task.description ?? null}
+		taskObjectives={objectives}
+		taskUi={task.templateUi}
+		taskInteractionType={task.templateInteractionType}
+		{nativeLanguage}
+		targetLanguage={task.language}
+		onclose={() => { showTranslateModal = false; }}
+	/>
+{/if}

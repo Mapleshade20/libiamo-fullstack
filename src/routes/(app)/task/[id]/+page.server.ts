@@ -64,7 +64,7 @@ export const load: PageServerLoad = async (event) => {
 	// Fetch user's native language for translation direction
 	const [userRecord] = await db.select({ nativeLanguage: authUser.nativeLanguage }).from(authUser).where(eq(authUser.id, user.id)).limit(1);
 
-	const nativeLanguage = userRecord?.nativeLanguage ?? "en";
+	const nativeLanguage = userRecord?.nativeLanguage ?? null;
 
 	return {
 		task: {
@@ -109,6 +109,10 @@ export const actions: Actions = {
 				? (INTERACTION_TYPE_LABELS[interactionType as keyof typeof INTERACTION_TYPE_LABELS] ?? interactionType)
 				: undefined;
 
+		if (!nativeLang || typeof nativeLang !== "string" || !nativeLang.trim()) {
+			return fail(400, { error: "Please set your native language in your profile before using translation help." });
+		}
+
 		try {
 			const expressions = await generateExpressions(
 				{
@@ -118,7 +122,7 @@ export const actions: Actions = {
 					uiLabel,
 					interactionType: interactionLabel,
 				},
-				typeof nativeLang === "string" ? nativeLang : "en",
+				nativeLang,
 				validateLanguageCode(targetLang),
 				user.id,
 			);
@@ -151,11 +155,15 @@ export const actions: Actions = {
 			return fail(400, { error: "Missing your translation" });
 		}
 
+		if (!nativeLang || typeof nativeLang !== "string" || !nativeLang.trim()) {
+			return fail(400, { error: "Please set your native language in your profile before using translation help." });
+		}
+
 		try {
 			const { feedback, correction } = await evaluateUserTranslation(
 				sourceExpression.trim(),
 				userTranslation.trim(),
-				typeof nativeLang === "string" ? nativeLang : "en",
+				nativeLang,
 				validateLanguageCode(targetLang),
 				user.id,
 			);

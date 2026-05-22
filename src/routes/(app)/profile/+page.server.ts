@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getNativeLanguageOptions } from "$lib/constants";
 import { profileSchema, switchLanguageSchema } from "$lib/schemas";
 import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
@@ -71,6 +72,7 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		serverTimezones: getMemoizedTimezones(),
+		serverNativeLanguages: getNativeLanguageOptions("en"),
 		hasApiKey,
 	};
 };

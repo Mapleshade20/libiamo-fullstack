@@ -20,6 +20,54 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	ja: "日本語",
 };
 
+export const NATIVE_LANGUAGE_CODES = [
+	"zh",
+	"en",
+	"hi",
+	"es",
+	"fr",
+	"ar",
+	"bn",
+	"pt",
+	"ru",
+	"ur",
+	"id",
+	"de",
+	"ja",
+	"pa",
+	"mr",
+	"te",
+	"tr",
+	"ko",
+	"vi",
+	"ta",
+	"it",
+	"gu",
+	"fa",
+	"pl",
+	"uk",
+	"ml",
+	"kn",
+	"or",
+	"my",
+	"th",
+] as const;
+export type NativeLanguageCode = (typeof NATIVE_LANGUAGE_CODES)[number];
+
+export function getNativeLanguageOptions(locale = "en"): { value: NativeLanguageCode; label: string }[] {
+	let displayNames: Intl.DisplayNames | undefined;
+	try {
+		displayNames = new Intl.DisplayNames([locale], { type: "language" });
+	} catch {
+		displayNames = undefined;
+	}
+
+	return NATIVE_LANGUAGE_CODES.map((code) => ({
+		value: code,
+		label: displayNames?.of(code) ?? code.toUpperCase(),
+	}));
+}
+
 export const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Spanish",

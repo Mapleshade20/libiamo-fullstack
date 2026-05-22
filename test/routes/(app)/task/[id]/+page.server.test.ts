@@ -109,7 +109,7 @@ describe("Task detail +page.server", () => {
 			});
 		});
 
-		it("returns task payload with nativeLanguage when it differs from active language", async () => {
+		it("returns null nativeLanguage when user has not set one", async () => {
 			const row = {
 				id: 42,
 				title: "Spanish task",
@@ -131,7 +131,7 @@ describe("Task detail +page.server", () => {
 					...row,
 					sessionStatus: null,
 				},
-				nativeLanguage: "en",
+				nativeLanguage: null,
 			});
 		});
 
@@ -156,7 +156,7 @@ describe("Task detail +page.server", () => {
 					...row,
 					sessionStatus: null,
 				},
-				nativeLanguage: "en",
+				nativeLanguage: null,
 			});
 		});
 	});
@@ -177,6 +177,13 @@ describe("Task detail +page.server", () => {
 		it("returns 400 when title is empty string", async () => {
 			const result = (await actions.generateExpressions(createActionEvent({ title: "   " }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 when native language is missing", async () => {
+			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", targetLanguage: "fr" }))) as any;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
 		});
 
 		it("generates expressions with minimal task context", async () => {
@@ -286,6 +293,15 @@ describe("Task detail +page.server", () => {
 		it("returns 400 when userTranslation is empty", async () => {
 			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello", userTranslation: "   " }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 when native language is missing", async () => {
+			const result = (await actions.evaluateTranslation(
+				createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour", targetLanguage: "fr" }),
+			)) as any;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
 		});
 
 		it("evaluates a perfect translation", async () => {
