@@ -7,9 +7,9 @@ Quick guidance for agents working in this repo.
 ```sh
 pnpm build     # production build
 pnpm preview   # start server on production build
-pnpm check     # svelte-check + biome check --write
+pnpm check     # svelte-check + biome check --write (USE THIS INSTEAD OF BUILD IN NORMAL DEVELOPMENT)
 pnpm format    # biome format --write
-pnpm test      # run unit tests (vitest)
+pnpm test      # run unit tests (vitest) (USE THIS IN NORMAL DEVELOPMENT)
 pnpm db:push   # push schema changes to DB (interactively done by user)
 ```
 
@@ -31,6 +31,7 @@ Key areas:
 - Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
 - Practice UI: reusable client code lives under `src/lib/components/practice-ui/`; Discord is the implemented chat UI, with other UI variants scaffolded/validated.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
+- Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/form-attention.ts`. Practice UI notifications under `src/lib/components/practice-ui/` are intentionally separate.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
 ## Notes for agents
