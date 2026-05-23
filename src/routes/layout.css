@@ -301,3 +301,21 @@
 		display: none;
 	}
 }
+
+@keyframes field-attention-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 0%, transparent);
+	}
+	18%,
+	72% {
+		box-shadow:
+			0 0 0 3px color-mix(in oklch, var(--destructive) 28%, transparent),
+			0 0 0 8px color-mix(in oklch, var(--destructive) 10%, transparent);
+	}
+}
+
+[data-field-attention="true"] {
+	border-color: var(--destructive);
+	animation: field-attention-pulse 2.4s ease-out;
+}
