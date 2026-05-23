@@ -94,7 +94,7 @@ const uiIcons: Record<string, Component> = {
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
 			{getGreeting(lang, data.user.name)}<br>
-			<span class="text-gray-500 italic relative">
+			<span class="text-gray-500 italic relative inline-block">
 				<span class="invisible">{targetSubtitle}</span>
 				<span class="absolute left-0 top-0">{displayedSubtitle}</span>
 			</span>
