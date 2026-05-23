@@ -8,7 +8,6 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { goto } from "$app/navigation";
 import TaskCard from "$lib/components/TaskCard.svelte";
-import { getFallbackSubtitle, getGreeting, getRandomSubtitle } from "$lib/greeting-corpus";
 import { type LanguageCode, t } from "$lib/i18n";
 import { captureTaskEnterTransition } from "$lib/task-transition";
 
@@ -16,7 +15,6 @@ let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
-let targetSubtitle = $state("");
 let typingTimer: ReturnType<typeof setInterval> | null = null;
 let displayedSubtitle = $state("");
 
@@ -37,8 +35,7 @@ function startTypewriter(text: string, speed = 20) {
 }
 
 $effect(() => {
-	targetSubtitle = getFallbackSubtitle(lang);
-	startTypewriter(getRandomSubtitle(lang));
+	startTypewriter(data.subtitle);
 	return () => {
 		if (typingTimer !== null) {
 			clearInterval(typingTimer);
@@ -93,9 +90,9 @@ const uiIcons: Record<string, Component> = {
 <div class="space-y-10">
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
-			{getGreeting(lang, data.user.name)}<br>
+			{data.greeting}<br>
 			<span class="text-gray-500 italic relative inline-block">
-				<span class="invisible">{targetSubtitle}</span>
+				<span class="invisible">{data.subtitle}</span>
 				<span class="absolute left-0 top-0">{displayedSubtitle}</span>
 			</span>
 		</h1>
