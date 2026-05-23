@@ -16,9 +16,9 @@ let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
-let displayedSubtitle = $state("");
-let targetSubtitle = $state(getFallbackSubtitle(data.language as LanguageCode));
+let targetSubtitle = $state("");
 let typingTimer: ReturnType<typeof setInterval> | null = null;
+let displayedSubtitle = $state("");
 
 function startTypewriter(text: string, speed = 20) {
 	if (typingTimer !== null) clearInterval(typingTimer);
