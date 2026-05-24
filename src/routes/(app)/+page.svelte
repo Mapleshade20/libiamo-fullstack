@@ -15,6 +15,34 @@ let { data } = $props();
 let lang = $derived(data.language as LanguageCode);
 
 let flippedId = $state<number | null>(null);
+let typingTimer: ReturnType<typeof setInterval> | null = null;
+let displayedSubtitle = $state("");
+
+function startTypewriter(text: string, speed = 20) {
+	if (typingTimer !== null) clearInterval(typingTimer);
+	displayedSubtitle = "";
+	let i = 0;
+	const timer = setInterval(() => {
+		if (i < text.length) {
+			displayedSubtitle += text[i];
+			i++;
+		} else {
+			clearInterval(timer);
+			typingTimer = null;
+		}
+	}, speed);
+	typingTimer = timer;
+}
+
+$effect(() => {
+	startTypewriter(data.subtitle);
+	return () => {
+		if (typingTimer !== null) {
+			clearInterval(typingTimer);
+			typingTimer = null;
+		}
+	};
+});
 
 function toggleFlip(id: number) {
 	flippedId = flippedId === id ? null : id;
@@ -62,8 +90,11 @@ const uiIcons: Record<string, Component> = {
 <div class="space-y-10">
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
-			Welcome back, {data.user.name}.<br>
-			<span class="text-gray-500 italic">Which world will you inhabit today?</span>
+			{data.greeting}<br>
+			<span class="text-gray-500 italic relative inline-block">
+				<span class="invisible">{data.subtitle}</span>
+				<span class="absolute left-0 top-0">{displayedSubtitle}</span>
+			</span>
 		</h1>
 	</section>
 

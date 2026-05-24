@@ -6,6 +6,7 @@ import { auth } from "$lib/server/auth";
 import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { practiceSession, task, template, userLearningProfile } from "$lib/server/db/schema";
+import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
 import { ensureTasksForDate } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -87,6 +88,8 @@ export const load: PageServerLoad = async (event) => {
 			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
 		})),
 		language,
+		greeting: getGreeting(language, user.name),
+		subtitle: getRandomSubtitle(language),
 	};
 };
 
