@@ -30,6 +30,17 @@ export class StructuredOutputParseError extends Error {
 	}
 }
 
+/** Thrown when the provider says the response did not finish normally. */
+export class LLMIncompleteResponseError extends Error {
+	constructor(
+		public readonly finishReason: string,
+		public readonly content: string,
+	) {
+		super(`LLM response did not complete normally (finish_reason: ${finishReason})`);
+		this.name = "LLMIncompleteResponseError";
+	}
+}
+
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
 	content: string;
@@ -321,10 +332,16 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 		throw new Error(`OpenAI API error: ${data.error.message ?? JSON.stringify(data.error)}`);
 	}
 
-	const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+	const firstChoice = data.choices?.[0];
+	const content = firstChoice?.message?.content?.trim() ?? "";
+	const finishReason = firstChoice?.finish_reason ?? null;
 
 	if (!content) {
 		throw new Error("LLM returned empty content");
+	}
+
+	if (finishReason && finishReason !== "stop") {
+		throw new LLMIncompleteResponseError(finishReason, content);
 	}
 
 	return {

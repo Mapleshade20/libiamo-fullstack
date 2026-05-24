@@ -24,7 +24,7 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 	decryptApiKey: vi.fn((c: string) => `decrypted:${c}`),
 }));
 
-function createChatCompletionResponse(content: string) {
+function createChatCompletionResponse(content: string, finishReason?: string | null) {
 	return new Response(
 		JSON.stringify({
 			id: "chatcmpl-test",
@@ -35,6 +35,7 @@ function createChatCompletionResponse(content: string) {
 						role: "assistant",
 						content,
 					},
+					finish_reason: finishReason,
 				},
 			],
 		}),
@@ -307,6 +308,26 @@ describe("createChatCompletion", () => {
 		const schema = z.object({ content: z.string() });
 
 		await expect(createStructuredOutput(schema, [{ role: "system", content: "hi" }])).rejects.toThrow("LLM returned empty content");
+	});
+
+	it("throws when provider reports a truncated response", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse('{"reply":"half', "length"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput, LLMIncompleteResponseError } = await import("$lib/server/llm");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		try {
+			await createStructuredOutput(schema, [{ role: "system", content: "hi" }]);
+			throw new Error("Expected createStructuredOutput to fail");
+		} catch (error) {
+			expect(error).toBeInstanceOf(LLMIncompleteResponseError);
+			expect(error).toMatchObject({
+				name: "LLMIncompleteResponseError",
+				finishReason: "length",
+				content: '{"reply":"half',
+			});
+		}
 	});
 
 	it("uses BYOK config when userId is provided and user has a valid API key", async () => {
