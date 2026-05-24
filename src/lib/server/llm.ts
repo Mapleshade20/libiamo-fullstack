@@ -18,6 +18,18 @@ export class OpenAIAuthError extends Error {
 	}
 }
 
+/** Thrown when an LLM response could not be parsed as the requested structured schema after retry. */
+export class StructuredOutputParseError extends Error {
+	constructor(
+		public readonly firstText: string,
+		public readonly retryText?: string,
+		public readonly cause?: unknown,
+	) {
+		super(`LLM returned invalid structured JSON: ${(retryText || firstText).slice(0, 500)}`);
+		this.name = "StructuredOutputParseError";
+	}
+}
+
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
 	content: string;
@@ -363,7 +375,7 @@ export async function createStructuredOutput<T extends z.ZodType>(
 		try {
 			return parseStructuredOutputText(schema, retryText);
 		} catch {
-			throw firstError;
+			throw new StructuredOutputParseError(firstText, retryText, firstError);
 		}
 	}
 }

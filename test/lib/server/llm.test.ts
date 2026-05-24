@@ -223,6 +223,30 @@ describe("client createStructuredOutput", () => {
 		);
 	});
 
+	it("exposes the first and retry text when structured output parsing fails", async () => {
+		const fetchMock = vi
+			.fn<FetchLike>()
+			.mockResolvedValueOnce(createChatCompletionResponse("not json"))
+			.mockResolvedValueOnce(createChatCompletionResponse("still not json"));
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput, StructuredOutputParseError } = await import("$lib/server/llm");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		try {
+			await createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }]);
+			throw new Error("Expected createStructuredOutput to fail");
+		} catch (error) {
+			expect(error).toBeInstanceOf(StructuredOutputParseError);
+			expect(error).toMatchObject({
+				name: "StructuredOutputParseError",
+				firstText: "not json",
+				retryText: "still not json",
+			});
+		}
+	});
+
 	it("rethrows first error when retry JSON parses successfully but fails schema validation", async () => {
 		const fetchMock = vi
 			.fn<FetchLike>()

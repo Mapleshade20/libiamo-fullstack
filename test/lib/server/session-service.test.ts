@@ -14,6 +14,14 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 	mockClient: {
 		createMultiTurnChat: vi.fn(),
 		createStructuredOutput: vi.fn(),
+		StructuredOutputParseError: class StructuredOutputParseError extends Error {
+			constructor(
+				public readonly firstText: string,
+				public readonly retryText?: string,
+			) {
+				super(`LLM returned invalid structured JSON: ${retryText ?? firstText}`);
+			}
+		},
 	},
 }));
 
@@ -358,7 +366,7 @@ describe("session service", () => {
 				expect.arrayContaining([
 					expect.objectContaining({ role: "system" }),
 					expect.objectContaining({ role: "user", content: "First message" }),
-					expect.objectContaining({ role: "assistant", content: "First reply" }),
+					expect.objectContaining({ role: "assistant", content: '{"reply":"First reply","terminate":false}' }),
 					expect.objectContaining({ role: "user", content: "Second message" }),
 				]),
 				{},
@@ -895,9 +903,46 @@ describe("session service", () => {
 			expect(historyArg).toEqual([
 				expect.objectContaining({ role: "system" }),
 				expect.objectContaining({ content: "Msg 1" }),
-				expect.objectContaining({ content: "Reply 1" }),
+				expect.objectContaining({ content: '{"reply":"Reply 1","terminate":false}' }),
 				expect.objectContaining({ content: "New msg" }),
 			]);
+		});
+
+		it("falls back to a plain text assistant reply when structured parsing fails with non-JSON text", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockRejectedValue(new mockClient.StructuredOutputParseError("not json", "Plain reply"));
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			const result = await sendMessage(123, "Need a reply", USER_ID, "msg-plain");
+
+			expect(result).toEqual({ reply: "Plain reply", turnCount: 1, terminated: false });
+			expect(valuesMock).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({
+					sessionId: 123,
+					role: "assistant",
+					content: "Plain reply",
+					llmMetadata: expect.objectContaining({
+						clientMessageId: "msg-plain",
+						raw: { reply: "Plain reply", terminate: false },
+					}),
+				}),
+			);
+		});
+
+		it("does not display truncated JSON-shaped structured output as a plain reply", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockRejectedValue(new mockClient.StructuredOutputParseError('{"reply":"half', '{"reply":"still half'));
+			const valuesMock = vi
+				.fn()
+				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-json", failed: false } }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await expect(sendMessage(123, "Need a reply", USER_ID, "msg-json")).rejects.toThrow("LLM returned invalid structured JSON");
+
+			expect(valuesMock).toHaveBeenCalledTimes(1);
+			expect(mockDb.update).toHaveBeenCalled();
 		});
 	});
 

@@ -5,7 +5,7 @@ import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, createStructuredOutput } from "./llm";
+import { type ChatMessage, createStructuredOutput, StructuredOutputParseError } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
@@ -290,6 +290,33 @@ function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unk
 	return messages.filter((message) => message.role === "user" && !isHiddenUserMessage(message)).length;
 }
 
+function getAssistantTerminateFlag(metadata: unknown): boolean {
+	const raw = getMessageMetadata(metadata).raw;
+	return raw && typeof raw === "object" && !Array.isArray(raw) ? ((raw as { terminate?: boolean }).terminate ?? false) : false;
+}
+
+function formatMessageForStructuredHistory(message: { role: string; content: string; llmMetadata?: unknown }): ChatMessage {
+	const role = message.role as "user" | "assistant" | "system";
+	if (role !== "assistant") return { role, content: message.content };
+	return {
+		role,
+		content: JSON.stringify({
+			reply: message.content,
+			terminate: getAssistantTerminateFlag(message.llmMetadata),
+		}),
+	};
+}
+
+function getPlainTextFallbackFromStructuredError(error: unknown): string | null {
+	if (!(error instanceof StructuredOutputParseError)) return null;
+	const candidates = [error.retryText, error.firstText];
+	const text = candidates.find((value) => {
+		const trimmed = value?.trim();
+		return trimmed && !trimmed.startsWith("{") && !trimmed.startsWith("[");
+	});
+	return text?.trim() ?? null;
+}
+
 function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
 	messages: T[],
 	clientMessageId: string,
@@ -400,13 +427,13 @@ export async function sendMessage(
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
 	if (!existingUserMessage) {
 		for (const m of activeMessages) {
-			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+			history.push(formatMessageForStructuredHistory(m));
 		}
 		history.push({ role: "user", content: trimmedPromptContent });
 	} else {
 		// Retry: existing user message is already in activeMessages
 		for (const m of activeMessages) {
-			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+			history.push(formatMessageForStructuredHistory(m));
 		}
 	}
 
@@ -471,22 +498,27 @@ export async function sendMessage(
 	try {
 		output = await createStructuredOutput(AgentReplySchema, history, {}, userId);
 	} catch (error) {
-		if (existingUserMessage?.id) {
-			await db
-				.update(sessionMessage)
-				.set({
-					llmMetadata: {
-						...getMessageMetadata(existingUserMessage.llmMetadata),
-						...options.userMetadata,
-						clientMessageId,
-						failed: true,
-						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
-						displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-					},
-				})
-				.where(eq(sessionMessage.id, existingUserMessage.id));
+		const fallbackReply = getPlainTextFallbackFromStructuredError(error);
+		if (fallbackReply) {
+			output = { reply: fallbackReply, terminate: false };
+		} else {
+			if (existingUserMessage?.id) {
+				await db
+					.update(sessionMessage)
+					.set({
+						llmMetadata: {
+							...getMessageMetadata(existingUserMessage.llmMetadata),
+							...options.userMetadata,
+							clientMessageId,
+							failed: true,
+							hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+							displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
+						},
+					})
+					.where(eq(sessionMessage.id, existingUserMessage.id));
+			}
+			throw error;
 		}
-		throw error;
 	}
 
 	await db.insert(sessionMessage).values({
