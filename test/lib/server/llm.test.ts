@@ -47,6 +47,12 @@ function createChatCompletionResponse(content: string) {
 	);
 }
 
+function getHeader(headers: RequestInit["headers"], name: string) {
+	if (headers instanceof Headers) return headers.get(name);
+	if (Array.isArray(headers)) return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+	return headers?.[name] ?? headers?.[name.toLowerCase()];
+}
+
 describe("client createStructuredOutput", () => {
 	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -93,8 +99,7 @@ describe("client createStructuredOutput", () => {
 		expect(url).toBe("https://example.com/v1/chat/completions");
 		expect(init.method).toBe("POST");
 
-		const headers = init.headers as Record<string, string>;
-		expect(headers.Authorization ?? headers.authorization).toBe("Bearer test-key");
+		expect(getHeader(init.headers, "authorization")).toBe("Bearer test-key");
 
 		expect(payload).toEqual(
 			expect.objectContaining({

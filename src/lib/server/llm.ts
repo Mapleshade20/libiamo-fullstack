@@ -1,4 +1,6 @@
 import { eq } from "drizzle-orm";
+import OpenAI from "openai";
+import type { ChatCompletion, ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { decryptApiKey } from "./api-key-crypto";
@@ -53,26 +55,6 @@ export type MultiTurnChatInput = {
 	options?: OpenAIOptions;
 };
 
-// ── OpenAI-compatible response types ──────────────────────────────────
-
-type ChatCompletionResponse = {
-	id?: string;
-	model?: string;
-	choices?: Array<{
-		message?: {
-			role?: string;
-			content?: string | null;
-		};
-		finish_reason?: string | null;
-		index?: number;
-	}>;
-	error?: {
-		message?: string;
-		type?: string;
-		code?: string | number;
-	};
-};
-
 // ── Config resolution ─────────────────────────────────────────────────
 
 type OpenAIConfig = {
@@ -97,9 +79,7 @@ function getEnvOpenAIConfig(): OpenAIConfig {
 		throw new Error("OPENAI_MODEL is not set. Please set OPENAI_MODEL in .env");
 	}
 
-	const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
-
-	return { apiKey, baseUrl, model };
+	return { apiKey, baseUrl: trimTrailingSlash(baseUrlRaw), model };
 }
 
 async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null> {
@@ -109,10 +89,11 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 
 	if (!row) return null;
 
-	const apiKey = decryptApiKey(row.encryptedKey);
-	const baseUrl = row.baseUrl.endsWith("/") ? row.baseUrl.slice(0, -1) : row.baseUrl;
-
-	return { apiKey, baseUrl, model: row.model };
+	return {
+		apiKey: decryptApiKey(row.encryptedKey),
+		baseUrl: trimTrailingSlash(row.baseUrl),
+		model: row.model,
+	};
 }
 
 async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
@@ -123,9 +104,22 @@ async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
 			return userConfig;
 		}
 	}
+
 	const envConfig = getEnvOpenAIConfig();
 	debugLog("config", { source: "env", model: envConfig.model, baseUrl: envConfig.baseUrl });
 	return envConfig;
+}
+
+function trimTrailingSlash(value: string) {
+	return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function createOpenAIClient(config: OpenAIConfig) {
+	return new OpenAI({
+		apiKey: config.apiKey,
+		baseURL: config.baseUrl,
+		maxRetries: 0,
+	});
 }
 
 // ── Debug helpers ─────────────────────────────────────────────────────
@@ -133,14 +127,6 @@ async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
 function isLlmDebugEnabled() {
 	const value = env.LLM_DEBUG?.trim().toLowerCase();
 	return value === "1" || value === "true" || value === "yes" || value === "on";
-}
-
-function safeJsonParse(text: string): unknown {
-	try {
-		return JSON.parse(text) as unknown;
-	} catch {
-		return text;
-	}
 }
 
 function debugLog(event: string, details: Record<string, unknown>) {
@@ -153,7 +139,7 @@ function debugLog(event: string, details: Record<string, unknown>) {
 	}
 }
 
-// ── Validation helpers ────────────────────────────────────────────────
+// ── Message helpers ───────────────────────────────────────────────────
 
 function validateMessages(messages: ChatMessage[]) {
 	if (!Array.isArray(messages) || messages.length === 0) {
@@ -171,20 +157,25 @@ function validateMessages(messages: ChatMessage[]) {
 	}
 }
 
-function mergeAdjacentMessages(messages: ChatMessage[]): ChatMessage[] {
-	const merged: ChatMessage[] = [];
+function normalizeMessages(messages: ChatMessage[]): ChatMessage[] {
+	const normalized: ChatMessage[] = [];
 
 	for (const message of messages) {
-		const previous = merged.at(-1);
+		const current = { role: message.role, content: message.content.trim() };
+		const previous = normalized.at(-1);
 
-		if (previous?.role === message.role) {
-			previous.content = `${previous.content.trimEnd()}\n\n${message.content.trimStart()}`;
+		if (previous?.role === current.role) {
+			previous.content = `${previous.content.trimEnd()}\n\n${current.content.trimStart()}`;
 		} else {
-			merged.push({ ...message });
+			normalized.push(current);
 		}
 	}
 
-	return merged;
+	return normalized;
+}
+
+function toOpenAIMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
+	return normalizeMessages(messages) as ChatCompletionMessageParam[];
 }
 
 export function stripJsonFences(text: string) {
@@ -238,89 +229,70 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 500)}`);
 }
 
-// ── Core LLM function using fetch ─────────────────────────────────────
+// ── Core LLM function using OpenAI SDK ────────────────────────────────
 
 async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
 	validateMessages(messages);
 
-	const { apiKey, baseUrl, model } = await resolveOpenAIConfig(userId);
-	const endpoint = `${baseUrl}/chat/completions`;
-	const requestBody: Record<string, unknown> = {
-		model,
-		messages: mergeAdjacentMessages(messages),
+	const config = await resolveOpenAIConfig(userId);
+	const url = `${config.baseUrl}/chat/completions`;
+	const request = {
+		model: config.model,
+		messages: toOpenAIMessages(messages),
 		max_tokens: options.maxTokens ?? 4096,
+		...(options.temperature === undefined ? {} : { temperature: options.temperature }),
 	};
 
-	// Only include temperature if explicitly requested (some models only accept specific values)
-	if (options.temperature !== undefined) {
-		requestBody.temperature = options.temperature;
-	}
-
 	debugLog("request", {
-		url: endpoint,
-		body: requestBody,
+		url,
+		body: request,
 	});
 
+	let completion: ChatCompletion;
 	let response: Response;
 
 	try {
-		response = await fetch(endpoint, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify(requestBody),
-		});
+		const result = await createOpenAIClient(config).chat.completions.create(request).withResponse();
+		completion = result.data;
+		response = result.response;
 	} catch (error) {
-		debugLog("network-error", {
-			url: endpoint,
-			message: error instanceof Error ? error.message : String(error),
-		});
-		throw error;
+		throw normalizeOpenAIError(error);
 	}
 
-	const bodyText = await response.text();
-
-	debugLog("response", {
-		url: endpoint,
-		status: response.status,
-		ok: response.ok,
-		body: safeJsonParse(bodyText),
-	});
-
-	if (!response.ok) {
-		const msg = `OpenAI API error (${response.status}): ${bodyText}`;
-		if (response.status === 401 || response.status === 403) {
-			throw new OpenAIAuthError(msg, response.status);
-		}
-		throw new Error(msg);
+	const responseError = (completion as unknown as { error?: { message?: string } }).error;
+	if (responseError) {
+		throw new Error(`OpenAI API error: ${responseError.message ?? JSON.stringify(responseError)}`);
 	}
 
-	let data: ChatCompletionResponse;
+	debugLog("response", { url, status: response.status, body: completion });
 
-	try {
-		data = JSON.parse(bodyText) as ChatCompletionResponse;
-	} catch {
-		throw new Error(`OpenAI API returned non-JSON response: ${bodyText.slice(0, 500)}`);
-	}
-
-	if (data.error) {
-		throw new Error(`OpenAI API error: ${data.error.message ?? JSON.stringify(data.error)}`);
-	}
-
-	const content = data.choices?.[0]?.message?.content?.trim() ?? "";
-
+	const content = completion.choices[0]?.message.content?.trim() ?? "";
 	if (!content) {
 		throw new Error("LLM returned empty content");
 	}
 
 	return {
-		id: data.id,
-		model: data.model,
+		id: completion.id,
+		model: completion.model,
 		content,
-		raw: data,
+		raw: completion,
 	};
+}
+
+function normalizeOpenAIError(error: unknown): Error {
+	if (error instanceof OpenAI.APIConnectionError && error.cause instanceof Error) {
+		return error.cause;
+	}
+
+	if (error instanceof OpenAI.APIError && typeof error.status === "number") {
+		const message = `OpenAI API error (${error.status}): ${error.message}`;
+		if (error.status === 401 || error.status === 403) {
+			return new OpenAIAuthError(message, error.status);
+		}
+		return new Error(message);
+	}
+
+	return error instanceof Error ? error : new Error(String(error));
 }
 
 // ── Structured output ─────────────────────────────────────────────────
@@ -352,16 +324,12 @@ export async function createStructuredOutput<T extends z.ZodType>(
 						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
 				},
 			],
-			{
-				...options,
-			},
+			options,
 			userId,
 		);
 
-		const retryText = retryResult.content.trim();
-
 		try {
-			return parseStructuredOutputText(schema, retryText);
+			return parseStructuredOutputText(schema, retryResult.content.trim());
 		} catch {
 			throw firstError;
 		}

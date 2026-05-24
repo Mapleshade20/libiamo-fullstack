@@ -28,6 +28,12 @@ function createJsonResponse(body: unknown, status = 200): Response {
 	});
 }
 
+function getHeader(headers: RequestInit["headers"], name: string) {
+	if (headers instanceof Headers) return headers.get(name);
+	if (Array.isArray(headers)) return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+	return headers?.[name] ?? headers?.[name.toLowerCase()];
+}
+
 describe("chat client wrappers", () => {
 	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -68,9 +74,8 @@ describe("chat client wrappers", () => {
 			const init = (firstCall[1] ?? {}) as RequestInit;
 			expect(url).toContain("chat/completions");
 			expect(init.method).toBe("POST");
-			// AI SDK sets authorization header (case may vary)
-			const headers = init.headers as Record<string, string>;
-			expect(headers.authorization ?? headers.Authorization).toContain("Bearer unit-key");
+			// OpenAI SDK sets authorization header (case may vary)
+			expect(getHeader(init.headers, "authorization")).toContain("Bearer unit-key");
 			const payload = JSON.parse(String(init.body));
 			expect(payload.model).toBe("glm-5");
 			expect(payload.messages).toEqual([
