@@ -362,32 +362,15 @@ export async function createStructuredOutput<T extends z.ZodType>(
 ): Promise<z.infer<T>> {
 	validateMessages(messages);
 
-	const firstResult = await createChatCompletion(messages, options, userId);
-	const firstText = firstResult.content.trim();
+	let firstResult: OpenAIResponse;
 
 	try {
-		return parseStructuredOutputText(schema, firstText);
+		firstResult = await createChatCompletion(messages, options, userId);
 	} catch (firstError) {
-		const retryResult = await createChatCompletion(
-			[
-				...messages,
-				{
-					role: "assistant",
-					content: firstText || "(empty response)",
-				},
-				{
-					role: "system",
-					content:
-						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
-				},
-			],
-			{
-				...options,
-			},
-			userId,
-		);
+		if (!(firstError instanceof LLMIncompleteResponseError)) throw firstError;
 
-		const retryText = retryResult.content.trim();
+		const firstText = firstError.content.trim();
+		const retryText = await retryStructuredOutputRequest(messages, firstText, options, userId);
 
 		try {
 			return parseStructuredOutputText(schema, retryText);
@@ -395,6 +378,43 @@ export async function createStructuredOutput<T extends z.ZodType>(
 			throw new StructuredOutputParseError(firstText, retryText, firstError);
 		}
 	}
+
+	const firstText = firstResult.content.trim();
+
+	try {
+		return parseStructuredOutputText(schema, firstText);
+	} catch (firstError) {
+		const retryText = await retryStructuredOutputRequest(messages, firstText, options, userId);
+
+		try {
+			return parseStructuredOutputText(schema, retryText);
+		} catch {
+			throw new StructuredOutputParseError(firstText, retryText, firstError);
+		}
+	}
+}
+
+async function retryStructuredOutputRequest(messages: ChatMessage[], previousText: string, options: OpenAIOptions, userId?: string): Promise<string> {
+	const retryResult = await createChatCompletion(
+		[
+			...messages,
+			{
+				role: "assistant",
+				content: previousText || "(empty response)",
+			},
+			{
+				role: "system",
+				content:
+					"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
+			},
+		],
+		{
+			...options,
+		},
+		userId,
+	);
+
+	return retryResult.content.trim();
 }
 
 // ── High-level chat functions ─────────────────────────────────────────

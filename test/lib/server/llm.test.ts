@@ -330,6 +330,55 @@ describe("createChatCompletion", () => {
 		}
 	});
 
+	it("retries once when the first structured response is truncated", async () => {
+		const fetchMock = vi
+			.fn<FetchLike>()
+			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"half', "length"))
+			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"Recovered","terminate":false}', "stop"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput } = await import("$lib/server/llm");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		const result = await createStructuredOutput(schema, [{ role: "system", content: "hi" }]);
+
+		expect(result).toEqual({ reply: "Recovered", terminate: false });
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		const secondCall = fetchMock.mock.calls[1];
+		if (!secondCall) throw new Error("second fetch was not called");
+		const secondPayload = JSON.parse(String((secondCall[1] as RequestInit).body));
+
+		expect(secondPayload.messages).toEqual(
+			expect.arrayContaining([
+				{ role: "assistant", content: '{"reply":"half' },
+				expect.objectContaining({ content: expect.stringContaining("previous response was invalid or incomplete") }),
+			]),
+		);
+	});
+
+	it("throws incomplete response error when the structured retry is also truncated", async () => {
+		const fetchMock = vi
+			.fn<FetchLike>()
+			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"half', "length"))
+			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"still half', "length"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createStructuredOutput, LLMIncompleteResponseError } = await import("$lib/server/llm");
+		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
+
+		try {
+			await createStructuredOutput(schema, [{ role: "system", content: "hi" }]);
+			throw new Error("Expected createStructuredOutput to fail");
+		} catch (error) {
+			expect(error).toBeInstanceOf(LLMIncompleteResponseError);
+			expect(error).toMatchObject({
+				finishReason: "length",
+				content: '{"reply":"still half',
+			});
+		}
+	});
+
 	it("uses BYOK config when userId is provided and user has a valid API key", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce({
