@@ -42,13 +42,20 @@ function mapCompleteSessionError(e: unknown) {
 }
 
 async function mapCompletionEvaluationFailure(sessionId: number) {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		columns: {
-			status: true,
-			tutorFeedback: true,
-		},
-	});
+	let session: { status: string; tutorFeedback: unknown } | null | undefined;
+
+	try {
+		session = await db.query.practiceSession.findFirst({
+			where: eq(practiceSession.id, sessionId),
+			columns: {
+				status: true,
+				tutorFeedback: true,
+			},
+		});
+	} catch (error) {
+		console.error("Failed to inspect session after evaluation failure:", error);
+		return null;
+	}
 
 	if (session?.status === "completed" && !session.tutorFeedback) {
 		return fail(502, {

@@ -5,7 +5,7 @@ import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, createStructuredOutput, StructuredOutputParseError } from "./llm";
+import { type ChatMessage, createStructuredOutput, StructuredOutputParseError, stripJsonFences } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
@@ -311,10 +311,10 @@ function getPlainTextFallbackFromStructuredError(error: unknown): string | null 
 	if (!(error instanceof StructuredOutputParseError)) return null;
 	const candidates = [error.retryText, error.firstText];
 	const text = candidates.find((value) => {
-		const trimmed = value?.trim();
+		const trimmed = stripJsonFences(value ?? "");
 		return trimmed && !trimmed.startsWith("{") && !trimmed.startsWith("[");
 	});
-	return text?.trim() ?? null;
+	return text ? stripJsonFences(text) : null;
 }
 
 function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(

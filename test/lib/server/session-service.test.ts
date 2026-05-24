@@ -14,6 +14,12 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 	mockClient: {
 		createMultiTurnChat: vi.fn(),
 		createStructuredOutput: vi.fn(),
+		stripJsonFences: vi.fn((text: string) => {
+			let cleaned = text.trim();
+			cleaned = cleaned.replace(/^`{3}(?:json)?/i, "").trim();
+			cleaned = cleaned.replace(/`{3}$/i, "").trim();
+			return cleaned;
+		}),
 		StructuredOutputParseError: class StructuredOutputParseError extends Error {
 			constructor(
 				public readonly firstText: string,
@@ -940,6 +946,22 @@ describe("session service", () => {
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
 			await expect(sendMessage(123, "Need a reply", USER_ID, "msg-json")).rejects.toThrow("LLM returned invalid structured JSON");
+
+			expect(valuesMock).toHaveBeenCalledTimes(1);
+			expect(mockDb.update).toHaveBeenCalled();
+		});
+
+		it("does not display fenced JSON-shaped structured output as a plain reply", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
+			mockClient.createStructuredOutput.mockRejectedValue(
+				new mockClient.StructuredOutputParseError('```json\n{"reply":"half"\n```', '```json\n{"reply":"still half"\n```'),
+			);
+			const valuesMock = vi
+				.fn()
+				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-fenced", failed: false } }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await expect(sendMessage(123, "Need a reply", USER_ID, "msg-fenced")).rejects.toThrow("LLM returned invalid structured JSON");
 
 			expect(valuesMock).toHaveBeenCalledTimes(1);
 			expect(mockDb.update).toHaveBeenCalled();

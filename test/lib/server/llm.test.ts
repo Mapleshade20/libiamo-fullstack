@@ -240,6 +240,7 @@ describe("client createStructuredOutput", () => {
 			throw new Error("Expected createStructuredOutput to fail");
 		} catch (error) {
 			expect(error).toBeInstanceOf(StructuredOutputParseError);
+			expect((error as Error).cause).toBeInstanceOf(Error);
 			expect(error).toMatchObject({
 				name: "StructuredOutputParseError",
 				firstText: "not json",

@@ -23,9 +23,9 @@ export class StructuredOutputParseError extends Error {
 	constructor(
 		public readonly firstText: string,
 		public readonly retryText?: string,
-		public readonly cause?: unknown,
+		cause?: unknown,
 	) {
-		super(`LLM returned invalid structured JSON: ${(retryText || firstText).slice(0, 500)}`);
+		super(`LLM returned invalid structured JSON: ${(retryText || firstText).slice(0, 500)}`, { cause });
 		this.name = "StructuredOutputParseError";
 	}
 }

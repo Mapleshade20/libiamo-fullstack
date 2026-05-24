@@ -709,6 +709,22 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
 		});
 
+		it("returns fail 500 when evaluation failure inspection also fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.completeSession.mockRejectedValue(new Error("LLM returned invalid structured JSON"));
+			mockDb.query.practiceSession.findFirst.mockRejectedValue(new Error("DB unavailable"));
+			const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
+
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
+			expect(errorSpy).toHaveBeenCalledWith("Failed to inspect session after evaluation failure:", expect.any(Error));
+		});
+
 		it("returns a retryable evaluation failure when completion was saved without feedback", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
