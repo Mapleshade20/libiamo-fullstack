@@ -703,9 +703,34 @@ describe("session page server", () => {
 				taskId: 456,
 			});
 			mockSessionService.completeSession.mockRejectedValue(12345);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
 			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to complete session" } });
+		});
+
+		it("returns a retryable evaluation failure when completion was saved without feedback", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 789,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.completeSession.mockRejectedValue(new Error("LLM returned invalid structured JSON"));
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				status: "completed",
+				tutorFeedback: null,
+			});
+
+			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
+
+			expect(result).toMatchObject({
+				status: 502,
+				data: {
+					error: "Feedback evaluation failed. Your session is saved; please retry feedback generation.",
+					evaluationFailed: true,
+					completed: true,
+				},
+			});
 		});
 	});
 

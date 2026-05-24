@@ -41,6 +41,26 @@ function mapCompleteSessionError(e: unknown) {
 	return null;
 }
 
+async function mapCompletionEvaluationFailure(sessionId: number) {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		columns: {
+			status: true,
+			tutorFeedback: true,
+		},
+	});
+
+	if (session?.status === "completed" && !session.tutorFeedback) {
+		return fail(502, {
+			error: "Feedback evaluation failed. Your session is saved; please retry feedback generation.",
+			evaluationFailed: true,
+			completed: true,
+		});
+	}
+
+	return null;
+}
+
 async function getLearnerProfileName(user: { id: string; name?: string | null }) {
 	const userProfile = await db.query.user.findFirst({
 		where: eq(authUser.id, user.id),
@@ -259,6 +279,9 @@ export const actions: Actions = {
 		} catch (e) {
 			const mappedError = mapCompleteSessionError(e);
 			if (mappedError) return mappedError;
+
+			const evaluationFailure = await mapCompletionEvaluationFailure(sessionId);
+			if (evaluationFailure) return evaluationFailure;
 
 			console.error("Failed to complete session:", e);
 			return fail(500, { error: "Failed to complete session" });

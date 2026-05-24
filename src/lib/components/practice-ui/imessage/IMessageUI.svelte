@@ -9,6 +9,7 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
+import EvaluationRetryNotice from "../EvaluationRetryNotice.svelte";
 import { createPracticeSession } from "../session.svelte";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
@@ -425,5 +426,11 @@ onMount(() => {
 				<a href="/" class="rounded-lg bg-[#0A84FF] px-4 py-2 text-sm font-medium text-white">{t.returnHall}</a>
 			</div>
 		</div>
+	</div>
+{/if}
+
+{#if session.needsEvaluationRetry}
+	<div class="fixed top-4 right-4 left-4 z-[1200] mx-auto max-w-xl">
+		<EvaluationRetryNotice message={session.evaluationError ?? undefined} isRetrying={session.isCompleting} onRetry={session.handleComplete} />
 	</div>
 {/if}

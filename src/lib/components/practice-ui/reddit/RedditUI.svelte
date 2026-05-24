@@ -2,6 +2,7 @@
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Search from "@lucide/svelte/icons/search";
 import { fade } from "svelte/transition";
+import EvaluationRetryNotice from "../EvaluationRetryNotice.svelte";
 import { createPracticeSession } from "../session.svelte";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
@@ -323,6 +324,12 @@ let showMobileMenu = $state(false);
 	{t}
 	onCloseEvaluation={() => (session.showEvaluationModal = false)}
 />
+
+{#if session.needsEvaluationRetry}
+	<div class="fixed top-4 right-4 left-4 z-[1200] mx-auto max-w-xl">
+		<EvaluationRetryNotice message={session.evaluationError ?? undefined} isRetrying={session.isCompleting} onRetry={session.handleComplete} />
+	</div>
+{/if}
 
 <style>
 ::-webkit-scrollbar {

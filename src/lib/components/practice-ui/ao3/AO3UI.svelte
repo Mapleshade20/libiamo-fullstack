@@ -3,6 +3,7 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
+import EvaluationRetryNotice from "../EvaluationRetryNotice.svelte";
 import { createPracticeSession } from "../session.svelte";
 import {
 	type Ao3OpeningState,
@@ -412,6 +413,12 @@ function scrollToTop(event: MouseEvent) {
 				<a href="/" class="ao3-action">{t.returnHall}</a>
 			</div>
 		</div>
+	</div>
+{/if}
+
+{#if session.needsEvaluationRetry}
+	<div class="fixed top-4 right-4 left-4 z-[2200] mx-auto max-w-xl">
+		<EvaluationRetryNotice message={session.evaluationError ?? undefined} isRetrying={session.isCompleting} onRetry={session.handleComplete} />
 	</div>
 {/if}
 

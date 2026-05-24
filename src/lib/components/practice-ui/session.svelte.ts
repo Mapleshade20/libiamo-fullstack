@@ -76,6 +76,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let isCompleted = $state(false);
 	let showEvaluationModal = $state(false);
 	let isInitializing = $state(false);
+	let evaluationError = $state<string | null>(null);
 	let feedback = $state<TutorFeedback | null>(null);
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
@@ -183,8 +184,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	}
 
 	async function handleComplete() {
-		if (!sessionId || isCompleting || isCompleted) return;
+		if (!sessionId || isCompleting || (isCompleted && feedback)) return;
 		isCompleting = true;
+		evaluationError = null;
 		try {
 			const result = await completeAction(sessionId);
 
@@ -194,9 +196,19 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				showEvaluationModal = true;
 				await scrollToBottom();
 				await invalidateAll();
+			} else if (result.type === "failure" && result.data) {
+				const data = result.data as { error?: string; evaluationFailed?: boolean; completed?: boolean };
+				if (data.evaluationFailed) {
+					isCompleted = data.completed ?? true;
+					feedback = null;
+					showEvaluationModal = false;
+					evaluationError = data.error ?? "Feedback could not be generated. Please try again.";
+					await invalidateAll();
+				}
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
+			evaluationError = "Feedback could not be generated. Please try again.";
 		} finally {
 			isCompleting = false;
 		}
@@ -284,6 +296,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
 			feedback = sessionData.tutorFeedback || null;
+			evaluationError = isCompleted && !feedback ? "Feedback could not be generated. Your session is saved, and you can retry the evaluation." : null;
 
 			if (isCompleted && feedback) showEvaluationModal = true;
 
@@ -443,6 +456,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		},
 		get feedback() {
 			return feedback;
+		},
+		get evaluationError() {
+			return evaluationError;
+		},
+		get needsEvaluationRetry() {
+			return isCompleted && !feedback;
 		},
 		get messages() {
 			return messages;

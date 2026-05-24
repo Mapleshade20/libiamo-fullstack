@@ -3,6 +3,7 @@ import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { normalizeText } from "../../utils/messageUtils";
+import EvaluationRetryNotice from "../EvaluationRetryNotice.svelte";
 import { createPracticeSession } from "../session.svelte";
 import ChatHeader from "./ChatHeader.svelte";
 import { i18n } from "./i18n";
@@ -177,6 +178,17 @@ $effect(() => {
 		onCloseEvaluation={() => (session.showEvaluationModal = false)}
 		onContextMenuMention={handleContextMenuMention}
 	/>
+
+	{#if session.needsEvaluationRetry}
+		<div class="fixed top-4 right-4 left-4 z-[1400] mx-auto max-w-xl">
+			<EvaluationRetryNotice
+				message={session.evaluationError ?? undefined}
+				isRetrying={session.isCompleting}
+				dark={true}
+				onRetry={session.handleComplete}
+			/>
+		</div>
+	{/if}
 
 	<MobileTopBar {serverName} onToggleMenu={() => (showMobileMenu = !showMobileMenu)} />
 

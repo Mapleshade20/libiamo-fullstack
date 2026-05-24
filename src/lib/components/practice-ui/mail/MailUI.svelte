@@ -7,6 +7,7 @@ import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtil
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
+import EvaluationRetryNotice from "../EvaluationRetryNotice.svelte";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
@@ -62,6 +63,7 @@ let isCompleting = $state(false);
 let isCompleted = $state(false);
 let isEntering = $state(true);
 let showEvaluationModal = $state(false);
+let evaluationError = $state<string | null>(null);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
@@ -113,6 +115,7 @@ const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
 const formatTimestamp = $derived(createTimeFormatter(timeZone));
+const needsEvaluationRetry = $derived(isCompleted && !feedback);
 
 function getDefaultDraft(): DraftEmail {
 	return {
@@ -273,9 +276,10 @@ function appendAgentMessageFromSendResult(
 }
 
 async function handleComplete(force = false) {
-	if (!sessionId || isCompleted || isInitializing || (!force && isSubmitting) || isCompleting) return;
+	if (!sessionId || (isCompleted && feedback) || isInitializing || (!force && isSubmitting) || isCompleting) return;
 
 	isCompleting = true;
+	evaluationError = null;
 	try {
 		const result = await completeAction(sessionId);
 		if (result.type === "success" && result.data) {
@@ -285,11 +289,21 @@ async function handleComplete(force = false) {
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
 			await invalidateAll();
+		} else if (result.type === "failure" && result.data) {
+			const data = result.data as { error?: string; evaluationFailed?: boolean; completed?: boolean };
+			if (data.evaluationFailed) {
+				isCompleted = data.completed ?? true;
+				feedback = null;
+				showEvaluationModal = false;
+				evaluationError = data.error ?? "Feedback could not be generated. Please try again.";
+				await invalidateAll();
+			}
 		} else {
 			console.error("Mail completion was rejected:", result);
 		}
 	} catch (error) {
 		console.error("Mail completion failed:", error);
+		evaluationError = "Feedback could not be generated. Please try again.";
 	} finally {
 		isCompleting = false;
 	}
@@ -382,6 +396,7 @@ function loadExistingSession(session: any) {
 	sessionId = session.id;
 	isCompleted = session.status === "completed" || session.status === "evaluated";
 	feedback = session.tutorFeedback || null;
+	evaluationError = isCompleted && !feedback ? "Feedback could not be generated. Your session is saved, and you can retry the evaluation." : null;
 
 	const sortedRawMessages = [...(session.messages ?? [])].sort(
 		(a, b) => parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
@@ -554,26 +569,31 @@ $effect(() => {
 			onSelectDraftMessage={selectDraftMessage}
 		/>
 
-		<DetailPane
-			bind:messageScroll
-			{selectedInboxEmail}
-			{selectedSentEmail}
-			{selectedSentMessage}
-			{todayLabel}
-			{userName}
-			{avatarUrl}
-			{isCompleted}
-			{isInitializing}
-			{isSubmitting}
-			{isCompleting}
-			{isBusy}
-			{t}
-			{remainingTurns}
-			{canFinish}
-			onMockAction={handleMockAction}
-			onComplete={handleComplete}
-			onRetry={handleRetry}
-		/>
+		<div class="min-h-0 overflow-hidden">
+			{#if needsEvaluationRetry}
+				<EvaluationRetryNotice message={evaluationError ?? undefined} isRetrying={isCompleting} onRetry={() => handleComplete(true)} />
+			{/if}
+			<DetailPane
+				bind:messageScroll
+				{selectedInboxEmail}
+				{selectedSentEmail}
+				{selectedSentMessage}
+				{todayLabel}
+				{userName}
+				{avatarUrl}
+				{isCompleted}
+				{isInitializing}
+				{isSubmitting}
+				{isCompleting}
+				{isBusy}
+				{t}
+				{remainingTurns}
+				{canFinish}
+				onMockAction={handleMockAction}
+				onComplete={handleComplete}
+				onRetry={handleRetry}
+			/>
+		</div>
 	</div>
 
 	{#if showSidebar}
