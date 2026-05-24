@@ -5,7 +5,7 @@ import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, createStructuredOutput } from "./llm";
+import { type ChatMessage, type ChatTool, createPlainTextChat, createStructuredOutput, createToolChat } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
@@ -314,10 +314,31 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	};
 }
 
-const AgentReplySchema = z.object({
-	reply: z.string().describe("Your conversational reply to the user."),
-	terminate: z.boolean().describe("true ONLY IF you are severely offended or the user explicitly says goodbye"),
-});
+const TERMINATE_CONVERSATION_TOOL: ChatTool = {
+	type: "function",
+	function: {
+		name: "terminate_conversation",
+		description: "Call this when the roleplay conversation should end after your current plain-text reply.",
+		parameters: {
+			type: "object",
+			additionalProperties: false,
+			properties: {
+				reason: {
+					type: "string",
+					description: "Short reason why the conversation should end.",
+				},
+			},
+			required: ["reason"],
+		},
+	},
+};
+
+function getStoredTermination(metadata: unknown) {
+	const raw = getMessageMetadata(metadata).raw;
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+	const value = raw as { terminate?: unknown; terminated?: unknown };
+	return value.terminate === true || value.terminated === true;
+}
 
 export type SendMessageOptions = {
 	hiddenUserMessage?: boolean;
@@ -363,9 +384,7 @@ export async function sendMessage(
 			return {
 				reply: existingState.assistantReply.content,
 				turnCount: countVisibleUserTurns(session.messages),
-				terminated: getMessageMetadata(existingState.assistantReply.llmMetadata).raw
-					? ((getMessageMetadata(existingState.assistantReply.llmMetadata).raw as { terminate?: boolean }).terminate ?? false)
-					: false,
+				terminated: getStoredTermination(existingState.assistantReply.llmMetadata),
 			};
 		}
 
@@ -388,16 +407,15 @@ export async function sendMessage(
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
-	// Inject exact JSON schema format to bypass provider compatibility issues
 	const terminationRule =
 		snapshot.ui === "apple_mail"
-			? 'For email practice, set "terminate" to true only when the learner explicitly says they are finished OR the email exchange has clearly reached a natural endpoint and no further learner response is needed. When unsure, use false.'
-			: 'Set "terminate" to true ONLY IF you are severely offended or the user explicitly says goodbye.';
-	const systemPromptWithJson = `${snapshot.systemPrompt}\n\nYou MUST respond ONLY in valid JSON format using exactly this schema: { "reply": "string (your conversational reply to the user)", "terminate": boolean }. ${terminationRule}`;
+			? "For email practice, call terminate_conversation only when the learner explicitly says they are finished OR the email exchange has clearly reached a natural endpoint and no further response is needed. When unsure, keep the conversation going."
+			: "Call terminate_conversation ONLY IF you are severely offended or the user explicitly says goodbye.";
+	const systemPromptWithPlainText = `${snapshot.systemPrompt}\n\nReply in natural plain text only. Do not output JSON, markdown fences, or metadata. ${terminationRule} If you call terminate_conversation, still include your final learner-visible reply as plain text.`;
 
 	// Build LLM history. Threaded UIs provide precise target context through promptContent
 	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
-	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithJson }];
+	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithPlainText }];
 	if (!existingUserMessage) {
 		for (const m of activeMessages) {
 			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
@@ -467,9 +485,35 @@ export async function sendMessage(
 		);
 	}
 
-	let output: z.infer<typeof AgentReplySchema>;
+	let output: { reply: string; terminated: boolean; raw: unknown };
 	try {
-		output = await createStructuredOutput(AgentReplySchema, history, {}, userId);
+		const response = await createToolChat(history, [TERMINATE_CONVERSATION_TOOL], {}, userId);
+		const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
+		let reply = response.content;
+		let raw: Record<string, unknown> = {
+			terminated: terminationCall !== undefined,
+			toolCalls: response.toolCalls,
+			completion: response.raw,
+		};
+
+		if (!reply && terminationCall) {
+			const fallback = await createPlainTextChat(
+				[
+					...history,
+					{
+						role: "system",
+						content:
+							"You decided this conversation should end. Write only the final learner-visible plain-text reply now. Do not output JSON and do not mention tool calls.",
+					},
+				],
+				{},
+				userId,
+			);
+			reply = fallback.content;
+			raw = { ...raw, fallback: fallback.raw };
+		}
+
+		output = { reply, terminated: terminationCall !== undefined, raw };
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -497,14 +541,14 @@ export async function sendMessage(
 			...options.assistantMetadata,
 			...(clientMessageId ? { clientMessageId } : {}),
 			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-			model: "structured-output",
-			raw: output,
+			model: "tool-calling",
+			raw: output.raw,
 		},
 	});
 
 	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
 
-	return { reply: output.reply, turnCount, terminated: output.terminate === true };
+	return { reply: output.reply, turnCount, terminated: output.terminated };
 }
 
 function buildTutorPrompt(

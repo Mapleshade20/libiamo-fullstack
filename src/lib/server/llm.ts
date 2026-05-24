@@ -1,6 +1,12 @@
 import { eq } from "drizzle-orm";
 import OpenAI from "openai";
-import type { ChatCompletion, ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type {
+	ChatCompletion,
+	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionMessageParam,
+	ChatCompletionTool,
+	ChatCompletionToolChoiceOption,
+} from "openai/resources/chat/completions";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { decryptApiKey } from "./api-key-crypto";
@@ -53,6 +59,24 @@ export type MultiTurnChatInput = {
 	userMessage: string;
 	systemPrompt?: string;
 	options?: OpenAIOptions;
+};
+
+export type ChatTool = ChatCompletionTool;
+
+export type ChatToolCall = {
+	id: string;
+	name: string;
+	argumentsText: string;
+	arguments: unknown;
+	raw: unknown;
+};
+
+export type ToolChatResponse = OpenAIResponse & {
+	toolCalls: ChatToolCall[];
+};
+
+export type ToolChatOptions = OpenAIOptions & {
+	toolChoice?: ChatCompletionToolChoiceOption;
 };
 
 // ── Config resolution ─────────────────────────────────────────────────
@@ -178,7 +202,7 @@ function toOpenAIMessages(messages: ChatMessage[]): ChatCompletionMessageParam[]
 	return normalizeMessages(messages) as ChatCompletionMessageParam[];
 }
 
-export function stripJsonFences(text: string) {
+function stripJsonFences(text: string) {
 	let cleaned = text.trim();
 	cleaned = cleaned.replace(/^`{3}(?:json)?/i, "").trim();
 	cleaned = cleaned.replace(/`{3}$/i, "").trim();
@@ -226,21 +250,28 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 		}
 	}
 
-	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 500)}`);
+	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 300)}`);
 }
 
 // ── Core LLM function using OpenAI SDK ────────────────────────────────
 
-async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
+type ChatCompletionCallOptions = OpenAIOptions & {
+	tools?: ChatTool[];
+	toolChoice?: ChatCompletionToolChoiceOption;
+	allowEmptyContent?: boolean;
+};
+
+async function callChatCompletion(messages: ChatMessage[], options: ChatCompletionCallOptions = {}, userId?: string): Promise<ChatCompletion> {
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId);
 	const url = `${config.baseUrl}/chat/completions`;
-	const request = {
+	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
 		messages: toOpenAIMessages(messages),
 		max_tokens: options.maxTokens ?? 4096,
 		...(options.temperature === undefined ? {} : { temperature: options.temperature }),
+		...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto", parallel_tool_calls: false } : {}),
 	};
 
 	debugLog("request", {
@@ -266,7 +297,16 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 
 	debugLog("response", { url, status: response.status, body: completion });
 
-	const content = completion.choices[0]?.message.content?.trim() ?? "";
+	return completion;
+}
+
+function completionContent(completion: ChatCompletion) {
+	return completion.choices[0]?.message.content?.trim() ?? "";
+}
+
+async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
+	const completion = await callChatCompletion(messages, options, userId);
+	const content = completionContent(completion);
 	if (!content) {
 		throw new Error("LLM returned empty content");
 	}
@@ -277,6 +317,57 @@ async function createChatCompletion(messages: ChatMessage[], options: OpenAIOpti
 		content,
 		raw: completion,
 	};
+}
+
+function parseToolArguments(args: string) {
+	try {
+		return JSON.parse(args) as unknown;
+	} catch {
+		return args;
+	}
+}
+
+function completionToolCalls(completion: ChatCompletion): ChatToolCall[] {
+	return (completion.choices[0]?.message.tool_calls ?? [])
+		.filter((toolCall) => toolCall.type === "function")
+		.map((toolCall) => ({
+			id: toolCall.id,
+			name: toolCall.function.name,
+			argumentsText: toolCall.function.arguments,
+			arguments: parseToolArguments(toolCall.function.arguments),
+			raw: toolCall,
+		}));
+}
+
+export async function createToolChat(
+	messages: ChatMessage[],
+	tools: ChatTool[],
+	options: ToolChatOptions = {},
+	userId?: string,
+): Promise<ToolChatResponse> {
+	if (!Array.isArray(tools) || tools.length === 0) {
+		throw new Error("tools must contain at least one item");
+	}
+
+	const completion = await callChatCompletion(messages, { ...options, tools, allowEmptyContent: true }, userId);
+	const content = completionContent(completion);
+	const toolCalls = completionToolCalls(completion);
+
+	if (!content && toolCalls.length === 0) {
+		throw new Error("LLM returned empty content");
+	}
+
+	return {
+		id: completion.id,
+		model: completion.model,
+		content,
+		raw: completion,
+		toolCalls,
+	};
+}
+
+export async function createPlainTextChat(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
+	return createChatCompletion(messages, options, userId);
 }
 
 function normalizeOpenAIError(error: unknown): Error {

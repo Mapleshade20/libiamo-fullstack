@@ -47,6 +47,39 @@ function createChatCompletionResponse(content: string) {
 	);
 }
 
+function createToolCallResponse(content: string | null) {
+	return new Response(
+		JSON.stringify({
+			id: "chatcmpl-tool-test",
+			model: "test-model",
+			choices: [
+				{
+					message: {
+						role: "assistant",
+						content,
+						tool_calls: [
+							{
+								id: "call-1",
+								type: "function",
+								function: {
+									name: "terminate_conversation",
+									arguments: '{"reason":"goodbye"}',
+								},
+							},
+						],
+					},
+				},
+			],
+		}),
+		{
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+			},
+		},
+	);
+}
+
 function getHeader(headers: RequestInit["headers"], name: string) {
 	if (headers instanceof Headers) return headers.get(name);
 	if (Array.isArray(headers)) return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
@@ -242,6 +275,68 @@ describe("client createStructuredOutput", () => {
 		await expect(createStructuredOutput(schema, [{ role: "system", content: "Return JSON." }])).rejects.toThrow(
 			"LLM returned invalid structured JSON",
 		);
+	});
+});
+
+describe("createToolChat", () => {
+	type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+	beforeEach(() => {
+		vi.restoreAllMocks();
+		mockEnv.LLM_DEBUG = "";
+	});
+
+	it("sends function tools and returns plain text plus parsed tool calls", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createToolCallResponse("Goodbye!"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createToolChat } = await import("$lib/server/llm");
+		const result = await createToolChat(
+			[{ role: "system", content: "Reply plainly." }],
+			[
+				{
+					type: "function",
+					function: {
+						name: "terminate_conversation",
+						description: "End the chat.",
+						parameters: { type: "object", properties: {} },
+					},
+				},
+			],
+		);
+
+		expect(result.content).toBe("Goodbye!");
+		expect(result.toolCalls).toEqual([
+			expect.objectContaining({
+				id: "call-1",
+				name: "terminate_conversation",
+				arguments: { reason: "goodbye" },
+			}),
+		]);
+
+		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		expect(payload.tool_choice).toBe("auto");
+		expect(payload.parallel_tool_calls).toBe(false);
+		expect(payload.tools[0].function.name).toBe("terminate_conversation");
+	});
+
+	it("allows empty assistant content when a tool call is returned", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createToolCallResponse(null));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { createToolChat } = await import("$lib/server/llm");
+		const result = await createToolChat(
+			[{ role: "system", content: "Reply plainly." }],
+			[
+				{
+					type: "function",
+					function: { name: "terminate_conversation", parameters: { type: "object", properties: {} } },
+				},
+			],
+		);
+
+		expect(result.content).toBe("");
+		expect(result.toolCalls[0]?.name).toBe("terminate_conversation");
 	});
 });
 
