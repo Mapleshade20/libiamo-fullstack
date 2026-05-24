@@ -1,9 +1,10 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { createSingleTurnChat, extractContentFromFence, OpenAIAuthError } from "$lib/server/llm";
+import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -161,14 +162,7 @@ function buildTranslationEvalPrompt(targetLang: LanguageCode): string {
 	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} translation evaluator. The user will provide original source sentences (with keys like [0-1]) and their ${langName} translations (with the same keys).
 
-Evaluate the translations and respond with ONLY a JSON object (no markdown fences):
-{
-  "overallScore": "<A, B, or C>",
-  "overallFeedback": "<brief overall comment on translation quality>",
-  "highlights": [
-    {"key": "<paragraph-index-sentence-index>", "type": "good" | "bad", "feedback": "<specific comment>", "grammarNote": "<for bad highlights: one-sentence explanation of the grammar rule or error>"}
-  ]
-}
+Evaluate the translations and respond with ONLY this JSON object shape (no markdown fences): {"overallScore":"<A, B, or C>","overallFeedback":"<brief overall comment on translation quality>","highlights":[{"key":"<paragraph-index-sentence-index>","type":"good|bad","feedback":"<specific comment>","grammarNote":"<for bad highlights: one-sentence explanation of the grammar rule or error>"}]}
 
 GRADING SCALE:
 - A: Excellent — accurate, natural, appropriate register
@@ -183,6 +177,23 @@ CRITICAL RULES FOR FEEDBACK:
 5. You MUST provide a highlight entry for EVERY single sentence key in the source text. Do NOT skip or omit any sentence. If a sentence has no issues, still include it with type "good" and brief positive feedback.
 6. For "bad" highlights, ALWAYS include a "grammarNote" field: a one-sentence explanation of the grammar rule or error (e.g., "The verb 'enfocar' requires the reflexive 'se' and preposition 'en' — it should be 'se centra en' or 'está enfocada en'."). For "good" highlights, omit the grammarNote field.`;
 }
+
+const TranslationEvalSchema = z.object({
+	overallScore: z.string().optional(),
+	overallFeedback: z.string().optional(),
+	highlights: z
+		.array(
+			z.object({
+				key: z.string(),
+				type: z.enum(["good", "bad"]),
+				feedback: z.string(),
+				grammarNote: z.string().optional(),
+			}),
+		)
+		.optional(),
+});
+
+const ModelTranslationsSchema = z.record(z.string(), z.string());
 
 /** Flatten passages (string[][]) into a numbered sentence list */
 function flattenPassages(passages: string[][]): { key: string; text: string }[] {
@@ -199,11 +210,8 @@ async function evaluateTranslation(
 	agentPromptBase: string,
 	sentences: { key: string; text: string }[],
 	translations: Record<string, string>,
-): Promise<{
-	overallScore?: string;
-	overallFeedback?: string;
-	highlights?: { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string }[];
-}> {
+	userId: string,
+): Promise<z.infer<typeof TranslationEvalSchema>> {
 	const sourceLines = sentences.map((s) => `[${s.key}] ${s.text}`).join("\n");
 	const translationLines = sentences.map((s) => `[${s.key}] ${translations[s.key] ?? "(missing)"}`).join("\n");
 
@@ -213,22 +221,14 @@ ${sourceLines}
 User's translations:
 ${translationLines}`;
 
-	const { reply } = await createSingleTurnChat({
-		systemPrompt: agentPromptBase,
-		userMessage,
+	return await chatJson(TranslationEvalSchema, {
+		messages: [
+			{ role: "system", content: agentPromptBase },
+			{ role: "user", content: userMessage },
+		],
 		options: { temperature: 0.7, maxTokens: 4096 },
+		userId,
 	});
-
-	// Extract JSON from response, handling markdown fences
-	const jsonStr = extractContentFromFence(reply.content);
-
-	// If the extracted content is valid JSON, parse it
-	try {
-		return JSON.parse(jsonStr);
-	} catch {
-		// If not valid JSON, return the raw content as feedback
-		return { overallFeedback: jsonStr };
-	}
 }
 
 /** Build a prompt for generating a reference model translation */
@@ -236,11 +236,7 @@ function buildModelTranslationPrompt(targetLang: LanguageCode): string {
 	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} translator. Translate the following sentences into natural, fluent ${langName}. Return ONLY a JSON object mapping each sentence key to its translation (no markdown fences, no extra text).
 
-Example format:
-{
-  "0-0": "translated sentence here",
-  "0-1": "another translation"
-}`;
+Example format: {"0-0":"translated sentence here","0-1":"another translation"}`;
 }
 
 /** Build a prompt for explaining a specific grammar/translation feedback in detail */
@@ -332,7 +328,7 @@ export const actions: Actions = {
 				if (evaluableSentences.length === 0) {
 					evaluation = {};
 				} else {
-					evaluation = await evaluateTranslation(evalPrompt, evaluableSentences, evaluableTranslations);
+					evaluation = await evaluateTranslation(evalPrompt, evaluableSentences, evaluableTranslations, user.id);
 				}
 				await db
 					.update(translationAttempt)
@@ -378,17 +374,14 @@ export const actions: Actions = {
 		const prompt = buildModelTranslationPrompt(tpl.language as LanguageCode);
 
 		try {
-			const { reply } = await createSingleTurnChat(
-				{
-					systemPrompt: prompt,
-					userMessage: `Translate these sentences:\n${sourceLines}`,
-					options: { temperature: 0.5, maxTokens: 4096 },
-				},
-				user.id,
-			);
-
-			const jsonStr = extractContentFromFence(reply.content);
-			const modelTranslations = JSON.parse(jsonStr) as Record<string, string>;
+			const modelTranslations = await chatJson(ModelTranslationsSchema, {
+				messages: [
+					{ role: "system", content: prompt },
+					{ role: "user", content: `Translate these sentences:\n${sourceLines}` },
+				],
+				options: { temperature: 0.5, maxTokens: 4096 },
+				userId: user.id,
+			});
 			return { success: true, modelTranslations };
 		} catch (err) {
 			console.error("Model translation generation failed:", err);
@@ -416,14 +409,17 @@ export const actions: Actions = {
 		const prompt = buildExplainFeedbackPrompt(validateLanguageCode(language));
 
 		try {
-			const { reply } = await createSingleTurnChat(
-				{
-					systemPrompt: prompt,
-					userMessage: `Source sentence: "${sourceSentence}"\n\nLearner's ${langName} translation: "${userTranslation}"\n\nThe feedback they received: "${feedback}"\n\nPlease expand on this feedback with a detailed explanation.`,
-					options: { temperature: 0.7, maxTokens: 4096 },
-				},
-				user.id,
-			);
+			const reply = await chatText({
+				messages: [
+					{ role: "system", content: prompt },
+					{
+						role: "user",
+						content: `Source sentence: "${sourceSentence}"\n\nLearner's ${langName} translation: "${userTranslation}"\n\nThe feedback they received: "${feedback}"\n\nPlease expand on this feedback with a detailed explanation.`,
+					},
+				],
+				options: { temperature: 0.7, maxTokens: 4096 },
+				userId: user.id,
+			});
 			return { success: true, explanation: reply.content };
 		} catch (err) {
 			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
@@ -442,14 +438,17 @@ export const actions: Actions = {
 		const langName = getLangName(language);
 
 		try {
-			const { reply } = await createSingleTurnChat(
-				{
-					systemPrompt: `You are an expert ${langName} translator. Translate the following sentence into natural, fluent ${langName}. Return ONLY the translation, no extra text, no quotes, no explanation.`,
-					userMessage: sourceSentence,
-					options: { temperature: 0.3, maxTokens: 512 },
-				},
-				user.id,
-			);
+			const reply = await chatText({
+				messages: [
+					{
+						role: "system",
+						content: `You are an expert ${langName} translator. Translate the following sentence into natural, fluent ${langName}. Return ONLY the translation, no extra text, no quotes, no explanation.`,
+					},
+					{ role: "user", content: sourceSentence },
+				],
+				options: { temperature: 0.3, maxTokens: 512 },
+				userId: user.id,
+			});
 			return { success: true, translation: reply.content.trim() };
 		} catch (err) {
 			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
@@ -474,14 +473,20 @@ export const actions: Actions = {
 		const langName = getLangName(language);
 
 		try {
-			const { reply } = await createSingleTurnChat(
-				{
-					systemPrompt: `You are an expert ${langName} language tutor. A learner received feedback on their translation. Answer their follow-up question helpfully and concisely in Markdown. Reference the original sentence and feedback in your answer.`,
-					userMessage: `Source sentence: "${sourceSentence}"\n\nLearner's translation: "${userTranslation}"\n\nFeedback received: "${feedback}"\n\nLearner's question: ${question}`,
-					options: { temperature: 0.7, maxTokens: 2048 },
-				},
-				user.id,
-			);
+			const reply = await chatText({
+				messages: [
+					{
+						role: "system",
+						content: `You are an expert ${langName} language tutor. A learner received feedback on their translation. Answer their follow-up question helpfully and concisely in Markdown. Reference the original sentence and feedback in your answer.`,
+					},
+					{
+						role: "user",
+						content: `Source sentence: "${sourceSentence}"\n\nLearner's translation: "${userTranslation}"\n\nFeedback received: "${feedback}"\n\nLearner's question: ${question}`,
+					},
+				],
+				options: { temperature: 0.7, maxTokens: 2048 },
+				userId: user.id,
+			});
 			return { success: true, answer: reply.content };
 		} catch (err) {
 			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");

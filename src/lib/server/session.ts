@@ -5,7 +5,7 @@ import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, type ChatTool, createPlainTextChat, createStructuredOutput, createToolChat } from "./llm";
+import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
@@ -318,7 +318,7 @@ const TERMINATE_CONVERSATION_TOOL: ChatTool = {
 	type: "function",
 	function: {
 		name: "terminate_conversation",
-		description: "Call this when the roleplay conversation should end after your current plain-text reply.",
+		description: "Call this only when the learner severely insults or abuses you.",
 		parameters: {
 			type: "object",
 			additionalProperties: false,
@@ -407,25 +407,16 @@ export async function sendMessage(
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
-	const terminationRule =
-		snapshot.ui === "apple_mail"
-			? "For email practice, call terminate_conversation only when the learner explicitly says they are finished OR the email exchange has clearly reached a natural endpoint and no further response is needed. When unsure, keep the conversation going."
-			: "Call terminate_conversation ONLY IF you are severely offended or the user explicitly says goodbye.";
-	const systemPromptWithPlainText = `${snapshot.systemPrompt}\n\nReply in natural plain text only. Do not output JSON, markdown fences, or metadata. ${terminationRule} If you call terminate_conversation, still include your final learner-visible reply as plain text.`;
+	const systemPromptWithPlainText = `${snapshot.systemPrompt}\n\nReply in natural plain text only. Do not output JSON, markdown fences, or metadata. Call terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
 
 	// Build LLM history. Threaded UIs provide precise target context through promptContent
 	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
 	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithPlainText }];
+	for (const m of activeMessages) {
+		history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
+	}
 	if (!existingUserMessage) {
-		for (const m of activeMessages) {
-			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-		}
 		history.push({ role: "user", content: trimmedPromptContent });
-	} else {
-		// Retry: existing user message is already in activeMessages
-		for (const m of activeMessages) {
-			history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-		}
 	}
 
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
@@ -487,30 +478,17 @@ export async function sendMessage(
 
 	let output: { reply: string; terminated: boolean; raw: unknown };
 	try {
-		const response = await createToolChat(history, [TERMINATE_CONVERSATION_TOOL], {}, userId);
+		const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
 		const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
 		let reply = response.content;
-		let raw: Record<string, unknown> = {
+		const raw: Record<string, unknown> = {
 			terminated: terminationCall !== undefined,
 			toolCalls: response.toolCalls,
 			completion: response.raw,
 		};
 
 		if (!reply && terminationCall) {
-			const fallback = await createPlainTextChat(
-				[
-					...history,
-					{
-						role: "system",
-						content:
-							"You decided this conversation should end. Write only the final learner-visible plain-text reply now. Do not output JSON and do not mention tool calls.",
-					},
-				],
-				{},
-				userId,
-			);
-			reply = fallback.content;
-			raw = { ...raw, fallback: fallback.raw };
+			reply = "I’m going to end this conversation here.";
 		}
 
 		output = { reply, terminated: terminationCall !== undefined, raw };
@@ -579,50 +557,43 @@ function buildTutorPrompt(
 		objectives.length > 0
 			? objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")
 			: "No specific task objectives. Please evaluate general conversational fluency, grammar, and appropriateness for the scenario.";
+	const emailEvaluationInstruction = isMailPractice
+		? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
+- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
+- The "objectiveResults" grades should remain per objective, not per email.
+- In the "content" feedback, summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
+		: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.";
 
 	return `You are a language tutor evaluating a student's conversation practice.
 
-	## Scenario Context
-	${scenarioContext || "General conversation practice"}
+## Scenario Context
+${scenarioContext || "General conversation practice"}
 
-	## Full Conversation History
-	${conversationHistory || "(No conversation yet)"}
+## Full Conversation History
+${conversationHistory || "(No conversation yet)"}
 
-	## Task Objectives
-	${objectivesSection}
+## Task Objectives
+${objectivesSection}
 
-	## Student's Messages (evaluate these specifically)
-	${studentMessages || "(No messages from student)"}
+## Student's Messages (evaluate these specifically)
+${studentMessages || "(No messages from student)"}
 
-	## Evaluation Instructions
-	Evaluate how well the student achieved the objectives (or general fluency if none) considering:
-	- The scenario context they were responding to
-	- The full conversation flow (how they adapted to the AI's responses)
-	- The quality, clarity, and appropriateness of their messages
-	${
-		isMailPractice
-			? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
-	- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
-	- The "objectiveResults" grades should remain per objective, not per email.
-	- In the "content" feedback, summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
-			: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing."
-	}
+## Evaluation Instructions
+Evaluate how well the student achieved the objectives (or general fluency if none) considering:
+- The scenario context they were responding to
+- The full conversation flow (how they adapted to the AI's responses)
+- The quality, clarity, and appropriateness of their messages
+${emailEvaluationInstruction}
 
-	Grade each objective (or general fluency) as:
-	- A: Excellent - fully achieved
-	- B: Good - mostly achieved with minor issues
-	- C: Needs improvement - significant gaps
+Grade each objective (or general fluency) as:
+- A: Excellent - fully achieved
+- B: Good - mostly achieved with minor issues
+- C: Needs improvement - significant gaps
 
-	Provide brief, constructive feedback (2-3 sentences).
-	IMPORTANT: You MUST write the "content" (overall feedback on student's performance) in ${learningLanguage.toUpperCase()}. Do NOT write the feedback in English. The "text" field of objectiveResults should remain in the original language of the objectives.
+Provide brief, constructive feedback (2-3 sentences).
+IMPORTANT: You MUST write the "content" (overall feedback on student's performance) in ${learningLanguage.toUpperCase()}. Do NOT write the feedback in English. The "text" field of objectiveResults should remain in the original language of the objectives.
 
-	Respond in JSON format:
-	{
-	"objectiveResults": [
-		{ "text": "objective description", "grade": "A|B|C" }
-	],
-	"content": "overall feedback on student's performance"
-	}`;
+Respond in JSON format: {"objectiveResults":[{"text":"objective description","grade":"A|B|C"}],"content":"overall feedback on student's performance"}`;
 }
 
 function getMailBodyHtmlMetadata(metadata: unknown) {
@@ -669,7 +640,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 		{ role: "user", content: "Please evaluate this conversation." },
 	];
 
-	const feedback = await createStructuredOutput(tutorFeedbackSchema, messages, {}, session.userId);
+	const feedback = await chatJson(tutorFeedbackSchema, { messages, userId: session.userId });
 
 	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
 
@@ -738,36 +709,36 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 	let contextSection = "";
 	if (contextPath && contextPath.length > 0) {
 		const threadLines = contextPath.map((c, i) => `${"  ".repeat(i)}u/${c.author}: ${c.text}`).join("\n");
-		contextSection = `\n## Reply Context (comment thread from root to the comment being replied to)\n${threadLines}\n`;
+		contextSection = `\n\n## Reply Context (comment thread from root to the comment being replied to)\n${threadLines}`;
 	}
+
+	const threadInstruction =
+		contextPath && contextPath.length > 0
+			? "\n4. The suggestions should be relevant to the specific comment thread shown in the Reply Context section."
+			: "";
 
 	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
 
-    ## Roleplay Rules & Context
-    ${snapshot.systemPrompt}
+## Roleplay Rules & Context
+${snapshot.systemPrompt}
 
-    ## Conversation History
-    ${history || "(No messages yet)"}${contextSection}
+## Conversation History
+${history || "(No messages yet)"}${contextSection}
 
-    ## Critical Instructions
-    Suggest 3 natural ways for the student to reply.
-    1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
-    2. The suggestions must be consistent with the persona and context provided above.
-    3. The "translation" field should provide an English translation of that suggestion.
-${contextPath && contextPath.length > 0 ? "    4. The suggestions should be relevant to the specific comment thread shown in the Reply Context section.\n" : ""}
-    Respond in JSON format:
-    {
-      "hints": [
-        { "text": "suggested reply in ${learningLanguageName}", "translation": "English translation" }
-      ]
-    }`;
+## Critical Instructions
+Suggest 3 natural ways for the student to reply.
+1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
+2. The suggestions must be consistent with the persona and context provided above.
+3. The "translation" field should provide an English translation of that suggestion.${threadInstruction}
+
+Respond in JSON format: {"hints":[{"text":"suggested reply in ${learningLanguageName}","translation":"English translation"}]}`;
 
 	const messages: ChatMessage[] = [
 		{ role: "system", content: prompt },
 		{ role: "user", content: `Give me hints for my next reply in ${learningLanguageName}.` },
 	];
 
-	return await createStructuredOutput(HintSchema, messages, {}, session.userId);
+	return await chatJson(HintSchema, { messages, userId: session.userId });
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

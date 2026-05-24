@@ -13,9 +13,9 @@ import { decryptApiKey } from "./api-key-crypto";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
 
-// ── Types ─────────────────────────────────────────────────────────────
+// ── Public types ──────────────────────────────────────────────────────
 
-/** Thrown when the API key is invalid, expired, or unauthorized (401/403) */
+/** Thrown when the API key is invalid, expired, or unauthorized (401/403). */
 export class OpenAIAuthError extends Error {
 	constructor(
 		message: string,
@@ -31,34 +31,22 @@ export type ChatMessage = {
 	content: string;
 };
 
-export type OpenAIOptions = {
+export type ChatOptions = {
 	temperature?: number;
 	maxTokens?: number;
 };
 
-export type OpenAIResponse = {
+export type ChatResponse = {
 	id?: string;
 	model?: string;
 	content: string;
 	raw: unknown;
 };
 
-export type ConversationTurnResult = {
-	reply: OpenAIResponse;
+export type ChatRequest = {
 	messages: ChatMessage[];
-};
-
-export type SingleTurnChatInput = {
-	systemPrompt: string;
-	userMessage: string;
-	options?: OpenAIOptions;
-};
-
-export type MultiTurnChatInput = {
-	history: ChatMessage[];
-	userMessage: string;
-	systemPrompt?: string;
-	options?: OpenAIOptions;
+	options?: ChatOptions;
+	userId?: string;
 };
 
 export type ChatTool = ChatCompletionTool;
@@ -71,12 +59,15 @@ export type ChatToolCall = {
 	raw: unknown;
 };
 
-export type ToolChatResponse = OpenAIResponse & {
+export type ToolChatResponse = ChatResponse & {
 	toolCalls: ChatToolCall[];
 };
 
-export type ToolChatOptions = OpenAIOptions & {
-	toolChoice?: ChatCompletionToolChoiceOption;
+export type ToolChatRequest = ChatRequest & {
+	tools: ChatTool[];
+	options?: ChatOptions & {
+		toolChoice?: ChatCompletionToolChoiceOption;
+	};
 };
 
 // ── Config resolution ─────────────────────────────────────────────────
@@ -181,26 +172,11 @@ function validateMessages(messages: ChatMessage[]) {
 	}
 }
 
-function normalizeMessages(messages: ChatMessage[]): ChatMessage[] {
-	const normalized: ChatMessage[] = [];
-
-	for (const message of messages) {
-		const current = { role: message.role, content: message.content.trim() };
-		const previous = normalized.at(-1);
-
-		if (previous?.role === current.role) {
-			previous.content = `${previous.content.trimEnd()}\n\n${current.content.trimStart()}`;
-		} else {
-			normalized.push(current);
-		}
-	}
-
-	return normalized;
-}
-
 function toOpenAIMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
-	return normalizeMessages(messages) as ChatCompletionMessageParam[];
+	return messages.map((message) => ({ ...message })) as ChatCompletionMessageParam[];
 }
+
+// ── JSON helpers ──────────────────────────────────────────────────────
 
 function stripJsonFences(text: string) {
 	let cleaned = text.trim();
@@ -209,13 +185,12 @@ function stripJsonFences(text: string) {
 	return cleaned;
 }
 
-/** Extract content from inside a markdown code fence, handling mid-text fences */
-export function extractContentFromFence(text: string): string {
+function extractContentFromFence(text: string): string {
 	const trimmed = text.trim();
 	const fenceStart = trimmed.indexOf("```");
 	if (fenceStart !== -1) {
 		let after = trimmed.slice(fenceStart + 3);
-		if (after.startsWith("json")) after = after.slice(4);
+		if (after.toLowerCase().startsWith("json")) after = after.slice(4);
 		after = after.trimStart();
 		const fenceEnd = after.indexOf("```");
 		if (fenceEnd !== -1) return after.slice(0, fenceEnd).trim();
@@ -223,24 +198,28 @@ export function extractContentFromFence(text: string): string {
 	return trimmed;
 }
 
-function extractJsonObject(text: string) {
-	const stripped = stripJsonFences(text);
-	const start = stripped.indexOf("{");
-	const end = stripped.lastIndexOf("}");
+function extractJsonValue(text: string) {
+	const stripped = stripJsonFences(extractContentFromFence(text));
+	const objectStart = stripped.indexOf("{");
+	const arrayStart = stripped.indexOf("[");
+	const starts = [objectStart, arrayStart].filter((index) => index >= 0);
+	const start = starts.length ? Math.min(...starts) : -1;
 
-	if (start === -1 || end === -1 || end <= start) {
-		return stripped;
-	}
+	if (start === -1) return stripped;
+
+	const endChar = stripped[start] === "{" ? "}" : "]";
+	const end = stripped.lastIndexOf(endChar);
+	if (end === -1 || end <= start) return stripped;
 
 	return stripped.slice(start, end + 1);
 }
 
 function repairMalformedJson(text: string) {
-	return extractJsonObject(text).replace(/"\s+([A-Za-z_$][\w$-]*)"\s*:/g, '"$1":');
+	return extractJsonValue(text).replace(/"\s+([A-Za-z_$][\w$-]*)"\s*:/g, '"$1":');
 }
 
 function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
-	const candidates = [extractJsonObject(text), repairMalformedJson(text)];
+	const candidates = [...new Set([extractJsonValue(text), repairMalformedJson(text)])];
 
 	for (const candidate of candidates) {
 		try {
@@ -253,15 +232,14 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 300)}`);
 }
 
-// ── Core LLM function using OpenAI SDK ────────────────────────────────
+// ── OpenAI call ───────────────────────────────────────────────────────
 
-type ChatCompletionCallOptions = OpenAIOptions & {
+type CompletionOptions = ChatOptions & {
 	tools?: ChatTool[];
 	toolChoice?: ChatCompletionToolChoiceOption;
-	allowEmptyContent?: boolean;
 };
 
-async function callChatCompletion(messages: ChatMessage[], options: ChatCompletionCallOptions = {}, userId?: string): Promise<ChatCompletion> {
+async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletion> {
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId);
@@ -274,10 +252,7 @@ async function callChatCompletion(messages: ChatMessage[], options: ChatCompleti
 		...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto", parallel_tool_calls: false } : {}),
 	};
 
-	debugLog("request", {
-		url,
-		body: request,
-	});
+	debugLog("request", { url, body: request });
 
 	let completion: ChatCompletion;
 	let response: Response;
@@ -304,17 +279,11 @@ function completionContent(completion: ChatCompletion) {
 	return completion.choices[0]?.message.content?.trim() ?? "";
 }
 
-async function createChatCompletion(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
-	const completion = await callChatCompletion(messages, options, userId);
-	const content = completionContent(completion);
-	if (!content) {
-		throw new Error("LLM returned empty content");
-	}
-
+function completionResponse(completion: ChatCompletion): ChatResponse {
 	return {
 		id: completion.id,
 		model: completion.model,
-		content,
+		content: completionContent(completion),
 		raw: completion,
 	};
 }
@@ -339,37 +308,6 @@ function completionToolCalls(completion: ChatCompletion): ChatToolCall[] {
 		}));
 }
 
-export async function createToolChat(
-	messages: ChatMessage[],
-	tools: ChatTool[],
-	options: ToolChatOptions = {},
-	userId?: string,
-): Promise<ToolChatResponse> {
-	if (!Array.isArray(tools) || tools.length === 0) {
-		throw new Error("tools must contain at least one item");
-	}
-
-	const completion = await callChatCompletion(messages, { ...options, tools, allowEmptyContent: true }, userId);
-	const content = completionContent(completion);
-	const toolCalls = completionToolCalls(completion);
-
-	if (!content && toolCalls.length === 0) {
-		throw new Error("LLM returned empty content");
-	}
-
-	return {
-		id: completion.id,
-		model: completion.model,
-		content,
-		raw: completion,
-		toolCalls,
-	};
-}
-
-export async function createPlainTextChat(messages: ChatMessage[], options: OpenAIOptions = {}, userId?: string): Promise<OpenAIResponse> {
-	return createChatCompletion(messages, options, userId);
-}
-
 function normalizeOpenAIError(error: unknown): Error {
 	if (error instanceof OpenAI.APIConnectionError && error.cause instanceof Error) {
 		return error.cause;
@@ -386,137 +324,48 @@ function normalizeOpenAIError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
-// ── Structured output ─────────────────────────────────────────────────
+// ── Public facade ─────────────────────────────────────────────────────
 
-export async function createStructuredOutput<T extends z.ZodType>(
-	schema: T,
-	messages: ChatMessage[],
-	options: OpenAIOptions = {},
-	userId?: string,
-): Promise<z.infer<T>> {
-	validateMessages(messages);
+export async function chatText({ messages, options = {}, userId }: ChatRequest): Promise<ChatResponse> {
+	const completion = await callChatCompletion(messages, options, userId);
+	const response = completionResponse(completion);
+	if (!response.content) {
+		throw new Error("LLM returned empty content");
+	}
+	return response;
+}
 
-	const firstResult = await createChatCompletion(messages, options, userId);
-	const firstText = firstResult.content.trim();
+export async function chatJson<T extends z.ZodType>(schema: T, { messages, options = {}, userId }: ChatRequest): Promise<z.infer<T>> {
+	const first = await chatText({ messages, options, userId });
 
 	try {
-		return parseStructuredOutputText(schema, firstText);
+		return parseStructuredOutputText(schema, first.content);
 	} catch (firstError) {
-		const retryResult = await createChatCompletion(
-			[
-				...messages,
-				{
-					role: "assistant",
-					content: firstText || "(empty response)",
-				},
-				{
-					role: "system",
-					content:
-						"The previous response was invalid or incomplete. Return ONLY a complete valid JSON object with all required fields for the requested schema.",
-				},
-			],
-			options,
-			userId,
-		);
+		const retry = await chatText({ messages, options, userId });
 
 		try {
-			return parseStructuredOutputText(schema, retryResult.content.trim());
+			return parseStructuredOutputText(schema, retry.content);
 		} catch {
 			throw firstError;
 		}
 	}
 }
 
-// ── High-level chat functions ─────────────────────────────────────────
-
-export async function createSingleTurnChat(input: SingleTurnChatInput, userId?: string): Promise<ConversationTurnResult> {
-	if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim()) {
-		throw new Error("systemPrompt is required");
+export async function chatTools({ messages, tools, options = {}, userId }: ToolChatRequest): Promise<ToolChatResponse> {
+	if (!Array.isArray(tools) || tools.length === 0) {
+		throw new Error("tools must contain at least one item");
 	}
 
-	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
-		throw new Error("userMessage is required");
+	const completion = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
+	const response = completionResponse(completion);
+	const toolCalls = completionToolCalls(completion);
+
+	if (!response.content && toolCalls.length === 0) {
+		throw new Error("LLM returned empty content");
 	}
-
-	const requestMessages: ChatMessage[] = [
-		{
-			role: "system",
-			content: input.systemPrompt.trim(),
-		},
-		{
-			role: "user",
-			content: input.userMessage.trim(),
-		},
-	];
-
-	const reply = await createChatCompletion(requestMessages, input.options ?? {}, userId);
 
 	return {
-		reply,
-		messages: [...requestMessages, { role: "assistant", content: reply.content }],
-	};
-}
-
-export async function createMultiTurnChat(input: MultiTurnChatInput, userId?: string): Promise<ConversationTurnResult> {
-	if (typeof input.userMessage !== "string" || !input.userMessage.trim()) {
-		throw new Error("userMessage is required");
-	}
-
-	if (!Array.isArray(input.history)) {
-		throw new Error("history must be an array");
-	}
-
-	const history: ChatMessage[] = input.history.map((msg) => {
-		if (!msg || !["system", "user", "assistant"].includes(msg.role)) {
-			throw new Error("each message.role must be one of: system, user, assistant");
-		}
-
-		if (typeof msg.content !== "string" || !msg.content.trim()) {
-			throw new Error("each message.content must be a non-empty string");
-		}
-
-		return {
-			role: msg.role,
-			content: msg.content.trim(),
-		};
-	});
-
-	const systemPrompt = typeof input.systemPrompt === "string" ? input.systemPrompt.trim() : undefined;
-
-	if (systemPrompt) {
-		const systemIndex = history.findIndex((msg) => msg.role === "system");
-
-		if (systemIndex >= 0) {
-			history[systemIndex] = {
-				role: "system",
-				content: systemPrompt,
-			};
-		} else {
-			history.unshift({
-				role: "system",
-				content: systemPrompt,
-			});
-		}
-	} else {
-		const hasSystemInHistory = history.some((msg) => msg.role === "system" && msg.content.trim().length > 0);
-
-		if (!hasSystemInHistory) {
-			throw new Error("systemPrompt is required for the first turn, or history must include a system message");
-		}
-	}
-
-	const requestMessages: ChatMessage[] = [
-		...history,
-		{
-			role: "user",
-			content: input.userMessage.trim(),
-		},
-	];
-
-	const reply = await createChatCompletion(requestMessages, input.options ?? {}, userId);
-
-	return {
-		reply,
-		messages: [...requestMessages, { role: "assistant", content: reply.content }],
+		...response,
+		toolCalls,
 	};
 }

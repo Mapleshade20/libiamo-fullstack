@@ -12,10 +12,9 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
 	},
 	mockClient: {
-		createMultiTurnChat: vi.fn(),
-		createPlainTextChat: vi.fn(),
-		createStructuredOutput: vi.fn(),
-		createToolChat: vi.fn(),
+		chatText: vi.fn(),
+		chatJson: vi.fn(),
+		chatTools: vi.fn(),
 	},
 }));
 
@@ -25,7 +24,7 @@ vi.mock("$lib/server/llm", () => mockClient);
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 function mockAgentReply(reply: string, terminated = false) {
-	mockClient.createToolChat.mockResolvedValue({
+	mockClient.chatTools.mockResolvedValue({
 		content: reply,
 		toolCalls: terminated ? [{ id: "call-1", name: "terminate_conversation", argumentsText: "{}", arguments: {}, raw: {} }] : [],
 		raw: { id: "chatcmpl-test" },
@@ -334,14 +333,15 @@ describe("session service", () => {
 			expect(result.turnCount).toBe(1);
 			expect(result.terminated).toBe(false);
 
-			expect(mockClient.createToolChat).toHaveBeenCalledWith(
-				expect.arrayContaining([
-					expect.objectContaining({ role: "system", content: expect.stringContaining("Reply in natural plain text only") }),
-					expect.objectContaining({ role: "user", content: "Hello!" }),
-				]),
-				expect.arrayContaining([expect.objectContaining({ type: "function" })]),
-				{},
-				USER_ID,
+			expect(mockClient.chatTools).toHaveBeenCalledWith(
+				expect.objectContaining({
+					messages: expect.arrayContaining([
+						expect.objectContaining({ role: "system", content: expect.stringContaining("Reply in natural plain text only") }),
+						expect.objectContaining({ role: "user", content: "Hello!" }),
+					]),
+					tools: expect.arrayContaining([expect.objectContaining({ type: "function" })]),
+					userId: USER_ID,
+				}),
 			);
 		});
 
@@ -357,16 +357,17 @@ describe("session service", () => {
 			mockAgentReply("Second reply");
 			await sendMessage(123, "Second message", USER_ID);
 
-			expect(mockClient.createToolChat).toHaveBeenCalledWith(
-				expect.arrayContaining([
-					expect.objectContaining({ role: "system" }),
-					expect.objectContaining({ role: "user", content: "First message" }),
-					expect.objectContaining({ role: "assistant", content: "First reply" }),
-					expect.objectContaining({ role: "user", content: "Second message" }),
-				]),
-				expect.any(Array),
-				{},
-				USER_ID,
+			expect(mockClient.chatTools).toHaveBeenCalledWith(
+				expect.objectContaining({
+					messages: expect.arrayContaining([
+						expect.objectContaining({ role: "system" }),
+						expect.objectContaining({ role: "user", content: "First message" }),
+						expect.objectContaining({ role: "assistant", content: "First reply" }),
+						expect.objectContaining({ role: "user", content: "Second message" }),
+					]),
+					tools: expect.any(Array),
+					userId: USER_ID,
+				}),
 			);
 		});
 
@@ -419,7 +420,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "Hello back!", turnCount: 1, terminated: true });
-			expect(mockClient.createToolChat).not.toHaveBeenCalled();
+			expect(mockClient.chatTools).not.toHaveBeenCalled();
 		});
 
 		it("does not treat a later turn's assistant reply as the duplicate clientMessageId reply", async () => {
@@ -435,7 +436,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
-			expect(mockClient.createToolChat).not.toHaveBeenCalled();
+			expect(mockClient.chatTools).not.toHaveBeenCalled();
 		});
 
 		it("returns pending for duplicate clientMessageId while assistant reply is still processing", async () => {
@@ -447,7 +448,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
-			expect(mockClient.createToolChat).not.toHaveBeenCalled();
+			expect(mockClient.chatTools).not.toHaveBeenCalled();
 		});
 
 		it("retries failed generation without inserting a duplicate user message", async () => {
@@ -471,31 +472,27 @@ describe("session service", () => {
 			const result = await sendMessage(123, "bye", USER_ID);
 
 			expect(result).toEqual({ reply: "Goodbye!", turnCount: 1, terminated: true });
-			expect(mockClient.createToolChat).toHaveBeenCalledWith(
-				expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.not.stringContaining("valid JSON") })]),
-				expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: "terminate_conversation" }) })]),
-				{},
-				USER_ID,
+			expect(mockClient.chatTools).toHaveBeenCalledWith(
+				expect.objectContaining({
+					messages: expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.not.stringContaining("valid JSON") })]),
+					tools: expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: "terminate_conversation" }) })]),
+					userId: USER_ID,
+				}),
 			);
 		});
 
-		it("generates fallback plain text when the termination tool call has no content", async () => {
+		it("does not make a second LLM request when the termination tool call has no content", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createToolChat.mockResolvedValue({
+			mockClient.chatTools.mockResolvedValue({
 				content: "",
 				toolCalls: [{ id: "call-1", name: "terminate_conversation", argumentsText: "{}", arguments: {}, raw: {} }],
 				raw: { id: "tool-only" },
 			});
-			mockClient.createPlainTextChat.mockResolvedValue({ content: "Final goodbye.", raw: { id: "fallback" } });
 
 			const result = await sendMessage(123, "bye", USER_ID);
 
-			expect(result).toEqual({ reply: "Final goodbye.", turnCount: 1, terminated: true });
-			expect(mockClient.createPlainTextChat).toHaveBeenCalledWith(
-				expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Write only the final") })]),
-				{},
-				USER_ID,
-			);
+			expect(result).toEqual({ reply: "I’m going to end this conversation here.", turnCount: 1, terminated: true });
+			expect(mockClient.chatText).not.toHaveBeenCalled();
 		});
 	});
 
@@ -526,7 +523,7 @@ describe("session service", () => {
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				content: "Good job!",
 				objectiveResults: [
 					{ text: "Use polite language", grade: "A" },
@@ -538,7 +535,7 @@ describe("session service", () => {
 
 			expect(result.content).toBe("Good job!");
 			expect(result.objectiveResults).toHaveLength(2);
-			expect(mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
+			expect(mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
 			expect(mockDb.update).toHaveBeenCalledTimes(2);
 		});
 
@@ -567,14 +564,14 @@ describe("session service", () => {
 				],
 				task: mockTaskObjectives,
 			});
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				content: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
 				objectiveResults: [{ text: "Use polite language", grade: "A" }],
 			});
 
 			await completeSession(123);
 
-			const prompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			const prompt = mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content ?? "";
 			expect(prompt).toContain("Full Conversation History");
 			expect(prompt).toContain("[assistant] Please send an update.");
 			expect(prompt).toContain("[assistant] Could you include next steps?");
@@ -597,7 +594,7 @@ describe("session service", () => {
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				content: "General fluency assessment here.",
 				objectiveResults: [],
 			});
@@ -631,7 +628,7 @@ describe("session service", () => {
 				});
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				content: "Good retry!",
 				objectiveResults: [
 					{ text: "Use polite language", grade: "A" },
@@ -704,7 +701,7 @@ describe("session service", () => {
 				content: "Ordering check",
 				llmMetadata: undefined,
 			});
-			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.createToolChat.mock.invocationCallOrder[0]);
+			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.chatTools.mock.invocationCallOrder[0]);
 		});
 
 		it("trims user message before saving", async () => {
@@ -759,17 +756,18 @@ describe("session service", () => {
 					}),
 				}),
 			);
-			expect(mockClient.createToolChat).toHaveBeenCalledWith(
-				expect.arrayContaining([expect.objectContaining({ role: "user", content: "Prompt context plus visible comment" })]),
-				expect.any(Array),
-				{},
-				USER_ID,
+			expect(mockClient.chatTools).toHaveBeenCalledWith(
+				expect.objectContaining({
+					messages: expect.arrayContaining([expect.objectContaining({ role: "user", content: "Prompt context plus visible comment" })]),
+					tools: expect.any(Array),
+					userId: USER_ID,
+				}),
 			);
 		});
 
 		it("persists user message even when LLM generation fails", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createToolChat.mockRejectedValue(new Error("LLM timeout"));
+			mockClient.chatTools.mockRejectedValue(new Error("LLM timeout"));
 			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
@@ -786,7 +784,7 @@ describe("session service", () => {
 
 		it("marks failed clientMessageId metadata when LLM generation fails", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createToolChat.mockRejectedValue(new Error("LLM timeout"));
+			mockClient.chatTools.mockRejectedValue(new Error("LLM timeout"));
 			const valuesMock = vi
 				.fn()
 				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-1", failed: false } }]) });
@@ -809,7 +807,7 @@ describe("session service", () => {
 			};
 
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				hints: [{ text: "こんにちは", translation: "Hello" }],
 			});
 
@@ -817,11 +815,12 @@ describe("session service", () => {
 
 			expect(result.hints).toHaveLength(1);
 			expect(result.hints[0].text).toBe("こんにちは");
-			expect(mockClient.createStructuredOutput).toHaveBeenCalledWith(
+			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.any(Object),
-				expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("JAPANESE") })]),
-				{},
-				USER_ID,
+				expect.objectContaining({
+					messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("JAPANESE") })]),
+					userId: USER_ID,
+				}),
 			);
 		});
 
@@ -844,11 +843,11 @@ describe("session service", () => {
 				agentPromptSnapshot: { systemPrompt: "Context" },
 				messages: [],
 			});
-			mockClient.createStructuredOutput.mockResolvedValue({ hints: [] });
+			mockClient.chatJson.mockResolvedValue({ hints: [] });
 
 			await generateHint(123);
 
-			const systemPrompt = mockClient.createStructuredOutput.mock.calls[0]?.[1]?.[0]?.content ?? "";
+			const systemPrompt = mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content ?? "";
 			expect(systemPrompt).toContain("(No messages yet)");
 		});
 	});
@@ -917,7 +916,7 @@ describe("session service", () => {
 
 			await sendMessage(123, "New msg", USER_ID);
 
-			const historyArg = mockClient.createToolChat.mock.calls[0][0];
+			const historyArg = mockClient.chatTools.mock.calls[0][0].messages;
 			expect(historyArg).toEqual([
 				expect.objectContaining({ role: "system" }),
 				expect.objectContaining({ content: "Msg 1" }),
@@ -1063,7 +1062,7 @@ describe("session service", () => {
 
 		it("adds comment thread context to the prompt when contextPath is provided", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				hints: [{ text: "¡Me parece bien!", translation: "Sounds good to me!" }],
 			});
 
@@ -1076,7 +1075,7 @@ describe("session service", () => {
 
 			expect(result.hints).toHaveLength(1);
 
-			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const promptMessages = mockClient.chatJson.mock.calls[0][1].messages;
 			const systemContent = promptMessages[0].content as string;
 
 			expect(systemContent).toContain("Reply Context");
@@ -1087,13 +1086,13 @@ describe("session service", () => {
 
 		it("skips the context section when contextPath is an empty array", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
-			mockClient.createStructuredOutput.mockResolvedValue({
+			mockClient.chatJson.mockResolvedValue({
 				hints: [{ text: "Hola", translation: "Hello" }],
 			});
 
 			await generateHint(123, []);
 
-			const promptMessages = mockClient.createStructuredOutput.mock.calls[0][1];
+			const promptMessages = mockClient.chatJson.mock.calls[0][1].messages;
 			const systemContent = promptMessages[0].content as string;
 
 			expect(systemContent).not.toContain("Reply Context");

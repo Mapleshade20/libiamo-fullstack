@@ -32,8 +32,9 @@ const { mockLimit, mockOrderBy, mockWhere, mockSelect, mockUpdate, mockSet, mock
 	};
 });
 
-const { mockCreateSingleTurnChat } = vi.hoisted(() => ({
-	mockCreateSingleTurnChat: vi.fn(),
+const { mockChatJson, mockChatText } = vi.hoisted(() => ({
+	mockChatJson: vi.fn(),
+	mockChatText: vi.fn(),
 }));
 
 vi.mock("$lib/server/db", () => ({
@@ -75,7 +76,8 @@ vi.mock("$lib/server/llm", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("$lib/server/llm")>();
 	return {
 		...actual,
-		createSingleTurnChat: mockCreateSingleTurnChat,
+		chatJson: mockChatJson,
+		chatText: mockChatText,
 	};
 });
 
@@ -100,7 +102,8 @@ function createActionEvent(entries: Record<string, string>, params: { id: string
 describe("(app) translate/[id] +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockCreateSingleTurnChat.mockReset();
+		mockChatJson.mockReset();
+		mockChatText.mockReset();
 	});
 
 	// ── Load ──────────────────────────────────────────────────────
@@ -318,14 +321,12 @@ describe("(app) translate/[id] +page.server", () => {
 			mockReturning.mockResolvedValueOnce([{ id: 99 }]);
 
 			// LLM returns valid JSON evaluation
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: JSON.stringify(evaluation) },
-			});
+			mockChatJson.mockResolvedValueOnce(evaluation);
 
 			const result = await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
 
 			expect(result).toEqual({ success: true });
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			expect(mockChatJson).toHaveBeenCalled();
 			// The final update sets status to "evaluated"
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: "evaluated", evaluation }));
 		});
@@ -341,7 +342,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockReturning.mockResolvedValueOnce([{ id: 100 }]);
 
 			// LLM throws
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+			mockChatJson.mockRejectedValueOnce(new Error("API timeout"));
 
 			const result = (await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }))) as any;
 
@@ -375,9 +376,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockReturning.mockResolvedValueOnce([{ id: 102 }]);
 
 			// LLM wraps JSON in markdown fences
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: `\`\`\`json\n${JSON.stringify(evaluation)}\n\`\`\`` },
-			});
+			mockChatJson.mockResolvedValueOnce(evaluation);
 
 			const result = await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
 
@@ -385,31 +384,18 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: "evaluated" }));
 		});
 
-		it("handles LLM returning non-JSON plain text (catch block)", async () => {
+		it("returns 500 when JSON evaluation cannot be parsed", async () => {
 			const translations = { "0-0": "Bonjour le monde" };
 
-			// Template query for submit: where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello world, how are you"]], language: "fr" }]);
-
-			// Insert (no attemptId)
 			mockReturning.mockResolvedValueOnce([{ id: 103 }]);
+			mockChatJson.mockRejectedValueOnce(new Error("LLM returned invalid structured JSON"));
 
-			// LLM returns plain text, not JSON
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: "The translations look mostly good but need some minor corrections." },
-			});
+			const result = (await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }))) as any;
 
-			const result = await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
-
-			expect(result).toEqual({ success: true });
-			// Should still be evaluated, but with overallFeedback containing the raw text
-			expect(mockSet).toHaveBeenCalledWith(
-				expect.objectContaining({
-					status: "evaluated",
-					evaluation: { overallFeedback: "The translations look mostly good but need some minor corrections." },
-				}),
-			);
+			expect(result.status).toBe(500);
+			expect(result.data?.error).toBe("Evaluation failed. Please try again.");
 		});
 
 		it("updates existing attempt when attemptId provided (no insert)", async () => {
@@ -424,9 +410,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 			// LLM returns valid evaluation
 			const evaluation = { overallScore: "A", overallFeedback: "Perfect" };
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: JSON.stringify(evaluation) },
-			});
+			mockChatJson.mockResolvedValueOnce(evaluation);
 
 			const result = await actions.submit(createActionEvent({ translations: JSON.stringify(translations), attemptId: "55" }, { id: "1" }));
 
@@ -447,16 +431,13 @@ describe("(app) translate/[id] +page.server", () => {
 			mockReturning.mockResolvedValueOnce([{ id: 200 }]);
 
 			const evaluation = { overallScore: "A", overallFeedback: "Good" };
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: JSON.stringify(evaluation) },
-			});
+			mockChatJson.mockResolvedValueOnce(evaluation);
 
 			await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
 
 			// Verify the LLM was called but only with non-short sentences
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
-			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
-			const userMessage = callArgs.userMessage as string;
+			expect(mockChatJson).toHaveBeenCalled();
+			const userMessage = mockChatJson.mock.calls[0][1].messages[1].content as string;
 			// Should NOT contain the short sentence "Hello"
 			expect(userMessage).not.toContain("[0-0] Hello");
 			// Should contain the normal sentence
@@ -473,14 +454,11 @@ describe("(app) translate/[id] +page.server", () => {
 			mockReturning.mockResolvedValueOnce([{ id: 201 }]);
 
 			const evaluation = { overallScore: "B", overallFeedback: "Okay" };
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: JSON.stringify(evaluation) },
-			});
+			mockChatJson.mockResolvedValueOnce(evaluation);
 
 			await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }));
 
-			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
-			const userMessage = callArgs.userMessage as string;
+			const userMessage = mockChatJson.mock.calls[0][1].messages[1].content as string;
 			// "Dear Mr. Smith" is 14 chars, should be filtered
 			expect(userMessage).not.toContain("Dear Mr. Smith");
 			expect(userMessage).toContain("This is a longer sentence");
@@ -497,7 +475,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 			// Should succeed without calling LLM (no evaluable passages)
 			expect(result).toEqual({ success: true });
-			expect(mockCreateSingleTurnChat).not.toHaveBeenCalled();
+			expect(mockChatJson).not.toHaveBeenCalled();
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ status: "evaluated" }));
 		});
 	});
@@ -534,9 +512,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello", "Goodbye"]], language: "fr" }]);
 
 			const modelTranslations = { "0-0": "Bonjour", "0-1": "Au revoir" };
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: JSON.stringify(modelTranslations) },
-			});
+			mockChatJson.mockResolvedValueOnce(modelTranslations);
 
 			const result = await actions.generateModelTranslation(createActionEvent({}, { id: "1" }));
 			expect(result).toEqual({ success: true, modelTranslations });
@@ -547,9 +523,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hi"]], language: "es" }]);
 
 			const modelTranslations = { "0-0": "Hola" };
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: `\`\`\`json\n${JSON.stringify(modelTranslations)}\n\`\`\`` },
-			});
+			mockChatJson.mockResolvedValueOnce(modelTranslations);
 
 			const result = await actions.generateModelTranslation(createActionEvent({}, { id: "1" }));
 			expect(result).toEqual({ success: true, modelTranslations });
@@ -559,7 +533,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
 
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+			mockChatJson.mockRejectedValueOnce(new Error("API error"));
 
 			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
 			expect(result.status).toBe(500);
@@ -570,9 +544,7 @@ describe("(app) translate/[id] +page.server", () => {
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([{ translationBase: [["Hello"]], language: "fr" }]);
 
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: "not valid json at all" },
-			});
+			mockChatJson.mockRejectedValueOnce(new Error("LLM returned invalid structured JSON"));
 
 			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
 			expect(result.status).toBe(500);
@@ -649,9 +621,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns explanation on success", async () => {
 			const explanation = "## What went wrong\n\nThe verb form is incorrect...";
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: explanation },
-			});
+			mockChatText.mockResolvedValueOnce({ content: explanation });
 
 			const result = await actions.explainFeedback(
 				createActionEvent(
@@ -666,11 +636,11 @@ describe("(app) translate/[id] +page.server", () => {
 			);
 
 			expect(result).toEqual({ success: true, explanation });
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			expect(mockChatText).toHaveBeenCalled();
 		});
 
 		it("returns 500 when LLM fails", async () => {
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+			mockChatText.mockRejectedValueOnce(new Error("API timeout"));
 
 			const result = (await actions.explainFeedback(
 				createActionEvent(
@@ -715,23 +685,19 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("returns translation on success", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: "Bonjour le monde" },
-			});
+			mockChatText.mockResolvedValueOnce({ content: "Bonjour le monde" });
 
 			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hello world", language: "fr" }, { id: "1" }));
 
 			expect(result).toEqual({ success: true, translation: "Bonjour le monde" });
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
-			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
-			expect(callArgs.systemPrompt).toContain("Français");
-			expect(callArgs.userMessage).toBe("Hello world");
+			expect(mockChatText).toHaveBeenCalled();
+			const callArgs = mockChatText.mock.calls[0][0];
+			expect(callArgs.messages[0].content).toContain("Français");
+			expect(callArgs.messages[1].content).toBe("Hello world");
 		});
 
 		it("trims whitespace from translation", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: "  ¡Hola!  " },
-			});
+			mockChatText.mockResolvedValueOnce({ content: "  ¡Hola!  " });
 
 			const result = await actions.translateSentence(createActionEvent({ sourceSentence: "Hi", language: "es" }, { id: "1" }));
 
@@ -739,7 +705,7 @@ describe("(app) translate/[id] +page.server", () => {
 		});
 
 		it("returns 500 when LLM fails", async () => {
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+			mockChatText.mockRejectedValueOnce(new Error("API timeout"));
 
 			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }))) as any;
 
@@ -798,9 +764,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 		it("returns answer on success", async () => {
 			const answer = "The verb should be conjugated because...";
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: answer },
-			});
+			mockChatText.mockResolvedValueOnce({ content: answer });
 
 			const result = await actions.askTutor(
 				createActionEvent(
@@ -816,17 +780,17 @@ describe("(app) translate/[id] +page.server", () => {
 			);
 
 			expect(result).toEqual({ success: true, answer });
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
-			const callArgs = mockCreateSingleTurnChat.mock.calls[0][0];
-			expect(callArgs.systemPrompt).toContain("Français");
-			expect(callArgs.userMessage).toContain("I eat");
-			expect(callArgs.userMessage).toContain("Je mange");
-			expect(callArgs.userMessage).toContain("Perfect!");
-			expect(callArgs.userMessage).toContain("Why is it");
+			expect(mockChatText).toHaveBeenCalled();
+			const callArgs = mockChatText.mock.calls[0][0];
+			expect(callArgs.messages[0].content).toContain("Français");
+			expect(callArgs.messages[1].content).toContain("I eat");
+			expect(callArgs.messages[1].content).toContain("Je mange");
+			expect(callArgs.messages[1].content).toContain("Perfect!");
+			expect(callArgs.messages[1].content).toContain("Why is it");
 		});
 
 		it("returns 500 when LLM fails", async () => {
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+			mockChatText.mockRejectedValueOnce(new Error("API error"));
 
 			const result = (await actions.askTutor(
 				createActionEvent(
