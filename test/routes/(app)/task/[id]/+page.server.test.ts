@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
-const { mockLimit, mockSelect, mockFindFirst, mockCreateSingleTurnChat } = vi.hoisted(() => {
+const { mockLimit, mockSelect, mockFindFirst, mockChatJson } = vi.hoisted(() => {
 	const mockLimit = vi.fn();
 	const mockWhere = vi.fn(() => ({ limit: mockLimit }));
 	const mockLeftJoin: any = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
@@ -14,8 +14,8 @@ const { mockLimit, mockSelect, mockFindFirst, mockCreateSingleTurnChat } = vi.ho
 	}));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));
 	const mockFindFirst = vi.fn();
-	const mockCreateSingleTurnChat = vi.fn();
-	return { mockLimit, mockSelect, mockFindFirst, mockCreateSingleTurnChat };
+	const mockChatJson = vi.fn();
+	return { mockLimit, mockSelect, mockFindFirst, mockChatJson };
 });
 
 vi.mock("$lib/server/db", () => ({
@@ -33,7 +33,7 @@ vi.mock("$lib/server/llm", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("$lib/server/llm")>();
 	return {
 		...actual,
-		createSingleTurnChat: mockCreateSingleTurnChat,
+		chatJson: mockChatJson,
 	};
 });
 
@@ -53,7 +53,7 @@ function createActionEvent(entries: Record<string, string>, userId = "u1") {
 describe("Task detail +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockCreateSingleTurnChat.mockReset();
+		mockChatJson.mockReset();
 	});
 
 	// ── Load ──────────────────────────────────────────────────────
@@ -187,9 +187,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("generates expressions with minimal task context", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: '["Could I have the check?", "Where is the exit?"]' },
-			});
+			mockChatJson.mockResolvedValueOnce(["Could I have the check?", "Where is the exit?"]);
 
 			const result = await actions.generateExpressions(
 				createActionEvent({
@@ -203,13 +201,11 @@ describe("Task detail +page.server", () => {
 				success: true,
 				expressions: ["Could I have the check?", "Where is the exit?"],
 			});
-			expect(mockCreateSingleTurnChat).toHaveBeenCalled();
+			expect(mockChatJson).toHaveBeenCalled();
 		});
 
 		it("generates expressions with full task context", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: '["How do I address the professor?", "What is the formal greeting?"]' },
-			});
+			mockChatJson.mockResolvedValueOnce(["How do I address the professor?", "What is the formal greeting?"]);
 
 			const result = await actions.generateExpressions(
 				createActionEvent({
@@ -230,9 +226,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("parses JSON inside markdown code fences", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: '```json\n["One expression", "Two expressions"]\n```' },
-			});
+			mockChatJson.mockResolvedValueOnce(["One expression", "Two expressions"]);
 
 			const result = await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "ja" }));
 
@@ -243,9 +237,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("falls back to line extraction for non-JSON response", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: { content: "1. Hello there\n2. How are you?\n3. Thank you" },
-			});
+			mockChatJson.mockResolvedValueOnce(["Hello there", "How are you?", "Thank you"]);
 
 			const result = await actions.generateExpressions(createActionEvent({ title: "Greetings", nativeLanguage: "en", targetLanguage: "fr" }));
 
@@ -257,7 +249,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("returns 500 when LLM fails", async () => {
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API error"));
+			mockChatJson.mockRejectedValueOnce(new Error("API error"));
 
 			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" }))) as any;
 
@@ -305,13 +297,9 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("evaluates a perfect translation", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: {
-					content: JSON.stringify({
-						feedback: "Perfect! This is exactly how a native speaker would say it.",
-						correction: "Bonjour",
-					}),
-				},
+			mockChatJson.mockResolvedValueOnce({
+				feedback: "Perfect! This is exactly how a native speaker would say it.",
+				correction: "Bonjour",
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -331,13 +319,9 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("evaluates a translation with errors and provides correction", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: {
-					content: JSON.stringify({
-						feedback: "The word order is incorrect. In Spanish, adjectives usually come after nouns.",
-						correction: "El gato negro",
-					}),
-				},
+			mockChatJson.mockResolvedValueOnce({
+				feedback: "The word order is incorrect. In Spanish, adjectives usually come after nouns.",
+				correction: "El gato negro",
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -357,10 +341,9 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("parses JSON inside markdown code fences", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: {
-					content: '```json\n{"feedback": "Nice work!", "correction": "¿Cómo estás?"}\n```',
-				},
+			mockChatJson.mockResolvedValueOnce({
+				feedback: "Nice work!",
+				correction: "¿Cómo estás?",
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -380,10 +363,9 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("handles non-JSON LLM response gracefully", async () => {
-			mockCreateSingleTurnChat.mockResolvedValueOnce({
-				reply: {
-					content: "This is a great translation attempt! Keep practicing.",
-				},
+			mockChatJson.mockResolvedValueOnce({
+				feedback: "This is a great translation attempt! Keep practicing.",
+				correction: "",
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -403,7 +385,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("returns 500 when LLM fails", async () => {
-			mockCreateSingleTurnChat.mockRejectedValueOnce(new Error("API timeout"));
+			mockChatJson.mockRejectedValueOnce(new Error("API timeout"));
 
 			const result = (await actions.evaluateTranslation(
 				createActionEvent({

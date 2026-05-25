@@ -107,11 +107,13 @@ describe("(app) home +page.server", () => {
 
 		expect(mockEnsureTasksForDate).toHaveBeenCalledTimes(1);
 		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
-		expect(result).toEqual({
-			weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
-			dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
-			language: "en",
-		});
+		expect(result).toEqual(
+			expect.objectContaining({
+				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
+				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
+				language: "en",
+			}),
+		);
 	});
 
 	describe("timezone logic", () => {

@@ -24,18 +24,20 @@ Key areas:
 - Data model: templates are blueprints; template variants store `slotValues` + UI-specific `openingState`; scheduled tasks store resolved template text and a selected `variantId`; practice sessions/messages store chat runtime state; translation attempts are separate from scheduled tasks.
 - Scheduling: `src/lib/server/tasks.ts` auto-fills 3 weekly + 3 daily non-translation tasks per user language/date; weekly dates normalize to Monday and admin manual weeks use `YYYY-Www`. Cadence values include `weekly`, `daily`, `none`.
 - Session prompts: `src/lib/server/session.ts` starts practice sessions, builds scenario context from variant `openingState`, prepends random MBTI persona at session start, and enforces target-language replies.
+- LLM: calls are centralized in `src/lib/server/llm.ts` and use the official `openai` SDK with `baseURL` for both env and BYOK credentials.
+    - `test/lib/server/llm.test.ts` stubs global `fetch`; this still works because the OpenAI SDK uses fetch under the hood.
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas in `src/lib/schemas.ts`, including admin form schemas and per-UI `openingState` schemas. Admin variant helpers validate slot coverage for `{{slot}}` placeholders.
 - Constants: `src/lib/constants.ts` — single source of truth for enum values/types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`), labels, and language display-name helpers. Do not inline enum unions or duplicate language-name maps/helpers elsewhere.
 - Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
-- Practice UI: reusable client code lives under `src/lib/components/practice-ui/`; Discord is the implemented chat UI, with other UI variants scaffolded/validated.
+- Practice UI: reusable client code lives under `src/lib/components/practice-ui/`.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
 ## Notes for agents
 
 - Use tabs for indentation.
-- Run `pnpm format`, `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
+- Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
 - If stuck on a problem after 2-3 failed attempts, do not brutely retry. Search the web for solutions and come up with new approaches.
 - Refer to `docs/ROADMAP.md` and `README.md` for roadmap and core concepts.

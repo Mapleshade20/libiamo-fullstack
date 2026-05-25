@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
-import { createSingleTurnChat, extractContentFromFence } from "$lib/server/llm";
+import { chatJson } from "$lib/server/llm";
 
 /** Resolve a language name from a code, using Intl.DisplayNames for non-learning languages */
 function languageName(code: string, fallbackLocale = "en"): string {
@@ -30,6 +31,13 @@ export interface ExpressionItem {
 	/** A model/reference translation */
 	reference?: string;
 }
+
+const ExpressionsSchema = z.array(z.string()).transform((items) => items.map((item) => item.trim()).filter(Boolean));
+
+const TranslationFeedbackSchema = z.object({
+	feedback: z.string().catch(""),
+	correction: z.string().catch(""),
+});
 
 /**
  * Build a prompt for generating useful expressions related to a task scenario.
@@ -64,11 +72,7 @@ export function buildEvaluationPrompt(nativeLang: string, targetLang: LanguageCo
 
 The learner was shown a phrase in ${nativeName} and asked to translate it into ${targetName}.
 
-Evaluate their translation and respond with ONLY a JSON object (no markdown fences):
-{
-  "feedback": "<a concise, encouraging sentence in ${nativeName} commenting on the translation quality, pointing out any errors and how to fix them>",
-  "correction": "<the corrected/natural ${targetName} translation>"
-}
+Evaluate their translation and respond with ONLY this JSON object shape (no markdown fences): {"feedback":"<a concise, encouraging sentence in ${nativeName} commenting on the translation quality, pointing out any errors and how to fix them>","correction":"<the corrected/natural ${targetName} translation>"}
 
 ## Evaluation Criteria
 - Accuracy: does the translation convey the same meaning?
@@ -119,31 +123,14 @@ export async function generateExpressions(
 
 	const context = contextParts.join("\n");
 
-	const { reply } = await createSingleTurnChat(
-		{
-			systemPrompt: prompt,
-			userMessage: `Generate useful expressions for this task scenario:\n\n${context}`,
-			options: { temperature: 0.7, maxTokens: 1024 },
-		},
+	return await chatJson(ExpressionsSchema, {
+		messages: [
+			{ role: "system", content: prompt },
+			{ role: "user", content: `Generate useful expressions for this task scenario:\n\n${context}` },
+		],
+		options: { temperature: 0.7, maxTokens: 1024 },
 		userId,
-	);
-
-	// Parse JSON from response
-	const jsonStr = extractContentFromFence(reply.content);
-
-	try {
-		const parsed = JSON.parse(jsonStr);
-		if (Array.isArray(parsed)) {
-			return parsed.filter((e): e is string => typeof e === "string" && e.trim().length > 0);
-		}
-		return [];
-	} catch {
-		// Fallback: try to extract lines (strip leading list markers and quotes)
-		return jsonStr
-			.split("\n")
-			.map((l) => l.replace(/^(?:\d+[.)]\s*|["'])|["']$/g, "").trim())
-			.filter((l) => l.length > 0);
-	}
+	});
 }
 
 /**
@@ -161,24 +148,15 @@ export async function evaluateUserTranslation(
 	const nativeName = languageName(nativeLang);
 	const targetName = LANGUAGE_LABELS[targetLang];
 
-	const { reply } = await createSingleTurnChat(
-		{
-			systemPrompt: prompt,
-			userMessage: `Original (${nativeName}): "${sourceExpression.trim()}"\n\nLearner's ${targetName} translation: "${userTranslation.trim()}"`,
-			options: { temperature: 0.7, maxTokens: 1024 },
-		},
+	return await chatJson(TranslationFeedbackSchema, {
+		messages: [
+			{ role: "system", content: prompt },
+			{
+				role: "user",
+				content: `Original (${nativeName}): "${sourceExpression.trim()}"\n\nLearner's ${targetName} translation: "${userTranslation.trim()}"`,
+			},
+		],
+		options: { temperature: 0.7, maxTokens: 1024 },
 		userId,
-	);
-
-	const jsonStr = extractContentFromFence(reply.content);
-
-	try {
-		const parsed = JSON.parse(jsonStr);
-		return {
-			feedback: typeof parsed.feedback === "string" ? parsed.feedback : "",
-			correction: typeof parsed.correction === "string" ? parsed.correction : "",
-		};
-	} catch {
-		return { feedback: jsonStr, correction: "" };
-	}
+	});
 }
