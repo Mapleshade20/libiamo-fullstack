@@ -5,7 +5,7 @@ import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
@@ -295,13 +295,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				labels: { earlier: labels.earlier },
 			});
 
-			const sortedRawMessages = [...(sessionData.messages ?? [])].sort(
-				(a: { createdAt: string | Date }, b: { createdAt: string | Date }) =>
-					parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
-			);
-
 			const sessionMessages = buildChatMessages({
-				rawMessages: sortedRawMessages,
+				rawMessages: sessionData.messages ?? [],
 				formatTimestamp,
 				userName,
 				agentName: agentName,

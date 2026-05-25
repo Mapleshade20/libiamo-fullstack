@@ -89,9 +89,11 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 			eq(practiceSession.userId, user.id),
 			inArray(practiceSession.status, ["in_progress", "completed", "evaluated"]),
 		),
-		orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
+		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		with: {
-			messages: true,
+			messages: {
+				orderBy: (messages, { asc }) => [asc(messages.createdAt), asc(messages.id)],
+			},
 		},
 	});
 

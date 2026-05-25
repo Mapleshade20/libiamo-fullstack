@@ -6,7 +6,7 @@ import { invalidateAll } from "$app/navigation";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
@@ -383,11 +383,8 @@ function loadExistingSession(session: any) {
 	isCompleted = session.status === "completed" || session.status === "evaluated";
 	feedback = session.tutorFeedback || null;
 
-	const sortedRawMessages = [...(session.messages ?? [])].sort(
-		(a, b) => parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
-	);
 	messages = buildChatMessages({
-		rawMessages: sortedRawMessages,
+		rawMessages: session.messages ?? [],
 		formatTimestamp,
 		userName,
 		agentName: t.tutorReply,

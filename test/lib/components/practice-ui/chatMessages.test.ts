@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { buildChatMessages, getSessionSnapshot, stableMetadataSnapshot, updateMessageById } from "$lib/components/practice-ui/chatMessages";
+import {
+	buildChatMessages,
+	getSessionSnapshot,
+	sortPersistedSessionMessages,
+	stableMetadataSnapshot,
+	updateMessageById,
+} from "$lib/components/practice-ui/chatMessages";
 
 const labels = {
 	retryFailedMessage: "Agent reply failed. Click Retry to try again.",
@@ -82,6 +88,58 @@ describe("buildChatMessages", () => {
 		});
 
 		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
+	});
+
+	it("uses persisted ids as a stable tie-breaker when timestamps are equal", () => {
+		const createdAt = new Date("2026-01-01T10:00:00Z");
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{ id: 2, role: "assistant", content: "Hi", createdAt, llmMetadata: { clientMessageId: "msg-1" } },
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt,
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
+	it("recognizes same-turn assistant replies by client message id", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-2", failed: false },
+				},
+				{
+					id: 3,
+					role: "assistant",
+					content: "Reply to first",
+					createdAt: new Date("2026-01-01T10:02:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2", "retry-2", "3"]);
+		expect(result.some((message) => message.id === "retry-1")).toBe(false);
 	});
 
 	it("treats an 'agent' role message as an assistant reply in the same turn", () => {
@@ -376,6 +434,19 @@ describe("session snapshots", () => {
 
 	it("uses different bounded mail body snapshots for changed HTML", () => {
 		expect(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello</p>" })).not.toEqual(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello!</p>" }));
+	});
+});
+
+describe("sortPersistedSessionMessages", () => {
+	it("orders by createdAt, then persisted id, then input order", () => {
+		const createdAt = "2026-01-01 10:00:00";
+		const result = sortPersistedSessionMessages([
+			{ id: 3, createdAt, role: "assistant", content: "third" },
+			{ id: 1, createdAt, role: "user", content: "first" },
+			{ id: 2, createdAt, role: "assistant", content: "second" },
+		]);
+
+		expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
 	});
 });
 

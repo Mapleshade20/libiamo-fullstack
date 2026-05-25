@@ -301,10 +301,19 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	if (userIndex === -1) return null;
 
 	const userMessage = messages[userIndex];
+	const assistantReplyByClientId = messages.find(
+		(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+	);
 	const messagesAfterUser = messages.slice(userIndex + 1);
 	const nextUserMessageIndex = messagesAfterUser.findIndex((message) => message.role === "user");
 	const messagesInSameTurn = nextUserMessageIndex === -1 ? messagesAfterUser : messagesAfterUser.slice(0, nextUserMessageIndex);
-	const assistantReply = messagesInSameTurn.find((message) => message.role === "assistant");
+	const assistantReply =
+		assistantReplyByClientId ??
+		messagesInSameTurn.find((message) => {
+			if (message.role !== "assistant") return false;
+			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
+			return !assistantClientMessageId || assistantClientMessageId === clientMessageId;
+		});
 	const metadata = getMessageMetadata(userMessage.llmMetadata);
 
 	return {
@@ -367,7 +376,7 @@ export async function sendMessage(
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
 		},
 	});
 
@@ -606,7 +615,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
 			task: true,
 		},
 	});
@@ -689,7 +698,7 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
 			task: true,
 		},
 	});

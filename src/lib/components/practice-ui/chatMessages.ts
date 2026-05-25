@@ -53,6 +53,11 @@ export type ChatMessage = {
 	thread?: CommentThreadMetadata;
 };
 
+function getMessageSortId(message: Pick<PersistedSessionMessage, "id">, fallback: number) {
+	const numericId = typeof message.id === "number" ? message.id : Number.parseInt(String(message.id), 10);
+	return Number.isFinite(numericId) ? numericId : fallback;
+}
+
 function compactStringSnapshot(value: string) {
 	let hash = 0x811c9dc5;
 	for (let index = 0; index < value.length; index += 1) {
@@ -74,7 +79,9 @@ export function stableMetadataSnapshot(value: unknown) {
 }
 
 export function getSessionSnapshot(session: SessionSnapshotInput): string {
-	const messagesSnapshot = (Array.isArray(session.messages) ? session.messages : [])
+	const messagesSnapshot = sortPersistedSessionMessages(
+		Array.isArray(session.messages) ? (session.messages as Array<SessionSnapshotMessage & Pick<PersistedSessionMessage, "id" | "createdAt">>) : [],
+	)
 		.map((m) => [m.id, m.status, m.content, m.clientMessageId ?? "", stableMetadataSnapshot(m.llmMetadata), m.createdAt].join(":"))
 		.join("|");
 	return `${session.status ?? ""}:${session.tutorFeedback ? "feedback" : ""}:${messagesSnapshot}`;
@@ -86,10 +93,24 @@ function getMessageMetadata(value: unknown): MessageMetadata {
 }
 
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
+	const userMessage = rawMessages[userMessageIndex];
+	const clientMessageId = getMessageMetadata(userMessage?.llmMetadata).clientMessageId;
+	if (clientMessageId) {
+		const exactAssistant = rawMessages.find(
+			(message) =>
+				(message.role === "assistant" || message.role === "agent") && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+		);
+		if (exactAssistant) return true;
+	}
+
 	for (let index = userMessageIndex + 1; index < rawMessages.length; index += 1) {
 		const message = rawMessages[index];
 		if (message.role === "user") return false;
-		if (message.role === "assistant" || message.role === "agent") return true;
+		if (message.role === "assistant" || message.role === "agent") {
+			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
+			if (clientMessageId && assistantClientMessageId && assistantClientMessageId !== clientMessageId) continue;
+			return true;
+		}
 	}
 
 	return false;
@@ -103,6 +124,21 @@ export function parsePersistedMessageDate(value: string | Date) {
 		return new Date(`${normalized}Z`);
 	}
 	return new Date(normalized);
+}
+
+export function sortPersistedSessionMessages<T extends Pick<PersistedSessionMessage, "id" | "createdAt">>(messages: T[]): T[] {
+	return messages
+		.map((message, index) => ({ message, index }))
+		.sort((a, b) => {
+			const createdAtDiff = parsePersistedMessageDate(a.message.createdAt).getTime() - parsePersistedMessageDate(b.message.createdAt).getTime();
+			if (createdAtDiff !== 0) return createdAtDiff;
+
+			const idDiff = getMessageSortId(a.message, a.index) - getMessageSortId(b.message, b.index);
+			if (idDiff !== 0) return idDiff;
+
+			return a.index - b.index;
+		})
+		.map(({ message }) => message);
 }
 
 function getRetryAgentCommentId(userCommentId: string | undefined, clientMessageId: string, persistedMessageId: number | string): string {
@@ -129,7 +165,9 @@ export function buildChatMessages({
 	labels: RetryLabels;
 	isHidden?: (message: PersistedSessionMessage) => boolean;
 }): ChatMessage[] {
-	return rawMessages.flatMap((message, index) => {
+	const sortedRawMessages = sortPersistedSessionMessages(rawMessages);
+
+	return sortedRawMessages.flatMap((message, index) => {
 		const metadata = getMessageMetadata(message.llmMetadata);
 		const mappedMessage = {
 			id: message.id.toString(),
@@ -145,7 +183,7 @@ export function buildChatMessages({
 			thread: metadata.thread,
 		} satisfies ChatMessage;
 
-		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(rawMessages, index)) {
+		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(sortedRawMessages, index)) {
 			return [mappedMessage];
 		}
 
