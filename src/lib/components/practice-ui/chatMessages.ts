@@ -92,22 +92,71 @@ function getMessageMetadata(value: unknown): MessageMetadata {
 	return value as MessageMetadata;
 }
 
+function isAgentRole(role: string) {
+	return role === "assistant" || role === "agent";
+}
+
+function getClientMessageId(message: Pick<PersistedSessionMessage, "llmMetadata">) {
+	return getMessageMetadata(message.llmMetadata).clientMessageId;
+}
+
+export function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
+	const sortedMessages = sortPersistedSessionMessages(messages);
+	const userClientIds = new Set<string>();
+	const assistantMessagesByClientId = new Map<string, T[]>();
+
+	for (const message of sortedMessages) {
+		const clientMessageId = getClientMessageId(message);
+		if (!clientMessageId) continue;
+		if (message.role === "user") {
+			userClientIds.add(clientMessageId);
+		} else if (isAgentRole(message.role)) {
+			const assistantMessages = assistantMessagesByClientId.get(clientMessageId) ?? [];
+			assistantMessages.push(message);
+			assistantMessagesByClientId.set(clientMessageId, assistantMessages);
+		}
+	}
+
+	const emitted = new Set<T>();
+	const orderedMessages: T[] = [];
+
+	for (const message of sortedMessages) {
+		if (emitted.has(message)) continue;
+
+		const clientMessageId = getClientMessageId(message);
+		if (clientMessageId && isAgentRole(message.role) && userClientIds.has(clientMessageId)) {
+			continue;
+		}
+
+		orderedMessages.push(message);
+		emitted.add(message);
+
+		if (message.role !== "user" || !clientMessageId) continue;
+
+		for (const assistantMessage of assistantMessagesByClientId.get(clientMessageId) ?? []) {
+			if (emitted.has(assistantMessage)) continue;
+			orderedMessages.push(assistantMessage);
+			emitted.add(assistantMessage);
+		}
+	}
+
+	return orderedMessages;
+}
+
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
 	const userMessage = rawMessages[userMessageIndex];
-	const clientMessageId = getMessageMetadata(userMessage?.llmMetadata).clientMessageId;
+	if (!userMessage) return false;
+	const clientMessageId = getClientMessageId(userMessage);
 	if (clientMessageId) {
-		const exactAssistant = rawMessages.find(
-			(message) =>
-				(message.role === "assistant" || message.role === "agent") && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-		);
+		const exactAssistant = rawMessages.find((message) => isAgentRole(message.role) && getClientMessageId(message) === clientMessageId);
 		if (exactAssistant) return true;
 	}
 
 	for (let index = userMessageIndex + 1; index < rawMessages.length; index += 1) {
 		const message = rawMessages[index];
 		if (message.role === "user") return false;
-		if (message.role === "assistant" || message.role === "agent") {
-			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
+		if (isAgentRole(message.role)) {
+			const assistantClientMessageId = getClientMessageId(message);
 			if (clientMessageId && assistantClientMessageId && assistantClientMessageId !== clientMessageId) continue;
 			return true;
 		}
@@ -165,7 +214,7 @@ export function buildChatMessages({
 	labels: RetryLabels;
 	isHidden?: (message: PersistedSessionMessage) => boolean;
 }): ChatMessage[] {
-	const sortedRawMessages = sortPersistedSessionMessages(rawMessages);
+	const sortedRawMessages = orderPersistedSessionMessagesForDisplay(rawMessages);
 
 	return sortedRawMessages.flatMap((message, index) => {
 		const metadata = getMessageMetadata(message.llmMetadata);

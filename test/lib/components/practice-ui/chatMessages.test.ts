@@ -3,6 +3,7 @@ import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
 import {
 	buildChatMessages,
 	getSessionSnapshot,
+	orderPersistedSessionMessagesForDisplay,
 	sortPersistedSessionMessages,
 	stableMetadataSnapshot,
 	updateMessageById,
@@ -138,8 +139,33 @@ describe("buildChatMessages", () => {
 			],
 		});
 
-		expect(result.map((message) => message.id)).toEqual(["1", "2", "retry-2", "3"]);
+		expect(result.map((message) => message.id)).toEqual(["1", "3", "2", "retry-2"]);
 		expect(result.some((message) => message.id === "retry-1")).toBe(false);
+	});
+
+	it("anchors a matched assistant reply after its user message when persisted order is inverted", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 10,
+					role: "assistant",
+					content: "Reply to third",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-3" },
+				},
+				{
+					id: 11,
+					role: "user",
+					content: "Third",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-3", failed: false },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["11", "10"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
 	});
 
 	it("treats an 'agent' role message as an assistant reply in the same turn", () => {
@@ -447,6 +473,36 @@ describe("sortPersistedSessionMessages", () => {
 		]);
 
 		expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
+	});
+});
+
+describe("orderPersistedSessionMessagesForDisplay", () => {
+	it("moves matched assistant messages directly after their user turn", () => {
+		const result = orderPersistedSessionMessagesForDisplay([
+			{
+				id: 1,
+				role: "user",
+				content: "First",
+				createdAt: new Date("2026-01-01T10:00:00Z"),
+				llmMetadata: { clientMessageId: "msg-1" },
+			},
+			{
+				id: 2,
+				role: "user",
+				content: "Second",
+				createdAt: new Date("2026-01-01T10:01:00Z"),
+				llmMetadata: { clientMessageId: "msg-2" },
+			},
+			{
+				id: 3,
+				role: "assistant",
+				content: "Reply to first",
+				createdAt: new Date("2026-01-01T10:02:00Z"),
+				llmMetadata: { clientMessageId: "msg-1" },
+			},
+		]);
+
+		expect(result.map((message) => message.id)).toEqual([1, 3, 2]);
 	});
 });
 
