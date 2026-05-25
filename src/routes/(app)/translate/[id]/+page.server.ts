@@ -162,7 +162,7 @@ function buildTranslationEvalPrompt(targetLang: LanguageCode): string {
 	const langName = promptLangName(targetLang);
 	return `You are an expert ${langName} translation evaluator. The user will provide original source sentences (with keys like [0-1]) and their ${langName} translations (with the same keys).
 
-Evaluate the translations and respond with ONLY this JSON object shape (no markdown fences): {"overallScore":"<A, B, or C>","overallFeedback":"<brief overall comment on translation quality>","highlights":[{"key":"<paragraph-index-sentence-index>","type":"good|bad","feedback":"<specific comment>","grammarNote":"<for bad highlights: one-sentence explanation of the grammar rule or error>"}]}
+Evaluate the translations and respond with ONLY this JSON object shape (no markdown fences): {"overallScore":"<A, B, or C>","overallFeedback":"<brief overall comment on translation quality>","highlights":[{"key":"<paragraph-index-sentence-index>","type":"good or bad","feedback":"<specific comment>","grammarNote":"<for bad highlights: one-sentence explanation of the grammar rule or error>"}]}
 
 GRADING SCALE:
 - A: Excellent — accurate, natural, appropriate register
@@ -179,8 +179,8 @@ CRITICAL RULES FOR FEEDBACK:
 }
 
 const TranslationEvalSchema = z.object({
-	overallScore: z.string().optional(),
-	overallFeedback: z.string().optional(),
+	overallScore: z.enum(["A", "B", "C"]),
+	overallFeedback: z.string(),
 	highlights: z
 		.array(
 			z.object({
