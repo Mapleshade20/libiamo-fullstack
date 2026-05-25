@@ -100,48 +100,24 @@ function getClientMessageId(message: Pick<PersistedSessionMessage, "llmMetadata"
 	return getMessageMetadata(message.llmMetadata).clientMessageId;
 }
 
-export function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
-	const sortedMessages = sortPersistedSessionMessages(messages);
-	const assistantMessagesByClientId = new Map<string, T[]>();
-	const userIndexByClientId = new Map<string, number>();
+function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
+	const orderedMessages = sortPersistedSessionMessages(messages);
 
-	for (const [index, message] of sortedMessages.entries()) {
+	for (let index = 0; index < orderedMessages.length; index += 1) {
+		const message = orderedMessages[index];
+		if (!isAgentRole(message.role)) continue;
+
 		const clientMessageId = getClientMessageId(message);
 		if (!clientMessageId) continue;
-		if (message.role === "user") {
-			userIndexByClientId.set(clientMessageId, index);
-		} else if (isAgentRole(message.role)) {
-			const assistantMessages = assistantMessagesByClientId.get(clientMessageId) ?? [];
-			assistantMessages.push(message);
-			assistantMessagesByClientId.set(clientMessageId, assistantMessages);
-		}
-	}
 
-	const emitted = new Set<T>();
-	const orderedMessages: T[] = [];
+		const userIndex = orderedMessages.findIndex(
+			(candidate, candidateIndex) => candidateIndex > index && candidate.role === "user" && getClientMessageId(candidate) === clientMessageId,
+		);
+		if (userIndex === -1) continue;
 
-	for (const message of sortedMessages) {
-		if (emitted.has(message)) continue;
-
-		const clientMessageId = getClientMessageId(message);
-		const matchedUserIndex = clientMessageId ? userIndexByClientId.get(clientMessageId) : undefined;
-		if (matchedUserIndex !== undefined && isAgentRole(message.role) && sortedMessages.indexOf(message) < matchedUserIndex) {
-			continue;
-		}
-
-		orderedMessages.push(message);
-		emitted.add(message);
-
-		if (message.role !== "user" || !clientMessageId) continue;
-		const userIndex = userIndexByClientId.get(clientMessageId);
-		if (userIndex === undefined) continue;
-
-		for (const assistantMessage of assistantMessagesByClientId.get(clientMessageId) ?? []) {
-			if (emitted.has(assistantMessage)) continue;
-			if (sortedMessages.indexOf(assistantMessage) > userIndex) continue;
-			orderedMessages.push(assistantMessage);
-			emitted.add(assistantMessage);
-		}
+		const [reply] = orderedMessages.splice(index, 1);
+		if (!reply) continue;
+		orderedMessages.splice(userIndex, 0, reply);
 	}
 
 	return orderedMessages;
@@ -179,7 +155,7 @@ export function parsePersistedMessageDate(value: string | Date) {
 	return new Date(normalized);
 }
 
-export function sortPersistedSessionMessages<T extends Pick<PersistedSessionMessage, "id" | "createdAt">>(messages: T[]): T[] {
+function sortPersistedSessionMessages<T extends Pick<PersistedSessionMessage, "id" | "createdAt">>(messages: T[]): T[] {
 	return messages
 		.map((message, index) => ({ message, index }))
 		.sort((a, b) => {

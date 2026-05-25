@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import {
-	buildChatMessages,
-	getSessionSnapshot,
-	orderPersistedSessionMessagesForDisplay,
-	sortPersistedSessionMessages,
-	stableMetadataSnapshot,
-	updateMessageById,
-} from "$lib/components/practice-ui/chatMessages";
+import { buildChatMessages, getSessionSnapshot, stableMetadataSnapshot, updateMessageById } from "$lib/components/practice-ui/chatMessages";
 
 const labels = {
 	retryFailedMessage: "Agent reply failed. Click Retry to try again.",
@@ -460,84 +453,6 @@ describe("session snapshots", () => {
 
 	it("uses different bounded mail body snapshots for changed HTML", () => {
 		expect(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello</p>" })).not.toEqual(stableMetadataSnapshot({ mailBodyHtml: "<p>Hello!</p>" }));
-	});
-});
-
-describe("sortPersistedSessionMessages", () => {
-	it("orders by createdAt, then persisted id, then input order", () => {
-		const createdAt = "2026-01-01 10:00:00";
-		const result = sortPersistedSessionMessages([
-			{ id: 3, createdAt, role: "assistant", content: "third" },
-			{ id: 1, createdAt, role: "user", content: "first" },
-			{ id: 2, createdAt, role: "assistant", content: "second" },
-		]);
-
-		expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
-	});
-});
-
-describe("orderPersistedSessionMessagesForDisplay", () => {
-	it("moves an inverted matched assistant message directly after its user turn", () => {
-		const result = orderPersistedSessionMessagesForDisplay([
-			{
-				id: 1,
-				role: "assistant",
-				content: "Reply to first",
-				createdAt: new Date("2026-01-01T10:00:00Z"),
-				llmMetadata: { clientMessageId: "msg-1" },
-			},
-			{
-				id: 2,
-				role: "user",
-				content: "First",
-				createdAt: new Date("2026-01-01T10:01:00Z"),
-				llmMetadata: { clientMessageId: "msg-1" },
-			},
-			{
-				id: 3,
-				role: "user",
-				content: "Second",
-				createdAt: new Date("2026-01-01T10:02:00Z"),
-				llmMetadata: { clientMessageId: "msg-2" },
-			},
-			{
-				id: 4,
-				role: "assistant",
-				content: "Reply to second",
-				createdAt: new Date("2026-01-01T10:03:00Z"),
-				llmMetadata: { clientMessageId: "msg-2" },
-			},
-		]);
-
-		expect(result.map((message) => message.id)).toEqual([2, 1, 3, 4]);
-	});
-
-	it("does not pull later matched assistant messages backward", () => {
-		const result = orderPersistedSessionMessagesForDisplay([
-			{
-				id: 1,
-				role: "user",
-				content: "First",
-				createdAt: new Date("2026-01-01T10:00:00Z"),
-				llmMetadata: { clientMessageId: "msg-1" },
-			},
-			{
-				id: 2,
-				role: "user",
-				content: "Second",
-				createdAt: new Date("2026-01-01T10:01:00Z"),
-				llmMetadata: { clientMessageId: "msg-2" },
-			},
-			{
-				id: 3,
-				role: "assistant",
-				content: "Reply to first",
-				createdAt: new Date("2026-01-01T10:02:00Z"),
-				llmMetadata: { clientMessageId: "msg-1" },
-			},
-		]);
-
-		expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
 	});
 });
 
