@@ -139,7 +139,7 @@ describe("buildChatMessages", () => {
 			],
 		});
 
-		expect(result.map((message) => message.id)).toEqual(["1", "3", "2", "retry-2"]);
+		expect(result.map((message) => message.id)).toEqual(["1", "2", "retry-2", "3"]);
 		expect(result.some((message) => message.id === "retry-1")).toBe(false);
 	});
 
@@ -477,7 +477,42 @@ describe("sortPersistedSessionMessages", () => {
 });
 
 describe("orderPersistedSessionMessagesForDisplay", () => {
-	it("moves matched assistant messages directly after their user turn", () => {
+	it("moves an inverted matched assistant message directly after its user turn", () => {
+		const result = orderPersistedSessionMessagesForDisplay([
+			{
+				id: 1,
+				role: "assistant",
+				content: "Reply to first",
+				createdAt: new Date("2026-01-01T10:00:00Z"),
+				llmMetadata: { clientMessageId: "msg-1" },
+			},
+			{
+				id: 2,
+				role: "user",
+				content: "First",
+				createdAt: new Date("2026-01-01T10:01:00Z"),
+				llmMetadata: { clientMessageId: "msg-1" },
+			},
+			{
+				id: 3,
+				role: "user",
+				content: "Second",
+				createdAt: new Date("2026-01-01T10:02:00Z"),
+				llmMetadata: { clientMessageId: "msg-2" },
+			},
+			{
+				id: 4,
+				role: "assistant",
+				content: "Reply to second",
+				createdAt: new Date("2026-01-01T10:03:00Z"),
+				llmMetadata: { clientMessageId: "msg-2" },
+			},
+		]);
+
+		expect(result.map((message) => message.id)).toEqual([2, 1, 3, 4]);
+	});
+
+	it("does not pull later matched assistant messages backward", () => {
 		const result = orderPersistedSessionMessagesForDisplay([
 			{
 				id: 1,
@@ -502,7 +537,7 @@ describe("orderPersistedSessionMessagesForDisplay", () => {
 			},
 		]);
 
-		expect(result.map((message) => message.id)).toEqual([1, 3, 2]);
+		expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
 	});
 });
 

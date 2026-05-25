@@ -102,14 +102,14 @@ function getClientMessageId(message: Pick<PersistedSessionMessage, "llmMetadata"
 
 export function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
 	const sortedMessages = sortPersistedSessionMessages(messages);
-	const userClientIds = new Set<string>();
 	const assistantMessagesByClientId = new Map<string, T[]>();
+	const userIndexByClientId = new Map<string, number>();
 
-	for (const message of sortedMessages) {
+	for (const [index, message] of sortedMessages.entries()) {
 		const clientMessageId = getClientMessageId(message);
 		if (!clientMessageId) continue;
 		if (message.role === "user") {
-			userClientIds.add(clientMessageId);
+			userIndexByClientId.set(clientMessageId, index);
 		} else if (isAgentRole(message.role)) {
 			const assistantMessages = assistantMessagesByClientId.get(clientMessageId) ?? [];
 			assistantMessages.push(message);
@@ -124,7 +124,8 @@ export function orderPersistedSessionMessagesForDisplay<T extends PersistedSessi
 		if (emitted.has(message)) continue;
 
 		const clientMessageId = getClientMessageId(message);
-		if (clientMessageId && isAgentRole(message.role) && userClientIds.has(clientMessageId)) {
+		const matchedUserIndex = clientMessageId ? userIndexByClientId.get(clientMessageId) : undefined;
+		if (matchedUserIndex !== undefined && isAgentRole(message.role) && sortedMessages.indexOf(message) < matchedUserIndex) {
 			continue;
 		}
 
@@ -132,9 +133,12 @@ export function orderPersistedSessionMessagesForDisplay<T extends PersistedSessi
 		emitted.add(message);
 
 		if (message.role !== "user" || !clientMessageId) continue;
+		const userIndex = userIndexByClientId.get(clientMessageId);
+		if (userIndex === undefined) continue;
 
 		for (const assistantMessage of assistantMessagesByClientId.get(clientMessageId) ?? []) {
 			if (emitted.has(assistantMessage)) continue;
+			if (sortedMessages.indexOf(assistantMessage) > userIndex) continue;
 			orderedMessages.push(assistantMessage);
 			emitted.add(assistantMessage);
 		}
