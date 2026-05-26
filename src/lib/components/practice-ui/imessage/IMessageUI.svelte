@@ -10,6 +10,7 @@ import { deserialize } from "$app/forms";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
+import TextSelectionHandler from "../TextSelectionHandler.svelte";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
 
@@ -427,3 +428,5 @@ onMount(() => {
 		</div>
 	</div>
 {/if}
+
+<TextSelectionHandler containerEl={session.chatContainer} sessionId={session.sessionId} {t} />

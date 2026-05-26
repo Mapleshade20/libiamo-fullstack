@@ -7,6 +7,7 @@ import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtil
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
+import TextSelectionHandler from "../TextSelectionHandler.svelte";
 import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
@@ -596,6 +597,8 @@ $effect(() => {
 		/>
 	{/if}
 </div>
+
+<TextSelectionHandler containerEl={messageScroll} {sessionId} {t} />
 
 <style>
 .mail-shell {

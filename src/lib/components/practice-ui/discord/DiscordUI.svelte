@@ -4,6 +4,7 @@ import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
+import TextSelectionHandler from "../TextSelectionHandler.svelte";
 import ChatHeader from "./ChatHeader.svelte";
 import { i18n } from "./i18n";
 import MemberList from "./MemberList.svelte";
@@ -257,6 +258,8 @@ $effect(() => {
 		</div>
 	</div>
 </div>
+
+<TextSelectionHandler containerEl={session.chatContainer} sessionId={session.sessionId} {t} />
 
 <style>
 ::-webkit-scrollbar {

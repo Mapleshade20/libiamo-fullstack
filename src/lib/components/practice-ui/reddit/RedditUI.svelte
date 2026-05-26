@@ -3,6 +3,7 @@ import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Search from "@lucide/svelte/icons/search";
 import { fade } from "svelte/transition";
 import { createPracticeSession } from "../session.svelte";
+import TextSelectionHandler from "../TextSelectionHandler.svelte";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
 import CommunityPanel from "./CommunityPanel.svelte";
@@ -323,6 +324,8 @@ let showMobileMenu = $state(false);
 	{t}
 	onCloseEvaluation={() => (session.showEvaluationModal = false)}
 />
+
+<TextSelectionHandler containerEl={session.chatContainer} sessionId={session.sessionId} {t} />
 
 <style>
 ::-webkit-scrollbar {

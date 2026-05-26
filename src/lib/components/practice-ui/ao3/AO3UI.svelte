@@ -4,6 +4,7 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { createPracticeSession } from "../session.svelte";
+import TextSelectionHandler from "../TextSelectionHandler.svelte";
 import {
 	type Ao3OpeningState,
 	type Ao3RenderableComment,
@@ -88,7 +89,7 @@ let showHintMenu = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
-let scrollContainer: HTMLDivElement;
+let scrollContainer = $state<HTMLDivElement | null>(null);
 
 const disabled = $derived(session.disabled);
 const remainingCharacters = $derived(Math.max(0, characterLimit - commentText.length));
@@ -463,6 +464,8 @@ function scrollToTop(event: MouseEvent) {
 		{/if}
 	</li>
 {/snippet}
+
+<TextSelectionHandler containerEl={scrollContainer} sessionId={session.sessionId} {t} />
 
 <style>
 .ao3-root {
