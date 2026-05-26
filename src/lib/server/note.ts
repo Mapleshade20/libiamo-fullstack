@@ -55,11 +55,12 @@ export async function createNotesBatch(
 	sourceSessionId: number,
 	language: string,
 	feedbackItems: { tutorComment: string; category?: "grammar" | "vocabulary" | "coherence" }[],
+	sessionOwnerId?: string,
 ) {
 	if (feedbackItems.length === 0) return [];
 
 	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sourceSessionId),
+		where: and(eq(practiceSession.id, sourceSessionId), sessionOwnerId ? eq(practiceSession.userId, sessionOwnerId) : undefined),
 		with: {
 			messages: {
 				orderBy: asc(sessionMessage.createdAt),

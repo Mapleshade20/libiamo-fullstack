@@ -143,6 +143,7 @@ async function submitAsk(q: string) {
 	if (!sessionId || followUpLoading) return;
 	followUpLoading = true;
 	followUpAnswer = null;
+	followUpQuestion = q;
 	try {
 		const formData = new FormData();
 		formData.append("sessionId", String(sessionId));

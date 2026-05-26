@@ -11,7 +11,6 @@ type Note = {
 	tutorComment: string;
 	keywords?: string[] | null;
 	sourceContext?: string | null;
-	createdAt: Date;
 };
 
 let {

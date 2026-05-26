@@ -6,7 +6,7 @@ import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/con
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
-import { note, practiceSession, task } from "$lib/server/db/schema";
+import { practiceSession, task } from "$lib/server/db/schema";
 import { createNoteFromSelectionQA, createNotesBatch, validateAndCreateNoteFromSelection } from "$lib/server/note";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
@@ -265,16 +265,9 @@ export const actions: Actions = {
 
 			const feedback = await completeSession(sessionId);
 
-			// Return existing note tutorComments so the UI can pre-mark already-saved items
-			const existingNotes = await db
-				.select({ tutorComment: note.tutorComment })
-				.from(note)
-				.where(and(eq(note.sourceSessionId, sessionId), eq(note.userId, user.id)));
-
 			return {
 				success: true,
 				feedback,
-				existingBackContents: existingNotes.map((n) => n.tutorComment),
 			};
 		} catch (e) {
 			const mappedError = mapCompleteSessionError(e);
@@ -293,18 +286,26 @@ export const actions: Actions = {
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 
-		const checkedItems = formData.getAll("checkedItems") as string[];
-		if (checkedItems.length === 0) return fail(400, { error: "No items selected" });
+		const checkedItemsRaw = formData.getAll("checkedItems");
+		if (checkedItemsRaw.length === 0) return fail(400, { error: "No items selected" });
 
-		// Parse category-prefixed values: "grammar|text", "vocabulary|text", "coherence|text"
-		const parsed = checkedItems.map((raw) => {
+		const ALLOWED_CATEGORIES = ["grammar", "vocabulary", "coherence"] as const;
+		type Category = (typeof ALLOWED_CATEGORIES)[number];
+
+		// Validate each checked item: must be a non-empty string with a valid category prefix
+		const parsed: { tutorComment: string; category: Category }[] = [];
+		for (const raw of checkedItemsRaw) {
+			if (typeof raw !== "string") return fail(400, { error: "Invalid checked item" });
 			const pipeIdx = raw.indexOf("|");
-			if (pipeIdx === -1) return { tutorComment: raw, category: "grammar" as const };
-			return {
-				category: raw.slice(0, pipeIdx) as "grammar" | "vocabulary" | "coherence",
-				tutorComment: raw.slice(pipeIdx + 1),
-			};
-		});
+			if (pipeIdx === -1) return fail(400, { error: "Invalid checked item format" });
+			const category = raw.slice(0, pipeIdx);
+			if (!(ALLOWED_CATEGORIES as readonly string[]).includes(category)) {
+				return fail(400, { error: "Invalid category" });
+			}
+			const tutorComment = raw.slice(pipeIdx + 1).trim();
+			if (!tutorComment) return fail(400, { error: "Empty feedback item text" });
+			parsed.push({ tutorComment, category: category as Category });
+		}
 
 		try {
 			// Fetch the task language from the session
@@ -314,7 +315,7 @@ export const actions: Actions = {
 			});
 			const language = session?.task?.language ?? "en";
 
-			const notes = await createNotesBatch(user.id, sessionId, language, parsed);
+			const notes = await createNotesBatch(user.id, sessionId, language, parsed, user.id);
 			return { success: true, count: notes.length };
 		} catch (e) {
 			console.error("Failed to save notes:", e);

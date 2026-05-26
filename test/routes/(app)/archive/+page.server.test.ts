@@ -49,7 +49,7 @@ describe("archive page server", () => {
 							taskTitle: "Ordering coffee",
 							ui: "discord",
 							completedAt: new Date(),
-							notes: [{ id: 1, tutorComment: "Use past tense", keywords: ["past tense"], sourceContext: "I go yesterday.", createdAt: new Date() }],
+							notes: [{ id: 1, tutorComment: "Use past tense", keywords: ["past tense"], sourceContext: "I go yesterday." }],
 						},
 					],
 				},

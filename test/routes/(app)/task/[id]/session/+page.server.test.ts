@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockSessionService } = vi.hoisted(() => ({
+const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
 			practiceSession: { findFirst: vi.fn() },
@@ -21,10 +21,16 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		getSessionOrFail: vi.fn(),
 		followUpOnFeedback: vi.fn(),
 	},
+	mockNoteService: {
+		createNotesBatch: vi.fn(),
+		validateAndCreateNoteFromSelection: vi.fn(),
+		createNoteFromSelectionQA: vi.fn(),
+	},
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
+vi.mock("$lib/server/note", () => mockNoteService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
@@ -52,11 +58,15 @@ describe("session page server", () => {
 	}: {
 		taskId?: string;
 		user?: typeof mockUser | null;
-		values?: Record<string, string>;
+		values?: Record<string, string | string[]>;
 	}) => {
 		const formData = new FormData();
 		for (const [key, value] of Object.entries(values)) {
-			formData.append(key, value);
+			if (Array.isArray(value)) {
+				for (const v of value) formData.append(key, v);
+			} else {
+				formData.append(key, value);
+			}
 		}
 		return {
 			request: { formData: () => Promise.resolve(formData) },
@@ -1046,6 +1056,220 @@ describe("session page server", () => {
 				}),
 			);
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to get follow-up answer" } });
+		});
+	});
+
+	describe("actions.saveNotes", () => {
+		it("saves notes and returns count", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.createNotesBatch.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+			const result = await actions.saveNotes(createFormEvent({ values: { sessionId: "123", checkedItems: ["grammar|Wrong tense"] } }));
+
+			expect(result).toEqual({ success: true, count: 2 });
+		});
+
+		it("returns 400 when checked items format is invalid", async () => {
+			const result = await actions.saveNotes(createFormEvent({ values: { sessionId: "123", checkedItems: ["spelling|text"] } }));
+			expect(result).toMatchObject({ status: 400, data: { error: "Invalid category" } });
+		});
+
+		it("returns 401 when unauthenticated", async () => {
+			const result = await actions.saveNotes(createFormEvent({ user: null, values: { sessionId: "123", checkedItems: ["grammar|text"] } }));
+			expect(result).toMatchObject({ status: 401 });
+		});
+
+		it("returns 500 when createNotesBatch fails", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.createNotesBatch.mockRejectedValue(new Error("DB error"));
+
+			const result = await actions.saveNotes(createFormEvent({ values: { sessionId: "123", checkedItems: ["grammar|text"] } }));
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to generate notes" } });
+		});
+	});
+
+	describe("actions.createNoteFromSelection", () => {
+		it("creates note from valid selection", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.validateAndCreateNoteFromSelection.mockResolvedValue({
+				success: true,
+				note: { id: 1, tutorComment: "Knowledge point" },
+			});
+
+			const result = await actions.createNoteFromSelection(
+				createFormEvent({ values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx" } }),
+			);
+
+			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Knowledge point" } });
+		});
+
+		it("rejects invalid selection", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.validateAndCreateNoteFromSelection.mockResolvedValue({
+				success: false,
+				reason: "Too short",
+			});
+
+			const result = await actions.createNoteFromSelection(
+				createFormEvent({ values: { sessionId: "123", selectedText: "x", surroundingContext: "ctx" } }),
+			);
+
+			expect(result).toEqual({ success: false, reason: "Too short" });
+		});
+
+		it("returns 403 when ownership check fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
+			const result = await actions.createNoteFromSelection(
+				createFormEvent({ values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx" } }),
+			);
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns 500 when validation fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.validateAndCreateNoteFromSelection.mockRejectedValue(new Error("LLM error"));
+
+			const result = await actions.createNoteFromSelection(
+				createFormEvent({ values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx" } }),
+			);
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to create note from selection" } });
+		});
+	});
+
+	describe("actions.followUpOnSelection", () => {
+		it("returns answer from followUpOnFeedback", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockSessionService.followUpOnFeedback.mockResolvedValue({ answer: "Explanation" });
+
+			const result = await actions.followUpOnSelection(
+				createFormEvent({
+					values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx", question: "why" },
+				}),
+			);
+
+			expect(result).toEqual({ success: true, answer: "Explanation" });
+		});
+
+		it("returns 403 when ownership check fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
+			const result = await actions.followUpOnSelection(
+				createFormEvent({
+					values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx", question: "why" },
+				}),
+			);
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns 500 when followUpOnFeedback fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockSessionService.followUpOnFeedback.mockRejectedValue(new Error("AI error"));
+
+			const result = await actions.followUpOnSelection(
+				createFormEvent({
+					values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx", question: "why" },
+				}),
+			);
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to get follow-up answer" } });
+		});
+	});
+
+	describe("actions.saveNoteFromSelection", () => {
+		it("saves note from Q&A distillation", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.createNoteFromSelectionQA.mockResolvedValue({
+				success: true,
+				note: { id: 1 },
+			});
+
+			const result = await actions.saveNoteFromSelection(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						selectedText: "text",
+						surroundingContext: "ctx",
+						question: "why",
+						answer: "explanation",
+					},
+				}),
+			);
+
+			expect(result).toEqual({ success: true, note: { id: 1 } });
+		});
+
+		it("returns 400 when required fields are missing", async () => {
+			const result = await actions.saveNoteFromSelection(
+				createFormEvent({
+					values: { sessionId: "123", selectedText: "text", surroundingContext: "ctx", question: "why" },
+				}),
+			);
+			expect(result).toMatchObject({ status: 400, data: { error: "Missing required fields" } });
+		});
+
+		it("returns 403 when ownership check fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
+			const result = await actions.saveNoteFromSelection(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						selectedText: "text",
+						surroundingContext: "ctx",
+						question: "why",
+						answer: "explanation",
+					},
+				}),
+			);
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns 500 when distillation fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				task: { language: "en" },
+			});
+			mockNoteService.createNoteFromSelectionQA.mockRejectedValue(new Error("LLM error"));
+
+			const result = await actions.saveNoteFromSelection(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						selectedText: "text",
+						surroundingContext: "ctx",
+						question: "why",
+						answer: "explanation",
+					},
+				}),
+			);
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to save note from selection" } });
 		});
 	});
 });
