@@ -431,7 +431,6 @@ export function getEditorFields(ui: UiVariant): FieldDef[] {
 
 // ── Tutor Feedback (AI structured output) ────────────────────────────
 export const tutorFeedbackSchema = z.object({
-	content: z.string().describe("Overall feedback text for the student"),
 	objectiveResults: z
 		.array(
 			z.object({
@@ -440,6 +439,10 @@ export const tutorFeedbackSchema = z.object({
 			}),
 		)
 		.describe("Per-objective evaluation results"),
+	grammar: z.array(z.string()).describe("Specific grammar issues (tense, conjugation, agreement)"),
+	vocabulary: z.array(z.string()).describe("Word/phrase precision issues"),
+	coherence: z.array(z.string()).describe("Logical flow and engagement issues"),
+	summary: z.string().describe("Brief overall recap of student's performance"),
 });
 
 export type TutorFeedback = z.infer<typeof tutorFeedbackSchema>;

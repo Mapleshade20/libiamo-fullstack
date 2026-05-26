@@ -524,7 +524,10 @@ describe("session service", () => {
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
 			mockClient.chatJson.mockResolvedValue({
-				content: "Good job!",
+				summary: "Good job!",
+				grammar: [],
+				vocabulary: [],
+				coherence: [],
 				objectiveResults: [
 					{ text: "Use polite language", grade: "A" },
 					{ text: "Respond appropriately", grade: "B" },
@@ -533,7 +536,7 @@ describe("session service", () => {
 
 			const result = await completeSession(123);
 
-			expect(result.content).toBe("Good job!");
+			expect(result.summary).toBe("Good job!");
 			expect(result.objectiveResults).toHaveLength(2);
 			expect(mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
 			expect(mockDb.update).toHaveBeenCalledTimes(2);
@@ -565,7 +568,10 @@ describe("session service", () => {
 				task: mockTaskObjectives,
 			});
 			mockClient.chatJson.mockResolvedValue({
-				content: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
+				summary: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
+				grammar: [],
+				vocabulary: [],
+				coherence: [],
 				objectiveResults: [{ text: "Use polite language", grade: "A" }],
 			});
 
@@ -595,13 +601,16 @@ describe("session service", () => {
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 
 			mockClient.chatJson.mockResolvedValue({
-				content: "General fluency assessment here.",
+				summary: "General fluency assessment here.",
+				grammar: [],
+				vocabulary: [],
+				coherence: [],
 				objectiveResults: [],
 			});
 
 			const result = await completeSession(123);
 
-			expect(result.content).toBe("General fluency assessment here.");
+			expect(result.summary).toBe("General fluency assessment here.");
 			expect(result.objectiveResults).toHaveLength(0);
 		});
 
@@ -629,7 +638,10 @@ describe("session service", () => {
 			const whereMock = vi.fn();
 			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
 			mockClient.chatJson.mockResolvedValue({
-				content: "Good retry!",
+				summary: "Good retry!",
+				grammar: [],
+				vocabulary: [],
+				coherence: [],
 				objectiveResults: [
 					{ text: "Use polite language", grade: "A" },
 					{ text: "Respond appropriately", grade: "A" },
@@ -638,7 +650,7 @@ describe("session service", () => {
 
 			const result = await completeSession(123);
 
-			expect(result.content).toBe("Good retry!");
+			expect(result.summary).toBe("Good retry!");
 			expect(mockDb.update).toHaveBeenCalledTimes(1);
 		});
 

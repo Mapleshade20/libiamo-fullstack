@@ -46,7 +46,7 @@ let {
 			<!-- Body -->
 			<div class="max-h-[52vh] overflow-y-auto px-6 py-5">
 				<h3 class="mb-2 text-[10px] font-black tracking-widest text-[#878A8C] uppercase">{t.overallFeedback}</h3>
-				<p class="whitespace-pre-wrap rounded-md bg-[#F6F7F8] p-4 text-sm leading-6 text-[#1C1C1C]">{feedback.content}</p>
+				<p class="whitespace-pre-wrap rounded-md bg-[#F6F7F8] p-4 text-sm leading-6 text-[#1C1C1C]">{feedback.summary}</p>
 
 				{#if feedback.objectiveResults?.length}
 					<h3 class="mt-5 mb-2 text-[10px] font-black tracking-widest text-[#878A8C] uppercase">{t.objectiveAssessment}</h3>

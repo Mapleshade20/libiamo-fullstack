@@ -561,7 +561,7 @@ function buildTutorPrompt(
 		? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
 - Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
 - The "objectiveResults" grades should remain per objective, not per email.
-- In the "content" feedback, summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
+- In the "summary", summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
 		: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.";
 
 	return `You are a language tutor evaluating a student's conversation practice.
@@ -591,9 +591,14 @@ Grade each objective (or general fluency) as:
 - C: Needs improvement - significant gaps
 
 Provide brief, constructive feedback (2-3 sentences).
-IMPORTANT: You MUST write the "content" (overall feedback on student's performance) in ${learningLanguage.toUpperCase()}. Do NOT write the feedback in English. The "text" field of objectiveResults should remain in the original language of the objectives.
+IMPORTANT: The "summary" and the items in "grammar", "vocabulary", and "coherence" arrays MUST be written in ${learningLanguage.toUpperCase()}. The "text" field of objectiveResults should remain in the original language of the objectives.
 
-Respond in JSON format: {"objectiveResults":[{"text":"objective description","grade":"A|B|C"}],"content":"overall feedback on student's performance"}`;
+In "grammar", list specific grammar issues (e.g. tense, conjugation, agreement).
+In "vocabulary", list word/phrase precision issues.
+In "coherence", list logical flow and engagement issues.
+If there are no issues for a category, provide an empty array [].
+
+Respond in JSON format: {"objectiveResults":[{"text":"objective description","grade":"A|B|C"}],"grammar":["specific grammar issue"],"vocabulary":["word precision issue"],"coherence":["flow or engagement issue"],"summary":"brief overall recap of student's performance"}`;
 }
 
 function getMailBodyHtmlMetadata(metadata: unknown) {
@@ -749,4 +754,66 @@ export async function getSessionOrFail(sessionId: number, userId: string, taskId
 		return null;
 	}
 	return session;
+}
+
+// ── Follow-up on feedback items ──────────────────────────────────────
+
+const FollowUpAnswerSchema = z.object({
+	answer: z.string().describe("A helpful, concise explanation answering the learner's follow-up question."),
+});
+
+const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
+	why: "Why is this wrong? Please explain the underlying rule or principle.",
+	examples: "Give me 3 more natural examples that illustrate the correct usage.",
+};
+
+export type FollowUpOnFeedbackInput = {
+	sessionId: number;
+	userId: string;
+	itemText: string;
+	category: "grammar" | "vocabulary" | "coherence";
+	question: string;
+};
+
+export type FollowUpOnFeedbackResult = {
+	answer: string;
+};
+
+export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
+		with: { task: { columns: { language: true } } },
+	});
+
+	if (!session) throw new Error("Session not found");
+
+	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
+	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
+	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
+
+	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific issue better.
+
+The note they're asking about:
+- Category: ${categoryLabel}
+- Knowledge point: "${input.itemText}"
+
+Their follow-up question: ${resolvedQuestion}
+
+## Instructions
+- Answer in a helpful, encouraging tone suitable for a language learner.
+- Be concise but thorough — 2-5 sentences is usually enough unless the learner asks for examples (then include 3 brief examples).
+- If the knowledge point describes a mistake, explain the correct rule clearly.
+- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.
+- Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
+- Do NOT roleplay as a character — you are a tutor, not the scenario persona.
+
+Respond in JSON format: { "answer": "your response here" }`;
+
+	const messages: ChatMessage[] = [
+		{ role: "system", content: systemPrompt },
+		{ role: "user", content: resolvedQuestion },
+	];
+
+	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
+	return { answer: result.answer };
 }

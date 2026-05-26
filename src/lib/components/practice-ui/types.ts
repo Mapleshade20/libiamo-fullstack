@@ -4,6 +4,9 @@ export type ObjectiveResult = {
 };
 
 export type TutorFeedback = {
-	content: string;
 	objectiveResults: ObjectiveResult[];
+	grammar: string[];
+	vocabulary: string[];
+	coherence: string[];
+	summary: string;
 };

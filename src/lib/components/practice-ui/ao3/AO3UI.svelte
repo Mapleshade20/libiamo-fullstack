@@ -391,7 +391,7 @@ function scrollToTop(event: MouseEvent) {
 			</div>
 			<div class="max-h-[52vh] overflow-y-auto p-5">
 				<h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-[#666]">{t.overallFeedback}</h3>
-				<p class="mb-6 whitespace-pre-wrap border border-[#ddd] bg-[#f9f9f9] p-3 text-sm leading-6">{session.feedback.content}</p>
+				<p class="mb-6 whitespace-pre-wrap border border-[#ddd] bg-[#f9f9f9] p-3 text-sm leading-6">{session.feedback.summary}</p>
 				{#if session.feedback.objectiveResults?.length}
 					<h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-[#666]">{t.objectiveAssessment}</h3>
 					<div class="space-y-2">

@@ -29,7 +29,7 @@ let {
 			</div>
 			<div class="overflow-y-auto p-6">
 				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6E6E73]">{t.overallFeedback}</h3>
-				<p class="mb-6 rounded-lg border border-black/10 bg-[#F7F7F9] p-4 text-sm leading-relaxed whitespace-pre-wrap">{feedback.content}</p>
+				<p class="mb-6 rounded-lg border border-black/10 bg-[#F7F7F9] p-4 text-sm leading-relaxed whitespace-pre-wrap">{feedback.summary}</p>
 				{#if feedback.objectiveResults && feedback.objectiveResults.length > 0}
 					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6E6E73]">{t.objectiveAssessment}</h3>
 					<div class="space-y-2">

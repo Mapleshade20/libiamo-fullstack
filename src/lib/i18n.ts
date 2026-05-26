@@ -52,6 +52,14 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		// Translate
 		"translate.title": "Translation",
 		"translate.empty": "No content available for translation yet.",
+		"archive.title": "Archive",
+		"archive.empty": "No notes yet. Complete a practice session and save feedback as notes.",
+		"archive.askFollowUp": "Ask about this",
+		"archive.askWhy": "Why is this wrong?",
+		"archive.askExamples": "Give me more examples",
+		"archive.askPlaceholder": "Ask a follow-up question...",
+		"archive.askSubmit": "Ask",
+		"archive.askThinking": "Thinking...",
 
 		// Common
 		"common.save": "Save",
@@ -119,6 +127,14 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		// Translate
 		"translate.title": "Traducción",
 		"translate.empty": "No hay contenido disponible para traducir todavía.",
+		"archive.title": "Archivo",
+		"archive.empty": "Aún no hay notas. Completa una sesión de práctica para guardar notas.",
+		"archive.askFollowUp": "Preguntar sobre esto",
+		"archive.askWhy": "¿Por qué está mal?",
+		"archive.askExamples": "Dame más ejemplos",
+		"archive.askPlaceholder": "Haz una pregunta de seguimiento...",
+		"archive.askSubmit": "Preguntar",
+		"archive.askThinking": "Pensando...",
 
 		"common.save": "Guardar",
 		"common.retry": "Reintentar",
@@ -185,6 +201,14 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		// Translate
 		"translate.title": "Traduction",
 		"translate.empty": "Aucun contenu disponible pour la traduction pour le moment.",
+		"archive.title": "Archive",
+		"archive.empty": "Pas encore de notes. Terminez une session d'entraînement pour enregistrer des notes.",
+		"archive.askFollowUp": "Question à ce sujet",
+		"archive.askWhy": "Pourquoi est-ce faux ?",
+		"archive.askExamples": "Donne-moi plus d'exemples",
+		"archive.askPlaceholder": "Poser une question de suivi...",
+		"archive.askSubmit": "Demander",
+		"archive.askThinking": "Réflexion...",
 
 		"common.save": "Enregistrer",
 		"common.retry": "Réessayer",
@@ -251,6 +275,14 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		// Translate
 		"translate.title": "翻訳",
 		"translate.empty": "現在翻訳可能なコンテンツはありません。",
+		"archive.title": "アーカイブ",
+		"archive.empty": "まだノートはありません。練習セッションを完了するとノートが保存されます。",
+		"archive.askFollowUp": "これについて質問",
+		"archive.askWhy": "なぜこれが間違いですか？",
+		"archive.askExamples": "もっと例をください",
+		"archive.askPlaceholder": "フォローアップの質問をどうぞ...",
+		"archive.askSubmit": "質問する",
+		"archive.askThinking": "考え中...",
 
 		"common.save": "保存",
 		"common.retry": "再試行",

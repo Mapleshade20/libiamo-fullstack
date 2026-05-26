@@ -7,7 +7,11 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 			task: { findFirst: vi.fn() },
 			user: { findFirst: vi.fn() },
 		},
-		select: vi.fn(),
+		select: vi.fn(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn(() => []),
+			})),
+		})),
 	},
 	mockSessionService: {
 		startSession: vi.fn(),
@@ -15,6 +19,7 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		completeSession: vi.fn(),
 		generateHint: vi.fn(),
 		getSessionOrFail: vi.fn(),
+		followUpOnFeedback: vi.fn(),
 	},
 }));
 
@@ -644,7 +649,10 @@ describe("session page server", () => {
 				taskId: 456,
 			});
 			const mockFeedback = {
-				content: "Good job!",
+				summary: "Good job!",
+				grammar: [],
+				vocabulary: [],
+				coherence: [],
 				objectiveResults: [{ text: "Objective 1", grade: "A" as const }],
 			};
 			mockSessionService.completeSession.mockResolvedValue(mockFeedback);
@@ -860,6 +868,184 @@ describe("session page server", () => {
 
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Failed to generate hints" } });
+		});
+	});
+
+	describe("actions.followUp", () => {
+		it("returns success with answer when called correctly", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.followUpOnFeedback.mockResolvedValue({
+				answer: "Here is the explanation.",
+			});
+
+			const result = await actions.followUp(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						itemText: "Incorrect verb conjugation",
+						category: "grammar",
+						question: "why",
+					},
+				}),
+			);
+
+			expect(result).toEqual({ success: true, answer: "Here is the explanation." });
+			expect(mockSessionService.followUpOnFeedback).toHaveBeenCalledWith({
+				sessionId: 123,
+				userId: "user_123",
+				itemText: "Incorrect verb conjugation",
+				category: "grammar",
+				question: "why",
+			});
+		});
+
+		it("accepts custom free-text question", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.followUpOnFeedback.mockResolvedValue({
+				answer: "Detailed answer.",
+			});
+
+			const result = await actions.followUp(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						itemText: "Word choice precision",
+						category: "vocabulary",
+						question: "Can you explain this in simpler terms?",
+					},
+				}),
+			);
+
+			expect(result).toEqual({ success: true, answer: "Detailed answer." });
+			expect(mockSessionService.followUpOnFeedback).toHaveBeenCalledWith({
+				sessionId: 123,
+				userId: "user_123",
+				itemText: "Word choice precision",
+				category: "vocabulary",
+				question: "Can you explain this in simpler terms?",
+			});
+		});
+
+		it("accepts coherence category", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.followUpOnFeedback.mockResolvedValue({
+				answer: "Coherence explanation.",
+			});
+
+			const result = await actions.followUp(
+				createFormEvent({
+					values: {
+						sessionId: "123",
+						itemText: "Flow could be improved",
+						category: "coherence",
+						question: "examples",
+					},
+				}),
+			);
+
+			expect(result).toEqual({ success: true, answer: "Coherence explanation." });
+		});
+
+		it.each([
+			{
+				name: "unauthenticated user",
+				event: createFormEvent({
+					user: null,
+					values: { sessionId: "123", itemText: "text", category: "grammar", question: "why" },
+				}),
+				expected: { status: 401, data: { error: "Unauthorized" } },
+			},
+			{
+				name: "invalid task id",
+				event: createFormEvent({
+					taskId: "invalid",
+					values: { sessionId: "123", itemText: "text", category: "grammar", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Invalid task ID" } },
+			},
+			{
+				name: "invalid session id",
+				event: createFormEvent({
+					values: { itemText: "text", category: "grammar", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Invalid session ID" } },
+			},
+			{
+				name: "missing itemText",
+				event: createFormEvent({
+					values: { sessionId: "123", category: "grammar", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Feedback item text is required" } },
+			},
+			{
+				name: "empty itemText",
+				event: createFormEvent({
+					values: { sessionId: "123", itemText: "  ", category: "grammar", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Feedback item text is required" } },
+			},
+			{
+				name: "missing category",
+				event: createFormEvent({
+					values: { sessionId: "123", itemText: "text", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Valid category is required" } },
+			},
+			{
+				name: "invalid category",
+				event: createFormEvent({
+					values: { sessionId: "123", itemText: "text", category: "style", question: "why" },
+				}),
+				expected: { status: 400, data: { error: "Valid category is required" } },
+			},
+			{
+				name: "missing question",
+				event: createFormEvent({
+					values: { sessionId: "123", itemText: "text", category: "grammar" },
+				}),
+				expected: { status: 400, data: { error: "Question is required" } },
+			},
+		])("returns controlled failures for $name", async ({ event, expected }) => {
+			const result = await actions.followUp(event);
+			expect(result).toMatchObject(expected);
+		});
+
+		it("returns 403 when ownership check fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue(null);
+			const result = await actions.followUp(
+				createFormEvent({
+					values: { sessionId: "123", itemText: "text", category: "grammar", question: "why" },
+				}),
+			);
+			expect(result).toMatchObject({ status: 403, data: { error: "Access denied" } });
+		});
+
+		it("returns 500 when followUpOnFeedback fails", async () => {
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.followUpOnFeedback.mockRejectedValue(new Error("AI error"));
+
+			const result = await actions.followUp(
+				createFormEvent({
+					values: { sessionId: "123", itemText: "text", category: "grammar", question: "why" },
+				}),
+			);
+			expect(result).toMatchObject({ status: 500, data: { error: "Failed to get follow-up answer" } });
 		});
 	});
 });

@@ -37,7 +37,7 @@ let {
 			<div class="p-6 overflow-y-auto max-h-[50vh] hide-scrollbar bg-[#313338]">
 				<h3 class="text-xs font-black text-[#949BA4] uppercase mb-2 tracking-wider">{t.overallFeedback}</h3>
 				<p class="text-[#DBDEE1] text-[15px] leading-relaxed whitespace-pre-wrap mb-8 bg-[#2B2D31] p-4 rounded-lg border border-[#1E1F22]">
-					{feedback.content}
+					{feedback.summary}
 				</p>
 				{#if feedback.objectiveResults && feedback.objectiveResults.length > 0}
 					<h3 class="text-xs font-black text-[#949BA4] uppercase mb-3 tracking-wider">{t.objectiveAssessment}</h3>

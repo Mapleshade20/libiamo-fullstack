@@ -215,6 +215,26 @@ export const translationAttempt = pgTable(
 	(t) => [index("translation_attempt_user_template_idx").on(t.userId, t.templateId)],
 );
 
+// ── note ───────────────────────────────────────────────────────────
+export const note = pgTable(
+	"note",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		sourceSessionId: integer("source_session_id")
+			.notNull()
+			.references(() => practiceSession.id, { onDelete: "cascade" }),
+		sourceMessageId: integer("source_message_id").references(() => sessionMessage.id, { onDelete: "set null" }),
+		tutorComment: text("tutor_comment").notNull(),
+		keywords: text("keywords").array(),
+		sourceContext: text("source_context"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [index("note_user_id_idx").on(t.userId), index("note_source_session_id_idx").on(t.sourceSessionId)],
+);
+
 // ── Relations ────────────────────────────────────────────────────────
 export const userLearningProfileRelations = relations(userLearningProfile, ({ one }) => ({
 	user: one(user, {
@@ -285,6 +305,7 @@ export const practiceSessionRelations = relations(practiceSession, ({ one, many 
 		references: [task.id],
 	}),
 	messages: many(sessionMessage),
+	notes: many(note),
 }));
 
 export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
@@ -292,6 +313,12 @@ export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
 		fields: [sessionMessage.sessionId],
 		references: [practiceSession.id],
 	}),
+}));
+
+export const noteRelations = relations(note, ({ one }) => ({
+	user: one(user, { fields: [note.userId], references: [user.id] }),
+	sourceSession: one(practiceSession, { fields: [note.sourceSessionId], references: [practiceSession.id] }),
+	sourceMessage: one(sessionMessage, { fields: [note.sourceMessageId], references: [sessionMessage.id] }),
 }));
 
 export * from "./auth.schema";

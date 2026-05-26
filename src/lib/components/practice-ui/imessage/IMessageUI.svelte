@@ -397,7 +397,7 @@ onMount(() => {
 			</div>
 			<div class="max-h-[52vh] overflow-y-auto px-6 py-4">
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.overallFeedback}</h3>
-				<p class="mt-2 whitespace-pre-wrap rounded-xl bg-[#F2F2F7] p-4 text-sm leading-6 text-[#1C1C1E]">{session.feedback.content}</p>
+				<p class="mt-2 whitespace-pre-wrap rounded-xl bg-[#F2F2F7] p-4 text-sm leading-6 text-[#1C1C1E]">{session.feedback.summary}</p>
 				{#if session.feedback.objectiveResults && session.feedback.objectiveResults.length > 0}
 					<h3 class="mt-6 text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.objectiveAssessment}</h3>
 					<div class="mt-2 space-y-2">
