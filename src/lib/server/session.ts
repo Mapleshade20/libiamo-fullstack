@@ -7,6 +7,7 @@ import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
+import { createNotesBatch } from "./note";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
 
@@ -655,6 +656,7 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 export async function completeSession(sessionId: number): Promise<TutorFeedback> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
+		with: { task: { columns: { language: true } } },
 	});
 
 	if (!session) throw new Error("Session not found");
@@ -666,7 +668,20 @@ export async function completeSession(sessionId: number): Promise<TutorFeedback>
 		await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 	}
 
-	return evaluateSession(sessionId);
+	const feedback = await evaluateSession(sessionId);
+
+	// Auto-create notes from all feedback items
+	const feedbackItems = [
+		...feedback.grammar.map((t) => ({ tutorComment: t, category: "grammar" as const })),
+		...feedback.vocabulary.map((t) => ({ tutorComment: t, category: "vocabulary" as const })),
+		...feedback.coherence.map((t) => ({ tutorComment: t, category: "coherence" as const })),
+	];
+	if (feedbackItems.length > 0) {
+		const language = session.task?.language ?? "en";
+		await createNotesBatch(session.userId, sessionId, language, feedbackItems, session.userId);
+	}
+
+	return feedback;
 }
 
 export type HintResult = {
