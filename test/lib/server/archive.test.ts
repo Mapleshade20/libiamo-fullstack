@@ -33,7 +33,6 @@ function makeNote(overrides: Record<string, unknown> = {}) {
 		tutorComment: overrides.tutorComment ?? "Use past tense",
 		keywords: overrides.keywords ?? ["past tense"],
 		sourceContext: overrides.sourceContext ?? "I go yesterday.",
-		createdAt: new Date(),
 	};
 }
 

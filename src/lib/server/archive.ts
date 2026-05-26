@@ -13,7 +13,6 @@ export type SessionWithNotes = {
 		tutorComment: string;
 		keywords: string[] | null;
 		sourceContext: string | null;
-		createdAt: Date;
 	}[];
 };
 
@@ -50,7 +49,6 @@ export async function listCompletedSessions(userId: string, now: Date = new Date
 					tutorComment: true,
 					keywords: true,
 					sourceContext: true,
-					createdAt: true,
 				},
 			},
 		},

@@ -230,7 +230,6 @@ export const note = pgTable(
 		tutorComment: text("tutor_comment").notNull(),
 		keywords: text("keywords").array(),
 		sourceContext: text("source_context"),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [index("note_user_id_idx").on(t.userId), index("note_source_session_id_idx").on(t.sourceSessionId)],
 );
