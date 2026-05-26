@@ -313,9 +313,9 @@ export const actions: Actions = {
 				where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, user.id)),
 				with: { task: { columns: { language: true } } },
 			});
-			const language = session?.task?.language ?? "en";
+			if (!session) return fail(403, { error: "Session not found" });
 
-			const notes = await createNotesBatch(user.id, sessionId, language, parsed, user.id);
+			const notes = await createNotesBatch(user.id, sessionId, session.task?.language ?? "en", parsed, user.id);
 			return { success: true, count: notes.length };
 		} catch (e) {
 			console.error("Failed to save notes:", e);

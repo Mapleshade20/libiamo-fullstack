@@ -1078,6 +1078,12 @@ describe("session page server", () => {
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid category" } });
 		});
 
+		it("returns 403 when session not found", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+			const result = await actions.saveNotes(createFormEvent({ values: { sessionId: "123", checkedItems: ["grammar|text"] } }));
+			expect(result).toMatchObject({ status: 403, data: { error: "Session not found" } });
+		});
+
 		it("returns 401 when unauthenticated", async () => {
 			const result = await actions.saveNotes(createFormEvent({ user: null, values: { sessionId: "123", checkedItems: ["grammar|text"] } }));
 			expect(result).toMatchObject({ status: 401 });

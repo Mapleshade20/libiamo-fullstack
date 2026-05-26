@@ -68,6 +68,7 @@ export async function createNotesBatch(
 			},
 		},
 	});
+	if (sessionOwnerId && !session) throw new Error("Session not found");
 	const conversationSnippet =
 		session?.messages
 			.filter((m) => m.content && m.content.trim().length > 0)
