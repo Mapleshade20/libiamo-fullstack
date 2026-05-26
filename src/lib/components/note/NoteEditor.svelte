@@ -25,8 +25,6 @@ let editTutorComment = $state(note.tutorComment);
 // svelte-ignore state_referenced_locally
 let editKeywords = $state((note.keywords ?? []).join(", "));
 let isEditing = $state(false);
-
-$effect(() => void note);
 </script>
 
 <form

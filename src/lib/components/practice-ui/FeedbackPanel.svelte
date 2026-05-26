@@ -4,18 +4,11 @@ import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import X from "@lucide/svelte/icons/x";
 import { deserialize, enhance } from "$app/forms";
+import type { TutorFeedback } from "./types";
 
 type FeedbackItem = {
 	text: string;
 	checked: boolean;
-};
-
-type TutorFeedback = {
-	objectiveResults: { text: string; grade: "A" | "B" | "C" }[];
-	grammar: string[];
-	vocabulary: string[];
-	coherence: string[];
-	summary: string;
 };
 
 type FollowUpState = {

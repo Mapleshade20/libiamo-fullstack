@@ -130,6 +130,12 @@ describe("archive page server", () => {
 			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "   " } }));
 			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
 		});
+
+		it("returns fail 404 when note not found", async () => {
+			mockNoteService.updateNote.mockResolvedValue(undefined);
+			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated" } }));
+			expect(result).toMatchObject({ status: 404, data: { error: "Note not found" } });
+		});
 	});
 
 	describe("actions.delete", () => {
@@ -165,6 +171,12 @@ describe("archive page server", () => {
 			);
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid note ID" } });
+		});
+
+		it("returns fail 404 when note not found", async () => {
+			mockNoteService.deleteNote.mockResolvedValue(undefined);
+			const result = await actions.delete(createFormEvent({ values: { noteId: "42" } }));
+			expect(result).toMatchObject({ status: 404, data: { error: "Note not found" } });
 		});
 	});
 

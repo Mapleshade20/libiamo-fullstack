@@ -25,7 +25,7 @@ export const actions: Actions = {
 		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
 		if (!tutorComment) return fail(400, { error: "Content is required" });
 
-		await updateNote(noteId, user.id, {
+		const updated = await updateNote(noteId, user.id, {
 			tutorComment,
 			keywords: keywordsRaw
 				? keywordsRaw
@@ -34,6 +34,7 @@ export const actions: Actions = {
 						.filter(Boolean)
 				: [],
 		});
+		if (!updated) return fail(404, { error: "Note not found" });
 
 		return { success: true };
 	},
@@ -47,7 +48,9 @@ export const actions: Actions = {
 
 		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
 
-		await deleteNote(noteId, user.id);
+		const deleted = await deleteNote(noteId, user.id);
+		if (!deleted) return fail(404, { error: "Note not found" });
+
 		return { success: true };
 	},
 
