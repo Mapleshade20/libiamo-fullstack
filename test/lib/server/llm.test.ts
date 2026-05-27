@@ -95,6 +95,7 @@ describe("chatText", () => {
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://example.com/v1/chat/completions");
 		expect(init.method).toBe("POST");
+		expect(init.redirect).toBe("manual");
 		expect(getHeader(init.headers, "authorization")).toBe("Bearer test-key");
 		expect(JSON.parse(String(init.body))).toEqual(
 			expect.objectContaining({

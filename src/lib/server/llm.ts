@@ -136,6 +136,7 @@ function createOpenAIClient(config: OpenAIConfig) {
 	return new OpenAI({
 		apiKey: config.apiKey,
 		baseURL: config.baseUrl,
+		fetchOptions: { redirect: "manual" },
 		maxRetries: 0,
 	});
 }

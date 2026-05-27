@@ -20,6 +20,11 @@ describe("normalizeByokBaseUrl", () => {
 		await expect(normalizeByokBaseUrl(" https://api.example.com/v1/ ")).resolves.toBe("https://api.example.com/v1");
 	});
 
+	it("allows public IPv4 literal HTTPS base URLs", async () => {
+		await expect(normalizeByokBaseUrl("https://124.64.247.88/v1/")).resolves.toBe("https://124.64.247.88/v1");
+		expect(lookupMock).not.toHaveBeenCalled();
+	});
+
 	it("rejects HTTP", async () => {
 		await expect(normalizeByokBaseUrl("http://api.example.com/v1")).rejects.toThrow("Base URL must use HTTPS.");
 	});
