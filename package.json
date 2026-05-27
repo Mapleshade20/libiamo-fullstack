@@ -14,8 +14,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && biome check --write",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
-		"test": "vitest",
-		"test:run": "vitest run",
+		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"test:ci": "vitest run --coverage",
 		"db:push": "drizzle-kit push",
@@ -62,6 +61,8 @@
 		"marked": "^18.0.0",
 		"nodemailer": "^8.0.4",
 		"openai": "^6.39.0",
+		"rough-notation": "^0.5.1",
+		"svelte-rough-notation": "^0.2.0",
 		"zod": "^4.3.6"
 	}
 }
