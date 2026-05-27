@@ -1,8 +1,17 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
-import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, NATIVE_LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import {
+	BYOK_BASE_URL_MAX_LENGTH,
+	CADENCES,
+	INTERACTION_TYPES,
+	LANGUAGE_CODES,
+	MAIL_TEXT_MAX_LENGTH,
+	NATIVE_LANGUAGE_CODES,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	UI_VARIANTS,
+	type UiVariant,
+} from "$lib/constants";
 
 dayjs.extend(customParseFormat);
 
@@ -72,7 +81,7 @@ export const profileSchema = z
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
 		),
 		apiKey: z.string().optional(),
-		apiBaseUrl: z.url().optional(),
+		apiBaseUrl: z.string().max(BYOK_BASE_URL_MAX_LENGTH, `Base URL must be at most ${BYOK_BASE_URL_MAX_LENGTH} characters`).optional(),
 		apiModel: z.string().optional(),
 	})
 	.refine(byokRefine, {

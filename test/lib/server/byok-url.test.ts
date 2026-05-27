@@ -1,6 +1,7 @@
 import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BYOK_BASE_URL_MAX_LENGTH } from "$lib/constants";
 
 vi.mock("node:dns/promises", () => ({
 	lookup: vi.fn(),
@@ -27,6 +28,11 @@ describe("normalizeByokBaseUrl", () => {
 
 	it("rejects HTTP", async () => {
 		await expect(normalizeByokBaseUrl("http://api.example.com/v1")).rejects.toThrow("Base URL must use HTTPS.");
+	});
+
+	it("rejects overly long base URLs before parsing", async () => {
+		await expect(normalizeByokBaseUrl(`https://api.example.com/${"a".repeat(BYOK_BASE_URL_MAX_LENGTH)}`)).rejects.toThrow("at most 500 characters");
+		expect(lookupMock).not.toHaveBeenCalled();
 	});
 
 	it("rejects credentials, query parameters, and fragments", async () => {

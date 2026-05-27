@@ -7,7 +7,7 @@ import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";

@@ -2,8 +2,8 @@
 import Loader from "@lucide/svelte/icons/loader-circle";
 import Send from "@lucide/svelte/icons/send";
 import { untrack } from "svelte";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { renderMarkdown } from "$lib/markdown";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 
 type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
 type QAPair = { question: string; answer?: string };

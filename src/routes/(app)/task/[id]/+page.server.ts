@@ -1,7 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq, ne } from "drizzle-orm";
-import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, UI_VARIANT_LABELS } from "$lib/constants";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH, UI_VARIANT_LABELS } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";

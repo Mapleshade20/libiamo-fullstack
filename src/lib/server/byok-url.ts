@@ -1,6 +1,7 @@
 import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import { BYOK_BASE_URL_MAX_LENGTH } from "$lib/constants";
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "localhost.localdomain"]);
 
@@ -12,7 +13,11 @@ export class ByokBaseUrlError extends Error {
 }
 
 function normalizeHostname(hostname: string) {
-	return hostname.replace(/^\[|\]$/g, "").toLowerCase();
+	let normalized = hostname.toLowerCase();
+	if (normalized.startsWith("[") && normalized.endsWith("]")) {
+		normalized = normalized.slice(1, -1);
+	}
+	return normalized;
 }
 
 function isPrivateIpv4(address: string) {
@@ -34,16 +39,42 @@ function isPrivateIpv4(address: string) {
 
 function isPrivateIpv6(address: string) {
 	const normalized = address.toLowerCase();
-	let mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
-	const mappedHex = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-	if (!mappedIpv4 && mappedHex) {
-		const high = Number.parseInt(mappedHex[1], 16);
-		const low = Number.parseInt(mappedHex[2], 16);
-		mappedIpv4 = `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-	}
+	const mappedIpv4 = parseMappedIpv4(normalized);
 	if (mappedIpv4) return isPrivateIpv4(mappedIpv4);
 
 	return normalized === "::1" || normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:");
+}
+
+function parseMappedIpv4(address: string) {
+	const prefix = "::ffff:";
+	if (!address.startsWith(prefix)) return null;
+	const suffix = address.slice(prefix.length);
+
+	const dottedParts = suffix.split(".");
+	if (dottedParts.length === 4) {
+		const numbers = dottedParts.map((part) => Number(part));
+		if (numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+			return numbers.join(".");
+		}
+		return null;
+	}
+
+	const hexParts = suffix.split(":");
+	if (hexParts.length !== 2 || !hexParts.every(isHexWord)) return null;
+	const high = Number.parseInt(hexParts[0], 16);
+	const low = Number.parseInt(hexParts[1], 16);
+	return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+}
+
+function isHexWord(value: string) {
+	if (value.length < 1 || value.length > 4) return false;
+	for (const char of value) {
+		const code = char.charCodeAt(0);
+		const isDigit = code >= 48 && code <= 57;
+		const isLowerHex = code >= 97 && code <= 102;
+		if (!isDigit && !isLowerHex) return false;
+	}
+	return true;
 }
 
 function isBlockedAddress(address: string) {
@@ -89,6 +120,9 @@ async function assertPublicHostname(hostname: string) {
 export async function normalizeByokBaseUrl(baseUrl: string): Promise<string> {
 	const raw = baseUrl.trim();
 	if (!raw) throw new ByokBaseUrlError("Base URL is required.");
+	if (raw.length > BYOK_BASE_URL_MAX_LENGTH) {
+		throw new ByokBaseUrlError(`Base URL must be at most ${BYOK_BASE_URL_MAX_LENGTH} characters.`);
+	}
 
 	let url: URL;
 	try {
@@ -115,7 +149,10 @@ export async function normalizeByokBaseUrl(baseUrl: string): Promise<string> {
 
 	await assertPublicHostname(normalizeHostname(url.hostname));
 
-	url.pathname = url.pathname.replace(/\/+$/, "");
+	while (url.pathname.endsWith("/")) {
+		url.pathname = url.pathname.slice(0, -1);
+	}
 	if (!url.pathname) url.pathname = "";
-	return url.toString().replace(/\/$/, "");
+	const normalized = url.toString();
+	return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }

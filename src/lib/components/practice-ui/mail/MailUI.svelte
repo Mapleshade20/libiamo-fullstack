@@ -3,7 +3,7 @@ import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
-import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";

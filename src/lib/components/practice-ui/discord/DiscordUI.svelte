@@ -2,7 +2,7 @@
 import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
 import ChatHeader from "./ChatHeader.svelte";

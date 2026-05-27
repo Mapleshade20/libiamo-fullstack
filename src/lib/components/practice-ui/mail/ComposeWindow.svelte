@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
-import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";

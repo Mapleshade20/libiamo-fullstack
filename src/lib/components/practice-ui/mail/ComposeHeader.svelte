@@ -1,6 +1,6 @@
 <script lang="ts">
 import X from "@lucide/svelte/icons/x";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import type { DraftEmail } from "./types";
 
 let {

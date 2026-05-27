@@ -1,8 +1,7 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";

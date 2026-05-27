@@ -15,7 +15,7 @@ import {
 	sanitizeDraftBodyHtml,
 	summarizeMailBodyLayout,
 } from "$lib/components/practice-ui/mail/mailUtils";
-import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 
 describe("mailUtils", () => {
 	describe("plainTextToDraftHtml", () => {

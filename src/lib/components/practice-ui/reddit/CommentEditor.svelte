@@ -4,7 +4,7 @@ import Image from "@lucide/svelte/icons/image";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import type { ContextComment } from "./types";
 
 let {

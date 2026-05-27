@@ -6,7 +6,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
-import { getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { BYOK_BASE_URL_MAX_LENGTH, getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 
 let { form, data } = $props();
 
@@ -234,7 +234,13 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiBaseUrl">Base URL</Label>
-					<Input id="apiBaseUrl" name="apiBaseUrl" value={form?.values?.apiBaseUrl ?? ""} placeholder="https://api.openai.com/v1" />
+					<Input
+						id="apiBaseUrl"
+						name="apiBaseUrl"
+						value={form?.values?.apiBaseUrl ?? ""}
+						maxlength={BYOK_BASE_URL_MAX_LENGTH}
+						placeholder="https://api.openai.com/v1"
+					/>
 					{#if form?.errors?.apiBaseUrl}
 						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
 					{/if}

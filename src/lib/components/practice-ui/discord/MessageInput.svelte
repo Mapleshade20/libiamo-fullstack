@@ -4,7 +4,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import Smile from "@lucide/svelte/icons/smile";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import EmojiPicker from "../../EmojiPicker.svelte";
 import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";

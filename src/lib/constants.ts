@@ -1,6 +1,10 @@
 export const UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 export type UiVariant = (typeof UI_VARIANTS)[number];
 
+export const BYOK_BASE_URL_MAX_LENGTH = 500;
+export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
+export const MAIL_TEXT_MAX_LENGTH = 50000;
+
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",
 	apple_mail: "Apple Mail",

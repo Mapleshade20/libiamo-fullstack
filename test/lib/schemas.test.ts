@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { BYOK_BASE_URL_MAX_LENGTH, MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -8,6 +8,7 @@ import {
 	getEditorFields,
 	imessageOpeningStateSchema,
 	openingStateSchemas,
+	profileSchema,
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
@@ -40,6 +41,15 @@ describe("schemas", () => {
 
 	it("validates forgot password email format", () => {
 		const result = forgotPasswordSchema.safeParse({ email: "invalid-email" });
+		expect(result.success).toBe(false);
+	});
+
+	it("limits BYOK base URL length", () => {
+		const result = profileSchema.safeParse({
+			apiKey: "sk-test",
+			apiBaseUrl: `https://api.example.com/${"a".repeat(BYOK_BASE_URL_MAX_LENGTH)}`,
+			apiModel: "test-model",
+		});
 		expect(result.success).toBe(false);
 	});
 

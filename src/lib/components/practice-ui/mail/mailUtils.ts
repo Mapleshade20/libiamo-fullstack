@@ -1,5 +1,5 @@
 import DOMPurify from "isomorphic-dompurify";
-import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { normalizeText } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
 import type { DraftEmail, MailEmail, NormalizedMailEmail } from "./types";

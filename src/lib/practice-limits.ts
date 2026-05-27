@@ -1,2 +1,0 @@
-export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
-export const MAIL_TEXT_MAX_LENGTH = 50000;
