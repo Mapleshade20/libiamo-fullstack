@@ -199,16 +199,31 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		try {
 			const result = await completeAction(sessionId);
 
-			if (result.type === "success" && result.data) {
+			if (result.type === "success") {
 				isCompleted = true;
-				feedback = result.data.feedback as TutorFeedback;
-				showEvaluationModal = true;
 				await scrollToBottom();
 				await invalidateAll();
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
 		} finally {
+			isCompleting = false;
+		}
+	}
+
+	async function handleCompleteAndNavigate(taskId: string) {
+		if (!sessionId || isCompleting || isCompleted) return;
+		isCompleting = true;
+		try {
+			const result = await completeAction(sessionId);
+
+			if (result.type === "success") {
+				isCompleted = true;
+				// Navigate to feedback page
+				window.location.href = `/task/${taskId}/feedback`;
+			}
+		} catch (error) {
+			console.error("Completion failed:", error);
 			isCompleting = false;
 		}
 	}
@@ -486,6 +501,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		},
 		handleSend,
 		handleComplete,
+		handleCompleteAndNavigate,
 		handleRetry,
 		runAutoCompleteIfNeeded,
 		hydrateFromExistingSession,

@@ -21,6 +21,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
+import { practiceSession } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 function mockAgentReply(reply: string, terminated = false) {
@@ -534,16 +535,20 @@ describe("session service", () => {
 				],
 			});
 
-			const result = await completeSession(123);
+			await completeSession(123);
 
-			expect(result.summary).toBe("Good job!");
-			expect(result.objectiveResults).toHaveLength(2);
-			expect(mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content).toContain("Email body layout:\n[align=center] Hello");
-			expect(mockDb.update).toHaveBeenCalledTimes(2);
+			// Verify session was marked as completed
+			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
+			expect(mockDb.update().set).toHaveBeenCalledWith(
+				expect.objectContaining({
+					status: "completed",
+					completedAt: expect.any(Date),
+				}),
+			);
 		});
 
-		it("asks mail evaluation to consider every learner email and the whole exchange", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValueOnce(mockSession).mockResolvedValueOnce({
+		it("marks session as completed for mail tasks", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				...mockSession,
 				agentPromptSnapshot: { systemPrompt: "Mail prompt", mbti: "ENFP", ui: "apple_mail", scenarioContext: "Scenario: Received email" },
 				messages: [
@@ -567,27 +572,11 @@ describe("session service", () => {
 				],
 				task: mockTaskObjectives,
 			});
-			mockClient.chatJson.mockResolvedValue({
-				summary: "Email 1: Good start. Email 2: Clear next step. Overall: Objective met.",
-				grammar: [],
-				vocabulary: [],
-				coherence: [],
-				objectiveResults: [{ text: "Use polite language", grade: "A" }],
-			});
 
 			await completeSession(123);
 
-			const prompt = mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content ?? "";
-			expect(prompt).toContain("Full Conversation History");
-			expect(prompt).toContain("[assistant] Please send an update.");
-			expect(prompt).toContain("[assistant] Could you include next steps?");
-			expect(prompt).toContain("To: Maya\nSubject: Update");
-			expect(prompt).toContain("To: Maya\nSubject: Re: Update");
-			expect(prompt).toContain("consider EVERY learner-sent email");
-			expect(prompt).toContain("whole email exchange");
-			expect(prompt).toContain("grades should remain per objective, not per email");
-			expect(prompt).toContain("Mention specific emails only when useful");
-			expect(prompt).toContain("Email body layout:\nHello Maya,\nI finished the draft.");
+			// Verify session was marked as completed
+			expect(mockDb.update).toHaveBeenCalled();
 		});
 
 		it("handles empty objectives", async () => {
@@ -608,10 +597,10 @@ describe("session service", () => {
 				objectiveResults: [],
 			});
 
-			const result = await completeSession(123);
+			await completeSession(123);
 
-			expect(result.summary).toBe("General fluency assessment here.");
-			expect(result.objectiveResults).toHaveLength(0);
+			// Verify session was marked as completed
+			expect(mockDb.update).toHaveBeenCalled();
 		});
 
 		it("throws when session not found", async () => {
@@ -620,38 +609,13 @@ describe("session service", () => {
 			await expect(completeSession(999)).rejects.toThrow("Session not found");
 		});
 
-		it("throws when session already completed", async () => {
-			mockDb.query.practiceSession.findFirst
-				.mockResolvedValueOnce({
-					...mockSession,
-					status: "completed",
-				})
-				.mockResolvedValueOnce({
-					...mockSession,
-					agentPromptSnapshot: { systemPrompt: "Scenario: Reddit post\nTitle: Test\n\nPrompt", mbti: "ENFP", ui: "reddit" },
-					messages: [
-						{ role: "user", content: "Hello" },
-						{ role: "assistant", content: "Hi there" },
-					],
-					task: mockTaskObjectives,
-				});
-			const whereMock = vi.fn();
-			mockDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: whereMock }) });
-			mockClient.chatJson.mockResolvedValue({
-				summary: "Good retry!",
-				grammar: [],
-				vocabulary: [],
-				coherence: [],
-				objectiveResults: [
-					{ text: "Use polite language", grade: "A" },
-					{ text: "Respond appropriately", grade: "A" },
-				],
+		it("throws when session not in progress", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				...mockSession,
+				status: "completed",
 			});
 
-			const result = await completeSession(123);
-
-			expect(result.summary).toBe("Good retry!");
-			expect(mockDb.update).toHaveBeenCalledTimes(1);
+			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
 		});
 
 		it("throws when session already evaluated", async () => {
@@ -660,7 +624,7 @@ describe("session service", () => {
 				status: "evaluated",
 			});
 
-			await expect(completeSession(123)).rejects.toThrow("Session not in progress or completed");
+			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
 		});
 	});
 

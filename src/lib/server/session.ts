@@ -734,35 +734,18 @@ export async function evaluateSession(sessionId: number): Promise<TutorFeedback>
 	return feedback;
 }
 
-export async function completeSession(sessionId: number): Promise<TutorFeedback> {
+export async function completeSession(sessionId: number): Promise<void> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		with: { task: { columns: { language: true } } },
+		columns: { id: true, status: true },
 	});
 
 	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress" && session.status !== "completed") {
-		throw new Error("Session not in progress or completed");
+	if (session.status !== "in_progress") {
+		throw new Error("Session not in progress");
 	}
 
-	if (session.status === "in_progress") {
-		await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
-	}
-
-	const feedback = await evaluateSession(sessionId);
-
-	// Auto-create notes from all feedback items
-	const feedbackItems = [
-		...feedback.grammar.map((t) => ({ tutorComment: t, category: "grammar" as const })),
-		...feedback.vocabulary.map((t) => ({ tutorComment: t, category: "vocabulary" as const })),
-		...feedback.coherence.map((t) => ({ tutorComment: t, category: "coherence" as const })),
-	];
-	if (feedbackItems.length > 0) {
-		const language = session.task?.language ?? "en";
-		await createNotesBatch(session.userId, sessionId, language, feedbackItems, session.userId);
-	}
-
-	return feedback;
+	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 }
 
 export type HintResult = {

@@ -658,18 +658,11 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			const mockFeedback = {
-				summary: "Good job!",
-				grammar: [],
-				vocabulary: [],
-				coherence: [],
-				objectiveResults: [{ text: "Objective 1", grade: "A" as const }],
-			};
-			mockSessionService.completeSession.mockResolvedValue(mockFeedback);
+			mockSessionService.completeSession.mockResolvedValue(undefined);
 
 			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 
-			expect(result).toMatchObject({ success: true, feedback: mockFeedback });
+			expect(result).toMatchObject({ success: true });
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
 

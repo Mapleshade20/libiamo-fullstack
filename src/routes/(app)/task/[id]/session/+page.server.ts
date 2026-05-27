@@ -303,11 +303,10 @@ export const actions: Actions = {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const feedback = await completeSession(sessionId);
+			await completeSession(sessionId);
 
 			return {
 				success: true,
-				feedback,
 			};
 		} catch (e) {
 			const mappedError = mapCompleteSessionError(e);

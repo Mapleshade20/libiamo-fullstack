@@ -546,7 +546,7 @@ describe("createPracticeSession", () => {
 
 		expect(mocks.completeAction).toHaveBeenCalledWith(505);
 		expect(session.isCompleted).toBe(true);
-		expect(session.showEvaluationModal).toBe(true);
+		// Note: showEvaluationModal is no longer set by handleComplete
 	});
 
 	it("handles complete failures without leaving loading state", async () => {
