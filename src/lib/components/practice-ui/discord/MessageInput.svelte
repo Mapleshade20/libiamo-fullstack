@@ -4,6 +4,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import Smile from "@lucide/svelte/icons/smile";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import EmojiPicker from "../../EmojiPicker.svelte";
 import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";
@@ -48,6 +49,10 @@ let hintAbortController: AbortController | null = null;
 
 const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || isWaitingRetry);
 
+function limitInputText(value: string) {
+	return value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
+}
+
 $effect(() => {
 	const text = inputText;
 	const match = text.match(/@([a-zA-Z0-9_]*)$/);
@@ -62,7 +67,7 @@ $effect(() => {
 function handleEmojiSelected(event: CustomEvent | Event) {
 	const emoji = extractEmojiFromPickerEvent(event);
 	if (emoji) {
-		inputText += emoji;
+		inputText = limitInputText(inputText + emoji);
 	}
 	showEmojiPicker = false;
 }
@@ -71,10 +76,10 @@ function insertMention(user: ChatUser) {
 	const lastAtIndex = inputText.lastIndexOf("@");
 	if (lastAtIndex !== -1) {
 		const beforeMention = inputText.slice(0, lastAtIndex);
-		inputText = `${beforeMention}@${user.name}`;
+		inputText = limitInputText(`${beforeMention}@${user.name}`);
 	} else {
 		const space = inputText.endsWith(" ") || inputText === "" ? "" : " ";
-		inputText += `${space}@${user.name} `;
+		inputText = limitInputText(`${inputText}${space}@${user.name} `);
 	}
 	showMentionMenu = false;
 }
@@ -123,7 +128,7 @@ function closeHintMenu() {
 }
 
 function selectHint(text: string) {
-	inputText = text;
+	inputText = limitInputText(text);
 	showHintMenu = false;
 }
 
@@ -166,7 +171,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		if (!isMobile) {
 			e.preventDefault();
 			if (!inputText.trim() || disabled) return;
-			const text = inputText;
+			const text = limitInputText(inputText);
 			inputText = "";
 			showMentionMenu = false;
 			showEmojiPicker = false;
@@ -223,6 +228,7 @@ function handleKeyDown(e: KeyboardEvent) {
 				<ResizeableTextarea
 					bind:value={inputText}
 					maxRows={10}
+					maxLength={PRACTICE_UI_TEXT_MAX_LENGTH}
 					{disabled}
 					placeholder={isCompleted
 						? "Session ended"

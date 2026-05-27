@@ -4,6 +4,7 @@ import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -16,6 +17,10 @@ emojiConverter.colons_mode = true;
 
 function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
 	return (message.trim() === "*User joined the server*" || message.trim() === MAIL_AGENT_OPENING_MESSAGE) && clientMessageId === `join-${sessionId}`;
+}
+
+function getMessageMaxLength(ui: string) {
+	return ui === "apple_mail" ? MAIL_TEXT_MAX_LENGTH : PRACTICE_UI_TEXT_MAX_LENGTH;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -171,6 +176,7 @@ export const actions: Actions = {
 			if (!taskData) {
 				return fail(404, { error: "Task not found" });
 			}
+			if (rawMessage.length > getMessageMaxLength(taskData.template.ui)) return fail(400, { error: "Message is too long" });
 
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });

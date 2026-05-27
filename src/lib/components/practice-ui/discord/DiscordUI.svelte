@@ -2,6 +2,7 @@
 import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
 import ChatHeader from "./ChatHeader.svelte";
@@ -116,7 +117,7 @@ function handleContextMenu(e: MouseEvent, user: ChatUser) {
 function handleContextMenuMention() {
 	if (contextMenu.targetUser) {
 		const space = session.inputText.endsWith(" ") || session.inputText === "" ? "" : " ";
-		session.inputText += `${space}@${contextMenu.targetUser.name} `;
+		session.inputText = `${session.inputText}${space}@${contextMenu.targetUser.name} `.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 	}
 	contextMenu.show = false;
 }

@@ -1,9 +1,10 @@
 import DOMPurify from "isomorphic-dompurify";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { normalizeText } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
 import type { DraftEmail, MailEmail, NormalizedMailEmail } from "./types";
 
-const mailBodyHtmlMaxLength = 20000;
+const mailBodyHtmlMaxLength = MAIL_TEXT_MAX_LENGTH;
 
 function escapeHtml(value: string) {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -348,7 +349,9 @@ export function normalizeMailBodySpacing(value: string) {
 
 export function formatDraftMessage(value: DraftEmail, noSubjectLabel: string) {
 	const subject = normalizeText(value.subject, noSubjectLabel);
-	return `To: ${value.to.trim()}\nSubject: ${subject}\n\n${normalizeMailBodySpacing(value.body)}`;
+	const header = `To: ${value.to.trim()}\nSubject: ${subject}\n\n`;
+	const bodyLimit = Math.max(0, MAIL_TEXT_MAX_LENGTH - header.length);
+	return `${header}${normalizeMailBodySpacing(value.body).slice(0, bodyLimit)}`;
 }
 
 function splitMailAddress(value: string) {

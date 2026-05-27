@@ -4,6 +4,7 @@ import Image from "@lucide/svelte/icons/image";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import type { ContextComment } from "./types";
 
 let {
@@ -93,7 +94,7 @@ function handleWindowClick(event: MouseEvent) {
 }
 
 function selectHint(text: string) {
-	inputText = text;
+	inputText = text.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 	if (!isExpanded) isExpanded = true;
 	showHintMenu = false;
 }
@@ -116,7 +117,7 @@ function collapse() {
 
 function submit() {
 	if (!inputText.trim() || disabled) return;
-	onSubmit(inputText);
+	onSubmit(inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH));
 	inputText = "";
 	isExpanded = false;
 }
@@ -179,6 +180,7 @@ onMount(() => () => {
 			<textarea
 				bind:this={textareaEl}
 				bind:value={inputText}
+				maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
 				rows="4"
 				class="block min-h-[96px] w-full resize-none bg-white px-3 py-2.5 text-sm leading-6 text-[#1C1C1C] outline-none placeholder:text-[#878A8C] disabled:cursor-not-allowed disabled:bg-[#F6F7F8]"
 				{placeholder}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -221,6 +222,13 @@ describe("schemas", () => {
 		expect(result.previousMessages[0].sender).toBe("Alice");
 	});
 
+	it("imessageOpeningStateSchema rejects overlong message text", () => {
+		const result = imessageOpeningStateSchema.safeParse({
+			previousMessages: [{ sender: "Alice", text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }],
+		});
+		expect(result.success).toBe(false);
+	});
+
 	it("discordOpeningStateSchema validates correctly", () => {
 		const result = discordOpeningStateSchema.parse({
 			serverName: "My Server",
@@ -238,6 +246,15 @@ describe("schemas", () => {
 		expect(result.success).toBe(false);
 	});
 
+	it("discordOpeningStateSchema rejects overlong previous message text", () => {
+		const result = discordOpeningStateSchema.safeParse({
+			serverName: "My Server",
+			channelName: "general",
+			previousMessages: [{ sender: "Bob", text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }],
+		});
+		expect(result.success).toBe(false);
+	});
+
 	it("redditOpeningStateSchema validates correctly with nested comments", () => {
 		const result = redditOpeningStateSchema.parse({
 			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1", votes: 42 },
@@ -250,12 +267,33 @@ describe("schemas", () => {
 		expect(result.previousComments?.[0].replies?.[0].text).toBe("Thanks!");
 	});
 
+	it("redditOpeningStateSchema rejects overlong post and comment text", () => {
+		expect(
+			redditOpeningStateSchema.safeParse({
+				post: { title: "A post", body: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1), subreddit: "r/test", author: "user1" },
+			}).success,
+		).toBe(false);
+		expect(
+			redditOpeningStateSchema.safeParse({
+				post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1" },
+				previousComments: [{ author: "commenter", text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }],
+			}).success,
+		).toBe(false);
+	});
+
 	it("appleMailOpeningStateSchema validates correctly", () => {
 		const result = appleMailOpeningStateSchema.parse({
 			emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "Hello", time: "14:30" }],
 		});
 		expect(result.emails).toHaveLength(1);
 		expect(result.emails[0].subject).toBe("Hi");
+	});
+
+	it("appleMailOpeningStateSchema rejects bodies over the mail text limit", () => {
+		const result = appleMailOpeningStateSchema.safeParse({
+			emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) }],
+		});
+		expect(result.success).toBe(false);
 	});
 
 	it("ao3OpeningStateSchema validates correctly with optional fields and nested comments", () => {

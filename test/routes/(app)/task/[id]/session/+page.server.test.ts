@@ -22,6 +22,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
@@ -555,6 +556,43 @@ describe("session page server", () => {
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 
 			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+		});
+
+		it("rejects overlong non-mail messages before session lookup", async () => {
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) } }));
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Message is too long" } });
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
+		});
+
+		it("allows longer Apple Mail messages up to the mail limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+
+			const message = "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1);
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${message}</div>` } }));
+
+			expect(result).toMatchObject({ success: true });
+			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+		});
+
+		it("rejects Apple Mail messages over the mail limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) } }));
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Message is too long" } });
 			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
 		});
 

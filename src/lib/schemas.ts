@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, NATIVE_LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 
 dayjs.extend(customParseFormat);
 
@@ -167,9 +168,12 @@ export const variantSchema = z.object({
 });
 
 // ── openingState per-UI schemas ───────────────────────────────────────
+const uiText = z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH);
+const mailText = z.string().max(MAIL_TEXT_MAX_LENGTH);
+
 const messageSchema = z.object({
-	sender: z.string(),
-	text: z.string(),
+	sender: uiText,
+	text: uiText,
 });
 
 export const imessageOpeningStateSchema = z.object({
@@ -177,14 +181,14 @@ export const imessageOpeningStateSchema = z.object({
 });
 
 export const discordOpeningStateSchema = z.object({
-	serverName: z.string(),
-	channelName: z.string(),
+	serverName: uiText,
+	channelName: uiText,
 	previousMessages: z
 		.array(
 			z.object({
-				sender: z.string(),
-				text: z.string(),
-				timestamp: z.string().optional(),
+				sender: uiText,
+				text: uiText,
+				timestamp: uiText.optional(),
 			}),
 		)
 		.default([]),
@@ -201,19 +205,19 @@ export type RedditCommentInput = {
 
 const redditCommentSchema: z.ZodType<RedditCommentInput> = z.object({
 	id: z.string().optional(),
-	author: z.string(),
-	text: z.string(),
-	timestamp: z.string().optional(),
+	author: uiText,
+	text: uiText,
+	timestamp: uiText.optional(),
 	votes: z.number().optional(),
 	replies: z.lazy(() => z.array(redditCommentSchema)).optional(),
 });
 
 export const redditOpeningStateSchema = z.object({
 	post: z.object({
-		title: z.string(),
-		body: z.string(),
-		subreddit: z.string(),
-		author: z.string(),
+		title: uiText,
+		body: uiText,
+		subreddit: uiText,
+		author: uiText,
 		votes: z.number().optional(),
 	}),
 	previousComments: z.array(redditCommentSchema).optional(),
@@ -222,11 +226,11 @@ export const redditOpeningStateSchema = z.object({
 export const appleMailOpeningStateSchema = z.object({
 	emails: z.array(
 		z.object({
-			from: z.string(),
-			to: z.string(),
-			subject: z.string(),
-			body: z.string(),
-			time: z.string().optional(),
+			from: uiText,
+			to: uiText,
+			subject: uiText,
+			body: mailText,
+			time: uiText.optional(),
 		}),
 	),
 });

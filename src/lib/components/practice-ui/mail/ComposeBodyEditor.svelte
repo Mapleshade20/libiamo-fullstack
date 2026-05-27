@@ -5,6 +5,7 @@ let {
 	editorDisabled = false,
 	placeholder = "",
 	onInput = () => {},
+	onBeforeInput = (_event: InputEvent) => {},
 	onKeydown = (_event: KeyboardEvent) => {},
 	onKeyup = () => {},
 	onMouseup = () => {},
@@ -17,6 +18,7 @@ let {
 	editorDisabled?: boolean;
 	placeholder?: string;
 	onInput?: () => void;
+	onBeforeInput?: (event: InputEvent) => void;
 	onKeydown?: (event: KeyboardEvent) => void;
 	onKeyup?: () => void;
 	onMouseup?: () => void;
@@ -38,6 +40,7 @@ let {
 		role="textbox"
 		aria-multiline="true"
 		tabindex="0"
+		onbeforeinput={onBeforeInput}
 		oninput={onInput}
 		onkeydown={onKeydown}
 		onkeyup={onKeyup}

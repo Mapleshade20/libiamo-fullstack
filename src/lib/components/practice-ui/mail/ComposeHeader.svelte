@@ -1,5 +1,6 @@
 <script lang="ts">
 import X from "@lucide/svelte/icons/x";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import type { DraftEmail } from "./types";
 
 let {
@@ -19,7 +20,7 @@ let {
 } = $props();
 
 function handleSubjectInput(event: Event) {
-	draft = { ...draft, subject: (event.currentTarget as HTMLInputElement).value };
+	draft = { ...draft, subject: (event.currentTarget as HTMLInputElement).value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH) };
 	onDraftChange(draft);
 }
 </script>
@@ -35,7 +36,7 @@ function handleSubjectInput(event: Event) {
 </label>
 <label class="compose-line">
 	<span>{t.subject}:</span>
-	<input value={draft.subject} disabled={subjectDisabled} oninput={handleSubjectInput}>
+	<input value={draft.subject} disabled={subjectDisabled} maxlength={PRACTICE_UI_TEXT_MAX_LENGTH} oninput={handleSubjectInput}>
 </label>
 
 <style>

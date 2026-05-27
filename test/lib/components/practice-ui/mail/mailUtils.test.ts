@@ -15,6 +15,7 @@ import {
 	sanitizeDraftBodyHtml,
 	summarizeMailBodyLayout,
 } from "$lib/components/practice-ui/mail/mailUtils";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 
 describe("mailUtils", () => {
 	describe("plainTextToDraftHtml", () => {
@@ -24,6 +25,21 @@ describe("mailUtils", () => {
 
 		it("returns an empty string for empty input", () => {
 			expect(plainTextToDraftHtml("")).toBe("");
+		});
+	});
+
+	describe("formatDraftMessage", () => {
+		it("bounds the formatted message to the mail text limit", () => {
+			const message = formatDraftMessage(
+				{
+					to: "Maya <maya@example.com>",
+					subject: "Hi",
+					body: "x".repeat(MAIL_TEXT_MAX_LENGTH + 100),
+				},
+				"No Subject",
+			);
+
+			expect(message.length).toBe(MAIL_TEXT_MAX_LENGTH);
 		});
 	});
 
