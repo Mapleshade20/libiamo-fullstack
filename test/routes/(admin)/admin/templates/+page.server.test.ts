@@ -3,7 +3,18 @@ import { actions, load } from "$routes/(admin)/admin/templates/+page.server";
 
 // ── 1. Mock SvelteKit ──────────────────────────────────────────────────
 vi.mock("@sveltejs/kit", () => ({
+	error: vi.fn((status, body) => {
+		const error = new Error(typeof body === "string" ? body : "Error");
+		(error as any).status = status;
+		throw error;
+	}),
 	fail: vi.fn((status, data) => ({ status, data })),
+	redirect: vi.fn((status, location) => {
+		const error = new Error("Redirect");
+		(error as any).status = status;
+		(error as any).location = location;
+		throw error;
+	}),
 }));
 
 // ── 2. Mock Drizzle Database & Schema ──────────────────────────────────
@@ -44,18 +55,20 @@ vi.mock("drizzle-orm", () => ({
 // ── 3. Helpers ─────────────────────────────────────────────────────────
 function createLoadEvent(searchParams: Record<string, string>) {
 	return {
+		locals: { user: { id: "admin-1", role: "admin" } },
 		url: {
 			searchParams: new URLSearchParams(searchParams),
 		},
 	} as any;
 }
 
-function createActionEvent(formDataEntries: Record<string, string>) {
+function createActionEvent(formDataEntries: Record<string, string>, role = "admin") {
 	const formData = new FormData();
 	for (const [key, value] of Object.entries(formDataEntries)) {
 		formData.append(key, value);
 	}
 	return {
+		locals: { user: { id: "user-1", role } },
 		request: {
 			formData: async () => formData,
 		},
@@ -70,6 +83,13 @@ describe("Admin Templates +page.server", () => {
 
 	// --- Load Function Coverage (Testing all URL Param Branches) ---
 	describe("load function", () => {
+		it("returns 403 for non-admin users", async () => {
+			const event = createLoadEvent({});
+			event.locals.user.role = "learner";
+
+			await expect(load(event)).rejects.toMatchObject({ status: 403 });
+		});
+
 		it("fetches templates without conditions when no filters are applied", async () => {
 			const event = createLoadEvent({});
 			const result = (await load(event)) as any;
@@ -121,6 +141,12 @@ describe("Admin Templates +page.server", () => {
 
 	// --- Actions Coverage (Testing toggleActive logic) ---
 	describe("actions.toggleActive", () => {
+		it("returns 403 before mutating when user is not an admin", async () => {
+			const event = createActionEvent({ id: "1", isActive: "true" }, "learner");
+
+			await expect((actions as any).toggleActive(event)).rejects.toMatchObject({ status: 403 });
+		});
+
 		it("returns 400 failure when template ID is missing or invalid", async () => {
 			const event = createActionEvent({ id: "invalid-id", isActive: "true" });
 			const result = (await (actions as any).toggleActive(event)) as any;

@@ -1,10 +1,13 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { requireAdmin } from "$lib/server/admin-auth";
 import { db } from "$lib/server/db";
 import { templateContribution, user } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	const id = Number(event.params.id);
 	if (Number.isNaN(id)) throw error(404, "Contribution not found");
 
@@ -44,8 +47,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	reject: async (event) => {
-		const adminId = event.locals.user?.id;
-		if (!adminId) throw redirect(302, "/sign-in");
+		const admin = requireAdmin(event);
 
 		const id = Number(event.params.id);
 		if (Number.isNaN(id)) return fail(400);
@@ -64,7 +66,7 @@ export const actions: Actions = {
 
 		await db
 			.update(templateContribution)
-			.set({ status: "rejected", reviewedBy: adminId, reviewNotes })
+			.set({ status: "rejected", reviewedBy: admin.id, reviewNotes })
 			.where(and(eq(templateContribution.id, id), eq(templateContribution.status, "pending")));
 
 		throw redirect(302, "/admin/reviews");

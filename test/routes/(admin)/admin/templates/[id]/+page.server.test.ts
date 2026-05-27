@@ -51,7 +51,7 @@ function createActionEvent(entries: Record<string, string>, paramsId = "1") {
 	}
 	return {
 		params: { id: paramsId },
-		locals: { user: { id: "admin-1" } },
+		locals: { user: { id: "admin-1", role: "admin" } },
 		request: {
 			formData: async () => formData,
 			headers: new Headers(),
@@ -90,7 +90,7 @@ describe("Admin Templates [id] +page.server", () => {
 
 	describe("load function", () => {
 		it("returns 404 for non-numeric id", async () => {
-			const event = { params: { id: "abc" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "abc" } } as any;
 			try {
 				await load(event);
 				expect.fail("Should have thrown");
@@ -101,7 +101,7 @@ describe("Admin Templates [id] +page.server", () => {
 
 		it("returns 404 if template is not found", async () => {
 			dbSelectQueue.push([]); // Empty result for template query
-			const event = { params: { id: "999" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "999" } } as any;
 			try {
 				await load(event);
 				expect.fail("Should have thrown");
@@ -114,7 +114,7 @@ describe("Admin Templates [id] +page.server", () => {
 			dbSelectQueue.push([sampleTemplate]); // 1st query: Template
 			dbSelectQueue.push([{ id: 1, slotValues: {} }]); // 2nd query: Variants
 
-			const event = { params: { id: "1" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "1" } } as any;
 			const result = await load(event);
 
 			expect((result as any).template).toBeDefined();
@@ -124,6 +124,13 @@ describe("Admin Templates [id] +page.server", () => {
 	});
 
 	describe("save action", () => {
+		it("returns 403 for non-admin users", async () => {
+			const event = createActionEvent(validTemplateEntries, "1");
+			event.locals.user.role = "learner";
+
+			await expect(actions.save(event)).rejects.toMatchObject({ status: 403 });
+		});
+
 		it("returns 400 with field errors for invalid template data", async () => {
 			const event = createActionEvent({}, "1");
 			const result = (await actions.save(event)) as ActionFailure<any>;
