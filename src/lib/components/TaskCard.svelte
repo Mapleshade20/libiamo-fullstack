@@ -73,10 +73,10 @@ let {
 			</div>
 			<div>
 				{#if isFinished}
-					<span class="text-[10px] font-bold text-green-600 flex items-center gap-1 mb-1.5 uppercase tracking-wider"
-						><CheckCircle2 size={12} strokeWidth={2.5} />
-						Completed</span
-					>
+					<span class="text-xs font-bold text-green-600 flex items-center gap-1 mb-1.5 uppercase tracking-wider">
+						<CheckCircle2 size={12} strokeWidth={2.5} />
+						Completed
+					</span>
 				{:else if status === "draft"}
 					<span
 						class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
@@ -101,14 +101,14 @@ let {
 		>
 			<div class="pt-1">
 				<h4
-					class="font-serif text-base mb-3 {isFinished
+					class="font-serif text-lg mb-3 {isFinished
 						? 'text-green-800'
 						: 'text-foreground'}"
 				>
 					Mission Objective
 				</h4>
 				<p
-					class="text-sm {isFinished
+					class="text-base md:leading-6 {isFinished
 						? 'text-green-700/80'
 						: 'text-muted-foreground'} leading-5 line-clamp-4"
 				>
@@ -121,7 +121,7 @@ let {
 					onclick={(e) => { e.stopPropagation(); onenter?.(e, id); }}
 					class="block w-full py-2 {isFinished
 						? 'bg-green-600 text-white hover:bg-green-700'
-						: 'bg-foreground text-background hover:opacity-90'} rounded-lg text-xs font-medium tracking-wide text-center transition-opacity shadow-md"
+						: 'bg-foreground text-background hover:opacity-90'} rounded-lg text-sm font-medium tracking-wide text-center transition-opacity shadow-md"
 				>
 					{buttonLabel}
 				</a>

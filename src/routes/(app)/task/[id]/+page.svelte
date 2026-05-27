@@ -75,13 +75,13 @@ function difficultyLabel(level: number): string {
 		</div>
 
 		{#if task.description}
-			<p class="mt-8 text-base font-light leading-relaxed text-muted-foreground">{task.description}</p>
+			<p class="mt-8 text-base leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
 				<h2 class="mb-2">Objectives</h2>
-				<ol class="list-inside list-decimal space-y-1.5 text-base font-light leading-relaxed text-muted-foreground">
+				<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
 					{/each}
@@ -92,7 +92,9 @@ function difficultyLabel(level: number): string {
 		{#if task.materialsMd}
 			<div class="mt-10">
 				<h2 class="mb-2">Background Material</h2>
-				<div class="prose prose-neutral text-base font-light leading-relaxed whitespace-pre-wrap">{@html renderMarkdown(task.materialsMd)}</div>
+				<div class="task-background-material prose prose-neutral text-base leading-normal rounded-lg border border-border bg-card p-5 shadow-sm">
+					{@html renderMarkdown(task.materialsMd)}
+				</div>
 			</div>
 		{/if}
 
@@ -134,6 +136,38 @@ function difficultyLabel(level: number): string {
 		</div>
 	</div>
 </div>
+
+<style>
+:global(.task-background-material h3) {
+	margin-top: 0.5rem;
+	margin-bottom: 0.25rem;
+	line-height: 1.35;
+}
+
+:global(.task-background-material h3:first-child) {
+	margin-top: 0;
+}
+
+:global(.task-background-material ul),
+:global(.task-background-material ol) {
+	margin-top: 0.25rem;
+	margin-bottom: 0.75rem;
+	padding-left: 1.25rem;
+}
+
+:global(.task-background-material li) {
+	margin-top: 0.125rem;
+	margin-bottom: 0.125rem;
+}
+
+:global(.task-background-material li > p) {
+	margin: 0;
+}
+
+:global(.task-background-material li > strong) {
+	display: inline;
+}
+</style>
 
 {#if hasNativeLanguage && nativeLanguage}
 	<TranslateModal

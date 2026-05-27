@@ -94,13 +94,13 @@ function handleAsk() {
 			{translation && !isShort ? 'bg-foreground/5' : ''}
 			{isActive && !isShort ? 'ring-1 ring-foreground/20' : ''}"
 		>
-			<span class="text-base font-light leading-relaxed text-foreground flex-1">{sentence}</span>
+			<span class="text-base leading-relaxed text-foreground flex-1">{sentence}</span>
 			{#if isShort}
 				<span class="text-[10px] font-medium text-muted-foreground bg-foreground/5 px-1.5 py-0.5 rounded shrink-0">Skipped</span>
 			{/if}
 		</div>
 	{:else}
-		<p class="text-base font-light leading-relaxed text-foreground flex items-center gap-2">
+		<p class="text-base leading-relaxed text-foreground flex items-center gap-2">
 			{sentence}
 			{#if isShort}
 				<span class="text-[10px] font-medium text-muted-foreground bg-foreground/5 px-1.5 py-0.5 rounded">Skipped</span>

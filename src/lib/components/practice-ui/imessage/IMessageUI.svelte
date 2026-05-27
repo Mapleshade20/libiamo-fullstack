@@ -181,7 +181,7 @@ onMount(() => {
 	</div>
 {/if}
 
-<div class="fixed inset-0 z-[999] h-[100dvh] w-full bg-[#F2F2F7] text-[#1C1C1E] md:bg-[#DDDDE1]">
+<div class="fixed inset-0 z-[999] h-[100dvh] w-full bg-[#F2F2F7] text-[#1C1C1E] font-inter-stack md:bg-[#DDDDE1]">
 	<div class="mx-auto flex h-full w-full md:items-center md:justify-center md:p-3 lg:p-4">
 		<div
 			class="flex h-full w-full overflow-hidden md:h-[calc(100dvh-1.5rem)] md:w-[calc(100vw-1.5rem)] lg:h-[calc(100dvh-2rem)] lg:w-[calc(100vw-2rem)] md:max-h-[1100px] md:max-w-[1800px] md:rounded-2xl md:border md:border-black/10 md:bg-white md:shadow-2xl"

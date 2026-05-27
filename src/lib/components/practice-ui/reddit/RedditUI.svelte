@@ -225,7 +225,7 @@ function handleFinishCancel() {
 	</div>
 {/if}
 
-<div class="fixed inset-0 z-[999] flex flex-col bg-white font-sans text-[#1C1C1C]">
+<div class="fixed inset-0 z-[999] flex flex-col bg-white font-inter-stack text-[#1C1C1C]">
 	<!-- Header -->
 	<Header
 		{t}

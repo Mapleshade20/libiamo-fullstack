@@ -78,7 +78,7 @@ function formatDate(d: Date): string {
 }
 </script>
 
-<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
+<h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
 
 {#if rows.length === 0}
 	<p class="mt-8 text-muted-foreground">{t(lang, "archive.empty")}</p>

@@ -121,7 +121,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
 				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative">
+					<div class="relative font-inter-stack">
 						<!-- Chain label -->
 						<div class="mb-4 flex items-center gap-3">
 							<div class="h-px flex-1 bg-[#e8e3db]"></div>
@@ -130,7 +130,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 						</div>
 
 						<!-- Messages in chain -->
-						<div class="relative pl-6 border-l-2 border-[#e8e3db]">
+						<div class="relative pl-6 border-l-2 border-[#e8e3db] text-sm">
 							{#each chain.messages as message}
 								<div class="mb-6 relative">
 									<!-- Author badge -->
@@ -150,16 +150,16 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
 										{:else if isGenerating}
 											<div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-												<p class="text-[#2a2520] leading-relaxed">{message.text}</p>
+												<p>{message.text}</p>
 											</div>
 										{:else}
 											<div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-												<p class="text-[#2a2520] leading-relaxed">{message.text}</p>
+												<p>{message.text}</p>
 											</div>
 										{/if}
 									{:else}
 										<div class="rounded-lg bg-[#f5f2ed] border border-[#e8e3db] p-4">
-											<p class="text-[#2a2520] leading-relaxed">{message.text}</p>
+											<p>{message.text}</p>
 										</div>
 									{/if}
 								</div>
@@ -172,7 +172,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			<!-- Right: Comments (1/3 on wide) -->
 			<div class="lg:col-span-1">
 				<div class="sticky top-24 space-y-6">
-					<h2 class="text-xl font-serif text-[#2a2520] mb-4">Tutor Comments</h2>
+					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
 
 					{#if isGenerating}
 						<div class="space-y-4">
@@ -190,8 +190,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 								{@const comment = getCommentForMessage(message.seqId)}
 								{#if comment}
 									<div class="rounded-lg border border-[#e8e3db] bg-white p-4 shadow-sm" transition:fade={{ duration: 200 }}>
-										<div class="text-xs font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
-										<div class="text-sm leading-relaxed whitespace-pre-wrap">
+										<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+										<div class="leading-relaxed whitespace-pre-wrap">
 											{@html comment.replace(/<highlight>([\s\S]*?)<\/highlight>/g, '<span class="bg-yellow-200/60 px-1 rounded font-medium">$1</span>')}
 										</div>
 									</div>
@@ -204,7 +204,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 					{#if feedback}
 						<div class="mt-8 space-y-6">
 							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif text-[#2a2520] mb-4">Objectives</h3>
+								<h3 class="text-lg font-serif mb-4">Objectives</h3>
 								<div class="space-y-3">
 									{#each feedback.objectives as objective}
 										<div class="flex items-start gap-3">
@@ -213,15 +213,15 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											>
 												{objective.grade}
 											</span>
-											<p class="text-sm text-[#2a2520] leading-relaxed flex-1">{objective.text}</p>
+											<p class="text-sm text-[#2a2520] flex-1">{objective.text}</p>
 										</div>
 									{/each}
 								</div>
 							</div>
 
 							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif text-[#2a2520] mb-4">Summary</h3>
-								<p class="text-sm text-[#2a2520] leading-relaxed whitespace-pre-wrap">{feedback.summary}</p>
+								<h3 class="text-lg font-serif mb-4">Summary</h3>
+								<p class="whitespace-pre-wrap">{feedback.summary}</p>
 							</div>
 						</div>
 					{/if}

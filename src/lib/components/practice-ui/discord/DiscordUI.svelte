@@ -178,7 +178,7 @@ $effect(() => {
 {/if}
 
 <div
-	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
+	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-inter-stack selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
 >
 	<Overlays {contextMenu} {showToast} {t} onContextMenuMention={handleContextMenuMention} />
 

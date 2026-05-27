@@ -24,7 +24,7 @@ function formatDate(d: Date | null): string {
 </script>
 
 <div class="space-y-10">
-	<h1 class="text-3xl md:text-4xl text-gray-800 font-medium">Contribute a Template</h1>
+	<h1 class="text-3xl text-gray-800 font-medium">Contribute a Template</h1>
 
 	<ActionNotification notification={actionNotification} />
 

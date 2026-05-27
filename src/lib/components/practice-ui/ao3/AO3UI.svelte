@@ -286,7 +286,7 @@ function scrollToTop(event: MouseEvent) {
 
 		<section class="min-h-[220px] py-4 text-[15px]">
 			<h3 class="mb-4 text-center font-[Georgia,serif] text-xl font-normal">{chapterTitle}</h3>
-			<div class="mx-auto max-w-3xl leading-7"><MarkdownRenderer content={excerpt} /></div>
+			<div class="mx-auto max-w-3xl leading-6"><MarkdownRenderer content={excerpt} /></div>
 		</section>
 
 		<ul class="my-6 flex list-none flex-wrap justify-center gap-2 p-0">

@@ -66,7 +66,7 @@ function getColor(kind: string): string {
 </script>
 
 <div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-	<p class="text-[#2a2520] leading-relaxed">
+	<p class="text-[#2a2520]">
 		{#each parts as part}
 			{#if part.type === "text"}
 				{part.content}
@@ -81,7 +81,13 @@ function getColor(kind: string): string {
 						delay={300}
 						class="cursor-pointer hover:opacity-80 transition-opacity whitespace-pre-wrap"
 					>
-						<button type="button" class="inline whitespace-pre-wrap text-left" onclick={(e) => handleClick(span, e)}>{part.content}</button>
+						<button
+							type="button"
+							class="inline whitespace-pre-wrap text-left rounded px-1 transition-colors hover:bg-black/10"
+							onclick={(e) => handleClick(span, e)}
+						>
+							{part.content}
+						</button>
 					</TextHighlighter>
 				{:else}
 					{part.content}

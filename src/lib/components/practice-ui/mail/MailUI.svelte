@@ -515,7 +515,7 @@ $effect(() => {
 {/if}
 
 <div
-	class="mail-shell fixed inset-0 z-[999] h-[100dvh] w-full overflow-hidden bg-[#F5F5F7] text-[#1D1D1F] selection:bg-[#3478F6] selection:text-white"
+	class="mail-shell fixed inset-0 z-[999] h-[100dvh] w-full overflow-hidden bg-[#F5F5F7] text-[#1D1D1F] font-inter-stack selection:bg-[#3478F6] selection:text-white"
 >
 	<Overlays {showEvaluationModal} {feedback} {showToast} {t} onCloseEvaluation={() => (showEvaluationModal = false)} />
 

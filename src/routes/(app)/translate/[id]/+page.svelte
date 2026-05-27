@@ -386,7 +386,7 @@ $effect(() => {
 		{/if}
 		{#if !translating}
 			{#if tpl.description}
-				<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{tpl.description}</p>
+				<p class="mt-8 max-w-xl text-base leading-relaxed text-muted-foreground">{tpl.description}</p>
 			{/if}
 			{#if isDone && passages.length > 0}
 				<div class="mt-10">
@@ -428,7 +428,7 @@ $effect(() => {
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Source Text</h2>
 					<div class="space-y-4 max-w-xl">
 						{#each passages as paragraph, pi}
-							<p class="text-base font-light leading-relaxed text-foreground">
+							<p class="text-base leading-relaxed text-foreground">
 								{#each paragraph as sentence, si}
 									<span>{sentence}{si < paragraph.length - 1 ? " " : ""}</span>
 								{/each}
@@ -440,7 +440,7 @@ $effect(() => {
 			{#if tpl.materialsMd}
 				<div class="mt-10">
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-					<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(tpl.materialsMd)}</div>
+					<div class="prose prose-neutral max-w-xl text-base leading-relaxed">{@html renderMarkdown(tpl.materialsMd)}</div>
 				</div>
 			{/if}
 		{:else}
