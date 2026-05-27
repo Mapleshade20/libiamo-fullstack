@@ -14,6 +14,7 @@ import {
 	followUpOnFeedback,
 	generateHint,
 	getSessionOrFail,
+	requestAgentOpening,
 	type SendMessageOptions,
 	sendMessage,
 	startSession,
@@ -23,8 +24,8 @@ import type { Actions, PageServerLoad } from "./$types";
 const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
-function isAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
-	return (message.trim() === "*User joined the server*" || message.trim() === MAIL_AGENT_OPENING_MESSAGE) && clientMessageId === `join-${sessionId}`;
+function isMailAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
+	return message.trim() === MAIL_AGENT_OPENING_MESSAGE && clientMessageId === `join-${sessionId}`;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -185,7 +186,7 @@ export const actions: Actions = {
 			if (!session) return fail(403, { error: "Access denied" });
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
-			const hiddenUserMessage = isAgentStartTrigger(rawMessage, clientMessageId, sessionId);
+			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
 			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,
@@ -243,6 +244,45 @@ export const actions: Actions = {
 
 			console.error("Failed to send message:", e);
 			return fail(500, { error: "Failed to send message" });
+		}
+	},
+
+	agentOpening: async ({ request, params, locals }) => {
+		const user = locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const clientMessageIdValue = formData.get("clientMessageId");
+		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
+
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+
+		try {
+			const taskData = await db.query.task.findFirst({
+				where: eq(task.id, taskId),
+				with: { template: true },
+			});
+			if (!taskData) {
+				return fail(404, { error: "Task not found" });
+			}
+
+			const session = await getSessionOrFail(sessionId, user.id, taskId);
+			if (!session) return fail(403, { error: "Access denied" });
+
+			const result = await requestAgentOpening(sessionId, user.id, clientMessageId || undefined, {
+				maxTurns: taskData.template.maxTurns,
+			});
+			return { success: true, ...result };
+		} catch (e) {
+			const mappedError = mapSendMessageError(e);
+			if (mappedError) return mappedError;
+
+			console.error("Failed to request agent opening:", e);
+			return fail(500, { error: "Failed to request agent opening" });
 		}
 	},
 

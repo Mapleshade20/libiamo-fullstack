@@ -60,8 +60,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	agentStartsFirst,
 	labels: sessionLabels,
-	joinTriggerText: "*Reader opened the AO3 work*",
-	isHiddenCheck: (m) => m.content === "*Reader opened the AO3 work*",
 }));
 
 const opening = $derived((openingState ?? {}) as Ao3OpeningState);

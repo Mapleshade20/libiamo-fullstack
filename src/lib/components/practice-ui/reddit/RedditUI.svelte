@@ -60,8 +60,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	agentStartsFirst,
 	labels: sessionLabels,
-	joinTriggerText: "*User joined the server*",
-	isHiddenCheck: (m) => m.content === "*User joined the server*",
 }));
 
 // ── Opening state ────────────────────────────────────────────────────

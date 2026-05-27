@@ -62,8 +62,6 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
-	joinTriggerText: "*User joined the server*",
-	isHiddenCheck: (m) => m.content === "*User joined the server*",
 	onPoolInit(pool) {
 		onlineUsers = pool.onlineUsers;
 		offlineUsers = pool.offlineUsers;

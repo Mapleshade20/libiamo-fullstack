@@ -341,12 +341,40 @@ function getStoredTermination(metadata: unknown) {
 	return value.terminate === true || value.terminated === true;
 }
 
+function buildSystemPromptWithPlainText(systemPrompt: string) {
+	return `${systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
+}
+
+async function generateAssistantOutput(history: ChatMessage[], userId: string): Promise<{ reply: string; terminated: boolean; raw: unknown }> {
+	const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
+	const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
+	let reply = response.content;
+	const raw: Record<string, unknown> = {
+		terminated: terminationCall !== undefined,
+		toolCalls: response.toolCalls,
+		completion: response.raw,
+	};
+
+	if (!reply && terminationCall) {
+		reply = "I’m going to end this conversation here.";
+	}
+
+	return { reply, terminated: terminationCall !== undefined, raw };
+}
+
 export type SendMessageOptions = {
 	hiddenUserMessage?: boolean;
 	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
+	assistantAuthorName?: string;
+	assistantMetadata?: Record<string, unknown>;
+};
+
+export type RequestAgentOpeningOptions = {
+	maxTurns?: number | null;
+	promptContent?: string;
 	assistantAuthorName?: string;
 	assistantMetadata?: Record<string, unknown>;
 };
@@ -408,7 +436,7 @@ export async function sendMessage(
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
-	const systemPromptWithPlainText = `${snapshot.systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*" or "*User joined the server*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
+	const systemPromptWithPlainText = buildSystemPromptWithPlainText(snapshot.systemPrompt);
 
 	// Build LLM history. Threaded UIs provide precise target context through promptContent
 	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
@@ -479,20 +507,7 @@ export async function sendMessage(
 
 	let output: { reply: string; terminated: boolean; raw: unknown };
 	try {
-		const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
-		const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
-		let reply = response.content;
-		const raw: Record<string, unknown> = {
-			terminated: terminationCall !== undefined,
-			toolCalls: response.toolCalls,
-			completion: response.raw,
-		};
-
-		if (!reply && terminationCall) {
-			reply = "I’m going to end this conversation here.";
-		}
-
-		output = { reply, terminated: terminationCall !== undefined, raw };
+		output = await generateAssistantOutput(history, userId);
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -528,6 +543,72 @@ export async function sendMessage(
 	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
 
 	return { reply: output.reply, turnCount, terminated: output.terminated };
+}
+
+export async function requestAgentOpening(
+	sessionId: number,
+	userId: string,
+	clientMessageId?: string,
+	options: RequestAgentOpeningOptions = {},
+): Promise<SendMessageResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: {
+			messages: { orderBy: asc(sessionMessage.createdAt) },
+		},
+	});
+
+	if (!session) throw new Error("Session not found");
+	if (session.userId !== userId) throw new Error("Access denied");
+	if (session.status !== "in_progress") throw new Error("Session not in progress");
+
+	if (clientMessageId) {
+		const existingAssistantReply = session.messages.find(
+			(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+		);
+		if (existingAssistantReply) {
+			return {
+				reply: existingAssistantReply.content,
+				turnCount: countVisibleUserTurns(session.messages),
+				terminated: getStoredTermination(existingAssistantReply.llmMetadata),
+			};
+		}
+	}
+
+	const maxTurns = options.maxTurns ?? 0;
+	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
+		throw new Error("Maximum conversation turns reached");
+	}
+
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
+	const history: ChatMessage[] = [{ role: "system", content: buildSystemPromptWithPlainText(snapshot.systemPrompt) }];
+	for (const message of session.messages) {
+		history.push({ role: message.role as "user" | "assistant" | "system", content: message.content });
+	}
+	if (options.promptContent?.trim()) {
+		history.push({ role: "user", content: options.promptContent.trim() });
+	}
+
+	const output = await generateAssistantOutput(history, userId);
+
+	await db.insert(sessionMessage).values({
+		sessionId,
+		role: "assistant",
+		content: output.reply,
+		llmMetadata: {
+			...options.assistantMetadata,
+			...(clientMessageId ? { clientMessageId } : {}),
+			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
+			model: "tool-calling",
+			raw: output.raw,
+		},
+	});
+
+	return {
+		reply: output.reply,
+		turnCount: countVisibleUserTurns(session.messages),
+		terminated: output.terminated,
+	};
 }
 
 function buildTutorPrompt(
