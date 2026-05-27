@@ -42,6 +42,12 @@ function hasOversizedTutorHelpText(values: string[]) {
 	return values.some((value) => value.length > TUTOR_HELP_TEXT_MAX_LENGTH);
 }
 
+function parseRouteId(value: string | undefined): number | null {
+	if (!value || !/^\d+$/.test(value)) return null;
+	const id = Number(value);
+	return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 /** Handle LLM errors with auth-specific messaging */
 function handleLlmError(err: unknown, fallback: string) {
 	console.error(fallback, err);
@@ -125,8 +131,8 @@ async function upsertAttempt(userId: string, templateId: number, translations: R
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 
-	const templateId = Number(event.params.id);
-	if (Number.isNaN(templateId)) {
+	const templateId = parseRouteId(event.params.id);
+	if (!templateId) {
 		return error(404, "Template not found");
 	}
 
@@ -286,8 +292,8 @@ export const actions: Actions = {
 	saveDraft: async (event) => {
 		const user = requireUser(event);
 
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const parsed = parseTranslationsForm(await event.request.formData());
 		if (!parsed.ok) return fail(400, { error: parsed.error });
@@ -303,8 +309,8 @@ export const actions: Actions = {
 	submit: async (event) => {
 		const user = requireUser(event);
 
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const parsed = parseTranslationsForm(await event.request.formData());
 		if (!parsed.ok) return fail(400, { error: parsed.error });
@@ -372,8 +378,8 @@ export const actions: Actions = {
 	generateModelTranslation: async (event) => {
 		const user = requireUser(event);
 
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const [tpl] = await db
 			.select({
@@ -414,8 +420,8 @@ export const actions: Actions = {
 	explainFeedback: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
@@ -451,8 +457,8 @@ export const actions: Actions = {
 	translateSentence: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
@@ -483,8 +489,8 @@ export const actions: Actions = {
 	askTutor: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
+		const templateId = parseRouteId(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });

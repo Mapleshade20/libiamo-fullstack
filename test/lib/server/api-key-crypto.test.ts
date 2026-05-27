@@ -14,7 +14,12 @@ vi.mock("node:dns/promises", () => ({
 	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
 }));
 
+vi.mock("$lib/server/byok-fetch", () => ({
+	createPinnedByokFetch: vi.fn(() => fetch),
+}));
+
 import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
+import { createPinnedByokFetch } from "$lib/server/byok-fetch";
 
 describe("api-key-crypto", () => {
 	describe("encryptApiKey / decryptApiKey", () => {
@@ -69,6 +74,9 @@ describe("api-key-crypto", () => {
 			const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
 			expect(url).toBe("https://api.example.com/v1/chat/completions");
 			expect(init.redirect).toBe("manual");
+			expect(createPinnedByokFetch).toHaveBeenCalledWith(
+				expect.objectContaining({ address: "93.184.216.34", baseUrl: "https://api.example.com/v1", family: 4 }),
+			);
 			expect(JSON.parse(String(init.body))).toMatchObject({
 				model: "test-model",
 				messages: [{ role: "user", content: "Hi" }],

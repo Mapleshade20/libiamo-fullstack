@@ -10,7 +10,8 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { decryptApiKey } from "./api-key-crypto";
-import { normalizeByokBaseUrl } from "./byok-url";
+import { createPinnedByokFetch } from "./byok-fetch";
+import { resolveByokBaseUrl } from "./byok-url";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
 
@@ -77,6 +78,7 @@ type OpenAIConfig = {
 	apiKey: string;
 	baseUrl: string;
 	model: string;
+	fetch?: typeof fetch;
 };
 
 function getEnvOpenAIConfig(): OpenAIConfig {
@@ -105,12 +107,13 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 
 	if (!row) return null;
 
-	const baseUrl = await normalizeByokBaseUrl(row.baseUrl);
+	const resolvedBaseUrl = await resolveByokBaseUrl(row.baseUrl);
 
 	return {
 		apiKey: decryptApiKey(row.encryptedKey),
-		baseUrl,
+		baseUrl: resolvedBaseUrl.baseUrl,
 		model: row.model,
+		fetch: createPinnedByokFetch(resolvedBaseUrl),
 	};
 }
 
@@ -136,6 +139,7 @@ function createOpenAIClient(config: OpenAIConfig) {
 	return new OpenAI({
 		apiKey: config.apiKey,
 		baseURL: config.baseUrl,
+		...(config.fetch ? { fetch: config.fetch } : {}),
 		fetchOptions: { redirect: "manual" },
 		maxRetries: 0,
 	});

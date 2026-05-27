@@ -121,6 +121,13 @@ describe("(app) translate/[id] +page.server", () => {
 			});
 		});
 
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 404 for malformed id %s", async (id) => {
+			await expect(load(createLoadEvent({ id }))).rejects.toMatchObject({
+				status: 404,
+			});
+			expect(mockSelect).not.toHaveBeenCalled();
+		});
+
 		it("returns 404 when template not found", async () => {
 			// First query (template): where → limit
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
@@ -204,6 +211,12 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.status).toBe(400);
 		});
 
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.saveDraft(createActionEvent({ translations: "{}" }, { id }))) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
+		});
+
 		it("returns 400 for missing translations", async () => {
 			const result = (await actions.saveDraft(createActionEvent({}, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
@@ -273,6 +286,12 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 400 for invalid template id", async () => {
 			const result = (await actions.submit(createActionEvent({ translations: "{}" }, { id: "abc" }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.submit(createActionEvent({ translations: "{}" }, { id }))) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 for missing translations", async () => {
@@ -499,6 +518,12 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.status).toBe(400);
 		});
 
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.generateModelTranslation(createActionEvent({}, { id }))) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
+		});
+
 		it("returns 404 when template has no translationBase", async () => {
 			mockWhere.mockReturnValueOnce({ limit: mockLimit });
 			mockLimit.mockResolvedValueOnce([{ translationBase: null, language: "fr" }]);
@@ -567,6 +592,14 @@ describe("(app) translate/[id] +page.server", () => {
 			await expect(actions.explainFeedback(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
 				status: 302,
 			});
+		});
+
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.explainFeedback(
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "Bonjour", feedback: "ok" }, { id }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 when sourceSentence is missing", async () => {
@@ -681,6 +714,12 @@ describe("(app) translate/[id] +page.server", () => {
 			});
 		});
 
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello" }, { id }))) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
+		});
+
 		it("returns 400 when sourceSentence is missing", async () => {
 			const result = (await actions.translateSentence(createActionEvent({ language: "fr" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
@@ -738,6 +777,14 @@ describe("(app) translate/[id] +page.server", () => {
 			await expect(actions.askTutor(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
 				status: 302,
 			});
+		});
+
+		it.each(["", "Infinity", "1.5", "0", "-1"])("returns 400 for malformed template id %s", async (id) => {
+			const result = (await actions.askTutor(
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "Bonjour", feedback: "ok", question: "why?" }, { id }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(mockSelect).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 when sourceSentence is missing", async () => {

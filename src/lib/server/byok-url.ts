@@ -5,6 +5,12 @@ import { BYOK_BASE_URL_MAX_LENGTH } from "$lib/constants";
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "localhost.localdomain"]);
 
+export type ResolvedByokBaseUrl = {
+	baseUrl: string;
+	address: string;
+	family: 4 | 6;
+};
+
 export class ByokBaseUrlError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -88,13 +94,13 @@ function isBlockedHostname(hostname: string) {
 	return BLOCKED_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost") || hostname.endsWith(".local");
 }
 
-async function assertPublicHostname(hostname: string) {
+async function resolvePublicHostname(hostname: string): Promise<LookupAddress[]> {
 	const ipFamily = net.isIP(hostname);
 	if (ipFamily) {
 		if (isBlockedAddress(hostname)) {
 			throw new ByokBaseUrlError("Base URL must not point to a private or local address.");
 		}
-		return;
+		return [{ address: hostname, family: ipFamily }];
 	}
 
 	if (isBlockedHostname(hostname)) {
@@ -115,9 +121,15 @@ async function assertPublicHostname(hostname: string) {
 	if (addresses.some((entry) => isBlockedAddress(entry.address))) {
 		throw new ByokBaseUrlError("Base URL must not resolve to a private or local address.");
 	}
+
+	return addresses;
 }
 
 export async function normalizeByokBaseUrl(baseUrl: string): Promise<string> {
+	return (await resolveByokBaseUrl(baseUrl)).baseUrl;
+}
+
+export async function resolveByokBaseUrl(baseUrl: string): Promise<ResolvedByokBaseUrl> {
 	const raw = baseUrl.trim();
 	if (!raw) throw new ByokBaseUrlError("Base URL is required.");
 	if (raw.length > BYOK_BASE_URL_MAX_LENGTH) {
@@ -147,12 +159,20 @@ export async function normalizeByokBaseUrl(baseUrl: string): Promise<string> {
 		throw new ByokBaseUrlError("Base URL must include a host.");
 	}
 
-	await assertPublicHostname(normalizeHostname(url.hostname));
+	const hostname = normalizeHostname(url.hostname);
+	const addresses = await resolvePublicHostname(hostname);
 
 	while (url.pathname.endsWith("/")) {
 		url.pathname = url.pathname.slice(0, -1);
 	}
 	if (!url.pathname) url.pathname = "";
 	const normalized = url.toString();
-	return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+	const normalizedBaseUrl = normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+	const [address] = addresses;
+
+	return {
+		baseUrl: normalizedBaseUrl,
+		address: address.address,
+		family: address.family as 4 | 6,
+	};
 }

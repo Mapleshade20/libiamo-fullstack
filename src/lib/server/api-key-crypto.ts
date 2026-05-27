@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { env } from "$env/dynamic/private";
-import { ByokBaseUrlError, normalizeByokBaseUrl } from "$lib/server/byok-url";
+import { createPinnedByokFetch } from "$lib/server/byok-fetch";
+import { ByokBaseUrlError, resolveByokBaseUrl } from "$lib/server/byok-url";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -50,22 +51,23 @@ export function decryptApiKey(ciphertext: string): string {
 const VERIFY_TIMEOUT_MS = 8000;
 
 export async function verifyApiKey(baseUrl: string, apiKey: string, model: string): Promise<{ ok: true } | { ok: false; error: string }> {
-	let normalizedBase: string;
+	let resolvedBaseUrl: Awaited<ReturnType<typeof resolveByokBaseUrl>>;
 	try {
-		normalizedBase = await normalizeByokBaseUrl(baseUrl);
+		resolvedBaseUrl = await resolveByokBaseUrl(baseUrl);
 	} catch (error) {
 		if (error instanceof ByokBaseUrlError) return { ok: false, error: error.message };
 		throw error;
 	}
 
-	const endpoint = `${normalizedBase}/chat/completions`;
+	const endpoint = `${resolvedBaseUrl.baseUrl}/chat/completions`;
+	const pinnedFetch = createPinnedByokFetch(resolvedBaseUrl);
 
 	let response: Response;
 	try {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
 
-		response = await fetch(endpoint, {
+		response = await pinnedFetch(endpoint, {
 			method: "POST",
 			redirect: "manual",
 			headers: {

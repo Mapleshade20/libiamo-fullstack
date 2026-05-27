@@ -23,7 +23,15 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 }));
 
 vi.mock("$lib/server/byok-url", () => ({
-	normalizeByokBaseUrl: vi.fn(async (baseUrl: string) => baseUrl.replace(/\/+$/, "")),
+	resolveByokBaseUrl: vi.fn(async (baseUrl: string) => ({
+		baseUrl: baseUrl.replace(/\/+$/, ""),
+		address: "93.184.216.34",
+		family: 4,
+	})),
+}));
+
+vi.mock("$lib/server/byok-fetch", () => ({
+	createPinnedByokFetch: vi.fn(() => fetch),
 }));
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
