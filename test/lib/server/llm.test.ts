@@ -22,6 +22,10 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 	decryptApiKey: vi.fn((c: string) => `decrypted:${c}`),
 }));
 
+vi.mock("$lib/server/byok-url", () => ({
+	normalizeByokBaseUrl: vi.fn(async (baseUrl: string) => baseUrl.replace(/\/+$/, "")),
+}));
+
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function createChatCompletionResponse(content: string | null, extraMessage: Record<string, unknown> = {}) {

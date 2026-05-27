@@ -10,6 +10,7 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { decryptApiKey } from "./api-key-crypto";
+import { normalizeByokBaseUrl } from "./byok-url";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
 
@@ -104,9 +105,11 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 
 	if (!row) return null;
 
+	const baseUrl = await normalizeByokBaseUrl(row.baseUrl);
+
 	return {
 		apiKey: decryptApiKey(row.encryptedKey),
-		baseUrl: trimTrailingSlash(row.baseUrl),
+		baseUrl,
 		model: row.model,
 	};
 }

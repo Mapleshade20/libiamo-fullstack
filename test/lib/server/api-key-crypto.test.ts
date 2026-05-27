@@ -10,6 +10,10 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 
 describe("api-key-crypto", () => {
@@ -64,6 +68,7 @@ describe("api-key-crypto", () => {
 			expect(fetchMock).toHaveBeenCalledTimes(1);
 			const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
 			expect(url).toBe("https://api.example.com/v1/chat/completions");
+			expect(init.redirect).toBe("manual");
 			expect(JSON.parse(String(init.body))).toMatchObject({
 				model: "test-model",
 				messages: [{ role: "user", content: "Hi" }],
@@ -101,6 +106,17 @@ describe("api-key-crypto", () => {
 
 			const [url] = fetchMock.mock.calls[0] as unknown as [string];
 			expect(url).toBe("https://api.example.com/v1/chat/completions");
+		});
+
+		it("returns ok:false without fetching when baseUrl is disallowed", async () => {
+			const fetchMock = vi.fn();
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await verifyApiKey("ftp://api.example.com/v1", "sk-key", "m");
+
+			expect(result.ok).toBe(false);
+			expect("error" in result && result.error).toContain("HTTPS");
+			expect(fetchMock).not.toHaveBeenCalled();
 		});
 
 		it("handles non-JSON error response body", async () => {

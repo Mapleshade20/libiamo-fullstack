@@ -5,6 +5,7 @@ import { getNativeLanguageOptions } from "$lib/constants";
 import { profileSchema, switchLanguageSchema } from "$lib/schemas";
 import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
+import { ByokBaseUrlError, normalizeByokBaseUrl } from "$lib/server/byok-url";
 import { db } from "$lib/server/db";
 import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
@@ -116,11 +117,23 @@ export const actions: Actions = {
 		// Handle BYOK API key: overwrite-style update
 		const apiKey = result.data.apiKey?.trim();
 		if (apiKey) {
-			const apiBaseUrl = result.data.apiBaseUrl?.trim();
+			let apiBaseUrl = result.data.apiBaseUrl?.trim();
 			const apiModel = result.data.apiModel?.trim();
 
 			// Verify the key before saving
 			if (apiBaseUrl && apiModel) {
+				try {
+					apiBaseUrl = await normalizeByokBaseUrl(apiBaseUrl);
+				} catch (error) {
+					if (error instanceof ByokBaseUrlError) {
+						return fail(400, {
+							message: error.message,
+							values: safeValues({ apiBaseUrl }),
+						});
+					}
+					throw error;
+				}
+
 				const verification = await verifyApiKey(apiBaseUrl, apiKey, apiModel);
 				if (!verification.ok) {
 					return fail(400, {

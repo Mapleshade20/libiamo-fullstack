@@ -45,6 +45,15 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 	verifyApiKey: mockVerifyApiKey,
 }));
 
+const { mockNormalizeByokBaseUrl } = vi.hoisted(() => ({
+	mockNormalizeByokBaseUrl: vi.fn(async (baseUrl: string) => baseUrl.replace(/\/+$/, "")),
+}));
+
+vi.mock("$lib/server/byok-url", () => ({
+	ByokBaseUrlError: class ByokBaseUrlError extends Error {},
+	normalizeByokBaseUrl: mockNormalizeByokBaseUrl,
+}));
+
 describe("Profile +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -172,9 +181,30 @@ describe("Profile +page.server", () => {
 
 			const result = await actions.updateProfile(event);
 
+			expect(mockNormalizeByokBaseUrl).toHaveBeenCalledWith("https://api.example.com/v1");
 			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test-key", "test-model");
 			expect(mockEncryptApiKey).toHaveBeenCalledWith("sk-test-key");
 			expect(result).toEqual({ success: true });
+		});
+
+		it("updateProfile stores normalized BYOK base URL", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-test-key",
+				apiBaseUrl: "https://api.example.com/v1/",
+				apiModel: "test-model",
+			});
+
+			mockNormalizeByokBaseUrl.mockResolvedValue("https://api.example.com/v1");
+			mockVerifyApiKey.mockResolvedValue({ ok: true });
+
+			await actions.updateProfile(event);
+
+			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test-key", "test-model");
+			expect(mockValues).toHaveBeenCalledWith(
+				expect.objectContaining({
+					baseUrl: "https://api.example.com/v1",
+				}),
+			);
 		});
 
 		it("updateProfile returns 400 when BYOK verification fails", async () => {

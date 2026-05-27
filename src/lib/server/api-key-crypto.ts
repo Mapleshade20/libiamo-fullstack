@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { env } from "$env/dynamic/private";
+import { ByokBaseUrlError, normalizeByokBaseUrl } from "$lib/server/byok-url";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -49,7 +50,14 @@ export function decryptApiKey(ciphertext: string): string {
 const VERIFY_TIMEOUT_MS = 8000;
 
 export async function verifyApiKey(baseUrl: string, apiKey: string, model: string): Promise<{ ok: true } | { ok: false; error: string }> {
-	const normalizedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+	let normalizedBase: string;
+	try {
+		normalizedBase = await normalizeByokBaseUrl(baseUrl);
+	} catch (error) {
+		if (error instanceof ByokBaseUrlError) return { ok: false, error: error.message };
+		throw error;
+	}
+
 	const endpoint = `${normalizedBase}/chat/completions`;
 
 	let response: Response;
@@ -59,6 +67,7 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 
 		response = await fetch(endpoint, {
 			method: "POST",
+			redirect: "manual",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${apiKey}`,
