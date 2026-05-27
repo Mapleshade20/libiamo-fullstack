@@ -3,6 +3,7 @@ import Loader from "@lucide/svelte/icons/loader-circle";
 import Send from "@lucide/svelte/icons/send";
 import { untrack } from "svelte";
 import { renderMarkdown } from "$lib/markdown";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 
 type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
 type QAPair = { question: string; answer?: string };
@@ -79,6 +80,13 @@ function handleAsk() {
 	onAskTutor(q, updated);
 	askQuestion = "";
 }
+
+function handleTranslationInput(event: Event) {
+	const textarea = event.target as HTMLTextAreaElement;
+	const value = textarea.value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
+	if (textarea.value !== value) textarea.value = value;
+	onTranslationChange(value);
+}
 </script>
 
 <div>
@@ -115,7 +123,8 @@ function handleAsk() {
 				class="w-full min-h-[60px] resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
 				placeholder="Enter your translation..."
 				value={translation}
-				oninput={(e) => onTranslationChange((e.target as HTMLTextAreaElement).value)}
+				maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+				oninput={handleTranslationInput}
 				onblur={onBlur}
 				rows={2}
 			></textarea>
@@ -126,7 +135,8 @@ function handleAsk() {
 				class="w-full min-h-[40px] resize-y rounded-lg border border-border/50 bg-background/50 px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
 				placeholder="Optional — excluded from evaluation"
 				value={translation}
-				oninput={(e) => onTranslationChange((e.target as HTMLTextAreaElement).value)}
+				maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+				oninput={handleTranslationInput}
 				onblur={onBlur}
 				rows={1}
 			></textarea>

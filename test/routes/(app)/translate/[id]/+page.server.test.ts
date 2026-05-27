@@ -92,7 +92,7 @@ function createActionEvent(entries: Record<string, string>, params: { id: string
 		formData.append(key, value);
 	}
 	return {
-		locals: { user: userId ? { id: userId } : null },
+		locals: { user: userId ? { id: userId, activeLanguage: "fr" } : null },
 		params,
 		request: { formData: async () => formData },
 	} as any;
@@ -212,6 +212,12 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 400 for invalid JSON", async () => {
 			const result = (await actions.saveDraft(createActionEvent({ translations: "not-json" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 when a translation sentence is too long", async () => {
+			const result = (await actions.saveDraft(createActionEvent({ translations: JSON.stringify({ "0-0": "x".repeat(10001) }) }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Translation text is too long");
 		});
 
 		it("returns 400 for non-numeric attemptId", async () => {
@@ -553,6 +559,10 @@ describe("(app) translate/[id] +page.server", () => {
 
 	// ── explainFeedback action ────────────────────────────────────
 	describe("explainFeedback action", () => {
+		beforeEach(() => {
+			mockLimit.mockResolvedValue([{ language: "fr" }]);
+		});
+
 		it("redirects unauthenticated users", async () => {
 			await expect(actions.explainFeedback(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
 				status: 302,
@@ -604,11 +614,11 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.data?.error).toBe("Missing feedback");
 		});
 
-		it("returns 400 when language is missing", async () => {
+		it("returns 400 when tutor help text is too long", async () => {
 			const result = (await actions.explainFeedback(
 				createActionEvent(
 					{
-						sourceSentence: "Hello",
+						sourceSentence: "x".repeat(10001),
 						userTranslation: "hola",
 						feedback: "wrong word",
 					},
@@ -616,7 +626,7 @@ describe("(app) translate/[id] +page.server", () => {
 				),
 			)) as any;
 			expect(result.status).toBe(400);
-			expect(result.data?.error).toBe("Missing language");
+			expect(result.data?.error).toBe("Tutor help text is too long");
 		});
 
 		it("returns explanation on success", async () => {
@@ -661,6 +671,10 @@ describe("(app) translate/[id] +page.server", () => {
 
 	// ── translateSentence action ──────────────────────────────────
 	describe("translateSentence action", () => {
+		beforeEach(() => {
+			mockLimit.mockResolvedValue([{ language: "fr" }]);
+		});
+
 		it("redirects unauthenticated users", async () => {
 			await expect(actions.translateSentence(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
 				status: 302,
@@ -678,10 +692,10 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.status).toBe(400);
 		});
 
-		it("returns 400 when language is missing", async () => {
-			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello" }, { id: "1" }))) as any;
+		it("returns 400 when tutor help text is too long", async () => {
+			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "x".repeat(10001) }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
-			expect(result.data?.error).toBe("Missing language");
+			expect(result.data?.error).toBe("Tutor help text is too long");
 		});
 
 		it("returns translation on success", async () => {
@@ -716,6 +730,10 @@ describe("(app) translate/[id] +page.server", () => {
 
 	// ── askTutor action ───────────────────────────────────────────
 	describe("askTutor action", () => {
+		beforeEach(() => {
+			mockLimit.mockResolvedValue([{ language: "fr" }]);
+		});
+
 		it("redirects unauthenticated users", async () => {
 			await expect(actions.askTutor(createActionEvent({}, { id: "1" }, ""))).rejects.toMatchObject({
 				status: 302,
@@ -754,12 +772,12 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.data?.error).toBe("Missing question");
 		});
 
-		it("returns 400 when language is missing", async () => {
+		it("returns 400 when tutor help text is too long", async () => {
 			const result = (await actions.askTutor(
-				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "why?" }, { id: "1" }),
+				createActionEvent({ sourceSentence: "Hello", userTranslation: "hola", feedback: "wrong", question: "x".repeat(10001) }, { id: "1" }),
 			)) as any;
 			expect(result.status).toBe(400);
-			expect(result.data?.error).toBe("Missing language");
+			expect(result.data?.error).toBe("Tutor help text is too long");
 		});
 
 		it("returns answer on success", async () => {

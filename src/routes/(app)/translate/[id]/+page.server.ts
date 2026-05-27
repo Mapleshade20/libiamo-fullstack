@@ -2,6 +2,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
@@ -9,6 +10,7 @@ import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
 const MAX_TRANSLATION_FORM_SIZE = 100 * 1024;
+const TUTOR_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
 
 /** Throw redirect if user is not authenticated */
 function requireUser(event: { locals: App.Locals }) {
@@ -37,6 +39,10 @@ function getLangName(code: unknown): string {
 	return LANGUAGE_LABELS[validateLanguageCode(code)];
 }
 
+function hasOversizedTutorHelpText(values: string[]) {
+	return values.some((value) => value.length > TUTOR_HELP_TEXT_MAX_LENGTH);
+}
+
 /** Handle LLM errors with auth-specific messaging */
 function handleLlmError(err: unknown, fallback: string) {
 	console.error(fallback, err);
@@ -54,6 +60,11 @@ const translateTemplateFilter = (templateId: number, userLanguage: string) =>
 		eq(template.isActive, true),
 		eq(template.language, userLanguage as LanguageCode),
 	);
+
+async function getAccessibleTranslateTemplateLanguage(templateId: number, activeLanguage: string) {
+	const [tpl] = await db.select({ language: template.language }).from(template).where(translateTemplateFilter(templateId, activeLanguage)).limit(1);
+	return tpl?.language as LanguageCode | undefined;
+}
 
 /** Parse translations and attemptId from form data, with size limit */
 function parseTranslationsForm(
@@ -74,6 +85,15 @@ function parseTranslationsForm(
 		translations = JSON.parse(raw);
 	} catch {
 		return { ok: false, error: "Invalid translations JSON" };
+	}
+	if (!translations || typeof translations !== "object" || Array.isArray(translations)) {
+		return { ok: false, error: "Invalid translations JSON" };
+	}
+	if (Object.values(translations).some((value) => typeof value !== "string")) {
+		return { ok: false, error: "Invalid translations JSON" };
+	}
+	if (Object.values(translations).some((value) => value.length > PRACTICE_UI_TEXT_MAX_LENGTH)) {
+		return { ok: false, error: "Translation text is too long" };
 	}
 	const attemptIdRaw = formData.get("attemptId");
 	const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
@@ -395,6 +415,8 @@ export const actions: Actions = {
 	explainFeedback: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
+		const templateId = Number(event.params.id);
+		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
@@ -402,11 +424,12 @@ export const actions: Actions = {
 		if (!userTranslation) return fail(400, { error: "Missing user translation" });
 		const feedback = getFormString(formData, "feedback");
 		if (!feedback) return fail(400, { error: "Missing feedback" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
+		if (hasOversizedTutorHelpText([sourceSentence, userTranslation, feedback])) return fail(400, { error: "Tutor help text is too long" });
 
-		const langName = getLangName(language);
-		const prompt = buildExplainFeedbackPrompt(validateLanguageCode(language));
+		const targetLanguage = await getAccessibleTranslateTemplateLanguage(templateId, user.activeLanguage);
+		if (!targetLanguage) return fail(404, { error: "Template not found" });
+		const langName = getLangName(targetLanguage);
+		const prompt = buildExplainFeedbackPrompt(targetLanguage);
 
 		try {
 			const reply = await chatText({
@@ -429,13 +452,16 @@ export const actions: Actions = {
 	translateSentence: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
+		const templateId = Number(event.params.id);
+		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
+		if (hasOversizedTutorHelpText([sourceSentence])) return fail(400, { error: "Tutor help text is too long" });
 
-		const langName = getLangName(language);
+		const targetLanguage = await getAccessibleTranslateTemplateLanguage(templateId, user.activeLanguage);
+		if (!targetLanguage) return fail(404, { error: "Template not found" });
+		const langName = getLangName(targetLanguage);
 
 		try {
 			const reply = await chatText({
@@ -458,6 +484,8 @@ export const actions: Actions = {
 	askTutor: async (event) => {
 		const user = requireUser(event);
 		const formData = await event.request.formData();
+		const templateId = Number(event.params.id);
+		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
 
 		const sourceSentence = getFormString(formData, "sourceSentence");
 		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
@@ -467,10 +495,11 @@ export const actions: Actions = {
 		if (!feedback) return fail(400, { error: "Missing feedback" });
 		const question = getFormString(formData, "question");
 		if (!question) return fail(400, { error: "Missing question" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
+		if (hasOversizedTutorHelpText([sourceSentence, userTranslation, feedback, question])) return fail(400, { error: "Tutor help text is too long" });
 
-		const langName = getLangName(language);
+		const targetLanguage = await getAccessibleTranslateTemplateLanguage(templateId, user.activeLanguage);
+		if (!targetLanguage) return fail(404, { error: "Template not found" });
+		const langName = getLangName(targetLanguage);
 
 		try {
 			const reply = await chatText({

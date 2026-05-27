@@ -44,10 +44,24 @@ function createActionEvent(entries: Record<string, string>, userId = "u1") {
 		formData.append(key, value);
 	}
 	return {
-		locals: { user: userId ? { id: userId } : null },
+		locals: { user: userId ? { id: userId, activeLanguage: "fr", nativeLanguage: "en" } : null },
+		params: { id: "42" },
 		request: { formData: async () => formData },
 	} as any;
 }
+
+const accessibleTask = {
+	id: 42,
+	title: "Ordering at a restaurant",
+	description: "Practice ordering politely",
+	objectives: ["Ask for the menu"],
+	language: "fr",
+	templateInteractionType: "chat",
+	templateUi: "discord",
+	templateDifficulty: 1,
+	pointReward: 10,
+	gemReward: 0,
+};
 
 // ── Tests ───────────────────────────────────────────────────────────
 describe("Task detail +page.server", () => {
@@ -163,24 +177,34 @@ describe("Task detail +page.server", () => {
 
 	// ── generateExpressions action ─────────────────────────────────
 	describe("generateExpressions action", () => {
+		beforeEach(() => {
+			mockLimit.mockResolvedValue([accessibleTask]);
+		});
+
 		it("returns 401 when user is not authenticated", async () => {
 			const result = (await actions.generateExpressions(createActionEvent({ title: "Test" }, ""))) as any;
 			expect(result.status).toBe(401);
 		});
 
-		it("returns 400 when title is missing", async () => {
-			const result = (await actions.generateExpressions(createActionEvent({}))) as any;
+		it("returns 400 when task id is invalid", async () => {
+			const event = createActionEvent({ nativeLanguage: "en" });
+			event.params.id = "abc";
+			const result = (await actions.generateExpressions(event)) as any;
 			expect(result.status).toBe(400);
-			expect(result.data?.error).toBe("Missing task title");
+			expect(result.data?.error).toBe("Invalid task ID");
 		});
 
-		it("returns 400 when title is empty string", async () => {
-			const result = (await actions.generateExpressions(createActionEvent({ title: "   " }))) as any;
-			expect(result.status).toBe(400);
+		it("returns 404 when task is not accessible", async () => {
+			mockLimit.mockResolvedValueOnce([]);
+			const result = (await actions.generateExpressions(createActionEvent({ nativeLanguage: "en" }))) as any;
+			expect(result.status).toBe(404);
+			expect(result.data?.error).toBe("Task not found");
 		});
 
 		it("returns 400 when native language is missing", async () => {
-			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", targetLanguage: "fr" }))) as any;
+			const event = createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" });
+			event.locals.user.nativeLanguage = null;
+			const result = (await actions.generateExpressions(event)) as any;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
@@ -209,10 +233,10 @@ describe("Task detail +page.server", () => {
 
 			const result = await actions.generateExpressions(
 				createActionEvent({
-					title: "Writing a formal email",
-					description: "Practice composing a formal email to a professor",
-					objectives: JSON.stringify(["Use proper salutations", "Close politely"]),
-					interactionType: "compose",
+					title: "Tampered title",
+					description: "Tampered description",
+					objectives: JSON.stringify(["Tampered objective"]),
+					interactionType: "translate",
 					ui: "apple_mail",
 					nativeLanguage: "en",
 					targetLanguage: "es",
@@ -223,6 +247,10 @@ describe("Task detail +page.server", () => {
 				success: true,
 				expressions: ["How do I address the professor?", "What is the formal greeting?"],
 			});
+			const requestMessages = mockChatJson.mock.calls[0]?.[1]?.messages;
+			expect(requestMessages[1].content).toContain('Task title: "Ordering at a restaurant"');
+			expect(requestMessages[1].content).toContain('Task description: "Practice ordering politely"');
+			expect(requestMessages[1].content).not.toContain("Tampered");
 		});
 
 		it("parses JSON inside markdown code fences", async () => {
@@ -260,6 +288,10 @@ describe("Task detail +page.server", () => {
 
 	// ── evaluateTranslation action ─────────────────────────────────
 	describe("evaluateTranslation action", () => {
+		beforeEach(() => {
+			mockLimit.mockResolvedValue([accessibleTask]);
+		});
+
 		it("returns 401 when user is not authenticated", async () => {
 			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" }, ""))) as any;
 			expect(result.status).toBe(401);
@@ -288,12 +320,25 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("returns 400 when native language is missing", async () => {
-			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour", targetLanguage: "fr" }),
-			)) as any;
+			const event = createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour", nativeLanguage: "en", targetLanguage: "fr" });
+			event.locals.user.nativeLanguage = null;
+			const result = (await actions.evaluateTranslation(event)) as any;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
+		});
+
+		it("returns 400 when translation help text is too long", async () => {
+			const result = (await actions.evaluateTranslation(
+				createActionEvent({
+					sourceExpression: "Hello",
+					userTranslation: "x".repeat(10001),
+					nativeLanguage: "en",
+				}),
+			)) as any;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Translation help text is too long");
 		});
 
 		it("evaluates a perfect translation", async () => {

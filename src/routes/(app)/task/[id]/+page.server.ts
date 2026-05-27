@@ -1,12 +1,15 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, UI_VARIANT_LABELS } from "$lib/constants";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
 import { OpenAIAuthError } from "$lib/server/llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
+
+const TRANSLATION_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
 
 /** Validate and cast a language code, defaulting to "en" */
 function validateLanguageCode(code: unknown): LanguageCode {
@@ -16,15 +19,12 @@ function validateLanguageCode(code: unknown): LanguageCode {
 	return "en";
 }
 
-export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
-	const taskId = Number(event.params.id);
+function parseTaskId(value: string) {
+	const taskId = Number(value);
+	return Number.isInteger(taskId) ? taskId : null;
+}
 
-	if (Number.isNaN(taskId)) {
-		return error(404, "Task not found");
-	}
-
+async function getAccessibleTask(taskId: number, activeLanguage: string) {
 	const [result] = await db
 		.select({
 			id: task.id,
@@ -46,8 +46,29 @@ export const load: PageServerLoad = async (event) => {
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
 		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
-		.where(eq(task.id, taskId))
+		.where(
+			and(
+				eq(task.id, taskId),
+				eq(task.language, validateLanguageCode(activeLanguage)),
+				eq(template.isActive, true),
+				ne(template.interactionType, "translate"),
+			),
+		)
 		.limit(1);
+
+	return result ?? null;
+}
+
+export const load: PageServerLoad = async (event) => {
+	const user = event.locals.user;
+	if (!user) return redirect(302, "/sign-in");
+	const taskId = parseTaskId(event.params.id);
+
+	if (taskId === null) {
+		return error(404, "Task not found");
+	}
+
+	const result = await getAccessibleTask(taskId, user.activeLanguage);
 
 	if (!result) {
 		return error(404, "Task not found");
@@ -81,33 +102,17 @@ export const actions: Actions = {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
 
-		const formData = await event.request.formData();
-		const title = formData.get("title");
-		const description = formData.get("description");
-		const objectivesRaw = formData.get("objectives");
-		const interactionType = formData.get("interactionType");
-		const ui = formData.get("ui");
-		const nativeLang = formData.get("nativeLanguage");
-		const targetLang = formData.get("targetLanguage");
+		const taskId = parseTaskId(event.params?.id ?? "");
+		if (taskId === null) return fail(400, { error: "Invalid task ID" });
 
-		if (!title || typeof title !== "string" || !title.trim()) {
-			return fail(400, { error: "Missing task title" });
-		}
+		const taskData = await getAccessibleTask(taskId, user.activeLanguage);
+		if (!taskData) return fail(404, { error: "Task not found" });
 
-		let objectives: string[] | null = null;
-		if (objectivesRaw && typeof objectivesRaw === "string") {
-			try {
-				objectives = JSON.parse(objectivesRaw);
-			} catch {
-				// ignore parse errors
-			}
-		}
+		const nativeLang = user.nativeLanguage;
 
-		const uiLabel = typeof ui === "string" ? (UI_VARIANT_LABELS[ui as keyof typeof UI_VARIANT_LABELS] ?? ui) : undefined;
+		const uiLabel = UI_VARIANT_LABELS[taskData.templateUi as keyof typeof UI_VARIANT_LABELS] ?? taskData.templateUi;
 		const interactionLabel =
-			typeof interactionType === "string"
-				? (INTERACTION_TYPE_LABELS[interactionType as keyof typeof INTERACTION_TYPE_LABELS] ?? interactionType)
-				: undefined;
+			INTERACTION_TYPE_LABELS[taskData.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? taskData.templateInteractionType;
 
 		if (!nativeLang || typeof nativeLang !== "string" || !nativeLang.trim()) {
 			return fail(400, { error: "Please set your native language in your profile before using translation help." });
@@ -116,14 +121,14 @@ export const actions: Actions = {
 		try {
 			const expressions = await generateExpressions(
 				{
-					title: title.trim(),
-					description: typeof description === "string" ? description : null,
-					objectives,
+					title: taskData.title,
+					description: taskData.description,
+					objectives: taskData.objectives,
 					uiLabel,
 					interactionType: interactionLabel,
 				},
 				nativeLang,
-				validateLanguageCode(targetLang),
+				validateLanguageCode(taskData.language),
 				user.id,
 			);
 
@@ -143,10 +148,15 @@ export const actions: Actions = {
 		if (!user) return fail(401, { error: "Unauthorized" });
 
 		const formData = await event.request.formData();
+		const taskId = parseTaskId(event.params?.id ?? "");
+		if (taskId === null) return fail(400, { error: "Invalid task ID" });
+
+		const taskData = await getAccessibleTask(taskId, user.activeLanguage);
+		if (!taskData) return fail(404, { error: "Task not found" });
+
 		const sourceExpression = formData.get("sourceExpression");
 		const userTranslation = formData.get("userTranslation");
-		const nativeLang = formData.get("nativeLanguage");
-		const targetLang = formData.get("targetLanguage");
+		const nativeLang = user.nativeLanguage;
 
 		if (!sourceExpression || typeof sourceExpression !== "string" || !sourceExpression.trim()) {
 			return fail(400, { error: "Missing source expression" });
@@ -158,13 +168,16 @@ export const actions: Actions = {
 		if (!nativeLang || typeof nativeLang !== "string" || !nativeLang.trim()) {
 			return fail(400, { error: "Please set your native language in your profile before using translation help." });
 		}
+		if (sourceExpression.length > TRANSLATION_HELP_TEXT_MAX_LENGTH || userTranslation.length > TRANSLATION_HELP_TEXT_MAX_LENGTH) {
+			return fail(400, { error: "Translation help text is too long" });
+		}
 
 		try {
 			const { feedback, correction } = await evaluateUserTranslation(
 				sourceExpression.trim(),
 				userTranslation.trim(),
 				nativeLang,
-				validateLanguageCode(targetLang),
+				validateLanguageCode(taskData.language),
 				user.id,
 			);
 

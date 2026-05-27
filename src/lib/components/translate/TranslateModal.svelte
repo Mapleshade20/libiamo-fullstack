@@ -7,6 +7,7 @@ import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import { type LanguageCode, t } from "$lib/i18n";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/practice-limits";
 
 interface Props {
 	show: boolean;
@@ -118,6 +119,13 @@ async function handleCheck(idx: number) {
 	} finally {
 		if (mounted) checking = { ...checking, [idx]: false };
 	}
+}
+
+function handleUserTranslationInput(idx: number, event: Event) {
+	const textarea = event.target as HTMLTextAreaElement;
+	const value = textarea.value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
+	if (textarea.value !== value) textarea.value = value;
+	userTranslations = { ...userTranslations, [idx]: value };
 }
 
 function handleClose() {
@@ -249,9 +257,8 @@ $effect(() => {
 									placeholder="Type your translation..."
 									rows={2}
 									value={userTranslations[idx] ?? ""}
-									oninput={(e) => {
-										userTranslations = { ...userTranslations, [idx]: (e.target as HTMLTextAreaElement).value };
-									}}
+									maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+									oninput={(e) => handleUserTranslationInput(idx, e)}
 									onkeydown={(e) => {
 										if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
 											e.preventDefault();
