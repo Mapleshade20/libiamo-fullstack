@@ -14,7 +14,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && biome check --write",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
-		"test": "vitest run",
+		"test": "vitest run --reporter agent",
 		"test:coverage": "vitest run --coverage",
 		"test:ci": "vitest run --coverage",
 		"db:push": "drizzle-kit push",
