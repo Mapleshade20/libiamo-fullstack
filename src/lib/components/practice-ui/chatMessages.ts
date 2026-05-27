@@ -103,20 +103,33 @@ function getClientMessageId(message: Pick<PersistedSessionMessage, "llmMetadata"
 function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
 	const orderedMessages = sortPersistedSessionMessages(messages);
 
-	for (let index = 0; index < orderedMessages.length; index += 1) {
+	let index = 0;
+	while (index < orderedMessages.length) {
 		const message = orderedMessages[index];
-		if (!isAgentRole(message.role)) continue;
+		if (!isAgentRole(message.role)) {
+			index += 1;
+			continue;
+		}
 
 		const clientMessageId = getClientMessageId(message);
-		if (!clientMessageId) continue;
+		if (!clientMessageId) {
+			index += 1;
+			continue;
+		}
 
 		const userIndex = orderedMessages.findIndex(
 			(candidate, candidateIndex) => candidateIndex > index && candidate.role === "user" && getClientMessageId(candidate) === clientMessageId,
 		);
-		if (userIndex === -1) continue;
+		if (userIndex === -1) {
+			index += 1;
+			continue;
+		}
 
 		const [reply] = orderedMessages.splice(index, 1);
-		if (!reply) continue;
+		if (!reply) {
+			index += 1;
+			continue;
+		}
 		orderedMessages.splice(userIndex, 0, reply);
 	}
 

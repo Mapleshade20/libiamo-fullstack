@@ -161,6 +161,45 @@ describe("buildChatMessages", () => {
 		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
 	});
 
+	it("anchors consecutive inverted assistant replies without skipping shifted messages", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 10,
+					role: "assistant",
+					content: "Reply to first",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+				{
+					id: 11,
+					role: "assistant",
+					content: "Reply to second",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-2" },
+				},
+				{
+					id: 12,
+					role: "user",
+					content: "First",
+					createdAt: new Date("2026-01-01T10:02:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+				{
+					id: 13,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:03:00Z"),
+					llmMetadata: { clientMessageId: "msg-2", failed: false },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["12", "10", "13", "11"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
 	it("treats an 'agent' role message as an assistant reply in the same turn", () => {
 		const result = buildChatMessages({
 			...baseOptions,
