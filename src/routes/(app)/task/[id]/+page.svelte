@@ -125,7 +125,9 @@ function difficultyLabel(level: number): string {
 					{/if}
 
 					{#if isFinished}
-						<Button class="px-8 bg-green-600 hover:bg-green-700 text-white" href="/task/{task.id}/session">{t(lang, "hall.reviewReport")}</Button>
+						<Button class="px-8 border border-green-400 bg-green-100 text-black hover:bg-green-200" href="/task/{task.id}/feedback">
+							{t(lang, "hall.reviewReport")}
+						</Button>
 					{:else if isPracticeEnabled}
 						<Button class="px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
 					{:else}

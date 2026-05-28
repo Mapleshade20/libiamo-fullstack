@@ -1,5 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
@@ -14,9 +14,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const taskId = Number.parseInt(taskIdStr, 10);
 	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
 
-	// Get the session
+	// Get the current user's session. If it doesn't exist yet, send them to the session flow.
 	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.taskId, taskId),
+		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
 		with: {
 			messages: { orderBy: (messages, { asc }) => [asc(messages.createdAt)] },
 			task: {
@@ -28,8 +28,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		},
 	});
 
-	if (!session) throw error(404, "Session not found");
-	if (session.userId !== user.id) throw error(403, "Access denied");
+	if (!session) throw redirect(303, `/task/${taskId}/session`);
 
 	// Redirect if not completed
 	if (session.status !== "completed" && session.status !== "evaluated") {
@@ -86,12 +85,11 @@ export const actions: Actions = {
 		try {
 			// Get session
 			const session = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.taskId, taskId),
+				where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
 				columns: { id: true, userId: true, status: true },
 			});
 
-			if (!session) return fail(404, { error: "Session not found" });
-			if (session.userId !== user.id) return fail(403, { error: "Access denied" });
+			if (!session) return fail(400, { error: "Session not completed" });
 			if (session.status !== "completed" && session.status !== "evaluated") {
 				return fail(400, { error: "Session not completed" });
 			}

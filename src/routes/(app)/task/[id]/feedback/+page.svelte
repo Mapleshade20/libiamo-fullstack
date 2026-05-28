@@ -1,13 +1,11 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
-import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
-import { fade, fly } from "svelte/transition";
-import { enhance } from "$app/forms";
+import MessageCircle from "@lucide/svelte/icons/message-circle";
+import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback-types";
-import { cn } from "$lib/utils";
+import type { AnnotationSpan, FeedbackResult, MessageAnnotation } from "$lib/feedback-types";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
 import FloatingQuestionFAB from "./FloatingQuestionFAB.svelte";
@@ -95,12 +93,24 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<!-- Header -->
 	<div class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-6 py-4">
-			<div class="flex items-center justify-between">
+			<div class="flex items-center justify-between gap-4">
 				<a href="/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
 					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 					<span class="text-sm font-medium uppercase tracking-wide">Back to Task</span>
 				</a>
-				<h1 class="text-lg font-serif">{data.taskTitle}</h1>
+				<div class="flex items-center gap-3">
+					<h1 class="text-lg font-serif">{data.taskTitle}</h1>
+					<Button
+						href="/task/{data.taskId}/session"
+						variant="outline"
+						size="icon-sm"
+						class="border-[#d8d0c5] bg-white/70 text-[#2a2520] hover:bg-[#f5f2ed]"
+						aria-label="Open practice session"
+						title="Open practice session"
+					>
+						<MessageCircle size={16} strokeWidth={1.75} />
+					</Button>
+				</div>
 			</div>
 		</div>
 	</div>
