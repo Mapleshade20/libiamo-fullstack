@@ -154,10 +154,10 @@ export const templateSchema = z
 		...templateCore,
 		cadence: z.enum(CADENCES),
 		difficulty: z.coerce.number().int().min(1).max(3),
-		maxTurns: z.coerce.number().int().min(0).optional(),
-		estimatedWords: z.coerce.number().int().min(0).optional(),
-		pointReward: z.coerce.number().int().min(0),
-		gemReward: z.coerce.number().int().min(0),
+		maxTurns: z.coerce.number().int().min(0).max(100).optional(),
+		estimatedWords: z.coerce.number().int().min(0).max(1_000_000).optional(),
+		pointReward: z.coerce.number().int().min(0).max(10_000),
+		gemReward: z.coerce.number().int().min(0).max(10_000),
 		isActive: z
 			.string()
 			.optional()
@@ -260,7 +260,7 @@ const ao3CommentSchema: z.ZodType<Ao3CommentInput> = z.object({
 	comment: z.string(),
 	timestamp: z.string().optional(),
 	chapterTitle: z.string().optional(),
-	iconUrl: z.string().optional(),
+	iconUrl: z.string().max(2048).url().startsWith("https://").optional(),
 	replies: z.lazy(() => z.array(ao3CommentSchema)).optional(),
 });
 

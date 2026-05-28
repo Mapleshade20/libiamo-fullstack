@@ -403,4 +403,63 @@ describe("schemas", () => {
 		expect(getEditorFields("translator")).toHaveLength(1);
 		expect(getEditorFields("translator")[0].type).toBe("textarea");
 	});
+
+	// ── Template numeric field bounds ────────────────────────────────
+
+	it("rejects over-range estimatedWords", () => {
+		const result = templateSchema.safeParse({ ...baseTemplate, estimatedWords: 2_000_000 });
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects over-range maxTurns", () => {
+		const result = templateSchema.safeParse({ ...baseTemplate, maxTurns: 200 });
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects over-range pointReward", () => {
+		const result = templateSchema.safeParse({ ...baseTemplate, pointReward: 20_000 });
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects over-range gemReward", () => {
+		const result = templateSchema.safeParse({ ...baseTemplate, gemReward: 20_000 });
+		expect(result.success).toBe(false);
+	});
+
+	it("accepts numeric fields at their maximum allowed values", () => {
+		const result = templateSchema.safeParse({
+			...baseTemplate,
+			estimatedWords: 1_000_000,
+			maxTurns: 100,
+			pointReward: 10_000,
+			gemReward: 10_000,
+		});
+		expect(result.success).toBe(true);
+	});
+
+	// ── AO3 iconUrl schema validation ────────────────────────────────
+
+	it("ao3OpeningStateSchema accepts valid https iconUrl", () => {
+		const result = ao3OpeningStateSchema.safeParse({
+			workTitle: "My Fic",
+			previousComments: [{ username: "fan", comment: "Nice!", iconUrl: "https://cdn.example.com/avatar.png" }],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("ao3OpeningStateSchema rejects non-https iconUrl", () => {
+		const result = ao3OpeningStateSchema.safeParse({
+			workTitle: "My Fic",
+			previousComments: [{ username: "fan", comment: "Nice!", iconUrl: "http://example.com/avatar.png" }],
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("ao3OpeningStateSchema rejects overly long iconUrl", () => {
+		const result = ao3OpeningStateSchema.safeParse({
+			workTitle: "My Fic",
+			previousComments: [{ username: "fan", comment: "Nice!", iconUrl: `https://example.com/${"a".repeat(3000)}` }],
+		});
+		expect(result.success).toBe(false);
+	});
 });

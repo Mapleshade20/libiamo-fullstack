@@ -1,3 +1,4 @@
+import { safeImageUrl } from "$lib/image-url";
 import type { ChatMessage } from "../chatMessages";
 import {
 	buildCommentThreadTree,
@@ -153,7 +154,7 @@ export function buildAo3CommentTree(params: {
 			username: base.author,
 			comment: base.text,
 			chapterTitle: normalizeAo3Text(comment.chapterTitle) || undefined,
-			iconUrl: normalizeAo3Text(comment.iconUrl, DEFAULT_AO3_ICON),
+			iconUrl: safeImageUrl(comment.iconUrl) ?? DEFAULT_AO3_ICON,
 		}),
 		mapMessageComment: (message, base) => ({
 			username: base.author,
