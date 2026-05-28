@@ -2,6 +2,7 @@
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { createPracticeSession } from "../session.svelte";
 import {
@@ -84,6 +85,7 @@ const characterLimit = 10000;
 let commentText = $state("");
 let replyTarget = $state<Ao3RenderableComment | null>(null);
 let showHintMenu = $state(false);
+let showFinishConfirm = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
@@ -201,6 +203,19 @@ function scrollToTop(event: MouseEvent) {
 	event.preventDefault();
 	scrollContainer?.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void session.handleCompleteAndNavigate(String(taskId));
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
+}
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -233,7 +248,7 @@ function scrollToTop(event: MouseEvent) {
 				<button
 					type="button"
 					class="rounded border border-[#ccc] bg-[#eee] px-3 py-1 text-sm text-[#444] shadow-inner hover:text-[#900] disabled:opacity-50"
-					onclick={() => session.handleCompleteAndNavigate(String(taskId))}
+					onclick={handleFinishClick}
 					disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
 				>
 					{session.isCompleting ? t.evaluating : t.finishTask}
@@ -380,6 +395,16 @@ function scrollToTop(event: MouseEvent) {
 		</section>
 	</main>
 </div>
+
+<BottomSheet
+	show={showFinishConfirm}
+	title="Finish Task"
+	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+	confirmLabel="Finish & Review"
+	cancelLabel="Keep Practicing"
+	onConfirm={handleFinishConfirm}
+	onCancel={handleFinishCancel}
+/>
 
 {#snippet renderComment(comment: Ao3RenderableComment)}
 	<li class="mb-4" style={`margin-left: ${Math.min(comment.depth, 5) * 2}%`}>

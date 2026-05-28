@@ -7,6 +7,7 @@ import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
@@ -74,6 +75,7 @@ const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessag
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 
 let showHintMenu = $state(false);
+let showFinishConfirm = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
@@ -140,6 +142,19 @@ function handleWindowClick(event: MouseEvent) {
 	if (!target.closest(".hint-container-wrapper")) {
 		if (showHintMenu) closeHintMenu();
 	}
+}
+
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void session.handleCompleteAndNavigate(String(taskId));
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
 }
 
 function getBubbleClasses(message: (typeof renderableMessages)[0], index: number) {
@@ -235,7 +250,7 @@ onMount(() => {
 							<button
 								type="button"
 								class="rounded-full bg-[#0A84FF] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0062CC] disabled:opacity-50"
-								onclick={() => session.handleCompleteAndNavigate(String(taskId))}
+								onclick={handleFinishClick}
 								disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
 							>
 								{session.isCompleting ? t.evaluating : t.finishTask}
@@ -384,3 +399,13 @@ onMount(() => {
 		</div>
 	</div>
 </div>
+
+<BottomSheet
+	show={showFinishConfirm}
+	title="Finish Task"
+	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+	confirmLabel="Finish & Review"
+	cancelLabel="Keep Practicing"
+	onConfirm={handleFinishConfirm}
+	onCancel={handleFinishCancel}
+/>

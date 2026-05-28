@@ -3,6 +3,7 @@ import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
@@ -63,6 +64,7 @@ let isEntering = $state(true);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
+let showFinishConfirm = $state(false);
 let messages = $state<ChatMessage[]>([]);
 let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
@@ -267,6 +269,19 @@ function appendAgentMessageFromSendResult(
 	messages = [...messages, agentMessage];
 	selectedInboxId = `agent-${agentMessage.id}`;
 	activeMailbox = "inbox";
+}
+
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void handleComplete();
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
 }
 
 async function handleComplete(force = false) {
@@ -565,7 +580,7 @@ $effect(() => {
 			{remainingTurns}
 			{canFinish}
 			onMockAction={handleMockAction}
-			onComplete={handleComplete}
+			onComplete={handleFinishClick}
 			onRetry={handleRetry}
 		/>
 	</div>
@@ -589,6 +604,16 @@ $effect(() => {
 			onPersistDraft={persistDraft}
 		/>
 	{/if}
+
+	<BottomSheet
+		show={showFinishConfirm}
+		title="Finish Task"
+		message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+		confirmLabel="Finish & Review"
+		cancelLabel="Keep Practicing"
+		onConfirm={handleFinishConfirm}
+		onCancel={handleFinishCancel}
+	/>
 </div>
 
 <style>

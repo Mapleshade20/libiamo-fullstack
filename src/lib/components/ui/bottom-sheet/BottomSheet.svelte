@@ -31,7 +31,7 @@ function handleBackdropClick(event: MouseEvent) {
 	<!-- Backdrop -->
 	<button
 		type="button"
-		class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+		class="fixed inset-0 z-[4000] bg-black/40 backdrop-blur-sm"
 		onclick={handleBackdropClick}
 		transition:fade={{ duration: 200 }}
 		aria-label="Close dialog"
@@ -39,7 +39,7 @@ function handleBackdropClick(event: MouseEvent) {
 
 	<!-- Bottom sheet -->
 	<div
-		class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-[#e8e3db] bg-white shadow-2xl"
+		class="fixed bottom-0 left-0 right-0 z-[4001] rounded-t-2xl border-t border-[#e8e3db] bg-white shadow-2xl"
 		transition:fly={{ y: 100, duration: 300 }}
 	>
 		<div class="mx-auto max-w-lg p-6">
@@ -48,8 +48,8 @@ function handleBackdropClick(event: MouseEvent) {
 
 			<!-- Content -->
 			<div class="mb-6">
-				<h3 class="text-xl font-serif text-[#2a2520] mb-2">{title}</h3>
-				<p class="text-sm text-[#6b6560] leading-relaxed">{message}</p>
+				<h3 class="text-xl font-medium font-serif text-[#2a2520] mb-2">{title}</h3>
+				<p class="text-base text-[#6b6560] leading-relaxed">{message}</p>
 			</div>
 
 			<!-- Actions -->
