@@ -497,6 +497,9 @@ export type FollowUpOnFeedbackInput = {
 	itemText: string;
 	category: "grammar" | "vocabulary" | "coherence";
 	question: string;
+	currentContext?: string;
+	previousContext?: string;
+	explanationMode?: "issue" | "good_expression";
 };
 
 export type FollowUpOnFeedbackResult = {
@@ -514,20 +517,33 @@ export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promis
 	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
 	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
 	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
+	const explanationMode = input.explanationMode ?? "issue";
+	const contextSection = [
+		input.previousContext?.trim() ? `Previous visible message/context:\n${input.previousContext.trim()}` : "",
+		input.currentContext?.trim() ? `Original current message/comment context:\n${input.currentContext.trim()}` : "",
+	]
+		.filter(Boolean)
+		.join("\n\n");
+	const focusLabel = explanationMode === "good_expression" ? "Good expression" : "Feedback issue";
+	const modeInstructions =
+		explanationMode === "good_expression"
+			? `- Treat the selected text as a good/natural expression worth learning, not as a mistake.\n- Explain what it means, why it is useful or natural in this context, and how the learner can reuse it.\n- If examples are useful, provide natural ${learningLanguageName} examples with brief English explanations.`
+			: `- Treat the selected text as an issue from the learner's message unless the context clearly says otherwise.\n- Explain what is wrong or unnatural and give the correct rule, wording, or more natural alternative.\n- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.`;
 
-	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific issue better.
+	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific item better.
 
-The note they're asking about:
+The item they're asking about:
+- Type: ${focusLabel}
 - Category: ${categoryLabel}
-- Knowledge point: "${input.itemText}"
-
+- Selected text: "${input.itemText}"
+${contextSection ? `\n## Original Context\n${contextSection}\n` : ""}
 Their follow-up question: ${resolvedQuestion}
 
 ## Instructions
 - Answer in a helpful, encouraging tone suitable for a language learner.
-- Be concise but thorough — 2-5 sentences is usually enough unless the learner asks for examples (then include 3 brief examples).
-- If the knowledge point describes a mistake, explain the correct rule clearly.
-- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.
+- Be concise but thorough — 2-5 sentences is usually enough unless examples are requested.
+${modeInstructions}
+- Use the original context above to explain the item specifically, not generically.
 - Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
 - Do NOT roleplay as a character — you are a tutor, not the scenario persona.
 

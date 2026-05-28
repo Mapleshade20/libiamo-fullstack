@@ -16,6 +16,7 @@ let {
 	sessionId,
 	currentContext = "",
 	previousContext = "",
+	explanationMode = "issue",
 	onClose,
 }: {
 	annotation: AnnotationSpan;
@@ -24,6 +25,7 @@ let {
 	sessionId: number;
 	currentContext?: string;
 	previousContext?: string;
+	explanationMode?: "issue" | "good_expression";
 	onClose: () => void;
 } = $props();
 
@@ -66,7 +68,14 @@ onMount(() => {
 });
 
 function getCacheKey(): string {
-	return `feedback-explanation-${sessionId}-${annotation.text.slice(0, 50)}`;
+	return `feedback-explanation-${sessionId}-${messageId}-${explanationMode}-${annotation.text.slice(0, 50)}`;
+}
+
+function getDefaultQuestion(): string {
+	if (explanationMode === "good_expression") {
+		return "Explain why this is a useful expression and give examples of how to use it.";
+	}
+	return "Explain this issue in detail with examples.";
 }
 
 async function fetchExplanation() {
@@ -87,7 +96,10 @@ async function fetchExplanation() {
 		formData.append("sessionId", String(sessionId));
 		formData.append("itemText", annotation.text);
 		formData.append("category", annotation.kind === "vocab" ? "vocabulary" : "grammar");
-		formData.append("question", "Explain this issue in detail with examples.");
+		formData.append("question", getDefaultQuestion());
+		formData.append("currentContext", currentContext);
+		formData.append("previousContext", previousContext);
+		formData.append("explanationMode", explanationMode);
 
 		const response = await fetch("?/followUp", {
 			method: "POST",
@@ -160,17 +172,27 @@ function handleBackdropClick(event: MouseEvent) {
 }
 
 const kindLabel = $derived(
-	annotation.kind === "grammar" ? "Grammar" : annotation.kind === "vocab" ? "Vocabulary" : annotation.kind === "delete" ? "Unnecessary" : "Issue",
+	explanationMode === "good_expression"
+		? "Good Expression"
+		: annotation.kind === "grammar"
+			? "Grammar"
+			: annotation.kind === "vocab"
+				? "Vocabulary"
+				: annotation.kind === "delete"
+					? "Unnecessary"
+					: "Issue",
 );
 
 const kindColor = $derived(
-	annotation.kind === "grammar"
-		? "text-red-600 bg-red-50 border-red-200"
-		: annotation.kind === "vocab"
-			? "text-blue-600 bg-blue-50 border-blue-200"
-			: annotation.kind === "delete"
-				? "text-gray-600 bg-gray-50 border-gray-200"
-				: "text-gray-600 bg-gray-50 border-gray-200",
+	explanationMode === "good_expression"
+		? "text-amber-700 bg-amber-50 border-amber-200"
+		: annotation.kind === "grammar"
+			? "text-red-600 bg-red-50 border-red-200"
+			: annotation.kind === "vocab"
+				? "text-blue-600 bg-blue-50 border-blue-200"
+				: annotation.kind === "delete"
+					? "text-gray-600 bg-gray-50 border-gray-200"
+					: "text-gray-600 bg-gray-50 border-gray-200",
 );
 </script>
 
@@ -228,7 +250,9 @@ const kindColor = $derived(
 			{:else if saveError}
 				<span class="text-sm text-red-600 font-medium">{saveError}</span>
 			{:else}
-				<span class="text-xs text-[#9b8f85]">Save this for later review</span>
+				<span class="text-xs text-[#9b8f85]"
+					>{explanationMode === "good_expression" ? "Save this expression for later review" : "Save this for later review"}</span
+				>
 			{/if}
 			<Button size="sm" variant="outline" onclick={handleSaveNote} disabled={isSaving || saveSuccess}>
 				<BookmarkPlus size={14} class="mr-1.5" />

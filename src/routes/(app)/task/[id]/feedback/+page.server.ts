@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
+import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -118,6 +119,10 @@ export const actions: Actions = {
 		const itemText = (formData.get("itemText") as string)?.trim();
 		const category = (formData.get("category") as string)?.trim();
 		const question = (formData.get("question") as string)?.trim();
+		const currentContext = (formData.get("currentContext") as string | null)?.trim() ?? "";
+		const previousContext = (formData.get("previousContext") as string | null)?.trim() ?? "";
+		const explanationModeRaw = (formData.get("explanationMode") as string | null)?.trim();
+		const explanationMode = explanationModeRaw === "good_expression" ? "good_expression" : "issue";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!itemText || !category || !question) {
@@ -134,6 +139,9 @@ export const actions: Actions = {
 				itemText,
 				category: category as "grammar" | "vocabulary" | "coherence",
 				question,
+				currentContext,
+				previousContext,
+				explanationMode,
 			});
 			return { success: true, answer: result.answer };
 		} catch (e) {
@@ -175,7 +183,6 @@ export const actions: Actions = {
 			const language = sessionData?.task?.language ?? "en";
 
 			// Create note using existing infrastructure
-			const { createNotesBatch } = await import("$lib/server/note");
 			const categoryMap: Record<string, "grammar" | "vocabulary" | "coherence"> = {
 				grammar: "grammar",
 				vocab: "vocabulary",
@@ -226,7 +233,6 @@ export const actions: Actions = {
 			});
 			const language = sessionData?.task?.language ?? "en";
 
-			const { createNotesFromSelectionBatch } = await import("$lib/server/note");
 			const result = await createNotesFromSelectionBatch({
 				userId: user.id,
 				sessionId,

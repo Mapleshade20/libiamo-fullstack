@@ -25,6 +25,7 @@ let activeAnnotation = $state<{
 	rect: DOMRect;
 	currentContext: string;
 	previousContext: string;
+	explanationMode: "issue" | "good_expression";
 } | null>(null);
 let askAppendRequest = $state<{ id: number; text: string } | null>(null);
 let askAppendCounter = $state(0);
@@ -78,7 +79,7 @@ async function triggerGeneration() {
 function handleAnnotationClick(span: AnnotationSpan, messageId: number, element: HTMLElement) {
 	const rect = element.getBoundingClientRect();
 	const context = getMessageContext(messageId);
-	activeAnnotation = { span, messageId, rect, ...context };
+	activeAnnotation = { span, messageId, rect, ...context, explanationMode: "issue" };
 }
 
 function handleCommentHighlightClick(span: AnnotationSpan, messageId: number, element: HTMLElement, comment: string) {
@@ -90,6 +91,7 @@ function handleCommentHighlightClick(span: AnnotationSpan, messageId: number, el
 		rect,
 		currentContext: getCommentContext(messageId, comment),
 		previousContext: messageContext.previousContext,
+		explanationMode: "good_expression",
 	};
 }
 
@@ -350,6 +352,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			sessionId={data.sessionId}
 			currentContext={activeAnnotation.currentContext}
 			previousContext={activeAnnotation.previousContext}
+			explanationMode={activeAnnotation.explanationMode}
 			onClose={closeAnnotationPopup}
 		/>
 	{/if}
