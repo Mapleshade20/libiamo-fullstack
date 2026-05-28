@@ -2,6 +2,7 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { fade } from "svelte/transition";
+import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
@@ -46,13 +47,15 @@ async function triggerGeneration() {
 			body: formData,
 		});
 
-		const result = await response.json();
+		const result = deserialize(await response.text());
 
 		if (result.type === "success" && result.data?.feedback) {
 			feedback = result.data.feedback as FeedbackResult;
 			await invalidateAll();
+		} else if (result.type === "failure") {
+			generationError = (result.data?.error as string | undefined) ?? "Failed to generate feedback";
 		} else {
-			generationError = result.data?.error ?? "Failed to generate feedback";
+			generationError = "Failed to generate feedback";
 		}
 	} catch (error) {
 		console.error("Generation error:", error);

@@ -122,7 +122,7 @@ async function handleSaveNote() {
 			body: formData,
 		});
 
-		const result = await response.json();
+		const result = deserialize(await response.text());
 
 		if (result.type === "success") {
 			saveSuccess = true;

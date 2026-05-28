@@ -173,9 +173,12 @@ async function handleSaveDraft() {
 		form.set("translations", JSON.stringify(translations));
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/saveDraft", { method: "POST", body: form });
-		if (!res.ok) {
-			const errData = await res.json().catch(() => null);
-			const message = errData?.error ?? "Failed to save draft. Please try again.";
+		const result = deserialize(await res.text());
+		if (result.type !== "success") {
+			const message =
+				result.type === "failure"
+					? ((result.data?.error as string | undefined) ?? "Failed to save draft. Please try again.")
+					: "Failed to save draft. Please try again.";
 			saveError = message;
 			showActionNotification("error", "Unable to save draft", message);
 			return;
@@ -204,8 +207,9 @@ async function handleSubmit() {
 		form.set("translations", JSON.stringify(translations));
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/submit", { method: "POST", body: form });
+		const result = deserialize(await res.text());
 
-		if (res.ok) {
+		if (result.type === "success") {
 			await invalidateAll();
 			showActionNotification("success", "Translation submitted", "Your translation was submitted for evaluation.");
 			// After invalidation, savedEvaluation should be populated
@@ -230,13 +234,10 @@ async function handleSubmit() {
 		} else {
 			// LLM failed — reset to draft state so user can retry
 			submitted = false;
-			let message = "Evaluation failed. Please try again.";
-			try {
-				const errData = await res.json();
-				message = errData?.error ?? message;
-			} catch {
-				// Keep the default message.
-			}
+			const message =
+				result.type === "failure"
+					? ((result.data?.error as string | undefined) ?? "Evaluation failed. Please try again.")
+					: "Evaluation failed. Please try again.";
 			submitError = message;
 			showActionNotification("error", "Evaluation failed", message);
 		}
