@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetForTesting } from "$lib/server/rate-limit-llm";
 import { actions, load } from "$routes/(app)/translate/[id]/+page.server";
 
 // ── Hoisted mocks ──────────────────────────────────────────────────
@@ -104,6 +105,7 @@ describe("(app) translate/[id] +page.server", () => {
 		vi.clearAllMocks();
 		mockChatJson.mockReset();
 		mockChatText.mockReset();
+		_resetForTesting();
 	});
 
 	// ── Load ──────────────────────────────────────────────────────

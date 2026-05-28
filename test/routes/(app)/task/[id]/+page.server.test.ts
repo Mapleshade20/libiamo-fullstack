@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetForTesting } from "$lib/server/rate-limit-llm";
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
@@ -68,6 +69,7 @@ describe("Task detail +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockChatJson.mockReset();
+		_resetForTesting();
 	});
 
 	// ── Load ──────────────────────────────────────────────────────
@@ -283,6 +285,29 @@ describe("Task detail +page.server", () => {
 
 			expect(result.status).toBe(500);
 			expect(result.data?.error).toBe("Failed to generate expressions. You may need to configure your own API key.");
+		});
+
+		it("returns 429 on the 11th call within a minute and makes no LLM or DB calls on that attempt", async () => {
+			mockChatJson.mockResolvedValue(["Expression 1", "Expression 2"]);
+			const event = createActionEvent({ title: "Ordering at a restaurant", nativeLanguage: "en", targetLanguage: "fr" });
+
+			// First 10 calls should succeed (limit is 10/min)
+			for (let i = 0; i < 10; i++) {
+				const r = (await actions.generateExpressions(event)) as any;
+				expect(r.status).toBeUndefined();
+			}
+
+			const dbCallsBefore = mockLimit.mock.calls.length;
+			const llmCallsBefore = mockChatJson.mock.calls.length;
+
+			// 11th call must be rate-limited
+			const result = (await actions.generateExpressions(event)) as any;
+			expect(result.status).toBe(429);
+			expect(result.data?.error).toMatch(/Too many requests/);
+
+			// No additional DB or LLM work should have occurred
+			expect(mockLimit.mock.calls.length).toBe(dbCallsBefore);
+			expect(mockChatJson.mock.calls.length).toBe(llmCallsBefore);
 		});
 	});
 

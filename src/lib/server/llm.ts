@@ -14,6 +14,7 @@ import { createPinnedByokFetch } from "./byok-fetch";
 import { resolveByokBaseUrl } from "./byok-url";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
+import { recordLlmTokens } from "./rate-limit-llm";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ export type ChatResponse = {
 	model?: string;
 	content: string;
 	raw: unknown;
+	usage?: { totalTokens: number };
 };
 
 export type ChatRequest = {
@@ -293,6 +295,7 @@ function completionResponse(completion: ChatCompletion): ChatResponse {
 		model: completion.model,
 		content: completionContent(completion),
 		raw: completion,
+		usage: completion.usage ? { totalTokens: completion.usage.total_tokens } : undefined,
 	};
 }
 
@@ -339,6 +342,9 @@ export async function chatText({ messages, options = {}, userId }: ChatRequest):
 	const response = completionResponse(completion);
 	if (!response.content) {
 		throw new Error("LLM returned empty content");
+	}
+	if (userId && response.usage?.totalTokens) {
+		recordLlmTokens(userId, response.usage.totalTokens);
 	}
 	return response;
 }

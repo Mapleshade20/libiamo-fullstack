@@ -5,6 +5,7 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MA
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
+import { checkLlmRateLimit } from "$lib/server/rate-limit-llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -309,6 +310,9 @@ export const actions: Actions = {
 	submit: async (event) => {
 		const user = requireUser(event);
 
+		const rl = checkLlmRateLimit(user.id, "submit");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const templateId = parseRouteId(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
@@ -378,6 +382,9 @@ export const actions: Actions = {
 	generateModelTranslation: async (event) => {
 		const user = requireUser(event);
 
+		const rl = checkLlmRateLimit(user.id, "generateModelTranslation");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const templateId = parseRouteId(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });
 
@@ -419,6 +426,10 @@ export const actions: Actions = {
 
 	explainFeedback: async (event) => {
 		const user = requireUser(event);
+
+		const rl = checkLlmRateLimit(user.id, "explainFeedback");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const formData = await event.request.formData();
 		const templateId = parseRouteId(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });
@@ -456,6 +467,10 @@ export const actions: Actions = {
 
 	translateSentence: async (event) => {
 		const user = requireUser(event);
+
+		const rl = checkLlmRateLimit(user.id, "translateSentence");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const formData = await event.request.formData();
 		const templateId = parseRouteId(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });
@@ -488,6 +503,10 @@ export const actions: Actions = {
 
 	askTutor: async (event) => {
 		const user = requireUser(event);
+
+		const rl = checkLlmRateLimit(user.id, "askTutor");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const formData = await event.request.formData();
 		const templateId = parseRouteId(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });

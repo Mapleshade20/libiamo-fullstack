@@ -5,6 +5,7 @@ import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
 import { OpenAIAuthError } from "$lib/server/llm";
+import { checkLlmRateLimit } from "$lib/server/rate-limit-llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -101,6 +102,9 @@ export const actions: Actions = {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
 
+		const rl = checkLlmRateLimit(user.id, "generateExpressions");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
+
 		const taskId = parseTaskId(event.params?.id ?? "");
 		if (taskId === null) return fail(400, { error: "Invalid task ID" });
 
@@ -145,6 +149,9 @@ export const actions: Actions = {
 	evaluateTranslation: async (event) => {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const rl = checkLlmRateLimit(user.id, "evaluateTranslation");
+		if (!rl.ok) return fail(429, { error: `Too many requests. Retry in ${rl.retryAfterSec}s.` });
 
 		const formData = await event.request.formData();
 		const taskId = parseTaskId(event.params?.id ?? "");
