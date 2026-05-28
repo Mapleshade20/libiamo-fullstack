@@ -39,7 +39,7 @@ function handleBackdropClick(event: MouseEvent) {
 
 	<!-- Bottom sheet -->
 	<div
-		class="fixed bottom-0 left-0 right-0 z-[4001] rounded-t-2xl border-t border-[#e8e3db] bg-white shadow-2xl"
+		class="fixed bottom-0 left-0 right-0 z-[4001] rounded-t-2xl border-t border-[#e8e3db] bg-white text-[#2a2520] shadow-2xl"
 		transition:fly={{ y: 100, duration: 300 }}
 	>
 		<div class="mx-auto max-w-lg p-6">
