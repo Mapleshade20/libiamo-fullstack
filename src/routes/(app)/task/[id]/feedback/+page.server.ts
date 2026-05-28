@@ -154,6 +154,8 @@ export const actions: Actions = {
 		const annotationText = (formData.get("annotationText") as string)?.trim();
 		const annotationKind = (formData.get("annotationKind") as string)?.trim();
 		const explanation = (formData.get("explanation") as string)?.trim();
+		const currentContext = (formData.get("currentContext") as string | null)?.trim() ?? "";
+		const previousContext = (formData.get("previousContext") as string | null)?.trim() ?? "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!annotationText || !annotationKind || !explanation) {
@@ -182,12 +184,63 @@ export const actions: Actions = {
 			const category = categoryMap[annotationKind] ?? "grammar";
 
 			const tutorComment = `${annotationText}: ${explanation}`;
-			const notes = await createNotesBatch(user.id, sessionId, language, [{ tutorComment, category }], user.id);
+			const sourceContext = [
+				previousContext ? `Previous message/context:\n${previousContext}` : "",
+				currentContext ? `Current message/context:\n${currentContext}` : "",
+			]
+				.filter(Boolean)
+				.join("\n\n");
+			const notes = await createNotesBatch(user.id, sessionId, language, [{ tutorComment, category, sourceContext }], user.id);
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
 			console.error("Failed to save note:", e);
 			return fail(500, { error: "Failed to save note" });
+		}
+	},
+
+	saveSelectionNotes: async ({ request, params, locals }) => {
+		const user = locals.user;
+		if (!user) return fail(401, { error: "Unauthorized" });
+
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const selectedText = (formData.get("selectedText") as string | null)?.trim() ?? "";
+		const currentContext = (formData.get("currentContext") as string | null)?.trim() ?? "";
+		const previousContext = (formData.get("previousContext") as string | null)?.trim() ?? "";
+		const sourceKind = (formData.get("sourceKind") as string | null)?.trim() ?? "feedback review";
+
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (!selectedText) return fail(400, { error: "Missing selected text" });
+
+		try {
+			const session = await getSessionOrFail(sessionId, user.id, taskId);
+			if (!session) return fail(403, { error: "Access denied" });
+
+			const sessionData = await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, sessionId),
+				with: { task: { columns: { language: true } } },
+			});
+			const language = sessionData?.task?.language ?? "en";
+
+			const { createNotesFromSelectionBatch } = await import("$lib/server/note");
+			const result = await createNotesFromSelectionBatch({
+				userId: user.id,
+				sessionId,
+				language,
+				selectedText,
+				currentContext,
+				previousContext,
+				sourceKind,
+			});
+
+			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
+		} catch (e) {
+			console.error("Failed to save selected notes:", e);
+			return fail(500, { error: "Failed to save selected notes" });
 		}
 	},
 };

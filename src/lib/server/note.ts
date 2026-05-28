@@ -54,7 +54,7 @@ export async function createNotesBatch(
 	userId: string,
 	sourceSessionId: number,
 	language: string,
-	feedbackItems: { tutorComment: string; category?: "grammar" | "vocabulary" | "coherence" }[],
+	feedbackItems: { tutorComment: string; category?: "grammar" | "vocabulary" | "coherence"; sourceContext?: string }[],
 	sessionOwnerId?: string,
 ) {
 	if (feedbackItems.length === 0) return [];
@@ -99,7 +99,12 @@ CRITICAL RULES:
 					role: "user" as const,
 					content: [
 						`## Conversation (for source context extraction)\n${conversationSnippet || "(No conversation available)"}`,
-						`## Feedback Items to process\n${feedbackItems.map((item, i) => `Item ${i + 1} [${item.category ?? "general"}]: ${item.tutorComment}`).join("\n\n")}`,
+						`## Feedback Items to process\n${feedbackItems
+							.map((item, i) => {
+								const context = item.sourceContext ? `\nContext for this item:\n${item.sourceContext}` : "";
+								return `Item ${i + 1} [${item.category ?? "general"}]: ${item.tutorComment}${context}`;
+							})
+							.join("\n\n")}`,
 					].join("\n\n"),
 				},
 			],
@@ -126,6 +131,83 @@ CRITICAL RULES:
 	});
 
 	return db.insert(note).values(referenceNotes).returning();
+}
+
+// ── createNotesFromSelectionBatch ──────────────────────────────────
+
+const SelectionNotesSchema = z.object({
+	reason: z.string().optional().describe("Short reason when no notes are created."),
+	items: z.array(
+		z.object({
+			knowledgePoint: z.string().describe("One concise sentence summarizing the core lesson."),
+			keywords: z.array(z.string()).describe("1-3 short core terms/phrases in the learning language"),
+			sourceContext: z.string().describe("1-3 sentences of context that illustrate the point"),
+		}),
+	),
+});
+
+export async function createNotesFromSelectionBatch(input: {
+	userId: string;
+	sessionId: number;
+	language: string;
+	selectedText: string;
+	currentContext: string;
+	previousContext?: string;
+	sourceKind?: string;
+}) {
+	const selectedText = input.selectedText.trim();
+	if (!selectedText) return { success: true as const, notes: [], count: 0, reason: "Selection is empty." };
+
+	const languageName = getLanguageEnglishName(input.language);
+	const result = await chatJson(SelectionNotesSchema, {
+		messages: [
+			{
+				role: "system" as const,
+				content: `You are an expert ${languageName} language tutor. A learner selected text on their feedback review page and clicked “save to notes”.
+
+Create between 0 and 3 useful reference notes from the selection.
+
+Return 0 notes if the selection is too short, generic, broken, only UI text, or does not contain a worthwhile ${languageName} language-learning point. Long selections may contain several points; choose only the best 1-3.
+
+For each note:
+- knowledgePoint: ONE concise English sentence naming the useful grammar rule, vocabulary nuance, collocation, idiom, or discourse pattern. Mention ${languageName} terms where relevant.
+- keywords: 1-3 short standalone labels in ${languageName}; use target-language words/phrases or grammar formulas.
+- sourceContext: 1-3 sentences from the provided context that illustrate the point. Prefer corrected/natural phrasing when helpful.
+
+Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
+			},
+			{
+				role: "user" as const,
+				content: [
+					`Selected text:\n${selectedText}`,
+					`Source area: ${input.sourceKind ?? "feedback review"}`,
+					`Previous visible message/context:\n${input.previousContext?.trim() || "(none)"}`,
+					`Current message/comment/context:\n${input.currentContext.trim() || "(none)"}`,
+				].join("\n\n"),
+			},
+		],
+		userId: input.userId,
+	});
+
+	const items = result.items.slice(0, 3);
+	if (items.length === 0) {
+		return { success: true as const, notes: [], count: 0, reason: result.reason ?? "No note-worthy point found." };
+	}
+
+	const created = await db
+		.insert(note)
+		.values(
+			items.map((item) => ({
+				userId: input.userId,
+				sourceSessionId: input.sessionId,
+				tutorComment: item.knowledgePoint,
+				keywords: item.keywords,
+				sourceContext: item.sourceContext,
+			})),
+		)
+		.returning();
+
+	return { success: true as const, notes: created, count: created.length, reason: null };
 }
 
 // ── listNotes ──────────────────────────────────────────────────────

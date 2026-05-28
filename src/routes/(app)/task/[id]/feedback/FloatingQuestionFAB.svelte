@@ -2,6 +2,7 @@
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
+import { tick } from "svelte";
 import { fly, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
@@ -9,12 +10,19 @@ import { Skeleton } from "$lib/components/ui/skeleton";
 import type { FeedbackConversation } from "$lib/feedback-types";
 import { renderMarkdown } from "$lib/markdown";
 
+type AppendRequest = {
+	id: number;
+	text: string;
+};
+
 let {
 	sessionId,
 	conversation,
+	appendRequest = null,
 }: {
 	sessionId: number;
 	conversation: FeedbackConversation;
+	appendRequest?: AppendRequest | null;
 } = $props();
 
 let isExpanded = $state(false);
@@ -22,6 +30,25 @@ let question = $state("");
 let answer = $state<string | null>(null);
 let isLoading = $state(false);
 let error = $state<string | null>(null);
+let textareaElement = $state<HTMLTextAreaElement | null>(null);
+let lastAppendRequestId = $state<number | null>(null);
+
+$effect(() => {
+	if (!appendRequest || appendRequest.id === lastAppendRequestId) return;
+	lastAppendRequestId = appendRequest.id;
+	void appendSelectedText(appendRequest.text);
+});
+
+async function appendSelectedText(text: string) {
+	const trimmed = text.trim();
+	if (!trimmed) return;
+	isExpanded = true;
+	answer = null;
+	error = null;
+	question = question.trim() ? `${question}\n\n${trimmed}` : trimmed;
+	await tick();
+	textareaElement?.focus();
+}
 
 function toggleExpanded() {
 	isExpanded = !isExpanded;
@@ -82,6 +109,7 @@ function handleKeydown(event: KeyboardEvent) {
 	<!-- FAB button -->
 	<button
 		type="button"
+		data-selection-ignore
 		class="fixed bottom-8 right-8 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#4a7c59] to-[#3d6849] text-white shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
 		onclick={toggleExpanded}
 		transition:scale={{ duration: 200 }}
@@ -91,6 +119,7 @@ function handleKeydown(event: KeyboardEvent) {
 {:else}
 	<!-- Expanded input panel -->
 	<div
+		data-selection-ignore
 		class="fixed bottom-8 right-8 z-30 w-[400px] rounded-2xl border border-[#e8e3db] bg-white/95 backdrop-blur-md shadow-2xl overflow-hidden"
 		transition:fly={{ y: 20, duration: 300 }}
 	>
@@ -152,6 +181,7 @@ function handleKeydown(event: KeyboardEvent) {
 			<div class="border-t border-[#e8e3db] p-4 bg-[#fdfcf9]">
 				<div class="flex items-end gap-2">
 					<textarea
+						bind:this={textareaElement}
 						bind:value={question}
 						onkeydown={handleKeydown}
 						placeholder="Type your question..."

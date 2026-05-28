@@ -14,12 +14,16 @@ let {
 	messageId,
 	rect,
 	sessionId,
+	currentContext = "",
+	previousContext = "",
 	onClose,
 }: {
 	annotation: AnnotationSpan;
 	messageId: number;
 	rect: DOMRect;
 	sessionId: number;
+	currentContext?: string;
+	previousContext?: string;
 	onClose: () => void;
 } = $props();
 
@@ -120,6 +124,9 @@ async function handleSaveNote() {
 		formData.append("annotationText", annotation.text);
 		formData.append("annotationKind", annotation.kind);
 		formData.append("explanation", explanation);
+		formData.append("currentContext", currentContext);
+		formData.append("previousContext", previousContext);
+		formData.append("sourceMessageId", String(messageId));
 
 		const response = await fetch("?/saveNote", {
 			method: "POST",
@@ -170,6 +177,7 @@ const kindColor = $derived(
 <!-- Backdrop -->
 <button
 	type="button"
+	data-selection-ignore
 	class="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
 	onclick={handleBackdropClick}
 	transition:fade={{ duration: 150 }}
@@ -178,6 +186,7 @@ const kindColor = $derived(
 
 <!-- Popup card -->
 <div
+	data-selection-ignore
 	class="fixed z-50 w-[400px] max-h-[500px] overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
 	style="top: {position.top}px; left: {position.left}px;"
 	transition:scale={{ duration: 200, start: 0.95 }}

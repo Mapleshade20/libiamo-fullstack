@@ -30,6 +30,7 @@ import {
 	createNote,
 	createNoteFromSelectionQA,
 	createNotesBatch,
+	createNotesFromSelectionBatch,
 	deleteNote,
 	getNote,
 	listNotes,
@@ -116,6 +117,59 @@ describe("createNotesBatch", () => {
 				expect.objectContaining({ tutorComment: "Choose precise vocabulary", keywords: ["precise word"], sourceContext: "He said it was good." }),
 			]),
 		);
+	});
+});
+
+describe("createNotesFromSelectionBatch", () => {
+	it("creates up to three notes from a long selection", async () => {
+		mockChatJson.mockResolvedValueOnce({
+			items: [
+				{ knowledgePoint: "Use the preterite for completed past actions.", keywords: ["pretérito"], sourceContext: "Ayer fui al mercado." },
+				{ knowledgePoint: "Use 'aunque' to concede a contrasting point.", keywords: ["aunque"], sourceContext: "Aunque estaba cansado, fui." },
+				{ knowledgePoint: "Use 'me parece que' for softened opinions.", keywords: ["me parece que"], sourceContext: "Me parece que es buena idea." },
+				{ knowledgePoint: "Extra item should be capped.", keywords: ["extra"], sourceContext: "Extra." },
+			],
+		});
+
+		const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+		const valuesFn = vi.fn().mockReturnValue({ returning });
+		mockDb.insert.mockReturnValue({ values: valuesFn });
+
+		const result = await createNotesFromSelectionBatch({
+			userId: USER_ID,
+			sessionId: SESSION_ID,
+			language: "es",
+			selectedText: "Ayer fui al mercado, aunque estaba cansado. Me parece que fue útil.",
+			previousContext: "[Agent] ¿Qué hiciste ayer?",
+			currentContext: "[You] Ayer fui al mercado, aunque estaba cansado. Me parece que fue útil.",
+			sourceKind: "message",
+		});
+
+		expect(result.count).toBe(3);
+		expect(valuesFn).toHaveBeenCalledWith(
+			expect.arrayContaining([expect.objectContaining({ tutorComment: "Use the preterite for completed past actions." })]),
+		);
+		expect(valuesFn.mock.calls[0]?.[0]).toHaveLength(3);
+		const prompt = mockChatJson.mock.calls[0]?.[1]?.messages?.[1]?.content as string;
+		expect(prompt).toContain("Previous visible message/context");
+		expect(prompt).toContain("[Agent] ¿Qué hiciste ayer?");
+		expect(prompt).toContain("Current message/comment/context");
+	});
+
+	it("returns zero notes with reason when selection is not useful", async () => {
+		mockChatJson.mockResolvedValueOnce({ items: [], reason: "Selection is too generic." });
+
+		const result = await createNotesFromSelectionBatch({
+			userId: USER_ID,
+			sessionId: SESSION_ID,
+			language: "en",
+			selectedText: "ok",
+			currentContext: "ok",
+		});
+
+		expect(result.count).toBe(0);
+		expect(result.reason).toBe("Selection is too generic.");
+		expect(mockDb.insert).not.toHaveBeenCalled();
 	});
 });
 

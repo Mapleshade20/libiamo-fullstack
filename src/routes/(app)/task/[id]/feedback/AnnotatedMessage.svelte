@@ -45,9 +45,19 @@ function parseAnnotatedHtml(annotatedText: string): Array<{ type: "text" | "anno
 
 const parts = $derived(parseAnnotatedHtml(annotation.annotatedText));
 
-function handleClick(span: AnnotationSpan, event: MouseEvent) {
-	const target = event.currentTarget as HTMLElement;
+function openAnnotation(span: AnnotationSpan, target: HTMLElement) {
 	onAnnotationClick(span, messageId, target);
+}
+
+function handleClick(span: AnnotationSpan, event: MouseEvent) {
+	if (window.getSelection()?.toString().trim()) return;
+	openAnnotation(span, event.currentTarget as HTMLElement);
+}
+
+function handleKeydown(span: AnnotationSpan, event: KeyboardEvent) {
+	if (event.key !== "Enter" && event.key !== " ") return;
+	event.preventDefault();
+	openAnnotation(span, event.currentTarget as HTMLElement);
 }
 
 function getVariant(kind: string): "box" | "underline" | "strike-through" {
@@ -81,13 +91,15 @@ function getColor(kind: string): string {
 						delay={300}
 						class="cursor-pointer hover:opacity-80 transition-opacity whitespace-pre-wrap"
 					>
-						<button
-							type="button"
-							class="inline whitespace-pre-wrap text-left rounded px-1 transition-colors hover:bg-black/10"
+						<span
+							role="button"
+							tabindex="0"
+							class="inline whitespace-pre-wrap text-left rounded px-1 transition-colors hover:bg-black/15"
 							onclick={(e) => handleClick(span, e)}
+							onkeydown={(e) => handleKeydown(span, e)}
 						>
 							{part.content}
-						</button>
+						</span>
 					</TextHighlighter>
 				{:else}
 					{part.content}
