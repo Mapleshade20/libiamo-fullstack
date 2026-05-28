@@ -60,6 +60,7 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	agentStartsFirst,
 	labels: sessionLabels,
+	taskId,
 }));
 
 const opening = $derived((openingState ?? {}) as Ao3OpeningState);
@@ -232,7 +233,7 @@ function scrollToTop(event: MouseEvent) {
 				<button
 					type="button"
 					class="rounded border border-[#ccc] bg-[#eee] px-3 py-1 text-sm text-[#444] shadow-inner hover:text-[#900] disabled:opacity-50"
-					onclick={session.handleComplete}
+					onclick={() => session.handleCompleteAndNavigate(String(taskId))}
 					disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
 				>
 					{session.isCompleting ? t.evaluating : t.finishTask}
@@ -379,39 +380,6 @@ function scrollToTop(event: MouseEvent) {
 		</section>
 	</main>
 </div>
-
-{#if session.showEvaluationModal && session.feedback}
-	<div transition:fade={{ duration: 200 }} class="fixed inset-0 z-[2200] flex items-center justify-center bg-black/50 p-4">
-		<div class="max-h-[82vh] w-full max-w-xl overflow-hidden border border-[#ccc] bg-white shadow-2xl">
-			<div class="border-b-[5px] border-black bg-[#900] p-5 text-center text-white">
-				<h2 class="font-[Georgia,serif] text-2xl">{t.questCompleted}</h2>
-				<p class="text-sm">{t.tutorReport}</p>
-			</div>
-			<div class="max-h-[52vh] overflow-y-auto p-5">
-				<h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-[#666]">{t.overallFeedback}</h3>
-				<p class="mb-6 whitespace-pre-wrap border border-[#ddd] bg-[#f9f9f9] p-3 text-sm leading-6">{session.feedback.summary}</p>
-				{#if session.feedback.objectiveResults?.length}
-					<h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-[#666]">{t.objectiveAssessment}</h3>
-					<div class="space-y-2">
-						{#each session.feedback.objectiveResults as obj}
-							<div class="flex items-center justify-between border border-[#ddd] bg-[#f9f9f9] p-3">
-								<span class="pr-4 text-sm">{obj.text}</span>
-								<span
-									class="rounded px-2 py-1 text-xs font-bold {obj.grade === 'A' ? 'bg-green-600 text-white' : obj.grade === 'B' ? 'bg-yellow-300 text-black' : 'bg-red-600 text-white'}"
-									>{obj.grade}</span
-								>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<div class="flex justify-end gap-2 border-t border-[#ddd] bg-[#f3efec] p-4">
-				<button type="button" class="ao3-action" onclick={() => (session.showEvaluationModal = false)}>{t.closeReview}</button>
-				<a href="/" class="ao3-action">{t.returnHall}</a>
-			</div>
-		</div>
-	</div>
-{/if}
 
 {#snippet renderComment(comment: Ao3RenderableComment)}
 	<li class="mb-4" style={`margin-left: ${Math.min(comment.depth, 5) * 2}%`}>

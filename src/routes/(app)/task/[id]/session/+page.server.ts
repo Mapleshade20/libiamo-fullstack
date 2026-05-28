@@ -7,11 +7,9 @@ import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUt
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { createNoteFromSelectionQA, createNotesBatch, validateAndCreateNoteFromSelection } from "$lib/server/note";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
 	completeSession,
-	followUpOnFeedback,
 	generateHint,
 	getSessionOrFail,
 	requestAgentOpening,
@@ -317,51 +315,6 @@ export const actions: Actions = {
 		}
 	},
 
-	saveNotes: async ({ request, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const formData = await request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-
-		const checkedItemsRaw = formData.getAll("checkedItems");
-		if (checkedItemsRaw.length === 0) return fail(400, { error: "No items selected" });
-
-		const ALLOWED_CATEGORIES = ["grammar", "vocabulary", "coherence"] as const;
-		type Category = (typeof ALLOWED_CATEGORIES)[number];
-
-		// Validate each checked item: must be a non-empty string with a valid category prefix
-		const parsed: { tutorComment: string; category: Category }[] = [];
-		for (const raw of checkedItemsRaw) {
-			if (typeof raw !== "string") return fail(400, { error: "Invalid checked item" });
-			const pipeIdx = raw.indexOf("|");
-			if (pipeIdx === -1) return fail(400, { error: "Invalid checked item format" });
-			const category = raw.slice(0, pipeIdx);
-			if (!(ALLOWED_CATEGORIES as readonly string[]).includes(category)) {
-				return fail(400, { error: "Invalid category" });
-			}
-			const tutorComment = raw.slice(pipeIdx + 1).trim();
-			if (!tutorComment) return fail(400, { error: "Empty feedback item text" });
-			parsed.push({ tutorComment, category: category as Category });
-		}
-
-		try {
-			// Fetch the task language from the session
-			const session = await db.query.practiceSession.findFirst({
-				where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, user.id)),
-				with: { task: { columns: { language: true } } },
-			});
-			if (!session) return fail(403, { error: "Session not found" });
-
-			const notes = await createNotesBatch(user.id, sessionId, session.task?.language ?? "en", parsed, user.id);
-			return { success: true, count: notes.length };
-		} catch (e) {
-			console.error("Failed to save notes:", e);
-			return fail(500, { error: "Failed to generate notes" });
-		}
-	},
-
 	hint: async (event) => {
 		const user = event.locals.user;
 		if (!user) return fail(401, { error: "Unauthorized" });
@@ -385,172 +338,6 @@ export const actions: Actions = {
 		} catch (e) {
 			console.error(e);
 			return fail(500, { error: "Failed to generate hints" });
-		}
-	},
-
-	followUp: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const taskId = Number.parseInt(event.params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await event.request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const itemText = (formData.get("itemText") as string)?.trim();
-		const category = (formData.get("category") as string)?.trim();
-		const question = (formData.get("question") as string)?.trim();
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!itemText) return fail(400, { error: "Feedback item text is required" });
-		if (!category || !["grammar", "vocabulary", "coherence"].includes(category)) {
-			return fail(400, { error: "Valid category is required" });
-		}
-		if (!question) return fail(400, { error: "Question is required" });
-
-		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const result = await followUpOnFeedback({
-				sessionId,
-				userId: user.id,
-				itemText,
-				category: category as "grammar" | "vocabulary" | "coherence",
-				question,
-			});
-			return { success: true, answer: result.answer };
-		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to get follow-up answer" });
-		}
-	},
-
-	createNoteFromSelection: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const taskId = Number.parseInt(event.params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await event.request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const selectedText = (formData.get("selectedText") as string)?.trim();
-		const surroundingContext = (formData.get("surroundingContext") as string)?.trim();
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!selectedText) return fail(400, { error: "No text selected" });
-		if (!surroundingContext) return fail(400, { error: "Surrounding context is required" });
-
-		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const sessionData = await db.query.practiceSession.findFirst({
-				where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, user.id)),
-				with: { task: { columns: { language: true } } },
-			});
-			const language = sessionData?.task?.language ?? "en";
-
-			const result = await validateAndCreateNoteFromSelection({
-				userId: user.id,
-				sessionId,
-				selectedText,
-				surroundingContext,
-				language,
-			});
-
-			if (result.success) {
-				return { success: true, note: result.note };
-			}
-			return { success: false, reason: result.reason };
-		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to create note from selection" });
-		}
-	},
-
-	followUpOnSelection: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const taskId = Number.parseInt(event.params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await event.request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const selectedText = (formData.get("selectedText") as string)?.trim();
-		const surroundingContext = (formData.get("surroundingContext") as string)?.trim();
-		const question = (formData.get("question") as string)?.trim();
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!selectedText) return fail(400, { error: "No text selected" });
-		if (!surroundingContext) return fail(400, { error: "Surrounding context is required" });
-		if (!question) return fail(400, { error: "Question is required" });
-
-		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const fullQuestion = [`Selected text: "${selectedText}"`, `Surrounding context: "${surroundingContext}"`, `Question: ${question}`].join("\n\n");
-
-			const result = await followUpOnFeedback({
-				sessionId,
-				userId: user.id,
-				itemText: selectedText,
-				category: "grammar",
-				question: fullQuestion,
-			});
-			return { success: true, answer: result.answer };
-		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to get follow-up answer" });
-		}
-	},
-
-	saveNoteFromSelection: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
-
-		const taskId = Number.parseInt(event.params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await event.request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const selectedText = (formData.get("selectedText") as string)?.trim();
-		const surroundingContext = (formData.get("surroundingContext") as string)?.trim();
-		const question = (formData.get("question") as string)?.trim();
-		const answer = (formData.get("answer") as string)?.trim();
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (!selectedText || !surroundingContext || !question || !answer) {
-			return fail(400, { error: "Missing required fields" });
-		}
-
-		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const sessionData = await db.query.practiceSession.findFirst({
-				where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, user.id)),
-				with: { task: { columns: { language: true } } },
-			});
-			const language = sessionData?.task?.language ?? "en";
-
-			const result = await createNoteFromSelectionQA({
-				userId: user.id,
-				sessionId,
-				selectedText,
-				surroundingContext,
-				question,
-				answer,
-				language,
-			});
-
-			return { success: true, note: result.note };
-		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to save note from selection" });
 		}
 	},
 };

@@ -165,7 +165,6 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 
 		expect(session.isCompleted).toBe(true);
-		expect(session.showEvaluationModal).toBe(true);
 		expect(chatContainer.scrollTop).toBe(240);
 	});
 
@@ -546,7 +545,7 @@ describe("createPracticeSession", () => {
 
 		expect(mocks.completeAction).toHaveBeenCalledWith(505);
 		expect(session.isCompleted).toBe(true);
-		// Note: showEvaluationModal is no longer set by handleComplete
+		// Note: auto-complete now uses handleCompleteAndNavigate
 	});
 
 	it("handles complete failures without leaving loading state", async () => {
@@ -561,7 +560,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
 
 		expect(errorSpy).toHaveBeenCalledWith("Completion failed:", expect.any(Error));
 		expect(session.isCompleting).toBe(false);
@@ -580,7 +579,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
 
 		expect(session.isCompleted).toBe(false);
 		expect(session.isCompleting).toBe(false);
@@ -589,7 +588,7 @@ describe("createPracticeSession", () => {
 	it("ignores complete when no active session is available", async () => {
 		const session = createSession(createOptions({ existingSession: null }));
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate("0");
 
 		expect(mocks.completeAction).not.toHaveBeenCalled();
 	});
@@ -705,7 +704,6 @@ describe("createPracticeSession", () => {
 		expect(session.isSubmitting).toBe(false);
 		expect(session.isCompleting).toBe(false);
 		expect(session.isCompleted).toBe(false);
-		expect(session.feedback).toBeNull();
 		expect(session.inputText).toBe("");
 		session.inputText = "hello";
 		expect(session.inputText).toBe("hello");
@@ -717,8 +715,6 @@ describe("createPracticeSession", () => {
 		expect(session.disabled).toBe(true);
 		expect(session.agentName).toBe("Agent");
 		expect(session.openingStateData).toEqual({});
-		session.showEvaluationModal = true;
-		expect(session.showEvaluationModal).toBe(true);
 		session.isEntering = false;
 		expect(session.isEntering).toBe(false);
 	});

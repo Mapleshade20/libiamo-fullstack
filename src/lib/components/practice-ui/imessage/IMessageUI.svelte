@@ -60,6 +60,7 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
+	taskId,
 }));
 
 const emojiConv = new EmojiConvertor();
@@ -234,7 +235,7 @@ onMount(() => {
 							<button
 								type="button"
 								class="rounded-full bg-[#0A84FF] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0062CC] disabled:opacity-50"
-								onclick={session.handleComplete}
+								onclick={() => session.handleCompleteAndNavigate(String(taskId))}
 								disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
 							>
 								{session.isCompleting ? t.evaluating : t.finishTask}
@@ -383,43 +384,3 @@ onMount(() => {
 		</div>
 	</div>
 </div>
-
-{#if session.showEvaluationModal && session.feedback}
-	<div transition:fade={{ duration: 200 }} class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4">
-		<div class="max-h-[80vh] w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-			<div class="border-b border-[#E5E5EA] px-6 py-4">
-				<h2 class="text-lg font-semibold text-[#1C1C1E]">{t.questCompleted}</h2>
-				<p class="text-sm text-[#8E8E93]">{t.tutorReport}</p>
-			</div>
-			<div class="max-h-[52vh] overflow-y-auto px-6 py-4">
-				<h3 class="text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.overallFeedback}</h3>
-				<p class="mt-2 whitespace-pre-wrap rounded-xl bg-[#F2F2F7] p-4 text-sm leading-6 text-[#1C1C1E]">{session.feedback.summary}</p>
-				{#if session.feedback.objectiveResults && session.feedback.objectiveResults.length > 0}
-					<h3 class="mt-6 text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.objectiveAssessment}</h3>
-					<div class="mt-2 space-y-2">
-						{#each session.feedback.objectiveResults as obj}
-							<div class="flex items-center justify-between rounded-xl bg-[#F2F2F7] px-3 py-2">
-								<span class="pr-4 text-sm text-[#1C1C1E]">{obj.text}</span>
-								<span
-									class="rounded-md px-2 py-1 text-xs font-bold {obj.grade === 'A' ? 'bg-[#34C759] text-white' : obj.grade === 'B' ? 'bg-[#FFD60A] text-[#1C1C1E]' : 'bg-[#FF3B30] text-white'}"
-								>
-									{obj.grade}
-								</span>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<div class="flex justify-end gap-2 border-t border-[#E5E5EA] px-6 py-4">
-				<button
-					type="button"
-					class="rounded-lg bg-[#E5E5EA] px-4 py-2 text-sm font-medium text-[#1C1C1E]"
-					onclick={() => (session.showEvaluationModal = false)}
-				>
-					{t.closeReview}
-				</button>
-				<a href="/" class="rounded-lg bg-[#0A84FF] px-4 py-2 text-sm font-medium text-white">{t.returnHall}</a>
-			</div>
-		</div>
-	</div>
-{/if}

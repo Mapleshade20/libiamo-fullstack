@@ -63,6 +63,7 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
+	taskId,
 	onPoolInit(pool) {
 		onlineUsers = pool.onlineUsers;
 		offlineUsers = pool.offlineUsers;

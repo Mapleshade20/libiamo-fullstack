@@ -1,7 +1,7 @@
 import { error, fail } from "@sveltejs/kit";
 import { listCompletedSessions } from "$lib/server/archive";
+import { followUpOnFeedback } from "$lib/server/feedback";
 import { deleteNote, getNote, updateNote } from "$lib/server/note";
-import { followUpOnFeedback } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {

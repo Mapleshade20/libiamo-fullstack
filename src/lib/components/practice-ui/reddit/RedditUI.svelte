@@ -61,6 +61,7 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	agentStartsFirst,
 	labels: sessionLabels,
+	taskId,
 }));
 
 // ── Opening state ────────────────────────────────────────────────────

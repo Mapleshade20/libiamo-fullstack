@@ -2,7 +2,7 @@
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
-import { fade, fly, scale } from "svelte/transition";
+import { fly, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";

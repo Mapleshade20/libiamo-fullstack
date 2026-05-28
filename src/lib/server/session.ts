@@ -1,13 +1,10 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
-import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
-import { createNotesBatch } from "./note";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
 
@@ -611,129 +608,6 @@ export async function requestAgentOpening(
 	};
 }
 
-function buildTutorPrompt(
-	objectives: string[],
-	scenarioContext: string,
-	messages: { role: string; content: string; llmMetadata?: unknown }[],
-	learningLanguage: string,
-	ui?: string,
-): string {
-	const isMailPractice = ui === "apple_mail";
-	const conversationHistory = messages
-		.map((m) => {
-			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
-			if (!mailBodyLayout) return `[${m.role}] ${m.content}`;
-			return `[${m.role}] ${m.content}\n\nEmail body layout:\n${mailBodyLayout}`;
-		})
-		.join("\n\n");
-	const userMessages = messages.filter((m) => m.role === "user");
-	const studentMessages = userMessages
-		.map((m, i) => {
-			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
-			const layout = mailBodyLayout ? `\nEmail body layout:\n${mailBodyLayout}` : "";
-			return `${i + 1}. ${m.content}${layout}`;
-		})
-		.join("\n\n");
-
-	const objectivesSection =
-		objectives.length > 0
-			? objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")
-			: "No specific task objectives. Please evaluate general conversational fluency, grammar, and appropriateness for the scenario.";
-	const emailEvaluationInstruction = isMailPractice
-		? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
-- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
-- The "objectiveResults" grades should remain per objective, not per email.
-- In the "summary", summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
-		: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.";
-
-	return `You are a language tutor evaluating a student's conversation practice.
-
-## Scenario Context
-${scenarioContext || "General conversation practice"}
-
-## Full Conversation History
-${conversationHistory || "(No conversation yet)"}
-
-## Task Objectives
-${objectivesSection}
-
-## Student's Messages (evaluate these specifically)
-${studentMessages || "(No messages from student)"}
-
-## Evaluation Instructions
-Evaluate how well the student achieved the objectives (or general fluency if none) considering:
-- The scenario context they were responding to
-- The full conversation flow (how they adapted to the AI's responses)
-- The quality, clarity, and appropriateness of their messages
-${emailEvaluationInstruction}
-
-Grade each objective (or general fluency) as:
-- A: Excellent - fully achieved
-- B: Good - mostly achieved with minor issues
-- C: Needs improvement - significant gaps
-
-Provide brief, constructive feedback (2-3 sentences).
-IMPORTANT: The "summary" and the items in "grammar", "vocabulary", and "coherence" arrays MUST be written in ${learningLanguage.toUpperCase()}. The "text" field of objectiveResults should remain in the original language of the objectives.
-
-In "grammar", list specific grammar issues (e.g. tense, conjugation, agreement).
-In "vocabulary", list word/phrase precision issues.
-In "coherence", list logical flow and engagement issues.
-If there are no issues for a category, provide an empty array [].
-
-Respond in JSON format: {"objectiveResults":[{"text":"objective description","grade":"A|B|C"}],"grammar":["specific grammar issue"],"vocabulary":["word precision issue"],"coherence":["flow or engagement issue"],"summary":"brief overall recap of student's performance"}`;
-}
-
-function getMailBodyHtmlMetadata(metadata: unknown) {
-	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
-	const value = (metadata as { mailBodyHtml?: unknown }).mailBodyHtml;
-	return typeof value === "string" ? value.trim() : "";
-}
-
-export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
-			task: true,
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (!session.task) throw new Error("Task not found");
-
-	const objectives = session.task.objectives ?? [];
-
-	const learningLanguageName = getLanguageEnglishName(session.task.language);
-
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
-	const scenarioContext = snapshot.scenarioContext ?? "";
-
-	const prompt = buildTutorPrompt(
-		objectives,
-		scenarioContext,
-		session.messages
-			.filter((m) => !isHiddenUserMessage(m))
-			.map((m) => ({
-				role: m.role,
-				content: getMessageDisplayContent(m),
-				llmMetadata: m.llmMetadata,
-			})),
-		learningLanguageName,
-		snapshot.ui,
-	);
-
-	const messages: ChatMessage[] = [
-		{ role: "system", content: prompt },
-		{ role: "user", content: "Please evaluate this conversation." },
-	];
-
-	const feedback = await chatJson(tutorFeedbackSchema, { messages, userId: session.userId });
-
-	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
-
-	return feedback;
-}
-
 export async function completeSession(sessionId: number): Promise<void> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -833,66 +707,4 @@ export async function getSessionOrFail(sessionId: number, userId: string, taskId
 		return null;
 	}
 	return session;
-}
-
-// ── Follow-up on feedback items ──────────────────────────────────────
-
-const FollowUpAnswerSchema = z.object({
-	answer: z.string().describe("A helpful, concise explanation answering the learner's follow-up question."),
-});
-
-const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
-	why: "Why is this wrong? Please explain the underlying rule or principle.",
-	examples: "Give me 3 more natural examples that illustrate the correct usage.",
-};
-
-export type FollowUpOnFeedbackInput = {
-	sessionId: number;
-	userId: string;
-	itemText: string;
-	category: "grammar" | "vocabulary" | "coherence";
-	question: string;
-};
-
-export type FollowUpOnFeedbackResult = {
-	answer: string;
-};
-
-export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
-		with: { task: { columns: { language: true } } },
-	});
-
-	if (!session) throw new Error("Session not found");
-
-	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
-	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
-	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
-
-	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific issue better.
-
-The note they're asking about:
-- Category: ${categoryLabel}
-- Knowledge point: "${input.itemText}"
-
-Their follow-up question: ${resolvedQuestion}
-
-## Instructions
-- Answer in a helpful, encouraging tone suitable for a language learner.
-- Be concise but thorough — 2-5 sentences is usually enough unless the learner asks for examples (then include 3 brief examples).
-- If the knowledge point describes a mistake, explain the correct rule clearly.
-- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.
-- Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
-- Do NOT roleplay as a character — you are a tutor, not the scenario persona.
-
-Respond in JSON format: { "answer": "your response here" }`;
-
-	const messages: ChatMessage[] = [
-		{ role: "system", content: systemPrompt },
-		{ role: "user", content: resolvedQuestion },
-	];
-
-	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
-	return { answer: result.answer };
 }

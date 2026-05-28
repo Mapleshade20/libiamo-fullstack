@@ -10,7 +10,6 @@ import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
 import { getOpeningStateMessages } from "./messageTransformer";
-import type { TutorFeedback } from "./types";
 
 export interface PracticeSessionLabels {
 	stillProcessingMessage: string;
@@ -29,6 +28,7 @@ export interface PracticeSessionOptions {
 	timeZone?: string;
 	labels: PracticeSessionLabels;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
+	taskId?: string | number;
 }
 
 /**
@@ -56,6 +56,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const timeZone = $derived(getOptions().timeZone);
 	const labels = $derived(getOptions().labels);
 	const onPoolInit = $derived(getOptions().onPoolInit);
+	const taskId = $derived(getOptions().taskId);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 	const formatTimestamp = $derived(createTimeFormatter(timeZone));
@@ -70,9 +71,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let hasAutoCompleted = $state(false);
 	let isCompleting = $state(false);
 	let isCompleted = $state(false);
-	let showEvaluationModal = $state(false);
 	let isInitializing = $state(false);
-	let feedback = $state<TutorFeedback | null>(null);
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
 	let agentUser = $state<ChatUser>({
@@ -126,7 +125,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
 		if (result.status === "reply") {
 			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
-			if (result.terminated) handleComplete();
+			if (result.terminated) handleCompleteAndNavigate(String(taskId ?? ""));
 		} else if (result.status === "pending") {
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
@@ -193,24 +192,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		isSubmitting = false;
 	}
 
-	async function handleComplete() {
-		if (!sessionId || isCompleting || isCompleted) return;
-		isCompleting = true;
-		try {
-			const result = await completeAction(sessionId);
-
-			if (result.type === "success") {
-				isCompleted = true;
-				await scrollToBottom();
-				await invalidateAll();
-			}
-		} catch (error) {
-			console.error("Completion failed:", error);
-		} finally {
-			isCompleting = false;
-		}
-	}
-
 	async function handleCompleteAndNavigate(taskId: string) {
 		if (!sessionId || isCompleting || isCompleted) return;
 		isCompleting = true;
@@ -224,6 +205,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
+		} finally {
 			isCompleting = false;
 		}
 	}
@@ -291,7 +273,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	function runAutoCompleteIfNeeded() {
 		if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 			hasAutoCompleted = true;
-			void handleComplete();
+			void handleCompleteAndNavigate(String(taskId ?? ""));
 		}
 	}
 
@@ -309,9 +291,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			onPoolInit?.(pool);
 
 			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
-			feedback = sessionData.tutorFeedback || null;
-
-			if (isCompleted && feedback) showEvaluationModal = true;
 
 			const openingMessages = getOpeningStateMessages({
 				openingStateData,
@@ -442,17 +421,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		get isCompleted() {
 			return isCompleted;
 		},
-		get showEvaluationModal() {
-			return showEvaluationModal;
-		},
-		set showEvaluationModal(v: boolean) {
-			showEvaluationModal = v;
-		},
 		get isInitializing() {
 			return isInitializing;
-		},
-		get feedback() {
-			return feedback;
 		},
 		get messages() {
 			return messages;
@@ -500,7 +470,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			return openingStateData;
 		},
 		handleSend,
-		handleComplete,
 		handleCompleteAndNavigate,
 		handleRetry,
 		runAutoCompleteIfNeeded,

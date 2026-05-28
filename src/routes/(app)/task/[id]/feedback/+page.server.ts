@@ -2,7 +2,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
-import { buildFeedbackConversation, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
+import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -128,7 +128,6 @@ export const actions: Actions = {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const { followUpOnFeedback } = await import("$lib/server/session");
 			const result = await followUpOnFeedback({
 				sessionId,
 				userId: user.id,

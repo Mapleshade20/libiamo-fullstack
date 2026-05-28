@@ -72,8 +72,6 @@ function extractAllTagsWithAttr(xml: string, tag: string): Array<{ attrs: Record
 
 // ── Annotation span parsing ──────────────────────────────────────────
 
-const ANNOTATION_TAGS: AnnotationKind[] = ["grammar", "vocab", "delete"];
-
 export function parseAnnotationSpans(annotatedText: string): AnnotationSpan[] {
 	const spans: AnnotationSpan[] = [];
 	const tagPattern = /<(grammar|vocab|delete)>([\s\S]*?)<\/\1>/g;

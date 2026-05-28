@@ -4,12 +4,13 @@
  */
 
 import { and, asc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import type { FeedbackChain, FeedbackConversation, FeedbackMessage, FeedbackResult } from "$lib/feedback-types";
 import { db } from "./db";
 import { practiceSession, sessionMessage } from "./db/schema";
-import { getPlainText, isFeedbackResultValid, parseFeedbackXml } from "./feedback-parser";
-import { type ChatMessage, chatText } from "./llm";
+import { isFeedbackResultValid, parseFeedbackXml } from "./feedback-parser";
+import { type ChatMessage, chatJson, chatText } from "./llm";
 
 // ── Message metadata helpers ─────────────────────────────────────────
 
@@ -121,7 +122,7 @@ function buildMessageTree(messages: SessionMessageRow[], openingState: Record<st
 		nodeMap.set(commentId, node);
 
 		if (parentId && nodeMap.has(parentId)) {
-			nodeMap.get(parentId)!.children.push(node);
+			nodeMap.get(parentId)?.children.push(node);
 		} else {
 			nodes.push(node);
 		}
@@ -151,7 +152,7 @@ function addOpeningComments(
 		nodeMap.set(id, node);
 
 		if (nodeMap.has(parentId)) {
-			nodeMap.get(parentId)!.children.push(node);
+			nodeMap.get(parentId)?.children.push(node);
 		} else {
 			nodes.push(node);
 		}
@@ -184,7 +185,7 @@ function addAo3OpeningComments(
 		nodeMap.set(id, node);
 
 		if (nodeMap.has(parentId)) {
-			nodeMap.get(parentId)!.children.push(node);
+			nodeMap.get(parentId)?.children.push(node);
 		} else {
 			nodes.push(node);
 		}
@@ -477,4 +478,66 @@ export async function getExistingFeedback(sessionId: number): Promise<FeedbackRe
 	}
 
 	return null;
+}
+
+// ── Follow-up on feedback items ──────────────────────────────────────
+
+const FollowUpAnswerSchema = z.object({
+	answer: z.string().describe("A helpful, concise explanation answering the learner's follow-up question."),
+});
+
+const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
+	why: "Why is this wrong? Please explain the underlying rule or principle.",
+	examples: "Give me 3 more natural examples that illustrate the correct usage.",
+};
+
+export type FollowUpOnFeedbackInput = {
+	sessionId: number;
+	userId: string;
+	itemText: string;
+	category: "grammar" | "vocabulary" | "coherence";
+	question: string;
+};
+
+export type FollowUpOnFeedbackResult = {
+	answer: string;
+};
+
+export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
+		with: { task: { columns: { language: true } } },
+	});
+
+	if (!session) throw new Error("Session not found");
+
+	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
+	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
+	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
+
+	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific issue better.
+
+The note they're asking about:
+- Category: ${categoryLabel}
+- Knowledge point: "${input.itemText}"
+
+Their follow-up question: ${resolvedQuestion}
+
+## Instructions
+- Answer in a helpful, encouraging tone suitable for a language learner.
+- Be concise but thorough — 2-5 sentences is usually enough unless the learner asks for examples (then include 3 brief examples).
+- If the knowledge point describes a mistake, explain the correct rule clearly.
+- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.
+- Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
+- Do NOT roleplay as a character — you are a tutor, not the scenario persona.
+
+Respond in JSON format: { "answer": "your response here" }`;
+
+	const messages: ChatMessage[] = [
+		{ role: "system", content: systemPrompt },
+		{ role: "user", content: resolvedQuestion },
+	];
+
+	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
+	return { answer: result.answer };
 }

@@ -7,7 +7,6 @@ import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtil
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
-import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
@@ -61,11 +60,9 @@ let isSubmitting = $state(false);
 let isCompleting = $state(false);
 let isCompleted = $state(false);
 let isEntering = $state(true);
-let showEvaluationModal = $state(false);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
-let feedback = $state<TutorFeedback | null>(null);
 let messages = $state<ChatMessage[]>([]);
 let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
@@ -278,13 +275,12 @@ async function handleComplete(force = false) {
 	isCompleting = true;
 	try {
 		const result = await completeAction(sessionId);
-		if (result.type === "success" && result.data) {
+		if (result.type === "success") {
 			isCompleted = true;
-			feedback = result.data.feedback as TutorFeedback;
-			showEvaluationModal = true;
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
-			await invalidateAll();
+			// Navigate to feedback page
+			window.location.href = `/task/${taskId}/feedback`;
 		} else {
 			console.error("Mail completion was rejected:", result);
 		}
@@ -381,7 +377,6 @@ function loadExistingSession(session: any) {
 	lastSessionSnapshot = sessionSnapshot;
 	sessionId = session.id;
 	isCompleted = session.status === "completed" || session.status === "evaluated";
-	feedback = session.tutorFeedback || null;
 
 	const sortedRawMessages = [...(session.messages ?? [])].sort(
 		(a, b) => parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
@@ -396,7 +391,6 @@ function loadExistingSession(session: any) {
 		labels: t,
 	});
 
-	if (isCompleted && feedback) showEvaluationModal = true;
 	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden);
 	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
 	if (
@@ -517,7 +511,7 @@ $effect(() => {
 <div
 	class="mail-shell fixed inset-0 z-[999] h-[100dvh] w-full overflow-hidden bg-[#F5F5F7] text-[#1D1D1F] font-inter-stack selection:bg-[#3478F6] selection:text-white"
 >
-	<Overlays {showEvaluationModal} {feedback} {showToast} {t} onCloseEvaluation={() => (showEvaluationModal = false)} />
+	<Overlays {showToast} {t} />
 
 	<div
 		class="mail-window grid h-full min-h-0 w-full grid-cols-[240px_minmax(280px,360px)_1fr] overflow-hidden border border-black/10 bg-white shadow-2xl"

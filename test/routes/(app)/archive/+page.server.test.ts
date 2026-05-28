@@ -16,7 +16,7 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 
 vi.mock("$lib/server/archive", () => mockArchiveService);
 vi.mock("$lib/server/note", () => mockNoteService);
-vi.mock("$lib/server/session", () => mockSessionService);
+vi.mock("$lib/server/feedback", () => mockSessionService);
 
 import { actions, load } from "$routes/(app)/archive/+page.server";
 
