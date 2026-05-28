@@ -1,5 +1,5 @@
 <script lang="ts">
-import { TextHighlighter } from "$lib/components/ori/text-highlighter";
+import { TextHighlighter } from "$lib/components/ui/text-highlighter";
 import type { AnnotationSpan, MessageAnnotation } from "$lib/feedback-types";
 
 let {
