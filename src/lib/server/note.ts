@@ -87,12 +87,12 @@ export async function createNotesBatch(
 
 For each item, produce:
 - **knowledgePoint**: ONE concise sentence summarizing the core lesson (grammar rule, vocabulary nuance, or discourse principle). Be specific, name the rule. Write in English but mention ${languageName} terms.
-- **keywords**: 2-3 very short core terms or phrases that capture the essence. These MUST be in ${languageName} (or the learning language), shown as a concise label — e.g., "el enlace", "función | funcionario", "no porque + subj.", "set ... on fire", "behind the scenes". Keep each under ~5 words.
-- **sourceContext**: 1-3 sentences quoted or closely paraphrased from the original conversation that illustrate the error or the correct usage. Extract this from the conversation snippet provided. If the conversation doesn't clearly show the context, write a brief summary.
+- **keywords**: 1-2 very short core phrases that capture the essence. These MUST be in ${languageName} (or the learning language), shown as a concise label — e.g. grammar like "cualquier + n. (neutral)", "n. + cualquiera (implying indifference)", vocabulary like "función | funcionario", "no porque + subj.", "set ... on fire", "behind the scenes", "think of | come up with". Keep each under ~5 words.
+- **sourceContext**: 2-3 sentences quoted or closely paraphrased that the feedback items come from. Extract this from the original conversation snippet provided, and make sure you replace the wrong or problematic language with the correct form if possible, to show the learner the right way to say it in context.
 
 CRITICAL RULES:
 - Do NOT repeat the error description verbatim in knowledgePoint. Distill the lesson.
-- Keywords should be useful standalone notes: grammar formulas, collocations, word pairs.
+- Keywords should be useful standalone notes: grammar formulas, collocations, or word pairs.
 - Return JSON: { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
 				},
 				{

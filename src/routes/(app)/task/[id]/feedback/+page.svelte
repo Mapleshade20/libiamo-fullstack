@@ -1,6 +1,7 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
+import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
@@ -22,18 +23,21 @@ let activeAnnotation = $state<{
 	rect: DOMRect;
 } | null>(null);
 
-// Initialize feedback from data
+// Keep local state in sync if page data is refreshed.
 $effect(() => {
 	if (data.existingFeedback && !feedback) {
 		feedback = data.existingFeedback;
 	}
 });
 
-// Trigger generation if not already done
-$effect(() => {
-	if (!feedback && !isGenerating && !generationError) {
-		void triggerGeneration();
+// Trigger client-only generation after mount. Calling fetch from an eager
+// reactive effect can run during SSR and causes SvelteKit warnings.
+onMount(() => {
+	if (data.existingFeedback) {
+		feedback = data.existingFeedback;
+		return;
 	}
+	void triggerGeneration();
 });
 
 async function triggerGeneration() {

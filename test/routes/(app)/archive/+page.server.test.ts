@@ -77,7 +77,7 @@ describe("archive page server", () => {
 				}),
 			);
 
-			expect(result).toEqual({ success: true });
+			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated content" } });
 			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
 				tutorComment: "Updated content",
 				keywords: [],
@@ -93,7 +93,7 @@ describe("archive page server", () => {
 				}),
 			);
 
-			expect(result).toEqual({ success: true });
+			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated" } });
 			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
 				tutorComment: "Updated",
 				keywords: ["past tense", "yesterday"],
@@ -148,7 +148,7 @@ describe("archive page server", () => {
 				}),
 			);
 
-			expect(result).toEqual({ success: true });
+			expect(result).toEqual({ success: true, noteId: 1 });
 			expect(mockNoteService.deleteNote).toHaveBeenCalledWith(42, "user_123");
 		});
 

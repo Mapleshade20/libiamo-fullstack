@@ -1,6 +1,7 @@
 <script lang="ts">
 import BookmarkPlus from "@lucide/svelte/icons/bookmark-plus";
 import X from "@lucide/svelte/icons/x";
+import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
@@ -25,6 +26,7 @@ let {
 let explanation = $state<string | null>(null);
 let isLoading = $state(false);
 let error = $state<string | null>(null);
+let saveError = $state<string | null>(null);
 let isSaving = $state(false);
 let saveSuccess = $state(false);
 
@@ -53,8 +55,9 @@ const position = $derived(
 	})(),
 );
 
-// Fetch explanation on mount
-$effect(() => {
+// Fetch explanation client-side only. Calling fetch from an eager reactive
+// effect can run during SSR and causes SvelteKit warnings.
+onMount(() => {
 	void fetchExplanation();
 });
 
@@ -109,6 +112,7 @@ async function handleSaveNote() {
 
 	isSaving = true;
 	saveSuccess = false;
+	saveError = null;
 
 	try {
 		const formData = new FormData();
@@ -129,9 +133,14 @@ async function handleSaveNote() {
 			setTimeout(() => {
 				saveSuccess = false;
 			}, 2000);
+		} else if (result.type === "failure") {
+			saveError = (result.data?.error as string | undefined) ?? "Failed to save note";
+		} else {
+			saveError = "Failed to save note";
 		}
 	} catch (e) {
 		console.error("Failed to save note:", e);
+		saveError = "Network error";
 	} finally {
 		isSaving = false;
 	}
@@ -204,9 +213,11 @@ const kindColor = $derived(
 
 	<!-- Footer -->
 	{#if explanation}
-		<div class="border-t border-[#e8e3db] p-4 bg-[#fdfcf9] flex items-center justify-between">
+		<div class="border-t border-[#e8e3db] p-4 bg-[#fdfcf9] flex items-center justify-between gap-3">
 			{#if saveSuccess}
 				<span class="text-sm text-green-600 font-medium">Saved to notes!</span>
+			{:else if saveError}
+				<span class="text-sm text-red-600 font-medium">{saveError}</span>
 			{:else}
 				<span class="text-xs text-[#9b8f85]">Save this for later review</span>
 			{/if}

@@ -36,7 +36,7 @@ export const actions: Actions = {
 		});
 		if (!updated) return fail(404, { error: "Note not found" });
 
-		return { success: true };
+		return { success: true, note: updated };
 	},
 
 	delete: async ({ request, locals }) => {
@@ -51,7 +51,7 @@ export const actions: Actions = {
 		const deleted = await deleteNote(noteId, user.id);
 		if (!deleted) return fail(404, { error: "Note not found" });
 
-		return { success: true };
+		return { success: true, noteId: deleted.id };
 	},
 
 	followUp: async ({ request, locals }) => {
