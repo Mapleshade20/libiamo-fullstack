@@ -127,17 +127,13 @@ function replaceNote(updated: ArchiveNote) {
 }
 
 function removeNote(noteId: number) {
-	groups = groups
-		.map((group) => ({
-			...group,
-			sessions: group.sessions
-				.map((session) => ({
-					...session,
-					notes: session.notes.filter((note) => note.id !== noteId),
-				}))
-				.filter((session) => session.notes.length > 0),
-		}))
-		.filter((group) => group.sessions.length > 0);
+	groups = groups.map((group) => ({
+		...group,
+		sessions: group.sessions.map((session) => ({
+			...session,
+			notes: session.notes.filter((note) => note.id !== noteId),
+		})),
+	}));
 }
 
 function formatDate(d: Date): string {

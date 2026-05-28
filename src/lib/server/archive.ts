@@ -55,10 +55,10 @@ export async function listCompletedSessions(userId: string, now: Date = new Date
 		orderBy: desc(practiceSession.completedAt),
 	});
 
-	const withNotes = sessions.filter((s) => s.notes.length > 0 && s.completedAt != null);
+	const completedSessions = sessions.filter((s) => s.completedAt != null);
 
 	const groups = new Map<string, SessionWithNotes[]>();
-	for (const s of withNotes) {
+	for (const s of completedSessions) {
 		if (!s.completedAt) continue;
 		const completedAt = s.completedAt;
 		const group = getTimeGroup(completedAt, now);
