@@ -52,8 +52,10 @@ function extractAllTagsWithAttr(xml: string, tag: string): Array<{ attrs: Record
 
 		// Parse attributes
 		const attrStr = xml.slice(startIdx + openTag.length, tagEndIdx).trim();
+		// Normalize spaces around = so the regex doesn't need \s* (avoids ReDoS flag)
+		const normalized = attrStr.replace(/\s*=\s*/g, "=");
 		const attrs: Record<string, string> = {};
-		const attrRegex = /(\w+)\s*=\s*"([^"]*)"/g;
+		const attrRegex = /(\w+)="([^"]*)"/g;
 		let attrMatch: RegExpExecArray | null;
 		while ((attrMatch = attrRegex.exec(attrStr)) !== null) {
 			attrs[attrMatch[1]] = attrMatch[2];
@@ -116,9 +118,21 @@ export function getPlainText(annotatedText: string): string {
 // ── Main parser ──────────────────────────────────────────────────────
 
 export function parseFeedbackXml(xmlResponse: string): FeedbackResult {
+	// Guard against oversized input: LLM response is bounded by maxTokens (8192),
+	// but a hard size cap provides defense-in-depth against ReDoS on the tag regex.
+	const MAX_XML_LENGTH = 100_000;
+	if (xmlResponse.length > MAX_XML_LENGTH) {
+		throw new Error(`Feedback XML too large: ${xmlResponse.length} bytes (max ${MAX_XML_LENGTH})`);
+	}
+
 	// Strip markdown fences if present
 	let xml = xmlResponse.trim();
-	xml = xml.replace(/^```(?:xml)?\s*/i, "").replace(/\s*```$/i, "");
+	if (/^```(?:xml)?/i.test(xml)) {
+		xml = xml.replace(/^```(?:xml)?/i, "").trim();
+	}
+	if (xml.endsWith("```")) {
+		xml = xml.slice(0, -3).trimEnd();
+	}
 
 	// Extract feedback content (may or may not have wrapper)
 	const feedbackContent = extractTagContent(xml, "feedback") ?? xml;

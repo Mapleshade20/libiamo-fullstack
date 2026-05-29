@@ -167,6 +167,16 @@ describe("parseFeedbackXml", () => {
 		expect(result.annotations[0].annotatedText).toBe("");
 		expect(result.annotations[0].spans).toEqual([]);
 	});
+
+	it("throws on oversized input", () => {
+		const huge = `<feedback><message id="1"><annotated>${"x".repeat(100_001)}</annotated><comment>ok</comment></message><summary>ok</summary></feedback>`;
+		expect(() => parseFeedbackXml(huge)).toThrow("Feedback XML too large");
+	});
+
+	it("accepts input at exactly the size limit", () => {
+		const xml = `<feedback><message id="1"><annotated>Hello</annotated><comment>ok</comment></message><summary>ok</summary></feedback>`;
+		expect(() => parseFeedbackXml(xml)).not.toThrow();
+	});
 });
 
 describe("isFeedbackResultValid", () => {
