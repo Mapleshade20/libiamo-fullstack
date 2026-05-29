@@ -22,6 +22,7 @@ let expandedSessionIds = $state(new Set<number>());
 let editingNoteId = $state<number | null>(null);
 let deletingNoteId = $state<number | null>(null);
 let deleteError = $state<string | null>(null);
+let creatingCardIds = $state(new Set<number>());
 
 $effect(() => {
 	groups = data.groups ?? [];
@@ -139,6 +140,36 @@ function removeNote(noteId: number) {
 function formatDate(d: Date): string {
 	return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+async function createReviewCard(noteId: number) {
+	creatingCardIds = new Set(creatingCardIds).add(noteId);
+	try {
+		const res = await fetch("/api/review/create-card", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ noteId }),
+		});
+		if (res.ok) {
+			const data = await res.json();
+			if (data.created) markNoteHasCard(noteId);
+		}
+	} catch {
+		// silently ignore
+	} finally {
+		creatingCardIds.delete(noteId);
+		creatingCardIds = new Set(creatingCardIds);
+	}
+}
+
+function markNoteHasCard(noteId: number) {
+	groups = groups.map((group) => ({
+		...group,
+		sessions: group.sessions.map((session) => ({
+			...session,
+			notes: session.notes.map((note) => (note.id === noteId ? { ...note, hasReviewCard: true } : note)),
+		})),
+	}));
+}
 </script>
 
 <h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
@@ -148,7 +179,7 @@ function formatDate(d: Date): string {
 {:else}
 	<div class="mt-10 relative">
 		<!-- Continuous vertical timeline line -->
-		<div class="absolute left-[160px] top-0 bottom-0 w-0.5 bg-border"></div>
+		<div class="absolute left-6 sm:left-[72px] top-0 bottom-0 w-0.5 bg-border"></div>
 
 		{#each rows as row (row.session.id)}
 			{@const { session, dateStr, showDate } = row}
@@ -156,9 +187,11 @@ function formatDate(d: Date): string {
 			{@const Icon = uiIcons[session.ui] ?? MessageCircle}
 			{@const isExpanded = expandedSessionIds.has(session.id)}
 			<div class="flex gap-0 pb-8">
-				<!-- Date (left of line, deduped) -->
-				<div class="w-[160px] shrink-0 pr-6 pt-[7px] text-right text-sm font-serif tabular-nums text-muted-foreground">{showDate ? dateStr : ""}</div>
-
+				<!-- Date (left of line, desktop) -->
+				<div class="hidden sm:block w-[72px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">
+					{showDate ? dateStr : ""}
+				</div>
+				<div class="w-6 sm:hidden shrink-0"></div>
 				<!-- Icon node on the line -->
 				<a href="/task/{session.taskId}/feedback" class="shrink-0 flex items-start relative -ml-[18px]">
 					<div
@@ -170,20 +203,30 @@ function formatDate(d: Date): string {
 
 				<!-- Content -->
 				<div class="min-w-0 flex-1 pl-5 pt-[5px]">
+					{#if showDate}
+						<p class="sm:hidden my-1 text-xs font-serif tabular-nums text-muted-foreground">{dateStr}</p>
+					{/if}
 					<button
 						type="button"
-						class="flex items-center gap-1.5 text-left font-serif text-lg text-foreground hover:text-muted-foreground transition-colors"
+						class="relative inline-flex items-center text-left font-serif text-lg text-foreground hover:text-muted-foreground transition-colors"
 						aria-expanded={isExpanded}
 						onclick={() => toggleSession(session.id)}
 					>
-						<ChevronRight size={18} class={`shrink-0 text-muted-foreground transition-transform${isExpanded ? ' rotate-90' : ''}`} />
-						{session.taskTitle}
+						<ChevronRight
+							size={18}
+							class={`absolute -left-5 top-1/2 -translate-y-1/2 shrink-0 text-muted-foreground transition-transform sm:hidden${isExpanded ? ' rotate-90' : ''}`}
+						/>
+						<ChevronRight
+							size={18}
+							class={`hidden shrink-0 text-muted-foreground transition-transform sm:block sm:mr-1.5${isExpanded ? ' rotate-90' : ''}`}
+						/>
+						<span>{session.taskTitle}</span>
 					</button>
 
 					{#if !isExpanded && allKeywords.length > 0}
 						<div class="mt-1.5 flex flex-wrap gap-1">
 							{#each allKeywords as kw}
-								<span class="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{kw}</span>
+								<span class="rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">{kw}</span>
 							{/each}
 						</div>
 					{/if}
@@ -198,7 +241,7 @@ function formatDate(d: Date): string {
 									<NoteEditor {note} oncancel={handleCancel} onsave={(input) => saveNote(note.id, input)} />
 								{:else if deletingNoteId === note.id}
 									<div class="rounded-md border border-red-200 bg-red-50 p-4">
-										<p class="mb-3 text-sm text-red-800">Delete this note? This cannot be undone.</p>
+										<p class="mb-3 text-sm text-red-800">Delete this note? Any associated review card will also be deleted. This cannot be undone.</p>
 										{#if deleteError}
 											<p class="mb-3 text-xs font-medium text-red-700">{deleteError}</p>
 										{/if}
@@ -220,7 +263,15 @@ function formatDate(d: Date): string {
 										</div>
 									</div>
 								{:else}
-									<NoteCard {note} onedit={() => handleEdit(note.id)} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
+									<NoteCard
+										{note}
+										hasReviewCard={note.hasReviewCard}
+										creating={creatingCardIds.has(note.id)}
+										onedit={() => handleEdit(note.id)}
+										ondelete={() => handleDeleteRequest(note.id)}
+										oncreateCard={() => createReviewCard(note.id)}
+										t={askLabels}
+									/>
 								{/if}
 							{/each}
 						</div>

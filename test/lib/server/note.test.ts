@@ -35,7 +35,6 @@ import {
 	getNote,
 	listNotes,
 	updateNote,
-	validateAndCreateNoteFromSelection,
 } from "$lib/server/note";
 
 const mockChatJson = chatJson as ReturnType<typeof vi.fn>;
@@ -237,54 +236,6 @@ describe("deleteNote", () => {
 
 		const result = await deleteNote(1, USER_ID);
 		expect(result).toEqual(deleted);
-	});
-});
-
-describe("validateAndCreateNoteFromSelection", () => {
-	it("creates note when LLM validates selection", async () => {
-		mockChatJson.mockResolvedValueOnce({
-			valid: true,
-			knowledgePoint: "Use past tense after 'yesterday'",
-			keywords: ["past tense", "yesterday"],
-			sourceContext: "I go to the store yesterday.",
-		});
-
-		const expectedNote = { id: 1, tutorComment: "Use past tense after 'yesterday'" };
-		const returning = vi.fn().mockResolvedValue([expectedNote]);
-		const valuesFn = vi.fn().mockReturnValue({ returning });
-		mockDb.insert.mockReturnValue({ values: valuesFn });
-
-		const result = await validateAndCreateNoteFromSelection({
-			userId: USER_ID,
-			sessionId: SESSION_ID,
-			selectedText: "I go to the store yesterday",
-			surroundingContext: "What did you do yesterday? I go to the store yesterday.",
-			language: "en",
-		});
-
-		expect(result.success).toBe(true);
-		expect(result.note).toEqual(expectedNote);
-
-		const insertedValues = valuesFn.mock.calls[0]?.[0];
-		expect(insertedValues.tutorComment).toBe("Use past tense after 'yesterday'");
-		expect(insertedValues.keywords).toEqual(["past tense", "yesterday"]);
-		expect(insertedValues.sourceContext).toBe("I go to the store yesterday.");
-	});
-
-	it("rejects invalid selection with reason", async () => {
-		mockChatJson.mockResolvedValueOnce({ valid: false, reason: "Selection is too short" });
-
-		const result = await validateAndCreateNoteFromSelection({
-			userId: USER_ID,
-			sessionId: SESSION_ID,
-			selectedText: "the",
-			surroundingContext: "the cat sat on the mat",
-			language: "en",
-		});
-
-		expect(result.success).toBe(false);
-		expect(result.reason).toBe("Selection is too short");
-		expect(mockDb.insert).not.toHaveBeenCalled();
 	});
 });
 

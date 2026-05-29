@@ -1,11 +1,11 @@
-name: Lint
+name: Lint and Test
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  biome:
+  primary:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,6 +22,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run svelte-check
-        run: pnpm svelte-kit sync && pnpm svelte-check --tsconfig ./tsconfig.json
-      - name: Run Biome
+        run: pnpm svelte-kit sync && pnpm svelte-check --tsconfig ./tsconfig.json --fail-on-warnings
+      - name: Run biome
         run: pnpm biome ci --error-on-warnings .
+      - name: Run vitest
+        run: pnpm vitest run --reporter github-actions
+      - uses: actions/setup-python@v3
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1

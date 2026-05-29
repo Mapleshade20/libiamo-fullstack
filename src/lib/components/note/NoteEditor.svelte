@@ -77,7 +77,7 @@ function handleCancel() {
 			<input id="note-keywords-{note.id}" bind:value={editKeywords} class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
 		</div>
 		{#if note.sourceContext}
-			<p class="text-xs italic text-muted-foreground/60">{note.sourceContext}</p>
+			<p class="text-sm italic text-muted-foreground/70">{note.sourceContext}</p>
 		{/if}
 		{#if error}
 			<p class="text-xs font-medium text-red-600">{error}</p>

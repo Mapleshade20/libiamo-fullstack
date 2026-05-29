@@ -169,7 +169,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 					<span class="text-sm font-medium uppercase tracking-wide">Back to Task</span>
 				</a>
 				<div class="flex items-center gap-3">
-					<h1 class="text-lg font-serif">{data.taskTitle}</h1>
+					<h1 class="text-base">{data.taskTitle}</h1>
 					<Button
 						href="/task/{data.taskId}/session"
 						variant="outline"

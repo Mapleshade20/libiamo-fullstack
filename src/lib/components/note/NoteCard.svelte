@@ -1,4 +1,5 @@
 <script lang="ts">
+import Bookmark from "@lucide/svelte/icons/bookmark";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import Pencil from "@lucide/svelte/icons/pencil";
@@ -16,13 +17,19 @@ type Note = {
 
 let {
 	note,
+	hasReviewCard = true,
+	creating = false,
 	onedit = () => {},
 	ondelete = () => {},
+	oncreateCard = () => {},
 	t = {} as Record<string, string>,
 }: {
 	note: Note;
+	hasReviewCard?: boolean;
+	creating?: boolean;
 	onedit?: () => void;
 	ondelete?: () => void;
+	oncreateCard?: () => void;
 	t?: Record<string, string>;
 } = $props();
 
@@ -65,27 +72,42 @@ async function submitAsk(q: string) {
 </script>
 
 <div class="rounded-lg border border-border bg-card p-4">
-	<div class="flex items-start gap-3">
+	<div class="flex flex-col sm:flex-row sm:items-start gap-3">
 		<div class="min-w-0 flex-1">
-			<p class="text-sm text-muted-foreground leading-relaxed">{note.tutorComment}</p>
+			<p class="text-base text-muted-foreground leading-relaxed">{note.tutorComment}</p>
 			{#if note.sourceContext}
-				<p class="mt-1 text-xs text-muted-foreground/40 italic line-clamp-3">{note.sourceContext}</p>
+				<p class="mt-1 text-sm text-muted-foreground/70 italic line-clamp-3">{note.sourceContext}</p>
 			{/if}
 			{#if note.keywords && note.keywords.length > 0}
 				<div class="mt-3 flex flex-wrap gap-1">
 					{#each note.keywords as kw}
-						<span class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{kw}</span>
+						<span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{kw}</span>
 					{/each}
 				</div>
 			{/if}
 		</div>
-		<div class="shrink-0 flex items-center gap-0.5">
+		<div class="shrink-0 flex flex-row sm:flex-col items-center gap-0.5">
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors" onclick={onedit} title="Edit">
 				<Pencil size={14} />
 			</button>
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-red-600 transition-colors" onclick={ondelete} title="Delete">
 				<Trash2 size={14} />
 			</button>
+			{#if !hasReviewCard}
+				<button
+					type="button"
+					class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
+					onclick={oncreateCard}
+					disabled={creating}
+					title="Create review card"
+				>
+					{#if creating}
+						<LoaderCircle size={14} class="animate-spin" />
+					{:else}
+						<Bookmark size={14} />
+					{/if}
+				</button>
+			{/if}
 			<button
 				type="button"
 				class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"

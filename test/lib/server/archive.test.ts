@@ -6,6 +6,7 @@ const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
 			practiceSession: { findMany: vi.fn() },
+			reviewCard: { findMany: vi.fn(() => []) },
 		},
 	},
 }));
@@ -88,11 +89,11 @@ describe("listCompletedSessions", () => {
 	});
 
 	it("returns sessions ordered by completedAt desc within each group", async () => {
-		const today = new Date();
-		const session1 = makeSession({ id: 1, notes: [makeNote()], completedAt: new Date(today.getTime() - 3600000) });
-		const session2 = makeSession({ id: 2, notes: [makeNote()], completedAt: today });
+		const now = new Date(2025, 5, 11, 12, 0, 0); // Wednesday June 11, 2025
+		const session1 = makeSession({ id: 1, notes: [makeNote()], completedAt: new Date(2025, 5, 11, 10, 0, 0) });
+		const session2 = makeSession({ id: 2, notes: [makeNote()], completedAt: new Date(2025, 5, 11, 11, 0, 0) });
 		mockDb.query.practiceSession.findMany.mockResolvedValue([session2, session1]);
-		const result = await listCompletedSessions(USER_ID);
+		const result = await listCompletedSessions(USER_ID, now);
 		expect(result[0].sessions[0].id).toBe(2);
 		expect(result[0].sessions[1].id).toBe(1);
 	});
