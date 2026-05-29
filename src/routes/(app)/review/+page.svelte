@@ -14,6 +14,7 @@ let flipped = $state(false);
 let isSubmitting = $state(false);
 let cardsReviewed = $state(0);
 let sessionStart = $state(0);
+let cardRevealedAt = $state(0);
 let sessionComplete = $state(false);
 let error = $state<string | null>(null);
 
@@ -22,19 +23,19 @@ let currentCard = $derived(data.cards[currentIndex] ?? null);
 function flip() {
 	if (isSubmitting) return;
 	if (sessionStart === 0) sessionStart = Date.now();
+	if (cardRevealedAt === 0) cardRevealedAt = Date.now();
 	flipped = true;
 }
 
 async function rate(rating: number) {
 	if (isSubmitting || !currentCard) return;
 	isSubmitting = true;
-	const start = Date.now();
 
 	try {
 		const res = await fetch(`/api/review/${currentCard.id}/rate`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ rating, elapsedSeconds: Math.round((Date.now() - start) / 1000) }),
+			body: JSON.stringify({ rating, elapsedSeconds: Math.round((Date.now() - cardRevealedAt) / 1000) }),
 		});
 
 		if (!res.ok) throw new Error("Failed to submit rating");
@@ -46,6 +47,7 @@ async function rate(rating: number) {
 		} else {
 			currentIndex++;
 			flipped = false;
+			cardRevealedAt = Date.now();
 		}
 	} catch (e) {
 		error = e instanceof Error ? e.message : "Something went wrong";

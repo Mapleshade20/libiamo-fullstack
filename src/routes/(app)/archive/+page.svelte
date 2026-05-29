@@ -150,7 +150,8 @@ async function createReviewCard(noteId: number) {
 			body: JSON.stringify({ noteId }),
 		});
 		if (res.ok) {
-			markNoteHasCard(noteId);
+			const data = await res.json();
+			if (data.created) markNoteHasCard(noteId);
 		}
 	} catch {
 		// silently ignore

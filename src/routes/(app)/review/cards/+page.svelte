@@ -23,18 +23,20 @@ function cancelEdit() {
 }
 
 async function saveEdit(cardId: number) {
-	await fetch(`/api/review/${cardId}`, {
+	const res = await fetch(`/api/review/${cardId}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ front: editFront, back: editBack }),
 	});
-	cardList = cardList.map((c) => (c.id === cardId ? { ...c, front: editFront, back: editBack } : c));
-	editingId = null;
+	if (res.ok) {
+		cardList = cardList.map((c) => (c.id === cardId ? { ...c, front: editFront, back: editBack } : c));
+		editingId = null;
+	}
 }
 
 async function onDelete(cardId: number) {
-	await fetch(`/api/review/${cardId}`, { method: "DELETE" });
-	cardList = cardList.filter((c) => c.id !== cardId);
+	const res = await fetch(`/api/review/${cardId}`, { method: "DELETE" });
+	if (res.ok) cardList = cardList.filter((c) => c.id !== cardId);
 }
 </script>
 

@@ -242,11 +242,6 @@ describe("getDueCards", () => {
 		expect(result).toHaveLength(1);
 		expect(result[0].previewIntervals.easy).toMatch(/mo$/);
 	});
-
-	it("filters out future cards", async () => {
-		// SQL-level due filter handles this — not testable with mocks
-		expect(true).toBe(true);
-	});
 });
 
 describe("rateCard", () => {
