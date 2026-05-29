@@ -62,9 +62,9 @@ let { front, back, cardType, flipped }: Props = $props();
 	container-type: inline-size;
 }
 .card-text-front {
-	font-size: clamp(0.875rem, 8cqi, 2rem);
+	font-size: clamp(1rem, 8cqi, 2rem);
 }
 .card-text-back {
-	font-size: clamp(0.75rem, 6cqi, 1.5rem);
+	font-size: clamp(1rem, 6cqi, 1.5rem);
 }
 </style>

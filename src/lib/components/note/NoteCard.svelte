@@ -72,9 +72,9 @@ async function submitAsk(q: string) {
 </script>
 
 <div class="rounded-lg border border-border bg-card p-4">
-	<div class="flex items-start gap-3">
+	<div class="flex flex-col sm:flex-row sm:items-start gap-3">
 		<div class="min-w-0 flex-1">
-			<p class="text-sm text-muted-foreground leading-relaxed">{note.tutorComment}</p>
+			<p class="text-base text-muted-foreground leading-relaxed">{note.tutorComment}</p>
 			{#if note.sourceContext}
 				<p class="mt-1 text-xs text-muted-foreground/40 italic line-clamp-3">{note.sourceContext}</p>
 			{/if}
@@ -86,7 +86,7 @@ async function submitAsk(q: string) {
 				</div>
 			{/if}
 		</div>
-		<div class="shrink-0 flex flex-col items-center gap-0.5">
+		<div class="shrink-0 flex flex-row sm:flex-col items-center gap-0.5">
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors" onclick={onedit} title="Edit">
 				<Pencil size={14} />
 			</button>

@@ -62,15 +62,15 @@ async function onDelete(cardId: number) {
 							</div>
 						</div>
 					{:else}
-						<div class="flex items-start gap-4">
-							<span class="mt-0.5 shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+						<div class="flex flex-col gap-3">
+							<span class="self-start rounded bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
 								{CARD_TYPE_LABELS[card.cardType]}
 							</span>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm text-foreground">{card.front}</p>
+							<div>
+								<p class="text-base text-foreground">{card.front}</p>
 								<p class="mt-1 text-xs text-muted-foreground line-clamp-2">{card.back}</p>
 							</div>
-							<div class="flex shrink-0 gap-0.5">
+							<div class="flex justify-end gap-0.5">
 								<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground" onclick={() => startEdit(card)}>
 									<Pencil size={16} />
 								</button>

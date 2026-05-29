@@ -178,7 +178,7 @@ function markNoteHasCard(noteId: number) {
 {:else}
 	<div class="mt-10 relative">
 		<!-- Continuous vertical timeline line -->
-		<div class="absolute left-[80px] top-0 bottom-0 w-0.5 bg-border"></div>
+		<div class="absolute left-6 sm:left-[72px] top-0 bottom-0 w-0.5 bg-border"></div>
 
 		{#each rows as row (row.session.id)}
 			{@const { session, dateStr, showDate } = row}
@@ -186,9 +186,11 @@ function markNoteHasCard(noteId: number) {
 			{@const Icon = uiIcons[session.ui] ?? MessageCircle}
 			{@const isExpanded = expandedSessionIds.has(session.id)}
 			<div class="flex gap-0 pb-8">
-				<!-- Date (left of line, deduped) -->
-				<div class="w-[80px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">{showDate ? dateStr : ""}</div>
-
+				<!-- Date (left of line, desktop) -->
+				<div class="hidden sm:block w-[72px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">
+					{showDate ? dateStr : ""}
+				</div>
+				<div class="w-6 sm:hidden shrink-0"></div>
 				<!-- Icon node on the line -->
 				<a href="/task/{session.taskId}/feedback" class="shrink-0 flex items-start relative -ml-[18px]">
 					<div
@@ -200,6 +202,9 @@ function markNoteHasCard(noteId: number) {
 
 				<!-- Content -->
 				<div class="min-w-0 flex-1 pl-5 pt-[5px]">
+					{#if showDate}
+						<p class="sm:hidden text-xs font-serif tabular-nums text-muted-foreground">{dateStr}</p>
+					{/if}
 					<button
 						type="button"
 						class="flex items-center gap-1.5 text-left font-serif text-lg text-foreground hover:text-muted-foreground transition-colors"
