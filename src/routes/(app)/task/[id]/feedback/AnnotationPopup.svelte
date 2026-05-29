@@ -42,7 +42,7 @@ const position = $derived(
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
 		const popupWidth = 400;
-		const popupHeight = 300;
+		const maxPopupHeight = 500;
 
 		let top = rect.bottom + 8;
 		let left = rect.left;
@@ -51,10 +51,16 @@ const position = $derived(
 		if (left + popupWidth > viewportWidth - 20) {
 			left = viewportWidth - popupWidth - 20;
 		}
+		if (left < 20) left = 20;
 
-		// Adjust if too far down
-		if (top + popupHeight > viewportHeight - 20) {
-			top = rect.top - popupHeight - 8;
+		// Prefer below, but flip above if there's not enough room
+		const spaceBelow = viewportHeight - rect.bottom - 8;
+		const spaceAbove = rect.top - 8;
+
+		if (spaceBelow < maxPopupHeight && spaceAbove > spaceBelow) {
+			top = Math.max(20, rect.top - maxPopupHeight - 8);
+		} else {
+			top = Math.min(top, viewportHeight - maxPopupHeight - 20);
 		}
 
 		return { top, left };
@@ -209,8 +215,8 @@ const kindColor = $derived(
 <!-- Popup card -->
 <div
 	data-selection-ignore
-	class="fixed z-50 w-[400px] max-h-[500px] overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
-	style="top: {position.top}px; left: {position.left}px;"
+	class="fixed z-50 w-[400px] flex flex-col overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
+	style="top: {position.top}px; left: {position.left}px; max-height: calc(100vh - {position.top}px - 20px);"
 	transition:scale={{ duration: 200, start: 0.95 }}
 >
 	<!-- Header -->
@@ -222,7 +228,7 @@ const kindColor = $derived(
 	</div>
 
 	<!-- Content -->
-	<div class="p-4 overflow-y-auto max-h-[350px]">
+	<div class="p-4 overflow-y-auto flex-1">
 		<!-- Annotated text -->
 		<div class="mb-4 rounded-lg bg-[#f5f2ed] p-3 border border-[#e8e3db]">
 			<p class="text-sm font-medium text-[#2a2520]">"{annotation.text}"</p>

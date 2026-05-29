@@ -243,7 +243,7 @@ export const reviewCard = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		sourceNoteId: integer("source_note_id").references(() => note.id, { onDelete: "set null" }),
+		sourceNoteId: integer("source_note_id").references(() => note.id, { onDelete: "cascade" }),
 		language: languageCodeEnum("language").notNull(),
 		cardType: text("card_type").$type<"vocabulary" | "expression" | "grammar" | "correction">().notNull(),
 		front: text("front").notNull(),

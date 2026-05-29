@@ -82,19 +82,28 @@ Determine the best flashcard type and create content:
 
 **vocabulary**: A specific word, phrase, or collocation the learner should memorize.
   - front: the word/phrase in ${languageName} (with furigana/romaji in parentheses if helpful)
-  - back: English definition + one example sentence in ${languageName}
+  - back: "Meaning: ..." in English + one example sentence in ${languageName}
 
-**expression**: An idiomatic expression, fixed phrase, or natural way to say something.
-  - front: a cloze deletion or fill-in-the-blank (use "___" for the missing part) in ${languageName}
-  - back: the complete expression + what it means in English + when to use it
+**expression**: An idiomatic expression or natural way to say something specific.
+  - front: Start with "To express [when/meaning], you can say:" followed by the expression with a cloze blank (___).
+    Example: "To express regret about a past decision, you can say: I wish I ___ (study) harder."
+  - back: The completed expression + what it means in English + when to use it
 
 **grammar**: A grammar rule, pattern, or structural point.
-  - front: a sentence with the grammar point highlighted, or a grammar formula to complete
+  - front: a sentence with the grammar point highlighted, or a grammar formula to complete. Must include enough context to understand what is being asked.
+    Example: "Complete with the correct form: Si yo ___ (tener) dinero, viajaría."
   - back: the rule explained in English + 2 example sentences in ${languageName}
 
 **correction**: The learner said something incorrectly and got corrected.
-  - front: the original INCORRECT sentence (marked as "What's wrong?")
+  - front: "What's wrong with this sentence?" followed by the original INCORRECT sentence
   - back: the CORRECTED version + brief explanation of the mistake in English
+
+CRITICAL RULES:
+- Every card's front MUST make the task clear. Never present a bare fragment without context.
+- Expression cards: always start with "To express [meaning], you can say:"
+- Grammar cards: always include enough context to understand what's being asked.
+- Correction cards: always show both the wrong and right versions.
+- The card's front MUST contain ${languageName} text. The back should explain in English.
 
 **When to skip** (set shouldSkip: true):
 - The note is too generic (e.g. "Be more careful with conjugations")
@@ -102,11 +111,7 @@ Determine the best flashcard type and create content:
 - The note is just a general encouragement or observation
 - The source context is too vague or missing to create a meaningful card
 
-RULES:
-- The card's front MUST contain ${languageName} text. The back should explain in English.
-- Prefer cloze deletions for expression cards — they promote active recall.
-- For correction cards, clearly show the WRONG → RIGHT contrast.
-- Return JSON: { "cardType": "...", "front": "...", "back": "...", "context": "...", "shouldSkip": false }`,
+Return JSON: { "cardType": "...", "front": "...", "back": "...", "context": "...", "shouldSkip": false }`,
 			},
 			{
 				role: "user",

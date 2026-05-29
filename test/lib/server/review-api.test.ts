@@ -24,10 +24,8 @@ function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<
 			json: async () => overrides.body ?? {},
 		},
 		params: overrides.params ?? {},
-	} as unknown as Parameters<typeof createCard>[0];
+	} as any;
 }
-
-const authedEvent = () => mockEvent({ user: { id: "test-user", activeLanguage: "es" } });
 
 beforeEach(() => {
 	vi.clearAllMocks();
