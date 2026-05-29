@@ -4,10 +4,11 @@ import Check from "@lucide/svelte/icons/check";
 import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
+import { untrack } from "svelte";
 import { CARD_TYPE_LABELS } from "$lib/constants";
 
 let { data } = $props();
-let cardList = $state(data.cards);
+let cardList = $state(untrack(() => data.cards));
 let editingId = $state<number | null>(null);
 let editFront = $state("");
 let editBack = $state("");
