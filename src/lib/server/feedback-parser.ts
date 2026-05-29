@@ -57,7 +57,7 @@ function extractAllTagsWithAttr(xml: string, tag: string): Array<{ attrs: Record
 		const attrs: Record<string, string> = {};
 		const attrRegex = /(\w+)="([^"]*)"/g;
 		let attrMatch: RegExpExecArray | null;
-		while ((attrMatch = attrRegex.exec(attrStr)) !== null) {
+		while ((attrMatch = attrRegex.exec(normalized)) !== null) {
 			attrs[attrMatch[1]] = attrMatch[2];
 		}
 
