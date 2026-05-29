@@ -100,7 +100,7 @@ function handleKeydown(e: KeyboardEvent) {
 	{:else if currentCard}
 		<ReviewProgress current={currentIndex + 1} total={data.cards.length} {lang} />
 
-		<div onclick={flip} role="button" tabindex="0">
+		<div onclick={flip} onkeydown={(e) => { if (e.key === "Enter") flip(); }} role="button" tabindex="0">
 			<Flashcard front={currentCard.front} back={currentCard.back} cardType={currentCard.cardType} {flipped} />
 		</div>
 

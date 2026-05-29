@@ -248,7 +248,6 @@ export const reviewCard = pgTable(
 		cardType: text("card_type").$type<"vocabulary" | "expression" | "grammar" | "correction">().notNull(),
 		front: text("front").notNull(),
 		back: text("back").notNull(),
-		context: text("context"),
 		fsrsCard: jsonb("fsrs_card").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -256,7 +255,7 @@ export const reviewCard = pgTable(
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(t) => [index("review_card_user_lang_idx").on(t.userId, t.language), index("review_card_source_note_idx").on(t.sourceNoteId)],
+	(t) => [index("review_card_user_lang_idx").on(t.userId, t.language), uniqueIndex("review_card_source_note_unique").on(t.sourceNoteId)],
 );
 
 // ── reviewLog ───────────────────────────────────────────────────────

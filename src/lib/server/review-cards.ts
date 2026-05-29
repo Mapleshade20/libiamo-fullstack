@@ -14,7 +14,7 @@ import { z } from "zod";
 import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
 import { db } from "./db";
 import { note, reviewCard, reviewLog } from "./db/schema";
-import { createNewCard, deserializeCard, getScheduler, Rating, serializeCard, serializeLog } from "./fsrs-scheduler";
+import { createNewCard, deserializeCard, getScheduler, Rating, State, serializeCard, serializeLog } from "./fsrs-scheduler";
 import { chatJson } from "./llm";
 
 // ── Card generation schema (LLM output) ────────────────────────────
@@ -42,6 +42,12 @@ export async function createCardFromNote(noteId: number, userId: string, languag
 	const foundNote = await db.query.note.findFirst({
 		where: and(eq(note.id, noteId), eq(note.userId, userId)),
 		columns: { id: true, tutorComment: true, keywords: true, sourceContext: true },
+		with: {
+			sourceSession: {
+				columns: {},
+				with: { task: { columns: { language: true } } },
+			},
+		},
 	});
 
 	if (!foundNote) throw new Error("Note not found");
@@ -51,24 +57,9 @@ export async function createCardFromNote(noteId: number, userId: string, languag
 		columns: { id: true },
 	});
 
-	if (existingCard) {
-		return { created: false };
-	}
+	if (existingCard) return { created: false };
 
-	// Determine language: use provided language or infer from associated session
-	const sessionInfo = await db.query.note.findFirst({
-		where: eq(note.id, noteId),
-		with: {
-			sourceSession: {
-				columns: {},
-				with: {
-					task: { columns: { language: true } },
-				},
-			},
-		},
-	});
-
-	const detectedLanguage = (language ?? sessionInfo?.sourceSession?.task?.language ?? "en") as LanguageCode;
+	const detectedLanguage = (language ?? foundNote.sourceSession?.task?.language ?? "en") as LanguageCode;
 	const languageName = getLanguageEnglishName(detectedLanguage);
 
 	const result = await chatJson(CardGenerationSchema, {
@@ -152,17 +143,18 @@ export async function getDueCards(
 ): Promise<Array<typeof reviewCard.$inferSelect & { previewIntervals: Record<string, string> }>> {
 	const now = new Date();
 
-	const cards = await db
+	const dueCards = await db
 		.select()
 		.from(reviewCard)
-		.where(and(eq(reviewCard.userId, userId), eq(reviewCard.language, language)))
+		.where(
+			and(
+				eq(reviewCard.userId, userId),
+				eq(reviewCard.language, language),
+				sql`(${reviewCard.fsrsCard}->>'due')::timestamptz <= ${now.toISOString()}`,
+			),
+		)
 		.orderBy(asc(reviewCard.id))
 		.limit(limit);
-
-	const dueCards = cards.filter((c) => {
-		const card = deserializeCard(c.fsrsCard);
-		return card.due <= now;
-	});
 
 	if (dueCards.length === 0) {
 		return [];
@@ -277,12 +269,8 @@ export async function getReviewStats(userId: string, language: LanguageCode) {
 
 	for (const c of allCards) {
 		const card = deserializeCard(c.fsrsCard);
-		if (card.state === 0)
-			newCount++; // State.New
-		else if (card.state === 1)
-			learningCount++; // State.Learning
-		else if (card.state === 3)
-			learningCount++; // State.Relearning (treat as learning)
+		if (card.state === State.New) newCount++;
+		else if (card.state === State.Learning || card.state === State.Relearning) learningCount++;
 		else reviewCount++;
 
 		if (card.due <= now) dueToday++;
