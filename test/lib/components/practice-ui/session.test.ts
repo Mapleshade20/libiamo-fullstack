@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 	invalidateAll: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
+	requestAgentFirstReplyAction: vi.fn(),
 	attemptAgentReply: vi.fn(),
 	initUserPool: vi.fn(),
 }));
@@ -23,6 +24,7 @@ vi.mock("$app/navigation", () => ({
 vi.mock("$lib/components/practice-ui/apiService", () => ({
 	postAction: mocks.postAction,
 	completeAction: mocks.completeAction,
+	requestAgentFirstReplyAction: mocks.requestAgentFirstReplyAction,
 }));
 
 vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
@@ -47,7 +49,6 @@ function createOptions(overrides: Partial<PracticeSessionOptions> = {}): Practic
 			retryFailedMessage: "Reply failed. Retry.",
 			earlier: "Earlier",
 		},
-		joinTriggerText: "*Session started*",
 		...overrides,
 	};
 }
@@ -164,7 +165,6 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 
 		expect(session.isCompleted).toBe(true);
-		expect(session.showEvaluationModal).toBe(true);
 		expect(chatContainer.scrollTop).toBe(240);
 	});
 
@@ -450,20 +450,19 @@ describe("createPracticeSession", () => {
 		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
 	});
 
-	it("starts a fresh session and sends hidden join trigger when agent starts first", async () => {
+	it("starts a fresh session and requests first agent reply when agent starts first", async () => {
 		mocks.postAction.mockResolvedValue({
 			type: "success",
 			data: { sessionId: 404 },
 		});
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "pending",
+		mocks.requestAgentFirstReplyAction.mockResolvedValue({
+			type: "success",
+			data: { pending: true },
 		});
-		const joinTriggerText = "*Session started*";
 		const session = createSession(
 			createOptions({
 				existingSession: null,
 				agentStartsFirst: true,
-				joinTriggerText,
 			}),
 		);
 
@@ -471,8 +470,8 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 
 		expect(mocks.postAction).toHaveBeenCalledWith("start", null);
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(404, joinTriggerText, "join-404");
-		expect(session.messages.some((message) => message.isHidden && message.text === joinTriggerText)).toBe(true);
+		expect(mocks.requestAgentFirstReplyAction).toHaveBeenCalledWith(404);
+		expect(session.messages.some((message) => message.role === "user" && message.isHidden)).toBe(false);
 		expect(session.messages.some((message) => message.deliveryState === "pending")).toBe(true);
 	});
 
@@ -546,7 +545,7 @@ describe("createPracticeSession", () => {
 
 		expect(mocks.completeAction).toHaveBeenCalledWith(505);
 		expect(session.isCompleted).toBe(true);
-		expect(session.showEvaluationModal).toBe(true);
+		// Note: auto-complete now uses handleCompleteAndNavigate
 	});
 
 	it("handles complete failures without leaving loading state", async () => {
@@ -561,7 +560,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
 
 		expect(errorSpy).toHaveBeenCalledWith("Completion failed:", expect.any(Error));
 		expect(session.isCompleting).toBe(false);
@@ -580,7 +579,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
 
 		expect(session.isCompleted).toBe(false);
 		expect(session.isCompleting).toBe(false);
@@ -589,27 +588,28 @@ describe("createPracticeSession", () => {
 	it("ignores complete when no active session is available", async () => {
 		const session = createSession(createOptions({ existingSession: null }));
 
-		await session.handleComplete();
+		await session.handleCompleteAndNavigate("0");
 
 		expect(mocks.completeAction).not.toHaveBeenCalled();
 	});
 
-	it("hydrates using sorted messages and custom hidden check", async () => {
+	it("hydrates using sorted messages and metadata-based hidden state", async () => {
 		const existingSession = {
 			id: 702,
 			status: "in_progress",
 			tutorFeedback: null,
 			messages: [
 				{ id: 9, role: "assistant", content: "new", createdAt: "2026-05-18T02:00:00.000Z" },
-				{ id: 8, role: "assistant", content: "legacy hidden marker", createdAt: "2026-05-18T01:00:00.000Z" },
+				{
+					id: 8,
+					role: "assistant",
+					content: "legacy hidden marker",
+					createdAt: "2026-05-18T01:00:00.000Z",
+					llmMetadata: { hidden: true },
+				},
 			],
 		};
-		const session = createSession(
-			createOptions({
-				existingSession,
-				isHiddenCheck: (message) => message.content.includes("hidden marker"),
-			}),
-		);
+		const session = createSession(createOptions({ existingSession }));
 
 		session.hydrateFromExistingSession(existingSession);
 		await waitForPromises();
@@ -634,6 +634,7 @@ describe("createPracticeSession", () => {
 
 		await session.initializeFreshSession();
 
+		expect(mocks.requestAgentFirstReplyAction).not.toHaveBeenCalled();
 		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
 		expect(session.messages.some((message) => message.isHidden)).toBe(false);
 	});
@@ -703,7 +704,6 @@ describe("createPracticeSession", () => {
 		expect(session.isSubmitting).toBe(false);
 		expect(session.isCompleting).toBe(false);
 		expect(session.isCompleted).toBe(false);
-		expect(session.feedback).toBeNull();
 		expect(session.inputText).toBe("");
 		session.inputText = "hello";
 		expect(session.inputText).toBe("hello");
@@ -715,8 +715,6 @@ describe("createPracticeSession", () => {
 		expect(session.disabled).toBe(true);
 		expect(session.agentName).toBe("Agent");
 		expect(session.openingStateData).toEqual({});
-		session.showEvaluationModal = true;
-		expect(session.showEvaluationModal).toBe(true);
 		session.isEntering = false;
 		expect(session.isEntering).toBe(false);
 	});

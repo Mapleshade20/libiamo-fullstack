@@ -1,6 +1,4 @@
 <script lang="ts">
-import { enhance } from "$app/forms";
-
 type Note = {
 	id: number;
 	tutorComment: string;
@@ -10,77 +8,89 @@ type Note = {
 
 let {
 	note,
-	action = "?/update",
 	oncancel = () => {},
-	onsaved = () => {},
+	onsave = async () => {},
 }: {
 	note: Note;
-	action?: string;
 	oncancel?: () => void;
-	onsaved?: () => void;
+	onsave?: (data: { tutorComment: string; keywords: string[] }) => void | Promise<void>;
 } = $props();
 
 // svelte-ignore state_referenced_locally
 let editTutorComment = $state(note.tutorComment);
 // svelte-ignore state_referenced_locally
 let editKeywords = $state((note.keywords ?? []).join(", "));
-let isEditing = $state(false);
+let isSaving = $state(false);
+let error = $state<string | null>(null);
+
+async function handleSubmit() {
+	const tutorComment = editTutorComment.trim();
+	if (!tutorComment || isSaving) return;
+
+	isSaving = true;
+	error = null;
+	try {
+		await onsave({
+			tutorComment,
+			keywords: editKeywords
+				.split(",")
+				.map((k) => k.trim())
+				.filter(Boolean),
+		});
+	} catch (e) {
+		console.error("Failed to save note:", e);
+		error = e instanceof Error ? e.message : "Failed to save note";
+	} finally {
+		isSaving = false;
+	}
+}
+
+function handleCancel() {
+	editTutorComment = note.tutorComment;
+	editKeywords = (note.keywords ?? []).join(", ");
+	oncancel();
+}
 </script>
 
 <form
-	method="POST"
-	{action}
-	use:enhance={() => {
-		isEditing = true;
-		return async ({ result }) => {
-			isEditing = false;
-			if (result.type === "success") onsaved();
-		};
+	onsubmit={(e) => {
+		e.preventDefault();
+		void handleSubmit();
 	}}
 	class="rounded-lg border border-border bg-card p-4"
 >
-	<input type="hidden" name="noteId" value={note.id}>
 	<div class="space-y-3">
 		<div>
-			<label for="note-tutor-comment" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide">Note</label>
+			<label for="note-tutor-comment-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide">Note</label>
 			<textarea
-				id="note-tutor-comment"
+				id="note-tutor-comment-{note.id}"
 				bind:value={editTutorComment}
-				name="tutorComment"
 				rows={4}
 				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
 				required
 			></textarea>
 		</div>
 		<div>
-			<label for="note-keywords" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+			<label for="note-keywords-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
 				>Keywords (comma-separated)</label
 			>
-			<input
-				id="note-keywords"
-				bind:value={editKeywords}
-				name="keywords"
-				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-			>
+			<input id="note-keywords-{note.id}" bind:value={editKeywords} class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
 		</div>
 		{#if note.sourceContext}
 			<p class="text-xs italic text-muted-foreground/60">{note.sourceContext}</p>
 		{/if}
+		{#if error}
+			<p class="text-xs font-medium text-red-600">{error}</p>
+		{/if}
 		<div class="flex gap-2">
-			<button type="submit" disabled={isEditing} class="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50">
-				{isEditing ? "Saving..." : "Save"}
-			</button>
 			<button
-				type="button"
-				onclick={() => {
-					editTutorComment = note.tutorComment;
-					editKeywords = (note.keywords ?? []).join(", ");
-					oncancel();
-				}}
-				class="rounded-md border border-border px-3 py-1.5 text-xs font-medium"
+				type="submit"
+				disabled={isSaving || !editTutorComment.trim()}
+				class="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
 			>
-				Cancel
+				{isSaving ? "Saving..." : "Save"}
 			</button>
+			<button type="button" onclick={handleCancel} class="rounded-md border border-border px-3 py-1.5 text-xs font-medium">Cancel</button>
 		</div>
 	</div>
 </form>

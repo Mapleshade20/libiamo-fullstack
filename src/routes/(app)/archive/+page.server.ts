@@ -1,7 +1,7 @@
 import { error, fail } from "@sveltejs/kit";
 import { listCompletedSessions } from "$lib/server/archive";
+import { followUpOnFeedback } from "$lib/server/feedback";
 import { deleteNote, getNote, updateNote } from "$lib/server/note";
-import { followUpOnFeedback } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -36,7 +36,7 @@ export const actions: Actions = {
 		});
 		if (!updated) return fail(404, { error: "Note not found" });
 
-		return { success: true };
+		return { success: true, note: updated };
 	},
 
 	delete: async ({ request, locals }) => {
@@ -51,7 +51,7 @@ export const actions: Actions = {
 		const deleted = await deleteNote(noteId, user.id);
 		if (!deleted) return fail(404, { error: "Note not found" });
 
-		return { success: true };
+		return { success: true, noteId: deleted.id };
 	},
 
 	followUp: async ({ request, locals }) => {

@@ -4,6 +4,7 @@ import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question"
 import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
+import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
 
 type Note = {
@@ -29,17 +30,20 @@ let askOpen = $state(false);
 let askQuestion = $state("");
 let askAnswer = $state<string | null>(null);
 let askLoading = $state(false);
+let askError = $state<string | null>(null);
 
 function toggleAsk() {
 	askOpen = !askOpen;
 	askQuestion = "";
 	askAnswer = null;
+	askError = null;
 }
 
 async function submitAsk(q: string) {
-	if (askLoading) return;
+	if (askLoading || !browser) return;
 	askLoading = true;
 	askAnswer = null;
+	askError = null;
 	try {
 		const formData = new FormData();
 		formData.append("noteId", String(note.id));
@@ -48,9 +52,12 @@ async function submitAsk(q: string) {
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
 			askAnswer = (result.data as { answer?: string }).answer ?? null;
+		} else {
+			askError = (result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Failed to get answer";
 		}
 	} catch (e) {
 		console.error("Follow-up failed:", e);
+		askError = "Network error";
 	} finally {
 		askLoading = false;
 	}
@@ -100,6 +107,9 @@ async function submitAsk(q: string) {
 					</button>
 				</div>
 			{:else}
+				{#if askError}
+					<p class="mb-2 text-xs text-red-600">{askError}</p>
+				{/if}
 				<div class="mb-2 flex flex-wrap gap-1.5">
 					<button type="button" class="rounded-full bg-background px-2.5 py-1 text-xs hover:bg-background/80" onclick={() => submitAsk("why")}>
 						{t.askWhy ?? "Why is this wrong?"}

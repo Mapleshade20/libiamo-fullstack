@@ -21,6 +21,7 @@ beforeEach(() => {
 function makeSession(overrides: Record<string, unknown> = {}) {
 	return {
 		id: overrides.id ?? 1,
+		taskId: overrides.taskId ?? 100,
 		completedAt: overrides.completedAt ?? new Date(),
 		task: { title: overrides.taskTitle ?? "Test Task", template: { ui: overrides.ui ?? "discord" } },
 		notes: overrides.notes ?? [],
@@ -43,12 +44,13 @@ describe("listCompletedSessions", () => {
 		expect(result).toEqual([]);
 	});
 
-	it("filters out sessions with no notes", async () => {
+	it("includes sessions with no notes", async () => {
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [] }), makeSession({ id: 2, notes: [makeNote()] })]);
 		const result = await listCompletedSessions(USER_ID);
 		expect(result).toHaveLength(1);
-		expect(result[0].sessions).toHaveLength(1);
-		expect(result[0].sessions[0].id).toBe(2);
+		expect(result[0].sessions).toHaveLength(2);
+		expect(result[0].sessions.map((session) => session.id)).toEqual([1, 2]);
+		expect(result[0].sessions[0].notes).toEqual([]);
 	});
 
 	it("groups sessions into Today", async () => {

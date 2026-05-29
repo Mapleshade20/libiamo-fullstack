@@ -1,13 +1,10 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
-import { type TutorFeedback, tutorFeedbackSchema } from "$lib/schemas";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
-import { createNotesBatch } from "./note";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
 
@@ -341,12 +338,40 @@ function getStoredTermination(metadata: unknown) {
 	return value.terminate === true || value.terminated === true;
 }
 
+function buildSystemPromptWithPlainText(systemPrompt: string) {
+	return `${systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
+}
+
+async function generateAssistantOutput(history: ChatMessage[], userId: string): Promise<{ reply: string; terminated: boolean; raw: unknown }> {
+	const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
+	const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
+	let reply = response.content;
+	const raw: Record<string, unknown> = {
+		terminated: terminationCall !== undefined,
+		toolCalls: response.toolCalls,
+		completion: response.raw,
+	};
+
+	if (!reply && terminationCall) {
+		reply = "I’m going to end this conversation here.";
+	}
+
+	return { reply, terminated: terminationCall !== undefined, raw };
+}
+
 export type SendMessageOptions = {
 	hiddenUserMessage?: boolean;
 	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
+	assistantAuthorName?: string;
+	assistantMetadata?: Record<string, unknown>;
+};
+
+export type RequestAgentOpeningOptions = {
+	maxTurns?: number | null;
+	promptContent?: string;
 	assistantAuthorName?: string;
 	assistantMetadata?: Record<string, unknown>;
 };
@@ -408,7 +433,7 @@ export async function sendMessage(
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
-	const systemPromptWithPlainText = `${snapshot.systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*" or "*User joined the server*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
+	const systemPromptWithPlainText = buildSystemPromptWithPlainText(snapshot.systemPrompt);
 
 	// Build LLM history. Threaded UIs provide precise target context through promptContent
 	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
@@ -479,20 +504,7 @@ export async function sendMessage(
 
 	let output: { reply: string; terminated: boolean; raw: unknown };
 	try {
-		const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
-		const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
-		let reply = response.content;
-		const raw: Record<string, unknown> = {
-			terminated: terminationCall !== undefined,
-			toolCalls: response.toolCalls,
-			completion: response.raw,
-		};
-
-		if (!reply && terminationCall) {
-			reply = "I’m going to end this conversation here.";
-		}
-
-		output = { reply, terminated: terminationCall !== undefined, raw };
+		output = await generateAssistantOutput(history, userId);
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -530,158 +542,84 @@ export async function sendMessage(
 	return { reply: output.reply, turnCount, terminated: output.terminated };
 }
 
-function buildTutorPrompt(
-	objectives: string[],
-	scenarioContext: string,
-	messages: { role: string; content: string; llmMetadata?: unknown }[],
-	learningLanguage: string,
-	ui?: string,
-): string {
-	const isMailPractice = ui === "apple_mail";
-	const conversationHistory = messages
-		.map((m) => {
-			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
-			if (!mailBodyLayout) return `[${m.role}] ${m.content}`;
-			return `[${m.role}] ${m.content}\n\nEmail body layout:\n${mailBodyLayout}`;
-		})
-		.join("\n\n");
-	const userMessages = messages.filter((m) => m.role === "user");
-	const studentMessages = userMessages
-		.map((m, i) => {
-			const mailBodyLayout = summarizeMailBodyLayout(getMailBodyHtmlMetadata(m.llmMetadata));
-			const layout = mailBodyLayout ? `\nEmail body layout:\n${mailBodyLayout}` : "";
-			return `${i + 1}. ${m.content}${layout}`;
-		})
-		.join("\n\n");
-
-	const objectivesSection =
-		objectives.length > 0
-			? objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")
-			: "No specific task objectives. Please evaluate general conversational fluency, grammar, and appropriateness for the scenario.";
-	const emailEvaluationInstruction = isMailPractice
-		? `- For this Apple Mail task, consider EVERY learner-sent email when forming the evaluation, including content, tone, clarity, completeness, subject/body fit, and email conventions such as greeting, purpose, next steps, and closing.
-- Also evaluate the whole email exchange: whether the learner responded appropriately across turns, handled the agent's replies, and achieved the task objectives by the end.
-- The "objectiveResults" grades should remain per objective, not per email.
-- In the "summary", summarize the most important strengths and issues across the learner's emails and the overall conversation. Mention specific emails only when useful.`
-		: "- For email-style tasks, judge the student's submitted messages mainly by content, tone, completeness, and email conventions such as greeting, purpose, clarity, and closing.";
-
-	return `You are a language tutor evaluating a student's conversation practice.
-
-## Scenario Context
-${scenarioContext || "General conversation practice"}
-
-## Full Conversation History
-${conversationHistory || "(No conversation yet)"}
-
-## Task Objectives
-${objectivesSection}
-
-## Student's Messages (evaluate these specifically)
-${studentMessages || "(No messages from student)"}
-
-## Evaluation Instructions
-Evaluate how well the student achieved the objectives (or general fluency if none) considering:
-- The scenario context they were responding to
-- The full conversation flow (how they adapted to the AI's responses)
-- The quality, clarity, and appropriateness of their messages
-${emailEvaluationInstruction}
-
-Grade each objective (or general fluency) as:
-- A: Excellent - fully achieved
-- B: Good - mostly achieved with minor issues
-- C: Needs improvement - significant gaps
-
-Provide brief, constructive feedback (2-3 sentences).
-IMPORTANT: The "summary" and the items in "grammar", "vocabulary", and "coherence" arrays MUST be written in ${learningLanguage.toUpperCase()}. The "text" field of objectiveResults should remain in the original language of the objectives.
-
-In "grammar", list specific grammar issues (e.g. tense, conjugation, agreement).
-In "vocabulary", list word/phrase precision issues.
-In "coherence", list logical flow and engagement issues.
-If there are no issues for a category, provide an empty array [].
-
-Respond in JSON format: {"objectiveResults":[{"text":"objective description","grade":"A|B|C"}],"grammar":["specific grammar issue"],"vocabulary":["word precision issue"],"coherence":["flow or engagement issue"],"summary":"brief overall recap of student's performance"}`;
-}
-
-function getMailBodyHtmlMetadata(metadata: unknown) {
-	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
-	const value = (metadata as { mailBodyHtml?: unknown }).mailBodyHtml;
-	return typeof value === "string" ? value.trim() : "";
-}
-
-export async function evaluateSession(sessionId: number): Promise<TutorFeedback> {
+export async function requestAgentOpening(
+	sessionId: number,
+	userId: string,
+	clientMessageId?: string,
+	options: RequestAgentOpeningOptions = {},
+): Promise<SendMessageResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
 			messages: { orderBy: asc(sessionMessage.createdAt) },
-			task: true,
 		},
 	});
 
 	if (!session) throw new Error("Session not found");
-	if (!session.task) throw new Error("Task not found");
+	if (session.userId !== userId) throw new Error("Access denied");
+	if (session.status !== "in_progress") throw new Error("Session not in progress");
 
-	const objectives = session.task.objectives ?? [];
+	if (clientMessageId) {
+		const existingAssistantReply = session.messages.find(
+			(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+		);
+		if (existingAssistantReply) {
+			return {
+				reply: existingAssistantReply.content,
+				turnCount: countVisibleUserTurns(session.messages),
+				terminated: getStoredTermination(existingAssistantReply.llmMetadata),
+			};
+		}
+	}
 
-	const learningLanguageName = getLanguageEnglishName(session.task.language);
+	const maxTurns = options.maxTurns ?? 0;
+	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
+		throw new Error("Maximum conversation turns reached");
+	}
 
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; mbti: string; ui: string; scenarioContext: string };
-	const scenarioContext = snapshot.scenarioContext ?? "";
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
+	const history: ChatMessage[] = [{ role: "system", content: buildSystemPromptWithPlainText(snapshot.systemPrompt) }];
+	for (const message of session.messages) {
+		history.push({ role: message.role as "user" | "assistant" | "system", content: message.content });
+	}
+	if (options.promptContent?.trim()) {
+		history.push({ role: "user", content: options.promptContent.trim() });
+	}
 
-	const prompt = buildTutorPrompt(
-		objectives,
-		scenarioContext,
-		session.messages
-			.filter((m) => !isHiddenUserMessage(m))
-			.map((m) => ({
-				role: m.role,
-				content: getMessageDisplayContent(m),
-				llmMetadata: m.llmMetadata,
-			})),
-		learningLanguageName,
-		snapshot.ui,
-	);
+	const output = await generateAssistantOutput(history, userId);
 
-	const messages: ChatMessage[] = [
-		{ role: "system", content: prompt },
-		{ role: "user", content: "Please evaluate this conversation." },
-	];
+	await db.insert(sessionMessage).values({
+		sessionId,
+		role: "assistant",
+		content: output.reply,
+		llmMetadata: {
+			...options.assistantMetadata,
+			...(clientMessageId ? { clientMessageId } : {}),
+			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
+			model: "tool-calling",
+			raw: output.raw,
+		},
+	});
 
-	const feedback = await chatJson(tutorFeedbackSchema, { messages, userId: session.userId });
-
-	await db.update(practiceSession).set({ status: "evaluated", tutorFeedback: feedback }).where(eq(practiceSession.id, sessionId));
-
-	return feedback;
+	return {
+		reply: output.reply,
+		turnCount: countVisibleUserTurns(session.messages),
+		terminated: output.terminated,
+	};
 }
 
-export async function completeSession(sessionId: number): Promise<TutorFeedback> {
+export async function completeSession(sessionId: number): Promise<void> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		with: { task: { columns: { language: true } } },
+		columns: { id: true, status: true },
 	});
 
 	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress" && session.status !== "completed") {
-		throw new Error("Session not in progress or completed");
+	if (session.status !== "in_progress") {
+		throw new Error("Session not in progress");
 	}
 
-	if (session.status === "in_progress") {
-		await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
-	}
-
-	const feedback = await evaluateSession(sessionId);
-
-	// Auto-create notes from all feedback items
-	const feedbackItems = [
-		...feedback.grammar.map((t) => ({ tutorComment: t, category: "grammar" as const })),
-		...feedback.vocabulary.map((t) => ({ tutorComment: t, category: "vocabulary" as const })),
-		...feedback.coherence.map((t) => ({ tutorComment: t, category: "coherence" as const })),
-	];
-	if (feedbackItems.length > 0) {
-		const language = session.task?.language ?? "en";
-		await createNotesBatch(session.userId, sessionId, language, feedbackItems, session.userId);
-	}
-
-	return feedback;
+	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 }
 
 export type HintResult = {
@@ -769,66 +707,4 @@ export async function getSessionOrFail(sessionId: number, userId: string, taskId
 		return null;
 	}
 	return session;
-}
-
-// ── Follow-up on feedback items ──────────────────────────────────────
-
-const FollowUpAnswerSchema = z.object({
-	answer: z.string().describe("A helpful, concise explanation answering the learner's follow-up question."),
-});
-
-const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
-	why: "Why is this wrong? Please explain the underlying rule or principle.",
-	examples: "Give me 3 more natural examples that illustrate the correct usage.",
-};
-
-export type FollowUpOnFeedbackInput = {
-	sessionId: number;
-	userId: string;
-	itemText: string;
-	category: "grammar" | "vocabulary" | "coherence";
-	question: string;
-};
-
-export type FollowUpOnFeedbackResult = {
-	answer: string;
-};
-
-export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
-		with: { task: { columns: { language: true } } },
-	});
-
-	if (!session) throw new Error("Session not found");
-
-	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
-	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
-	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
-
-	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific issue better.
-
-The note they're asking about:
-- Category: ${categoryLabel}
-- Knowledge point: "${input.itemText}"
-
-Their follow-up question: ${resolvedQuestion}
-
-## Instructions
-- Answer in a helpful, encouraging tone suitable for a language learner.
-- Be concise but thorough — 2-5 sentences is usually enough unless the learner asks for examples (then include 3 brief examples).
-- If the knowledge point describes a mistake, explain the correct rule clearly.
-- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.
-- Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
-- Do NOT roleplay as a character — you are a tutor, not the scenario persona.
-
-Respond in JSON format: { "answer": "your response here" }`;
-
-	const messages: ChatMessage[] = [
-		{ role: "system", content: systemPrompt },
-		{ role: "user", content: resolvedQuestion },
-	];
-
-	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
-	return { answer: result.answer };
 }

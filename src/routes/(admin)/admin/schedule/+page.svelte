@@ -2,6 +2,8 @@
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -9,6 +11,7 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import * as Table from "$lib/components/ui/table";
 import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
 
@@ -17,6 +20,15 @@ let rawDate = $derived(data.filters.rawDate);
 
 // Initialize to empty string to match the placeholder option's value
 let selectedTemplateId = $state<number | string>("");
+let scheduleForm: HTMLFormElement | null = $state(null);
+
+const actionNotification = $derived(
+	form?.success
+		? { variant: "success" as const, title: "Task scheduled", message: "The task has been added to the selected date." }
+		: form?.message
+			? { variant: "error" as const, title: "Unable to schedule task", message: form.message }
+			: null,
+);
 
 // Use effect to safely sync selectedTemplateId whenever activeTemplates changes
 $effect(() => {
@@ -40,6 +52,8 @@ function toggleMode(newMode: "daily" | "weekly") {
 </script>
 
 <div class="space-y-8">
+	<ActionNotification notification={actionNotification} />
+
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Schedule</h1>
 
@@ -132,22 +146,25 @@ function toggleMode(newMode: "daily" | "weekly") {
 	<Card.Root>
 		<Card.Header> <Card.Title>Schedule Task Manually</Card.Title> </Card.Header>
 		<Card.Content>
-			{#if form?.success}
-				<p class="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">Task scheduled.</p>
-			{/if}
-			{#if form?.message}
-				<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
-			{/if}
+			<FormErrorFocus formRef={scheduleForm} errors={form?.errors} fieldOrder={["templateId", "date"]} />
 
-			<form method="POST" action="?/schedule" use:enhance class="flex flex-wrap items-end gap-4">
+			<form
+				bind:this={scheduleForm}
+				method="POST"
+				action="?/schedule"
+				use:enhance
+				class="flex flex-wrap items-end gap-4"
+				oninvalidcapture={handleInvalidField}
+			>
 				<div class="space-y-1">
 					<Label for="templateId">Template</Label>
 					<select
 						id="templateId"
 						name="templateId"
 						bind:value={selectedTemplateId}
-						class="flex h-10 w-64 rounded-md border border-input bg-background px-3 py-2 text-sm"
+						class="flex h-10 w-64 rounded-md border border-input bg-background px-3 py-2 text-sm aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
 						required
+						aria-invalid={Boolean(form?.errors?.templateId)}
 					>
 						{#if data.activeTemplates.length === 0}
 							<option value="" disabled>No active {mode} templates</option>
@@ -163,7 +180,15 @@ function toggleMode(newMode: "daily" | "weekly") {
 
 				<div class="space-y-1">
 					<Label for="scheduleDate">{mode === "daily" ? "Date" : "Week"}</Label>
-					<Input id="scheduleDate" name="date" type={mode === "daily" ? "date" : "week"} lang="en" value={rawDate} required />
+					<Input
+						id="scheduleDate"
+						name="date"
+						type={mode === "daily" ? "date" : "week"}
+						lang="en"
+						value={rawDate}
+						required
+						aria-invalid={Boolean(form?.errors?.date)}
+					/>
 					{#if form?.errors?.date}
 						<p class="text-sm text-red-600">{form.errors.date[0]}</p>
 					{/if}

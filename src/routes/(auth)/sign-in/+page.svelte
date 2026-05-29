@@ -2,30 +2,37 @@
 import Eye from "@lucide/svelte/icons/eye";
 import EyeOff from "@lucide/svelte/icons/eye-off";
 import { enhance } from "$app/forms";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
+import { handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
 let showPassword = $state(false);
+let signInForm: HTMLFormElement | null = $state(null);
+
+const actionNotification = $derived(
+	data.resetSuccess
+		? { variant: "success" as const, title: "Password reset", message: "Password reset successfully. Please sign in." }
+		: form?.message
+			? { variant: "error" as const, title: "Unable to sign in", message: form.message }
+			: null,
+);
 </script>
 
 <Card.Root>
 	<Card.Header><Card.Title class="text-xl">Sign In</Card.Title></Card.Header>
 	<Card.Content>
-		{#if data.resetSuccess}
-			<p class="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">Password reset successfully. Please sign in.</p>
-		{/if}
+		<ActionNotification notification={actionNotification} />
+		<FormErrorFocus formRef={signInForm} errors={form?.errors} fieldOrder={["email", "password"]} />
 
-		{#if form?.message}
-			<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
-		{/if}
-
-		<form method="POST" use:enhance class="space-y-4">
+		<form bind:this={signInForm} method="POST" use:enhance class="space-y-4" oninvalidcapture={handleInvalidField}>
 			<div class="space-y-2">
 				<Label for="email">Email</Label>
-				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required />
+				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
 				{#if form?.errors?.email}
 					<p class="text-sm text-red-600">{form.errors.email[0]}</p>
 				{/if}
@@ -34,7 +41,7 @@ let showPassword = $state(false);
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
 				<div class="relative">
-					<Input id="password" name="password" type={showPassword ? "text" : "password"} required />
+					<Input id="password" name="password" type={showPassword ? "text" : "password"} required aria-invalid={Boolean(form?.errors?.password)} />
 					<button
 						type="button"
 						class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"

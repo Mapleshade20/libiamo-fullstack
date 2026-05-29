@@ -5,17 +5,27 @@ import Mail from "@lucide/svelte/icons/mail";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
+import { deserialize } from "$app/forms";
 import NoteCard from "$lib/components/note/NoteCard.svelte";
 import NoteEditor from "$lib/components/note/NoteEditor.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
+import type { PageData } from "./$types";
+
+type ArchiveGroups = PageData["groups"];
+type ArchiveNote = ArchiveGroups[number]["sessions"][number]["notes"][number];
 
 let { data } = $props();
 
 let lang = $derived(data.language as LanguageCode);
-
+let groups = $state<ArchiveGroups>([]);
 let expandedSessionIds = $state(new Set<number>());
 let editingNoteId = $state<number | null>(null);
 let deletingNoteId = $state<number | null>(null);
+let deleteError = $state<string | null>(null);
+
+$effect(() => {
+	groups = data.groups ?? [];
+});
 
 const askLabels = $derived({
 	askFollowUp: t(lang, "archive.askFollowUp"),
@@ -36,7 +46,7 @@ const uiIcons: Record<string, Component> = {
 
 /** Flatten groups into rows, with per-row showDate flag for dedup */
 let rows = $derived(
-	(data.groups ?? []).flatMap((group) => {
+	groups.flatMap((group) => {
 		let prevDate = "";
 		return group.sessions.map((session) => {
 			const dateStr = formatDate(new Date(session.completedAt));
@@ -57,20 +67,73 @@ function toggleSession(id: number) {
 function handleEdit(noteId: number) {
 	editingNoteId = noteId;
 	deletingNoteId = null;
+	deleteError = null;
 }
 
 function handleDeleteRequest(noteId: number) {
 	deletingNoteId = noteId;
 	editingNoteId = null;
-}
-
-function handleSaved() {
-	editingNoteId = null;
+	deleteError = null;
 }
 
 function handleCancel() {
 	editingNoteId = null;
 	deletingNoteId = null;
+	deleteError = null;
+}
+
+async function saveNote(noteId: number, input: { tutorComment: string; keywords: string[] }) {
+	const formData = new FormData();
+	formData.append("noteId", String(noteId));
+	formData.append("tutorComment", input.tutorComment);
+	formData.append("keywords", input.keywords.join(", "));
+
+	const response = await fetch("?/update", { method: "POST", body: formData });
+	const result = deserialize(await response.text());
+
+	if (result.type !== "success" || !result.data?.note) {
+		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Failed to save note");
+	}
+
+	replaceNote(result.data.note as ArchiveNote);
+	editingNoteId = null;
+}
+
+async function deleteNote(noteId: number) {
+	const formData = new FormData();
+	formData.append("noteId", String(noteId));
+
+	deleteError = null;
+	const response = await fetch("?/delete", { method: "POST", body: formData });
+	const result = deserialize(await response.text());
+
+	if (result.type !== "success") {
+		deleteError = (result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Failed to delete note";
+		return;
+	}
+
+	removeNote(noteId);
+	deletingNoteId = null;
+}
+
+function replaceNote(updated: ArchiveNote) {
+	groups = groups.map((group) => ({
+		...group,
+		sessions: group.sessions.map((session) => ({
+			...session,
+			notes: session.notes.map((note) => (note.id === updated.id ? updated : note)),
+		})),
+	}));
+}
+
+function removeNote(noteId: number) {
+	groups = groups.map((group) => ({
+		...group,
+		sessions: group.sessions.map((session) => ({
+			...session,
+			notes: session.notes.filter((note) => note.id !== noteId),
+		})),
+	}));
 }
 
 function formatDate(d: Date): string {
@@ -78,7 +141,7 @@ function formatDate(d: Date): string {
 }
 </script>
 
-<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
+<h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
 
 {#if rows.length === 0}
 	<p class="mt-8 text-muted-foreground">{t(lang, "archive.empty")}</p>
@@ -87,7 +150,7 @@ function formatDate(d: Date): string {
 		<!-- Continuous vertical timeline line -->
 		<div class="absolute left-[160px] top-0 bottom-0 w-0.5 bg-border"></div>
 
-		{#each rows as row}
+		{#each rows as row (row.session.id)}
 			{@const { session, dateStr, showDate } = row}
 			{@const allKeywords = session.notes.flatMap((n) => n.keywords ?? []).filter((k, i, arr) => arr.indexOf(k) === i)}
 			{@const Icon = uiIcons[session.ui] ?? MessageCircle}
@@ -97,7 +160,7 @@ function formatDate(d: Date): string {
 				<div class="w-[160px] shrink-0 pr-6 pt-[7px] text-right text-sm font-serif tabular-nums text-muted-foreground">{showDate ? dateStr : ""}</div>
 
 				<!-- Icon node on the line -->
-				<a href="/task/{session.taskId}/session" class="shrink-0 flex items-start relative -ml-[18px]">
+				<a href="/task/{session.taskId}/feedback" class="shrink-0 flex items-start relative -ml-[18px]">
 					<div
 						class="relative z-10 mt-[5px] flex h-9 w-9 items-center justify-center rounded border-2 border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
 					>
@@ -132,13 +195,21 @@ function formatDate(d: Date): string {
 							{/if}
 							{#each session.notes as note (note.id)}
 								{#if editingNoteId === note.id}
-									<NoteEditor {note} action="?/update" oncancel={handleCancel} onsaved={handleSaved} />
+									<NoteEditor {note} oncancel={handleCancel} onsave={(input) => saveNote(note.id, input)} />
 								{:else if deletingNoteId === note.id}
-									<form method="POST" action="?/delete" class="rounded-md border border-red-200 bg-red-50 p-4">
-										<input type="hidden" name="noteId" value={note.id}>
+									<div class="rounded-md border border-red-200 bg-red-50 p-4">
 										<p class="mb-3 text-sm text-red-800">Delete this note? This cannot be undone.</p>
+										{#if deleteError}
+											<p class="mb-3 text-xs font-medium text-red-700">{deleteError}</p>
+										{/if}
 										<div class="flex gap-2">
-											<button type="submit" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">Delete</button>
+											<button
+												type="button"
+												onclick={() => deleteNote(note.id)}
+												class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+											>
+												Delete
+											</button>
 											<button
 												type="button"
 												onclick={handleCancel}
@@ -147,7 +218,7 @@ function formatDate(d: Date): string {
 												Cancel
 											</button>
 										</div>
-									</form>
+									</div>
 								{:else}
 									<NoteCard {note} onedit={() => handleEdit(note.id)} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
 								{/if}

@@ -7,15 +7,20 @@ Quick guidance for agents working in this repo.
 ```sh
 pnpm build     # production build
 pnpm preview   # start server on production build
-pnpm check     # svelte-check + biome check --write
-pnpm format    # biome format --write
-pnpm test      # run unit tests (vitest)
+pnpm check     # svelte-check + biome check --write (format included, use this instead of build or format for development)
+pnpm test      # run unit tests (vitest) (use this for development)
 pnpm db:push   # push schema changes to DB (interactively done by user)
 ```
 
 ## Overview
 
 **Libiamo** is a language learning app (en/es/fr/ja) that simulates real scenarios (Reddit, Discord, email, iMessage, AO3). Users complete communication tasks to develop pragmatic language skills.
+
+UI design:
+
+Adopt a premium, silky-smooth retro editorial magazine aesthetic. Use a very light warm paper-colored base. Let headlines and section titles stand out naturally with elegant serif typography, while all body copy, navigation, controls, and functional UI text should use clean sans-serif fonts for readability.
+
+The interface should feel refined, calm, tactile, and highly polished, with appropriate spacing, subtle borders, soft shadows, muted contrast, and smooth transitions. Avoid generic modern SaaS styling, loud gradients, harsh colors, or excessive decoration. The goal is a high-end magazine-like reading experience expressed as a fluid digital interface.
 
 Key areas:
 
@@ -33,6 +38,7 @@ Key areas:
 - Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
 - Practice UI: reusable client code lives under `src/lib/components/practice-ui/`.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
+- Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/form-attention.ts`. Practice UI notifications under `src/lib/components/practice-ui/` are intentionally separate.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
 ## Notes for agents
