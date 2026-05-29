@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "./db";
-import { note, practiceSession } from "./db/schema";
+import { note, practiceSession, reviewCard } from "./db/schema";
 
 export type SessionWithNotes = {
 	id: number;
@@ -13,6 +13,7 @@ export type SessionWithNotes = {
 		tutorComment: string;
 		keywords: string[] | null;
 		sourceContext: string | null;
+		hasReviewCard: boolean;
 	}[];
 };
 
@@ -57,6 +58,19 @@ export async function listCompletedSessions(userId: string, now: Date = new Date
 
 	const completedSessions = sessions.filter((s) => s.completedAt != null);
 
+	// Collect all note IDs and check which have review cards
+	const allNoteIds = completedSessions.flatMap((s) => s.notes.map((n) => n.id));
+	const noteIdsWithCards = new Set<number>();
+	if (allNoteIds.length > 0) {
+		const cards = await db.query.reviewCard.findMany({
+			where: inArray(reviewCard.sourceNoteId, allNoteIds),
+			columns: { sourceNoteId: true },
+		});
+		for (const c of cards) {
+			if (c.sourceNoteId !== null) noteIdsWithCards.add(c.sourceNoteId);
+		}
+	}
+
 	const groups = new Map<string, SessionWithNotes[]>();
 	for (const s of completedSessions) {
 		if (!s.completedAt) continue;
@@ -69,7 +83,10 @@ export async function listCompletedSessions(userId: string, now: Date = new Date
 			taskTitle: s.task?.title ?? "Unknown Task",
 			ui: s.task?.template?.ui ?? "unknown",
 			completedAt,
-			notes: s.notes,
+			notes: s.notes.map((n) => ({
+				...n,
+				hasReviewCard: noteIdsWithCards.has(n.id),
+			})),
 		});
 	}
 

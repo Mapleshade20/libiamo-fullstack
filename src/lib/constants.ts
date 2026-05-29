@@ -90,3 +90,14 @@ export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 
 export const CADENCES = ["weekly", "daily", "none"] as const;
 export type Cadence = (typeof CADENCES)[number];
+
+// ── Review Cards ──────────────────────────────────────────────────────
+export const CARD_TYPES = ["vocabulary", "expression", "grammar", "correction"] as const;
+export type CardType = (typeof CARD_TYPES)[number];
+
+export const CARD_TYPE_LABELS: Record<CardType, string> = {
+	vocabulary: "Vocabulary",
+	expression: "Expression",
+	grammar: "Grammar",
+	correction: "Correction",
+};

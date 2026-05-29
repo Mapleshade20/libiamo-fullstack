@@ -1,13 +1,14 @@
 /**
  * Review card generation and CRUD operations.
  *
- * - generateCardsFromNotes: LLM-powered card creation from saved notes
+ * - createCardFromNote: LLM-powered single-card creation from a saved note
  * - getDueCards: fetch cards due for review
  * - rateCard: apply a review rating and persist the updated FSRS state
  * - getReviewStats: aggregate review statistics
+ * - noteHasCard: check whether a note already has a review card
  */
 
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, sql } from "drizzle-orm";
 import type { Grade } from "ts-fsrs";
 import { z } from "zod";
 import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
@@ -19,64 +20,65 @@ import { chatJson } from "./llm";
 // ── Card generation schema (LLM output) ────────────────────────────
 
 const CardGenerationSchema = z.object({
-	cards: z.array(
-		z.object({
-			noteId: z.number().describe("The id of the note this card is generated from"),
-			cardType: z.enum(["vocabulary", "expression", "grammar", "correction"]),
-			front: z.string().describe("Question side: word/phrase/cloze/sentence in the learning language"),
-			back: z.string().describe("Answer side: definition/explanation/rule in English"),
-			context: z.string().optional().describe("Original context or example sentence (optional)"),
-			shouldSkip: z.boolean().optional().describe("Set true if this note does not contain a concrete language point worth making a flashcard for"),
-		}),
-	),
+	cardType: z.enum(["vocabulary", "expression", "grammar", "correction"]),
+	front: z.string().describe("Question side: word/phrase/cloze/sentence in the learning language"),
+	back: z.string().describe("Answer side: definition/explanation/rule in English"),
+	context: z.string().optional().describe("Original context or example sentence (optional)"),
+	shouldSkip: z.boolean().optional().describe("Set true if this note does not contain a concrete language point worth making a flashcard for"),
 });
 
-// ── generateCardsFromNotes ─────────────────────────────────────────
+// ── noteHasCard ─────────────────────────────────────────────────────
 
-export async function generateCardsFromNotes(userId: string, language?: string): Promise<{ generated: number; skipped: number }> {
-	const conditions = [eq(note.userId, userId), eq(note.reviewStatus, "pending")];
+export async function noteHasCard(noteId: number): Promise<boolean> {
+	const card = await db.query.reviewCard.findFirst({
+		where: eq(reviewCard.sourceNoteId, noteId),
+		columns: { id: true },
+	});
+	return card !== undefined;
+}
 
-	const pendingNotes = await db
-		.select({
-			id: note.id,
-			tutorComment: note.tutorComment,
-			keywords: note.keywords,
-			sourceContext: note.sourceContext,
-		})
-		.from(note)
-		.where(and(...conditions))
-		.orderBy(asc(note.id))
-		.limit(30); // process up to 30 notes per batch
+// ── createCardFromNote ──────────────────────────────────────────────
 
-	if (pendingNotes.length === 0) {
-		return { generated: 0, skipped: 0 };
+export async function createCardFromNote(noteId: number, userId: string, language?: string): Promise<{ created: boolean }> {
+	const foundNote = await db.query.note.findFirst({
+		where: and(eq(note.id, noteId), eq(note.userId, userId)),
+		columns: { id: true, tutorComment: true, keywords: true, sourceContext: true },
+	});
+
+	if (!foundNote) throw new Error("Note not found");
+
+	const existingCard = await db.query.reviewCard.findFirst({
+		where: eq(reviewCard.sourceNoteId, noteId),
+		columns: { id: true },
+	});
+
+	if (existingCard) {
+		return { created: false };
 	}
 
 	// Determine language: use provided language or infer from associated session
-	const firstSession = pendingNotes[0]?.id
-		? await db.query.note.findFirst({
-				where: eq(note.id, pendingNotes[0].id),
+	const sessionInfo = await db.query.note.findFirst({
+		where: eq(note.id, noteId),
+		with: {
+			sourceSession: {
+				columns: {},
 				with: {
-					sourceSession: {
-						columns: {},
-						with: {
-							task: { columns: { language: true } },
-						},
-					},
+					task: { columns: { language: true } },
 				},
-			})
-		: null;
+			},
+		},
+	});
 
-	const detectedLanguage = (language ?? firstSession?.sourceSession?.task?.language ?? "en") as LanguageCode;
+	const detectedLanguage = (language ?? sessionInfo?.sourceSession?.task?.language ?? "en") as LanguageCode;
 	const languageName = getLanguageEnglishName(detectedLanguage);
 
 	const result = await chatJson(CardGenerationSchema, {
 		messages: [
 			{
 				role: "system",
-				content: `You are an expert ${languageName} language tutor creating review flashcards from saved notes.
+				content: `You are an expert ${languageName} language tutor creating a review flashcard from a saved note.
 
-For each note, determine the best flashcard type and create content:
+Determine the best flashcard type and create content:
 
 **vocabulary**: A specific word, phrase, or collocation the learner should memorize.
   - front: the word/phrase in ${languageName} (with furigana/romaji in parentheses if helpful)
@@ -101,55 +103,37 @@ For each note, determine the best flashcard type and create content:
 - The source context is too vague or missing to create a meaningful card
 
 RULES:
-- Each card's front MUST contain ${languageName} text. The back should explain in English.
+- The card's front MUST contain ${languageName} text. The back should explain in English.
 - Prefer cloze deletions for expression cards — they promote active recall.
 - For correction cards, clearly show the WRONG → RIGHT contrast.
-- Do NOT create duplicate cards for very similar notes. Merge similar points into one good card.
-- Return JSON: { "cards": [{ "noteId": ..., "cardType": "...", "front": "...", "back": "...", "context": "...", "shouldSkip": false }] }`,
+- Return JSON: { "cardType": "...", "front": "...", "back": "...", "context": "...", "shouldSkip": false }`,
 			},
 			{
 				role: "user",
-				content: `Generate review cards for these saved notes:\n\n${pendingNotes
-					.map(
-						(n) =>
-							`## Note ${n.id}\n**Lesson:** ${n.tutorComment}\n${n.keywords?.length ? `**Keywords:** ${n.keywords.join(", ")}\n` : ""}${n.sourceContext ? `**Context:** ${n.sourceContext}` : ""}`,
-					)
-					.join("\n\n")}`,
+				content: `Create a review card for this saved note:\n\n**Lesson:** ${foundNote.tutorComment}\n${foundNote.keywords?.length ? `**Keywords:** ${foundNote.keywords.join(", ")}\n` : ""}${foundNote.sourceContext ? `**Context:** ${foundNote.sourceContext}` : ""}`,
 			},
 		],
 		userId,
 	});
 
-	let generated = 0;
-	let skipped = 0;
+	if (result.shouldSkip) {
+		return { created: false };
+	}
 
 	const newCard = createNewCard();
 
-	for (const card of result.cards) {
-		const noteId = card.noteId;
+	await db.insert(reviewCard).values({
+		userId,
+		sourceNoteId: noteId,
+		language: detectedLanguage,
+		cardType: result.cardType,
+		front: result.front,
+		back: result.back,
+		context: result.context ?? null,
+		fsrsCard: serializeCard(newCard),
+	});
 
-		if (card.shouldSkip) {
-			await db.update(note).set({ reviewStatus: "skipped" }).where(eq(note.id, noteId));
-			skipped++;
-			continue;
-		}
-
-		await db.insert(reviewCard).values({
-			userId,
-			sourceNoteId: noteId,
-			language: detectedLanguage,
-			cardType: card.cardType,
-			front: card.front,
-			back: card.back,
-			context: card.context ?? null,
-			fsrsCard: serializeCard(newCard),
-		});
-
-		await db.update(note).set({ reviewStatus: "generated" }).where(eq(note.id, noteId));
-		generated++;
-	}
-
-	return { generated, skipped };
+	return { created: true };
 }
 
 // ── getDueCards ──────────────────────────────────────────────────────
@@ -168,7 +152,6 @@ export async function getDueCards(
 		.orderBy(asc(reviewCard.id))
 		.limit(limit);
 
-	// Filter cards where due date is in the past or new/learning cards
 	const dueCards = cards.filter((c) => {
 		const card = deserializeCard(c.fsrsCard);
 		return card.due <= now;
@@ -184,7 +167,6 @@ export async function getDueCards(
 		const card = deserializeCard(c.fsrsCard);
 		const preview = scheduler.repeat(card, now);
 
-		// Format intervals as human-readable strings
 		const formatInterval = (dueDate: Date): string => {
 			const diffMs = dueDate.getTime() - now.getTime();
 			const diffMins = Math.round(diffMs / 60000);
@@ -275,7 +257,6 @@ export async function getReviewStats(userId: string, language: LanguageCode) {
 			and(
 				eq(reviewLog.userId, userId),
 				lte(reviewLog.reviewedAt, now),
-				// Same day check: reviewedAt >= start of today
 				sql`${reviewLog.reviewedAt} >= ${new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()}`,
 			),
 		);
@@ -300,11 +281,12 @@ export async function getReviewStats(userId: string, language: LanguageCode) {
 		if (card.due <= now) dueToday++;
 	}
 
-	// Also check for pending notes
+	// Count notes without review cards (for archive "create card" availability)
 	const [pendingCount] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(note)
-		.where(and(eq(note.userId, userId), eq(note.reviewStatus, "pending")));
+		.leftJoin(reviewCard, eq(note.id, reviewCard.sourceNoteId))
+		.where(and(eq(note.userId, userId), isNull(reviewCard.id)));
 
 	return {
 		dueToday,

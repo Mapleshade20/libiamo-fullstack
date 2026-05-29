@@ -449,3 +449,13 @@ export const scheduleManualSchema = z.object({
 		return dayjs(value, "YYYY-MM-DD", true).isValid();
 	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
 });
+
+// ── Review ────────────────────────────────────────────────────────────
+export const reviewRatingSchema = z.object({
+	rating: z.number().int().min(1).max(4),
+	elapsedSeconds: z.number().int().min(0),
+});
+
+export const reviewCreateCardSchema = z.object({
+	noteId: z.number().int().positive(),
+});

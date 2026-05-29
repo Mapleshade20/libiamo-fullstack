@@ -6,6 +6,7 @@ const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
 			practiceSession: { findMany: vi.fn() },
+			reviewCard: { findMany: vi.fn(() => []) },
 		},
 	},
 }));
