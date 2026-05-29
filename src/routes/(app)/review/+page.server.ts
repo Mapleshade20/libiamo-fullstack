@@ -16,7 +16,6 @@ export const load: PageServerLoad = async (event) => {
 		id: number;
 		front: string;
 		back: string;
-		context: string | null;
 		cardType: CardType;
 		previewIntervals: Record<string, string>;
 	}> = [];
@@ -28,7 +27,6 @@ export const load: PageServerLoad = async (event) => {
 			id: c.id,
 			front: c.front,
 			back: c.back,
-			context: c.context,
 			cardType: c.cardType as CardType,
 			previewIntervals: c.previewIntervals,
 		}));

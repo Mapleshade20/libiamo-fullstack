@@ -23,7 +23,6 @@ const CardGenerationSchema = z.object({
 	cardType: z.enum(["vocabulary", "expression", "grammar", "correction"]),
 	front: z.string().describe("Question side: word/phrase/cloze/sentence in the learning language"),
 	back: z.string().describe("Answer side: definition/explanation/rule in English"),
-	context: z.string().optional().describe("Original context or example sentence (optional)"),
 	shouldSkip: z.boolean().optional().describe("Set true if this note does not contain a concrete language point worth making a flashcard for"),
 });
 
@@ -81,17 +80,17 @@ export async function createCardFromNote(noteId: number, userId: string, languag
 Determine the best flashcard type and create content:
 
 **vocabulary**: A specific word, phrase, or collocation the learner should memorize.
-  - front: the word/phrase in ${languageName} (with furigana/romaji in parentheses if helpful)
+  - front: just the word/phrase itself, nothing else. No labels like "(noun)" or "(phrasal verb)". No pronunciation.
   - back: "Meaning: ..." in English + one example sentence in ${languageName}
 
 **expression**: An idiomatic expression or natural way to say something specific.
-  - front: Start with "To express [when/meaning], you can say:" followed by the expression with a cloze blank (___).
-    Example: "To express regret about a past decision, you can say: I wish I ___ (study) harder."
-  - back: The completed expression + what it means in English + when to use it
+  - front: Start with "To express [when/meaning], you can say:" followed by the expression with a cloze blank (___). Do NOT reveal the answer inside parentheses.
+    Example: "To express regret about a past decision, you can say: I wish I ___ harder."
+  - back: The completed expression + what it means in English
 
 **grammar**: A grammar rule, pattern, or structural point.
-  - front: a sentence with the grammar point highlighted, or a grammar formula to complete. Must include enough context to understand what is being asked.
-    Example: "Complete with the correct form: Si yo ___ (tener) dinero, viajaría."
+  - front: a sentence with a blank to fill. Do NOT put the answer in parentheses. Must include enough context to understand what is being asked.
+    Example: "Complete with the correct form: Si yo ___ dinero, viajaría."
   - back: the rule explained in English + 2 example sentences in ${languageName}
 
 **correction**: The learner said something incorrectly and got corrected.
@@ -99,6 +98,9 @@ Determine the best flashcard type and create content:
   - back: the CORRECTED version + brief explanation of the mistake in English
 
 CRITICAL RULES:
+- Keep front and back BRIEF. Front: 1-2 short sentences max. Back: 2-3 sentences max.
+- NEVER put the answer inside parentheses on the front. The learner must recall it.
+- NEVER add pronunciation, furigana, romaji, or word-type labels like "(noun)" or "(phrasal verb)".
 - Every card's front MUST make the task clear. Never present a bare fragment without context.
 - Expression cards: always start with "To express [meaning], you can say:"
 - Grammar cards: always include enough context to understand what's being asked.
@@ -111,7 +113,7 @@ CRITICAL RULES:
 - The note is just a general encouragement or observation
 - The source context is too vague or missing to create a meaningful card
 
-Return JSON: { "cardType": "...", "front": "...", "back": "...", "context": "...", "shouldSkip": false }`,
+Return JSON: { "cardType": "...", "front": "...", "back": "...", "shouldSkip": false }`,
 			},
 			{
 				role: "user",
@@ -134,7 +136,7 @@ Return JSON: { "cardType": "...", "front": "...", "back": "...", "context": "...
 		cardType: result.cardType,
 		front: result.front,
 		back: result.back,
-		context: result.context ?? null,
+
 		fsrsCard: serializeCard(newCard),
 	});
 

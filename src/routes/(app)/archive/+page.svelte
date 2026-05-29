@@ -178,7 +178,7 @@ function markNoteHasCard(noteId: number) {
 {:else}
 	<div class="mt-10 relative">
 		<!-- Continuous vertical timeline line -->
-		<div class="absolute left-[160px] top-0 bottom-0 w-0.5 bg-border"></div>
+		<div class="absolute left-[80px] top-0 bottom-0 w-0.5 bg-border"></div>
 
 		{#each rows as row (row.session.id)}
 			{@const { session, dateStr, showDate } = row}
@@ -187,7 +187,7 @@ function markNoteHasCard(noteId: number) {
 			{@const isExpanded = expandedSessionIds.has(session.id)}
 			<div class="flex gap-0 pb-8">
 				<!-- Date (left of line, deduped) -->
-				<div class="w-[160px] shrink-0 pr-6 pt-[7px] text-right text-sm font-serif tabular-nums text-muted-foreground">{showDate ? dateStr : ""}</div>
+				<div class="w-[80px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">{showDate ? dateStr : ""}</div>
 
 				<!-- Icon node on the line -->
 				<a href="/task/{session.taskId}/feedback" class="shrink-0 flex items-start relative -ml-[18px]">

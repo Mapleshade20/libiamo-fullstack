@@ -4,34 +4,32 @@ import { CARD_TYPE_LABELS, type CardType } from "$lib/constants";
 interface Props {
 	front: string;
 	back: string;
-	context: string | null;
 	cardType: CardType;
 	flipped: boolean;
 }
 
-let { front, back, context, cardType, flipped }: Props = $props();
+let { front, back, cardType, flipped }: Props = $props();
 </script>
 
 <div class="flashcard cursor-pointer select-none" class:flipped>
 	<div class="flashcard-inner relative w-full h-full">
 		<div
-			class="flashcard-face flashcard-front absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-8 shadow-sm"
+			class="flashcard-face flashcard-front absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-6 shadow-sm"
 		>
-			<span class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{CARD_TYPE_LABELS[cardType]}</span>
-			<p class="text-center text-2xl leading-relaxed text-foreground">{front}</p>
+			<span class="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">{CARD_TYPE_LABELS[cardType]}</span>
+			<div class="card-content flex-1 flex items-center justify-center w-full overflow-y-auto">
+				<p class="card-text card-text-front text-center leading-snug text-foreground">{front}</p>
+			</div>
 			{#if !flipped}
-				<p class="mt-6 text-sm text-muted-foreground">Tap or press Space to reveal</p>
+				<p class="mt-2 text-xs text-muted-foreground">Tap or press Space to reveal</p>
 			{/if}
 		</div>
 		<div
-			class="flashcard-face flashcard-back absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-8 shadow-sm"
+			class="flashcard-face flashcard-back absolute inset-0 flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-6 shadow-sm"
 		>
-			<p class="text-center text-xl leading-relaxed text-foreground">{back}</p>
-			{#if context}
-				<div class="mt-4 rounded-lg border border-border bg-muted/50 px-4 py-3">
-					<p class="text-base italic text-muted-foreground">{context}</p>
-				</div>
-			{/if}
+			<div class="card-content flex-1 flex items-center justify-center w-full overflow-y-auto">
+				<p class="card-text card-text-back text-center leading-snug text-foreground whitespace-pre-line">{back}</p>
+			</div>
 		</div>
 	</div>
 </div>
@@ -43,10 +41,12 @@ let { front, back, context, cardType, flipped }: Props = $props();
 	max-width: 480px;
 	height: 320px;
 	margin: 0 auto;
+	container-type: inline-size;
 }
 .flashcard-inner {
 	transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 	transform-style: preserve-3d;
+	height: 100%;
 }
 .flashcard.flipped .flashcard-inner {
 	transform: rotateY(180deg);
@@ -57,5 +57,14 @@ let { front, back, context, cardType, flipped }: Props = $props();
 }
 .flashcard-back {
 	transform: rotateY(180deg);
+}
+.card-content {
+	container-type: inline-size;
+}
+.card-text-front {
+	font-size: clamp(0.875rem, 8cqi, 2rem);
+}
+.card-text-back {
+	font-size: clamp(0.75rem, 6cqi, 1.5rem);
 }
 </style>

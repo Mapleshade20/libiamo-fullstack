@@ -86,7 +86,7 @@ async function submitAsk(q: string) {
 				</div>
 			{/if}
 		</div>
-		<div class="shrink-0 flex items-center gap-0.5">
+		<div class="shrink-0 flex flex-col items-center gap-0.5">
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors" onclick={onedit} title="Edit">
 				<Pencil size={14} />
 			</button>

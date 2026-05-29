@@ -12,18 +12,18 @@ interface Props {
 let { preview, lang, disabled, onrate }: Props = $props();
 
 let ratings = $derived([
-	{ key: "again", rating: 1, label: t(lang, "review.rating.again"), color: "bg-red-50 border-red-200 text-red-700 hover:bg-red-100" },
-	{ key: "hard", rating: 2, label: t(lang, "review.rating.hard"), color: "bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100" },
-	{ key: "good", rating: 3, label: t(lang, "review.rating.good"), color: "bg-green-50 border-green-200 text-green-700 hover:bg-green-100" },
-	{ key: "easy", rating: 4, label: t(lang, "review.rating.easy"), color: "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" },
+	{ key: "again", rating: 1, label: t(lang, "review.rating.again"), color: "border-red-200 bg-red-50 text-red-700 active:bg-red-200" },
+	{ key: "hard", rating: 2, label: t(lang, "review.rating.hard"), color: "border-orange-200 bg-orange-50 text-orange-700 active:bg-orange-200" },
+	{ key: "good", rating: 3, label: t(lang, "review.rating.good"), color: "border-green-200 bg-green-50 text-green-700 active:bg-green-200" },
+	{ key: "easy", rating: 4, label: t(lang, "review.rating.easy"), color: "border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-200" },
 ]);
 </script>
 
-<div class="mt-6 flex items-center justify-center gap-3">
+<div class="fixed bottom-0 left-0 right-0 z-30 flex gap-1 p-1 sm:relative sm:mt-6 sm:justify-center sm:gap-3 sm:p-0">
 	{#each ratings as { key, rating, label, color }}
 		<button
 			type="button"
-			class="flex flex-col items-center gap-1 rounded-xl border px-5 py-3 text-base font-medium transition-all {color} disabled:opacity-40"
+			class="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border py-3 text-base font-medium transition-colors sm:flex-initial sm:px-5 {color} disabled:opacity-40"
 			{disabled}
 			onclick={() => onrate(rating)}
 		>

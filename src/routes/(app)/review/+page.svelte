@@ -73,7 +73,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="mx-auto max-w-xl">
+<div class="mx-auto max-w-xl pb-24 sm:pb-0">
 	<h1 class="mb-8 text-center text-3xl">{t(lang, "review.title")}</h1>
 
 	{#if error}
@@ -93,7 +93,7 @@ function handleKeydown(e: KeyboardEvent) {
 		<ReviewProgress current={currentIndex + 1} total={data.cards.length} {lang} />
 
 		<div onclick={flip} role="button" tabindex="0">
-			<Flashcard front={currentCard.front} back={currentCard.back} context={currentCard.context} cardType={currentCard.cardType} {flipped} />
+			<Flashcard front={currentCard.front} back={currentCard.back} cardType={currentCard.cardType} {flipped} />
 		</div>
 
 		{#if flipped}
