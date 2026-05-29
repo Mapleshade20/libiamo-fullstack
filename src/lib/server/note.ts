@@ -28,6 +28,7 @@ export async function createNote(input: CreateNoteInput) {
 			tutorComment: input.tutorComment,
 			keywords: input.keywords ?? null,
 			sourceContext: input.sourceContext ?? null,
+			reviewStatus: "pending",
 		})
 		.returning();
 
@@ -130,7 +131,10 @@ CRITICAL RULES:
 		};
 	});
 
-	return db.insert(note).values(referenceNotes).returning();
+	return db
+		.insert(note)
+		.values(referenceNotes.map((n) => ({ ...n, reviewStatus: "pending" as const })))
+		.returning();
 }
 
 // ── createNotesFromSelectionBatch ──────────────────────────────────
@@ -203,6 +207,7 @@ Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint":
 				tutorComment: item.knowledgePoint,
 				keywords: item.keywords,
 				sourceContext: item.sourceContext,
+				reviewStatus: "pending" as const,
 			})),
 		)
 		.returning();
