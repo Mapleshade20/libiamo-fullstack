@@ -71,7 +71,7 @@ async function onDelete(cardId: number) {
 							</span>
 							<div>
 								<p class="text-base text-foreground">{card.front}</p>
-								<p class="mt-1 text-xs text-muted-foreground line-clamp-2">{card.back}</p>
+								<p class="mt-1 text-sm text-muted-foreground line-clamp-2">{card.back}</p>
 							</div>
 							<div class="flex justify-end gap-0.5">
 								<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground" onclick={() => startEdit(card)}>

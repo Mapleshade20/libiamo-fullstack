@@ -23,7 +23,7 @@ let ratings = $derived([
 	{#each ratings as { key, rating, label, color }}
 		<button
 			type="button"
-			class="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border py-3 text-base font-medium transition-colors sm:flex-initial sm:px-5 {color} disabled:opacity-40"
+			class="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border-2 py-3 text-base transition-colors sm:flex-initial sm:px-5 {color} disabled:opacity-40"
 			{disabled}
 			onclick={() => onrate(rating)}
 		>

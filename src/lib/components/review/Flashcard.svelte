@@ -21,7 +21,7 @@ let { front, back, cardType, flipped }: Props = $props();
 				<p class="card-text card-text-front text-center leading-snug text-foreground">{front}</p>
 			</div>
 			{#if !flipped}
-				<p class="mt-2 text-xs text-muted-foreground">Tap or press Space to reveal</p>
+				<p class="mt-2 text-xs text-muted-foreground/60">Tap or press Space to reveal</p>
 			{/if}
 		</div>
 		<div

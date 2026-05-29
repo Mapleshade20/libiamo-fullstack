@@ -118,7 +118,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 	{#if data.allCards.length > 0}
 		<div class="mt-12 border-t border-border pt-6 text-center">
-			<a href="/review/cards" class="text-sm text-muted-foreground underline hover:text-foreground"> Manage cards ({data.allCards.length}) </a>
+			<a href="/review/cards" class="text-muted-foreground underline hover:text-foreground"> Manage cards ({data.allCards.length}) </a>
 		</div>
 	{/if}
 </div>

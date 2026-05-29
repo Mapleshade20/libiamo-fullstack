@@ -76,12 +76,12 @@ async function submitAsk(q: string) {
 		<div class="min-w-0 flex-1">
 			<p class="text-base text-muted-foreground leading-relaxed">{note.tutorComment}</p>
 			{#if note.sourceContext}
-				<p class="mt-1 text-xs text-muted-foreground/40 italic line-clamp-3">{note.sourceContext}</p>
+				<p class="mt-1 text-sm text-muted-foreground/70 italic line-clamp-3">{note.sourceContext}</p>
 			{/if}
 			{#if note.keywords && note.keywords.length > 0}
 				<div class="mt-3 flex flex-wrap gap-1">
 					{#each note.keywords as kw}
-						<span class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{kw}</span>
+						<span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{kw}</span>
 					{/each}
 				</div>
 			{/if}
