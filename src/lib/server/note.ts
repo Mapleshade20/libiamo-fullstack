@@ -5,7 +5,7 @@ import { db } from "./db";
 import { note, practiceSession, sessionMessage } from "./db/schema";
 import { chatJson } from "./llm";
 
-// ── Types ──────────────────────────────────────────────────────────
+// ── createNote ─────────────────────────────────────────────────────
 
 export interface CreateNoteInput {
 	userId: string;
@@ -15,8 +15,6 @@ export interface CreateNoteInput {
 	keywords?: string[];
 	sourceContext?: string;
 }
-
-// ── createNote ─────────────────────────────────────────────────────
 
 export async function createNote(input: CreateNoteInput) {
 	const [result] = await db
@@ -34,18 +32,36 @@ export async function createNote(input: CreateNoteInput) {
 	return result;
 }
 
+// ── shared note extraction guidelines ─────────────────────────────
+
+function getNoteFieldGuidelines(languageName: string) {
+	return {
+		knowledgePoint: `ONE concise sentence summarizing the core lesson (grammar rule, vocabulary nuance, or discourse principle). Be specific. Write in English but mention ${languageName} terms.`,
+		keywords: `1-2 very short core phrases that capture the essence. These MUST be in ${languageName} (or the learning language), shown as a concise label — e.g. grammar like "cualquier + n. (neutral)", "n. + cualquiera (implying indifference)", vocabulary like "resonate with someone", "no porque + subj.", "set ... on fire", "behind the scenes", "think of | come up with". Keep each under ~5 words.`,
+		sourceContext:
+			"1-3 sentences quoted or closely paraphrased that the feedback items come from. Extract this from the original conversation snippet provided, and make sure you replace the wrong or problematic language with the correct form if possible, to show the learner the right way to say it in context.",
+	};
+}
+
+function formatNoteFieldGuidelines(languageName: string) {
+	const guidelines = getNoteFieldGuidelines(languageName);
+	return [
+		`- knowledgePoint: ${guidelines.knowledgePoint}`,
+		`- keywords: ${guidelines.keywords}`,
+		`- sourceContext: ${guidelines.sourceContext}`,
+	].join("\n");
+}
+
+const schemaNoteFieldGuidelines = getNoteFieldGuidelines("the learning language");
+
 // ── createNotesBatch ───────────────────────────────────────────────
 
 const ExtractKnowledgeSchema = z.object({
 	items: z.array(
 		z.object({
-			knowledgePoint: z.string(),
-			keywords: z
-				.array(z.string())
-				.describe(
-					"2-3 short core terms/phrases in the learning language (e.g., a key word, collocation, or grammar formula like 'no porque + subj.')",
-				),
-			sourceContext: z.string().describe("1-3 sentences of the original conversation that illustrate the error or the language point"),
+			knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
+			keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
+			sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
 		}),
 	),
 });
@@ -86,13 +102,10 @@ export async function createNotesBatch(
 					content: `You are an expert ${languageName} language tutor. For each feedback item below, distill the core lesson into a concise knowledge point and extract keywords + context.
 
 For each item, produce:
-- **knowledgePoint**: ONE concise sentence summarizing the core lesson (grammar rule, vocabulary nuance, or discourse principle). Be specific, name the rule. Write in English but mention ${languageName} terms.
-- **keywords**: 1-2 very short core phrases that capture the essence. These MUST be in ${languageName} (or the learning language), shown as a concise label — e.g. grammar like "cualquier + n. (neutral)", "n. + cualquiera (implying indifference)", vocabulary like "función | funcionario", "no porque + subj.", "set ... on fire", "behind the scenes", "think of | come up with". Keep each under ~5 words.
-- **sourceContext**: 2-3 sentences quoted or closely paraphrased that the feedback items come from. Extract this from the original conversation snippet provided, and make sure you replace the wrong or problematic language with the correct form if possible, to show the learner the right way to say it in context.
+${formatNoteFieldGuidelines(languageName)}
 
 CRITICAL RULES:
 - Do NOT repeat the error description verbatim in knowledgePoint. Distill the lesson.
-- Keywords should be useful standalone notes: grammar formulas, collocations, or word pairs.
 - Return JSON: { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
 				},
 				{
@@ -139,9 +152,9 @@ const SelectionNotesSchema = z.object({
 	reason: z.string().optional().describe("Short reason when no notes are created."),
 	items: z.array(
 		z.object({
-			knowledgePoint: z.string().describe("One concise sentence summarizing the core lesson."),
-			keywords: z.array(z.string()).describe("1-3 short core terms/phrases in the learning language"),
-			sourceContext: z.string().describe("1-3 sentences of context that illustrate the point"),
+			knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
+			keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
+			sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
 		}),
 	),
 });
@@ -165,14 +178,12 @@ export async function createNotesFromSelectionBatch(input: {
 				role: "system" as const,
 				content: `You are an expert ${languageName} language tutor. A learner selected text on their feedback review page and clicked “save to notes”.
 
-Create between 0 and 3 useful reference notes from the selection.
+Create between 0 and 2 useful reference notes from the selection.
 
-Return 0 notes if the selection is too short, generic, broken, only UI text, or does not contain a worthwhile ${languageName} language-learning point. Long selections may contain several points; choose only the best 1-3.
+Return 0 notes if the selection is too short, generic, broken, only UI text, or does not contain a worthwhile ${languageName} language-learning point. Long selections may contain several points; choose only the best 1-2.
 
 For each note:
-- knowledgePoint: ONE concise English sentence naming the useful grammar rule, vocabulary nuance, collocation, idiom, or discourse pattern. Mention ${languageName} terms where relevant.
-- keywords: 1-3 short standalone labels in ${languageName}; use target-language words/phrases or grammar formulas.
-- sourceContext: 1-3 sentences from the provided context that illustrate the point. Prefer corrected/natural phrasing when helpful.
+${formatNoteFieldGuidelines(languageName)}
 
 Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
 			},
@@ -247,86 +258,12 @@ export async function deleteNote(noteId: number, userId: string) {
 	return deleted;
 }
 
-// ── validateAndCreateNoteFromSelection ─────────────────────────────
-
-const ValidateSelectionSchema = z.discriminatedUnion("valid", [
-	z.object({
-		valid: z.literal(true),
-		knowledgePoint: z.string(),
-		keywords: z.array(z.string()).describe("2-3 short core terms in the learning language"),
-		sourceContext: z.string().describe("1-3 sentences of original context"),
-	}),
-	z.object({ valid: z.literal(false), reason: z.string() }),
-]);
-
-export async function validateAndCreateNoteFromSelection(input: {
-	userId: string;
-	sessionId: number;
-	selectedText: string;
-	surroundingContext: string;
-	language: string;
-}) {
-	const languageName = getLanguageEnglishName(input.language);
-
-	const contextBlock = `\n## Surrounding text for context\n"${input.surroundingContext}"`;
-
-	const result = await chatJson(ValidateSelectionSchema, {
-		messages: [
-			{
-				role: "system" as const,
-				content: `You are an expert ${languageName} language tutor. A learner has selected some text from a conversation and wants to save it as a reference note.
-
-Your job:
-1. Decide whether the selection is a **meaningful, self-contained language point** worth remembering.
-2. If valid, extract a concise knowledge point (one sentence), 2-3 short keywords in ${languageName}, and the original context (1-3 sentences).
-3. If invalid, explain why in one short sentence.
-
-Reject if the selection is:
-- Too short (1-2 words with no clear language point)
-- An incomplete or broken sentence fragment
-- Nonsensical or gibberish
-- A generic greeting or filler phrase with nothing to learn
-- Just a name, number, or punctuation
-
-Accept if the selection contains:
-- A complete phrase or sentence with a clear grammar pattern
-- An idiomatic expression, collocation, or interesting word usage
-- A discourse connector or structural pattern
-- A correctly or incorrectly used language feature worth studying
-
-Return JSON:
-- If valid: { "valid": true, "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }
-- If invalid: { "valid": false, "reason": "..." }`,
-			},
-			{
-				role: "user" as const,
-				content: `Selected text: "${input.selectedText}"${contextBlock}`,
-			},
-		],
-		userId: input.userId,
-	});
-
-	if (!result.valid) {
-		return { success: false as const, reason: result.reason };
-	}
-
-	const created = await createNote({
-		userId: input.userId,
-		sourceSessionId: input.sessionId,
-		tutorComment: result.knowledgePoint,
-		keywords: result.keywords,
-		sourceContext: result.sourceContext,
-	});
-
-	return { success: true as const, note: created };
-}
-
 // ── createNoteFromSelectionQA ──────────────────────────────────────
 
 const DistillQASchema = z.object({
-	knowledgePoint: z.string(),
-	keywords: z.array(z.string()).describe("2-3 short core terms in the learning language"),
-	sourceContext: z.string().describe("1-3 sentences of original context"),
+	knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
+	keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
+	sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
 });
 
 export async function createNoteFromSelectionQA(input: {
@@ -344,9 +281,12 @@ export async function createNoteFromSelectionQA(input: {
 		messages: [
 			{
 				role: "system" as const,
-				content: `You are an expert ${languageName} language tutor. A learner selected text from a conversation, asked a follow-up question about it, and received an answer. Distill the key lesson from this Q&A into a concise knowledge point (one sentence), 2-3 short keywords in ${languageName}, and the original context (1-3 sentences). Focus on the grammar rule, vocabulary nuance, or language principle the learner should remember.
+				content: `You are an expert ${languageName} language tutor. A learner selected text from a conversation, asked a follow-up question about it, and received an answer.
 
-Write the knowledge point in English, but mention ${languageName} terms where relevant. Keywords should be in ${languageName}.
+Distill the key lesson from this Q&A into:
+${formatNoteFieldGuidelines(languageName)}
+
+Focus on the grammar rule, vocabulary building or nuance the learner should remember.
 
 Return JSON: { "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }`,
 			},
