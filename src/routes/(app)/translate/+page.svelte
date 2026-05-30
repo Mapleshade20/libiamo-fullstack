@@ -48,7 +48,7 @@ function enterTask(event: MouseEvent, taskId: number) {
 <div class="space-y-10">
 	<!-- Title -->
 	<section>
-		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">{t(lang, "translate.title")}</h1>
+		<h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "translate.title")}</h1>
 	</section>
 
 	<!-- Templates -->

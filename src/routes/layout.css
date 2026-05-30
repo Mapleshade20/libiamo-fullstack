@@ -42,6 +42,7 @@
 	--color-accent-blue: #8fa3b1;
 	--color-accent-sage: #8faf8f;
 	--color-accent-rose: #c9a4a4;
+	--font-sans-inter: "Inter Variable", "Inter", ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "Noto Sans", sans-serif;
 }
 
 .dark {
@@ -80,7 +81,7 @@
 
 @theme inline {
 	--font-serif: "Playfair Display", Georgia, serif;
-	--font-sans: "Inter Variable", sans-serif;
+	--font-sans: "Signika", ui-sans-serif, system-ui, sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -126,33 +127,123 @@
 		@apply border-border outline-ring/50;
 	}
 
-	body {
-		@apply bg-background text-foreground;
+	html {
+		@apply font-sans;
 	}
 
-	h1,
-	h2 {
-		font-family: var(--font-serif);
+	body {
+		@apply bg-background text-foreground font-light;
 	}
 
 	h1 {
-		@apply text-2xl font-bold;
+		@apply text-2xl font-medium font-serif;
 	}
 
 	h2 {
-		@apply text-lg font-medium;
+		@apply text-lg font-medium font-serif;
 	}
 
-	h3 {
-		@apply text-base font-medium;
+	strong,
+	b {
+		@apply font-semibold;
 	}
 
-	strong {
-		@apply font-medium;
+	/* Markdown prose styles */
+	.prose {
+		color: inherit;
 	}
 
-	html {
-		@apply font-sans;
+	.prose p {
+		@apply mb-4;
+	}
+
+	.prose p:last-child {
+		@apply mb-0;
+	}
+
+	.prose h1 {
+		@apply text-2xl font-semibold mb-4 mt-6;
+	}
+
+	.prose h2 {
+		@apply text-xl font-semibold mb-3 mt-5;
+	}
+
+	.prose h3 {
+		@apply text-lg font-medium mb-2 mt-4;
+	}
+
+	.prose h4 {
+		@apply text-base font-medium mb-2 mt-3;
+	}
+
+	.prose h5,
+	.prose h6 {
+		@apply text-sm font-medium mb-2 mt-3;
+	}
+
+	.prose strong,
+	.prose b {
+		@apply font-semibold;
+	}
+
+	.prose em,
+	.prose i {
+		@apply italic;
+	}
+
+	.prose ul,
+	.prose ol {
+		@apply mb-4 pl-6;
+	}
+
+	.prose ul {
+		@apply list-disc;
+	}
+
+	.prose ol {
+		@apply list-decimal;
+	}
+
+	.prose li {
+		@apply mb-1;
+	}
+
+	.prose code {
+		@apply bg-muted text-foreground px-1.5 py-0.5 rounded text-sm font-mono;
+	}
+
+	.prose pre {
+		@apply bg-muted text-foreground p-4 rounded-lg mb-4 overflow-x-auto;
+	}
+
+	.prose pre code {
+		@apply bg-transparent p-0;
+	}
+
+	.prose blockquote {
+		@apply border-l-4 border-border pl-4 italic my-4 text-muted-foreground;
+	}
+
+	.prose a {
+		@apply underline hover:opacity-80 transition-colors;
+	}
+
+	.prose hr {
+		@apply border-border my-6;
+	}
+
+	.prose table {
+		@apply w-full border-collapse mb-4;
+	}
+
+	.prose th,
+	.prose td {
+		@apply border border-border px-3 py-2;
+	}
+
+	.prose th {
+		@apply bg-muted font-semibold;
 	}
 }
 
@@ -265,6 +356,11 @@
 	}
 }
 
+.font-inter-stack {
+	font-family: var(--font-sans-inter);
+	font-weight: 400;
+}
+
 @utility task-stagger {
 	& > * {
 		animation: task-content-in 0.8s ease-out both;
@@ -300,4 +396,22 @@
 	&::-webkit-scrollbar {
 		display: none;
 	}
+}
+
+@keyframes field-attention-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 0%, transparent);
+	}
+	18%,
+	72% {
+		box-shadow:
+			0 0 0 3px color-mix(in oklch, var(--destructive) 28%, transparent),
+			0 0 0 8px color-mix(in oklch, var(--destructive) 10%, transparent);
+	}
+}
+
+[data-field-attention="true"] {
+	border-color: var(--destructive);
+	animation: field-attention-pulse 2.4s ease-out;
 }

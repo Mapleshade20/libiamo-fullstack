@@ -215,6 +215,71 @@ export const translationAttempt = pgTable(
 	(t) => [index("translation_attempt_user_template_idx").on(t.userId, t.templateId)],
 );
 
+// ── note ───────────────────────────────────────────────────────────
+export const note = pgTable(
+	"note",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		sourceSessionId: integer("source_session_id")
+			.notNull()
+			.references(() => practiceSession.id, { onDelete: "cascade" }),
+		sourceMessageId: integer("source_message_id").references(() => sessionMessage.id, { onDelete: "set null" }),
+		tutorComment: text("tutor_comment").notNull(),
+		keywords: text("keywords").array(),
+		sourceContext: text("source_context"),
+		reviewStatus: text("review_status").$type<"pending" | "generated" | "skipped">(),
+	},
+	(t) => [index("note_user_id_idx").on(t.userId), index("note_source_session_id_idx").on(t.sourceSessionId)],
+);
+
+// ── reviewCard ──────────────────────────────────────────────────────
+export const reviewCard = pgTable(
+	"review_card",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		sourceNoteId: integer("source_note_id").references(() => note.id, { onDelete: "cascade" }),
+		language: languageCodeEnum("language").notNull(),
+		cardType: text("card_type").$type<"vocabulary" | "expression" | "grammar" | "correction">().notNull(),
+		front: text("front").notNull(),
+		back: text("back").notNull(),
+		fsrsCard: jsonb("fsrs_card").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [index("review_card_user_lang_idx").on(t.userId, t.language), uniqueIndex("review_card_source_note_unique").on(t.sourceNoteId)],
+);
+
+// ── reviewLog ───────────────────────────────────────────────────────
+export const reviewLog = pgTable(
+	"review_log",
+	{
+		id: serial("id").primaryKey(),
+		cardId: integer("card_id")
+			.notNull()
+			.references(() => reviewCard.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		rating: integer("rating").notNull(),
+		elapsedSeconds: integer("elapsed_seconds").notNull(),
+		scheduledDays: integer("scheduled_days").notNull(),
+		prevCard: jsonb("prev_card").notNull(),
+		newCard: jsonb("new_card").notNull(),
+		log: jsonb("log").notNull(),
+		reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+	},
+	(t) => [index("review_log_card_idx").on(t.cardId), index("review_log_user_reviewed_idx").on(t.userId, t.reviewedAt)],
+);
+
 // ── Relations ────────────────────────────────────────────────────────
 export const userLearningProfileRelations = relations(userLearningProfile, ({ one }) => ({
 	user: one(user, {
@@ -285,6 +350,7 @@ export const practiceSessionRelations = relations(practiceSession, ({ one, many 
 		references: [task.id],
 	}),
 	messages: many(sessionMessage),
+	notes: many(note),
 }));
 
 export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
@@ -292,6 +358,24 @@ export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
 		fields: [sessionMessage.sessionId],
 		references: [practiceSession.id],
 	}),
+}));
+
+export const noteRelations = relations(note, ({ one, many }) => ({
+	user: one(user, { fields: [note.userId], references: [user.id] }),
+	sourceSession: one(practiceSession, { fields: [note.sourceSessionId], references: [practiceSession.id] }),
+	sourceMessage: one(sessionMessage, { fields: [note.sourceMessageId], references: [sessionMessage.id] }),
+	reviewCards: many(reviewCard),
+}));
+
+export const reviewCardRelations = relations(reviewCard, ({ one, many }) => ({
+	user: one(user, { fields: [reviewCard.userId], references: [user.id] }),
+	sourceNote: one(note, { fields: [reviewCard.sourceNoteId], references: [note.id] }),
+	reviewLogs: many(reviewLog),
+}));
+
+export const reviewLogRelations = relations(reviewLog, ({ one }) => ({
+	card: one(reviewCard, { fields: [reviewLog.cardId], references: [reviewCard.id] }),
+	user: one(user, { fields: [reviewLog.userId], references: [user.id] }),
 }));
 
 export * from "./auth.schema";

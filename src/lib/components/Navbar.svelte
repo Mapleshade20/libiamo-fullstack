@@ -25,6 +25,7 @@ let { mode, user, avatarUrl, pendingReviewCount = 0 }: Props = $props();
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
 	{ href: "/translate", label: "Translate" },
+	{ href: "/review", label: "Review" },
 	{ href: "/", label: "Quests", exact: true },
 	{ href: "/archive", label: "Archive" },
 	...(user.role !== "admin" ? [{ href: "/contribute", label: "Contribute" }] : []),

@@ -10,12 +10,14 @@ import Send from "@lucide/svelte/icons/send";
 import Star from "@lucide/svelte/icons/star";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
 import EvaluationSummary from "$lib/components/translate/EvaluationSummary.svelte";
 import TranslationSentence from "$lib/components/translate/TranslationSentence.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { type LanguageCode, t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
+import type { ActionNotificationContent } from "$lib/notifications";
 
 type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
 type Evaluation = {
@@ -47,6 +49,8 @@ let saving = $state(false);
 let saveError = $state<string | null>(null);
 let submitted = $state(false);
 let submitError = $state<string | null>(null);
+let notificationKey = $state(0);
+let actionNotification = $state<ActionNotificationContent | null>(null);
 
 // Live evaluation state (after submit)
 let liveEvaluation = $state<Evaluation | null>(null);
@@ -78,6 +82,11 @@ let saveIndicator = $state<string | null>(null);
 let lastSavedValue = $state<string>("");
 let saveTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 let lastSaveError = $state(false);
+
+function showActionNotification(variant: "success" | "error" | "info", title: string, message: string) {
+	notificationKey += 1;
+	actionNotification = { variant, title, message, key: notificationKey };
+}
 
 // localStorage persistence
 let storageKey = $derived(`translate-${tpl.id}`);
@@ -164,14 +173,22 @@ async function handleSaveDraft() {
 		form.set("translations", JSON.stringify(translations));
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/saveDraft", { method: "POST", body: form });
-		if (!res.ok) {
-			const errData = await res.json().catch(() => null);
-			saveError = errData?.error ?? "Failed to save draft. Please try again.";
+		const result = deserialize(await res.text());
+		if (result.type !== "success") {
+			const message =
+				result.type === "failure"
+					? ((result.data?.error as string | undefined) ?? "Failed to save draft. Please try again.")
+					: "Failed to save draft. Please try again.";
+			saveError = message;
+			showActionNotification("error", "Unable to save draft", message);
 			return;
 		}
 		await invalidateAll();
+		showActionNotification("success", "Draft saved", "Your translation draft has been saved.");
 	} catch {
-		saveError = "Failed to save draft. Please try again.";
+		const message = "Failed to save draft. Please try again.";
+		saveError = message;
+		showActionNotification("error", "Unable to save draft", message);
 	} finally {
 		saving = false;
 	}
@@ -190,9 +207,11 @@ async function handleSubmit() {
 		form.set("translations", JSON.stringify(translations));
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/submit", { method: "POST", body: form });
+		const result = deserialize(await res.text());
 
-		if (res.ok) {
+		if (result.type === "success") {
 			await invalidateAll();
+			showActionNotification("success", "Translation submitted", "Your translation was submitted for evaluation.");
 			// After invalidation, savedEvaluation should be populated
 			// Animate highlights appearing one by one
 			const evalResult = data.attempt?.evaluation as Evaluation | null;
@@ -215,17 +234,19 @@ async function handleSubmit() {
 		} else {
 			// LLM failed — reset to draft state so user can retry
 			submitted = false;
-			try {
-				const errData = await res.json();
-				submitError = errData?.error ?? "Evaluation failed. Please try again.";
-			} catch {
-				submitError = "Evaluation failed. Please try again.";
-			}
+			const message =
+				result.type === "failure"
+					? ((result.data?.error as string | undefined) ?? "Evaluation failed. Please try again.")
+					: "Evaluation failed. Please try again.";
+			submitError = message;
+			showActionNotification("error", "Evaluation failed", message);
 		}
 	} catch {
 		// Network error — reset to draft state so user can retry
+		const message = "Evaluation failed. Please try again.";
 		submitted = false;
-		submitError = "Evaluation failed. Please try again.";
+		submitError = message;
+		showActionNotification("error", "Evaluation failed", message);
 	} finally {
 		evaluating = false;
 		saving = false;
@@ -330,6 +351,7 @@ $effect(() => {
 	};
 });
 </script>
+<ActionNotification notification={actionNotification} />
 <div class="fixed inset-0 bg-card"></div>
 <div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
 	{#if translating}
@@ -365,7 +387,7 @@ $effect(() => {
 		{/if}
 		{#if !translating}
 			{#if tpl.description}
-				<p class="mt-8 max-w-xl text-base font-light leading-relaxed text-muted-foreground">{tpl.description}</p>
+				<p class="mt-8 max-w-xl text-base leading-relaxed text-muted-foreground">{tpl.description}</p>
 			{/if}
 			{#if isDone && passages.length > 0}
 				<div class="mt-10">
@@ -407,7 +429,7 @@ $effect(() => {
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Source Text</h2>
 					<div class="space-y-4 max-w-xl">
 						{#each passages as paragraph, pi}
-							<p class="text-base font-light leading-relaxed text-foreground">
+							<p class="text-base leading-relaxed text-foreground">
 								{#each paragraph as sentence, si}
 									<span>{sentence}{si < paragraph.length - 1 ? " " : ""}</span>
 								{/each}
@@ -419,7 +441,7 @@ $effect(() => {
 			{#if tpl.materialsMd}
 				<div class="mt-10">
 					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-					<div class="prose prose-neutral max-w-xl text-base font-light leading-relaxed">{@html renderMarkdown(tpl.materialsMd)}</div>
+					<div class="prose prose-neutral max-w-xl text-base leading-relaxed">{@html renderMarkdown(tpl.materialsMd)}</div>
 				</div>
 			{/if}
 		{:else}
@@ -510,12 +532,6 @@ $effect(() => {
 							<Button onclick={startTranslation} class="px-8">{attemptStatus === "draft" ? "Continue Translation" : "Start Translation"}</Button>
 						{/if}
 					{:else if !submitted}
-						{#if saveError}
-							<span class="text-sm text-red-600">{saveError}</span>
-						{/if}
-						{#if submitError}
-							<span class="text-sm text-red-600">{submitError}</span>
-						{/if}
 						<Button variant="outline" onclick={handleSaveDraft} disabled={saving}
 							><Save size={14} class="mr-1.5" />{saving ? "Saving..." : "Save Draft"}</Button
 						>
