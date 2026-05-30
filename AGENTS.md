@@ -5,7 +5,6 @@ Quick guidance for agents working in this repo.
 ## Commands
 
 ```sh
-pnpm dev          # start dev server
 pnpm build        # production build
 pnpm preview      # preview production build
 pnpm check        # svelte-check + biome check --write (format included, use this instead of build or format for development)
@@ -27,7 +26,7 @@ Key areas:
 
 - Routes: `(app)/` authenticated learner pages (home, session, feedback, archive, review, translate, contribute, profile), `(auth)/`, `(admin)/`; `/api/review/` for review card CRUD.
 - Server: `src/lib/server/` for auth, db, email, LLM, sessions, tasks, dates, MBTI, feedback, notes, review-cards (FSRS), archive, translate. `src/lib/admin/` for template/variant action helpers.
-- Data model: templates → templateVariants → tasks → practiceSessions → sessionMessages; feedback produces notes; notes spawn reviewCards (FSRS); reviewLogs track history. Separate: templateContributions, translationAttempts, userLearningProfile.
+- Data model: templates are blueprints; template variants store `slotValues` + UI-specific `openingState`; scheduled tasks store resolved template text and a selected `variantId`; practice sessions/messages store chat runtime state; completed session gets feedback; feedback produces notes; notes spawn reviewCards (FSRS); reviewLogs track history. Separate things from this main workflow: templateContributions, translationAttempts.
 - Scheduling: `src/lib/server/tasks.ts` auto-fills 3 weekly + 3 daily non-translation tasks per user language/date; weekly dates normalize to Monday and admin manual weeks use `YYYY-Www`. Cadence values include `weekly`, `daily`, `none`.
 - Session prompts: `src/lib/server/session.ts` starts practice sessions, builds scenario context from variant `openingState`, prepends random MBTI persona at session start, and enforces target-language replies.
 - LLM: calls are centralized in `src/lib/server/llm.ts` and use the official `openai` SDK with `baseURL` for both env and BYOK credentials.
@@ -39,15 +38,15 @@ Key areas:
 - Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
 - Practice UI: reusable client code lives under `src/lib/components/practice-ui/`.
 - UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
-- Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/form-attention.ts`. Practice UI notifications under `src/lib/components/practice-ui/` are intentionally separate.
+- Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/form-attention.ts`.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
 ## Notes for agents
 
 - Use tabs for indentation.
+- Refer to `README.md` for core concepts.
 - Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
 - If stuck on a problem after 2-3 failed attempts, do not brutely retry. Search the web for solutions and come up with new approaches.
-- Refer to `docs/ROADMAP.md`, `README.md`, and `docs/AGENT_API.md` for roadmap, core concepts, and LLM API docs.
-- Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`. Coverage: 85% lines/branches/statements, 70% functions.
+- Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
 - **Time-dependent tests:** use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
-- Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`) and runs biome check.
+- Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).
