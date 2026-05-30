@@ -2,12 +2,13 @@ import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getNativeLanguageOptions } from "$lib/constants";
-import { profileSchema, switchLanguageSchema } from "$lib/schemas";
+import { profileSchema } from "$lib/schemas";
 import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
 import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
-import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
+import { userApiKey } from "$lib/server/db/schema";
+import { switchActiveLanguage } from "$lib/server/user-language";
 import type { Actions, PageServerLoad } from "./$types";
 
 /**
@@ -142,31 +143,7 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	switchLanguage: async (event) => {
-		const user = requireUser(event);
-		const formData = await event.request.formData();
-		const raw = { language: formData.get("language")?.toString() ?? "" };
-
-		const result = switchLanguageSchema.safeParse(raw);
-		if (!result.success) {
-			return fail(400, { message: "Invalid language" });
-		}
-
-		await auth.api.updateUser({
-			body: { activeLanguage: result.data.language },
-			headers: event.request.headers,
-		});
-
-		await db
-			.insert(userLearningProfile)
-			.values({
-				userId: user.id,
-				language: result.data.language,
-			})
-			.onConflictDoNothing();
-
-		return redirect(302, "/");
-	},
+	switchLanguage: switchActiveLanguage,
 
 	signOut: async (event) => {
 		requireUser(event);
