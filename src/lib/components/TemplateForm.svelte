@@ -586,32 +586,34 @@ function jsonStr(val: unknown): string {
 		onCancel={() => { showConfirm = false; }}
 	>
 		{#snippet children()}
-			<dl class="space-y-2 text-sm">
-				<div class="flex justify-between gap-4">
-					<dt class="text-[#2a2520] font-medium">Language</dt>
-					<dd class="text-[#6b6560]">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</dd>
+			<div class="space-y-3">
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div class="space-y-1">
+						<Label class="text-xs text-muted-foreground">Language</Label>
+						<p class="text-sm">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</p>
+					</div>
+					<div class="space-y-1">
+						<Label class="text-xs text-muted-foreground">Interaction Type</Label>
+						<p class="text-sm">
+							{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
+						</p>
+					</div>
+					<div class="space-y-1">
+						<Label class="text-xs text-muted-foreground">UI</Label>
+						<p class="text-sm">{UI_VARIANT_LABELS[selectedUi] ?? selectedUi}</p>
+					</div>
 				</div>
-				<div class="flex justify-between gap-4">
-					<dt class="text-[#2a2520] font-medium">Type</dt>
-					<dd class="text-[#6b6560]">
-						{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
-					</dd>
-				</div>
-				<div class="flex justify-between gap-4">
-					<dt class="text-[#2a2520] font-medium">UI</dt>
-					<dd class="text-[#6b6560]">{UI_VARIANT_LABELS[selectedUi] ?? selectedUi}</dd>
-				</div>
-				<div class="flex justify-between gap-4">
-					<dt class="text-[#2a2520] font-medium">Title</dt>
-					<dd class="text-[#6b6560] text-right truncate max-w-[60%]">{titleBase}</dd>
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">Title</Label>
+					<p class="text-sm">{titleBase}</p>
 				</div>
 				{#if shortObjectiveBase}
-					<div>
-						<dt class="text-[#2a2520] font-medium mb-1">Objective</dt>
-						<dd class="text-[#6b6560] text-xs leading-relaxed line-clamp-3">{shortObjectiveBase}</dd>
+					<div class="space-y-1">
+						<Label class="text-xs text-muted-foreground">Short Objective</Label>
+						<p class="text-sm">{shortObjectiveBase}</p>
 					</div>
 				{/if}
-			</dl>
+			</div>
 		{/snippet}
 	</BottomSheet>
 {/if}
