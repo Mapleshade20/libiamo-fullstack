@@ -92,7 +92,9 @@ let confirmed = $state(false);
 $effect(() => {
 	if (!mainFormEl) return;
 	const handler = (e: KeyboardEvent) => {
-		if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault();
+		const t = e.target as HTMLInputElement;
+		if (e.key === "Enter" && t instanceof HTMLInputElement && !["checkbox", "radio", "button", "submit", "reset"].includes(t.type))
+			e.preventDefault();
 	};
 	mainFormEl.addEventListener("keydown", handler);
 	return () => mainFormEl?.removeEventListener("keydown", handler);
