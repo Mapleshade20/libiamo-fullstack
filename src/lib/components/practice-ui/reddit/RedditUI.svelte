@@ -2,6 +2,7 @@
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Search from "@lucide/svelte/icons/search";
 import { fade } from "svelte/transition";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { createPracticeSession } from "../session.svelte";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
@@ -60,8 +61,7 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	agentStartsFirst,
 	labels: sessionLabels,
-	joinTriggerText: "*User joined the server*",
-	isHiddenCheck: (m) => m.content === "*User joined the server*",
+	taskId,
 }));
 
 // ── Opening state ────────────────────────────────────────────────────
@@ -182,6 +182,20 @@ function handleMockAction() {
 // ── Mobile sidebar ───────────────────────────────────────────────────
 
 let showMobileMenu = $state(false);
+let showFinishConfirm = $state(false);
+
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void session.handleCompleteAndNavigate(String(taskId));
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
+}
 </script>
 
 <!--===================================================-->
@@ -212,7 +226,7 @@ let showMobileMenu = $state(false);
 	</div>
 {/if}
 
-<div class="fixed inset-0 z-[999] flex flex-col bg-white font-sans text-[#1C1C1C]">
+<div class="fixed inset-0 z-[999] flex flex-col bg-white font-inter-stack text-[#1C1C1C]">
 	<!-- Header -->
 	<Header
 		{t}
@@ -222,7 +236,7 @@ let showMobileMenu = $state(false);
 		isCompleting={session.isCompleting}
 		isSubmitting={session.isSubmitting}
 		isInitializing={session.isInitializing}
-		onComplete={session.handleComplete}
+		onComplete={handleFinishClick}
 		onMockAction={handleMockAction}
 		onToggleMobileMenu={() => (showMobileMenu = !showMobileMenu)}
 	/>
@@ -314,14 +328,17 @@ let showMobileMenu = $state(false);
 	</div>
 </div>
 
-<!-- Overlays (toast + evaluation modal) -->
-<Overlays
-	{showToast}
-	showEvaluationModal={session.showEvaluationModal}
-	feedback={session.feedback}
-	{taskId}
-	{t}
-	onCloseEvaluation={() => (session.showEvaluationModal = false)}
+<!-- Overlays (toast) -->
+<Overlays {showToast} {t} />
+
+<BottomSheet
+	show={showFinishConfirm}
+	title="Finish Task"
+	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+	confirmLabel="Finish & Review"
+	cancelLabel="Keep Practicing"
+	onConfirm={handleFinishConfirm}
+	onCancel={handleFinishCancel}
 />
 
 <style>

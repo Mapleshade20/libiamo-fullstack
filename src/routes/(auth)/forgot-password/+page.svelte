@@ -1,15 +1,30 @@
 <script lang="ts">
+import { tick } from "svelte";
 import { enhance } from "$app/forms";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
+import { focusAndHighlightField, handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
 
 let newPassword = $state("");
 let confirmNewPassword = $state("");
 let confirmNewPasswordError = $state("");
+let resetForm: HTMLFormElement | null = $state(null);
+let requestForm: HTMLFormElement | null = $state(null);
+let confirmNewPasswordInput: HTMLInputElement | null = $state(null);
+
+const actionNotification = $derived(
+	form?.emailSent
+		? { variant: "success" as const, title: "Check your inbox", message: "If an account with that email exists, we've sent a reset link." }
+		: form?.resetMessage
+			? { variant: "error" as const, title: "Unable to reset password", message: form.resetMessage }
+			: null,
+);
 
 // Clear mismatch error naturally when passwords match
 $effect(() => {
@@ -30,6 +45,7 @@ $effect(() => {
 		</Card.Title>
 	</Card.Header>
 	<Card.Content>
+		<ActionNotification notification={actionNotification} />
 		{#if data.hasToken}
 			{#if data.error}
 				<!-- Invalid/expired token from URL — dedicated UX -->
@@ -40,16 +56,19 @@ $effect(() => {
 				</div>
 			{:else}
 				<!-- Reset form — stays visible on retryable server errors -->
-				{#if form?.resetMessage}
-					<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.resetMessage}</p>
-				{/if}
+				<FormErrorFocus formRef={resetForm} errors={form?.resetErrors} fieldOrder={["newPassword"]} />
 
 				<form
+					bind:this={resetForm}
 					method="POST"
 					action="?/resetPassword"
+					oninvalidcapture={handleInvalidField}
 					use:enhance={({ cancel }) => {
 						if (newPassword !== confirmNewPassword) {
 							confirmNewPasswordError = "Passwords do not match";
+							void tick().then(() => {
+								if (confirmNewPasswordInput) focusAndHighlightField(confirmNewPasswordInput);
+							});
 							cancel();
 							return;
 						}
@@ -61,7 +80,14 @@ $effect(() => {
 
 					<div class="space-y-2">
 						<Label for="newPassword">New Password</Label>
-						<Input id="newPassword" name="newPassword" type="password" bind:value={newPassword} required />
+						<Input
+							id="newPassword"
+							name="newPassword"
+							type="password"
+							bind:value={newPassword}
+							required
+							aria-invalid={Boolean(form?.resetErrors?.newPassword)}
+						/>
 						{#if form?.resetErrors?.newPassword}
 							<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
 						{/if}
@@ -69,7 +95,14 @@ $effect(() => {
 
 					<div class="space-y-2">
 						<Label for="confirmNewPassword">Confirm New Password</Label>
-						<Input id="confirmNewPassword" type="password" bind:value={confirmNewPassword} required />
+						<Input
+							id="confirmNewPassword"
+							bind:ref={confirmNewPasswordInput}
+							type="password"
+							bind:value={confirmNewPassword}
+							required
+							aria-invalid={Boolean(confirmNewPasswordError)}
+						/>
 						{#if confirmNewPasswordError}
 							<p class="text-sm text-red-600">{confirmNewPasswordError}</p>
 						{/if}
@@ -81,10 +114,11 @@ $effect(() => {
 		{:else if form?.emailSent}
 			<p class="text-center text-muted-foreground">If an account with that email exists, we've sent a reset link. Check your inbox.</p>
 		{:else}
-			<form method="POST" action="?/requestReset" use:enhance class="space-y-4">
+			<FormErrorFocus formRef={requestForm} errors={form?.errors} fieldOrder={["email"]} />
+			<form bind:this={requestForm} method="POST" action="?/requestReset" use:enhance class="space-y-4" oninvalidcapture={handleInvalidField}>
 				<div class="space-y-2">
 					<Label for="email">Email</Label>
-					<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required />
+					<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
 					{#if form?.errors?.email}
 						<p class="text-sm text-red-600">{form.errors.email[0]}</p>
 					{/if}

@@ -1,9 +1,2 @@
-export type ObjectiveResult = {
-	text: string;
-	grade: "A" | "B" | "C";
-};
-
-export type TutorFeedback = {
-	content: string;
-	objectiveResults: ObjectiveResult[];
-};
+// Legacy TutorFeedback type removed — feedback now lives on the dedicated feedback page.
+// New feedback types are in $lib/feedback-types.ts

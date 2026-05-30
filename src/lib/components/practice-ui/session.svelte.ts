@@ -3,14 +3,13 @@ import { invalidateAll } from "$app/navigation";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import { completeAction, postAction } from "./apiService";
+import { completeAction, postAction, requestAgentFirstReplyAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
 import { getOpeningStateMessages } from "./messageTransformer";
-import type { TutorFeedback } from "./types";
 
 export interface PracticeSessionLabels {
 	stillProcessingMessage: string;
@@ -28,9 +27,8 @@ export interface PracticeSessionOptions {
 	agentStartsFirst: boolean;
 	timeZone?: string;
 	labels: PracticeSessionLabels;
-	joinTriggerText: string;
-	isHiddenCheck?: (message: { content: string }) => boolean;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
+	taskId?: string | number;
 }
 
 /**
@@ -57,9 +55,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
 	const timeZone = $derived(getOptions().timeZone);
 	const labels = $derived(getOptions().labels);
-	const joinTriggerText = $derived(getOptions().joinTriggerText);
-	const isHiddenCheck = $derived(getOptions().isHiddenCheck);
 	const onPoolInit = $derived(getOptions().onPoolInit);
+	const taskId = $derived(getOptions().taskId);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
 	const formatTimestamp = $derived(createTimeFormatter(timeZone));
@@ -74,9 +71,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let hasAutoCompleted = $state(false);
 	let isCompleting = $state(false);
 	let isCompleted = $state(false);
-	let showEvaluationModal = $state(false);
 	let isInitializing = $state(false);
-	let feedback = $state<TutorFeedback | null>(null);
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
 	let agentUser = $state<ChatUser>({
@@ -130,7 +125,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
 		if (result.status === "reply") {
 			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
-			if (result.terminated) handleComplete();
+			if (result.terminated) handleCompleteAndNavigate(String(taskId ?? ""));
 		} else if (result.status === "pending") {
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
@@ -144,6 +139,21 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		} else if (result.status === "rejected") {
 			console.warn("Backend rejected the message");
 		}
+	}
+
+	function mapOpeningActionResult(result: any): SendAttemptResult {
+		if (result?.type === "failure" && result.status >= 400 && result.status < 500) {
+			return { status: "rejected" };
+		}
+		if (result?.type === "success" && result.data) {
+			if ((result.data as any).pending) return { status: "pending" };
+			return {
+				status: "reply",
+				text: result.data.reply as string,
+				terminated: (result.data as any).terminated ?? false,
+			};
+		}
+		return { status: "failed" };
 	}
 
 	// ── Actions ────────────────────────────────────────────────────
@@ -182,18 +192,16 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		isSubmitting = false;
 	}
 
-	async function handleComplete() {
+	async function handleCompleteAndNavigate(taskId: string) {
 		if (!sessionId || isCompleting || isCompleted) return;
 		isCompleting = true;
 		try {
 			const result = await completeAction(sessionId);
 
-			if (result.type === "success" && result.data) {
+			if (result.type === "success") {
 				isCompleted = true;
-				feedback = result.data.feedback as TutorFeedback;
-				showEvaluationModal = true;
-				await scrollToBottom();
-				await invalidateAll();
+				// Navigate to feedback page
+				window.location.href = `/task/${taskId}/feedback`;
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
@@ -265,7 +273,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	function runAutoCompleteIfNeeded() {
 		if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 			hasAutoCompleted = true;
-			void handleComplete();
+			void handleCompleteAndNavigate(String(taskId ?? ""));
 		}
 	}
 
@@ -283,9 +291,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			onPoolInit?.(pool);
 
 			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
-			feedback = sessionData.tutorFeedback || null;
-
-			if (isCompleted && feedback) showEvaluationModal = true;
 
 			const openingMessages = getOpeningStateMessages({
 				openingStateData,
@@ -303,7 +308,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				avatarUrl,
 				agentColor: agentUser.color,
 				labels,
-				isHidden: isHiddenCheck ? (m) => isHiddenCheck(m as { content: string }) : undefined,
 			});
 
 			messages = [...openingMessages, ...sessionMessages];
@@ -338,27 +342,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 					labels: { earlier: labels.earlier },
 				});
 
+				messages = [...openingMessages];
+
 				if (agentStartsFirst) {
-					messages = [
-						...openingMessages,
-						{
-							id: crypto.randomUUID(),
-							role: "user",
-							text: joinTriggerText,
-							timestamp: formatTimestamp(new Date()),
-							authorName: userName,
-							avatar: avatarUrl,
-							isHidden: true,
-						},
-					];
-
 					await scrollToBottom();
-
-					const result = await attemptAgentReply(currentId, joinTriggerText, `join-${currentId}`);
-
-					applySendResult(result, `join-${currentId}`);
-				} else {
-					messages = [...openingMessages];
+					const openingResult = await requestAgentFirstReplyAction(currentId);
+					applySendResult(mapOpeningActionResult(openingResult), `join-${currentId}`);
 				}
 
 				await scrollToBottom();
@@ -427,17 +416,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		get isCompleted() {
 			return isCompleted;
 		},
-		get showEvaluationModal() {
-			return showEvaluationModal;
-		},
-		set showEvaluationModal(v: boolean) {
-			showEvaluationModal = v;
-		},
 		get isInitializing() {
 			return isInitializing;
-		},
-		get feedback() {
-			return feedback;
 		},
 		get messages() {
 			return messages;
@@ -485,7 +465,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			return openingStateData;
 		},
 		handleSend,
-		handleComplete,
+		handleCompleteAndNavigate,
 		handleRetry,
 		runAutoCompleteIfNeeded,
 		hydrateFromExistingSession,

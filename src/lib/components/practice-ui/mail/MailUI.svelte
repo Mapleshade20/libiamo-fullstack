@@ -3,11 +3,11 @@ import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
-import type { TutorFeedback } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
@@ -61,11 +61,10 @@ let isSubmitting = $state(false);
 let isCompleting = $state(false);
 let isCompleted = $state(false);
 let isEntering = $state(true);
-let showEvaluationModal = $state(false);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
-let feedback = $state<TutorFeedback | null>(null);
+let showFinishConfirm = $state(false);
 let messages = $state<ChatMessage[]>([]);
 let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
@@ -272,19 +271,31 @@ function appendAgentMessageFromSendResult(
 	activeMailbox = "inbox";
 }
 
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void handleComplete();
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
+}
+
 async function handleComplete(force = false) {
 	if (!sessionId || isCompleted || isInitializing || (!force && isSubmitting) || isCompleting) return;
 
 	isCompleting = true;
 	try {
 		const result = await completeAction(sessionId);
-		if (result.type === "success" && result.data) {
+		if (result.type === "success") {
 			isCompleted = true;
-			feedback = result.data.feedback as TutorFeedback;
-			showEvaluationModal = true;
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
-			await invalidateAll();
+			// Navigate to feedback page
+			window.location.href = `/task/${taskId}/feedback`;
 		} else {
 			console.error("Mail completion was rejected:", result);
 		}
@@ -381,7 +392,6 @@ function loadExistingSession(session: any) {
 	lastSessionSnapshot = sessionSnapshot;
 	sessionId = session.id;
 	isCompleted = session.status === "completed" || session.status === "evaluated";
-	feedback = session.tutorFeedback || null;
 
 	messages = buildChatMessages({
 		rawMessages: session.messages ?? [],
@@ -393,7 +403,6 @@ function loadExistingSession(session: any) {
 		labels: t,
 	});
 
-	if (isCompleted && feedback) showEvaluationModal = true;
 	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden);
 	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
 	if (
@@ -512,9 +521,9 @@ $effect(() => {
 {/if}
 
 <div
-	class="mail-shell fixed inset-0 z-[999] h-[100dvh] w-full overflow-hidden bg-[#F5F5F7] text-[#1D1D1F] selection:bg-[#3478F6] selection:text-white"
+	class="mail-shell fixed inset-0 z-[999] h-[100dvh] w-full overflow-hidden bg-[#F5F5F7] text-[#1D1D1F] font-inter-stack selection:bg-[#3478F6] selection:text-white"
 >
-	<Overlays {showEvaluationModal} {feedback} {showToast} {t} onCloseEvaluation={() => (showEvaluationModal = false)} />
+	<Overlays {showToast} {t} />
 
 	<div
 		class="mail-window grid h-full min-h-0 w-full grid-cols-[240px_minmax(280px,360px)_1fr] overflow-hidden border border-black/10 bg-white shadow-2xl"
@@ -568,7 +577,7 @@ $effect(() => {
 			{remainingTurns}
 			{canFinish}
 			onMockAction={handleMockAction}
-			onComplete={handleComplete}
+			onComplete={handleFinishClick}
 			onRetry={handleRetry}
 		/>
 	</div>
@@ -592,6 +601,16 @@ $effect(() => {
 			onPersistDraft={persistDraft}
 		/>
 	{/if}
+
+	<BottomSheet
+		show={showFinishConfirm}
+		title="Finish Task"
+		message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+		confirmLabel="Finish & Review"
+		cancelLabel="Keep Practicing"
+		onConfirm={handleFinishConfirm}
+		onCancel={handleFinishCancel}
+	/>
 </div>
 
 <style>
