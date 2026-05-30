@@ -3,11 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
+import { requireAdmin } from "$lib/server/admin-auth";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	const id = Number(event.params.id);
 	if (Number.isNaN(id)) return error(404, "Template not found");
 
@@ -21,6 +24,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	save: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const raw = Object.fromEntries(formData);
@@ -36,12 +41,16 @@ export const actions: Actions = {
 	},
 
 	delete: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		await db.update(template).set({ isActive: false }).where(eq(template.id, id));
 		return redirect(302, "/admin/templates");
 	},
 
 	addVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const { slotValues, openingState } = parseVariantFormData(formData);
@@ -66,6 +75,8 @@ export const actions: Actions = {
 	},
 
 	saveVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
@@ -98,6 +109,8 @@ export const actions: Actions = {
 	},
 
 	activateVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
@@ -120,6 +133,8 @@ export const actions: Actions = {
 	},
 
 	deactivateVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));

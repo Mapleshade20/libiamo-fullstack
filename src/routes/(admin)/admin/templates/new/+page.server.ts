@@ -3,11 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
+import { requireAdmin } from "$lib/server/admin-auth";
 import { db } from "$lib/server/db";
 import { template, templateContribution, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	const contributionId = event.url.searchParams.get("fromContribution");
 	if (!contributionId) return { contributionData: null };
 
@@ -21,6 +24,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	default: async (event) => {
+		const user = requireAdmin(event);
+
 		const formData = await event.request.formData();
 		const raw = Object.fromEntries(formData);
 
@@ -29,8 +34,7 @@ export const actions: Actions = {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
+		const userId = user.id;
 
 		const isTranslate = result.data.interactionType === "translate";
 		const fromContributionId = Number(formData.get("fromContributionId"));
