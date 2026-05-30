@@ -491,7 +491,7 @@ const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
 	examples: "Give me 3 more natural examples that illustrate the correct usage.",
 };
 
-export type FollowUpOnFeedbackInput = {
+type FollowUpOnFeedbackInput = {
 	sessionId: number;
 	userId: string;
 	itemText: string;
@@ -502,7 +502,7 @@ export type FollowUpOnFeedbackInput = {
 	explanationMode?: "issue" | "good_expression";
 };
 
-export type FollowUpOnFeedbackResult = {
+type FollowUpOnFeedbackResult = {
 	answer: string;
 };
 

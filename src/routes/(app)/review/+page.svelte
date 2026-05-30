@@ -4,7 +4,6 @@ import RatingButtons from "$lib/components/review/RatingButtons.svelte";
 import ReviewProgress from "$lib/components/review/ReviewProgress.svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import { CARD_TYPE_LABELS, type CardType } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
 
 let { data } = $props();
@@ -54,13 +53,6 @@ async function rate(rating: number) {
 	} finally {
 		isSubmitting = false;
 	}
-}
-
-let showCardList = $state(false);
-
-async function deleteCard(cardId: number) {
-	await fetch(`/api/review/${cardId}`, { method: "DELETE" });
-	data.allCards = data.allCards.filter((c: { id: number }) => c.id !== cardId);
 }
 
 function handleKeydown(e: KeyboardEvent) {

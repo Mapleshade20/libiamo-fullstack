@@ -7,7 +7,7 @@ import { chatJson } from "./llm";
 
 // ── createNote ─────────────────────────────────────────────────────
 
-export interface CreateNoteInput {
+interface CreateNoteInput {
 	userId: string;
 	sourceSessionId: number;
 	sourceMessageId?: number;

@@ -168,7 +168,7 @@ function buildSystemPrompt(agentPrompt: string | null, scenarioContext: string):
 	return parts.join("\n\n");
 }
 
-export type StartSessionResult = {
+type StartSessionResult = {
 	sessionId: number;
 	systemPrompt: string;
 	mbti: string;
@@ -252,7 +252,7 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	}
 }
 
-export type SendMessageResult = {
+type SendMessageResult = {
 	reply: string;
 	turnCount: number;
 	terminated?: boolean;
@@ -369,7 +369,7 @@ export type SendMessageOptions = {
 	assistantMetadata?: Record<string, unknown>;
 };
 
-export type RequestAgentOpeningOptions = {
+type RequestAgentOpeningOptions = {
 	maxTurns?: number | null;
 	promptContent?: string;
 	assistantAuthorName?: string;
