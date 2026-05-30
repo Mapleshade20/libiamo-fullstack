@@ -52,13 +52,14 @@ function extractAllTagsWithAttr(xml: string, tag: string): Array<{ attrs: Record
 
 		// Parse attributes
 		const attrStr = xml.slice(startIdx + openTag.length, tagEndIdx).trim();
-		// Normalize spaces around = so the regex doesn't need \s* (avoids ReDoS flag)
-		const normalized = attrStr.replace(/\s*=\s*/g, "=");
 		const attrs: Record<string, string> = {};
-		const attrRegex = /(\w+)="([^"]*)"/g;
-		let attrMatch: RegExpExecArray | null;
-		while ((attrMatch = attrRegex.exec(normalized)) !== null) {
-			attrs[attrMatch[1]] = attrMatch[2];
+		// Parse key="value" pairs — split on whitespace to avoid \s* in regex (SonarQube S5852)
+		for (const token of attrStr.split(/\s+/)) {
+			const eq = token.indexOf("=");
+			if (eq === -1) continue;
+			const key = token.slice(0, eq);
+			const value = token.slice(eq + 1).replace(/^"|"$/g, "");
+			if (key) attrs[key] = value;
 		}
 
 		const contentStart = tagEndIdx + 1;
