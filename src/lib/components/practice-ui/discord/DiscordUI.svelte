@@ -2,6 +2,7 @@
 import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
@@ -63,8 +64,7 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
-	joinTriggerText: "*User joined the server*",
-	isHiddenCheck: (m) => m.content === "*User joined the server*",
+	taskId,
 	onPoolInit(pool) {
 		onlineUsers = pool.onlineUsers;
 		offlineUsers = pool.offlineUsers;
@@ -96,6 +96,7 @@ let allUsers = $derived([session.agentUser, ...onlineUsers, ...offlineUsers]);
 let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
 let showMembers = $state(true);
+let showFinishConfirm = $state(false);
 
 let contextMenu = $state({
 	show: false,
@@ -120,6 +121,19 @@ function handleContextMenuMention() {
 		session.inputText = `${session.inputText}${space}@${contextMenu.targetUser.name} `.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 	}
 	contextMenu.show = false;
+}
+
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void session.handleCompleteAndNavigate(String(taskId));
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
 }
 
 function handleWindowClick() {
@@ -166,18 +180,9 @@ $effect(() => {
 {/if}
 
 <div
-	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-sans selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
+	class="fixed inset-0 z-[999] flex h-[100dvh] w-full overflow-hidden bg-[#313338] text-gray-200 font-inter-stack selection:bg-[#5865F2] selection:text-white flex-col md:flex-row"
 >
-	<Overlays
-		showEvaluationModal={session.showEvaluationModal}
-		feedback={session.feedback}
-		{contextMenu}
-		{showToast}
-		{taskId}
-		{t}
-		onCloseEvaluation={() => (session.showEvaluationModal = false)}
-		onContextMenuMention={handleContextMenuMention}
-	/>
+	<Overlays {contextMenu} {showToast} {t} onContextMenuMention={handleContextMenuMention} />
 
 	<MobileTopBar {serverName} onToggleMenu={() => (showMobileMenu = !showMobileMenu)} />
 
@@ -207,7 +212,7 @@ $effect(() => {
 			turnsLeftLabel={t.turnsLeft}
 			evaluatingLabel={t.evaluating}
 			finishTaskLabel={t.finishTask}
-			onComplete={session.handleComplete}
+			onComplete={handleFinishClick}
 			onToggleMembers={() => (showMembers = !showMembers)}
 		/>
 
@@ -257,6 +262,16 @@ $effect(() => {
 			{/if}
 		</div>
 	</div>
+
+	<BottomSheet
+		show={showFinishConfirm}
+		title="Finish Task"
+		message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+		confirmLabel="Finish & Review"
+		cancelLabel="Keep Practicing"
+		onConfirm={handleFinishConfirm}
+		onCancel={handleFinishCancel}
+	/>
 </div>
 
 <style>

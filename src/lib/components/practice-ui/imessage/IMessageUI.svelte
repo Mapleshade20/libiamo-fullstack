@@ -7,6 +7,7 @@ import EmojiConvertor from "emoji-js";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
@@ -39,7 +40,6 @@ let {
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
-const IMESSAGE_JOIN_TRIGGER_TEXT = "*Session started*";
 const sessionLabels = {
 	get stillProcessingMessage() {
 		return t.stillProcessingMessage;
@@ -62,9 +62,7 @@ const session = createPracticeSession(() => ({
 	agentStartsFirst,
 	timeZone,
 	labels: sessionLabels,
-	joinTriggerText: IMESSAGE_JOIN_TRIGGER_TEXT,
-	// Keep old marker support so existing sessions stay hidden.
-	isHiddenCheck: (m) => m.content === IMESSAGE_JOIN_TRIGGER_TEXT || m.content === "*User joined the server*",
+	taskId,
 }));
 
 const emojiConv = new EmojiConvertor();
@@ -78,6 +76,7 @@ const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessag
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 
 let showHintMenu = $state(false);
+let showFinishConfirm = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
@@ -146,6 +145,19 @@ function handleWindowClick(event: MouseEvent) {
 	}
 }
 
+function handleFinishClick() {
+	showFinishConfirm = true;
+}
+
+function handleFinishConfirm() {
+	showFinishConfirm = false;
+	void session.handleCompleteAndNavigate(String(taskId));
+}
+
+function handleFinishCancel() {
+	showFinishConfirm = false;
+}
+
 function getBubbleClasses(message: (typeof renderableMessages)[0], index: number) {
 	const position = getBubbleGroupPosition(renderableMessages, index);
 	if (message.role === "user") {
@@ -186,7 +198,7 @@ onMount(() => {
 	</div>
 {/if}
 
-<div class="fixed inset-0 z-[999] h-[100dvh] w-full bg-[#F2F2F7] text-[#1C1C1E] md:bg-[#DDDDE1]">
+<div class="fixed inset-0 z-[999] h-[100dvh] w-full bg-[#F2F2F7] text-[#1C1C1E] font-inter-stack md:bg-[#DDDDE1]">
 	<div class="mx-auto flex h-full w-full md:items-center md:justify-center md:p-3 lg:p-4">
 		<div
 			class="flex h-full w-full overflow-hidden md:h-[calc(100dvh-1.5rem)] md:w-[calc(100vw-1.5rem)] lg:h-[calc(100dvh-2rem)] lg:w-[calc(100vw-2rem)] md:max-h-[1100px] md:max-w-[1800px] md:rounded-2xl md:border md:border-black/10 md:bg-white md:shadow-2xl"
@@ -239,7 +251,7 @@ onMount(() => {
 							<button
 								type="button"
 								class="rounded-full bg-[#0A84FF] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#0062CC] disabled:opacity-50"
-								onclick={session.handleComplete}
+								onclick={handleFinishClick}
 								disabled={session.isCompleting || session.isSubmitting || session.isInitializing}
 							>
 								{session.isCompleting ? t.evaluating : t.finishTask}
@@ -373,7 +385,7 @@ onMount(() => {
 								class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
 								aria-label={t.sendMessage}
 								onclick={() => {
-								if (!session.inputText.trim() || session.disabled) return;
+									if (!session.inputText.trim() || session.disabled) return;
 									const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 									session.inputText = "";
 									session.handleSend(text);
@@ -390,42 +402,12 @@ onMount(() => {
 	</div>
 </div>
 
-{#if session.showEvaluationModal && session.feedback}
-	<div transition:fade={{ duration: 200 }} class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4">
-		<div class="max-h-[80vh] w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-			<div class="border-b border-[#E5E5EA] px-6 py-4">
-				<h2 class="text-lg font-semibold text-[#1C1C1E]">{t.questCompleted}</h2>
-				<p class="text-sm text-[#8E8E93]">{t.tutorReport}</p>
-			</div>
-			<div class="max-h-[52vh] overflow-y-auto px-6 py-4">
-				<h3 class="text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.overallFeedback}</h3>
-				<p class="mt-2 whitespace-pre-wrap rounded-xl bg-[#F2F2F7] p-4 text-sm leading-6 text-[#1C1C1E]">{session.feedback.content}</p>
-				{#if session.feedback.objectiveResults && session.feedback.objectiveResults.length > 0}
-					<h3 class="mt-6 text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{t.objectiveAssessment}</h3>
-					<div class="mt-2 space-y-2">
-						{#each session.feedback.objectiveResults as obj}
-							<div class="flex items-center justify-between rounded-xl bg-[#F2F2F7] px-3 py-2">
-								<span class="pr-4 text-sm text-[#1C1C1E]">{obj.text}</span>
-								<span
-									class="rounded-md px-2 py-1 text-xs font-bold {obj.grade === 'A' ? 'bg-[#34C759] text-white' : obj.grade === 'B' ? 'bg-[#FFD60A] text-[#1C1C1E]' : 'bg-[#FF3B30] text-white'}"
-								>
-									{obj.grade}
-								</span>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<div class="flex justify-end gap-2 border-t border-[#E5E5EA] px-6 py-4">
-				<button
-					type="button"
-					class="rounded-lg bg-[#E5E5EA] px-4 py-2 text-sm font-medium text-[#1C1C1E]"
-					onclick={() => (session.showEvaluationModal = false)}
-				>
-					{t.closeReview}
-				</button>
-				<a href="/" class="rounded-lg bg-[#0A84FF] px-4 py-2 text-sm font-medium text-white">{t.returnHall}</a>
-			</div>
-		</div>
-	</div>
-{/if}
+<BottomSheet
+	show={showFinishConfirm}
+	title="Finish Task"
+	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
+	confirmLabel="Finish & Review"
+	cancelLabel="Keep Practicing"
+	onConfirm={handleFinishConfirm}
+	onCancel={handleFinishCancel}
+/>

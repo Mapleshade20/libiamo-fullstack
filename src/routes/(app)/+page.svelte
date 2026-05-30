@@ -89,7 +89,7 @@ const uiIcons: Record<string, Component> = {
 
 <div class="space-y-10">
 	<section>
-		<h1 class="text-3xl md:text-4xl text-gray-800 font-medium leading-tight">
+		<h1 class="text-3xl md:text-4xl text-gray-800 font-normal leading-tight">
 			{data.greeting}<br>
 			<span class="text-gray-500 italic relative inline-block">
 				<span class="invisible">{data.subtitle}</span>

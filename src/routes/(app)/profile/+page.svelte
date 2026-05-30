@@ -1,12 +1,15 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { enhance } from "$app/forms";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import { BYOK_BASE_URL_MAX_LENGTH, getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
 
@@ -30,6 +33,16 @@ const nativeLanguageOptions = $derived(
 let timezoneInputValue = $state("");
 let nativeLanguageInputValue = $state("");
 let detectedTimezone = $state("");
+let settingsForm: HTMLFormElement | null = $state(null);
+let apiKeyForm: HTMLFormElement | null = $state(null);
+
+const actionNotification = $derived(
+	form?.success
+		? { variant: "success" as const, title: "Profile updated", message: "Your changes have been saved." }
+		: form?.message
+			? { variant: "error" as const, title: "Unable to save", message: form.message }
+			: null,
+);
 
 $effect(() => {
 	const val = form?.values?.timezone ?? data.user.timezone ?? "";
@@ -89,9 +102,7 @@ function applyDetectedTimezone() {
 <div class="mx-auto max-w-2xl space-y-8">
 	<h1 class="text-3xl">Profile</h1>
 
-	{#if form?.success}
-		<p class="rounded-md bg-green-50 p-3 text-sm text-green-700">Profile updated.</p>
-	{/if}
+	<ActionNotification notification={actionNotification} />
 
 	<Card.Root>
 		<Card.Content class="pt-6">
@@ -112,9 +123,12 @@ function applyDetectedTimezone() {
 	<Card.Root>
 		<Card.Header><Card.Title>Settings</Card.Title></Card.Header>
 		<Card.Content>
+			<FormErrorFocus formRef={settingsForm} errors={form?.errors} fieldOrder={["name", "timezone", "nativeLanguage"]} />
 			<form
+				bind:this={settingsForm}
 				method="POST"
 				action="?/updateProfile"
+				oninvalidcapture={handleInvalidField}
 				use:enhance={() => {
 					return async ({ update }) => {
 						await update({ reset: false });
@@ -124,7 +138,7 @@ function applyDetectedTimezone() {
 			>
 				<div class="space-y-2">
 					<Label for="name">Name</Label>
-					<Input id="name" name="name" value={form?.values?.name ?? data.user.name ?? ""} />
+					<Input id="name" name="name" value={form?.values?.name ?? data.user.name ?? ""} aria-invalid={Boolean(form?.errors?.name)} />
 					{#if form?.errors?.name}
 						<p class="text-sm text-red-600">{form.errors.name[0]}</p>
 					{/if}
@@ -136,7 +150,8 @@ function applyDetectedTimezone() {
 						id="timezone"
 						name="timezone"
 						bind:value={timezoneInputValue}
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						aria-invalid={Boolean(form?.errors?.timezone)}
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
 					>
 						<option value="" disabled>Select your timezone</option>
 						{#each timezoneOptions as tz}
@@ -163,7 +178,8 @@ function applyDetectedTimezone() {
 						id="nativeLanguage"
 						name="nativeLanguage"
 						bind:value={nativeLanguageInputValue}
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						aria-invalid={Boolean(form?.errors?.nativeLanguage)}
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
 					>
 						<option value="">Select your native language</option>
 						{#each nativeLanguageOptions as language}
@@ -191,9 +207,6 @@ function applyDetectedTimezone() {
 				</select>
 				<Button type="submit" variant="secondary">Switch</Button>
 			</form>
-			{#if form?.message}
-				<p class="text-sm text-red-600">{form.message}</p>
-			{/if}
 		</Card.Content>
 	</Card.Root>
 
@@ -206,13 +219,12 @@ function applyDetectedTimezone() {
 				<p class="mb-4 text-sm text-muted-foreground">No custom API key set. The default platform key is used for AI responses.</p>
 			{/if}
 
-			{#if form?.message}
-				<p class="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
-			{/if}
-
+			<FormErrorFocus formRef={apiKeyForm} errors={form?.errors} fieldOrder={["apiKey", "apiBaseUrl", "apiModel"]} />
 			<form
+				bind:this={apiKeyForm}
 				method="POST"
 				action="?/updateProfile"
+				oninvalidcapture={handleInvalidField}
 				use:enhance={() => {
 					return async ({ update }) => {
 						await update({ reset: false });
@@ -227,6 +239,7 @@ function applyDetectedTimezone() {
 						name="apiKey"
 						type="password"
 						placeholder={data.hasApiKey ? "•••••••• (leave empty to keep current)" : "Enter your API key"}
+						aria-invalid={Boolean(form?.errors?.apiKey)}
 					/>
 					{#if form?.errors?.apiKey}
 						<p class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
@@ -240,6 +253,7 @@ function applyDetectedTimezone() {
 						value={form?.values?.apiBaseUrl ?? ""}
 						maxlength={BYOK_BASE_URL_MAX_LENGTH}
 						placeholder="https://api.openai.com/v1"
+						aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
 					/>
 					{#if form?.errors?.apiBaseUrl}
 						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
@@ -247,7 +261,13 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiModel">Model</Label>
-					<Input id="apiModel" name="apiModel" value={form?.values?.apiModel ?? ""} placeholder="gpt-4o" />
+					<Input
+						id="apiModel"
+						name="apiModel"
+						value={form?.values?.apiModel ?? ""}
+						placeholder="gpt-4o"
+						aria-invalid={Boolean(form?.errors?.apiModel)}
+					/>
 					{#if form?.errors?.apiModel}
 						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}

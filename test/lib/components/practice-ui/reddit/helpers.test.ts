@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { buildRedditCommentTree, buildRedditUserPrompt, findRedditTarget, flattenRedditComments } from "$lib/components/practice-ui/reddit/helpers";
+import {
+	buildRedditCommentTree,
+	buildRedditUserPrompt,
+	countRedditComments,
+	findRedditTarget,
+	flattenRedditComments,
+	getRedditCommentVotes,
+} from "$lib/components/practice-ui/reddit/helpers";
 
 describe("Reddit comment-thread helpers", () => {
 	const openingState = {
@@ -61,5 +68,15 @@ describe("Reddit comment-thread helpers", () => {
 		expect(root.replies.map((reply) => reply.id)).toContain("reddit-user-msg-1");
 		const userComment = root.replies.find((reply) => reply.id === "reddit-user-msg-1");
 		expect(userComment?.replies[0]).toMatchObject({ id: "reddit-agent-msg-1", username: "ThoughtfulUser" });
+	});
+
+	it("countRedditComments delegates to countThreadComments", () => {
+		const tree = buildRedditCommentTree({ openingState, messages: [] });
+		expect(countRedditComments(tree)).toBeGreaterThan(0);
+	});
+
+	it("getRedditCommentVotes uses votes when present", () => {
+		const tree = buildRedditCommentTree({ openingState, messages: [] });
+		expect(getRedditCommentVotes({ ...tree[0], votes: 42 }, "fallback")).toBe(42);
 	});
 });

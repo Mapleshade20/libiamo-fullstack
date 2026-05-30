@@ -1,4 +1,4 @@
-name: Coverage and Code Quality
+name: Invoke SonarQube
 on:
   push:
     branches:

@@ -442,21 +442,6 @@ export function getEditorFields(ui: UiVariant): FieldDef[] {
 	return (openingStateSchemas[ui].meta() as OpeningStateEditorMeta | undefined)?.fields ?? [];
 }
 
-// ── Tutor Feedback (AI structured output) ────────────────────────────
-export const tutorFeedbackSchema = z.object({
-	content: z.string().describe("Overall feedback text for the student"),
-	objectiveResults: z
-		.array(
-			z.object({
-				text: z.string().describe("The objective being evaluated"),
-				grade: z.enum(["A", "B", "C"]).describe("A = excellent, B = good, C = needs improvement"),
-			}),
-		)
-		.describe("Per-objective evaluation results"),
-});
-
-export type TutorFeedback = z.infer<typeof tutorFeedbackSchema>;
-
 // ── Schedule ──────────────────────────────────────────────────────────
 export const scheduleManualSchema = z.object({
 	templateId: z.coerce.number().int().positive(),
@@ -476,4 +461,14 @@ export const scheduleManualSchema = z.object({
 		// Ensure the date actually exists (e.g., prevent Feb 30th)
 		return dayjs(value, "YYYY-MM-DD", true).isValid();
 	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
+});
+
+// ── Review ────────────────────────────────────────────────────────────
+export const reviewRatingSchema = z.object({
+	rating: z.number().int().min(1).max(4),
+	elapsedSeconds: z.number().int().min(0),
+});
+
+export const reviewCreateCardSchema = z.object({
+	noteId: z.number().int().positive(),
 });

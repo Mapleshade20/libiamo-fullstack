@@ -2,6 +2,8 @@
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { extractSlotNames, getDefaultOpeningState, type UiVariant } from "$lib/admin/variant-helpers";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import OpeningStateEditor from "$lib/components/OpeningStateEditor.svelte";
 import SlotEditor from "$lib/components/SlotEditor.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -17,6 +19,7 @@ import {
 	UI_VARIANT_LABELS,
 	UI_VARIANTS,
 } from "$lib/constants";
+import { handleInvalidField } from "$lib/form-attention";
 import { renderMarkdown } from "$lib/markdown";
 
 type VariantData = {
@@ -79,51 +82,26 @@ let {
 	initialOpeningState,
 	extraHiddenFields,
 }: Props = $props();
-let mainFormEl: HTMLFormElement | null = null;
+let mainFormEl: HTMLFormElement | null = $state(null);
 
-function getScrollableParent(element: HTMLElement): HTMLElement | null {
-	let current = element.parentElement;
-	while (current) {
-		const style = window.getComputedStyle(current);
-		const overflowY = style.overflowY;
-		const canScroll = (overflowY === "auto" || overflowY === "scroll") && current.scrollHeight > current.clientHeight;
-		if (canScroll) return current;
-		current = current.parentElement;
-	}
-	return null;
-}
+const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save template", message: form.message } : null);
 
-function centerField(element: HTMLElement) {
-	const scrollParent = getScrollableParent(element);
-	const elementRect = element.getBoundingClientRect();
-
-	if (!scrollParent) {
-		const targetTop = window.scrollY + elementRect.top - window.innerHeight / 2 + elementRect.height / 2;
-		window.scrollTo({
-			top: Math.max(0, targetTop),
-			behavior: "smooth",
-		});
-	} else {
-		const parentRect = scrollParent.getBoundingClientRect();
-		const offsetTop = elementRect.top - parentRect.top;
-		const targetTop = scrollParent.scrollTop + offsetTop - scrollParent.clientHeight / 2 + elementRect.height / 2;
-		scrollParent.scrollTo({
-			top: Math.max(0, targetTop),
-			behavior: "smooth",
-		});
-	}
-}
-
-function handleInvalidCapture(event: Event) {
-	const field = event.target as HTMLElement | null;
-	if (!field) return;
-
-	requestAnimationFrame(() => {
-		centerField(field);
-		// One more pass to beat late browser scrolling.
-		requestAnimationFrame(() => centerField(field));
-	});
-}
+const templateFieldOrder = [
+	"language",
+	"interactionType",
+	"ui",
+	"cadence",
+	"difficulty",
+	"pointReward",
+	"gemReward",
+	"titleBase",
+	"shortObjectiveBase",
+	"descriptionBase",
+	"agentPromptBase",
+	"objectivesBase",
+	"translationBase",
+	"tags",
+];
 
 const isEditMode = $derived("id" in template);
 
@@ -296,15 +274,14 @@ function jsonStr(val: unknown): string {
 }
 </script>
 
-<form method="POST" {action} use:enhance class="space-y-8" bind:this={mainFormEl} oninvalidcapture={handleInvalidCapture}>
+<ActionNotification notification={actionNotification} />
+<FormErrorFocus formRef={mainFormEl} errors={form?.errors} fieldOrder={templateFieldOrder} />
+
+<form method="POST" {action} use:enhance class="space-y-8" bind:this={mainFormEl} oninvalidcapture={handleInvalidField}>
 	{#if extraHiddenFields}
 		{#each Object.entries(extraHiddenFields) as [ name, val ]}
 			<input type="hidden" {name} value={val}>
 		{/each}
-	{/if}
-
-	{#if form?.message}
-		<p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{form.message}</p>
 	{/if}
 
 	<!-- Section A: Metadata -->

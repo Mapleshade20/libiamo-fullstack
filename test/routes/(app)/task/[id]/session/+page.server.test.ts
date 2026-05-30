@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockSessionService } = vi.hoisted(() => ({
+const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
 			practiceSession: { findFirst: vi.fn() },
 			task: { findFirst: vi.fn() },
 			user: { findFirst: vi.fn() },
 		},
-		select: vi.fn(),
+		select: vi.fn(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn(() => []),
+			})),
+		})),
 	},
 	mockSessionService: {
 		startSession: vi.fn(),
@@ -15,11 +19,20 @@ const { mockDb, mockSessionService } = vi.hoisted(() => ({
 		completeSession: vi.fn(),
 		generateHint: vi.fn(),
 		getSessionOrFail: vi.fn(),
+		followUpOnFeedback: vi.fn(),
+	},
+	mockNoteService: {
+		createNotesBatch: vi.fn(),
+		validateAndCreateNoteFromSelection: vi.fn(),
 	},
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
+vi.mock("$lib/server/feedback", () => ({
+	followUpOnFeedback: mockSessionService.followUpOnFeedback,
+}));
+vi.mock("$lib/server/note", () => mockNoteService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
@@ -48,11 +61,15 @@ describe("session page server", () => {
 	}: {
 		taskId?: string;
 		user?: typeof mockUser | null;
-		values?: Record<string, string>;
+		values?: Record<string, string | string[]>;
 	}) => {
 		const formData = new FormData();
 		for (const [key, value] of Object.entries(values)) {
-			formData.append(key, value);
+			if (Array.isArray(value)) {
+				for (const v of value) formData.append(key, v);
+			} else {
+				formData.append(key, value);
+			}
 		}
 		return {
 			request: { formData: () => Promise.resolve(formData) },
@@ -681,15 +698,11 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			const mockFeedback = {
-				content: "Good job!",
-				objectiveResults: [{ text: "Objective 1", grade: "A" as const }],
-			};
-			mockSessionService.completeSession.mockResolvedValue(mockFeedback);
+			mockSessionService.completeSession.mockResolvedValue(undefined);
 
 			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 
-			expect(result).toMatchObject({ success: true, feedback: mockFeedback });
+			expect(result).toMatchObject({ success: true });
 			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
 
