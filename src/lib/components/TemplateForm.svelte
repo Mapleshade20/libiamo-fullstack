@@ -89,6 +89,15 @@ let mainFormEl: HTMLFormElement | null = $state(null);
 let showConfirm = $state(false);
 let confirmed = $state(false);
 
+$effect(() => {
+	if (!mainFormEl) return;
+	const handler = (e: KeyboardEvent) => {
+		if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault();
+	};
+	mainFormEl.addEventListener("keydown", handler);
+	return () => mainFormEl?.removeEventListener("keydown", handler);
+});
+
 const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save template", message: form.message } : null);
 
 const templateFieldOrder = [
@@ -303,7 +312,6 @@ function jsonStr(val: unknown): string {
 	class="space-y-8"
 	bind:this={mainFormEl}
 	oninvalidcapture={handleInvalidField}
-	onkeydown={(e) => { if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault(); }}
 >
 	{#if extraHiddenFields}
 		{#each Object.entries(extraHiddenFields) as [ name, val ]}
