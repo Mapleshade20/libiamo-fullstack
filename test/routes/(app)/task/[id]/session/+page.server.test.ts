@@ -71,7 +71,7 @@ describe("session page server", () => {
 			}
 		}
 		return {
-			request: { formData: () => Promise.resolve(formData) },
+			request: { formData: vi.fn().mockResolvedValue(formData) },
 			params: { id: taskId },
 			locals: { user },
 		} as any;
@@ -129,13 +129,13 @@ describe("session page server", () => {
 			expect(result.user.timezone).toBe("Asia/Shanghai");
 		});
 
-		it("throws 401 when user not authenticated", async () => {
+		it("redirects when user not authenticated", async () => {
 			await expect(
 				load({
 					params: { id: mockTaskId },
 					locals: { user: null },
 				} as any),
-			).rejects.toMatchObject({ status: 401 });
+			).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 		});
 
 		it("throws 400 for invalid task ID", async () => {
@@ -264,7 +264,8 @@ describe("session page server", () => {
 			{
 				name: "unauthenticated user",
 				event: { params: { id: mockTaskId }, locals: { user: null } },
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
@@ -283,8 +284,14 @@ describe("session page server", () => {
 				setup: () => mockSessionService.startSession.mockRejectedValue("String error"),
 				expected: { status: 500, data: { error: "Failed to start session" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected, setup }) => {
+		])("returns controlled failures for $name", async ({ event, expected, setup, redirect }) => {
 			setup?.();
+			if (redirect) {
+				await expect(actions.start(event as any)).rejects.toMatchObject(expected);
+				expect(mockSessionService.startSession).not.toHaveBeenCalled();
+				return;
+			}
+
 			const result = await actions.start(event as any);
 			expect(result).toMatchObject(expected);
 		});
@@ -578,26 +585,35 @@ describe("session page server", () => {
 		it.each([
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "789", message: "Hello" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "789", message: "Hello" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789", message: "Hello" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "789", message: "Hello" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: { sessionId: "invalid", message: "Hello" } }),
+				event: () => createFormEvent({ values: { sessionId: "invalid", message: "Hello" } }),
 				expected: { status: 400, data: { error: "Invalid session ID" } },
 			},
 			{
 				name: "empty message",
-				event: createFormEvent({ values: { sessionId: "789", message: "" } }),
+				event: () => createFormEvent({ values: { sessionId: "789", message: "" } }),
 				expected: { status: 400, data: { error: "Message is required" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.send(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.send(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockDb.query.task.findFirst).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.send(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 
@@ -679,21 +695,30 @@ describe("session page server", () => {
 		it.each([
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: { sessionId: "invalid" } }),
+				event: () => createFormEvent({ values: { sessionId: "invalid" } }),
 				expected: { status: 400, data: { error: "Invalid session ID" } },
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "789" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "789" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "789" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.complete(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.complete(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.complete(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 
@@ -770,21 +795,30 @@ describe("session page server", () => {
 		it.each([
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "123" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "123" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "123" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "123" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: {} }),
+				event: () => createFormEvent({ values: {} }),
 				expected: { status: 400, data: { error: "Invalid session" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.hint(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.hint(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.hint(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 

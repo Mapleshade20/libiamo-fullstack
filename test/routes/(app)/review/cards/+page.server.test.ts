@@ -17,8 +17,8 @@ describe("review cards page server", () => {
 		vi.clearAllMocks();
 	});
 
-	it("returns 401 when user is not authenticated", async () => {
-		await expect(load({ locals: { user: null }, params: {} } as any)).rejects.toMatchObject({ status: 401 });
+	it("redirects when user is not authenticated", async () => {
+		await expect(load({ locals: { user: null }, params: {} } as any)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 	});
 
 	it("returns cards for authenticated user", async () => {

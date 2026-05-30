@@ -5,6 +5,7 @@ import { getNativeLanguageOptions } from "$lib/constants";
 import { profileSchema, switchLanguageSchema } from "$lib/schemas";
 import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
 import { auth } from "$lib/server/auth";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
@@ -59,16 +60,12 @@ function getMemoizedTimezones(): { value: string; label: string }[] {
 }
 
 export const load: PageServerLoad = async (event) => {
-	const userId = event.locals.user?.id;
-	let hasApiKey = false;
-
-	if (userId) {
-		const row = await db.query.userApiKey.findFirst({
-			where: (t, { eq }) => eq(t.userId, userId),
-			columns: { userId: true },
-		});
-		hasApiKey = row !== undefined;
-	}
+	const user = requireUser(event);
+	const row = await db.query.userApiKey.findFirst({
+		where: (t, { eq }) => eq(t.userId, user.id),
+		columns: { userId: true },
+	});
+	const hasApiKey = row !== undefined;
 
 	return {
 		serverTimezones: getMemoizedTimezones(),
@@ -79,8 +76,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	updateProfile: async (event) => {
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
+		const user = requireUser(event);
 
 		const formData = await event.request.formData();
 		const raw = {
@@ -131,7 +127,7 @@ export const actions: Actions = {
 
 				await db
 					.insert(userApiKey)
-					.values({ userId, encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl, model: apiModel })
+					.values({ userId: user.id, encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl, model: apiModel })
 					.onConflictDoUpdate({ target: userApiKey.userId, set: { encryptedKey: encryptApiKey(apiKey), baseUrl: apiBaseUrl, model: apiModel } });
 			}
 		}
@@ -140,14 +136,14 @@ export const actions: Actions = {
 	},
 
 	clearApiKey: async (event) => {
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
+		const user = requireUser(event);
 
-		await db.delete(userApiKey).where(eq(userApiKey.userId, userId));
+		await db.delete(userApiKey).where(eq(userApiKey.userId, user.id));
 		return { success: true };
 	},
 
 	switchLanguage: async (event) => {
+		const user = requireUser(event);
 		const formData = await event.request.formData();
 		const raw = { language: formData.get("language")?.toString() ?? "" };
 
@@ -161,13 +157,10 @@ export const actions: Actions = {
 			headers: event.request.headers,
 		});
 
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
-
 		await db
 			.insert(userLearningProfile)
 			.values({
-				userId,
+				userId: user.id,
 				language: result.data.language,
 			})
 			.onConflictDoNothing();
@@ -176,6 +169,7 @@ export const actions: Actions = {
 	},
 
 	signOut: async (event) => {
+		requireUser(event);
 		await auth.api.signOut({ headers: event.request.headers });
 		return redirect(302, "/sign-in");
 	},

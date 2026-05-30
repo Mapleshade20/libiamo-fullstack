@@ -1,8 +1,15 @@
 import { error, redirect } from "@sveltejs/kit";
 
-export function requireAdmin(event: { locals: App.Locals }) {
+export function requireUser(event: { locals: App.Locals }) {
 	const user = event.locals.user;
 	if (!user) throw redirect(302, "/sign-in");
+
+	return user;
+}
+
+export function requireAdmin(event: { locals: App.Locals }) {
+	const user = requireUser(event);
 	if (user.role !== "admin") throw error(403, "Forbidden");
+
 	return user;
 }

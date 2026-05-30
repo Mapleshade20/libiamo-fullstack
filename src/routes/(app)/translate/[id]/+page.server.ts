@@ -1,7 +1,8 @@
-import { error, fail, redirect } from "@sveltejs/kit";
+import { error, fail } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
@@ -9,13 +10,6 @@ import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
 const MAX_TRANSLATION_FORM_SIZE = 100 * 1024;
-
-/** Throw redirect if user is not authenticated */
-function requireUser(event: { locals: App.Locals }) {
-	const user = event.locals.user;
-	if (!user) throw redirect(302, "/sign-in");
-	return user;
-}
 
 /** Validate and cast a language code, defaulting to "en" */
 function validateLanguageCode(code: unknown): LanguageCode {

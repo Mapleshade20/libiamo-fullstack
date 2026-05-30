@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
-import { requireAdmin } from "$lib/server/admin-auth";
+import { requireAdmin } from "$lib/server/authz";
 import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";

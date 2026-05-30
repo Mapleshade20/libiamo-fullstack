@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
@@ -8,8 +9,7 @@ import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const user = locals.user;
-	if (!user) throw error(401, "Unauthorized");
+	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
 	const taskId = Number.parseInt(taskIdStr, 10);
@@ -77,8 +77,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	generateFeedback: async ({ params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -108,8 +107,7 @@ export const actions: Actions = {
 	},
 
 	followUp: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -151,8 +149,7 @@ export const actions: Actions = {
 	},
 
 	saveNote: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -207,8 +204,7 @@ export const actions: Actions = {
 	},
 
 	saveSelectionNotes: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });

@@ -45,7 +45,7 @@ function createActionEvent(entries: Record<string, string>, userId = "u1") {
 	}
 	return {
 		locals: { user: userId ? { id: userId } : null },
-		request: { formData: async () => formData },
+		request: { formData: vi.fn().mockResolvedValue(formData) },
 	} as any;
 }
 
@@ -163,9 +163,12 @@ describe("Task detail +page.server", () => {
 
 	// ── generateExpressions action ─────────────────────────────────
 	describe("generateExpressions action", () => {
-		it("returns 401 when user is not authenticated", async () => {
-			const result = (await actions.generateExpressions(createActionEvent({ title: "Test" }, ""))) as any;
-			expect(result.status).toBe(401);
+		it("redirects before parsing form data when user is not authenticated", async () => {
+			const event = createActionEvent({ title: "Test" }, "");
+
+			await expect(actions.generateExpressions(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(mockChatJson).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 when title is missing", async () => {
@@ -260,9 +263,12 @@ describe("Task detail +page.server", () => {
 
 	// ── evaluateTranslation action ─────────────────────────────────
 	describe("evaluateTranslation action", () => {
-		it("returns 401 when user is not authenticated", async () => {
-			const result = (await actions.evaluateTranslation(createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" }, ""))) as any;
-			expect(result.status).toBe(401);
+		it("redirects before parsing form data when user is not authenticated", async () => {
+			const event = createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" }, "");
+
+			await expect(actions.evaluateTranslation(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(mockChatJson).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 when sourceExpression is missing", async () => {

@@ -31,8 +31,8 @@ describe("review page server", () => {
 			locals: { user },
 		}) as any;
 
-	it("returns 401 when user is not authenticated", async () => {
-		await expect(load(mockEvent(null))).rejects.toMatchObject({ status: 401 });
+	it("redirects when user is not authenticated", async () => {
+		await expect(load(mockEvent(null))).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 	});
 
 	it("returns cards, stats, and language for authenticated user", async () => {

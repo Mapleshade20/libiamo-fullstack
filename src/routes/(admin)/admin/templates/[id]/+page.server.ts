@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
-import { requireAdmin } from "$lib/server/admin-auth";
+import { requireAdmin } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";

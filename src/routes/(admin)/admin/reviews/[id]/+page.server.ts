@@ -1,6 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { requireAdmin } from "$lib/server/admin-auth";
+import { requireAdmin } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { templateContribution, user } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
