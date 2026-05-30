@@ -6,6 +6,7 @@ import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import OpeningStateEditor from "$lib/components/OpeningStateEditor.svelte";
 import SlotEditor from "$lib/components/SlotEditor.svelte";
+import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
@@ -62,6 +63,7 @@ interface Props {
 	submitLabel?: string;
 	cancelHref?: string;
 	hideAdminFields?: boolean;
+	confirmBeforeSubmit?: boolean;
 	/** Pre-fill variant slots in create mode */
 	initialSlotValues?: Record<string, string>;
 	/** Pre-fill opening state in create mode */
@@ -78,11 +80,14 @@ let {
 	submitLabel = "Save",
 	cancelHref = "/admin/templates",
 	hideAdminFields = false,
+	confirmBeforeSubmit = false,
 	initialSlotValues,
 	initialOpeningState,
 	extraHiddenFields,
 }: Props = $props();
 let mainFormEl: HTMLFormElement | null = $state(null);
+let showConfirm = $state(false);
+let confirmed = $state(false);
 
 const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save template", message: form.message } : null);
 
@@ -138,6 +143,12 @@ const requiredSlots = $derived(
 		objectivesBase: objectivesArray,
 	}),
 );
+
+// ── Language tracking ────────────────────────────────────────────
+let selectedLanguage = $state<string>(untrack(() => template.language ?? "en"));
+$effect(() => {
+	selectedLanguage = template.language ?? "en";
+});
 
 // ── Interaction type tracking ────────────────────────────────────
 let selectedInteractionType = $state<string>(untrack(() => template.interactionType ?? "chat"));
@@ -277,7 +288,23 @@ function jsonStr(val: unknown): string {
 <ActionNotification notification={actionNotification} />
 <FormErrorFocus formRef={mainFormEl} errors={form?.errors} fieldOrder={templateFieldOrder} />
 
-<form method="POST" {action} use:enhance class="space-y-8" bind:this={mainFormEl} oninvalidcapture={handleInvalidField}>
+<form
+	method="POST"
+	{action}
+	use:enhance={({ cancel }) => {
+		if (confirmBeforeSubmit && !confirmed) {
+			cancel();
+			showConfirm = true;
+			return;
+		}
+		confirmed = false;
+		return async ({ update }) => update();
+	}}
+	class="space-y-8"
+	bind:this={mainFormEl}
+	oninvalidcapture={handleInvalidField}
+	onkeydown={(e) => { if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault(); }}
+>
 	{#if extraHiddenFields}
 		{#each Object.entries(extraHiddenFields) as [ name, val ]}
 			<input type="hidden" {name} value={val}>
@@ -290,9 +317,15 @@ function jsonStr(val: unknown): string {
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
-				<select id="language" name="language" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+				<select
+					id="language"
+					name="language"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					required
+					bind:value={selectedLanguage}
+				>
 					{#each LANGUAGE_CODES as code}
-						<option value={code} selected={template.language === code}>{LANGUAGE_LABELS[code]}</option>
+						<option value={code}>{LANGUAGE_LABELS[code]}</option>
 					{/each}
 				</select>
 				{#if form?.errors?.language}
@@ -542,6 +575,46 @@ function jsonStr(val: unknown): string {
 		<Button href={cancelHref} variant="outline">Cancel</Button>
 	</div>
 </form>
+
+{#if confirmBeforeSubmit}
+	<BottomSheet
+		show={showConfirm}
+		title="Submit for Review?"
+		confirmLabel="Submit"
+		cancelLabel="Go Back"
+		onConfirm={() => { confirmed = true; showConfirm = false; mainFormEl?.requestSubmit(); }}
+		onCancel={() => { showConfirm = false; }}
+	>
+		{#snippet children()}
+			<dl class="space-y-2 text-sm">
+				<div class="flex justify-between gap-4">
+					<dt class="text-[#2a2520] font-medium">Language</dt>
+					<dd class="text-[#6b6560]">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</dd>
+				</div>
+				<div class="flex justify-between gap-4">
+					<dt class="text-[#2a2520] font-medium">Type</dt>
+					<dd class="text-[#6b6560]">
+						{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
+					</dd>
+				</div>
+				<div class="flex justify-between gap-4">
+					<dt class="text-[#2a2520] font-medium">UI</dt>
+					<dd class="text-[#6b6560]">{UI_VARIANT_LABELS[selectedUi] ?? selectedUi}</dd>
+				</div>
+				<div class="flex justify-between gap-4">
+					<dt class="text-[#2a2520] font-medium">Title</dt>
+					<dd class="text-[#6b6560] text-right truncate max-w-[60%]">{titleBase}</dd>
+				</div>
+				{#if shortObjectiveBase}
+					<div>
+						<dt class="text-[#2a2520] font-medium mb-1">Objective</dt>
+						<dd class="text-[#6b6560] text-xs leading-relaxed line-clamp-3">{shortObjectiveBase}</dd>
+					</div>
+				{/if}
+			</dl>
+		{/snippet}
+	</BottomSheet>
+{/if}
 
 <!-- Section C: Variants (edit mode only — separate forms, outside the main form) -->
 {#if isEditMode && !isTranslate}
