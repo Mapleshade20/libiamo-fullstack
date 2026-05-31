@@ -35,6 +35,7 @@ vi.mock("$lib/server/feedback", () => ({
 vi.mock("$lib/server/note", () => mockNoteService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
+import { CLIENT_MESSAGE_ID_MAX_LENGTH, MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
@@ -71,7 +72,7 @@ describe("session page server", () => {
 			}
 		}
 		return {
-			request: { formData: () => Promise.resolve(formData) },
+			request: { formData: vi.fn().mockResolvedValue(formData) },
 			params: { id: taskId },
 			locals: { user },
 		} as any;
@@ -136,13 +137,13 @@ describe("session page server", () => {
 			expect(result.user.timezone).toBe("Asia/Shanghai");
 		});
 
-		it("throws 401 when user not authenticated", async () => {
+		it("redirects when user not authenticated", async () => {
 			await expect(
 				load({
 					params: { id: mockTaskId },
 					locals: { user: null },
 				} as any),
-			).rejects.toMatchObject({ status: 401 });
+			).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 		});
 
 		it("throws 400 for invalid task ID", async () => {
@@ -271,7 +272,8 @@ describe("session page server", () => {
 			{
 				name: "unauthenticated user",
 				event: { params: { id: mockTaskId }, locals: { user: null } },
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
@@ -290,8 +292,14 @@ describe("session page server", () => {
 				setup: () => mockSessionService.startSession.mockRejectedValue("String error"),
 				expected: { status: 500, data: { error: "Failed to start session" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected, setup }) => {
+		])("returns controlled failures for $name", async ({ event, expected, setup, redirect }) => {
 			setup?.();
+			if (redirect) {
+				await expect(actions.start(event as any)).rejects.toMatchObject(expected);
+				expect(mockSessionService.startSession).not.toHaveBeenCalled();
+				return;
+			}
+
 			const result = await actions.start(event as any);
 			expect(result).toMatchObject(expected);
 		});
@@ -582,29 +590,102 @@ describe("session page server", () => {
 			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
 		});
 
+		it("rejects overlong non-mail messages before session lookup", async () => {
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) } }));
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Message is too long" } });
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
+		});
+
+		it("rejects overlong client message IDs before task lookup", async () => {
+			const result = await actions.send(
+				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "x".repeat(CLIENT_MESSAGE_ID_MAX_LENGTH + 1) } }),
+			);
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Client message ID is too long" } });
+			expect(mockDb.query.task.findFirst).not.toHaveBeenCalled();
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+		});
+
+		it("allows Apple Mail messages above the shared UI limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+
+			const message = "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1);
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${message}</div>` } }));
+
+			expect(result).toMatchObject({ success: true });
+			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+		});
+
+		it("allows Apple Mail messages at the body limit even when headers push the formatted message over the raw limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+
+			const body = "x".repeat(MAIL_TEXT_MAX_LENGTH);
+			const message = `To: Maya Chen <maya@example.com>\nSubject: Update\n\n${body}`;
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${body}</div>` } }));
+
+			expect(result).toMatchObject({ success: true });
+			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+		});
+
+		it("rejects Apple Mail messages over the mail limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) } }));
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Message is too long" } });
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+		});
+
 		it.each([
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "789", message: "Hello" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "789", message: "Hello" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789", message: "Hello" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "789", message: "Hello" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: { sessionId: "invalid", message: "Hello" } }),
+				event: () => createFormEvent({ values: { sessionId: "invalid", message: "Hello" } }),
 				expected: { status: 400, data: { error: "Invalid session ID" } },
 			},
 			{
 				name: "empty message",
-				event: createFormEvent({ values: { sessionId: "789", message: "" } }),
+				event: () => createFormEvent({ values: { sessionId: "789", message: "" } }),
 				expected: { status: 400, data: { error: "Message is required" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.send(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.send(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockDb.query.task.findFirst).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.send(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 
@@ -686,21 +767,30 @@ describe("session page server", () => {
 		it.each([
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: { sessionId: "invalid" } }),
+				event: () => createFormEvent({ values: { sessionId: "invalid" } }),
 				expected: { status: 400, data: { error: "Invalid session ID" } },
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "789" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "789" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "789" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "789" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.complete(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.complete(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.complete(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 
@@ -777,21 +867,30 @@ describe("session page server", () => {
 		it.each([
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { sessionId: "123" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { sessionId: "123" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid task id",
-				event: createFormEvent({ taskId: "invalid", values: { sessionId: "123" } }),
+				event: () => createFormEvent({ taskId: "invalid", values: { sessionId: "123" } }),
 				expected: { status: 400, data: { error: "Invalid task ID" } },
 			},
 			{
 				name: "invalid session id",
-				event: createFormEvent({ values: {} }),
+				event: () => createFormEvent({ values: {} }),
 				expected: { status: 400, data: { error: "Invalid session" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.hint(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.hint(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.hint(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 
@@ -802,6 +901,7 @@ describe("session page server", () => {
 		});
 
 		it("passes valid contextPath array to generateHint", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -817,7 +917,33 @@ describe("session page server", () => {
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
 		});
 
+		it("allows large hint contextPaths up to the task turn-based context budget", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 6 } });
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			const contextPath = JSON.stringify(
+				Array.from({ length: 6 }, (_, i) => ({
+					author: `speaker-${i}`,
+					text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH),
+				})),
+			);
+
+			expect(contextPath.length).toBeGreaterThan(USER_LONG_TEXT_MAX_LENGTH);
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
+				123,
+				expect.arrayContaining([expect.objectContaining({ author: "speaker-0", text: expect.stringMatching(/^x+$/) })]),
+			);
+		});
+
 		it("ignores contextPath when it is not valid JSON", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -831,6 +957,7 @@ describe("session page server", () => {
 		});
 
 		it("ignores contextPath when it is a JSON object instead of array", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -844,6 +971,7 @@ describe("session page server", () => {
 		});
 
 		it("filters malformed contextPath entries before calling generateHint", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -858,6 +986,7 @@ describe("session page server", () => {
 		});
 
 		it("ignores contextPath when it is an empty string", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",

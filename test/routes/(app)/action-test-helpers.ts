@@ -1,5 +1,5 @@
 import type { ActionFailure } from "@sveltejs/kit";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 export function createActionEvent(entries: Record<string, string>, userId = "u1") {
 	const formData = new FormData();
@@ -10,7 +10,7 @@ export function createActionEvent(entries: Record<string, string>, userId = "u1"
 	return {
 		locals: { user: userId ? { id: userId } : null },
 		request: {
-			formData: async () => formData,
+			formData: vi.fn().mockResolvedValue(formData),
 			headers: new Headers(),
 		},
 	} as any;
@@ -49,9 +49,12 @@ export function runSwitchLanguageActionSuite({
 			expect(result.data?.message).toBe("Invalid language");
 		});
 
-		it("returns 401 when user id is missing", async () => {
-			const result = (await action(createActionEvent({ language: "fr" }, ""))) as ActionFailure<any>;
-			expect(result.status).toBe(401);
+		it("redirects before parsing form data when user is missing", async () => {
+			const event = createActionEvent({ language: "fr" }, "");
+
+			await expect(action(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(updateUser).not.toHaveBeenCalled();
 		});
 
 		it("updates language, ensures profile, and redirects", async () => {

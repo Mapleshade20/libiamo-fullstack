@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "$lib/server/db";
 import { actions, load } from "$routes/(admin)/admin/reviews/[id]/+page.server";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ vi.mock("drizzle-orm", () => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function createEvent(formEntries?: Record<string, string>, userId = "admin-1") {
+function createEvent(formEntries?: Record<string, string>, userId = "admin-1", role = "admin") {
 	const formData = new FormData();
 	if (formEntries) {
 		for (const [key, value] of Object.entries(formEntries)) {
@@ -39,9 +40,9 @@ function createEvent(formEntries?: Record<string, string>, userId = "admin-1") {
 		}
 	}
 	return {
-		locals: { user: userId ? { id: userId } : null },
+		locals: { user: userId ? { id: userId, role } : null },
 		params: { id: "1" },
-		request: { formData: async () => formData, headers: new Headers() },
+		request: { formData: vi.fn().mockResolvedValue(formData), headers: new Headers() },
 	} as any;
 }
 
@@ -66,7 +67,7 @@ describe("Admin Reviews [id] +page.server", () => {
 
 	describe("load", () => {
 		it("returns 404 for invalid id", async () => {
-			const event = { params: { id: "abc" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "abc" } } as any;
 			await expect(load(event)).rejects.toMatchObject({ status: 404 });
 		});
 
@@ -74,7 +75,7 @@ describe("Admin Reviews [id] +page.server", () => {
 			const limit = vi.fn().mockResolvedValue([]);
 			mockSelectFrom.mockReturnValue({ leftJoin: vi.fn(() => ({ where: vi.fn(() => ({ limit })) })) });
 
-			const event = { params: { id: "1" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "1" } } as any;
 			await expect(load(event)).rejects.toMatchObject({ status: 404 });
 		});
 
@@ -82,7 +83,7 @@ describe("Admin Reviews [id] +page.server", () => {
 			const limit = vi.fn().mockResolvedValue([buildContribution()]);
 			mockSelectFrom.mockReturnValue({ leftJoin: vi.fn(() => ({ where: vi.fn(() => ({ limit })) })) });
 
-			const event = { params: { id: "1" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "1" } } as any;
 			const result = (await load(event)) as { contribution: Record<string, unknown> };
 			expect(result.contribution).toBeDefined();
 		});
@@ -92,6 +93,14 @@ describe("Admin Reviews [id] +page.server", () => {
 		it("redirects unauthenticated users", async () => {
 			const event = createEvent({}, "");
 			await expect(actions.reject(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+		});
+
+		it("returns 403 for non-admin users", async () => {
+			const event = createEvent({}, "learner-1", "learner");
+			await expect(actions.reject(event)).rejects.toMatchObject({ status: 403 });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(db.select).not.toHaveBeenCalled();
+			expect(db.update).not.toHaveBeenCalled();
 		});
 
 		it("rejects and redirects to reviews list", async () => {

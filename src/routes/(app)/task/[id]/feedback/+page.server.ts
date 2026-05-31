@@ -1,5 +1,7 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
@@ -7,9 +9,35 @@ import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/not
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
+function hasOversizedUserText(values: string[]) {
+	return values.some((value) => value.length > USER_TEXT_MAX_LENGTH);
+}
+
+function getConversationContextMaxLength(maxTurns?: number | null) {
+	return (maxTurns && maxTurns > 0 ? PRACTICE_UI_TEXT_MAX_LENGTH * 2 * maxTurns : 0) + USER_LONG_TEXT_MAX_LENGTH;
+}
+
+function hasOversizedConversationContext(values: string[], maxTurns?: number | null) {
+	return values.reduce((total, value) => total + value.length, 0) > getConversationContextMaxLength(maxTurns);
+}
+
+async function getSessionContext(sessionId: number, userId: string, taskId: number) {
+	const session = await getSessionOrFail(sessionId, userId, taskId);
+	if (!session) return null;
+
+	const sessionData = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
+	});
+
+	return {
+		language: sessionData?.task?.language ?? "en",
+		maxTurns: sessionData?.task?.template?.maxTurns ?? 0,
+	};
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const user = locals.user;
-	if (!user) throw error(401, "Unauthorized");
+	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
 	const taskId = Number.parseInt(taskIdStr, 10);
@@ -77,8 +105,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	generateFeedback: async ({ params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -108,8 +135,7 @@ export const actions: Actions = {
 	},
 
 	followUp: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -128,10 +154,16 @@ export const actions: Actions = {
 		if (!itemText || !category || !question) {
 			return fail(400, { error: "Missing required fields" });
 		}
+		if (hasOversizedUserText([itemText, category, question])) {
+			return fail(400, { error: "Text is too long" });
+		}
 
 		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
+			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (hasOversizedConversationContext([currentContext, previousContext], sessionContext.maxTurns)) {
+				return fail(400, { error: "Text is too long" });
+			}
 
 			const result = await followUpOnFeedback({
 				sessionId,
@@ -151,8 +183,7 @@ export const actions: Actions = {
 	},
 
 	saveNote: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -169,18 +200,16 @@ export const actions: Actions = {
 		if (!annotationText || !annotationKind || !explanation) {
 			return fail(400, { error: "Missing required fields" });
 		}
+		if (hasOversizedUserText([annotationText, annotationKind, explanation])) {
+			return fail(400, { error: "Text is too long" });
+		}
 
 		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			// Get task language
-			const sessionData = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, sessionId),
-				with: { task: { columns: { language: true } } },
-			});
-
-			const language = sessionData?.task?.language ?? "en";
+			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (hasOversizedConversationContext([currentContext, previousContext], sessionContext.maxTurns)) {
+				return fail(400, { error: "Text is too long" });
+			}
 
 			// Create note using existing infrastructure
 			const categoryMap: Record<string, "grammar" | "vocabulary" | "coherence"> = {
@@ -197,7 +226,7 @@ export const actions: Actions = {
 			]
 				.filter(Boolean)
 				.join("\n\n");
-			const notes = await createNotesBatch(user.id, sessionId, language, [{ tutorComment, category, sourceContext }], user.id);
+			const notes = await createNotesBatch(user.id, sessionId, sessionContext.language, [{ tutorComment, category, sourceContext }], user.id);
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
@@ -207,8 +236,7 @@ export const actions: Actions = {
 	},
 
 	saveSelectionNotes: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -222,21 +250,21 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!selectedText) return fail(400, { error: "Missing selected text" });
+		if (hasOversizedUserText([selectedText, sourceKind])) {
+			return fail(400, { error: "Text is too long" });
+		}
 
 		try {
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const sessionData = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, sessionId),
-				with: { task: { columns: { language: true } } },
-			});
-			const language = sessionData?.task?.language ?? "en";
+			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (hasOversizedConversationContext([currentContext, previousContext], sessionContext.maxTurns)) {
+				return fail(400, { error: "Text is too long" });
+			}
 
 			const result = await createNotesFromSelectionBatch({
 				userId: user.id,
 				sessionId,
-				language,
+				language: sessionContext.language,
 				selectedText,
 				currentContext,
 				previousContext,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/translate/[id]/+page.server";
 
 // ── Hoisted mocks ──────────────────────────────────────────────────
@@ -212,6 +213,20 @@ describe("(app) translate/[id] +page.server", () => {
 		it("returns 400 for invalid JSON", async () => {
 			const result = (await actions.saveDraft(createActionEvent({ translations: "not-json" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
+		});
+
+		it("returns 400 for non-object translations JSON", async () => {
+			const result = (await actions.saveDraft(createActionEvent({ translations: "[]" }, { id: "1" }))) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Invalid translations JSON");
+		});
+
+		it("returns 400 when a translation sentence is too long", async () => {
+			const result = (await actions.saveDraft(
+				createActionEvent({ translations: JSON.stringify({ "0-0": "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }) }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Translation text is too long");
 		});
 
 		it("returns 400 for non-numeric attemptId", async () => {
@@ -619,6 +634,22 @@ describe("(app) translate/[id] +page.server", () => {
 			expect(result.data?.error).toBe("Missing language");
 		});
 
+		it("returns 400 when tutor help text is too long", async () => {
+			const result = (await actions.explainFeedback(
+				createActionEvent(
+					{
+						sourceSentence: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1),
+						userTranslation: "hola",
+						feedback: "wrong word",
+						language: "es",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Tutor help text is too long");
+		});
+
 		it("returns explanation on success", async () => {
 			const explanation = "## What went wrong\n\nThe verb form is incorrect...";
 			mockChatText.mockResolvedValueOnce({ content: explanation });
@@ -682,6 +713,14 @@ describe("(app) translate/[id] +page.server", () => {
 			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello" }, { id: "1" }))) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns 400 when sourceSentence is too long", async () => {
+			const result = (await actions.translateSentence(
+				createActionEvent({ sourceSentence: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1), language: "fr" }, { id: "1" }),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Tutor help text is too long");
 		});
 
 		it("returns translation on success", async () => {
@@ -760,6 +799,23 @@ describe("(app) translate/[id] +page.server", () => {
 			)) as any;
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Missing language");
+		});
+
+		it("returns 400 when question is too long", async () => {
+			const result = (await actions.askTutor(
+				createActionEvent(
+					{
+						sourceSentence: "Hello",
+						userTranslation: "hola",
+						feedback: "wrong",
+						question: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1),
+						language: "es",
+					},
+					{ id: "1" },
+				),
+			)) as any;
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Tutor help text is too long");
 		});
 
 		it("returns answer on success", async () => {

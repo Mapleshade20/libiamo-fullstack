@@ -32,7 +32,8 @@ describe("Admin Reviews +page.server", () => {
 		const where = vi.fn(() => ({ orderBy }));
 		mockSelectFrom.mockReturnValue({ leftJoin: vi.fn(() => ({ where })) });
 
-		const result = (await load({} as any)) as { pendingContributions: unknown[] };
+		const event = { locals: { user: { id: "admin-1", role: "admin" } } } as any;
+		const result = (await load(event)) as { pendingContributions: unknown[] };
 		expect(result.pendingContributions).toEqual([]);
 	});
 });

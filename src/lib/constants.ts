@@ -1,6 +1,21 @@
 export const UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 export type UiVariant = (typeof UI_VARIANTS)[number];
 
+export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
+export const MAIL_TEXT_MAX_LENGTH = 50000;
+export const MAIL_BODY_HTML_MAX_LENGTH = MAIL_TEXT_MAX_LENGTH * 10;
+export const AUTH_EMAIL_MAX_LENGTH = 254;
+export const AUTH_PASSWORD_MAX_LENGTH = 1024;
+export const AUTH_TOKEN_MAX_LENGTH = 2048;
+export const USER_NAME_MAX_LENGTH = 100;
+export const USER_TEXT_MAX_LENGTH = 10000;
+export const USER_LONG_TEXT_MAX_LENGTH = 50000;
+export const USER_KEYWORDS_MAX_LENGTH = 10000;
+export const BYOK_API_KEY_MAX_LENGTH = 2048;
+export const BYOK_MODEL_MAX_LENGTH = 512;
+export const BYOK_BASE_URL_MAX_LENGTH = 2048;
+export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;
+
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",
 	apple_mail: "Apple Mail",
@@ -8,6 +23,55 @@ export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	imessage: "iMessage",
 	ao3: "AO3",
 	translator: "Translator",
+};
+
+export const BYOK_API_BASE_URLS = [
+	"https://openrouter.ai/api/v1",
+	"https://api.deepseek.com",
+	"https://dashscope.aliyuncs.com/compatible-mode/v1",
+	"https://api.hunyuan.cloud.tencent.com/v1",
+	"https://qianfan.baidubce.com/v2",
+	"https://open.bigmodel.cn/api/paas/v4",
+	"https://api.moonshot.cn/v1",
+	"https://api.minimaxi.com/v1",
+	"https://ark.cn-beijing.volces.com/api/v3",
+	"https://api.siliconflow.com/v1",
+	"https://api-inference.modelscope.cn/v1",
+	"https://api.stepfun.com/v1",
+	"https://api.baichuan-ai.com/v1",
+	"https://api.sensenova.cn/compatible-mode/v2",
+	"https://spark-api-open.xf-yun.com/v1",
+	"https://api.modelverse.cn/v1",
+	"https://api.modelarts-maas.com/v1",
+	"https://api.ppio.com/openai/v1",
+	"https://cloud.infini-ai.com/maas/v1",
+	"https://openai.qiniu.com/v1",
+	"https://api.scnet.cn/api/llm/v1",
+] as const;
+export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
+
+export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
+	"https://openrouter.ai/api/v1": "OpenRouter",
+	"https://api.deepseek.com": "DeepSeek",
+	"https://dashscope.aliyuncs.com/compatible-mode/v1": "Alibaba Cloud Bailian / Qwen",
+	"https://api.hunyuan.cloud.tencent.com/v1": "Tencent Hunyuan",
+	"https://qianfan.baidubce.com/v2": "Baidu Qianfan",
+	"https://open.bigmodel.cn/api/paas/v4": "Zhipu AI / GLM",
+	"https://api.moonshot.cn/v1": "Kimi / Moonshot",
+	"https://api.minimaxi.com/v1": "MiniMax",
+	"https://ark.cn-beijing.volces.com/api/v3": "Volcengine Ark / Doubao",
+	"https://api.siliconflow.com/v1": "SiliconFlow",
+	"https://api-inference.modelscope.cn/v1": "ModelScope",
+	"https://api.stepfun.com/v1": "StepFun",
+	"https://api.baichuan-ai.com/v1": "Baichuan AI",
+	"https://api.sensenova.cn/compatible-mode/v2": "SenseNova",
+	"https://spark-api-open.xf-yun.com/v1": "iFlytek Spark",
+	"https://api.modelverse.cn/v1": "UCloud ModelVerse",
+	"https://api.modelarts-maas.com/v1": "Huawei Cloud ModelArts MaaS",
+	"https://api.ppio.com/openai/v1": "PPIO",
+	"https://cloud.infini-ai.com/maas/v1": "Infini-AI",
+	"https://openai.qiniu.com/v1": "Qiniu AI",
+	"https://api.scnet.cn/api/llm/v1": "SCNet",
 };
 
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;

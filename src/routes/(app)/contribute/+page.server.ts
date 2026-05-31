@@ -2,14 +2,19 @@ import { fail, redirect } from "@sveltejs/kit";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { templateContributionSchema } from "$lib/schemas";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { templateContribution } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
+function hasOversizedSlotValues(slotValues: Record<string, string>) {
+	return Object.entries(slotValues).some(([key, value]) => key.length > USER_TEXT_MAX_LENGTH || value.length > USER_TEXT_MAX_LENGTH);
+}
+
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) throw redirect(302, "/sign-in");
+	const user = requireUser(event);
 	if (user.role === "admin") throw redirect(302, "/");
 
 	const contributions = await db
@@ -31,8 +36,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	default: async (event) => {
-		const userId = event.locals.user?.id;
-		if (!userId) throw redirect(302, "/sign-in");
+		const user = requireUser(event);
 
 		const formData = await event.request.formData();
 		const raw = Object.fromEntries(formData);
@@ -47,12 +51,15 @@ export const actions: Actions = {
 		if (isTranslate) {
 			await db.insert(templateContribution).values({
 				...result.data,
-				createdBy: userId,
+				createdBy: user.id,
 				status: "pending",
 				submittedAt: new Date(),
 			});
 		} else {
 			const parsed = parseTemplateForm(formData);
+			if (hasOversizedSlotValues(parsed.slotValues)) {
+				return fail(400, { message: "Slot values are too long", values: raw });
+			}
 			const variantResult = prepareVariantPayload(result.data, parsed.slotValues, parsed.openingState, "First variant");
 			if (variantResult.error) {
 				return fail(400, { message: variantResult.error, values: raw });
@@ -60,7 +67,7 @@ export const actions: Actions = {
 
 			await db.insert(templateContribution).values({
 				...result.data,
-				createdBy: userId,
+				createdBy: user.id,
 				status: "pending",
 				submittedAt: new Date(),
 				slotValues: variantResult.slotValues,

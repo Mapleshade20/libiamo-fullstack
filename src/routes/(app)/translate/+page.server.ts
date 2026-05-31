@@ -1,13 +1,12 @@
-import { redirect } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
+	const user = requireUser(event);
 	const language = user.activeLanguage as LanguageCode;
 
 	const templates = await db

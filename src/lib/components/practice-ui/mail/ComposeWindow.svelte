@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
@@ -42,6 +43,8 @@ let lastAppliedEditorHtml = $state("");
 let savedEditorRange = $state<Range | null>(null);
 let savedEditorDomSelection = $state<SerializedEditorSelection | null>(null);
 let isRestoringSelection = false;
+let showLengthWarning = $state(false);
+let warningTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 let activeLayouts = $state<ComposeActiveLayouts>({
 	insertUnorderedList: false,
 	insertOrderedList: false,
@@ -148,6 +151,14 @@ function getPlainTextFromEditor() {
 			.replace(/[\u200B-\u200D\uFEFF]/g, "")
 			.replace(/\n$/, ""),
 	);
+}
+
+function getSelectedEditorTextLength() {
+	const selection = window.getSelection();
+	if (!selection || selection.rangeCount === 0) return 0;
+	const range = selection.getRangeAt(0);
+	if (!selectionBelongsToEditor(range)) return 0;
+	return selection.toString().length;
 }
 
 function selectionBelongsToEditor(range: Range) {
@@ -293,8 +304,18 @@ function updateActiveLayouts() {
 
 function syncDraftFromEditor() {
 	if (!bodyEditor) return;
-	const body = getPlainTextFromEditor();
-	const bodyHtml = bodyEditor.innerHTML;
+	let body = getPlainTextFromEditor();
+	if (body.length > MAIL_TEXT_MAX_LENGTH) {
+		body = body.slice(0, MAIL_TEXT_MAX_LENGTH);
+		bodyEditor.innerText = body;
+		showLengthWarning = true;
+		if (warningTimer) clearTimeout(warningTimer);
+		warningTimer = setTimeout(() => {
+			showLengthWarning = false;
+			warningTimer = null;
+		}, 3000);
+	}
+	const bodyHtml = sanitizeDraftBodyHtml(bodyEditor.innerHTML);
 	const nextDraft = { ...draft, body, bodyHtml };
 	lastAppliedEditorHtml = bodyHtml;
 	draft = nextDraft;
@@ -355,15 +376,36 @@ function handleEditorKeydown(event: KeyboardEvent) {
 	runEditorCommand(event.shiftKey ? "outdent" : "indent");
 }
 
+function handleEditorBeforeInput(event: InputEvent) {
+	if (editorDisabled || event.inputType.startsWith("delete") || event.inputType.startsWith("history")) return;
+	const insertedText = event.data ?? "";
+	if (!insertedText) return;
+
+	const remaining = MAIL_TEXT_MAX_LENGTH - (getPlainTextFromEditor().length - getSelectedEditorTextLength());
+	if (remaining <= 0) {
+		event.preventDefault();
+		return;
+	}
+	if (insertedText.length > remaining) {
+		event.preventDefault();
+		restoreEditorSelection();
+		document.execCommand("insertText", false, insertedText.slice(0, remaining));
+		syncDraftFromEditor();
+	}
+}
+
 function handlePaste(event: ClipboardEvent) {
 	event.preventDefault();
-	const html = sanitizeDraftBodyHtml(event.clipboardData?.getData("text/html"));
+	const remaining = MAIL_TEXT_MAX_LENGTH - (getPlainTextFromEditor().length - getSelectedEditorTextLength());
+	if (remaining <= 0) return;
+
+	const html = sanitizeDraftBodyHtml(event.clipboardData?.getData("text/html"), remaining);
 	if (html) {
 		runEditorCommand("insertHTML", html);
 		return;
 	}
 
-	const text = event.clipboardData?.getData("text/plain") ?? "";
+	const text = (event.clipboardData?.getData("text/plain") ?? "").slice(0, remaining);
 	if (!text) return;
 	restoreEditorSelection();
 	document.execCommand("insertText", false, text);
@@ -429,6 +471,7 @@ $effect(() => {
 <div
 	class="compose-window"
 	class:frame-ready={frameReady}
+	class:length-warning={showLengthWarning}
 	style:left={isCompact ? null : `${frame.x}px`}
 	style:top={isCompact ? null : `${frame.y}px`}
 	style:width={isCompact ? null : `${frame.width}px`}
@@ -460,6 +503,7 @@ $effect(() => {
 		isEmpty={editorIsEmpty}
 		{editorDisabled}
 		placeholder={isCompleted || limitReached ? t.questCompleted : t.composePlaceholder}
+		onBeforeInput={handleEditorBeforeInput}
 		onInput={syncDraftFromEditor}
 		onKeydown={handleEditorKeydown}
 		onKeyup={saveEditorSelection}
@@ -469,6 +513,11 @@ $effect(() => {
 		onPaste={handlePaste}
 	/>
 	<ComposeActionBar {draft} {sessionId} {isSubmitting} {isCompleted} {isInitializing} {limitReached} {t} {onMockAction} {onSend} />
+	{#if showLengthWarning}
+		<div class="length-warning-banner" transition:fly={{ y: -4, duration: 200 }}>
+			{t.lengthLimitReached ?? "Character limit reached — content has been trimmed."}
+		</div>
+	{/if}
 	<div class="resize-grip" role="presentation" onpointerdown={startResize}></div>
 </div>
 
@@ -484,6 +533,16 @@ $effect(() => {
 	background: white;
 	box-shadow: 0 22px 70px rgba(0, 0, 0, 0.24);
 	opacity: 0;
+	transition:
+		box-shadow 0.3s ease,
+		border-color 0.3s ease;
+}
+
+.compose-window.length-warning {
+	border-color: rgba(220, 38, 38, 0.6);
+	box-shadow:
+		0 22px 70px rgba(0, 0, 0, 0.24),
+		inset 0 0 0 2px rgba(220, 38, 38, 0.4);
 }
 
 .compose-window.frame-ready {
@@ -508,6 +567,20 @@ $effect(() => {
 	border-bottom: 2px solid rgba(0, 0, 0, 0.22);
 	border-right: 2px solid rgba(0, 0, 0, 0.22);
 	content: "";
+}
+
+.length-warning-banner {
+	position: absolute;
+	bottom: 52px;
+	left: 0;
+	right: 0;
+	z-index: 10;
+	padding: 6px 16px;
+	background: rgba(254, 226, 226, 0.95);
+	color: #991b1b;
+	font-size: 12px;
+	text-align: center;
+	border-top: 1px solid rgba(220, 38, 38, 0.3);
 }
 
 @media (max-width: 640px) {

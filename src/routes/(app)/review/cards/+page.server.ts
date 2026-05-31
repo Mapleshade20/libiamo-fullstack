@@ -1,13 +1,12 @@
-import { error } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import type { CardType } from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { reviewCard } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) throw error(401);
+	const user = requireUser(event);
 
 	const cards = await db
 		.select({

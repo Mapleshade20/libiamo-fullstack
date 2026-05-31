@@ -23,7 +23,18 @@ vi.mock("$lib/server/db/schema", () => ({
 }));
 
 vi.mock("@sveltejs/kit", () => ({
+	error: vi.fn((status, body) => {
+		const error = new Error(typeof body === "string" ? body : "Error");
+		(error as any).status = status;
+		throw error;
+	}),
 	fail: vi.fn((status, data) => ({ status, data })),
+	redirect: vi.fn((status, location) => {
+		const error = new Error("Redirect");
+		(error as any).status = status;
+		(error as any).location = location;
+		throw error;
+	}),
 }));
 
 vi.spyOn(tasksModule, "scheduleTaskManually").mockResolvedValue();
@@ -36,6 +47,7 @@ describe("Schedule Page Server", () => {
 	describe("Load Function", () => {
 		const createMockEvent = (searchParams: Record<string, string>) =>
 			({
+				locals: { user: { id: "admin-1", role: "admin" } },
 				url: {
 					searchParams: new URLSearchParams(searchParams),
 				},
@@ -76,9 +88,26 @@ describe("Schedule Page Server", () => {
 	});
 
 	describe("Actions", () => {
+		it("schedule action should return 403 for non-admin users", async () => {
+			const formData = new FormData();
+			formData.append("templateId", "1");
+			formData.append("date", "2024-01-01");
+			const event = {
+				locals: { user: { id: "learner-1", role: "learner" } },
+				request: { formData: vi.fn().mockResolvedValue(formData) },
+			} as any;
+
+			await expect(actions.schedule(event)).rejects.toMatchObject({ status: 403 });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(tasksModule.scheduleTaskManually).not.toHaveBeenCalled();
+		});
+
 		it("schedule action should fail on invalid form data", async () => {
 			const formData = new FormData();
-			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+			const event = {
+				locals: { user: { id: "admin-1", role: "admin" } },
+				request: { formData: vi.fn().mockResolvedValue(formData) },
+			} as any;
 
 			await actions.schedule(event);
 			expect(fail).toHaveBeenCalledWith(400, expect.any(Object));
@@ -88,7 +117,10 @@ describe("Schedule Page Server", () => {
 			const formData = new FormData();
 			formData.append("templateId", "1");
 			formData.append("date", "2024-01-01");
-			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+			const event = {
+				locals: { user: { id: "admin-1", role: "admin" } },
+				request: { formData: vi.fn().mockResolvedValue(formData) },
+			} as any;
 
 			const result = await actions.schedule(event);
 
@@ -100,7 +132,10 @@ describe("Schedule Page Server", () => {
 			const formData = new FormData();
 			formData.append("templateId", "1");
 			formData.append("date", "2024-01-01");
-			const event = { request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+			const event = {
+				locals: { user: { id: "admin-1", role: "admin" } },
+				request: { formData: vi.fn().mockResolvedValue(formData) },
+			} as any;
 
 			vi.mocked(tasksModule.scheduleTaskManually).mockRejectedValueOnce(new Error("Database connection lost"));
 

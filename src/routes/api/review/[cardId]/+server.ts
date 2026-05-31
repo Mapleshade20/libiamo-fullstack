@@ -1,6 +1,7 @@
 import { json } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { reviewCard, reviewLog } from "$lib/server/db/schema";
 import type { RequestHandler } from "./$types";
@@ -26,8 +27,8 @@ export const DELETE: RequestHandler = async (event) => {
 };
 
 const updateSchema = z.object({
-	front: z.string().min(1),
-	back: z.string().min(1),
+	front: z.string().min(1).max(USER_TEXT_MAX_LENGTH),
+	back: z.string().min(1).max(USER_TEXT_MAX_LENGTH),
 });
 
 export const PATCH: RequestHandler = async (event) => {

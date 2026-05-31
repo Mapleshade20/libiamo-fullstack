@@ -3,7 +3,15 @@ import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
-import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import { parseDraftFromMessage, summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import {
+	CLIENT_MESSAGE_ID_MAX_LENGTH,
+	MAIL_TEXT_MAX_LENGTH,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	USER_LONG_TEXT_MAX_LENGTH,
+	USER_TEXT_MAX_LENGTH,
+} from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -24,6 +32,22 @@ emojiConverter.colons_mode = true;
 
 function isMailAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
 	return message.trim() === MAIL_AGENT_OPENING_MESSAGE && clientMessageId === `join-${sessionId}`;
+}
+
+function isOverlongMessage(ui: string, rawMessage: string, hiddenUserMessage: boolean) {
+	if (hiddenUserMessage) return false;
+	if (ui === "apple_mail") {
+		return parseDraftFromMessage(rawMessage, "").body.length > MAIL_TEXT_MAX_LENGTH;
+	}
+	return rawMessage.length > PRACTICE_UI_TEXT_MAX_LENGTH;
+}
+
+function isOversizedMetadataId(value: string) {
+	return value.length > CLIENT_MESSAGE_ID_MAX_LENGTH;
+}
+
+function getConversationContextMaxLength(maxTurns?: number | null) {
+	return (maxTurns && maxTurns > 0 ? PRACTICE_UI_TEXT_MAX_LENGTH * 2 * maxTurns : 0) + USER_LONG_TEXT_MAX_LENGTH;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -57,8 +81,9 @@ async function getLearnerProfileName(user: { id: string; name?: string | null })
 	return userProfile?.name || user.name || "Learner";
 }
 
-function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
+function parseHintContextPath(value: FormDataEntryValue | null, maxLength: number): Array<{ author: string; text: string }> | undefined {
 	if (typeof value !== "string" || !value.trim()) return undefined;
+	if (value.length > maxLength) return undefined;
 
 	try {
 		const parsed = JSON.parse(value);
@@ -67,6 +92,8 @@ function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author:
 			(item): item is { author: string; text: string } =>
 				Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof item.author === "string" && typeof item.text === "string",
 		);
+		if (contextPath.some((item) => item.author.length > USER_TEXT_MAX_LENGTH || item.text.length > USER_LONG_TEXT_MAX_LENGTH)) return undefined;
+		if (contextPath.reduce((total, item) => total + item.text.length, 0) > maxLength) return undefined;
 		return contextPath.length ? contextPath : undefined;
 	} catch {
 		return undefined;
@@ -74,8 +101,7 @@ function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author:
 }
 
 export const load: PageServerLoad = async ({ params, locals, parent }) => {
-	const user = locals.user;
-	if (!user) throw error(401, "Unauthorized");
+	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
 	const taskId = Number.parseInt(taskIdStr, 10);
@@ -139,8 +165,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 
 export const actions: Actions = {
 	start: async ({ params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -158,8 +183,7 @@ export const actions: Actions = {
 	},
 
 	send: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -172,6 +196,7 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
+		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
 
 		try {
 			const taskData = await db.query.task.findFirst({
@@ -182,11 +207,15 @@ export const actions: Actions = {
 				return fail(404, { error: "Task not found" });
 			}
 
+			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
+			if (isOverlongMessage(taskData.template.ui, rawMessage, hiddenUserMessage)) {
+				return fail(400, { error: "Message is too long" });
+			}
+
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
-			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
 			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,
@@ -248,8 +277,7 @@ export const actions: Actions = {
 	},
 
 	agentOpening: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -260,6 +288,7 @@ export const actions: Actions = {
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
 
 		try {
 			const taskData = await db.query.task.findFirst({
@@ -287,8 +316,7 @@ export const actions: Actions = {
 	},
 
 	complete: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -318,23 +346,28 @@ export const actions: Actions = {
 	},
 
 	hint: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser(event);
 
 		const taskId = Number.parseInt(event.params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
 
 		const formData = await event.request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const contextPathRaw = formData.get("contextPath");
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
-
-		const contextPath = parseHintContextPath(formData.get("contextPath"));
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
+			const taskData = await db.query.task.findFirst({
+				where: eq(task.id, taskId),
+				with: { template: true },
+			});
+			if (!taskData) return fail(404, { error: "Task not found" });
+
+			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.template.maxTurns));
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {

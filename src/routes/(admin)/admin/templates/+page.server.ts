@@ -1,11 +1,14 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq, type SQL } from "drizzle-orm";
 import type { InteractionType, LanguageCode } from "$lib/constants";
+import { requireAdmin } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { template } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	const language = event.url.searchParams.get("language") as LanguageCode | null;
 	const interactionType = event.url.searchParams.get("interactionType");
 	const active = event.url.searchParams.get("active");
@@ -30,6 +33,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	toggleActive: async (event) => {
+		requireAdmin(event);
+
 		const formData = await event.request.formData();
 		const id = Number(formData.get("id"));
 		const currentActive = formData.get("isActive") === "true";

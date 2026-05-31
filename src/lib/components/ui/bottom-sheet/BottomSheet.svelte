@@ -10,6 +10,7 @@ let {
 	cancelLabel = "Cancel",
 	onConfirm,
 	onCancel,
+	children,
 }: {
 	show?: boolean;
 	title?: string;
@@ -18,6 +19,7 @@ let {
 	cancelLabel?: string;
 	onConfirm: () => void;
 	onCancel: () => void;
+	children?: import("svelte").Snippet;
 } = $props();
 
 function handleBackdropClick(event: MouseEvent) {
@@ -49,7 +51,11 @@ function handleBackdropClick(event: MouseEvent) {
 			<!-- Content -->
 			<div class="mb-6">
 				<h3 class="text-xl font-medium font-serif text-[#2a2520] mb-2">{title}</h3>
-				<p class="text-base text-[#6b6560] leading-relaxed">{message}</p>
+				{#if children}
+					{@render children()}
+				{:else}
+					<p class="text-base text-[#6b6560] leading-relaxed">{message}</p>
+				{/if}
 			</div>
 
 			<!-- Actions -->

@@ -1,18 +1,16 @@
-import { fail, redirect } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
-import { switchLanguageSchema } from "$lib/schemas";
-import { auth } from "$lib/server/auth";
+import { requireUser } from "$lib/server/authz";
 import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/dates";
 import { db } from "$lib/server/db";
-import { practiceSession, task, template, userLearningProfile } from "$lib/server/db/schema";
+import { practiceSession, task, template } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
 import { ensureTasksForDate } from "$lib/server/tasks";
+import { switchActiveLanguage } from "$lib/server/user-language";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
+	const user = requireUser(event);
 	const language = user.activeLanguage as LanguageCode;
 
 	const userTz = user.timezone || "UTC";
@@ -94,31 +92,5 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	switchLanguage: async (event) => {
-		const formData = await event.request.formData();
-		const raw = { language: formData.get("language")?.toString() ?? "" };
-
-		const result = switchLanguageSchema.safeParse(raw);
-		if (!result.success) {
-			return fail(400, { message: "Invalid language" });
-		}
-
-		await auth.api.updateUser({
-			body: { activeLanguage: result.data.language },
-			headers: event.request.headers,
-		});
-
-		const userId = event.locals.user?.id;
-		if (!userId) return fail(401);
-
-		await db
-			.insert(userLearningProfile)
-			.values({
-				userId,
-				language: result.data.language,
-			})
-			.onConflictDoNothing();
-
-		return redirect(302, "/");
-	},
+	switchLanguage: switchActiveLanguage,
 };

@@ -63,6 +63,8 @@ let evaluation = $derived<Evaluation | null>(liveEvaluation ?? savedEvaluation);
 function isShort(text: string): boolean {
 	const t = text.trim();
 	if (t.length === 0) return true;
+	const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff]/.test(t);
+	if (hasCJK) return t.replace(/\s+/g, "").length <= 8;
 	return t.split(/\s+/).length <= 3 || t.length <= 20;
 }
 

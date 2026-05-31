@@ -1,9 +1,10 @@
 import DOMPurify from "isomorphic-dompurify";
+import { MAIL_BODY_HTML_MAX_LENGTH } from "$lib/constants";
 import { normalizeText } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
 import type { DraftEmail, MailEmail, NormalizedMailEmail } from "./types";
 
-const mailBodyHtmlMaxLength = 20000;
+const mailBodyHtmlMaxLength = MAIL_BODY_HTML_MAX_LENGTH;
 
 function escapeHtml(value: string) {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
