@@ -38,6 +38,11 @@ export interface ArchiveGroup {
 export async function listCompletedSessions(userId: string, now: Date = new Date()): Promise<ArchiveGroup[]> {
 	const sessions = await db.query.practiceSession.findMany({
 		where: and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["completed", "evaluated"])),
+		columns: {
+			id: true,
+			taskId: true,
+			completedAt: true,
+		},
 		with: {
 			task: {
 				columns: { title: true },
