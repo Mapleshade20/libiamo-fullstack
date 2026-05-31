@@ -1,7 +1,24 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
-import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, NATIVE_LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+import {
+	AUTH_EMAIL_MAX_LENGTH,
+	AUTH_PASSWORD_MAX_LENGTH,
+	AUTH_TOKEN_MAX_LENGTH,
+	BYOK_API_KEY_MAX_LENGTH,
+	BYOK_MODEL_MAX_LENGTH,
+	CADENCES,
+	INTERACTION_TYPES,
+	LANGUAGE_CODES,
+	MAIL_TEXT_MAX_LENGTH,
+	NATIVE_LANGUAGE_CODES,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	UI_VARIANTS,
+	type UiVariant,
+	USER_LONG_TEXT_MAX_LENGTH,
+	USER_NAME_MAX_LENGTH,
+	USER_TEXT_MAX_LENGTH,
+} from "$lib/constants";
 
 dayjs.extend(customParseFormat);
 
@@ -28,8 +45,8 @@ export const timezoneSchema = z.preprocess(
 );
 
 export const signInSchema = z.object({
-	email: z.email("Invalid email"),
-	password: z.string().min(1, "Password is required"),
+	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
+	password: z.string().min(1, "Password is required").max(AUTH_PASSWORD_MAX_LENGTH),
 });
 
 const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: string }) => {
@@ -45,34 +62,34 @@ const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: str
 const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
 
 export const signUpSchema = z.object({
-	email: z.email("Invalid email"),
-	password: z.string().min(8, "Password must be at least 8 characters"),
-	name: z.string().min(1, "Name is required"),
+	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
+	password: z.string().min(8, "Password must be at least 8 characters").max(AUTH_PASSWORD_MAX_LENGTH),
+	name: z.string().min(1, "Name is required").max(USER_NAME_MAX_LENGTH),
 	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
 	timezone: timezoneSchema,
 });
 
 export const forgotPasswordSchema = z.object({
-	email: z.email("Invalid email"),
+	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
 });
 
 export const resetPasswordSchema = z.object({
-	newPassword: z.string().min(8, "Password must be at least 8 characters"),
-	token: z.string().min(1, "Invalid token"),
+	newPassword: z.string().min(8, "Password must be at least 8 characters").max(AUTH_PASSWORD_MAX_LENGTH),
+	token: z.string().min(1, "Invalid token").max(AUTH_TOKEN_MAX_LENGTH),
 });
 
 // ── App ──────────────────────────────────────────────────────────────
 export const profileSchema = z
 	.object({
-		name: z.string().max(50).optional(),
+		name: z.string().max(USER_NAME_MAX_LENGTH).optional(),
 		timezone: timezoneSchema,
 		nativeLanguage: z.preprocess(
 			(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
 		),
-		apiKey: z.string().optional(),
+		apiKey: z.string().max(BYOK_API_KEY_MAX_LENGTH).optional(),
 		apiBaseUrl: z.url().optional(),
-		apiModel: z.string().optional(),
+		apiModel: z.string().max(BYOK_MODEL_MAX_LENGTH).optional(),
 	})
 	.refine(byokRefine, {
 		message: byokMessage,
@@ -128,11 +145,64 @@ const templateContentFields = {
 		}),
 };
 
+const contributionContentFields = {
+	titleBase: z.string().min(1, "Title is required").max(USER_TEXT_MAX_LENGTH),
+	shortObjectiveBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
+	descriptionBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
+	materialsMd: z.string().max(USER_LONG_TEXT_MAX_LENGTH).optional(),
+	objectivesBase: z
+		.string()
+		.max(USER_LONG_TEXT_MAX_LENGTH)
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+	translationBase: z
+		.string()
+		.max(USER_LONG_TEXT_MAX_LENGTH)
+		.optional()
+		.transform((v) => {
+			if (!v) return null;
+			const paragraphs = v
+				.split(/\n\s*\n/)
+				.map((para) =>
+					para
+						.split("\n")
+						.map((s) => s.trim())
+						.filter(Boolean),
+				)
+				.filter((para) => para.length > 0);
+			return paragraphs.length > 0 ? paragraphs : null;
+		}),
+	tags: z
+		.string()
+		.max(USER_TEXT_MAX_LENGTH)
+		.optional()
+		.transform((v) => {
+			if (!v) return [];
+			return v
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		}),
+};
+
 const templateCore = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
 	ui: z.enum(UI_VARIANTS),
 	...templateContentFields,
+};
+
+const templateContributionCore = {
+	language: z.enum(LANGUAGE_CODES),
+	interactionType: z.enum(INTERACTION_TYPES),
+	ui: z.enum(UI_VARIANTS),
+	...contributionContentFields,
 };
 
 const translateUiRefine = (data: { interactionType: string; ui: string }) => (data.interactionType === "translate") === (data.ui === "translator");
@@ -157,7 +227,9 @@ export const templateSchema = z
 	})
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
 
-export const templateContributionSchema = z.object({ ...templateCore }).refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
+export const templateContributionSchema = z
+	.object({ ...templateContributionCore })
+	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({
@@ -167,9 +239,12 @@ export const variantSchema = z.object({
 });
 
 // ── openingState per-UI schemas ───────────────────────────────────────
+const uiText = z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH);
+const mailText = z.string().max(MAIL_TEXT_MAX_LENGTH);
+
 const messageSchema = z.object({
-	sender: z.string(),
-	text: z.string(),
+	sender: uiText,
+	text: uiText,
 });
 
 export const imessageOpeningStateSchema = z.object({
@@ -177,14 +252,14 @@ export const imessageOpeningStateSchema = z.object({
 });
 
 export const discordOpeningStateSchema = z.object({
-	serverName: z.string(),
-	channelName: z.string(),
+	serverName: uiText,
+	channelName: uiText,
 	previousMessages: z
 		.array(
 			z.object({
-				sender: z.string(),
-				text: z.string(),
-				timestamp: z.string().optional(),
+				sender: uiText,
+				text: uiText,
+				timestamp: uiText.optional(),
 			}),
 		)
 		.default([]),
@@ -201,19 +276,19 @@ export type RedditCommentInput = {
 
 const redditCommentSchema: z.ZodType<RedditCommentInput> = z.object({
 	id: z.string().optional(),
-	author: z.string(),
-	text: z.string(),
-	timestamp: z.string().optional(),
+	author: uiText,
+	text: uiText,
+	timestamp: uiText.optional(),
 	votes: z.number().optional(),
 	replies: z.lazy(() => z.array(redditCommentSchema)).optional(),
 });
 
 export const redditOpeningStateSchema = z.object({
 	post: z.object({
-		title: z.string(),
-		body: z.string(),
-		subreddit: z.string(),
-		author: z.string(),
+		title: uiText,
+		body: uiText,
+		subreddit: uiText,
+		author: uiText,
 		votes: z.number().optional(),
 	}),
 	previousComments: z.array(redditCommentSchema).optional(),
@@ -222,11 +297,11 @@ export const redditOpeningStateSchema = z.object({
 export const appleMailOpeningStateSchema = z.object({
 	emails: z.array(
 		z.object({
-			from: z.string(),
-			to: z.string(),
-			subject: z.string(),
-			body: z.string(),
-			time: z.string().optional(),
+			from: uiText,
+			to: uiText,
+			subject: uiText,
+			body: mailText,
+			time: uiText.optional(),
 		}),
 	),
 });
@@ -243,45 +318,45 @@ export type Ao3CommentInput = {
 
 const ao3CommentSchema: z.ZodType<Ao3CommentInput> = z.object({
 	id: z.string().optional(),
-	username: z.string(),
-	comment: z.string(),
-	timestamp: z.string().optional(),
-	chapterTitle: z.string().optional(),
-	iconUrl: z.string().optional(),
+	username: uiText,
+	comment: uiText,
+	timestamp: uiText.optional(),
+	chapterTitle: uiText.optional(),
+	iconUrl: uiText.optional(),
 	replies: z.lazy(() => z.array(ao3CommentSchema)).optional(),
 });
 
 export const ao3OpeningStateSchema = z.object({
-	workTitle: z.string(),
-	authorName: z.string().optional(),
-	chapterTitle: z.string().optional(),
-	summary: z.string().optional(),
-	bodyExcerpt: z.string().optional(),
-	rating: z.string().optional(),
-	archiveWarning: z.string().optional(),
-	categories: z.array(z.string()).optional(),
-	fandoms: z.array(z.string()).optional(),
-	relationships: z.array(z.string()).optional(),
-	characters: z.array(z.string()).optional(),
-	additionalTags: z.array(z.string()).optional(),
-	tags: z.array(z.string()).optional(),
+	workTitle: uiText,
+	authorName: uiText.optional(),
+	chapterTitle: uiText.optional(),
+	summary: uiText.optional(),
+	bodyExcerpt: uiText.optional(),
+	rating: uiText.optional(),
+	archiveWarning: uiText.optional(),
+	categories: z.array(uiText).optional(),
+	fandoms: z.array(uiText).optional(),
+	relationships: z.array(uiText).optional(),
+	characters: z.array(uiText).optional(),
+	additionalTags: z.array(uiText).optional(),
+	tags: z.array(uiText).optional(),
 	stats: z
 		.object({
-			published: z.string().optional(),
-			updated: z.string().optional(),
-			words: z.string().optional(),
-			chapters: z.string().optional(),
-			comments: z.string().optional(),
-			kudos: z.string().optional(),
-			bookmarks: z.string().optional(),
-			hits: z.string().optional(),
+			published: uiText.optional(),
+			updated: uiText.optional(),
+			words: uiText.optional(),
+			chapters: uiText.optional(),
+			comments: uiText.optional(),
+			kudos: uiText.optional(),
+			bookmarks: uiText.optional(),
+			hits: uiText.optional(),
 		})
 		.optional(),
 	previousComments: z.array(ao3CommentSchema).optional(),
 });
 
 export const translatorOpeningStateSchema = z.object({
-	sourceText: z.string().min(1, "Source text is required"),
+	sourceText: uiText.min(1, "Source text is required"),
 });
 
 // ── Opening state editor metadata ─────────────────────────────────────

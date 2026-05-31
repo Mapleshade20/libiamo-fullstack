@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -211,6 +212,11 @@ describe("schemas", () => {
 		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "chat", ui: "translator" }).success).toBe(false);
 	});
 
+	it("templateContributionSchema rejects overlong user-authored content", () => {
+		expect(templateContributionSchema.safeParse({ ...baseContribution, titleBase: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+		expect(templateContributionSchema.safeParse({ ...baseContribution, materialsMd: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+	});
+
 	// ── openingState per-UI schemas ───────────────────────────────────
 
 	it("imessageOpeningStateSchema validates correctly", () => {
@@ -256,6 +262,33 @@ describe("schemas", () => {
 		});
 		expect(result.emails).toHaveLength(1);
 		expect(result.emails[0].subject).toBe("Hi");
+	});
+
+	it("opening state schemas reject overlong shared UI text", () => {
+		expect(
+			imessageOpeningStateSchema.safeParse({
+				previousMessages: [{ sender: "Alice", text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }],
+			}).success,
+		).toBe(false);
+		expect(
+			redditOpeningStateSchema.safeParse({
+				post: { title: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1), body: "Content", subreddit: "r/test", author: "user1" },
+			}).success,
+		).toBe(false);
+		expect(ao3OpeningStateSchema.safeParse({ workTitle: "W", summary: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+	});
+
+	it("appleMailOpeningStateSchema allows long bodies up to the mail limit", () => {
+		expect(
+			appleMailOpeningStateSchema.safeParse({
+				emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }],
+			}).success,
+		).toBe(true);
+		expect(
+			appleMailOpeningStateSchema.safeParse({
+				emails: [{ from: "a@b.com", to: "c@d.com", subject: "Hi", body: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) }],
+			}).success,
+		).toBe(false);
 	});
 
 	it("ao3OpeningStateSchema validates correctly with optional fields and nested comments", () => {

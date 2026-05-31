@@ -1,4 +1,5 @@
 import { fail } from "@sveltejs/kit";
+import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { listCompletedSessions } from "$lib/server/archive";
 import { requireUser } from "$lib/server/authz";
 import { followUpOnFeedback } from "$lib/server/feedback";
@@ -23,6 +24,8 @@ export const actions: Actions = {
 
 		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
 		if (!tutorComment) return fail(400, { error: "Content is required" });
+		if (tutorComment.length > USER_TEXT_MAX_LENGTH) return fail(400, { error: "Content is too long" });
+		if (keywordsRaw && keywordsRaw.length > USER_KEYWORDS_MAX_LENGTH) return fail(400, { error: "Keywords are too long" });
 
 		const updated = await updateNote(noteId, user.id, {
 			tutorComment,
@@ -61,6 +64,7 @@ export const actions: Actions = {
 
 		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
 		if (!question) return fail(400, { error: "Question is required" });
+		if (question.length > USER_TEXT_MAX_LENGTH) return fail(400, { error: "Question is too long" });
 
 		const note = await getNote(noteId, user.id);
 		if (!note) return fail(404, { error: "Note not found" });

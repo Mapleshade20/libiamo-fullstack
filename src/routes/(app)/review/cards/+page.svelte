@@ -5,7 +5,7 @@ import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
 import { untrack } from "svelte";
-import { CARD_TYPE_LABELS } from "$lib/constants";
+import { CARD_TYPE_LABELS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 let { data } = $props();
 let cardList = $state(untrack(() => data.cards));
@@ -55,8 +55,18 @@ async function onDelete(cardId: number) {
 				<div class="rounded-lg border border-border bg-card p-4">
 					{#if editingId === card.id}
 						<div class="space-y-3">
-							<input type="text" class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={editFront}>
-							<textarea class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" rows={3} bind:value={editBack}></textarea>
+							<input
+								type="text"
+								class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+								bind:value={editFront}
+								maxlength={USER_TEXT_MAX_LENGTH}
+							>
+							<textarea
+								class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+								rows={3}
+								bind:value={editBack}
+								maxlength={USER_TEXT_MAX_LENGTH}
+							></textarea>
 							<div class="flex justify-end gap-2">
 								<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground" onclick={cancelEdit}><X size={16} /></button>
 								<button type="button" class="rounded p-1 text-green-600 hover:text-green-700" onclick={() => saveEdit(card.id)}>

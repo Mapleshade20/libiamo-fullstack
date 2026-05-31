@@ -1,6 +1,18 @@
 export const UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 export type UiVariant = (typeof UI_VARIANTS)[number];
 
+export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
+export const MAIL_TEXT_MAX_LENGTH = 50000;
+export const AUTH_EMAIL_MAX_LENGTH = 254;
+export const AUTH_PASSWORD_MAX_LENGTH = 1024;
+export const AUTH_TOKEN_MAX_LENGTH = 2048;
+export const USER_NAME_MAX_LENGTH = 100;
+export const USER_TEXT_MAX_LENGTH = 10000;
+export const USER_LONG_TEXT_MAX_LENGTH = 50000;
+export const USER_KEYWORDS_MAX_LENGTH = 10000;
+export const BYOK_API_KEY_MAX_LENGTH = 2048;
+export const BYOK_MODEL_MAX_LENGTH = 512;
+
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",
 	apple_mail: "Apple Mail",

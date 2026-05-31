@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
@@ -7,6 +8,14 @@ import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExi
 import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
+
+function hasOversizedUserText(values: string[]) {
+	return values.some((value) => value.length > USER_TEXT_MAX_LENGTH);
+}
+
+function hasOversizedUserLongText(values: string[]) {
+	return values.some((value) => value.length > USER_LONG_TEXT_MAX_LENGTH);
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const user = requireUser({ locals });
@@ -126,6 +135,9 @@ export const actions: Actions = {
 		if (!itemText || !category || !question) {
 			return fail(400, { error: "Missing required fields" });
 		}
+		if (hasOversizedUserText([itemText, category, question]) || hasOversizedUserLongText([currentContext, previousContext])) {
+			return fail(400, { error: "Text is too long" });
+		}
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
@@ -165,6 +177,9 @@ export const actions: Actions = {
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!annotationText || !annotationKind || !explanation) {
 			return fail(400, { error: "Missing required fields" });
+		}
+		if (hasOversizedUserText([annotationText, annotationKind, explanation]) || hasOversizedUserLongText([currentContext, previousContext])) {
+			return fail(400, { error: "Text is too long" });
 		}
 
 		try {
@@ -218,6 +233,9 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!selectedText) return fail(400, { error: "Missing selected text" });
+		if (hasOversizedUserText([selectedText, sourceKind]) || hasOversizedUserLongText([currentContext, previousContext])) {
+			return fail(400, { error: "Text is too long" });
+		}
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
