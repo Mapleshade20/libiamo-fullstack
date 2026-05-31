@@ -4,7 +4,13 @@ import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import {
+	CLIENT_MESSAGE_ID_MAX_LENGTH,
+	MAIL_TEXT_MAX_LENGTH,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	USER_LONG_TEXT_MAX_LENGTH,
+	USER_TEXT_MAX_LENGTH,
+} from "$lib/constants";
 import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -33,7 +39,7 @@ function getMessageMaxLength(ui: string) {
 }
 
 function isOversizedMetadataId(value: string) {
-	return value.length > USER_TEXT_MAX_LENGTH;
+	return value.length > CLIENT_MESSAGE_ID_MAX_LENGTH;
 }
 
 function getConversationContextMaxLength(maxTurns?: number | null) {

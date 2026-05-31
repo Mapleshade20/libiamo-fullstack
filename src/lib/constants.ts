@@ -12,6 +12,8 @@ export const USER_LONG_TEXT_MAX_LENGTH = 50000;
 export const USER_KEYWORDS_MAX_LENGTH = 10000;
 export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
+export const BYOK_BASE_URL_MAX_LENGTH = 2048;
+export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;
 
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",

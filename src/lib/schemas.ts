@@ -6,6 +6,7 @@ import {
 	AUTH_PASSWORD_MAX_LENGTH,
 	AUTH_TOKEN_MAX_LENGTH,
 	BYOK_API_KEY_MAX_LENGTH,
+	BYOK_BASE_URL_MAX_LENGTH,
 	BYOK_MODEL_MAX_LENGTH,
 	CADENCES,
 	INTERACTION_TYPES,
@@ -88,7 +89,7 @@ export const profileSchema = z
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
 		),
 		apiKey: z.string().max(BYOK_API_KEY_MAX_LENGTH).optional(),
-		apiBaseUrl: z.url().optional(),
+		apiBaseUrl: z.url().max(BYOK_BASE_URL_MAX_LENGTH).optional(),
 		apiModel: z.string().max(BYOK_MODEL_MAX_LENGTH).optional(),
 	})
 	.refine(byokRefine, {

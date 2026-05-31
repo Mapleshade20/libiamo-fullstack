@@ -43,6 +43,8 @@ let lastAppliedEditorHtml = $state("");
 let savedEditorRange = $state<Range | null>(null);
 let savedEditorDomSelection = $state<SerializedEditorSelection | null>(null);
 let isRestoringSelection = false;
+let showLengthWarning = $state(false);
+let warningTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 let activeLayouts = $state<ComposeActiveLayouts>({
 	insertUnorderedList: false,
 	insertOrderedList: false,
@@ -306,6 +308,12 @@ function syncDraftFromEditor() {
 	if (body.length > MAIL_TEXT_MAX_LENGTH) {
 		body = body.slice(0, MAIL_TEXT_MAX_LENGTH);
 		bodyEditor.innerText = body;
+		showLengthWarning = true;
+		if (warningTimer) clearTimeout(warningTimer);
+		warningTimer = setTimeout(() => {
+			showLengthWarning = false;
+			warningTimer = null;
+		}, 3000);
 	}
 	const bodyHtml = sanitizeDraftBodyHtml(bodyEditor.innerHTML);
 	const nextDraft = { ...draft, body, bodyHtml };
@@ -463,6 +471,7 @@ $effect(() => {
 <div
 	class="compose-window"
 	class:frame-ready={frameReady}
+	class:length-warning={showLengthWarning}
 	style:left={isCompact ? null : `${frame.x}px`}
 	style:top={isCompact ? null : `${frame.y}px`}
 	style:width={isCompact ? null : `${frame.width}px`}
@@ -504,6 +513,11 @@ $effect(() => {
 		onPaste={handlePaste}
 	/>
 	<ComposeActionBar {draft} {sessionId} {isSubmitting} {isCompleted} {isInitializing} {limitReached} {t} {onMockAction} {onSend} />
+	{#if showLengthWarning}
+		<div class="length-warning-banner" transition:fly={{ y: -4, duration: 200 }}>
+			{t.lengthLimitReached ?? "Character limit reached — content has been trimmed."}
+		</div>
+	{/if}
 	<div class="resize-grip" role="presentation" onpointerdown={startResize}></div>
 </div>
 
@@ -519,6 +533,16 @@ $effect(() => {
 	background: white;
 	box-shadow: 0 22px 70px rgba(0, 0, 0, 0.24);
 	opacity: 0;
+	transition:
+		box-shadow 0.3s ease,
+		border-color 0.3s ease;
+}
+
+.compose-window.length-warning {
+	border-color: rgba(220, 38, 38, 0.6);
+	box-shadow:
+		0 22px 70px rgba(0, 0, 0, 0.24),
+		inset 0 0 0 2px rgba(220, 38, 38, 0.4);
 }
 
 .compose-window.frame-ready {
@@ -543,6 +567,20 @@ $effect(() => {
 	border-bottom: 2px solid rgba(0, 0, 0, 0.22);
 	border-right: 2px solid rgba(0, 0, 0, 0.22);
 	content: "";
+}
+
+.length-warning-banner {
+	position: absolute;
+	bottom: 52px;
+	left: 0;
+	right: 0;
+	z-index: 10;
+	padding: 6px 16px;
+	background: rgba(254, 226, 226, 0.95);
+	color: #991b1b;
+	font-size: 12px;
+	text-align: center;
+	border-top: 1px solid rgba(220, 38, 38, 0.3);
 }
 
 @media (max-width: 640px) {

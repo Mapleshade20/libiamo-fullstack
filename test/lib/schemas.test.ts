@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import {
+	BYOK_API_KEY_MAX_LENGTH,
+	BYOK_MODEL_MAX_LENGTH,
+	MAIL_TEXT_MAX_LENGTH,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	USER_LONG_TEXT_MAX_LENGTH,
+} from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -227,7 +233,7 @@ describe("schemas", () => {
 
 	it("templateContributionSchema rejects overlong user-authored content", () => {
 		expect(templateContributionSchema.safeParse({ ...baseContribution, titleBase: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
-		expect(templateContributionSchema.safeParse({ ...baseContribution, materialsMd: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+		expect(templateContributionSchema.safeParse({ ...baseContribution, materialsMd: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
 	});
 
 	// ── openingState per-UI schemas ───────────────────────────────────
