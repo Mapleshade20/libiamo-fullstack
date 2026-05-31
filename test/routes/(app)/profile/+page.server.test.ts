@@ -1,5 +1,6 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BYOK_API_BASE_URLS } from "$lib/constants";
 import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
@@ -165,7 +166,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile saves BYOK config after verification", async () => {
 			const event = createActionEvent({
 				apiKey: "sk-test-key",
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -173,7 +174,7 @@ describe("Profile +page.server", () => {
 
 			const result = await actions.updateProfile(event);
 
-			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test-key", "test-model");
+			expect(mockVerifyApiKey).toHaveBeenCalledWith(BYOK_API_BASE_URLS[0], "sk-test-key", "test-model");
 			expect(mockEncryptApiKey).toHaveBeenCalledWith("sk-test-key");
 			expect(result).toEqual({ success: true });
 		});
@@ -181,7 +182,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile returns 400 when BYOK verification fails", async () => {
 			const event = createActionEvent({
 				apiKey: "sk-bad-key",
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -208,7 +209,7 @@ describe("Profile +page.server", () => {
 
 		it("updateProfile returns schema error when baseUrl and model are given without apiKey", async () => {
 			const event = createActionEvent({
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -216,6 +217,21 @@ describe("Profile +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors?.apiKey).toBeDefined();
+		});
+
+		it("updateProfile rejects an unsupported BYOK base URL before verification", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-test-key",
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiBaseUrl).toBeDefined();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+			expect(mockEncryptApiKey).not.toHaveBeenCalled();
 		});
 	});
 });

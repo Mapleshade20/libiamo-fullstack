@@ -10,6 +10,55 @@ export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	translator: "Translator",
 };
 
+export const BYOK_API_BASE_URLS = [
+	"https://api.deepseek.com",
+	"https://dashscope.aliyuncs.com/compatible-mode/v1",
+	"https://api.hunyuan.cloud.tencent.com/v1",
+	"https://qianfan.baidubce.com/v2",
+	"https://open.bigmodel.cn/api/paas/v4",
+	"https://api.moonshot.cn/v1",
+	"https://api.minimaxi.com/v1",
+	"https://ark.cn-beijing.volces.com/api/v3",
+	"https://api.siliconflow.cn/v1",
+	"https://api-inference.modelscope.cn/v1",
+	"https://api.stepfun.ai/v1",
+	"https://api.baichuan-ai.com/v1",
+	"https://api.01.ai/v1",
+	"https://api.sensenova.cn/compatible-mode/v2",
+	"https://spark-api-open.xf-yun.com/v1",
+	"https://api.modelverse.cn/v1",
+	"https://api.modelarts-maas.com/v1",
+	"https://api.ppio.com/openai/v1",
+	"https://cloud.infini-ai.com/maas/v1",
+	"https://api.qnaigc.com/v1",
+	"https://api.scnet.cn/api/llm/v1",
+] as const;
+export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
+
+export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
+	"https://api.deepseek.com": "DeepSeek",
+	"https://dashscope.aliyuncs.com/compatible-mode/v1": "Alibaba Cloud Bailian / Qwen",
+	"https://api.hunyuan.cloud.tencent.com/v1": "Tencent Hunyuan",
+	"https://qianfan.baidubce.com/v2": "Baidu Qianfan",
+	"https://open.bigmodel.cn/api/paas/v4": "Zhipu AI / GLM",
+	"https://api.moonshot.cn/v1": "Kimi / Moonshot",
+	"https://api.minimaxi.com/v1": "MiniMax",
+	"https://ark.cn-beijing.volces.com/api/v3": "Volcengine Ark / Doubao",
+	"https://api.siliconflow.cn/v1": "SiliconFlow",
+	"https://api-inference.modelscope.cn/v1": "ModelScope",
+	"https://api.stepfun.ai/v1": "StepFun",
+	"https://api.baichuan-ai.com/v1": "Baichuan AI",
+	"https://api.01.ai/v1": "01.AI / Yi",
+	"https://api.sensenova.cn/compatible-mode/v2": "SenseNova",
+	"https://spark-api-open.xf-yun.com/v1": "iFlytek Spark",
+	"https://api.modelverse.cn/v1": "UCloud ModelVerse",
+	"https://api.modelarts-maas.com/v1": "Huawei Cloud ModelArts MaaS",
+	"https://api.ppio.com/openai/v1": "PPIO",
+	"https://cloud.infini-ai.com/maas/v1": "Infini-AI",
+	"https://api.qnaigc.com/v1": "Qiniu AI",
+	"https://api.scnet.cn/api/llm/v1": "SCNet",
+};
+
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 

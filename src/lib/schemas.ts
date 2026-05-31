@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
-import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, NATIVE_LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+import { BYOK_API_BASE_URLS, CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, NATIVE_LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
 
 dayjs.extend(customParseFormat);
 
@@ -71,7 +71,7 @@ export const profileSchema = z
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
 		),
 		apiKey: z.string().optional(),
-		apiBaseUrl: z.url().optional(),
+		apiBaseUrl: z.enum(BYOK_API_BASE_URLS, { message: "Please select a supported API provider" }).optional(),
 		apiModel: z.string().optional(),
 	})
 	.refine(byokRefine, {

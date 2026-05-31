@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BYOK_API_BASE_URLS } from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -7,6 +8,7 @@ import {
 	getEditorFields,
 	imessageOpeningStateSchema,
 	openingStateSchemas,
+	profileSchema,
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
@@ -40,6 +42,17 @@ describe("schemas", () => {
 	it("validates forgot password email format", () => {
 		const result = forgotPasswordSchema.safeParse({ email: "invalid-email" });
 		expect(result.success).toBe(false);
+	});
+
+	it("profileSchema allows only supported BYOK base URLs", () => {
+		const validByok = {
+			apiKey: "sk-test-key",
+			apiBaseUrl: BYOK_API_BASE_URLS[0],
+			apiModel: "test-model",
+		};
+
+		expect(profileSchema.safeParse(validByok).success).toBe(true);
+		expect(profileSchema.safeParse({ ...validByok, apiBaseUrl: "https://api.example.com/v1" }).success).toBe(false);
 	});
 
 	const baseTemplate = {

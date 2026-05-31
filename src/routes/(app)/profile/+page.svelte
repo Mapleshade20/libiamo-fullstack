@@ -8,7 +8,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
-import { getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions, LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 import { handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
@@ -247,13 +247,17 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiBaseUrl">Base URL</Label>
-					<Input
+					<select
 						id="apiBaseUrl"
 						name="apiBaseUrl"
-						value={form?.values?.apiBaseUrl ?? ""}
-						placeholder="https://api.openai.com/v1"
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
 						aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
-					/>
+					>
+						<option value="" disabled selected={(form?.values?.apiBaseUrl ?? "") === ""}>Select an API provider</option>
+						{#each BYOK_API_BASE_URLS as baseUrl}
+							<option value={baseUrl} selected={form?.values?.apiBaseUrl === baseUrl}>{BYOK_API_BASE_URL_LABELS[baseUrl]} — {baseUrl}</option>
+						{/each}
+					</select>
 					{#if form?.errors?.apiBaseUrl}
 						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
 					{/if}
