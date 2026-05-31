@@ -169,7 +169,10 @@ export const practiceSession = pgTable(
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
 	},
-	(t) => [uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId)],
+	(t) => [
+		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),
+		index("practice_session_archive_idx").on(t.userId, t.status, t.completedAt),
+	],
 );
 
 // ── sessionMessage ─────────────────────────────────────────────────────

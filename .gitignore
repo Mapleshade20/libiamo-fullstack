@@ -2,6 +2,7 @@ node_modules
 
 # Output
 .output
+.deploy
 .vercel
 .netlify
 .wrangler
