@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
-import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import { parseDraftFromMessage, summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -34,8 +34,12 @@ function isMailAgentStartTrigger(message: string, clientMessageId: string, sessi
 	return message.trim() === MAIL_AGENT_OPENING_MESSAGE && clientMessageId === `join-${sessionId}`;
 }
 
-function getMessageMaxLength(ui: string) {
-	return ui === "apple_mail" ? MAIL_TEXT_MAX_LENGTH : PRACTICE_UI_TEXT_MAX_LENGTH;
+function isOverlongMessage(ui: string, rawMessage: string, hiddenUserMessage: boolean) {
+	if (hiddenUserMessage) return false;
+	if (ui === "apple_mail") {
+		return parseDraftFromMessage(rawMessage, "").body.length > MAIL_TEXT_MAX_LENGTH;
+	}
+	return rawMessage.length > PRACTICE_UI_TEXT_MAX_LENGTH;
 }
 
 function isOversizedMetadataId(value: string) {
@@ -200,13 +204,16 @@ export const actions: Actions = {
 			if (!taskData) {
 				return fail(404, { error: "Task not found" });
 			}
-			if (rawMessage.length > getMessageMaxLength(taskData.template.ui)) return fail(400, { error: "Message is too long" });
+
+			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
+			if (isOverlongMessage(taskData.template.ui, rawMessage, hiddenUserMessage)) {
+				return fail(400, { error: "Message is too long" });
+			}
 
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
-			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
 
 			const sendOptions: SendMessageOptions = {
 				hiddenUserMessage,

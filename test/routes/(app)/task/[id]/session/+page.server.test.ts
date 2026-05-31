@@ -617,6 +617,23 @@ describe("session page server", () => {
 			expect(mockSessionService.sendMessage).toHaveBeenCalled();
 		});
 
+		it("allows Apple Mail messages at the body limit even when headers push the formatted message over the raw limit", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({
+				...mockTask,
+				template: { ui: "apple_mail" as const, maxTurns: 3 },
+				variant: { openingState: { emails: [] } },
+			});
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
+			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+
+			const body = "x".repeat(MAIL_TEXT_MAX_LENGTH);
+			const message = `To: Maya Chen <maya@example.com>\nSubject: Update\n\n${body}`;
+			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${body}</div>` } }));
+
+			expect(result).toMatchObject({ success: true });
+			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+		});
+
 		it("rejects Apple Mail messages over the mail limit", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,

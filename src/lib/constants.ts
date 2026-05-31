@@ -3,6 +3,7 @@ export type UiVariant = (typeof UI_VARIANTS)[number];
 
 export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
 export const MAIL_TEXT_MAX_LENGTH = 50000;
+export const MAIL_BODY_HTML_MAX_LENGTH = MAIL_TEXT_MAX_LENGTH * 10;
 export const AUTH_EMAIL_MAX_LENGTH = 254;
 export const AUTH_PASSWORD_MAX_LENGTH = 1024;
 export const AUTH_TOKEN_MAX_LENGTH = 2048;
