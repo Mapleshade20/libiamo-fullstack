@@ -100,42 +100,6 @@ function getClientMessageId(message: Pick<PersistedSessionMessage, "llmMetadata"
 	return getMessageMetadata(message.llmMetadata).clientMessageId;
 }
 
-function orderPersistedSessionMessagesForDisplay<T extends PersistedSessionMessage>(messages: T[]): T[] {
-	const orderedMessages = sortPersistedSessionMessages(messages);
-
-	let index = 0;
-	while (index < orderedMessages.length) {
-		const message = orderedMessages[index];
-		if (!isAgentRole(message.role)) {
-			index += 1;
-			continue;
-		}
-
-		const clientMessageId = getClientMessageId(message);
-		if (!clientMessageId) {
-			index += 1;
-			continue;
-		}
-
-		const userIndex = orderedMessages.findIndex(
-			(candidate, candidateIndex) => candidateIndex > index && candidate.role === "user" && getClientMessageId(candidate) === clientMessageId,
-		);
-		if (userIndex === -1) {
-			index += 1;
-			continue;
-		}
-
-		const [reply] = orderedMessages.splice(index, 1);
-		if (!reply) {
-			index += 1;
-			continue;
-		}
-		orderedMessages.splice(userIndex, 0, reply);
-	}
-
-	return orderedMessages;
-}
-
 function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], userMessageIndex: number) {
 	const userMessage = rawMessages[userMessageIndex];
 	if (!userMessage) return false;
@@ -207,7 +171,7 @@ export function buildChatMessages({
 	labels: RetryLabels;
 	isHidden?: (message: PersistedSessionMessage) => boolean;
 }): ChatMessage[] {
-	const sortedRawMessages = orderPersistedSessionMessagesForDisplay(rawMessages);
+	const sortedRawMessages = sortPersistedSessionMessages(rawMessages);
 
 	return sortedRawMessages.flatMap((message, index) => {
 		const metadata = getMessageMetadata(message.llmMetadata);
