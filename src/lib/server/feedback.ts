@@ -3,14 +3,15 @@
  * Builds the annotation prompt, calls LLM, parses XML, persists result.
  */
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import type { FeedbackChain, FeedbackConversation, FeedbackMessage, FeedbackResult } from "$lib/feedback-types";
 import { db } from "./db";
-import { practiceSession, sessionMessage } from "./db/schema";
+import { practiceSession } from "./db/schema";
 import { isFeedbackResultValid, parseFeedbackXml } from "./feedback-parser";
 import { type ChatMessage, chatJson, chatText } from "./llm";
+import { sessionMessageChronologicalOrder } from "./session-message-ordering";
 
 // ── Message metadata helpers ─────────────────────────────────────────
 
@@ -412,7 +413,7 @@ export async function generateFeedback(sessionId: number): Promise<FeedbackResul
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: {
 				with: {
 					variant: true,

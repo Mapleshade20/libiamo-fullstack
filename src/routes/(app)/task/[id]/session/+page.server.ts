@@ -25,6 +25,7 @@ import {
 	sendMessage,
 	startSession,
 } from "$lib/server/session";
+import { orderSessionMessagesChronologically } from "$lib/server/session-message-ordering";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -126,7 +127,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		with: {
 			messages: {
-				orderBy: (messages, { asc }) => [asc(messages.createdAt), asc(messages.id)],
+				orderBy: orderSessionMessagesChronologically,
 			},
 		},
 	});

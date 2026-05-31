@@ -1,10 +1,11 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
+import { sessionMessageChronologicalOrder } from "./session-message-ordering";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
 
@@ -402,7 +403,7 @@ export async function sendMessage(
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 		},
 	});
 
@@ -560,7 +561,7 @@ export async function requestAgentOpening(
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 		},
 	});
 
@@ -656,7 +657,7 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: true,
 		},
 	});

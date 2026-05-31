@@ -1,9 +1,10 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName } from "$lib/constants";
 import { db } from "./db";
-import { note, practiceSession, sessionMessage } from "./db/schema";
+import { note, practiceSession } from "./db/schema";
 import { chatJson } from "./llm";
+import { sessionMessageChronologicalOrder } from "./session-message-ordering";
 
 // ── createNote ─────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ export async function createNotesBatch(
 		where: and(eq(practiceSession.id, sourceSessionId), sessionOwnerId ? eq(practiceSession.userId, sessionOwnerId) : undefined),
 		with: {
 			messages: {
-				orderBy: asc(sessionMessage.createdAt),
+				orderBy: sessionMessageChronologicalOrder,
 				columns: { role: true, content: true },
 			},
 		},
