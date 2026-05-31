@@ -229,7 +229,8 @@ describe("Profile +page.server", () => {
 			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
-			expect(result.data?.errors?.apiKey).toBeDefined();
+			expect(result.data?.errors?.apiBaseUrl).toBeDefined();
+			expect(result.data?.errors?.apiModel).toBeDefined();
 			expect(mockVerifyApiKey).not.toHaveBeenCalled();
 		});
 
