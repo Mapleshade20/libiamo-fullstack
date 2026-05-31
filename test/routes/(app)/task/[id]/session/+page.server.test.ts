@@ -35,7 +35,7 @@ vi.mock("$lib/server/feedback", () => ({
 vi.mock("$lib/server/note", () => mockNoteService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
@@ -890,6 +890,31 @@ describe("session page server", () => {
 
 			expect(result).toEqual({ success: true, ...mockHints });
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+		});
+
+		it("allows large hint contextPaths up to the task turn-based context budget", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "discord" as const, maxTurns: 6 } });
+			mockSessionService.getSessionOrFail.mockResolvedValue({
+				id: 123,
+				userId: "user_123",
+				taskId: 456,
+			});
+			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			const contextPath = JSON.stringify(
+				Array.from({ length: 6 }, (_, i) => ({
+					author: `speaker-${i}`,
+					text: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH),
+				})),
+			);
+
+			expect(contextPath.length).toBeGreaterThan(USER_LONG_TEXT_MAX_LENGTH);
+
+			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
+
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
+				123,
+				expect.arrayContaining([expect.objectContaining({ author: "speaker-0", text: expect.stringMatching(/^x+$/) })]),
+			);
 		});
 
 		it("ignores contextPath when it is not valid JSON", async () => {

@@ -36,6 +36,10 @@ function isOversizedMetadataId(value: string) {
 	return value.length > USER_TEXT_MAX_LENGTH;
 }
 
+function getConversationContextMaxLength(maxTurns?: number | null) {
+	return (maxTurns && maxTurns > 0 ? PRACTICE_UI_TEXT_MAX_LENGTH * 2 * maxTurns : 0) + USER_LONG_TEXT_MAX_LENGTH;
+}
+
 function mapSendMessageError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "userMessage is required") return fail(400, { error: e.message });
@@ -67,9 +71,9 @@ async function getLearnerProfileName(user: { id: string; name?: string | null })
 	return userProfile?.name || user.name || "Learner";
 }
 
-function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
+function parseHintContextPath(value: FormDataEntryValue | null, maxLength: number): Array<{ author: string; text: string }> | undefined {
 	if (typeof value !== "string" || !value.trim()) return undefined;
-	if (value.length > USER_LONG_TEXT_MAX_LENGTH) return undefined;
+	if (value.length > maxLength) return undefined;
 
 	try {
 		const parsed = JSON.parse(value);
@@ -79,6 +83,7 @@ function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author:
 				Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof item.author === "string" && typeof item.text === "string",
 		);
 		if (contextPath.some((item) => item.author.length > USER_TEXT_MAX_LENGTH || item.text.length > USER_LONG_TEXT_MAX_LENGTH)) return undefined;
+		if (contextPath.reduce((total, item) => total + item.text.length, 0) > maxLength) return undefined;
 		return contextPath.length ? contextPath : undefined;
 	} catch {
 		return undefined;
@@ -333,15 +338,21 @@ export const actions: Actions = {
 
 		const formData = await event.request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const contextPathRaw = formData.get("contextPath");
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
-
-		const contextPath = parseHintContextPath(formData.get("contextPath"));
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
+			const taskData = await db.query.task.findFirst({
+				where: eq(task.id, taskId),
+				with: { template: true },
+			});
+			if (!taskData) return fail(404, { error: "Task not found" });
+
+			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.template.maxTurns));
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {
