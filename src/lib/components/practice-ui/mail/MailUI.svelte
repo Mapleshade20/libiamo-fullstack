@@ -8,7 +8,7 @@ import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "../chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
 import ComposeWindow from "./ComposeWindow.svelte";
 import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
@@ -399,11 +399,8 @@ function loadExistingSession(session: any) {
 	sessionId = session.id;
 	isCompleted = session.status === "completed" || session.status === "evaluated";
 
-	const sortedRawMessages = [...(session.messages ?? [])].sort(
-		(a, b) => parsePersistedMessageDate(a.createdAt).getTime() - parsePersistedMessageDate(b.createdAt).getTime(),
-	);
 	messages = buildChatMessages({
-		rawMessages: sortedRawMessages,
+		rawMessages: session.messages ?? [],
 		formatTimestamp,
 		userName,
 		agentName: t.tutorReply,

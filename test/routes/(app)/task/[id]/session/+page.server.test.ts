@@ -98,7 +98,14 @@ describe("session page server", () => {
 			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
-			expect(sessionQuery.orderBy({ startedAt: "startedAt" }, { desc: (value: string) => `desc:${value}` })).toEqual(["desc:startedAt"]);
+			expect(sessionQuery.orderBy({ startedAt: "startedAt", id: "id" }, { desc: (value: string) => `desc:${value}` })).toEqual([
+				"desc:startedAt",
+				"desc:id",
+			]);
+			expect(sessionQuery.with.messages.orderBy({ createdAt: "createdAt", id: "id" }, { asc: (value: string) => `asc:${value}` })).toEqual([
+				"asc:createdAt",
+				"asc:id",
+			]);
 		});
 
 		it("returns null existingSession when no in-progress session", async () => {

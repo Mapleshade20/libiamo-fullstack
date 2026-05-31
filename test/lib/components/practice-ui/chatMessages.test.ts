@@ -84,6 +84,83 @@ describe("buildChatMessages", () => {
 		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
 	});
 
+	it("uses persisted ids as a stable tie-breaker when timestamps are equal", () => {
+		const createdAt = new Date("2026-01-01T10:00:00Z");
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{ id: 2, role: "assistant", content: "Hi", createdAt, llmMetadata: { clientMessageId: "msg-1" } },
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt,
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
+	it("recognizes same-turn assistant replies by client message id", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: false },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-2", failed: false },
+				},
+				{
+					id: 3,
+					role: "assistant",
+					content: "Reply to first",
+					createdAt: new Date("2026-01-01T10:02:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2", "retry-2", "3"]);
+		expect(result.some((message) => message.id === "retry-1")).toBe(false);
+	});
+
+	it("does not add a pending placeholder when a matching assistant reply is persisted earlier", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 10,
+					role: "assistant",
+					content: "Reply to third",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-3" },
+				},
+				{
+					id: 11,
+					role: "user",
+					content: "Third",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-3", failed: false },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["10", "11"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
 	it("treats an 'agent' role message as an assistant reply in the same turn", () => {
 		const result = buildChatMessages({
 			...baseOptions,

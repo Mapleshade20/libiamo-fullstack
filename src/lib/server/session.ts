@@ -1,10 +1,11 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
 import { getMbtiPrompt, getRandomMbti } from "./mbti";
+import { sessionMessageChronologicalOrder } from "./session-message-ordering";
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
 
@@ -299,10 +300,19 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	if (userIndex === -1) return null;
 
 	const userMessage = messages[userIndex];
+	const assistantReplyByClientId = messages.find(
+		(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+	);
 	const messagesAfterUser = messages.slice(userIndex + 1);
 	const nextUserMessageIndex = messagesAfterUser.findIndex((message) => message.role === "user");
 	const messagesInSameTurn = nextUserMessageIndex === -1 ? messagesAfterUser : messagesAfterUser.slice(0, nextUserMessageIndex);
-	const assistantReply = messagesInSameTurn.find((message) => message.role === "assistant");
+	const assistantReply =
+		assistantReplyByClientId ??
+		messagesInSameTurn.find((message) => {
+			if (message.role !== "assistant") return false;
+			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
+			return !assistantClientMessageId || assistantClientMessageId === clientMessageId;
+		});
 	const metadata = getMessageMetadata(userMessage.llmMetadata);
 
 	return {
@@ -393,7 +403,7 @@ export async function sendMessage(
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 		},
 	});
 
@@ -551,7 +561,7 @@ export async function requestAgentOpening(
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 		},
 	});
 
@@ -647,7 +657,7 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
-			messages: { orderBy: asc(sessionMessage.createdAt) },
+			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: true,
 		},
 	});

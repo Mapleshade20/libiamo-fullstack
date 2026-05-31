@@ -6,6 +6,7 @@ import type { UiVariant } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import type { SendMessageOptions } from "$lib/server/session";
+import { orderSessionMessagesChronologically } from "$lib/server/session-message-ordering";
 import { buildAo3SendOptions } from "./ao3";
 import { buildRedditSendOptions } from "./reddit";
 
@@ -28,7 +29,7 @@ type BuildPracticeUiSendOptionsParams = {
 async function getSessionMessages(sessionId: number) {
 	const sessionWithMessages = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		with: { messages: true },
+		with: { messages: { orderBy: orderSessionMessagesChronologically } },
 	});
 	return sessionWithMessages?.messages ?? [];
 }
