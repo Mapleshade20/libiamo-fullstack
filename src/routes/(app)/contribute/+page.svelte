@@ -37,7 +37,7 @@ function formatDate(d: Date | null): string {
 		</div>
 	{:else}
 		<p class="text-muted-foreground">Propose a new learning scenario. Your submission will be reviewed by an admin before it goes live.</p>
-		<TemplateForm {form} submitLabel="Submit for Review" cancelHref="/" hideAdminFields />
+		<TemplateForm {form} submitLabel="Submit for Review" cancelHref="/" hideAdminFields confirmBeforeSubmit />
 	{/if}
 
 	<!-- Contribution History -->

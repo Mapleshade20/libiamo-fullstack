@@ -9,7 +9,14 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",
-			include: ["src/routes/**/*.ts", "src/lib/server/*.ts", "src/lib/components/**/*.ts", "src/lib/markdown.ts"],
+			include: [
+				"src/routes/**/*.ts",
+				"src/lib/server/*.ts",
+				"src/lib/components/**/*.ts",
+				"src/lib/constants.ts",
+				"src/lib/markdown.ts",
+				"src/lib/schemas.ts",
+			],
 			exclude: [
 				// No executable logic — pure translation keys
 				"**/i18n.ts",

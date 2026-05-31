@@ -4,6 +4,7 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidateAll } from "$app/navigation";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
@@ -138,12 +139,12 @@ function loadSavedDraft(): DraftEmail {
 		const saved = localStorage.getItem(getDraftStorageKey());
 		if (!saved) return baseDraft;
 		const parsed = JSON.parse(saved) as Partial<DraftEmail>;
-		const body = typeof parsed.body === "string" ? parsed.body : "";
+		const body = (typeof parsed.body === "string" ? parsed.body : "").slice(0, MAIL_TEXT_MAX_LENGTH);
 		return {
 			...baseDraft,
 			subject: typeof parsed.subject === "string" ? parsed.subject : baseDraft.subject,
 			body,
-			bodyHtml: typeof parsed.bodyHtml === "string" ? parsed.bodyHtml : plainTextToDraftHtml(body),
+			bodyHtml: typeof parsed.bodyHtml === "string" ? sanitizeDraftBodyHtml(parsed.bodyHtml) : plainTextToDraftHtml(body),
 		};
 	} catch {
 		return baseDraft;
@@ -156,12 +157,17 @@ function persistDraft(nextDraft = draft) {
 
 	try {
 		const storageKey = getDraftStorageKey();
-		if (!hasDraftContent(nextDraft)) {
+		const boundedDraft = {
+			...nextDraft,
+			body: nextDraft.body.slice(0, MAIL_TEXT_MAX_LENGTH),
+			bodyHtml: sanitizeDraftBodyHtml(nextDraft.bodyHtml),
+		};
+		if (!hasDraftContent(boundedDraft)) {
 			localStorage.removeItem(storageKey);
 			return;
 		}
 
-		localStorage.setItem(storageKey, JSON.stringify(nextDraft));
+		localStorage.setItem(storageKey, JSON.stringify(boundedDraft));
 	} catch {
 		// Some browsers can reject storage in restricted contexts; keep the UI usable.
 	}

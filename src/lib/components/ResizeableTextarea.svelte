@@ -1,6 +1,6 @@
 <!-- ResizeableTextarea.svelte -->
 <script lang="ts">
-let { value = $bindable(""), maxRows = 10, placeholder = "", disabled = false, onKeyDown } = $props();
+let { value = $bindable(""), maxRows = 10, maxLength = undefined, placeholder = "", disabled = false, onKeyDown } = $props();
 
 let textarea = $state<HTMLTextAreaElement>();
 const LINE_HEIGHT = 24;
@@ -34,6 +34,7 @@ $effect(() => {
 	bind:value
 	{placeholder}
 	{disabled}
+	maxlength={maxLength}
 	onkeydown={onKeyDown}
 	rows="1"
 	class="custom-textarea hide-scrollbar"

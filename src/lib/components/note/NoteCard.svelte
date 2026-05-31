@@ -7,6 +7,7 @@ import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 type Note = {
 	id: number;
@@ -153,6 +154,7 @@ async function submitAsk(q: string) {
 						class="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs"
 						placeholder={t.askPlaceholder ?? "Ask a follow-up question..."}
 						bind:value={askQuestion}
+						maxlength={USER_TEXT_MAX_LENGTH}
 						disabled={askLoading}
 					>
 					<button

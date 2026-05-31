@@ -5,7 +5,7 @@ export function renderMarkdown(source: string, options?: { breaks?: boolean }): 
 	const raw = marked.parse(source, {
 		async: false,
 		gfm: true,
-		breaks: options?.breaks ?? false,
+		breaks: options?.breaks ?? true,
 	});
 	return DOMPurify.sanitize(raw, {
 		ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z])/i,

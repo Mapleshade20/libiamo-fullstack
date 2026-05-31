@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
@@ -189,6 +190,20 @@ describe("Task detail +page.server", () => {
 			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
 		});
 
+		it("returns 400 when task context is too long", async () => {
+			const result = (await actions.generateExpressions(
+				createActionEvent({
+					title: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1),
+					nativeLanguage: "en",
+					targetLanguage: "fr",
+				}),
+			)) as any;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Task context is too long");
+			expect(mockChatJson).not.toHaveBeenCalled();
+		});
+
 		it("generates expressions with minimal task context", async () => {
 			mockChatJson.mockResolvedValueOnce(["Could I have the check?", "Where is the exit?"]);
 
@@ -300,6 +315,20 @@ describe("Task detail +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Please set your native language in your profile before using translation help.");
+		});
+
+		it("returns 400 when translation help text is too long", async () => {
+			const result = (await actions.evaluateTranslation(
+				createActionEvent({
+					sourceExpression: "Hello",
+					userTranslation: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1),
+					nativeLanguage: "en",
+					targetLanguage: "fr",
+				}),
+			)) as any;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.error).toBe("Translation help text is too long");
 		});
 
 		it("evaluates a perfect translation", async () => {

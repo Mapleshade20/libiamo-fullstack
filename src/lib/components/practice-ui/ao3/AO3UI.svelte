@@ -3,6 +3,7 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { createPracticeSession } from "../session.svelte";
 import {
@@ -80,7 +81,7 @@ const additionalTags = $derived(getAo3AdditionalTags(opening));
 const stats = $derived(opening.stats ?? {});
 const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl }));
 const commentCount = $derived(countAo3Comments(commentTree));
-const characterLimit = 10000;
+const characterLimit = PRACTICE_UI_TEXT_MAX_LENGTH;
 
 let commentText = $state("");
 let replyTarget = $state<Ao3RenderableComment | null>(null);
@@ -186,7 +187,7 @@ function closeHintMenu() {
 }
 
 function selectHint(text: string) {
-	commentText = text;
+	commentText = text.slice(0, characterLimit);
 	showHintMenu = false;
 }
 
