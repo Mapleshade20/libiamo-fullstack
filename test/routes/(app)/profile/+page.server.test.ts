@@ -1,17 +1,18 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
+import { BYOK_API_BASE_URLS, BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
-const { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+const { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+	const mockFindFirst = vi.fn().mockResolvedValue(undefined);
 	const mockOnConflictDoNothing = vi.fn();
 	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: vi.fn() }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
 	const mockWhere = vi.fn();
 	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
+	return { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
 });
 
 vi.mock("$lib/server/auth", () => ({
@@ -27,7 +28,7 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: mockInsert,
 		delete: mockDelete,
-		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+		query: { userApiKey: { findFirst: mockFindFirst } },
 	},
 }));
 
@@ -49,23 +50,48 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 describe("Profile +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockFindFirst.mockResolvedValue(undefined);
 	});
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
 		it("returns serverTimezones and hasApiKey", async () => {
 			const event = { locals: { user: { id: "test-user" } } } as any;
-			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean };
+			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean; apiBaseUrl: string; apiModel: string };
 
 			expect(result.serverTimezones).toBeDefined();
 			expect(Array.isArray(result.serverTimezones)).toBe(true);
 
 			expect(result.hasApiKey).toBe(false);
+			expect(result.apiBaseUrl).toBe("");
+			expect(result.apiModel).toBe("");
 
 			if (result.serverTimezones.length > 0) {
 				expect(result.serverTimezones[0]).toHaveProperty("value");
 				expect(result.serverTimezones[0]).toHaveProperty("label");
 			}
+		});
+
+		it("returns saved BYOK provider and model without exposing the API key", async () => {
+			mockFindFirst.mockResolvedValue({
+				userId: "test-user",
+				baseUrl: BYOK_API_BASE_URLS[8],
+				model: "Qwen/Qwen3-8B",
+			});
+
+			const result = (await load({ locals: { user: { id: "test-user" } } } as any)) as {
+				hasApiKey: boolean;
+				apiBaseUrl: string;
+				apiModel: string;
+				apiKey?: string;
+				encryptedKey?: string;
+			};
+
+			expect(result.hasApiKey).toBe(true);
+			expect(result.apiBaseUrl).toBe(BYOK_API_BASE_URLS[8]);
+			expect(result.apiModel).toBe("Qwen/Qwen3-8B");
+			expect(result.apiKey).toBeUndefined();
+			expect(result.encryptedKey).toBeUndefined();
 		});
 	});
 
@@ -166,7 +192,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile saves BYOK config after verification", async () => {
 			const event = createActionEvent({
 				apiKey: "sk-test-key",
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -174,7 +200,7 @@ describe("Profile +page.server", () => {
 
 			const result = await actions.updateProfile(event);
 
-			expect(mockVerifyApiKey).toHaveBeenCalledWith("https://api.example.com/v1", "sk-test-key", "test-model");
+			expect(mockVerifyApiKey).toHaveBeenCalledWith(BYOK_API_BASE_URLS[0], "sk-test-key", "test-model");
 			expect(mockEncryptApiKey).toHaveBeenCalledWith("sk-test-key");
 			expect(result).toEqual({ success: true });
 		});
@@ -182,7 +208,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile returns 400 when BYOK verification fails", async () => {
 			const event = createActionEvent({
 				apiKey: "sk-bad-key",
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -203,13 +229,14 @@ describe("Profile +page.server", () => {
 			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
-			expect(result.data?.errors?.apiKey).toBeDefined();
+			expect(result.data?.errors?.apiBaseUrl).toBeDefined();
+			expect(result.data?.errors?.apiModel).toBeDefined();
 			expect(mockVerifyApiKey).not.toHaveBeenCalled();
 		});
 
 		it("updateProfile returns schema error when baseUrl and model are given without apiKey", async () => {
 			const event = createActionEvent({
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -219,10 +246,25 @@ describe("Profile +page.server", () => {
 			expect(result.data?.errors?.apiKey).toBeDefined();
 		});
 
+		it("updateProfile rejects an unsupported BYOK base URL before verification", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-test-key",
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiBaseUrl).toBeDefined();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+			expect(mockEncryptApiKey).not.toHaveBeenCalled();
+		});
+
 		it("updateProfile rejects overlong BYOK apiKey before verification", async () => {
 			const event = createActionEvent({
 				apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH + 1),
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "test-model",
 			});
 
@@ -237,7 +279,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile rejects overlong BYOK apiModel before verification", async () => {
 			const event = createActionEvent({
 				apiKey: "sk-test-key",
-				apiBaseUrl: "https://api.example.com/v1",
+				apiBaseUrl: BYOK_API_BASE_URLS[0],
 				apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH + 1),
 			});
 

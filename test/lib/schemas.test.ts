@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	BYOK_API_BASE_URLS,
 	BYOK_API_KEY_MAX_LENGTH,
 	BYOK_MODEL_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -50,14 +51,15 @@ describe("schemas", () => {
 		expect(result.success).toBe(false);
 	});
 
-	it("profileSchema enforces BYOK apiKey and apiModel length limits", () => {
+	it("profileSchema enforces BYOK provider and credential length limits", () => {
 		const validByok = {
 			apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH),
-			apiBaseUrl: "https://api.example.com/v1",
+			apiBaseUrl: BYOK_API_BASE_URLS[0],
 			apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH),
 		};
 
 		expect(profileSchema.safeParse(validByok).success).toBe(true);
+		expect(profileSchema.safeParse({ ...validByok, apiBaseUrl: "https://api.example.com/v1" }).success).toBe(false);
 		expect(profileSchema.safeParse({ ...validByok, apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH + 1) }).success).toBe(false);
 		expect(profileSchema.safeParse({ ...validByok, apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH + 1) }).success).toBe(false);
 	});

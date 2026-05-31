@@ -5,8 +5,8 @@ import {
 	AUTH_EMAIL_MAX_LENGTH,
 	AUTH_PASSWORD_MAX_LENGTH,
 	AUTH_TOKEN_MAX_LENGTH,
+	BYOK_API_BASE_URLS,
 	BYOK_API_KEY_MAX_LENGTH,
-	BYOK_BASE_URL_MAX_LENGTH,
 	BYOK_MODEL_MAX_LENGTH,
 	CADENCES,
 	INTERACTION_TYPES,
@@ -50,16 +50,7 @@ export const signInSchema = z.object({
 	password: z.string().min(1, "Password is required").max(AUTH_PASSWORD_MAX_LENGTH),
 });
 
-const byokRefine = (data: { apiKey?: string; apiBaseUrl?: string; apiModel?: string }) => {
-	const hasApiKey = data.apiKey?.trim();
-	const hasBaseUrl = data.apiBaseUrl?.trim();
-	const hasModel = data.apiModel?.trim();
-	if (hasApiKey || hasBaseUrl || hasModel) {
-		if (!hasApiKey || !hasBaseUrl || !hasModel) return false;
-	}
-	return true;
-};
-
+const byokFields = ["apiKey", "apiBaseUrl", "apiModel"] as const;
 const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
 
 export const signUpSchema = z.object({
@@ -89,12 +80,16 @@ export const profileSchema = z
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
 		),
 		apiKey: z.string().max(BYOK_API_KEY_MAX_LENGTH).optional(),
-		apiBaseUrl: z.url().max(BYOK_BASE_URL_MAX_LENGTH).optional(),
+		apiBaseUrl: z.enum(BYOK_API_BASE_URLS, { message: "Please select a supported API provider" }).optional(),
 		apiModel: z.string().max(BYOK_MODEL_MAX_LENGTH).optional(),
 	})
-	.refine(byokRefine, {
-		message: byokMessage,
-		path: ["apiKey"],
+	.superRefine((data, ctx) => {
+		const filled = byokFields.map((f) => data[f]?.trim());
+		if (filled.some(Boolean) && !filled.every(Boolean)) {
+			byokFields.forEach((f, i) => {
+				if (!filled[i]) ctx.addIssue({ code: z.ZodIssueCode.custom, message: byokMessage, path: [f] });
+			});
+		}
 	});
 
 export const switchLanguageSchema = z.object({
