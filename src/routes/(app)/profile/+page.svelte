@@ -256,7 +256,7 @@ function applyDetectedTimezone() {
 					{/if}
 				</div>
 				<div class="space-y-2">
-					<Label for="apiBaseUrl">Base URL</Label>
+					<Label for="apiBaseUrl">Base URL (OpenAI-compatible; accessible in Mainland China)</Label>
 					<select
 						id="apiBaseUrl"
 						name="apiBaseUrl"
@@ -275,7 +275,13 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiModel">Model</Label>
-					<Input id="apiModel" name="apiModel" bind:value={apiModelValue} placeholder="gpt-4o" aria-invalid={Boolean(form?.errors?.apiModel)} />
+					<Input
+						id="apiModel"
+						name="apiModel"
+						bind:value={apiModelValue}
+						placeholder="deepseek-v4-flash"
+						aria-invalid={Boolean(form?.errors?.apiModel)}
+					/>
 					{#if form?.errors?.apiModel}
 						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}

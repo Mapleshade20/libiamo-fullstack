@@ -26,6 +26,7 @@ export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 };
 
 export const BYOK_API_BASE_URLS = [
+	"https://openrouter.ai/api/v1",
 	"https://api.deepseek.com",
 	"https://dashscope.aliyuncs.com/compatible-mode/v1",
 	"https://api.hunyuan.cloud.tencent.com/v1",
@@ -50,6 +51,7 @@ export const BYOK_API_BASE_URLS = [
 export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
 
 export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
+	"https://openrouter.ai/api/v1": "OpenRouter",
 	"https://api.deepseek.com": "DeepSeek",
 	"https://dashscope.aliyuncs.com/compatible-mode/v1": "Alibaba Cloud Bailian / Qwen",
 	"https://api.hunyuan.cloud.tencent.com/v1": "Tencent Hunyuan",
