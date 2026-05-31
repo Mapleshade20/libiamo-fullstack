@@ -8,6 +8,7 @@ import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
@@ -86,7 +87,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 		if (!isMobile) {
 			event.preventDefault();
 			if (!session.inputText.trim() || session.disabled) return;
-			const text = session.inputText;
+			const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 			session.inputText = "";
 			session.handleSend(text);
 		}
@@ -133,7 +134,7 @@ function closeHintMenu() {
 }
 
 function selectHint(text: string) {
-	session.inputText = text;
+	session.inputText = text.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 	showHintMenu = false;
 }
 
@@ -307,6 +308,7 @@ onMount(() => {
 					<div class="relative">
 						<textarea
 							bind:value={session.inputText}
+							maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
 							rows="1"
 							class="block min-h-11 max-h-40 w-full resize-none rounded-[22px] border border-[#D1D1D6] bg-white px-4 py-2.5 pr-24 text-[15px] leading-5 outline-none placeholder:text-[#8E8E93] focus:border-[#0A84FF] md:rounded-full md:pr-26"
 							placeholder={session.isCompleted
@@ -383,8 +385,8 @@ onMount(() => {
 								class="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A84FF] text-white transition-colors hover:bg-[#0062CC] disabled:bg-[#D1D1D6] md:bg-[#34C759] md:hover:bg-[#2DAE4F]"
 								aria-label={t.sendMessage}
 								onclick={() => {
-								if (!session.inputText.trim() || session.disabled) return;
-									const text = session.inputText;
+									if (!session.inputText.trim() || session.disabled) return;
+									const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 									session.inputText = "";
 									session.handleSend(text);
 								}}

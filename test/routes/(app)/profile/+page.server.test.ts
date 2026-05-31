@@ -1,5 +1,6 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
@@ -73,7 +74,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile returns 400 for invalid payload", async () => {
 			const result = (await actions.updateProfile(
 				createActionEvent({
-					name: "x".repeat(60),
+					name: "x".repeat(USER_NAME_MAX_LENGTH + 1),
 				}),
 			)) as ActionFailure<any>;
 
@@ -216,6 +217,36 @@ describe("Profile +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors?.apiKey).toBeDefined();
+		});
+
+		it("updateProfile rejects overlong BYOK apiKey before verification", async () => {
+			const event = createActionEvent({
+				apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH + 1),
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "test-model",
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiKey).toBeDefined();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+			expect(mockEncryptApiKey).not.toHaveBeenCalled();
+		});
+
+		it("updateProfile rejects overlong BYOK apiModel before verification", async () => {
+			const event = createActionEvent({
+				apiKey: "sk-test-key",
+				apiBaseUrl: "https://api.example.com/v1",
+				apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH + 1),
+			});
+
+			const result = (await actions.updateProfile(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.apiModel).toBeDefined();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+			expect(mockEncryptApiKey).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -1,4 +1,6 @@
 <script lang="ts">
+import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+
 type Note = {
 	id: number;
 	tutorComment: string;
@@ -65,6 +67,7 @@ function handleCancel() {
 			<textarea
 				id="note-tutor-comment-{note.id}"
 				bind:value={editTutorComment}
+				maxlength={USER_TEXT_MAX_LENGTH}
 				rows={4}
 				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
 				required
@@ -74,7 +77,12 @@ function handleCancel() {
 			<label for="note-keywords-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
 				>Keywords (comma-separated)</label
 			>
-			<input id="note-keywords-{note.id}" bind:value={editKeywords} class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
+			<input
+				id="note-keywords-{note.id}"
+				bind:value={editKeywords}
+				maxlength={USER_KEYWORDS_MAX_LENGTH}
+				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+			>
 		</div>
 		{#if note.sourceContext}
 			<p class="text-sm italic text-muted-foreground/70">{note.sourceContext}</p>

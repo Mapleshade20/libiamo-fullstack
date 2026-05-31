@@ -15,6 +15,7 @@ import {
 	sanitizeDraftBodyHtml,
 	summarizeMailBodyLayout,
 } from "$lib/components/practice-ui/mail/mailUtils";
+import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 
 describe("mailUtils", () => {
 	describe("plainTextToDraftHtml", () => {
@@ -147,6 +148,11 @@ describe("mailUtils", () => {
 					'<div onclick="alert(1)" style="text-align: right; color: #d70015; font-size: 24px">Friday</div><blockquote style="margin-left: 40px; font-weight: bold">Thanks</blockquote><img src=x onerror=alert(1)><script>alert(1)</script>',
 				),
 			).toBe('<div style="text-align: right">Friday</div><blockquote style="margin-left: 40px">Thanks</blockquote>');
+		});
+
+		it("preserves large mail drafts without truncating sanitized html", () => {
+			const body = "x".repeat(MAIL_TEXT_MAX_LENGTH + 10000);
+			expect(sanitizeDraftBodyHtml(`<div>${body}</div>`)).toBe(`<div>${body}</div>`);
 		});
 
 		it("drops unsupported or malformed style declarations", () => {

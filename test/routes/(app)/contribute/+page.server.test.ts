@@ -155,6 +155,20 @@ describe("Contribute +page.server", () => {
 			expect(result.data?.message).toContain("topic");
 		});
 
+		it("returns 400 when slot values are too long", async () => {
+			const entries = {
+				...validEntries,
+				firstVariantSlotValues: JSON.stringify({ friend: "Alice", topic: "x".repeat(10001) }),
+			};
+			const event = createEvent(entries);
+
+			const result = (await actions.default(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toBe("Slot values are too long");
+			expect(mockInsert).not.toHaveBeenCalled();
+		});
+
 		it("returns 400 when opening state is invalid for the UI", async () => {
 			const entries = {
 				...validEntries,

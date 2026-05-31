@@ -131,6 +131,18 @@ describe("archive page server", () => {
 			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
 		});
 
+		it("returns fail 400 when tutorComment is too long", async () => {
+			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "x".repeat(10001) } }));
+			expect(result).toMatchObject({ status: 400, data: { error: "Content is too long" } });
+			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
+		});
+
+		it("returns fail 400 when keywords are too long", async () => {
+			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated", keywords: "x".repeat(10001) } }));
+			expect(result).toMatchObject({ status: 400, data: { error: "Keywords are too long" } });
+			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
+		});
+
 		it("returns fail 404 when note not found", async () => {
 			mockNoteService.updateNote.mockResolvedValue(undefined);
 			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated" } }));
@@ -230,6 +242,11 @@ describe("archive page server", () => {
 				name: "whitespace question",
 				event: () => createFormEvent({ values: { noteId: "42", question: "  " } }),
 				expected: { status: 400, data: { error: "Question is required" } },
+			},
+			{
+				name: "overlong question",
+				event: () => createFormEvent({ values: { noteId: "42", question: "x".repeat(10001) } }),
+				expected: { status: 400, data: { error: "Question is too long" } },
 			},
 		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
 			const actualEvent = event();
