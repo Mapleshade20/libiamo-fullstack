@@ -1,6 +1,7 @@
-import { error, fail, redirect } from "@sveltejs/kit";
+import { error, fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, UI_VARIANT_LABELS } from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
@@ -17,8 +18,7 @@ function validateLanguageCode(code: unknown): LanguageCode {
 }
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) return redirect(302, "/sign-in");
+	const user = requireUser(event);
 	const taskId = Number(event.params.id);
 
 	if (Number.isNaN(taskId)) {
@@ -78,8 +78,7 @@ export const load: PageServerLoad = async (event) => {
 export const actions: Actions = {
 	/** Generate 2-3 useful expressions for the task in the user's native language */
 	generateExpressions: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser(event);
 
 		const formData = await event.request.formData();
 		const title = formData.get("title");
@@ -139,8 +138,7 @@ export const actions: Actions = {
 
 	/** Evaluate a user's translation attempt and return feedback + correction */
 	evaluateTranslation: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser(event);
 
 		const formData = await event.request.formData();
 		const sourceExpression = formData.get("sourceExpression");

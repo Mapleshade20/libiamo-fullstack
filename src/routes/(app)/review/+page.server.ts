@@ -1,14 +1,14 @@
 import { error } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { type CardType, LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { reviewCard } from "$lib/server/db/schema";
 import { getDueCards, getReviewStats } from "$lib/server/review-cards";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
-	const user = event.locals.user;
-	if (!user) throw error(401, "Unauthorized");
+	const user = requireUser(event);
 
 	const language = (user.activeLanguage ?? "en") as LanguageCode;
 	if (!(LANGUAGE_CODES as readonly string[]).includes(language)) {

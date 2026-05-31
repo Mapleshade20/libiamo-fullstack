@@ -155,10 +155,11 @@ describe("Profile +page.server", () => {
 			expect(mockWhere).toHaveBeenCalled();
 		});
 
-		it("clearApiKey returns 401 when no user", async () => {
+		it("clearApiKey redirects when no user", async () => {
 			const event = createActionEvent({}, "");
-			const result = (await actions.clearApiKey(event)) as ActionFailure<any>;
-			expect(result.status).toBe(401);
+
+			await expect(actions.clearApiKey(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(mockDelete).not.toHaveBeenCalled();
 		});
 
 		it("updateProfile saves BYOK config after verification", async () => {

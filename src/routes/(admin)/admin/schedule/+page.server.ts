@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
+import { requireAdmin } from "$lib/server/authz";
 import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
@@ -10,6 +11,8 @@ import { scheduleTaskManually } from "$lib/server/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	// Establish global mode (defaults to daily)
 	const rawMode = event.url.searchParams.get("mode") ?? "daily";
 	const mode: "daily" | "weekly" = rawMode === "weekly" ? "weekly" : "daily";
@@ -80,6 +83,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	schedule: async (event) => {
+		requireAdmin(event);
+
 		const formData = await event.request.formData();
 		const raw = {
 			templateId: formData.get("templateId")?.toString() ?? "",

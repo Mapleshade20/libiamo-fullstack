@@ -1,13 +1,9 @@
 import crypto from "node:crypto";
-import { redirect } from "@sveltejs/kit";
+import { requireUser } from "$lib/server/authz";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
-	const user = event.locals.user;
-
-	if (!user) {
-		return redirect(302, "/sign-in");
-	}
+	const user = requireUser(event);
 
 	const email = user.email?.toLowerCase() || "";
 	const hash = crypto.createHash("md5").update(email).digest("hex");

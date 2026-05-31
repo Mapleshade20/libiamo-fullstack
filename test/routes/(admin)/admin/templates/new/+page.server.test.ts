@@ -1,5 +1,6 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "$lib/server/db";
 import { actions, load } from "$routes/(admin)/admin/templates/new/+page.server";
 
 // ── Hoisted mock factories ───────────────────────────────────────────────
@@ -37,15 +38,15 @@ vi.mock("$lib/server/db/schema", () => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function createEvent(entries: Record<string, string>, userId = "admin-1") {
+function createEvent(entries: Record<string, string>, userId = "admin-1", role = "admin") {
 	const formData = new FormData();
 	for (const [key, value] of Object.entries(entries)) {
 		formData.append(key, value);
 	}
 	return {
-		locals: { user: userId ? { id: userId } : null },
+		locals: { user: userId ? { id: userId, role } : null },
 		request: {
-			formData: async () => formData,
+			formData: vi.fn().mockResolvedValue(formData),
 			headers: new Headers(),
 		},
 	} as any;
@@ -75,20 +76,26 @@ describe("Admin Templates New +page.server", () => {
 
 	describe("load", () => {
 		it("returns null contributionData when no fromContribution param", async () => {
-			const event = { url: { searchParams: new URLSearchParams() } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, url: { searchParams: new URLSearchParams() } } as any;
 			const result = (await load(event)) as { contributionData: unknown };
 			expect(result.contributionData).toBeNull();
 		});
 
 		it("returns null contributionData when fromContribution is NaN", async () => {
-			const event = { url: { searchParams: new URLSearchParams("fromContribution=abc") } } as any;
+			const event = {
+				locals: { user: { id: "admin-1", role: "admin" } },
+				url: { searchParams: new URLSearchParams("fromContribution=abc") },
+			} as any;
 			const result = (await load(event)) as { contributionData: unknown };
 			expect(result.contributionData).toBeNull();
 		});
 
 		it("returns contribution data when fromContribution is valid", async () => {
 			mockSelectLimit.mockResolvedValue([{ id: 5, titleBase: "Test" }]);
-			const event = { url: { searchParams: new URLSearchParams("fromContribution=5") } } as any;
+			const event = {
+				locals: { user: { id: "admin-1", role: "admin" } },
+				url: { searchParams: new URLSearchParams("fromContribution=5") },
+			} as any;
 			const result = (await load(event)) as { contributionData: Record<string, unknown> };
 			expect(result.contributionData).toBeDefined();
 		});
@@ -105,11 +112,21 @@ describe("Admin Templates New +page.server", () => {
 			expect(result.data?.errors?.language).toBeDefined();
 		});
 
-		it("returns 401 when user is not authenticated", async () => {
+		it("redirects when user is not authenticated", async () => {
 			const event = createEvent(validTemplateEntries, "");
-			const result = (await actions.default(event)) as ActionFailure<any>;
 
-			expect(result.status).toBe(401);
+			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+		});
+
+		it("returns 403 when user is not an admin", async () => {
+			const event = createEvent(validTemplateEntries, "learner-1", "learner");
+
+			await expect(actions.default(event)).rejects.toMatchObject({ status: 403 });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(db.select).not.toHaveBeenCalled();
+			expect(db.insert).not.toHaveBeenCalled();
+			expect(db.update).not.toHaveBeenCalled();
+			expect(mockTransaction).not.toHaveBeenCalled();
 		});
 
 		it("returns 400 when first variant is missing slot values", async () => {

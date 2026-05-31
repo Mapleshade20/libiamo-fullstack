@@ -33,7 +33,7 @@ describe("archive page server", () => {
 			formData.append(key, value);
 		}
 		return {
-			request: { formData: () => Promise.resolve(formData) },
+			request: { formData: vi.fn().mockResolvedValue(formData) },
 			locals: { user },
 		} as any;
 	};
@@ -62,8 +62,8 @@ describe("archive page server", () => {
 			expect(mockArchiveService.listCompletedSessions).toHaveBeenCalledWith("user_123");
 		});
 
-		it("throws 401 when unauthenticated", async () => {
-			await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({ status: 401 });
+		it("redirects when unauthenticated", async () => {
+			await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 		});
 	});
 
@@ -100,15 +100,15 @@ describe("archive page server", () => {
 			});
 		});
 
-		it("returns fail 401 when unauthenticated", async () => {
-			const result = await actions.update(
-				createFormEvent({
-					user: null,
-					values: { noteId: "42", tutorComment: "Updated" },
-				}),
-			);
+		it("redirects before parsing form data when unauthenticated", async () => {
+			const event = createFormEvent({
+				user: null,
+				values: { noteId: "42", tutorComment: "Updated" },
+			});
 
-			expect(result).toMatchObject({ status: 401 });
+			await expect(actions.update(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
 		});
 
 		it("returns fail 400 when noteId is invalid", async () => {
@@ -152,15 +152,15 @@ describe("archive page server", () => {
 			expect(mockNoteService.deleteNote).toHaveBeenCalledWith(42, "user_123");
 		});
 
-		it("returns fail 401 when unauthenticated", async () => {
-			const result = await actions.delete(
-				createFormEvent({
-					user: null,
-					values: { noteId: "42" },
-				}),
-			);
+		it("redirects before parsing form data when unauthenticated", async () => {
+			const event = createFormEvent({
+				user: null,
+				values: { noteId: "42" },
+			});
 
-			expect(result).toMatchObject({ status: 401 });
+			await expect(actions.delete(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(mockNoteService.deleteNote).not.toHaveBeenCalled();
 		});
 
 		it("returns fail 400 when noteId is invalid", async () => {
@@ -212,26 +212,35 @@ describe("archive page server", () => {
 		it.each([
 			{
 				name: "unauthenticated user",
-				event: createFormEvent({ user: null, values: { noteId: "42", question: "why" } }),
-				expected: { status: 401, data: { error: "Unauthorized" } },
+				event: () => createFormEvent({ user: null, values: { noteId: "42", question: "why" } }),
+				expected: { status: 302, location: "/sign-in" },
+				redirect: true,
 			},
 			{
 				name: "invalid noteId",
-				event: createFormEvent({ values: { noteId: "abc", question: "why" } }),
+				event: () => createFormEvent({ values: { noteId: "abc", question: "why" } }),
 				expected: { status: 400, data: { error: "Invalid note ID" } },
 			},
 			{
 				name: "missing question",
-				event: createFormEvent({ values: { noteId: "42" } }),
+				event: () => createFormEvent({ values: { noteId: "42" } }),
 				expected: { status: 400, data: { error: "Question is required" } },
 			},
 			{
 				name: "whitespace question",
-				event: createFormEvent({ values: { noteId: "42", question: "  " } }),
+				event: () => createFormEvent({ values: { noteId: "42", question: "  " } }),
 				expected: { status: 400, data: { error: "Question is required" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected }) => {
-			const result = await actions.followUp(event);
+		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
+			const actualEvent = event();
+			if (redirect) {
+				await expect(actions.followUp(actualEvent)).rejects.toMatchObject(expected);
+				expect(actualEvent.request.formData).not.toHaveBeenCalled();
+				expect(mockNoteService.getNote).not.toHaveBeenCalled();
+				return;
+			}
+
+			const result = await actions.followUp(actualEvent);
 			expect(result).toMatchObject(expected);
 		});
 

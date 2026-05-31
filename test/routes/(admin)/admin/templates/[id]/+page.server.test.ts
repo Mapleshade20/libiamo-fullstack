@@ -1,5 +1,6 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "$lib/server/db";
 import { actions, load } from "$routes/(admin)/admin/templates/[id]/+page.server";
 
 // ── Mock DB ──────────────────────────────────────────────────────────────
@@ -51,9 +52,9 @@ function createActionEvent(entries: Record<string, string>, paramsId = "1") {
 	}
 	return {
 		params: { id: paramsId },
-		locals: { user: { id: "admin-1" } },
+		locals: { user: { id: "admin-1", role: "admin" } },
 		request: {
-			formData: async () => formData,
+			formData: vi.fn().mockResolvedValue(formData),
 			headers: new Headers(),
 		},
 	} as any;
@@ -90,7 +91,7 @@ describe("Admin Templates [id] +page.server", () => {
 
 	describe("load function", () => {
 		it("returns 404 for non-numeric id", async () => {
-			const event = { params: { id: "abc" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "abc" } } as any;
 			try {
 				await load(event);
 				expect.fail("Should have thrown");
@@ -101,7 +102,7 @@ describe("Admin Templates [id] +page.server", () => {
 
 		it("returns 404 if template is not found", async () => {
 			dbSelectQueue.push([]); // Empty result for template query
-			const event = { params: { id: "999" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "999" } } as any;
 			try {
 				await load(event);
 				expect.fail("Should have thrown");
@@ -114,12 +115,32 @@ describe("Admin Templates [id] +page.server", () => {
 			dbSelectQueue.push([sampleTemplate]); // 1st query: Template
 			dbSelectQueue.push([{ id: 1, slotValues: {} }]); // 2nd query: Variants
 
-			const event = { params: { id: "1" } } as any;
+			const event = { locals: { user: { id: "admin-1", role: "admin" } }, params: { id: "1" } } as any;
 			const result = await load(event);
 
 			expect((result as any).template).toBeDefined();
 			expect((result as any).variants).toBeDefined();
 			expect((result as any).template.id).toBe(1);
+		});
+	});
+
+	describe("authorization", () => {
+		it.each([
+			"save",
+			"delete",
+			"addVariant",
+			"saveVariant",
+			"activateVariant",
+			"deactivateVariant",
+		] as const)("returns 403 for non-admin users before %s", async (actionName) => {
+			const event = createActionEvent(validTemplateEntries, "1");
+			event.locals.user.role = "learner";
+
+			await expect(actions[actionName](event)).rejects.toMatchObject({ status: 403 });
+			expect(event.request.formData).not.toHaveBeenCalled();
+			expect(db.select).not.toHaveBeenCalled();
+			expect(db.update).not.toHaveBeenCalled();
+			expect(db.insert).not.toHaveBeenCalled();
 		});
 	});
 

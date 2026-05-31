@@ -4,6 +4,7 @@ import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -74,8 +75,7 @@ function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author:
 }
 
 export const load: PageServerLoad = async ({ params, locals, parent }) => {
-	const user = locals.user;
-	if (!user) throw error(401, "Unauthorized");
+	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
 	const taskId = Number.parseInt(taskIdStr, 10);
@@ -137,8 +137,7 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 
 export const actions: Actions = {
 	start: async ({ params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -156,8 +155,7 @@ export const actions: Actions = {
 	},
 
 	send: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -246,8 +244,7 @@ export const actions: Actions = {
 	},
 
 	agentOpening: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -285,8 +282,7 @@ export const actions: Actions = {
 	},
 
 	complete: async ({ request, params, locals }) => {
-		const user = locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -316,8 +312,7 @@ export const actions: Actions = {
 	},
 
 	hint: async (event) => {
-		const user = event.locals.user;
-		if (!user) return fail(401, { error: "Unauthorized" });
+		const user = requireUser(event);
 
 		const taskId = Number.parseInt(event.params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });

@@ -1,13 +1,50 @@
-import { error, fail, redirect } from "@sveltejs/kit";
+import { type ActionFailure, error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
+import { requireAdmin } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
+type VariantStatusActionResult =
+	| {
+			templateId: number;
+			variantId: number;
+			variant: { isActive: boolean };
+	  }
+	| ActionFailure<{ message: string }>;
+
+function isActionFailure(result: VariantStatusActionResult): result is ActionFailure<{ message: string }> {
+	return "status" in result;
+}
+
+async function getVariantStatusForAction(event: {
+	locals: App.Locals;
+	params: { id: string };
+	request: Request;
+}): Promise<VariantStatusActionResult> {
+	requireAdmin(event);
+
+	const templateId = Number(event.params.id);
+	const formData = await event.request.formData();
+	const variantId = Number(formData.get("variantId"));
+	if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
+
+	const [variant] = await db
+		.select({ isActive: templateVariant.isActive })
+		.from(templateVariant)
+		.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, templateId)))
+		.limit(1);
+	if (!variant) return fail(404, { message: "Variant not found" });
+
+	return { templateId, variantId, variant };
+}
+
 export const load: PageServerLoad = async (event) => {
+	requireAdmin(event);
+
 	const id = Number(event.params.id);
 	if (Number.isNaN(id)) return error(404, "Template not found");
 
@@ -21,6 +58,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	save: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const raw = Object.fromEntries(formData);
@@ -36,12 +75,16 @@ export const actions: Actions = {
 	},
 
 	delete: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		await db.update(template).set({ isActive: false }).where(eq(template.id, id));
 		return redirect(302, "/admin/templates");
 	},
 
 	addVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const { slotValues, openingState } = parseVariantFormData(formData);
@@ -66,6 +109,8 @@ export const actions: Actions = {
 	},
 
 	saveVariant: async (event) => {
+		requireAdmin(event);
+
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
@@ -98,46 +143,30 @@ export const actions: Actions = {
 	},
 
 	activateVariant: async (event) => {
-		const id = Number(event.params.id);
-		const formData = await event.request.formData();
-		const variantId = Number(formData.get("variantId"));
-		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
-
-		const [variant] = await db
-			.select({ isActive: templateVariant.isActive })
-			.from(templateVariant)
-			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
-			.limit(1);
-		if (!variant) return fail(404, { message: "Variant not found" });
+		const result = await getVariantStatusForAction(event);
+		if (isActionFailure(result)) return result;
+		const { templateId, variantId, variant } = result;
 		if (variant.isActive) return fail(400, { message: "Variant is already active" });
 
 		await db
 			.update(templateVariant)
 			.set({ isActive: true })
-			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, templateId)));
 
 		return { activated: true };
 	},
 
 	deactivateVariant: async (event) => {
-		const id = Number(event.params.id);
-		const formData = await event.request.formData();
-		const variantId = Number(formData.get("variantId"));
-		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
-
-		const [variant] = await db
-			.select({ isActive: templateVariant.isActive })
-			.from(templateVariant)
-			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
-			.limit(1);
-		if (!variant) return fail(404, { message: "Variant not found" });
+		const result = await getVariantStatusForAction(event);
+		if (isActionFailure(result)) return result;
+		const { templateId, variantId, variant } = result;
 		if (!variant.isActive) return fail(400, { message: "Variant is already inactive" });
 
 		// Enforce at-least-one-active-variant rule
 		const activeVariants = await db
 			.select({ count: templateVariant.id })
 			.from(templateVariant)
-			.where(and(eq(templateVariant.templateId, id), eq(templateVariant.isActive, true)));
+			.where(and(eq(templateVariant.templateId, templateId), eq(templateVariant.isActive, true)));
 
 		if (activeVariants.length <= 1) {
 			return fail(400, { message: "Cannot deactivate the last active variant. Add another variant first." });
@@ -146,7 +175,7 @@ export const actions: Actions = {
 		await db
 			.update(templateVariant)
 			.set({ isActive: false })
-			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
+			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, templateId)));
 
 		return { deactivated: true };
 	},
