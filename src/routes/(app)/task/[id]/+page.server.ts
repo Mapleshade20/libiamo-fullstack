@@ -1,6 +1,13 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { INTERACTION_TYPE_LABELS, LANGUAGE_CODES, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH, UI_VARIANT_LABELS } from "$lib/constants";
+import {
+	INTERACTION_TYPE_LABELS,
+	LANGUAGE_CODES,
+	type LanguageCode,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	UI_VARIANT_LABELS,
+	USER_LONG_TEXT_MAX_LENGTH,
+} from "$lib/constants";
 import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -10,6 +17,7 @@ import { evaluateUserTranslation, generateExpressions } from "$lib/server/transl
 import type { Actions, PageServerLoad } from "./$types";
 
 const TRANSLATION_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
+const TASK_TRANSLATION_HELP_CONTEXT_MAX_LENGTH = USER_LONG_TEXT_MAX_LENGTH;
 
 /** Validate and cast a language code, defaulting to "en" */
 function validateLanguageCode(code: unknown): LanguageCode {
@@ -94,6 +102,13 @@ export const actions: Actions = {
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return fail(400, { error: "Missing task title" });
 		}
+		if (
+			title.length > TRANSLATION_HELP_TEXT_MAX_LENGTH ||
+			(typeof description === "string" && description.length > TRANSLATION_HELP_TEXT_MAX_LENGTH) ||
+			(typeof objectivesRaw === "string" && objectivesRaw.length > TASK_TRANSLATION_HELP_CONTEXT_MAX_LENGTH)
+		) {
+			return fail(400, { error: "Task context is too long" });
+		}
 
 		let objectives: string[] | null = null;
 		if (objectivesRaw && typeof objectivesRaw === "string") {
@@ -102,6 +117,9 @@ export const actions: Actions = {
 			} catch {
 				// ignore parse errors
 			}
+		}
+		if (objectives?.some((objective) => typeof objective === "string" && objective.length > TRANSLATION_HELP_TEXT_MAX_LENGTH)) {
+			return fail(400, { error: "Task context is too long" });
 		}
 
 		const uiLabel = typeof ui === "string" ? (UI_VARIANT_LABELS[ui as keyof typeof UI_VARIANT_LABELS] ?? ui) : undefined;

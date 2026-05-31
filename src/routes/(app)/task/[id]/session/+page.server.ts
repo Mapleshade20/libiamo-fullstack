@@ -4,7 +4,7 @@ import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -30,6 +30,10 @@ function isMailAgentStartTrigger(message: string, clientMessageId: string, sessi
 
 function getMessageMaxLength(ui: string) {
 	return ui === "apple_mail" ? MAIL_TEXT_MAX_LENGTH : PRACTICE_UI_TEXT_MAX_LENGTH;
+}
+
+function isOversizedMetadataId(value: string) {
+	return value.length > USER_TEXT_MAX_LENGTH;
 }
 
 function mapSendMessageError(e: unknown) {
@@ -65,6 +69,7 @@ async function getLearnerProfileName(user: { id: string; name?: string | null })
 
 function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author: string; text: string }> | undefined {
 	if (typeof value !== "string" || !value.trim()) return undefined;
+	if (value.length > USER_LONG_TEXT_MAX_LENGTH) return undefined;
 
 	try {
 		const parsed = JSON.parse(value);
@@ -73,6 +78,7 @@ function parseHintContextPath(value: FormDataEntryValue | null): Array<{ author:
 			(item): item is { author: string; text: string } =>
 				Boolean(item) && typeof item === "object" && !Array.isArray(item) && typeof item.author === "string" && typeof item.text === "string",
 		);
+		if (contextPath.some((item) => item.author.length > USER_TEXT_MAX_LENGTH || item.text.length > USER_LONG_TEXT_MAX_LENGTH)) return undefined;
 		return contextPath.length ? contextPath : undefined;
 	} catch {
 		return undefined;
@@ -173,6 +179,7 @@ export const actions: Actions = {
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!rawMessage?.trim()) return fail(400, { error: "Message is required" });
+		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
 
 		try {
 			const taskData = await db.query.task.findFirst({
@@ -261,6 +268,7 @@ export const actions: Actions = {
 		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
 
 		try {
 			const taskData = await db.query.task.findFirst({

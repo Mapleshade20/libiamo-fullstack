@@ -591,6 +591,16 @@ describe("session page server", () => {
 			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
 		});
 
+		it("rejects overlong client message IDs before task lookup", async () => {
+			const result = await actions.send(
+				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) } }),
+			);
+
+			expect(result).toMatchObject({ status: 400, data: { error: "Client message ID is too long" } });
+			expect(mockDb.query.task.findFirst).not.toHaveBeenCalled();
+			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
+		});
+
 		it("allows Apple Mail messages above the shared UI limit", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,

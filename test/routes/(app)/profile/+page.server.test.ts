@@ -1,5 +1,6 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
@@ -73,7 +74,7 @@ describe("Profile +page.server", () => {
 		it("updateProfile returns 400 for invalid payload", async () => {
 			const result = (await actions.updateProfile(
 				createActionEvent({
-					name: "x".repeat(60),
+					name: "x".repeat(USER_NAME_MAX_LENGTH + 1),
 				}),
 			)) as ActionFailure<any>;
 
