@@ -64,7 +64,7 @@ export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 	const row = await db.query.userApiKey.findFirst({
 		where: (t, { eq }) => eq(t.userId, user.id),
-		columns: { userId: true },
+		columns: { userId: true, baseUrl: true, model: true },
 	});
 	const hasApiKey = row !== undefined;
 
@@ -72,6 +72,8 @@ export const load: PageServerLoad = async (event) => {
 		serverTimezones: getMemoizedTimezones(),
 		serverNativeLanguages: getNativeLanguageOptions("en"),
 		hasApiKey,
+		apiBaseUrl: row?.baseUrl ?? "",
+		apiModel: row?.model ?? "",
 	};
 };
 

@@ -5,13 +5,14 @@ import { auth } from "$lib/server/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
-const { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+const { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+	const mockFindFirst = vi.fn().mockResolvedValue(undefined);
 	const mockOnConflictDoNothing = vi.fn();
 	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: vi.fn() }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
 	const mockWhere = vi.fn();
 	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return { mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
+	return { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
 });
 
 vi.mock("$lib/server/auth", () => ({
@@ -27,7 +28,7 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: mockInsert,
 		delete: mockDelete,
-		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+		query: { userApiKey: { findFirst: mockFindFirst } },
 	},
 }));
 
@@ -49,23 +50,48 @@ vi.mock("$lib/server/api-key-crypto", () => ({
 describe("Profile +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockFindFirst.mockResolvedValue(undefined);
 	});
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
 		it("returns serverTimezones and hasApiKey", async () => {
 			const event = { locals: { user: { id: "test-user" } } } as any;
-			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean };
+			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean; apiBaseUrl: string; apiModel: string };
 
 			expect(result.serverTimezones).toBeDefined();
 			expect(Array.isArray(result.serverTimezones)).toBe(true);
 
 			expect(result.hasApiKey).toBe(false);
+			expect(result.apiBaseUrl).toBe("");
+			expect(result.apiModel).toBe("");
 
 			if (result.serverTimezones.length > 0) {
 				expect(result.serverTimezones[0]).toHaveProperty("value");
 				expect(result.serverTimezones[0]).toHaveProperty("label");
 			}
+		});
+
+		it("returns saved BYOK provider and model without exposing the API key", async () => {
+			mockFindFirst.mockResolvedValue({
+				userId: "test-user",
+				baseUrl: BYOK_API_BASE_URLS[8],
+				model: "Qwen/Qwen3-8B",
+			});
+
+			const result = (await load({ locals: { user: { id: "test-user" } } } as any)) as {
+				hasApiKey: boolean;
+				apiBaseUrl: string;
+				apiModel: string;
+				apiKey?: string;
+				encryptedKey?: string;
+			};
+
+			expect(result.hasApiKey).toBe(true);
+			expect(result.apiBaseUrl).toBe(BYOK_API_BASE_URLS[8]);
+			expect(result.apiModel).toBe("Qwen/Qwen3-8B");
+			expect(result.apiKey).toBeUndefined();
+			expect(result.encryptedKey).toBeUndefined();
 		});
 	});
 

@@ -32,6 +32,8 @@ const nativeLanguageOptions = $derived(
 
 let timezoneInputValue = $state("");
 let nativeLanguageInputValue = $state("");
+let apiBaseUrlValue = $state("");
+let apiModelValue = $state("");
 let detectedTimezone = $state("");
 let settingsForm: HTMLFormElement | null = $state(null);
 let apiKeyForm: HTMLFormElement | null = $state(null);
@@ -51,6 +53,14 @@ $effect(() => {
 
 $effect(() => {
 	nativeLanguageInputValue = form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "";
+});
+
+$effect(() => {
+	apiBaseUrlValue = form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? "";
+});
+
+$effect(() => {
+	apiModelValue = form?.values?.apiModel ?? data.apiModel ?? "";
 });
 
 onMount(() => {
@@ -250,12 +260,13 @@ function applyDetectedTimezone() {
 					<select
 						id="apiBaseUrl"
 						name="apiBaseUrl"
+						bind:value={apiBaseUrlValue}
 						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
 						aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
 					>
-						<option value="" disabled selected={(form?.values?.apiBaseUrl ?? "") === ""}>Select an API provider</option>
+						<option value="" disabled>Select an API provider</option>
 						{#each BYOK_API_BASE_URLS as baseUrl}
-							<option value={baseUrl} selected={form?.values?.apiBaseUrl === baseUrl}>{BYOK_API_BASE_URL_LABELS[baseUrl]} — {baseUrl}</option>
+							<option value={baseUrl}>{BYOK_API_BASE_URL_LABELS[baseUrl]} — {baseUrl}</option>
 						{/each}
 					</select>
 					{#if form?.errors?.apiBaseUrl}
@@ -264,13 +275,7 @@ function applyDetectedTimezone() {
 				</div>
 				<div class="space-y-2">
 					<Label for="apiModel">Model</Label>
-					<Input
-						id="apiModel"
-						name="apiModel"
-						value={form?.values?.apiModel ?? ""}
-						placeholder="gpt-4o"
-						aria-invalid={Boolean(form?.errors?.apiModel)}
-					/>
+					<Input id="apiModel" name="apiModel" bind:value={apiModelValue} placeholder="gpt-4o" aria-invalid={Boolean(form?.errors?.apiModel)} />
 					{#if form?.errors?.apiModel}
 						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}
