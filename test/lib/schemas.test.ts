@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
 	appleMailOpeningStateSchema,
@@ -8,6 +8,7 @@ import {
 	getEditorFields,
 	imessageOpeningStateSchema,
 	openingStateSchemas,
+	profileSchema,
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
@@ -41,6 +42,18 @@ describe("schemas", () => {
 	it("validates forgot password email format", () => {
 		const result = forgotPasswordSchema.safeParse({ email: "invalid-email" });
 		expect(result.success).toBe(false);
+	});
+
+	it("profileSchema enforces BYOK apiKey and apiModel length limits", () => {
+		const validByok = {
+			apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH),
+			apiBaseUrl: "https://api.example.com/v1",
+			apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH),
+		};
+
+		expect(profileSchema.safeParse(validByok).success).toBe(true);
+		expect(profileSchema.safeParse({ ...validByok, apiKey: "k".repeat(BYOK_API_KEY_MAX_LENGTH + 1) }).success).toBe(false);
+		expect(profileSchema.safeParse({ ...validByok, apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH + 1) }).success).toBe(false);
 	});
 
 	const baseTemplate = {
