@@ -23,6 +23,11 @@ const actionNotification = $derived(
 );
 </script>
 
+<svelte:head>
+	<title>Sign In · Libiamo</title>
+	<meta name="description" content="Sign in to continue your language practice with Libiamo.">
+</svelte:head>
+
 <Card.Root>
 	<Card.Header><Card.Title class="text-xl">Sign In</Card.Title></Card.Header>
 	<Card.Content>

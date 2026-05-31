@@ -11,6 +11,11 @@ function formatDate(date: Date | null): string {
 }
 </script>
 
+<svelte:head>
+	<title>Review Pool · Admin · Libiamo</title>
+	<meta name="description" content="Manage and review user-contributed material awaiting approval.">
+</svelte:head>
+
 <div class="space-y-6">
 	<h1>Review Pool</h1>
 

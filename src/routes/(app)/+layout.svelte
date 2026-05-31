@@ -79,6 +79,8 @@ $effect(() => {
 });
 </script>
 
+<svelte:head> <meta name="robots" content="noindex, nofollow"> </svelte:head>
+
 <div class="min-h-screen">
 	{#if !isSessionPage}
 		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />

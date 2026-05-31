@@ -39,6 +39,11 @@ function difficultyLabel(level: number): string {
 }
 </script>
 
+<svelte:head>
+	<title>{task.title} · Libiamo</title>
+	<meta name="description" content="Prepare for this language practice scenario, review objectives, and begin the session.">
+</svelte:head>
+
 <div class="fixed inset-0 bg-card overflow-hidden z-0">
 	{#if isFinished}
 		<div class="absolute -right-24 -top-24 text-green-500/5 pointer-events-none"><CheckCircle2 size={500} strokeWidth={1} /></div>

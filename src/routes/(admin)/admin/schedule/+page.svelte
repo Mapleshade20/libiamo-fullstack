@@ -51,6 +51,11 @@ function toggleMode(newMode: "daily" | "weekly") {
 }
 </script>
 
+<svelte:head>
+	<title>Schedule · Admin · Libiamo</title>
+	<meta name="description" content="Review and manage scheduled learner tasks.">
+</svelte:head>
+
 <div class="space-y-8">
 	<ActionNotification notification={actionNotification} />
 

@@ -159,6 +159,11 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 }
 </script>
 
+<svelte:head>
+	<title>{data.taskTitle} · Feedback · Libiamo</title>
+	<meta name="description" content="Review feedback, corrections, and tutor comments for your completed practice session.">
+</svelte:head>
+
 <div class="min-h-screen bg-[#fdfcf9] text-[#2a2520]">
 	<!-- Header -->
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">

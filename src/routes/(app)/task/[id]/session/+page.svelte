@@ -8,6 +8,11 @@ import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
 let { data } = $props();
 </script>
 
+<svelte:head>
+	<title>{data.task.title} · Practice · Libiamo</title>
+	<meta name="description" content={`Practice “${data.task.title}” in an interactive simulated conversation.`}>
+</svelte:head>
+
 {#if data.task.template.ui === "discord"}
 	<DiscordUI
 		taskId={data.taskId}

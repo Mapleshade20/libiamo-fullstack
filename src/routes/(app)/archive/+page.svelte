@@ -172,6 +172,11 @@ function markNoteHasCard(noteId: number) {
 }
 </script>
 
+<svelte:head>
+	<title>Archive · Libiamo</title>
+	<meta name="description" content="Review saved notes, explanations, and language feedback from past sessions.">
+</svelte:head>
+
 <h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
 
 {#if rows.length === 0}

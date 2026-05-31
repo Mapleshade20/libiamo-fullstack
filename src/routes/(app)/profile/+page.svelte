@@ -109,6 +109,11 @@ function applyDetectedTimezone() {
 }
 </script>
 
+<svelte:head>
+	<title>Profile · Libiamo</title>
+	<meta name="description" content="Manage your profile.">
+</svelte:head>
+
 <div class="mx-auto max-w-2xl space-y-8">
 	<h1 class="text-3xl">Profile</h1>
 

@@ -2,6 +2,8 @@
 let { children } = $props();
 </script>
 
+<svelte:head> <meta name="robots" content="noindex, follow"> </svelte:head>
+
 <div class="flex min-h-screen items-center justify-center px-4">
 	<div class="w-full max-w-md space-y-8">
 		<div class="text-center">

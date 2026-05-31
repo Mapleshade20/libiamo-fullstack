@@ -87,6 +87,11 @@ const uiIcons: Record<string, Component> = {
 };
 </script>
 
+<svelte:head>
+	<title>Quest Hall · Libiamo</title>
+	<meta name="description" content="Choose today's language practice quests and continue your learning routine.">
+</svelte:head>
+
 <div class="space-y-10">
 	<section>
 		<h1 class="text-3xl md:text-4xl text-gray-800 font-normal leading-tight">

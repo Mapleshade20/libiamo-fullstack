@@ -41,6 +41,11 @@ async function onDelete(cardId: number) {
 }
 </script>
 
+<svelte:head>
+	<title>Review Cards · Libiamo</title>
+	<meta name="description" content="Manage your saved language review cards.">
+</svelte:head>
+
 <div class="mx-auto max-w-2xl">
 	<div class="mb-8 flex items-center gap-4">
 		<a href="/review" class="text-muted-foreground hover:text-foreground"><ArrowLeft size={20} /></a>

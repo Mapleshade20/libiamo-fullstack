@@ -353,6 +353,11 @@ $effect(() => {
 	};
 });
 </script>
+
+<svelte:head>
+	<title>{tpl.title} · Translation · Libiamo</title>
+	<meta name="description" content={`Translate and review “${tpl.title}” with targeted feedback.`}>
+</svelte:head>
 <ActionNotification notification={actionNotification} />
 <div class="fixed inset-0 bg-card"></div>
 <div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">

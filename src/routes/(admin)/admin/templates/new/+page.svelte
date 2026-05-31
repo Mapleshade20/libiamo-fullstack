@@ -27,6 +27,11 @@ let templateData = $derived(
 );
 </script>
 
+<svelte:head>
+	<title>New Template · Admin · Libiamo</title>
+	<meta name="description" content="Create a new Libiamo practice template.">
+</svelte:head>
+
 <div class="space-y-6">
 	<h1>
 		{#if contributed}
