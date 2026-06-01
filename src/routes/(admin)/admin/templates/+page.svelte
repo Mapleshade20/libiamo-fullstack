@@ -8,6 +8,11 @@ import { INTERACTION_TYPE_LABELS, INTERACTION_TYPES, LANGUAGE_CODES, LANGUAGE_LA
 let { data } = $props();
 </script>
 
+<svelte:head>
+	<title>Templates · Admin · Libiamo</title>
+	<meta name="description" content="Manage Libiamo practice templates.">
+</svelte:head>
+
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1>Templates</h1>

@@ -34,6 +34,11 @@ $effect(() => {
 });
 </script>
 
+<svelte:head>
+	<title>Reset Password · Libiamo</title>
+	<meta name="description" content="Reset your Libiamo password and regain access to your account.">
+</svelte:head>
+
 <Card.Root>
 	<Card.Header>
 		<Card.Title class="text-xl">

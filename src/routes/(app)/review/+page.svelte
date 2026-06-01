@@ -73,6 +73,11 @@ function handleKeydown(e: KeyboardEvent) {
 }
 </script>
 
+<svelte:head>
+	<title>Review · Libiamo</title>
+	<meta name="description" content="Review vocabulary, grammar, expressions, and corrections with spaced repetition.">
+</svelte:head>
+
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="mx-auto max-w-xl pb-24 sm:pb-0">

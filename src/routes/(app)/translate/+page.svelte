@@ -45,6 +45,11 @@ function enterTask(event: MouseEvent, taskId: number) {
 }
 </script>
 
+<svelte:head>
+	<title>Translation · Libiamo</title>
+	<meta name="description" content="Practice translation tasks and compare your work with guided feedback.">
+</svelte:head>
+
 <div class="space-y-10">
 	<!-- Title -->
 	<section>

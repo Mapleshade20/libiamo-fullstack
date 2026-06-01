@@ -23,6 +23,11 @@ function formatDate(d: Date | null): string {
 }
 </script>
 
+<svelte:head>
+	<title>Contribute · Libiamo</title>
+	<meta name="description" content="Contribute new language-learning templates and scenario ideas to Libiamo.">
+</svelte:head>
+
 <div class="space-y-10">
 	<h1 class="text-3xl text-gray-800 font-medium">Contribute a Template</h1>
 

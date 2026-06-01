@@ -18,6 +18,11 @@ const actionNotification = $derived(
 );
 </script>
 
+<svelte:head>
+	<title>Verify Email · Libiamo</title>
+	<meta name="description" content="Verify your email address to finish setting up your Libiamo account.">
+</svelte:head>
+
 <ActionNotification notification={actionNotification} />
 
 <Card.Root>

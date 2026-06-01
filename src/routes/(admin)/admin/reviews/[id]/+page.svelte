@@ -26,6 +26,11 @@ function fmtDate(d: Date | null): string {
 }
 </script>
 
+<svelte:head>
+	<title>Review: {c.titleBase} · Admin · Libiamo</title>
+	<meta name="description" content="Inspect and manage user-contributed material.">
+</svelte:head>
+
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<a href="/admin/reviews" class="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2">&larr; Back to Review Pool</a>

@@ -1,3 +1,14 @@
-# allow crawling everything by default
 User-agent: *
-Disallow:
+Disallow: /admin/
+Disallow: /task/
+Disallow: /archive
+Disallow: /review
+Disallow: /profile
+Disallow: /contribute
+Disallow: /translate
+
+Allow: /
+Allow: /sign-in
+Allow: /sign-up
+Allow: /forgot-password
+Allow: /verify

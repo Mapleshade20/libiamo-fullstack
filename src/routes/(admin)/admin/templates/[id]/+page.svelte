@@ -11,6 +11,11 @@ const actionNotification = $derived(
 );
 </script>
 
+<svelte:head>
+	<title>Edit Template #{data.template.id} · Admin · Libiamo</title>
+	<meta name="description" content="Edit template content, variants, and scenario configuration.">
+</svelte:head>
+
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1>Edit Template #{data.template.id}</h1>

@@ -34,6 +34,11 @@ $effect(() => {
 });
 </script>
 
+<svelte:head>
+	<title>Sign Up · Libiamo</title>
+	<meta name="description" content="Create a Libiamo account to practice language through real-world scenarios.">
+</svelte:head>
+
 <Card.Root>
 	<Card.Header><Card.Title class="text-xl">Sign Up</Card.Title></Card.Header>
 	<Card.Content>
