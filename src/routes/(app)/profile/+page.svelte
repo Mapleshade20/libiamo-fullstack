@@ -127,9 +127,9 @@ function applyDetectedTimezone() {
 					<h2 class="text-xl font-semibold">{data.user.name}</h2>
 					<p class="text-sm text-muted-foreground">
 						Your avatar is connected to your email via
-						<a href="https://cravatar.cn" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline"> Cravatar </a>.
+						<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>.
 					</p>
-					<p class="text-xs text-muted-foreground">Want a custom image? Upload it at Gravatar/Cravatar and it will sync here automatically!</p>
+					<p class="text-xs text-muted-foreground">Add a profile photo on Gravatar to display it here!</p>
 				</div>
 			</div>
 		</Card.Content>

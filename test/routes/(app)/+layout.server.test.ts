@@ -12,13 +12,13 @@ describe("(app) layout +layout.server", () => {
 		});
 	});
 
-	it("returns user and cravatar url when user exists", async () => {
+	it("returns user and gravatar url when user exists", async () => {
 		const user = { id: "u1", email: "Alice@Example.com" };
 
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.user).toEqual(user);
-		expect(result.avatarUrl).toBe(`https://cn.cravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);
+		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);
 	});
 
 	it("uses empty email fallback when user email is missing", async () => {
@@ -26,6 +26,6 @@ describe("(app) layout +layout.server", () => {
 
 		const result = (await load({ locals: { user } } as any)) as any;
 
-		expect(result.avatarUrl).toBe(`https://cn.cravatar.com/avatar/${EMPTY_MD5}?d=identicon&s=192`);
+		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${EMPTY_MD5}?d=identicon&s=192`);
 	});
 });

@@ -71,4 +71,4 @@ Validation and UI
 
 ### Profile Photo
 
-Libiamo uses [Cravatar](https://cravatar.cn) (a Gravatar mirror) to manage user profile photos. Users only need to create their profile on Gravatar and then it will be automatically synced here.
+Libiamo uses [Gravatar](https://gravatar.com) to display user profile photos.

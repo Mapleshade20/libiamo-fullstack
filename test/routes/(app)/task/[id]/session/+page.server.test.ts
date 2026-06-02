@@ -91,7 +91,7 @@ describe("session page server", () => {
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
 				// Mock the parent function to resolve the avatarUrl
-				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.task).toEqual(mockTask);
@@ -116,7 +116,7 @@ describe("session page server", () => {
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
 				// Mock the parent function here as well
-				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
 			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
 
 			expect(result.existingSession).toBeNull();
@@ -130,7 +130,7 @@ describe("session page server", () => {
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
-				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
 			} as any)) as { user: { name: string; timezone: string } };
 
 			expect(result.user.name).toBe("Updated Name");
@@ -174,7 +174,7 @@ describe("session page server", () => {
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
-				parent: async () => ({ avatarUrl: "https://cn.cravatar.com/avatar/mockhash" }),
+				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
 			} as any)) as { task: typeof spanishTask; existingSession: { id: number } | null };
 
 			expect(result.task).toEqual(spanishTask);
