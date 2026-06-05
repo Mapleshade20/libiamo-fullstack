@@ -99,6 +99,20 @@ describe("LLM API key helpers", () => {
 			expect("error" in result && result.error).toContain("Connection refused");
 		});
 
+		it("clears the timeout when fetch rejects immediately", async () => {
+			const fetchMock = vi.fn(async () => {
+				throw new Error("Connection refused");
+			});
+			const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await verifyApiKey("https://api.example.com/v1", "sk-key", "test-model");
+
+			expect(result.ok).toBe(false);
+			expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+			clearTimeoutSpy.mockRestore();
+		});
+
 		it("strips trailing slash from baseUrl", async () => {
 			const fetchMock = vi.fn(async () => Response.json({ choices: [{ message: { content: "ok" } }] }, { status: 200 }));
 			vi.stubGlobal("fetch", fetchMock);

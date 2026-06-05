@@ -128,20 +128,23 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
 
-		response = await fetch(endpoint, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify({
-				model,
-				messages: [{ role: "user", content: "Hi" }],
-				max_tokens: 1,
-			}),
-			signal: controller.signal,
-		});
-		clearTimeout(timeout);
+		try {
+			response = await fetch(endpoint, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${apiKey}`,
+				},
+				body: JSON.stringify({
+					model,
+					messages: [{ role: "user", content: "Hi" }],
+					max_tokens: 1,
+				}),
+				signal: controller.signal,
+			});
+		} finally {
+			clearTimeout(timeout);
+		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (message.includes("abort") || message.includes("AbortError") || message.includes("timeout")) {
