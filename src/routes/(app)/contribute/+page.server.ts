@@ -4,7 +4,7 @@ import { z } from "zod";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { templateContributionSchema } from "$lib/schemas";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { templateContribution } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";

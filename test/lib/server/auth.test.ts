@@ -34,7 +34,7 @@ vi.mock("$lib/server/db", () => ({
 	db: { __brand: "db" },
 }));
 
-vi.mock("$lib/server/email", () => ({
+vi.mock("$lib/server/auth/email", () => ({
 	sendEmail: mockSendEmail,
 	emailVerificationHtml: vi.fn((email: string, url: string) => `<html>verify ${email} ${url}</html>`),
 	resetPasswordHtml: vi.fn((email: string, url: string) => `<html>reset ${email} ${url}</html>`),
@@ -47,7 +47,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("wires better-auth with required email verification settings", async () => {
-		await import("$lib/server/auth");
+		await import("$lib/server/auth/auth");
 
 		expect(mockDrizzleAdapter).toHaveBeenCalledTimes(1);
 		expect(mockSveltekitCookies).toHaveBeenCalledTimes(1);
@@ -65,7 +65,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("sends verification email with expected content", async () => {
-		await import("$lib/server/auth");
+		await import("$lib/server/auth/auth");
 
 		const config = mockBetterAuth.mock.calls[0]?.[0] as any;
 		await config.emailVerification.sendVerificationEmail({
@@ -84,7 +84,7 @@ describe("auth server configuration", () => {
 	});
 
 	it("sends reset password email with expected content", async () => {
-		await import("$lib/server/auth");
+		await import("$lib/server/auth/auth");
 
 		const config = mockBetterAuth.mock.calls[0]?.[0] as any;
 		await config.emailAndPassword.sendResetPassword({

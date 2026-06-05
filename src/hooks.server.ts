@@ -1,7 +1,7 @@
 import type { Handle } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { auth } from "$lib/server/auth";
+import { auth } from "$lib/server/auth/auth";
 import { sql } from "$lib/server/db";
 
 process.on("sveltekit:shutdown", async (reason) => {

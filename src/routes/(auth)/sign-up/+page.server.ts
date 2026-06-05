@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { signUpSchema } from "$lib/schemas";
-import { auth } from "$lib/server/auth";
+import { auth } from "$lib/server/auth/auth";
 import { db } from "$lib/server/db";
 import { userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";

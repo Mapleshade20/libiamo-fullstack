@@ -1,6 +1,6 @@
 <script lang="ts">
 import { tick } from "svelte";
-import { type FieldErrors, focusFirstFormError } from "$lib/form-attention";
+import { type FieldErrors, focusFirstFormError } from "$lib/client/form-attention";
 
 interface Props {
 	formRef?: HTMLFormElement | null;

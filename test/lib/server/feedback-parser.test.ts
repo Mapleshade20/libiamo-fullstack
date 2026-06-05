@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { getPlainText, isFeedbackResultValid, parseAnnotationSpans, parseFeedbackXml, stripAllTags } from "$lib/server/feedback-parser";
+import { describe, expect, it, vi } from "vitest";
+
+const { mockDb } = vi.hoisted(() => ({
+	mockDb: {
+		query: {},
+	},
+}));
+
+vi.mock("$lib/server/db", () => ({ db: mockDb }));
+
+import { getPlainText, isFeedbackResultValid, parseAnnotationSpans, parseFeedbackXml, stripAllTags } from "$lib/server/feedback";
 
 describe("stripAllTags", () => {
 	it("removes annotation and highlight tags, leaving content", () => {

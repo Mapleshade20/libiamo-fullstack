@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { requireAdmin } from "$lib/server/authz";
+import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { templateContribution, user } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";

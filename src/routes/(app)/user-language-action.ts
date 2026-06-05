@@ -1,7 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { switchLanguageSchema } from "$lib/schemas";
-import { auth } from "$lib/server/auth";
-import { requireUser } from "$lib/server/authz";
+import { auth } from "$lib/server/auth/auth";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { userLearningProfile } from "$lib/server/db/schema";
 

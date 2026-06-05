@@ -8,7 +8,7 @@ import {
 	UI_VARIANT_LABELS,
 	USER_LONG_TEXT_MAX_LENGTH,
 } from "$lib/constants";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";

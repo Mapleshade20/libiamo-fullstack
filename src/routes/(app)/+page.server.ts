@@ -1,13 +1,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
-import { requireUser } from "$lib/server/authz";
-import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/dates";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession, task, template } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
-import { ensureTasksForDate } from "$lib/server/tasks";
-import { switchActiveLanguage } from "$lib/server/user-language";
+import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/scheduling/dates";
+import { ensureTasksForDate } from "$lib/server/scheduling/tasks";
 import type { Actions, PageServerLoad } from "./$types";
+import { switchActiveLanguage } from "./user-language-action";
 
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);

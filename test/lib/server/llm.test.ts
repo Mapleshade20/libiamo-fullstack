@@ -7,6 +7,7 @@ const { mockEnv } = vi.hoisted(() => ({
 		OPENAI_BASE_URL: "https://example.com/v1",
 		OPENAI_MODEL: "test-model",
 		LLM_DEBUG: "",
+		BETTER_AUTH_SECRET: "test-secret-for-api-key-encryption",
 	},
 }));
 
@@ -16,10 +17,6 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(null) } },
 	},
-}));
-
-vi.mock("$lib/server/api-key-crypto", () => ({
-	decryptApiKey: vi.fn((c: string) => `decrypted:${c}`),
 }));
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -70,6 +67,7 @@ beforeEach(() => {
 	mockEnv.OPENAI_BASE_URL = "https://example.com/v1";
 	mockEnv.OPENAI_MODEL = "test-model";
 	mockEnv.LLM_DEBUG = "";
+	mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
 });
 
 describe("chatText", () => {
@@ -139,21 +137,21 @@ describe("chatText", () => {
 
 	it("uses BYOK config when userId has a configured key", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
+		const { chatText, encryptApiKey } = await import("$lib/server/llm");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce({
 			userId: "byok-user",
-			encryptedKey: "test-cipher",
+			encryptedKey: encryptApiKey("user-key"),
 			baseUrl: "https://user-api.example.com/v1/",
 			model: "user-model",
 		} as any);
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
 		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "byok-user" });
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://user-api.example.com/v1/chat/completions");
-		expect(getHeader(init.headers, "authorization")).toBe("Bearer decrypted:test-cipher");
+		expect(getHeader(init.headers, "authorization")).toBe("Bearer user-key");
 		expect(JSON.parse(String(init.body)).model).toBe("user-model");
 	});
 

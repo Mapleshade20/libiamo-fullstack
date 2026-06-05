@@ -2,6 +2,7 @@
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { extractSlotNames, getDefaultOpeningState, type UiVariant } from "$lib/admin/variant-helpers";
+import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import OpeningStateEditor from "$lib/components/OpeningStateEditor.svelte";
@@ -20,7 +21,6 @@ import {
 	UI_VARIANT_LABELS,
 	UI_VARIANTS,
 } from "$lib/constants";
-import { handleInvalidField } from "$lib/form-attention";
 import { renderMarkdown } from "$lib/markdown";
 
 type VariantData = {

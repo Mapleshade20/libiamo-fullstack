@@ -95,7 +95,13 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-import { ensureTasksForDate, getMondayFromWeekString, getMondayOfWeekForDate, scheduleTaskManually, toDateString } from "$lib/server/tasks";
+import {
+	ensureTasksForDate,
+	getMondayFromWeekString,
+	getMondayOfWeekForDate,
+	scheduleTaskManually,
+	toDateString,
+} from "$lib/server/scheduling/tasks";
 
 // ── 2. Helpers ─────────────────────────────────────────────────────────
 function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, unknown> = {}) {

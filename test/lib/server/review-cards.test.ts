@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createNewCard, deserializeCard, Rating, State, serializeCard } from "$lib/server/fsrs-scheduler";
+import { createNewCard, deserializeCard, Rating, State, serializeCard } from "$lib/server/review-cards";
 
 // ── fssr-scheduler tests ────────────────────────────────────────────
 
@@ -226,7 +226,7 @@ describe("getDueCards", () => {
 	});
 
 	it("formats month-level intervals for high-stability cards", async () => {
-		const scheduler = (await import("$lib/server/fsrs-scheduler")).getScheduler();
+		const scheduler = (await import("$lib/server/review-cards")).getScheduler();
 		let current = createNewCard();
 		let simulatedNow = new Date();
 		for (let i = 0; i < 10; i++) {

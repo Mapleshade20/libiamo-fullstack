@@ -1,7 +1,7 @@
 import { fail } from "@sveltejs/kit";
 import { and, eq, type SQL } from "drizzle-orm";
 import type { InteractionType, LanguageCode } from "$lib/constants";
-import { requireAdmin } from "$lib/server/authz";
+import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";

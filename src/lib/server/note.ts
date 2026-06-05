@@ -4,7 +4,7 @@ import { getLanguageEnglishName } from "$lib/constants";
 import { db } from "./db";
 import { note, practiceSession } from "./db/schema";
 import { chatJson } from "./llm";
-import { sessionMessageChronologicalOrder } from "./session-message-ordering";
+import { sessionMessageChronologicalOrder } from "./session";
 
 // ── createNote ─────────────────────────────────────────────────────
 

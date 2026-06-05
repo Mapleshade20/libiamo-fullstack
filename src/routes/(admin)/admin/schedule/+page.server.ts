@@ -3,11 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { LanguageCode } from "$lib/constants";
 import { scheduleManualSchema } from "$lib/schemas";
-import { requireAdmin } from "$lib/server/authz";
-import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/dates";
+import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { task, template } from "$lib/server/db/schema";
-import { scheduleTaskManually } from "$lib/server/tasks";
+import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/scheduling/dates";
+import { scheduleTaskManually } from "$lib/server/scheduling/tasks";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {

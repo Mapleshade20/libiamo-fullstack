@@ -10,9 +10,15 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
+vi.mock("$lib/server/db", () => ({
+	db: {
+		query: { userApiKey: { findFirst: vi.fn() } },
+	},
+}));
 
-describe("api-key-crypto", () => {
+import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
+
+describe("LLM API key helpers", () => {
 	describe("encryptApiKey / decryptApiKey", () => {
 		it("round-trips a plaintext API key", () => {
 			const original = "sk-test-key-12345";

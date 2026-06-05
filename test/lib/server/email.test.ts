@@ -24,7 +24,7 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { sendEmail } from "$lib/server/email";
+import { sendEmail } from "$lib/server/auth/email";
 
 describe("sendEmail", () => {
 	beforeEach(() => {
@@ -102,7 +102,7 @@ describe("sendEmail", () => {
 	});
 });
 
-import { emailVerificationHtml, resetPasswordHtml } from "$lib/server/email";
+import { emailVerificationHtml, resetPasswordHtml } from "$lib/server/auth/email";
 
 describe("emailVerificationHtml", () => {
 	it("returns an HTML string containing the user email", () => {

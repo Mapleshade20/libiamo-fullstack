@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { AnnotationSpan } from "$lib/feedback-types";
+import type { AnnotationSpan } from "$lib/feedback/types";
 
 let {
 	comment,

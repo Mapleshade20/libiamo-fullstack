@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getLocalDateString, toSafeUtcDate } from "$lib/server/dates";
+import { getLocalDateString, toSafeUtcDate } from "$lib/server/scheduling/dates";
 
 describe("getLocalDateString", () => {
 	let originalTz: string | undefined;
