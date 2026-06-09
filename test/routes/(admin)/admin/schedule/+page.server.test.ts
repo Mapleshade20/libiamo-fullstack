@@ -1,6 +1,6 @@
 import { fail } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as tasksModule from "$lib/server/tasks";
+import * as tasksModule from "$lib/server/scheduling/tasks";
 import { actions, load } from "$routes/(admin)/admin/schedule/+page.server";
 
 vi.mock("$lib/server/db", () => {

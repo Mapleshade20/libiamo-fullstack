@@ -3,12 +3,12 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getNativeLanguageOptions } from "$lib/constants";
 import { profileSchema } from "$lib/schemas";
-import { encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
-import { auth } from "$lib/server/auth";
-import { requireUser } from "$lib/server/authz";
+import { auth } from "$lib/server/auth/auth";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { userApiKey } from "$lib/server/db/schema";
-import { switchActiveLanguage } from "$lib/server/user-language";
+import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { switchActiveLanguage } from "../user-language-action";
 import type { Actions, PageServerLoad } from "./$types";
 
 /**

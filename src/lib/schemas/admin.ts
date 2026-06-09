@@ -2,101 +2,18 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import {
-	AUTH_EMAIL_MAX_LENGTH,
-	AUTH_PASSWORD_MAX_LENGTH,
-	AUTH_TOKEN_MAX_LENGTH,
-	BYOK_API_BASE_URLS,
-	BYOK_API_KEY_MAX_LENGTH,
-	BYOK_MODEL_MAX_LENGTH,
 	CADENCES,
 	INTERACTION_TYPES,
 	LANGUAGE_CODES,
 	MAIL_TEXT_MAX_LENGTH,
-	NATIVE_LANGUAGE_CODES,
 	PRACTICE_UI_TEXT_MAX_LENGTH,
 	UI_VARIANTS,
 	type UiVariant,
 	USER_LONG_TEXT_MAX_LENGTH,
-	USER_NAME_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
 
 dayjs.extend(customParseFormat);
-
-// ── Auth ─────────────────────────────────────────────────────────────
-export const timezoneSchema = z.preprocess(
-	(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-	z
-		.string()
-		.optional()
-		.refine(
-			(tz) => {
-				if (!tz) return true;
-				try {
-					Intl.DateTimeFormat(undefined, { timeZone: tz });
-					return true;
-				} catch {
-					return false;
-				}
-			},
-			{
-				message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
-			},
-		),
-);
-
-export const signInSchema = z.object({
-	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
-	password: z.string().min(1, "Password is required").max(AUTH_PASSWORD_MAX_LENGTH),
-});
-
-const byokFields = ["apiKey", "apiBaseUrl", "apiModel"] as const;
-const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
-
-export const signUpSchema = z.object({
-	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
-	password: z.string().min(8, "Password must be at least 8 characters").max(AUTH_PASSWORD_MAX_LENGTH),
-	name: z.string().min(1, "Name is required").max(USER_NAME_MAX_LENGTH),
-	activeLanguage: z.enum(LANGUAGE_CODES, { message: "Please select a language" }),
-	timezone: timezoneSchema,
-});
-
-export const forgotPasswordSchema = z.object({
-	email: z.email("Invalid email").max(AUTH_EMAIL_MAX_LENGTH),
-});
-
-export const resetPasswordSchema = z.object({
-	newPassword: z.string().min(8, "Password must be at least 8 characters").max(AUTH_PASSWORD_MAX_LENGTH),
-	token: z.string().min(1, "Invalid token").max(AUTH_TOKEN_MAX_LENGTH),
-});
-
-// ── App ──────────────────────────────────────────────────────────────
-export const profileSchema = z
-	.object({
-		name: z.string().max(USER_NAME_MAX_LENGTH).optional(),
-		timezone: timezoneSchema,
-		nativeLanguage: z.preprocess(
-			(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
-		),
-		apiKey: z.string().max(BYOK_API_KEY_MAX_LENGTH).optional(),
-		apiBaseUrl: z.enum(BYOK_API_BASE_URLS, { message: "Please select a supported API provider" }).optional(),
-		apiModel: z.string().max(BYOK_MODEL_MAX_LENGTH).optional(),
-	})
-	.superRefine((data, ctx) => {
-		const filled = byokFields.map((f) => data[f]?.trim());
-		if (filled.some(Boolean) && !filled.every(Boolean)) {
-			byokFields.forEach((f, i) => {
-				if (!filled[i]) ctx.addIssue({ code: z.ZodIssueCode.custom, message: byokMessage, path: [f] });
-			});
-		}
-	});
-
-export const switchLanguageSchema = z.object({
-	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),
-});
-
-// ── Admin ────────────────────────────────────────────────────────────
 
 const templateContentFields = {
 	titleBase: z.string().min(1, "Title is required"),
@@ -519,14 +436,4 @@ export const scheduleManualSchema = z.object({
 		// Ensure the date actually exists (e.g., prevent Feb 30th)
 		return dayjs(value, "YYYY-MM-DD", true).isValid();
 	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
-});
-
-// ── Review ────────────────────────────────────────────────────────────
-export const reviewRatingSchema = z.object({
-	rating: z.number().int().min(1).max(4),
-	elapsedSeconds: z.number().int().min(0),
-});
-
-export const reviewCreateCardSchema = z.object({
-	noteId: z.number().int().positive(),
 });

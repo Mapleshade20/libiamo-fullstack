@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {

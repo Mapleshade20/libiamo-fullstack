@@ -1,10 +1,10 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, ne, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
-import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
+import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "./dates";
 
-export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "$lib/server/dates";
+export { getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "./dates";
 
 function resolveSlots(text: string, slots: Record<string, string>): string {
 	return text.replaceAll(/\{\{(\w+)\}\}/g, (_, k) => {

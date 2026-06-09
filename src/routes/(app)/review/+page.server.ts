@@ -1,7 +1,7 @@
 import { error } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { type CardType, LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { reviewCard } from "$lib/server/db/schema";
 import { getDueCards, getReviewStats } from "$lib/server/review-cards";

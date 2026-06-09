@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { CardType } from "$lib/constants";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { reviewCard } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";

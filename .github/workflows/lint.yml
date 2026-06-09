@@ -25,7 +25,7 @@ jobs:
       - name: Run biome
         run: pnpm biome ci --error-on-warnings .
       - name: Run vitest
-        run: pnpm vitest run --reporter github-actions
+        run: pnpm vitest run
       - uses: actions/setup-python@v3
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1

@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";

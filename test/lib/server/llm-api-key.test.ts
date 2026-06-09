@@ -10,9 +10,15 @@ vi.mock("$env/dynamic/private", () => ({
 	env: mockEnv,
 }));
 
-import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/api-key-crypto";
+vi.mock("$lib/server/db", () => ({
+	db: {
+		query: { userApiKey: { findFirst: vi.fn() } },
+	},
+}));
 
-describe("api-key-crypto", () => {
+import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
+
+describe("LLM API key helpers", () => {
 	describe("encryptApiKey / decryptApiKey", () => {
 		it("round-trips a plaintext API key", () => {
 			const original = "sk-test-key-12345";
@@ -91,6 +97,20 @@ describe("api-key-crypto", () => {
 
 			expect(result.ok).toBe(false);
 			expect("error" in result && result.error).toContain("Connection refused");
+		});
+
+		it("clears the timeout when fetch rejects immediately", async () => {
+			const fetchMock = vi.fn(async () => {
+				throw new Error("Connection refused");
+			});
+			const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+			vi.stubGlobal("fetch", fetchMock);
+
+			const result = await verifyApiKey("https://api.example.com/v1", "sk-key", "test-model");
+
+			expect(result.ok).toBe(false);
+			expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+			clearTimeoutSpy.mockRestore();
 		});
 
 		it("strips trailing slash from baseUrl", async () => {

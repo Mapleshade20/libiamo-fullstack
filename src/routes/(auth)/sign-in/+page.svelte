@@ -2,13 +2,13 @@
 import Eye from "@lucide/svelte/icons/eye";
 import EyeOff from "@lucide/svelte/icons/eye-off";
 import { enhance } from "$app/forms";
+import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
-import { handleInvalidField } from "$lib/form-attention";
 
 let { form, data } = $props();
 let showPassword = $state(false);

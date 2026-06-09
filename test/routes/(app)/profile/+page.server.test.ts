@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BYOK_API_BASE_URLS, BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
-import { auth } from "$lib/server/auth";
+import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
 
@@ -15,7 +15,7 @@ const { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDele
 	return { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
 });
 
-vi.mock("$lib/server/auth", () => ({
+vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
 			updateUser: vi.fn(),
@@ -42,7 +42,7 @@ const { mockEncryptApiKey, mockVerifyApiKey } = vi.hoisted(() => ({
 	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
 }));
 
-vi.mock("$lib/server/api-key-crypto", () => ({
+vi.mock("$lib/server/llm", () => ({
 	encryptApiKey: mockEncryptApiKey,
 	verifyApiKey: mockVerifyApiKey,
 }));

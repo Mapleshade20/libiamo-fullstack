@@ -2,7 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
 import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";

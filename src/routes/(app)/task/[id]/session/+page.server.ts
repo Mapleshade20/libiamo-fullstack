@@ -11,7 +11,7 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
-import { requireUser } from "$lib/server/authz";
+import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
@@ -20,12 +20,12 @@ import {
 	completeSession,
 	generateHint,
 	getSessionOrFail,
+	orderSessionMessagesChronologically,
 	requestAgentOpening,
 	type SendMessageOptions,
 	sendMessage,
 	startSession,
 } from "$lib/server/session";
-import { orderSessionMessagesChronologically } from "$lib/server/session-message-ordering";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();

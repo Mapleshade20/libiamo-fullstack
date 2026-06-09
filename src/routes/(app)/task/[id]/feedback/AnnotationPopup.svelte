@@ -6,7 +6,7 @@ import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import type { AnnotationSpan } from "$lib/feedback-types";
+import type { AnnotationSpan } from "$lib/feedback/types";
 import { renderMarkdown } from "$lib/markdown";
 
 let {

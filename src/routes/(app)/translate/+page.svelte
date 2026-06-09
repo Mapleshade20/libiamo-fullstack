@@ -1,9 +1,9 @@
 <script lang="ts">
 import Languages from "@lucide/svelte/icons/languages";
 import { goto } from "$app/navigation";
+import { captureTaskEnterTransition } from "$lib/client/task-transition";
 import TaskCard from "$lib/components/TaskCard.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
-import { captureTaskEnterTransition } from "$lib/task-transition";
 
 let { data } = $props();
 let lang = $derived(data.language as LanguageCode);

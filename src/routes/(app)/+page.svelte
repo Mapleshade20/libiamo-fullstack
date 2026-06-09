@@ -7,9 +7,9 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { goto } from "$app/navigation";
+import { captureTaskEnterTransition } from "$lib/client/task-transition";
 import TaskCard from "$lib/components/TaskCard.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
-import { captureTaskEnterTransition } from "$lib/task-transition";
 
 let { data } = $props();
 let lang = $derived(data.language as LanguageCode);

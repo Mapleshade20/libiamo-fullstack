@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount, tick } from "svelte";
 import { enhance } from "$app/forms";
+import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -8,7 +9,6 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
-import { focusAndHighlightField, handleInvalidField } from "$lib/form-attention";
 
 let { form } = $props();
 

@@ -3,8 +3,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
+import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
 import { db } from "$lib/server/db";
-import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/email";
 
 export const auth = betterAuth({
 	baseURL: env.ORIGIN,

@@ -1,8 +1,8 @@
 <script lang="ts">
 import { tick } from "svelte";
 import { page } from "$app/state";
+import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/client/task-transition";
 import Navbar from "$lib/components/Navbar.svelte";
-import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/task-transition";
 
 let { children, data } = $props();
 let overlayStyle = $state("");

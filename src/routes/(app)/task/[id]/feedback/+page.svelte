@@ -7,7 +7,7 @@ import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback-types";
+import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";

@@ -20,6 +20,7 @@ const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => ({
 		generateHint: vi.fn(),
 		getSessionOrFail: vi.fn(),
 		followUpOnFeedback: vi.fn(),
+		orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
 	},
 	mockNoteService: {
 		createNotesBatch: vi.fn(),

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { auth } from "$lib/server/auth";
+import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(app)/+page.server";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
@@ -25,7 +25,7 @@ const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => 
 	mockGetLocalDateString: vi.fn(() => "2026-04-17"),
 }));
 
-vi.mock("$lib/server/auth", () => ({
+vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
 			updateUser: vi.fn(),
@@ -72,11 +72,11 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-vi.mock("$lib/server/tasks", () => ({
+vi.mock("$lib/server/scheduling/tasks", () => ({
 	ensureTasksForDate: mockEnsureTasksForDate,
 }));
 
-vi.mock("$lib/server/dates", () => ({
+vi.mock("$lib/server/scheduling/dates", () => ({
 	getMondayOfWeekForDate: mockGetMondayOfWeekForDate,
 	getLocalDateString: mockGetLocalDateString,
 }));
