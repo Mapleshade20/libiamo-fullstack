@@ -7,7 +7,7 @@ import { Skeleton } from "$lib/components/ui/skeleton";
 import { type LanguageCode, t } from "$lib/i18n";
 
 let { data } = $props();
-let lang: LanguageCode = $derived(data.language as LanguageCode);
+let lang: LanguageCode = $derived(data.user.activeLanguage as LanguageCode);
 let currentIndex = $state(0);
 let flipped = $state(false);
 let isSubmitting = $state(false);
@@ -113,9 +113,9 @@ function handleKeydown(e: KeyboardEvent) {
 		</div>
 	{/if}
 
-	{#if data.allCards.length > 0}
+	{#if data.cardCount > 0}
 		<div class="mt-12 border-t border-border pt-6 text-center">
-			<a href="/review/cards" class="text-muted-foreground underline hover:text-foreground"> Manage cards ({data.allCards.length}) </a>
+			<a href="/review/cards" class="text-muted-foreground underline hover:text-foreground"> Manage cards ({data.cardCount}) </a>
 		</div>
 	{/if}
 </div>

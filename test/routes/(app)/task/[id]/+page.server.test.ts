@@ -6,8 +6,7 @@ import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 const { mockLimit, mockSelect, mockFindFirst, mockChatJson } = vi.hoisted(() => {
 	const mockLimit = vi.fn();
 	const mockWhere = vi.fn(() => ({ limit: mockLimit }));
-	const mockLeftJoin: any = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
-	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin }));
+	const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
 	// from() returns a chainable that supports both innerJoin (task query) and where→limit (user query)
 	const mockFrom = vi.fn(() => ({
 		innerJoin: mockInnerJoin,

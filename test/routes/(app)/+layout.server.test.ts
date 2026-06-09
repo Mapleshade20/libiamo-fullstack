@@ -13,11 +13,26 @@ describe("(app) layout +layout.server", () => {
 	});
 
 	it("returns user and gravatar url when user exists", async () => {
-		const user = { id: "u1", email: "Alice@Example.com" };
+		const user = {
+			id: "u1",
+			name: "Alice",
+			email: "Alice@Example.com",
+			role: "learner",
+			activeLanguage: "en",
+			timezone: "UTC",
+			nativeLanguage: "es",
+		};
 
 		const result = (await load({ locals: { user } } as any)) as any;
 
-		expect(result.user).toEqual(user);
+		expect(result.user).toEqual({
+			name: "Alice",
+			email: "Alice@Example.com",
+			role: "learner",
+			activeLanguage: "en",
+			timezone: "UTC",
+			nativeLanguage: "es",
+		});
 		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);
 	});
 

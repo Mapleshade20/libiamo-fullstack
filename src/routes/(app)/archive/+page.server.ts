@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser({ locals });
 
 	const groups = await listCompletedSessions(user.id);
-	return { groups, language: user.activeLanguage };
+	return { groups };
 };
 
 export const actions: Actions = {

@@ -111,7 +111,6 @@ describe("(app) home +page.server", () => {
 			expect.objectContaining({
 				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
 				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
-				language: "en",
 			}),
 		);
 	});

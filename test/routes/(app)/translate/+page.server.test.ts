@@ -55,7 +55,6 @@ describe("(app) translate +page.server", () => {
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.templates).toEqual(templates);
-		expect(result.language).toBe("en");
 		expect(result.statusMap).toEqual({});
 	});
 
@@ -70,7 +69,6 @@ describe("(app) translate +page.server", () => {
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.templates).toEqual([]);
-		expect(result.language).toBe("ja");
 		expect(result.statusMap).toEqual({});
 	});
 

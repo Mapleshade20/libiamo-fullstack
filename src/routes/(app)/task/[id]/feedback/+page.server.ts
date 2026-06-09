@@ -46,8 +46,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Get the current user's session. If it doesn't exist yet, send them to the session flow.
 	const session = await db.query.practiceSession.findFirst({
 		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
+		columns: {
+			id: true,
+			status: true,
+			agentPromptSnapshot: true,
+		},
 		with: {
-			messages: { orderBy: (messages, { asc }) => [asc(messages.createdAt)] },
+			messages: {
+				columns: {
+					id: true,
+					role: true,
+					content: true,
+					createdAt: true,
+					llmMetadata: true,
+				},
+				orderBy: (messages, { asc }) => [asc(messages.createdAt)],
+			},
 			task: {
 				with: {
 					variant: true,

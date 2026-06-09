@@ -52,10 +52,13 @@ describe("(admin) Layout Server Load", () => {
 	});
 
 	it("should return the user object if user is an admin", async () => {
-		const adminUser = { role: "admin", id: 1 };
+		const adminUser = { role: "admin", id: 1, name: "Admin", email: "admin@example.com", activeLanguage: "en" };
 		const event = { locals: { user: adminUser } } as any;
 
 		const result = await load(event);
-		expect(result).toEqual({ user: adminUser, pendingReviewCount: 0 });
+		expect(result).toEqual({
+			user: { role: "admin", name: "Admin", email: "admin@example.com", activeLanguage: "en" },
+			pendingReviewCount: 0,
+		});
 	});
 });

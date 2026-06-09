@@ -17,8 +17,8 @@ let { data } = $props();
 	<DiscordUI
 		taskId={data.taskId}
 		userName={data.user.name}
-		avatarUrl={data.user.avatarUrl}
-		language={data.user.learningLanguage}
+		avatarUrl={data.avatarUrl}
+		language={data.task.language}
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
@@ -29,8 +29,8 @@ let { data } = $props();
 	<IMessageUI
 		taskId={data.taskId}
 		userName={data.user.name}
-		avatarUrl={data.user.avatarUrl}
-		language={data.user.learningLanguage}
+		avatarUrl={data.avatarUrl}
+		language={data.task.language}
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
@@ -41,8 +41,8 @@ let { data } = $props();
 	<MailUI
 		taskId={data.taskId}
 		userName={data.user.name}
-		avatarUrl={data.user.avatarUrl}
-		language={data.user.learningLanguage}
+		avatarUrl={data.avatarUrl}
+		language={data.task.language}
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
@@ -53,8 +53,8 @@ let { data } = $props();
 	<AO3UI
 		taskId={data.taskId}
 		userName={data.user.name}
-		avatarUrl={data.user.avatarUrl}
-		language={data.user.learningLanguage}
+		avatarUrl={data.avatarUrl}
+		language={data.task.language}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
@@ -64,8 +64,8 @@ let { data } = $props();
 	<RedditUI
 		taskId={data.taskId}
 		userName={data.user.name}
-		avatarUrl={data.user.avatarUrl}
-		language={data.user.learningLanguage}
+		avatarUrl={data.avatarUrl}
+		language={data.task.language}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
