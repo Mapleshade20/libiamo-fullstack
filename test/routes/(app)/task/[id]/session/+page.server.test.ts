@@ -123,19 +123,17 @@ describe("session page server", () => {
 			expect(result.existingSession).toBeNull();
 		});
 
-		it("uses the latest profile timezone from the database", async () => {
+		it("does not duplicate parent user profile data", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-			mockDb.query.user.findFirst.mockResolvedValue({ name: "Updated Name", timezone: "Asia/Shanghai" });
 
 			const result = (await load({
 				params: { id: mockTaskId },
 				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
-				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { user: { name: string; timezone: string } };
+			} as any)) as { user?: unknown };
 
-			expect(result.user.name).toBe("Updated Name");
-			expect(result.user.timezone).toBe("Asia/Shanghai");
+			expect(result.user).toBeUndefined();
+			expect(mockDb.query.user.findFirst).not.toHaveBeenCalled();
 		});
 
 		it("redirects when user not authenticated", async () => {

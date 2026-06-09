@@ -24,13 +24,8 @@ export const load: PageServerLoad = async (event) => {
 			id: task.id,
 			title: task.title,
 			shortObjective: task.shortObjective,
-			description: task.description,
-			objectives: task.objectives,
-			date: task.date,
-			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -41,13 +36,8 @@ export const load: PageServerLoad = async (event) => {
 			id: task.id,
 			title: task.title,
 			shortObjective: task.shortObjective,
-			description: task.description,
-			objectives: task.objectives,
-			date: task.date,
-			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
-			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -85,7 +75,6 @@ export const load: PageServerLoad = async (event) => {
 			...taskItem,
 			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
 		})),
-		language,
 		greeting: getGreeting(language, user.name),
 		subtitle: getRandomSubtitle(language),
 	};

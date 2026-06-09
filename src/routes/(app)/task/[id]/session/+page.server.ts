@@ -101,7 +101,7 @@ function parseHintContextPath(value: FormDataEntryValue | null, maxLength: numbe
 	}
 }
 
-export const load: PageServerLoad = async ({ params, locals, parent }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
@@ -110,9 +110,14 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
+		columns: {
+			id: true,
+			title: true,
+			language: true,
+		},
 		with: {
-			variant: true,
-			template: true,
+			variant: { columns: { openingState: true } },
+			template: { columns: { ui: true, maxTurns: true, agentStartsFirst: true } },
 		},
 	});
 
@@ -124,9 +129,21 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 			eq(practiceSession.userId, user.id),
 			inArray(practiceSession.status, ["in_progress", "completed", "evaluated"]),
 		),
+		columns: {
+			id: true,
+			status: true,
+			tutorFeedback: true,
+		},
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		with: {
 			messages: {
+				columns: {
+					id: true,
+					role: true,
+					content: true,
+					createdAt: true,
+					llmMetadata: true,
+				},
 				orderBy: orderSessionMessagesChronologically,
 			},
 		},
@@ -136,31 +153,11 @@ export const load: PageServerLoad = async ({ params, locals, parent }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
-	const userProfile = await db.query.user.findFirst({
-		where: eq(authUser.id, user.id),
-		columns: {
-			name: true,
-			timezone: true,
-		},
-	});
-
-	const parentData = await parent();
-	const avatarUrl = parentData.avatarUrl;
-	const learningLanguage = taskData.language;
-
 	return {
 		task: taskData,
 		existingSession,
 		taskId: taskIdStr,
-		agentPrompt: taskData.agentPrompt || "",
-		maxTurns: taskData.template.maxTurns || 0,
 		agentStartsFirst: taskData.template.agentStartsFirst,
-		user: {
-			name: userProfile?.name || user.name || "Learner",
-			avatarUrl,
-			learningLanguage,
-			timezone: userProfile?.timezone || user.timezone || "UTC",
-		},
 	};
 };
 

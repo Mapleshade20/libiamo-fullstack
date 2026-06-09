@@ -50,12 +50,8 @@ export const load: PageServerLoad = async (event) => {
 		.select({
 			id: task.id,
 			title: task.title,
-			date: task.date,
 			origin: task.origin,
-			language: task.language,
-			templateTitle: template.titleBase,
 			templateInteractionType: template.interactionType,
-			cadence: task.cadence,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))

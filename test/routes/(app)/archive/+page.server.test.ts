@@ -39,7 +39,7 @@ describe("archive page server", () => {
 	};
 
 	describe("load", () => {
-		it("returns groups and language when authenticated", async () => {
+		it("returns groups when authenticated", async () => {
 			const mockGroups = [
 				{
 					label: "Today",
@@ -58,7 +58,7 @@ describe("archive page server", () => {
 
 			const result = await load({ locals: { user: mockUser } } as any);
 
-			expect(result).toEqual({ groups: mockGroups, language: "en" });
+			expect(result).toEqual({ groups: mockGroups });
 			expect(mockArchiveService.listCompletedSessions).toHaveBeenCalledWith("user_123");
 		});
 

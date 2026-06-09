@@ -12,5 +12,13 @@ export const load: LayoutServerLoad = async (event) => {
 		.from(templateContribution)
 		.where(eq(templateContribution.status, "pending"));
 
-	return { user, pendingReviewCount: result?.count ?? 0 };
+	return {
+		user: {
+			name: user.name,
+			email: user.email,
+			role: user.role,
+			activeLanguage: user.activeLanguage,
+		},
+		pendingReviewCount: result?.count ?? 0,
+	};
 };

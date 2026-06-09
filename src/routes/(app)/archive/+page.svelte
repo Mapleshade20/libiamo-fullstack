@@ -16,7 +16,7 @@ type ArchiveNote = ArchiveGroups[number]["sessions"][number]["notes"][number];
 
 let { data } = $props();
 
-let lang = $derived(data.language as LanguageCode);
+let lang = $derived(data.user.activeLanguage as LanguageCode);
 let groups = $state<ArchiveGroups>((() => data.groups ?? [])());
 let expandedSessionIds = $state(new Set<number>());
 let editingNoteId = $state<number | null>(null);

@@ -124,7 +124,6 @@ export const load: PageServerLoad = async (event) => {
 			id: template.id,
 			title: template.titleBase,
 			description: template.descriptionBase,
-			shortObjective: template.shortObjectiveBase,
 			language: template.language,
 			materialsMd: template.materialsMd,
 			translationBase: template.translationBase,

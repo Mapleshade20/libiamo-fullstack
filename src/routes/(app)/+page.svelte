@@ -12,7 +12,7 @@ import TaskCard from "$lib/components/TaskCard.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
 
 let { data } = $props();
-let lang = $derived(data.language as LanguageCode);
+let lang = $derived(data.user.activeLanguage as LanguageCode);
 
 let flippedId = $state<number | null>(null);
 let typingTimer: ReturnType<typeof setInterval> | null = null;

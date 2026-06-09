@@ -11,7 +11,7 @@ import {
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
-import { practiceSession, task, template, templateVariant } from "$lib/server/db/schema";
+import { practiceSession, task, template } from "$lib/server/db/schema";
 import { OpenAIAuthError } from "$lib/server/llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
@@ -41,21 +41,15 @@ export const load: PageServerLoad = async (event) => {
 			title: task.title,
 			description: task.description,
 			objectives: task.objectives,
-			date: task.date,
 			language: task.language,
 			templateInteractionType: template.interactionType,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
 			materialsMd: template.materialsMd,
-			estimatedWords: template.estimatedWords,
-			maxTurns: template.maxTurns,
 			pointReward: template.pointReward,
-			gemReward: template.gemReward,
-			openingState: templateVariant.openingState,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
-		.leftJoin(templateVariant, eq(task.variantId, templateVariant.id))
 		.where(eq(task.id, taskId))
 		.limit(1);
 

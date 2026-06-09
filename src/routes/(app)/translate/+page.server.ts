@@ -15,7 +15,6 @@ export const load: PageServerLoad = async (event) => {
 			titleBase: template.titleBase,
 			shortObjectiveBase: template.shortObjectiveBase,
 			difficulty: template.difficulty,
-			interactionType: template.interactionType,
 		})
 		.from(template)
 		.where(and(eq(template.language, language), eq(template.ui, "translator"), eq(template.isActive, true)));
@@ -40,7 +39,6 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		templates,
-		language,
 		statusMap: Object.fromEntries(statusMap),
 	};
 };
