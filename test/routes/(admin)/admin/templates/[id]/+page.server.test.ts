@@ -8,8 +8,8 @@ import { actions, load } from "$routes/(admin)/admin/templates/[id]/+page.server
 // Dynamic queue to handle consecutive database select calls within a single test
 let dbSelectQueue: any[][] = [];
 
-vi.mock("$lib/server/db", () => ({
-	db: {
+vi.mock("$lib/server/db", () => {
+	const mockDb: any = {
 		select: vi.fn(() => {
 			const val = dbSelectQueue.shift() || [];
 			const chain = Promise.resolve(val) as any;
@@ -30,8 +30,15 @@ vi.mock("$lib/server/db", () => ({
 			chain.values = vi.fn(() => chain);
 			return chain;
 		}),
-	},
-}));
+		delete: vi.fn(() => {
+			const chain = Promise.resolve() as any;
+			chain.where = vi.fn(() => chain);
+			return chain;
+		}),
+	};
+	mockDb.transaction = vi.fn(async (callback) => callback(mockDb));
+	return { db: mockDb };
+});
 
 vi.mock("$lib/server/db/schema", () => ({
 	template: { id: "id", isActive: "isActive" },
@@ -128,6 +135,7 @@ describe("Admin Templates [id] +page.server", () => {
 		it.each([
 			"save",
 			"delete",
+			"importJson",
 			"addVariant",
 			"saveVariant",
 			"activateVariant",
@@ -166,6 +174,47 @@ describe("Admin Templates [id] +page.server", () => {
 				status: 302,
 				location: "/admin/templates",
 			});
+		});
+	});
+
+	describe("importJson action", () => {
+		it("returns 400 for malformed JSON", async () => {
+			const event = createActionEvent({ templateJson: "not json" }, "1");
+			const result = (await actions.importJson(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toContain("Invalid JSON");
+		});
+
+		it("returns imported: true for valid JSON", async () => {
+			const event = createActionEvent(
+				{
+					templateJson: JSON.stringify({
+						version: 1,
+						template: {
+							language: "en",
+							interactionType: "chat",
+							ui: "imessage",
+							cadence: "daily",
+							difficulty: 1,
+							pointReward: 10,
+							gemReward: 5,
+							titleBase: "Chat with {{friend}}",
+						},
+						variants: [
+							{
+								isActive: true,
+								slotValues: { friend: "Alice" },
+								openingState: { previousMessages: [] },
+							},
+						],
+					}),
+				},
+				"1",
+			);
+
+			const result = await actions.importJson(event);
+			expect(result).toEqual({ imported: true });
+			expect(db.transaction).toHaveBeenCalledOnce();
 		});
 	});
 

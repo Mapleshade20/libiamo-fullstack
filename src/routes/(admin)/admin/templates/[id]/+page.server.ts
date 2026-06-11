@@ -1,7 +1,7 @@
 import { type ActionFailure, error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
+import { parseTemplateJson, parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
@@ -80,6 +80,38 @@ export const actions: Actions = {
 		const id = Number(event.params.id);
 		await db.update(template).set({ isActive: false }).where(eq(template.id, id));
 		return redirect(302, "/admin/templates");
+	},
+
+	importJson: async (event) => {
+		requireAdmin(event);
+
+		const id = Number(event.params.id);
+		if (Number.isNaN(id)) return fail(400, { message: "Invalid template id" });
+
+		const formData = await event.request.formData();
+		const rawJson = formData.get("templateJson");
+		if (typeof rawJson !== "string" || rawJson.trim() === "") return fail(400, { message: "Paste template JSON before importing." });
+
+		const result = parseTemplateJson(rawJson);
+		if (!result.success) return fail(400, { message: result.error });
+
+		const { template: importedTemplate, variants } = result.data;
+		await db.transaction(async (tx) => {
+			await tx.update(template).set(importedTemplate).where(eq(template.id, id));
+			await tx.delete(templateVariant).where(eq(templateVariant.templateId, id));
+			if (variants.length > 0) {
+				await tx.insert(templateVariant).values(
+					variants.map((variant) => ({
+						templateId: id,
+						isActive: variant.isActive,
+						slotValues: variant.slotValues,
+						openingState: variant.openingState,
+					})),
+				);
+			}
+		});
+
+		return { imported: true };
 	},
 
 	addVariant: async (event) => {

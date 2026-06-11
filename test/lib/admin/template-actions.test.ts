@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareVariantPayload } from "$lib/admin/template-actions";
+import { parseTemplateJson, prepareVariantPayload } from "$lib/admin/template-actions";
 
 const baseTemplate = {
 	ui: "imessage" as const,
@@ -148,5 +148,58 @@ describe("prepareVariantPayload", () => {
 
 		expect(result.error).toBeDefined();
 		expect(result.error).toContain("hobby");
+	});
+});
+
+describe("parseTemplateJson", () => {
+	const validPayload = {
+		version: 1,
+		template: {
+			language: "en",
+			interactionType: "chat",
+			ui: "imessage",
+			cadence: "daily",
+			difficulty: 1,
+			pointReward: 10,
+			gemReward: 5,
+			titleBase: "Chat with {{friend}}",
+		},
+		variants: [{ isActive: true, slotValues: { friend: "Alice" }, openingState: { previousMessages: [] } }],
+	};
+
+	it("parses and validates exported template JSON", () => {
+		const result = parseTemplateJson(JSON.stringify(validPayload));
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.template.titleBase).toBe("Chat with {{friend}}");
+			expect(result.data.variants[0].slotValues).toEqual({ friend: "Alice" });
+		}
+	});
+
+	it("rejects invalid JSON", () => {
+		const result = parseTemplateJson("not json");
+
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error).toBe("Invalid JSON.");
+	});
+
+	it("rejects non-translation templates without variants", () => {
+		const result = parseTemplateJson(JSON.stringify({ ...validPayload, variants: [] }));
+
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error).toContain("at least one variant");
+	});
+
+	it("rejects variants missing required slots", () => {
+		const result = parseTemplateJson(
+			JSON.stringify({
+				...validPayload,
+				variants: [{ isActive: true, slotValues: {}, openingState: { previousMessages: [] } }],
+			}),
+		);
+
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error).toContain("friend");
 	});
 });

@@ -1,7 +1,12 @@
 <script lang="ts">
+import { enhance } from "$app/forms";
 import TemplateForm from "$lib/components/TemplateForm.svelte";
+import { Button } from "$lib/components/ui/button";
+import { Textarea } from "$lib/components/ui/textarea";
 
 let { data, form } = $props();
+
+const importPlaceholder = '{"version":1,"template":{...},"variants":[...]}';
 
 // Pre-fill from contribution
 let contributed = $derived(data?.contributionData);
@@ -45,8 +50,20 @@ let templateData = $derived(
 		<p class="text-muted-foreground">Reviewing contribution #{contributed.id}. Adjust fields below, then create to approve.</p>
 	{/if}
 
+	{#if !contributed}
+		<details class="rounded-md border border-input bg-background p-4">
+			<summary class="cursor-pointer text-sm font-medium">Import JSON</summary>
+			<form method="POST" action="?/importJson" use:enhance={() => async ({ update }) => update({ reset: false })} class="mt-4 space-y-3">
+				<p class="text-sm text-muted-foreground">Paste an exported template JSON file to create a new template with all variants.</p>
+				<Textarea name="templateJson" rows={10} placeholder={importPlaceholder} required />
+				<Button type="submit" variant="secondary">Import JSON</Button>
+			</form>
+		</details>
+	{/if}
+
 	<TemplateForm
 		template={templateData}
+		action="?/create"
 		{form}
 		submitLabel={contributed ? "Create & Approve" : "Create Template"}
 		initialSlotValues={contributed?.slotValues as Record<string, string> | undefined}

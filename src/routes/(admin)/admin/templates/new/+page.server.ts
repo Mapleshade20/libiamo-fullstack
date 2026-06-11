@@ -1,7 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
+import { parseTemplateForm, parseTemplateJson, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	default: async (event) => {
+	create: async (event) => {
 		const user = requireAdmin(event);
 
 		const formData = await event.request.formData();
@@ -103,5 +103,44 @@ export const actions: Actions = {
 		}
 
 		return redirect(302, "/admin/templates");
+	},
+
+	importJson: async (event) => {
+		const user = requireAdmin(event);
+
+		const formData = await event.request.formData();
+		const rawJson = formData.get("templateJson");
+		if (typeof rawJson !== "string" || rawJson.trim() === "") return fail(400, { message: "Paste template JSON before importing." });
+
+		const result = parseTemplateJson(rawJson);
+		if (!result.success) return fail(400, { message: result.error });
+
+		const { template: importedTemplate, variants } = result.data;
+		let newTemplateId: number | undefined;
+
+		await db.transaction(async (tx) => {
+			const [newTemplate] = await tx
+				.insert(template)
+				.values({
+					...importedTemplate,
+					createdBy: user.id,
+				})
+				.returning({ id: template.id });
+
+			newTemplateId = newTemplate.id;
+
+			if (variants.length > 0) {
+				await tx.insert(templateVariant).values(
+					variants.map((variant) => ({
+						templateId: newTemplate.id,
+						isActive: variant.isActive,
+						slotValues: variant.slotValues,
+						openingState: variant.openingState,
+					})),
+				);
+			}
+		});
+
+		return redirect(302, newTemplateId ? `/admin/templates/${newTemplateId}` : "/admin/templates");
 	},
 };

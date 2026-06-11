@@ -49,6 +49,10 @@ function toggleMode(newMode: "daily" | "weekly") {
 	url.searchParams.delete("date");
 	goto(url.toString(), { keepFocus: true });
 }
+
+function submitFilters(event: Event) {
+	(event.currentTarget as HTMLFormElement).requestSubmit();
+}
 </script>
 
 <svelte:head>
@@ -90,7 +94,7 @@ function toggleMode(newMode: "daily" | "weekly") {
 		</div>
 	</div>
 
-	<form method="GET" class="flex flex-wrap items-end gap-4">
+	<form method="GET" class="flex flex-wrap items-end gap-4" onchange={submitFilters}>
 		<input type="hidden" name="mode" value={mode}>
 
 		<div class="space-y-1">
@@ -106,8 +110,6 @@ function toggleMode(newMode: "daily" | "weekly") {
 				{/each}
 			</select>
 		</div>
-
-		<Button type="submit" variant="secondary">View</Button>
 	</form>
 
 	<div>
