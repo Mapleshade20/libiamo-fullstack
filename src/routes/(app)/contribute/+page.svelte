@@ -1,12 +1,45 @@
 <script lang="ts">
 import { page } from "$app/state";
+import { parseTemplateJson } from "$lib/admin/template-actions";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import TemplateForm from "$lib/components/TemplateForm.svelte";
 import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
+import { Textarea } from "$lib/components/ui/textarea";
 
 let { data, form } = $props();
 
+type ImportedTemplateData = {
+	language?: string;
+	interactionType?: string;
+	ui?: string;
+	cadence?: string;
+	difficulty?: number;
+	maxTurns?: number | null;
+	estimatedWords?: number | null;
+	pointReward?: number;
+	gemReward?: number;
+	isActive?: boolean;
+	agentStartsFirst?: boolean;
+	titleBase?: string;
+	shortObjectiveBase?: string | null;
+	descriptionBase?: string | null;
+	agentPromptBase?: string | null;
+	materialsMd?: string | null;
+	objectivesBase?: string[] | null;
+	translationBase?: string[][] | null;
+	tags?: string[] | null;
+};
+
 let success = $derived(page.url.searchParams.get("success") === "1");
+let importJsonText = $state("");
+let importError = $state<string | null>(null);
+let importFeedback = $state<string | null>(null);
+let importedTemplate = $state<ImportedTemplateData | undefined>(undefined);
+let importedSlotValues = $state<Record<string, string> | undefined>(undefined);
+let importedOpeningState = $state<Record<string, unknown> | undefined>(undefined);
+let importResetKey = $state("empty");
+const importPlaceholder = '{"version":1,"template":{...},"variants":[...]}';
 const actionNotification = $derived(
 	success
 		? {
@@ -20,6 +53,26 @@ const actionNotification = $derived(
 function formatDate(d: Date | null): string {
 	if (!d) return "";
 	return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function fillFromJson() {
+	const result = parseTemplateJson(importJsonText);
+	if (!result.success) {
+		importError = result.error;
+		importFeedback = null;
+		return;
+	}
+
+	const firstVariant = result.data.variants.find((variant) => variant.isActive) ?? result.data.variants[0];
+	importedTemplate = result.data.template;
+	importedSlotValues = firstVariant?.slotValues;
+	importedOpeningState = firstVariant?.openingState;
+	importResetKey = `import-${Date.now()}`;
+	importError = null;
+	importFeedback =
+		result.data.template.interactionType === "translate"
+			? "Editor filled from JSON. Review the fields, make any edits, then submit for review."
+			: `Editor filled from JSON using ${firstVariant?.isActive ? "the first active" : "the first"} variant. Review the fields, make any edits, then submit for review.`;
 }
 </script>
 
@@ -42,7 +95,40 @@ function formatDate(d: Date | null): string {
 		</div>
 	{:else}
 		<p class="text-muted-foreground">Propose a new learning scenario. Your submission will be reviewed by an admin before it goes live.</p>
-		<TemplateForm {form} submitLabel="Submit for Review" cancelHref="/" hideAdminFields confirmBeforeSubmit />
+
+		<details class="rounded-md border border-input bg-background p-4">
+			<summary class="cursor-pointer text-sm font-medium">Import JSON</summary>
+			<div class="mt-4 space-y-3">
+				<p class="text-sm text-muted-foreground">
+					Paste exported template JSON to fill the editor. You can edit everything before submitting for review.
+					{#if importedTemplate && importedTemplate.interactionType !== "translate"}
+						Only the first active variant is loaded for user contributions.
+					{/if}
+				</p>
+				<Textarea bind:value={importJsonText} rows={8} placeholder={importPlaceholder} />
+				{#if importError}
+					<p class="text-sm text-red-600 whitespace-pre-wrap">{importError}</p>
+				{/if}
+				{#if importFeedback}
+					<p class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{importFeedback}</p>
+				{/if}
+				<Button type="button" variant="secondary" onclick={fillFromJson}>Fill editor from JSON</Button>
+			</div>
+		</details>
+
+		{#key importResetKey}
+			<TemplateForm
+				template={importedTemplate}
+				{form}
+				submitLabel="Submit for Review"
+				cancelHref="/"
+				hideAdminFields
+				confirmBeforeSubmit
+				initialSlotValues={importedSlotValues}
+				initialOpeningState={importedOpeningState}
+				resetKey={importResetKey}
+			/>
+		{/key}
 	{/if}
 
 	<!-- Contribution History -->
