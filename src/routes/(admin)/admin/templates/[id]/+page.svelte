@@ -107,7 +107,7 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 		<summary class="cursor-pointer text-sm font-medium">Export / Import JSON</summary>
 		<div class="mt-4 grid gap-4 lg:grid-cols-2">
 			<div class="space-y-2">
-				<p class="text-sm text-muted-foreground">Export this template and its variants for another environment.</p>
+				<p class="text-sm text-muted-foreground">Export this template and its variants.</p>
 				<Button href={exportHref} download={`template-${data.template.id}.json`} variant="outline">Export JSON</Button>
 			</div>
 
@@ -128,8 +128,8 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 				class="space-y-2"
 			>
 				<p class="text-sm text-muted-foreground">
-					Paste exported JSON to update this template in-place. Variants with ids are updated, id-less variants are added, and omitted variants are
-					deactivated.
+					Paste exported JSON to update this template in-place. Variants with ids are updated, variants without ids are added, and omitted variants
+					are deactivated.
 				</p>
 				<Textarea name="templateJson" rows={8} placeholder={templateExportJson} bind:value={importJsonText} required />
 				<Button type="submit" variant="secondary">Import JSON</Button>
