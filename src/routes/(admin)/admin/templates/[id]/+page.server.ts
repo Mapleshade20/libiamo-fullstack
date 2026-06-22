@@ -1,7 +1,8 @@
 import { type ActionFailure, error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { parseTemplateJson, parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
+import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
+import { buildTemplateImportPreview } from "$lib/admin/template-import-preview";
 import { templateSchema } from "$lib/schemas";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
@@ -92,22 +93,47 @@ export const actions: Actions = {
 		const rawJson = formData.get("templateJson");
 		if (typeof rawJson !== "string" || rawJson.trim() === "") return fail(400, { message: "Paste template JSON before importing." });
 
-		const result = parseTemplateJson(rawJson);
-		if (!result.success) return fail(400, { message: result.error });
+		const existingVariants = await db
+			.select({ id: templateVariant.id, slotValues: templateVariant.slotValues })
+			.from(templateVariant)
+			.where(eq(templateVariant.templateId, id))
+			.orderBy(templateVariant.id);
+		const preview = buildTemplateImportPreview(rawJson, existingVariants);
+		if (!preview.ok) return fail(400, { message: preview.error });
 
-		const { template: importedTemplate, variants } = result.data;
+		const { template: importedTemplate, variants } = preview.payload;
+		const importedVariantIds = variants.map((variant) => variant.id).filter((variantId): variantId is number => typeof variantId === "number");
+		const uniqueImportedVariantIds = new Set(importedVariantIds);
+
 		await db.transaction(async (tx) => {
 			await tx.update(template).set(importedTemplate).where(eq(template.id, id));
-			await tx.delete(templateVariant).where(eq(templateVariant.templateId, id));
-			if (variants.length > 0) {
-				await tx.insert(templateVariant).values(
-					variants.map((variant) => ({
+
+			for (const variant of variants) {
+				const variantPayload = {
+					isActive: variant.isActive,
+					slotValues: variant.slotValues,
+					openingState: variant.openingState,
+				};
+
+				if (variant.id !== undefined) {
+					await tx
+						.update(templateVariant)
+						.set(variantPayload)
+						.where(and(eq(templateVariant.id, variant.id), eq(templateVariant.templateId, id)));
+				} else {
+					await tx.insert(templateVariant).values({
 						templateId: id,
-						isActive: variant.isActive,
-						slotValues: variant.slotValues,
-						openingState: variant.openingState,
-					})),
-				);
+						...variantPayload,
+					});
+				}
+			}
+
+			for (const existingVariant of existingVariants) {
+				if (uniqueImportedVariantIds.has(existingVariant.id)) continue;
+				await tx
+					.update(templateVariant)
+					.set({ isActive: false })
+					.where(and(eq(templateVariant.id, existingVariant.id), eq(templateVariant.templateId, id)));
 			}
 		});
 

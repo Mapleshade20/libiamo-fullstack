@@ -9,6 +9,7 @@ let {
 	title = "Confirm",
 	message = "Are you sure?",
 	confirmLabel = "Confirm",
+	confirmDisabled = false,
 	cancelLabel = "Cancel",
 	onConfirm,
 	onCancel,
@@ -18,6 +19,7 @@ let {
 	title?: string;
 	message?: string;
 	confirmLabel?: string;
+	confirmDisabled?: boolean;
 	cancelLabel?: string;
 	onConfirm: () => void;
 	onCancel: () => void;
@@ -74,7 +76,11 @@ $effect(() => {
 					<!-- Actions -->
 					<div class="flex gap-3">
 						<Button variant="outline" class="flex-1" onclick={onCancel}> {cancelLabel} </Button>
-						<Button class="flex-1 bg-gradient-to-br from-[#4a7c59] to-[#3d6849] hover:from-[#3d6849] hover:to-[#2f5237]" onclick={onConfirm}>
+						<Button
+							class="flex-1 bg-gradient-to-br from-[#4a7c59] to-[#3d6849] hover:from-[#3d6849] hover:to-[#2f5237]"
+							onclick={onConfirm}
+							disabled={confirmDisabled}
+						>
 							{confirmLabel}
 						</Button>
 					</div>

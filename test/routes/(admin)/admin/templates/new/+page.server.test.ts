@@ -282,5 +282,46 @@ describe("Admin Templates New +page.server", () => {
 
 			expect(mockTransaction).toHaveBeenCalled();
 		});
+
+		it("accepts exported variant ids but ignores them when creating a new template", async () => {
+			const event = createEvent({
+				templateJson: JSON.stringify({
+					version: 1,
+					template: {
+						language: "en",
+						interactionType: "chat",
+						ui: "imessage",
+						cadence: "daily",
+						difficulty: 1,
+						pointReward: 10,
+						gemReward: 5,
+						titleBase: "Chat with {{friend}}",
+					},
+					variants: [
+						{
+							id: 123,
+							isActive: true,
+							slotValues: { friend: "Alice" },
+							openingState: { previousMessages: [] },
+						},
+					],
+				}),
+			});
+
+			await expect(actions.importJson(event)).rejects.toMatchObject({
+				status: 302,
+				location: "/admin/templates/1",
+			});
+
+			const insertedVariants = (mockValues.mock.calls as unknown[][]).find((call) => Array.isArray(call[0]))?.[0];
+			expect(insertedVariants).toEqual([
+				{
+					templateId: 1,
+					isActive: true,
+					slotValues: { friend: "Alice" },
+					openingState: { previousMessages: [] },
+				},
+			]);
+		});
 	});
 });

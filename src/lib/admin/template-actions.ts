@@ -119,6 +119,7 @@ const importedTemplateSchema = z
 	});
 
 const importedVariantSchema = z.object({
+	id: z.number().int().positive().optional(),
 	slotValues: z.record(z.string(), z.string()).default({}),
 	openingState: z.record(z.string(), z.unknown()).default({}),
 	isActive: z.boolean().default(true),
