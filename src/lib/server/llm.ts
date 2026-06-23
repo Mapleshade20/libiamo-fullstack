@@ -251,10 +251,16 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 
 // ── Config resolution ─────────────────────────────────────────────────
 
+type OpenAIConfigSource = "byok" | "env";
+
 type OpenAIConfig = {
 	apiKey: string;
 	baseUrl: string;
 	model: string;
+};
+
+type ResolvedOpenAIConfig = OpenAIConfig & {
+	source: OpenAIConfigSource;
 };
 
 function getEnvOpenAIConfig(): OpenAIConfig {
@@ -290,18 +296,20 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 	};
 }
 
-async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
+async function resolveOpenAIConfig(userId?: string): Promise<ResolvedOpenAIConfig> {
 	if (userId) {
 		const userConfig = await getUserOpenAIConfig(userId);
 		if (userConfig) {
-			debugLog("config", { source: "byok", model: userConfig.model, baseUrl: userConfig.baseUrl });
-			return userConfig;
+			const resolved = { ...userConfig, source: "byok" as const };
+			debugLog("config", { source: resolved.source, model: resolved.model, baseUrl: resolved.baseUrl });
+			return resolved;
 		}
 	}
 
 	const envConfig = getEnvOpenAIConfig();
-	debugLog("config", { source: "env", model: envConfig.model, baseUrl: envConfig.baseUrl });
-	return envConfig;
+	const resolved = { ...envConfig, source: "env" as const };
+	debugLog("config", { source: resolved.source, model: resolved.model, baseUrl: resolved.baseUrl });
+	return resolved;
 }
 
 function trimTrailingSlash(value: string) {
