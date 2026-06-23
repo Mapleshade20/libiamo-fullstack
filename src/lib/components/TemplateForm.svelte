@@ -31,6 +31,8 @@ type VariantData = {
 };
 
 type TemplateData = {
+	id?: number;
+	updatedAt?: Date | string;
 	language?: string;
 	interactionType?: string;
 	ui?: string;
@@ -56,6 +58,7 @@ interface Props {
 	template?: TemplateData;
 	variants?: VariantData[];
 	form?: {
+		action?: string;
 		message?: string;
 		errors?: Record<string, string[]>;
 	} | null;
@@ -70,6 +73,8 @@ interface Props {
 	initialOpeningState?: Record<string, unknown>;
 	/** Extra hidden fields added inside the form */
 	extraHiddenFields?: Record<string, string>;
+	/** Changes when external template data should replace local draft state */
+	resetKey?: string;
 }
 
 let {
@@ -84,6 +89,7 @@ let {
 	initialSlotValues,
 	initialOpeningState,
 	extraHiddenFields,
+	resetKey,
 }: Props = $props();
 let mainFormEl: HTMLFormElement | null = $state(null);
 let showConfirm = $state(false);
@@ -100,7 +106,28 @@ $effect(() => {
 	return () => mainFormEl?.removeEventListener("keydown", handler);
 });
 
-const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save template", message: form.message } : null);
+function templateFormErrorTitle(action: string | undefined) {
+	switch (action) {
+		case "importJson":
+			return null;
+		case "addVariant":
+			return "Unable to add variant";
+		case "saveVariant":
+			return "Unable to save variant";
+		case "activateVariant":
+			return "Unable to activate variant";
+		case "deactivateVariant":
+			return "Unable to deactivate variant";
+		default:
+			return "Unable to save template";
+	}
+}
+
+const actionNotification = $derived.by(() => {
+	if (!form?.message) return null;
+	const title = templateFormErrorTitle(form.action);
+	return title ? { variant: "error" as const, title, message: form.message } : null;
+});
 
 const templateFieldOrder = [
 	"language",
@@ -121,20 +148,22 @@ const templateFieldOrder = [
 
 const isEditMode = $derived("id" in template);
 
+function templateSourceKey() {
+	return resetKey ?? JSON.stringify(template ?? {});
+}
+
+function numberFieldValue(value: number | null | undefined, fallback = "") {
+	return value === null || value === undefined ? fallback : String(value);
+}
+
 // ── Tracked form field values for slot extraction ────────────────
 let titleBase = $state(untrack(() => template.titleBase ?? ""));
 let shortObjectiveBase = $state(untrack(() => template.shortObjectiveBase ?? ""));
 let descriptionBase = $state(untrack(() => template.descriptionBase ?? ""));
 let agentPromptBase = $state(untrack(() => template.agentPromptBase ?? ""));
 let objectivesText = $state(untrack(() => (template.objectivesBase ?? []).join("\n")));
-
-$effect(() => {
-	titleBase = template.titleBase ?? "";
-	shortObjectiveBase = template.shortObjectiveBase ?? "";
-	descriptionBase = template.descriptionBase ?? "";
-	agentPromptBase = template.agentPromptBase ?? "";
-	objectivesText = (template.objectivesBase ?? []).join("\n");
-});
+let tagsText = $state(untrack(() => (template.tags ?? []).join(", ")));
+let translationText = $state(untrack(() => (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n")));
 
 // Parse objectives text to array for slot extraction
 const objectivesArray = $derived(
@@ -157,23 +186,22 @@ const requiredSlots = $derived(
 
 // ── Language tracking ────────────────────────────────────────────
 let selectedLanguage = $state<string>(untrack(() => template.language ?? "en"));
-$effect(() => {
-	selectedLanguage = template.language ?? "en";
-});
 
 // ── Interaction type tracking ────────────────────────────────────
 let selectedInteractionType = $state<string>(untrack(() => template.interactionType ?? "chat"));
-$effect(() => {
-	selectedInteractionType = template.interactionType ?? "chat";
-});
 
 let isTranslate = $derived(selectedInteractionType === "translate");
 
 // ── UI variant tracking ──────────────────────────────────────────
 let selectedUi = $state<UiVariant>(untrack(() => (template.ui as UiVariant) ?? "reddit"));
-$effect(() => {
-	selectedUi = (template.ui as UiVariant) ?? "reddit";
-});
+let selectedCadence = $state<string>(untrack(() => template.cadence ?? "daily"));
+let difficultyValue = $state(untrack(() => numberFieldValue(template.difficulty, "1")));
+let maxTurnsValue = $state(untrack(() => numberFieldValue(template.maxTurns)));
+let estimatedWordsValue = $state(untrack(() => numberFieldValue(template.estimatedWords)));
+let pointRewardValue = $state(untrack(() => numberFieldValue(template.pointReward, "3")));
+let gemRewardValue = $state(untrack(() => numberFieldValue(template.gemReward, "30")));
+let isActiveValue = $state(untrack(() => template.isActive ?? true));
+let agentStartsFirstValue = $state(untrack(() => template.agentStartsFirst ?? true));
 
 // Auto-set UI variant and lock when interactionType is translate.
 // When switching away, reset to a valid non-translator default so the
@@ -192,13 +220,37 @@ const uiOptions = $derived(isTranslate ? UI_VARIANTS : UI_VARIANTS.filter((v) =>
 // Markdown preview
 let showMdPreview = $state(false);
 let mdSource = $state(untrack(() => template.materialsMd ?? ""));
-$effect(() => {
-	mdSource = template.materialsMd ?? "";
-});
 let mdHtml = $derived(showMdPreview ? renderMarkdown(mdSource) : "");
 
-// Tags: comma-separated
-let tagsValue = $derived((template.tags ?? []).join(", "));
+function syncTemplateDraftFromProps() {
+	selectedLanguage = template.language ?? "en";
+	selectedInteractionType = template.interactionType ?? "chat";
+	selectedUi = (template.ui as UiVariant) ?? "reddit";
+	selectedCadence = template.cadence ?? "daily";
+	difficultyValue = numberFieldValue(template.difficulty, "1");
+	maxTurnsValue = numberFieldValue(template.maxTurns);
+	estimatedWordsValue = numberFieldValue(template.estimatedWords);
+	pointRewardValue = numberFieldValue(template.pointReward, "3");
+	gemRewardValue = numberFieldValue(template.gemReward, "30");
+	isActiveValue = template.isActive ?? true;
+	agentStartsFirstValue = template.agentStartsFirst ?? true;
+	titleBase = template.titleBase ?? "";
+	shortObjectiveBase = template.shortObjectiveBase ?? "";
+	descriptionBase = template.descriptionBase ?? "";
+	agentPromptBase = template.agentPromptBase ?? "";
+	objectivesText = (template.objectivesBase ?? []).join("\n");
+	tagsText = (template.tags ?? []).join(", ");
+	translationText = (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n");
+	mdSource = template.materialsMd ?? "";
+}
+
+let lastTemplateSourceKey = $state<string | null>(null);
+$effect(() => {
+	const key = templateSourceKey();
+	if (key === lastTemplateSourceKey) return;
+	lastTemplateSourceKey = key;
+	syncTemplateDraftFromProps();
+});
 
 // ── Variant editing state (edit mode) ────────────────────────────
 let editingVariantId = $state<number | null>(null);
@@ -294,6 +346,35 @@ function jsonStr(val: unknown): string {
 		return "{}";
 	}
 }
+
+function enhanceWithoutReset() {
+	return async ({ update }: { update: (options?: { reset?: boolean; invalidateAll?: boolean }) => Promise<void> }) => update({ reset: false });
+}
+
+function enhanceVariantSave(variantId: number) {
+	return () =>
+		async ({ result, update }: { result: { type: string }; update: (options?: { reset?: boolean; invalidateAll?: boolean }) => Promise<void> }) => {
+			await update({ reset: false });
+			if (result.type === "success") editingVariantId = editingVariantId === variantId ? null : editingVariantId;
+		};
+}
+
+function enhanceAddVariant() {
+	return async ({
+		result,
+		update,
+	}: {
+		result: { type: string };
+		update: (options?: { reset?: boolean; invalidateAll?: boolean }) => Promise<void>;
+	}) => {
+		await update({ reset: false });
+		if (result.type === "success") {
+			showAddVariant = false;
+			newVariantSlots = {};
+			newVariantOpeningState = getDefaultOpeningState(selectedUi) as Record<string, unknown>;
+		}
+	};
+}
 </script>
 
 <ActionNotification notification={actionNotification} />
@@ -309,7 +390,7 @@ function jsonStr(val: unknown): string {
 			return;
 		}
 		confirmed = false;
-		return async ({ update }) => update();
+		return async ({ update }) => update({ reset: false });
 	}}
 	class="space-y-8"
 	bind:this={mainFormEl}
@@ -387,11 +468,15 @@ function jsonStr(val: unknown): string {
 				{#if !isTranslate}
 					<div class="space-y-2">
 						<Label for="cadence">Cadence</Label>
-						<select id="cadence" name="cadence" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+						<select
+							id="cadence"
+							name="cadence"
+							class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+							required
+							bind:value={selectedCadence}
+						>
 							{#each CADENCES as cadence}
-								<option value={cadence} selected={template.cadence === cadence}>
-									{cadence === "none" ? "None" : cadence.charAt(0).toUpperCase() + cadence.slice(1)}
-								</option>
+								<option value={cadence}>{cadence === "none" ? "None" : cadence.charAt(0).toUpperCase() + cadence.slice(1)}</option>
 							{/each}
 						</select>
 						{#if form?.errors?.cadence}
@@ -406,7 +491,7 @@ function jsonStr(val: unknown): string {
 			{#if !hideAdminFields}
 				<div class="space-y-2">
 					<Label for="difficulty">Difficulty (1–3)</Label>
-					<Input id="difficulty" name="difficulty" type="number" min="1" max="3" value={template.difficulty ?? 1} required />
+					<Input id="difficulty" name="difficulty" type="number" min="1" max="3" bind:value={difficultyValue} required />
 					{#if form?.errors?.difficulty}
 						<p class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
 					{/if}
@@ -416,19 +501,19 @@ function jsonStr(val: unknown): string {
 			{#if !isTranslate && !hideAdminFields}
 				<div class="space-y-2">
 					<Label for="maxTurns">Max Turns</Label>
-					<Input id="maxTurns" name="maxTurns" type="number" min="0" value={template.maxTurns ?? ""} />
+					<Input id="maxTurns" name="maxTurns" type="number" min="0" bind:value={maxTurnsValue} />
 				</div>
 			{/if}
 
 			{#if !hideAdminFields}
 				<div class="space-y-2">
 					<Label for="estimatedWords">Estimated Words</Label>
-					<Input id="estimatedWords" name="estimatedWords" type="number" min="0" value={template.estimatedWords ?? ""} />
+					<Input id="estimatedWords" name="estimatedWords" type="number" min="0" bind:value={estimatedWordsValue} />
 				</div>
 
 				<div class="space-y-2">
 					<Label for="pointReward">Point Reward</Label>
-					<Input id="pointReward" name="pointReward" type="number" min="0" value={template.pointReward ?? 3} required />
+					<Input id="pointReward" name="pointReward" type="number" min="0" bind:value={pointRewardValue} required />
 					{#if form?.errors?.pointReward}
 						<p class="text-sm text-red-600">{form.errors.pointReward[0]}</p>
 					{/if}
@@ -436,26 +521,20 @@ function jsonStr(val: unknown): string {
 
 				<div class="space-y-2">
 					<Label for="gemReward">Gem Reward</Label>
-					<Input id="gemReward" name="gemReward" type="number" min="0" value={template.gemReward ?? 30} required />
+					<Input id="gemReward" name="gemReward" type="number" min="0" bind:value={gemRewardValue} required />
 					{#if form?.errors?.gemReward}
 						<p class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
 					{/if}
 				</div>
 
 				<div class="flex items-center gap-2 pt-6">
-					<input id="isActive" name="isActive" type="checkbox" checked={template.isActive ?? true} class="rounded border-input">
+					<input id="isActive" name="isActive" type="checkbox" bind:checked={isActiveValue} class="rounded border-input">
 					<Label for="isActive">Active</Label>
 				</div>
 			{/if}
 			{#if !hideAdminFields}
 				<div class="flex items-center gap-2 pt-6">
-					<input
-						id="agentStartsFirst"
-						name="agentStartsFirst"
-						type="checkbox"
-						checked={template.agentStartsFirst ?? true}
-						class="rounded border-input"
-					>
+					<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" bind:checked={agentStartsFirstValue} class="rounded border-input">
 					<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
 				</div>
 			{/if}
@@ -509,7 +588,7 @@ function jsonStr(val: unknown): string {
 
 		<div class="space-y-2">
 			<Label for="tags">Tags (comma-separated)</Label>
-			<Input id="tags" name="tags" value={tagsValue} placeholder="refusal, politeness, friendship" />
+			<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
 		</div>
 
 		<!-- materialsMd with preview -->
@@ -546,7 +625,7 @@ function jsonStr(val: unknown): string {
 				id="translationBase"
 				name="translationBase"
 				rows={10}
-				value={(template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n")}
+				bind:value={translationText}
 				placeholder="The sun was setting behind the mountains.&#10;The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank.&#10;The water reflected the fading light."
 			/>
 			<p class="text-xs text-muted-foreground">Each line = one sentence. Blank line = paragraph break.</p>
@@ -670,12 +749,12 @@ function jsonStr(val: unknown): string {
 							{editingVariantId === v.id ? "Close" : "Edit"}
 						</button>
 						{#if v.isActive}
-							<form method="POST" action="?/deactivateVariant" use:enhance>
+							<form method="POST" action="?/deactivateVariant" use:enhance={enhanceWithoutReset}>
 								<input type="hidden" name="variantId" value={v.id}>
 								<button type="submit" class="text-xs text-red-500 underline underline-offset-2 hover:opacity-80">Deactivate</button>
 							</form>
 						{:else}
-							<form method="POST" action="?/activateVariant" use:enhance>
+							<form method="POST" action="?/activateVariant" use:enhance={enhanceWithoutReset}>
 								<input type="hidden" name="variantId" value={v.id}>
 								<button type="submit" class="text-xs text-green-600 underline underline-offset-2 hover:opacity-80">Activate</button>
 							</form>
@@ -684,7 +763,7 @@ function jsonStr(val: unknown): string {
 				</div>
 
 				{#if editingVariantId === v.id}
-					<form method="POST" action="?/saveVariant" use:enhance class="space-y-4">
+					<form method="POST" action="?/saveVariant" use:enhance={enhanceVariantSave(v.id)} class="space-y-4">
 						<input type="hidden" name="variantId" value={v.id}>
 
 						<div class="space-y-2">
@@ -737,7 +816,7 @@ function jsonStr(val: unknown): string {
 		{#if showAddVariant}
 			<div class="rounded-md border border-dashed border-input p-4 space-y-4">
 				<p class="text-sm font-medium">New Variant</p>
-				<form method="POST" action="?/addVariant" use:enhance class="space-y-4">
+				<form method="POST" action="?/addVariant" use:enhance={enhanceAddVariant} class="space-y-4">
 					<div class="space-y-2">
 						<Label>Slot Values</Label>
 						<SlotEditor bind:value={newVariantSlots} {requiredSlots} name="slotValues" />

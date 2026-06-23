@@ -8,8 +8,8 @@ import { actions, load } from "$routes/(admin)/admin/templates/[id]/+page.server
 // Dynamic queue to handle consecutive database select calls within a single test
 let dbSelectQueue: any[][] = [];
 
-vi.mock("$lib/server/db", () => ({
-	db: {
+vi.mock("$lib/server/db", () => {
+	const mockDb: any = {
 		select: vi.fn(() => {
 			const val = dbSelectQueue.shift() || [];
 			const chain = Promise.resolve(val) as any;
@@ -30,8 +30,15 @@ vi.mock("$lib/server/db", () => ({
 			chain.values = vi.fn(() => chain);
 			return chain;
 		}),
-	},
-}));
+		delete: vi.fn(() => {
+			const chain = Promise.resolve() as any;
+			chain.where = vi.fn(() => chain);
+			return chain;
+		}),
+	};
+	mockDb.transaction = vi.fn(async (callback) => callback(mockDb));
+	return { db: mockDb };
+});
 
 vi.mock("$lib/server/db/schema", () => ({
 	template: { id: "id", isActive: "isActive" },
@@ -128,6 +135,7 @@ describe("Admin Templates [id] +page.server", () => {
 		it.each([
 			"save",
 			"delete",
+			"importJson",
 			"addVariant",
 			"saveVariant",
 			"activateVariant",
@@ -169,6 +177,153 @@ describe("Admin Templates [id] +page.server", () => {
 		});
 	});
 
+	describe("importJson action", () => {
+		it("returns 400 for malformed JSON", async () => {
+			const event = createActionEvent({ templateJson: "not json" }, "1");
+			const result = (await actions.importJson(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("importJson");
+			expect(result.data?.message).toContain("Invalid JSON");
+		});
+
+		it("returns imported: true for valid JSON", async () => {
+			const event = createActionEvent(
+				{
+					templateJson: JSON.stringify({
+						version: 1,
+						template: {
+							language: "en",
+							interactionType: "chat",
+							ui: "imessage",
+							cadence: "daily",
+							difficulty: 1,
+							pointReward: 10,
+							gemReward: 5,
+							titleBase: "Chat with {{friend}}",
+						},
+						variants: [
+							{
+								isActive: true,
+								slotValues: { friend: "Alice" },
+								openingState: { previousMessages: [] },
+							},
+						],
+					}),
+				},
+				"1",
+			);
+
+			const result = await actions.importJson(event);
+			expect(result).toEqual({ imported: true });
+			expect(db.transaction).toHaveBeenCalledOnce();
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("updates imported variants by id, inserts id-less variants, and deactivates omitted variants", async () => {
+			dbSelectQueue.push([{ id: 2 }, { id: 3 }]);
+			const event = createActionEvent(
+				{
+					templateJson: JSON.stringify({
+						version: 1,
+						template: {
+							language: "en",
+							interactionType: "chat",
+							ui: "imessage",
+							cadence: "daily",
+							difficulty: 1,
+							pointReward: 10,
+							gemReward: 5,
+							titleBase: "Chat with {{friend}}",
+						},
+						variants: [
+							{
+								id: 2,
+								isActive: true,
+								slotValues: { friend: "Alice" },
+								openingState: { previousMessages: [] },
+							},
+							{
+								isActive: true,
+								slotValues: { friend: "Bob" },
+								openingState: { previousMessages: [] },
+							},
+						],
+					}),
+				},
+				"1",
+			);
+
+			const result = await actions.importJson(event);
+
+			expect(result).toEqual({ imported: true });
+			expect(db.delete).not.toHaveBeenCalled();
+			expect(db.insert).toHaveBeenCalledTimes(1);
+			expect(db.update).toHaveBeenCalledTimes(3); // template, imported variant #2, omitted variant #3
+			const updateSetPayloads = (db.update as any).mock.results.map((result: any) => result.value.set.mock.calls[0]?.[0]);
+			expect(updateSetPayloads).toContainEqual({ isActive: false });
+			expect(updateSetPayloads).toContainEqual({
+				isActive: true,
+				slotValues: { friend: "Alice" },
+				openingState: { previousMessages: [] },
+			});
+		});
+
+		it("returns 400 for duplicate imported variant ids", async () => {
+			dbSelectQueue.push([{ id: 2 }]);
+			const event = createActionEvent({
+				templateJson: JSON.stringify({
+					version: 1,
+					template: {
+						language: "en",
+						interactionType: "chat",
+						ui: "imessage",
+						cadence: "daily",
+						difficulty: 1,
+						pointReward: 10,
+						gemReward: 5,
+						titleBase: "Chat with {{friend}}",
+					},
+					variants: [
+						{ id: 2, isActive: true, slotValues: { friend: "Alice" }, openingState: { previousMessages: [] } },
+						{ id: 2, isActive: true, slotValues: { friend: "Bob" }, openingState: { previousMessages: [] } },
+					],
+				}),
+			});
+
+			const result = (await actions.importJson(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toContain("duplicate variant ids");
+			expect(db.transaction).not.toHaveBeenCalled();
+		});
+
+		it("returns 400 when an imported variant id does not belong to this template", async () => {
+			dbSelectQueue.push([{ id: 2 }]);
+			const event = createActionEvent({
+				templateJson: JSON.stringify({
+					version: 1,
+					template: {
+						language: "en",
+						interactionType: "chat",
+						ui: "imessage",
+						cadence: "daily",
+						difficulty: 1,
+						pointReward: 10,
+						gemReward: 5,
+						titleBase: "Chat with {{friend}}",
+					},
+					variants: [{ id: 999, isActive: true, slotValues: { friend: "Alice" }, openingState: { previousMessages: [] } }],
+				}),
+			});
+
+			const result = (await actions.importJson(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toContain("does not belong to this template");
+			expect(db.transaction).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("addVariant action", () => {
 		it("returns 400 when variant is missing slot values", async () => {
 			dbSelectQueue.push([sampleTemplate]);
@@ -181,6 +336,7 @@ describe("Admin Templates [id] +page.server", () => {
 			);
 			const result = (await actions.addVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("addVariant");
 			expect(result.data?.message).toContain("topic");
 		});
 
@@ -203,6 +359,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.saveVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("saveVariant");
 		});
 
 		it("returns savedVariant: true on success", async () => {
@@ -228,6 +385,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.activateVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("activateVariant");
 		});
 
 		it("returns activated: true when updating an inactive variant", async () => {
@@ -245,6 +403,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deactivateVariant");
 		});
 
 		it("fails if it tries to deactivate the last active variant", async () => {
@@ -255,6 +414,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deactivateVariant");
 			expect(result.data?.message).toContain("last active variant");
 		});
 

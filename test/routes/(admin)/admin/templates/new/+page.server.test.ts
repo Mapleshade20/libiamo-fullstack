@@ -101,10 +101,10 @@ describe("Admin Templates New +page.server", () => {
 		});
 	});
 
-	describe("default action", () => {
+	describe("create action", () => {
 		it("returns 400 with field errors for invalid template data", async () => {
 			const event = createEvent({});
-			const result = (await actions.default(event)) as ActionFailure<any>;
+			const result = (await actions.create(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors).toBeDefined();
@@ -115,13 +115,13 @@ describe("Admin Templates New +page.server", () => {
 		it("redirects when user is not authenticated", async () => {
 			const event = createEvent(validTemplateEntries, "");
 
-			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			await expect(actions.create(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 		});
 
 		it("returns 403 when user is not an admin", async () => {
 			const event = createEvent(validTemplateEntries, "learner-1", "learner");
 
-			await expect(actions.default(event)).rejects.toMatchObject({ status: 403 });
+			await expect(actions.create(event)).rejects.toMatchObject({ status: 403 });
 			expect(event.request.formData).not.toHaveBeenCalled();
 			expect(db.select).not.toHaveBeenCalled();
 			expect(db.insert).not.toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			const result = (await actions.default(event)) as ActionFailure<any>;
+			const result = (await actions.create(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toContain("missing slot values");
@@ -151,7 +151,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			const result = (await actions.default(event)) as ActionFailure<any>;
+			const result = (await actions.create(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toContain("Invalid opening state for discord");
@@ -160,7 +160,7 @@ describe("Admin Templates New +page.server", () => {
 		it("creates template and redirects on success", async () => {
 			const event = createEvent(validTemplateEntries);
 
-			await expect(actions.default(event)).rejects.toMatchObject({
+			await expect(actions.create(event)).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/templates",
 			});
@@ -177,7 +177,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			await expect(actions.default(event)).rejects.toMatchObject({
+			await expect(actions.create(event)).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/templates",
 			});
@@ -192,7 +192,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			const result = (await actions.default(event)) as ActionFailure<any>;
+			const result = (await actions.create(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(404);
 		});
@@ -206,7 +206,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			const result = (await actions.default(event)) as ActionFailure<any>;
+			const result = (await actions.create(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toBe("Already reviewed");
@@ -220,7 +220,7 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			await expect(actions.default(event)).rejects.toMatchObject({
+			await expect(actions.create(event)).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/templates",
 			});
@@ -234,10 +234,94 @@ describe("Admin Templates New +page.server", () => {
 			};
 			const event = createEvent(entries);
 
-			await expect(actions.default(event)).rejects.toMatchObject({
+			await expect(actions.create(event)).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/templates",
 			});
+		});
+	});
+
+	describe("importJson action", () => {
+		it("returns 400 for malformed JSON", async () => {
+			const event = createEvent({ templateJson: "not json" });
+
+			const result = (await actions.importJson(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toContain("Invalid JSON");
+		});
+
+		it("creates imported template and redirects to edit page", async () => {
+			const event = createEvent({
+				templateJson: JSON.stringify({
+					version: 1,
+					template: {
+						language: "en",
+						interactionType: "chat",
+						ui: "imessage",
+						cadence: "daily",
+						difficulty: 1,
+						pointReward: 10,
+						gemReward: 5,
+						titleBase: "Chat with {{friend}}",
+					},
+					variants: [
+						{
+							isActive: true,
+							slotValues: { friend: "Alice" },
+							openingState: { previousMessages: [] },
+						},
+					],
+				}),
+			});
+
+			await expect(actions.importJson(event)).rejects.toMatchObject({
+				status: 302,
+				location: "/admin/templates/1",
+			});
+
+			expect(mockTransaction).toHaveBeenCalled();
+		});
+
+		it("accepts exported variant ids but ignores them when creating a new template", async () => {
+			const event = createEvent({
+				templateJson: JSON.stringify({
+					version: 1,
+					template: {
+						language: "en",
+						interactionType: "chat",
+						ui: "imessage",
+						cadence: "daily",
+						difficulty: 1,
+						pointReward: 10,
+						gemReward: 5,
+						titleBase: "Chat with {{friend}}",
+					},
+					variants: [
+						{
+							id: 123,
+							isActive: true,
+							slotValues: { friend: "Alice" },
+							openingState: { previousMessages: [] },
+						},
+					],
+				}),
+			});
+
+			await expect(actions.importJson(event)).rejects.toMatchObject({
+				status: 302,
+				location: "/admin/templates/1",
+			});
+
+			const insertedVariants = (mockValues.mock.calls as unknown[][]).find((call) => Array.isArray(call[0]))?.[0];
+			expect(insertedVariants).toEqual([
+				{
+					templateId: 1,
+					isActive: true,
+					slotValues: { friend: "Alice" },
+					openingState: { previousMessages: [] },
+				},
+			]);
 		});
 	});
 });

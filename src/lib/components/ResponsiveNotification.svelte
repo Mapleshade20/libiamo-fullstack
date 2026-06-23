@@ -5,6 +5,7 @@ import Info from "@lucide/svelte/icons/info";
 import X from "@lucide/svelte/icons/x";
 import { onDestroy, onMount, tick } from "svelte";
 import { fade, fly, scale } from "svelte/transition";
+import { lockBodyScroll } from "$lib/client/scroll-lock";
 import type { NotificationVariant } from "$lib/notifications";
 import { cn } from "$lib/utils";
 
@@ -87,12 +88,18 @@ $effect(() => {
 	return clearTimer;
 });
 
+$effect(() => {
+	if (!open || isWide) return;
+
+	return lockBodyScroll();
+});
+
 onDestroy(clearTimer);
 </script>
 
 {#if open && message}
 	<div
-		class="fixed -inset-px z-[4000] flex h-[calc(100dvh+2px)] w-[calc(100vw+2px)] items-center justify-center bg-background/20 p-4 backdrop-blur-xl md:pointer-events-none md:inset-auto md:right-5 md:top-[var(--notification-desktop-top)] md:block md:h-auto md:w-auto md:bg-transparent md:p-0 md:backdrop-blur-none"
+		class="fixed inset-0 z-[4000] flex h-dvh w-screen items-center justify-center overscroll-contain bg-stone-200/80 p-4 md:pointer-events-none md:inset-auto md:right-5 md:top-[var(--notification-desktop-top)] md:block md:h-auto md:w-auto md:bg-transparent md:p-0"
 		style="--notification-desktop-top: {desktopTop}px"
 	>
 		<div
@@ -102,8 +109,7 @@ onDestroy(clearTimer);
 			aria-modal="true"
 			aria-labelledby="notification-title"
 		>
-			<div class="relative overflow-hidden rounded-3xl border border-white/60 bg-popover/95 p-5 shadow-2xl shadow-foreground/20 ring-1 ring-black/5">
-				<div class={cn("absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent", variantClasses.accent)}></div>
+			<div class="relative overflow-hidden rounded-3xl border border-border/80 bg-popover p-5 shadow-2xl shadow-foreground/15 ring-1 ring-black/5">
 				<div class="relative flex gap-4">
 					<div class={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1", variantClasses.icon)}>
 						{#if variant === "success"}
