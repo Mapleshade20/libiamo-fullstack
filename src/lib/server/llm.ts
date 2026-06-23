@@ -11,7 +11,7 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { db } from "./db";
-import { userApiKey } from "./db/schema";
+import { userApiKey, userQuota } from "./db/schema";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -25,6 +25,22 @@ export class OpenAIAuthError extends Error {
 		this.name = "OpenAIAuthError";
 	}
 }
+
+/** Thrown when a non-BYOK user has no trial tokens left before an LLM call. */
+export class TrialQuotaExhaustedError extends Error {
+	constructor(
+		public readonly trialTotal: number,
+		public readonly trialTokensLeft = 0,
+	) {
+		super("Trial token budget exhausted. Configure your own API key to continue using AI features.");
+		this.name = "TrialQuotaExhaustedError";
+	}
+}
+
+export type TrialQuotaBalance = {
+	trialTokensLeft: number;
+	trialTotal: number;
+};
 
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
@@ -69,6 +85,65 @@ export type ToolChatRequest = ChatRequest & {
 		toolChoice?: ChatCompletionToolChoiceOption;
 	};
 };
+
+// ── Trial quota helpers ──────────────────────────────────────────────
+
+const DEFAULT_TRIAL_TOKEN_BUDGET = 50_000;
+
+export function getTrialTokenBudget(): number {
+	const raw = env.TRIAL_TOKEN_BUDGET?.trim();
+	if (!raw) return DEFAULT_TRIAL_TOKEN_BUDGET;
+
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error("TRIAL_TOKEN_BUDGET must be a positive integer");
+	}
+	return parsed;
+}
+
+export async function hasUserApiKey(userId: string): Promise<boolean> {
+	const row = await db.query.userApiKey.findFirst({
+		where: eq(userApiKey.userId, userId),
+		columns: { userId: true },
+	});
+	return row !== undefined;
+}
+
+async function ensureUserQuota(userId: string): Promise<TrialQuotaBalance> {
+	const existing = await db.query.userQuota.findFirst({
+		where: eq(userQuota.userId, userId),
+		columns: { trialTokens: true, trialTotalTokens: true },
+	});
+	if (existing) {
+		return { trialTokensLeft: existing.trialTokens, trialTotal: existing.trialTotalTokens };
+	}
+
+	const budget = getTrialTokenBudget();
+	const [inserted] = await db
+		.insert(userQuota)
+		.values({ userId, trialTokens: budget, trialTotalTokens: budget })
+		.onConflictDoNothing()
+		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
+
+	if (inserted) {
+		return { trialTokensLeft: inserted.trialTokens, trialTotal: inserted.trialTotalTokens };
+	}
+
+	const row = await db.query.userQuota.findFirst({
+		where: eq(userQuota.userId, userId),
+		columns: { trialTokens: true, trialTotalTokens: true },
+	});
+	if (!row) throw new Error("Failed to initialize trial quota");
+	return { trialTokensLeft: row.trialTokens, trialTotal: row.trialTotalTokens };
+}
+
+export async function getTrialTokensLeft(userId: string): Promise<number> {
+	return (await ensureUserQuota(userId)).trialTokensLeft;
+}
+
+export async function getTrialQuotaBalance(userId: string): Promise<TrialQuotaBalance> {
+	return ensureUserQuota(userId);
+}
 
 // ── API key encryption and verification ──────────────────────────────
 
