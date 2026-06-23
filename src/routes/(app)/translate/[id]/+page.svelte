@@ -177,7 +177,6 @@ async function handleSaveDraft() {
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/saveDraft", { method: "POST", body: form });
 		const result = deserialize(await res.text());
-		dispatchQuotaNoticeFromData(result);
 		if (result.type !== "success") {
 			const message =
 				result.type === "failure"
