@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import OpenAI from "openai";
 import type {
 	ChatCompletion,
@@ -42,6 +42,12 @@ export type TrialQuotaBalance = {
 	trialTotal: number;
 };
 
+export type TrialQuotaStatus = TrialQuotaBalance & {
+	trialTokensUsed: number;
+	trialUsageEstimated: boolean;
+	trialQuotaWarning: "low" | "depleted" | null;
+};
+
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
 	content: string;
@@ -57,6 +63,7 @@ export type ChatResponse = {
 	model?: string;
 	content: string;
 	raw: unknown;
+	quota?: TrialQuotaStatus;
 };
 
 export type ChatRequest = {
@@ -163,6 +170,35 @@ async function assertTrialQuotaAvailable(userId: string): Promise<TrialQuotaBala
 	}
 
 	return { trialTokensLeft: gated.trialTokens, trialTotal: gated.trialTotalTokens };
+}
+
+async function debitTrialQuota(userId: string, tokens: number, estimated: boolean): Promise<TrialQuotaStatus> {
+	const tokensToDebit = Math.max(0, Math.ceil(tokens));
+	if (tokensToDebit === 0) {
+		const balance = await ensureUserQuota(userId);
+		return { ...balance, trialTokensUsed: 0, trialUsageEstimated: estimated, trialQuotaWarning: null };
+	}
+
+	const [updated] = await db
+		.update(userQuota)
+		.set({
+			trialTokens: sql`${userQuota.trialTokens} - ${tokensToDebit}`,
+			updatedAt: new Date(),
+		})
+		.where(eq(userQuota.userId, userId))
+		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
+
+	if (!updated) {
+		throw new Error("Failed to debit trial quota");
+	}
+
+	return {
+		trialTokensLeft: updated.trialTokens,
+		trialTotal: updated.trialTotalTokens,
+		trialTokensUsed: tokensToDebit,
+		trialUsageEstimated: estimated,
+		trialQuotaWarning: null,
+	};
 }
 
 // ── API key encryption and verification ──────────────────────────────
@@ -446,11 +482,17 @@ type CompletionOptions = ChatOptions & {
 	toolChoice?: ChatCompletionToolChoiceOption;
 };
 
-async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletion> {
+type ChatCompletionResult = {
+	completion: ChatCompletion;
+	quota?: TrialQuotaStatus;
+};
+
+async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletionResult> {
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId);
-	if (userId && config.source === "env") {
+	const shouldApplyTrialQuota = Boolean(userId && config.source === "env");
+	if (userId && shouldApplyTrialQuota) {
 		await assertTrialQuotaAvailable(userId);
 	}
 	const url = `${config.baseUrl}/chat/completions`;
@@ -482,7 +524,41 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 
 	debugLog("response", { url, status: response.status, body: completion });
 
-	return completion;
+	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractVisibleOutputTokenUsage(completion)) : undefined;
+
+	return { completion, quota };
+}
+
+function extractVisibleOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {
+	const usage = completion.usage as
+		| {
+				completion_tokens?: unknown;
+				completion_tokens_details?: { reasoning_tokens?: unknown };
+		  }
+		| null
+		| undefined;
+
+	if (typeof usage?.completion_tokens === "number" && Number.isFinite(usage.completion_tokens)) {
+		const reasoningTokens =
+			typeof usage.completion_tokens_details?.reasoning_tokens === "number" && Number.isFinite(usage.completion_tokens_details.reasoning_tokens)
+				? usage.completion_tokens_details.reasoning_tokens
+				: 0;
+		return [Math.max(0, usage.completion_tokens - reasoningTokens), false];
+	}
+
+	const text = completionOutputTextForEstimate(completion);
+	return [text.trim() ? Math.max(1, Math.ceil(text.length / 4)) : 0, true];
+}
+
+function completionOutputTextForEstimate(completion: ChatCompletion): string {
+	const message = completion.choices[0]?.message;
+	const parts = [message?.content ?? ""];
+	for (const toolCall of message?.tool_calls ?? []) {
+		if (toolCall.type === "function") {
+			parts.push(toolCall.function.arguments);
+		}
+	}
+	return parts.join("\n");
 }
 
 function completionContent(completion: ChatCompletion) {
@@ -537,12 +613,12 @@ function normalizeOpenAIError(error: unknown): Error {
 // ── Public facade ─────────────────────────────────────────────────────
 
 export async function chatText({ messages, options = {}, userId }: ChatRequest): Promise<ChatResponse> {
-	const completion = await callChatCompletion(messages, options, userId);
-	const response = completionResponse(completion);
+	const result = await callChatCompletion(messages, options, userId);
+	const response = completionResponse(result.completion);
 	if (!response.content) {
 		throw new Error("LLM returned empty content");
 	}
-	return response;
+	return { ...response, quota: result.quota };
 }
 
 export async function chatJson<T extends z.ZodType>(schema: T, { messages, options = {}, userId }: ChatRequest): Promise<z.infer<T>> {
@@ -566,9 +642,9 @@ export async function chatTools({ messages, tools, options = {}, userId }: ToolC
 		throw new Error("tools must contain at least one item");
 	}
 
-	const completion = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
-	const response = completionResponse(completion);
-	const toolCalls = completionToolCalls(completion);
+	const result = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
+	const response = completionResponse(result.completion);
+	const toolCalls = completionToolCalls(result.completion);
 
 	if (!response.content && toolCalls.length === 0) {
 		throw new Error("LLM returned empty content");
@@ -576,6 +652,7 @@ export async function chatTools({ messages, tools, options = {}, userId }: ToolC
 
 	return {
 		...response,
+		quota: result.quota,
 		toolCalls,
 	};
 }
