@@ -271,10 +271,13 @@ async function handleShowReference(key: string, sourceSentence: string) {
 			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
 			persistRefs();
 		} else {
-			referenceErrors = { ...referenceErrors, [key]: r.data?.error ?? "Failed to translate. You may need to configure your own API key." };
+			referenceErrors = {
+				...referenceErrors,
+				[key]: r.data?.error ?? "Failed to translate. Check your trial balance or configure your own API key.",
+			};
 		}
 	} catch {
-		referenceErrors = { ...referenceErrors, [key]: "Failed to connect. You may need to configure your own API key." };
+		referenceErrors = { ...referenceErrors, [key]: "Failed to connect. Check your trial balance or configure your own API key." };
 	} finally {
 		loadingReferences = new Set([...loadingReferences].filter((k) => k !== key));
 	}
@@ -313,10 +316,10 @@ async function handleAskTutor(key: string, question: string, history: { question
 		if (r.type === "success" && r.data) {
 			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
 		} else {
-			tutorErrors = { ...tutorErrors, [key]: r.data?.error ?? "Failed to get answer. You may need to configure your own API key." };
+			tutorErrors = { ...tutorErrors, [key]: r.data?.error ?? "Failed to get answer. Check your trial balance or configure your own API key." };
 		}
 	} catch {
-		tutorErrors = { ...tutorErrors, [key]: "Failed to connect. You may need to configure your own API key." };
+		tutorErrors = { ...tutorErrors, [key]: "Failed to connect. Check your trial balance or configure your own API key." };
 	} finally {
 		loadingTutorAnswers = new Set([...loadingTutorAnswers].filter((k) => k !== key));
 	}

@@ -4,6 +4,7 @@ import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/llm";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
+	event.depends?.("app:trial-quota");
 	const user = requireUser(event);
 
 	const email = user.email?.toLowerCase() || "";

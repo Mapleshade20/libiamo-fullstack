@@ -149,7 +149,7 @@ export const actions: Actions = {
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to generate expressions. You may need to configure your own API key." });
+			return fail(500, { error: "Failed to generate expressions. Check your trial balance or configure your own API key." });
 		}
 	},
 
@@ -195,7 +195,7 @@ export const actions: Actions = {
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to evaluate translation. You may need to configure your own API key." });
+			return fail(500, { error: "Failed to evaluate translation. Check your trial balance or configure your own API key." });
 		}
 	},
 };

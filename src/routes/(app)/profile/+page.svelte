@@ -262,7 +262,7 @@ function applyDetectedTimezone() {
 			{#if data.hasApiKey}
 				<p class="mb-4 text-sm text-green-700">&#x2705; Your own API key is configured.</p>
 			{:else}
-				<p class="mb-4 text-sm text-muted-foreground">No custom API key set. The default platform key is used for AI responses.</p>
+				<p class="mb-4 text-sm text-muted-foreground">No custom API key set. AI features use your trial balance through the platform key.</p>
 				{#if data.trialQuota && trialTone === "depleted"}
 					<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
 						<p class="font-semibold">Your trial AI balance is depleted.</p>

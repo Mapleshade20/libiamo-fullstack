@@ -1,6 +1,8 @@
+import { invalidate } from "$app/navigation";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 export const QUOTA_NOTICE_EVENT = "libiamo:quota-notice";
+export const TRIAL_QUOTA_INVALIDATION_KEY = "app:trial-quota";
 
 type QuotaNoticePayload = {
 	kind?: "low" | "depleted";
@@ -32,8 +34,14 @@ export function dispatchQuotaNotice(notice: unknown) {
 	);
 }
 
+export function refreshTrialQuotaBalance() {
+	if (typeof window === "undefined") return;
+	void invalidate(TRIAL_QUOTA_INVALIDATION_KEY);
+}
+
 export function dispatchQuotaNoticeFromData(data: unknown) {
 	if (!data || typeof data !== "object") return;
+	refreshTrialQuotaBalance();
 	const directNotice = (data as { quotaNotice?: unknown }).quotaNotice;
 	const actionDataNotice = (data as { data?: { quotaNotice?: unknown } }).data?.quotaNotice;
 	const quotaNotice = directNotice ?? actionDataNotice;

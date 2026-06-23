@@ -404,7 +404,7 @@ export const actions: Actions = {
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to generate model translation. You may need to configure your own API key." });
+			return fail(500, { error: "Failed to generate model translation. Check your trial balance or configure your own API key." });
 		}
 	},
 
@@ -439,7 +439,7 @@ export const actions: Actions = {
 			});
 			return withPendingQuotaNotice(user.id, { success: true, explanation: reply.content });
 		} catch (err) {
-			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
+			return handleLlmError(err, "Failed to generate explanation. Check your trial balance or configure your own API key.");
 		}
 	},
 
@@ -469,7 +469,7 @@ export const actions: Actions = {
 			});
 			return withPendingQuotaNotice(user.id, { success: true, translation: reply.content.trim() });
 		} catch (err) {
-			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
+			return handleLlmError(err, "Failed to translate sentence. Check your trial balance or configure your own API key.");
 		}
 	},
 
@@ -508,7 +508,7 @@ export const actions: Actions = {
 			});
 			return withPendingQuotaNotice(user.id, { success: true, answer: reply.content });
 		} catch (err) {
-			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");
+			return handleLlmError(err, "Failed to get answer. Check your trial balance or configure your own API key.");
 		}
 	},
 };

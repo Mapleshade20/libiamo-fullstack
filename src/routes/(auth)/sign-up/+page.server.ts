@@ -5,6 +5,7 @@ import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { db } from "$lib/server/db";
 import { userLearningProfile, userQuota } from "$lib/server/db/schema";
+import { getTrialTokenBudget } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -43,6 +44,7 @@ export const actions: Actions = {
 			});
 
 			if (res.user) {
+				const trialTokenBudget = getTrialTokenBudget();
 				await Promise.all([
 					db
 						.insert(userLearningProfile)
@@ -51,7 +53,10 @@ export const actions: Actions = {
 							language: result.data.activeLanguage,
 						})
 						.onConflictDoNothing(),
-					db.insert(userQuota).values({ userId: res.user.id }).onConflictDoNothing(),
+					db
+						.insert(userQuota)
+						.values({ userId: res.user.id, trialTokens: trialTokenBudget, trialTotalTokens: trialTokenBudget })
+						.onConflictDoNothing(),
 				]);
 			}
 		} catch (error) {
