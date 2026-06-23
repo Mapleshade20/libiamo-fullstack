@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import OpenAI from "openai";
 import type {
 	ChatCompletion,
@@ -143,6 +143,26 @@ export async function getTrialTokensLeft(userId: string): Promise<number> {
 
 export async function getTrialQuotaBalance(userId: string): Promise<TrialQuotaBalance> {
 	return ensureUserQuota(userId);
+}
+
+async function assertTrialQuotaAvailable(userId: string): Promise<TrialQuotaBalance> {
+	const balance = await ensureUserQuota(userId);
+	if (balance.trialTokensLeft <= 0) {
+		throw new TrialQuotaExhaustedError(balance.trialTotal, balance.trialTokensLeft);
+	}
+
+	const [gated] = await db
+		.update(userQuota)
+		.set({ updatedAt: new Date() })
+		.where(and(eq(userQuota.userId, userId), gt(userQuota.trialTokens, 0)))
+		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
+
+	if (!gated) {
+		const current = await ensureUserQuota(userId);
+		throw new TrialQuotaExhaustedError(current.trialTotal, current.trialTokensLeft);
+	}
+
+	return { trialTokensLeft: gated.trialTokens, trialTotal: gated.trialTotalTokens };
 }
 
 // ── API key encryption and verification ──────────────────────────────
@@ -430,6 +450,9 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId);
+	if (userId && config.source === "env") {
+		await assertTrialQuotaAvailable(userId);
+	}
 	const url = `${config.baseUrl}/chat/completions`;
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
