@@ -5,7 +5,7 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MA
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
+import { chatJson, chatText, OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -38,6 +38,9 @@ function hasOversizedTutorHelpText(values: string[]) {
 
 /** Handle LLM errors with auth-specific messaging */
 function handleLlmError(err: unknown, fallback: string) {
+	if (err instanceof TrialQuotaExhaustedError) {
+		return fail(402, trialQuotaExhaustedData(err));
+	}
 	console.error(fallback, err);
 	if (err instanceof OpenAIAuthError) {
 		return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
@@ -342,6 +345,9 @@ export const actions: Actions = {
 					.set({ status: "evaluated", evaluation, updatedAt: new Date() })
 					.where(eq(translationAttempt.id, recordId));
 			} catch (err) {
+				if (err instanceof TrialQuotaExhaustedError) {
+					return fail(402, trialQuotaExhaustedData(err));
+				}
 				console.error("Translation evaluation failed:", err);
 				if (err instanceof OpenAIAuthError) {
 					return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
@@ -391,6 +397,9 @@ export const actions: Actions = {
 			});
 			return { success: true, modelTranslations };
 		} catch (err) {
+			if (err instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(err));
+			}
 			console.error("Model translation generation failed:", err);
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });

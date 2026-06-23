@@ -5,6 +5,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
+import { TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
@@ -143,6 +144,9 @@ export const actions: Actions = {
 				feedback,
 			};
 		} catch (e) {
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 			console.error("Failed to generate feedback:", e);
 			return fail(500, { error: "Failed to generate feedback" });
 		}
@@ -191,6 +195,9 @@ export const actions: Actions = {
 			});
 			return { success: true, answer: result.answer };
 		} catch (e) {
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 			console.error(e);
 			return fail(500, { error: "Failed to get follow-up answer" });
 		}
@@ -244,6 +251,9 @@ export const actions: Actions = {
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 			console.error("Failed to save note:", e);
 			return fail(500, { error: "Failed to save note" });
 		}
@@ -287,6 +297,9 @@ export const actions: Actions = {
 
 			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
 		} catch (e) {
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 			console.error("Failed to save selected notes:", e);
 			return fail(500, { error: "Failed to save selected notes" });
 		}

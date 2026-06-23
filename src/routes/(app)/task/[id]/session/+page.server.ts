@@ -15,6 +15,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
+import { TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
 	completeSession,
@@ -268,6 +269,9 @@ export const actions: Actions = {
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 
 			console.error("Failed to send message:", e);
 			return fail(500, { error: "Failed to send message" });
@@ -307,6 +311,9 @@ export const actions: Actions = {
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 
 			console.error("Failed to request agent opening:", e);
 			return fail(500, { error: "Failed to request agent opening" });
@@ -369,6 +376,9 @@ export const actions: Actions = {
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {
+			if (e instanceof TrialQuotaExhaustedError) {
+				return fail(402, trialQuotaExhaustedData(e));
+			}
 			console.error(e);
 			return fail(500, { error: "Failed to generate hints" });
 		}

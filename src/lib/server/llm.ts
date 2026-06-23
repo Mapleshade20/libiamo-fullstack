@@ -268,6 +268,14 @@ export async function consumePendingQuotaNotice(userId: string): Promise<TrialQu
 	return quotaNotice("low", row.trialTokens, row.trialTotalTokens);
 }
 
+export function trialQuotaExhaustedData(error: TrialQuotaExhaustedError) {
+	return {
+		error: error.message,
+		quotaExhausted: true as const,
+		quotaNotice: quotaNotice("depleted", error.trialTokensLeft, error.trialTotal),
+	};
+}
+
 function quotaNotice(kind: TrialQuotaWarning, trialTokensLeft: number, trialTotal: number): TrialQuotaNotice {
 	if (kind === "depleted") {
 		return {
