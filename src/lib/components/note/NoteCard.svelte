@@ -8,6 +8,7 @@ import X from "@lucide/svelte/icons/x";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 type Note = {
 	id: number;
@@ -58,6 +59,7 @@ async function submitAsk(q: string) {
 		formData.append("question", q);
 		const res = await fetch("?/followUp", { method: "POST", body: formData });
 		const result = deserialize(await res.text());
+		dispatchQuotaNoticeFromData(result);
 		if (result.type === "success" && result.data) {
 			askAnswer = (result.data as { answer?: string }).answer ?? null;
 		} else {

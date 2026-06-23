@@ -1,8 +1,11 @@
 <script lang="ts">
-import { tick } from "svelte";
+import { onMount, tick } from "svelte";
 import { page } from "$app/state";
 import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/client/task-transition";
+import ActionNotification from "$lib/components/ActionNotification.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
+import type { ActionNotificationContent } from "$lib/notifications";
+import { QUOTA_NOTICE_EVENT } from "$lib/quota-notices";
 
 let { children, data } = $props();
 let overlayStyle = $state("");
@@ -10,6 +13,7 @@ let overlayOpacity = $state(0);
 let overlayVisible = $state(false);
 let clearTimer: ReturnType<typeof setTimeout> | undefined = $state();
 let fadeTimer: ReturnType<typeof setTimeout> | undefined = $state();
+let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
 let isSessionPage = $derived(page.url.pathname.includes("/session"));
@@ -72,6 +76,14 @@ $effect(() => {
 	void runTaskEnterOverlay();
 });
 
+onMount(() => {
+	const handleQuotaNotice = (event: Event) => {
+		quotaNotification = (event as CustomEvent<ActionNotificationContent>).detail;
+	};
+	window.addEventListener(QUOTA_NOTICE_EVENT, handleQuotaNotice);
+	return () => window.removeEventListener(QUOTA_NOTICE_EVENT, handleQuotaNotice);
+});
+
 $effect(() => {
 	return () => {
 		clearOverlayTimers();
@@ -93,6 +105,8 @@ $effect(() => {
 			style="{overlayStyle}opacity:{overlayOpacity};"
 		></div>
 	{/if}
+
+	<ActionNotification notification={quotaNotification} durationMs={7000} />
 
 	<main
 		class={isSessionPage

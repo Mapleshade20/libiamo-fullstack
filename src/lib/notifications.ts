@@ -5,4 +5,6 @@ export type ActionNotificationContent = {
 	title?: string;
 	message: string;
 	key?: string | number;
+	actionHref?: string;
+	actionLabel?: string;
 };

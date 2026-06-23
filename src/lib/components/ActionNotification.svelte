@@ -31,6 +31,8 @@ $effect(() => {
 	variant={notification?.variant ?? "info"}
 	title={notification?.title}
 	message={notification?.message ?? ""}
+	actionHref={notification?.actionHref}
+	actionLabel={notification?.actionLabel}
 	{durationMs}
 	onClose={() => (isOpen = false)}
 />

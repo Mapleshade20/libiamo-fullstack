@@ -9,6 +9,7 @@ import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { FeedbackConversation } from "$lib/feedback/types";
 import { renderMarkdown } from "$lib/markdown";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 type AppendRequest = {
 	id: number;
@@ -83,6 +84,7 @@ async function handleSubmit() {
 		});
 
 		const result = deserialize(await response.text());
+		dispatchQuotaNoticeFromData(result);
 
 		if (result.type === "success" && result.data?.answer) {
 			answer = result.data.answer as string;

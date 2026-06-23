@@ -8,6 +8,7 @@ import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan } from "$lib/feedback/types";
 import { renderMarkdown } from "$lib/markdown";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 let {
 	annotation,
@@ -113,6 +114,7 @@ async function fetchExplanation() {
 		});
 
 		const result = deserialize(await response.text());
+		dispatchQuotaNoticeFromData(result);
 
 		if (result.type === "success" && result.data?.answer) {
 			explanation = result.data.answer as string;
@@ -152,6 +154,7 @@ async function handleSaveNote() {
 		});
 
 		const result = deserialize(await response.text());
+		dispatchQuotaNoticeFromData(result);
 
 		if (result.type === "success") {
 			saveSuccess = true;

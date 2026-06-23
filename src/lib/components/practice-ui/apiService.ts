@@ -1,4 +1,5 @@
 import { deserialize } from "$app/forms";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 export async function postAction(action: string, sessionId: number | string | null) {
 	const formData = new FormData();
@@ -7,7 +8,9 @@ export async function postAction(action: string, sessionId: number | string | nu
 		method: "POST",
 		body: formData,
 	});
-	return deserialize(await res.text());
+	const result = deserialize(await res.text());
+	dispatchQuotaNoticeFromData(result);
+	return result;
 }
 
 export function completeAction(sessionId: number | string) {
@@ -20,7 +23,9 @@ export async function sendFormAction(action: string, formData: FormData, signal?
 		body: formData,
 		signal,
 	});
-	return deserialize(await res.text());
+	const result = deserialize(await res.text());
+	dispatchQuotaNoticeFromData(result);
+	return result;
 }
 
 export function requestAgentFirstReplyAction(sessionId: number | string) {

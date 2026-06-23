@@ -5,6 +5,7 @@ import Smile from "@lucide/svelte/icons/smile";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 import EmojiPicker from "../../EmojiPicker.svelte";
 import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";
@@ -103,6 +104,7 @@ async function handleGetHint() {
 			signal: hintAbortController.signal,
 		});
 		const result = deserialize(await res.text());
+		dispatchQuotaNoticeFromData(result);
 		if (result.type === "success" && result.data) {
 			hints = (result.data as any).hints;
 		}

@@ -9,6 +9,7 @@ import { deserialize } from "$app/forms";
 import NoteCard from "$lib/components/note/NoteCard.svelte";
 import NoteEditor from "$lib/components/note/NoteEditor.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];
@@ -151,7 +152,10 @@ async function createReviewCard(noteId: number) {
 		});
 		if (res.ok) {
 			const data = await res.json();
+			dispatchQuotaNoticeFromData(data);
 			if (data.created) markNoteHasCard(noteId);
+		} else {
+			dispatchQuotaNoticeFromData(await res.json().catch(() => null));
 		}
 	} catch {
 		// silently ignore

@@ -5,6 +5,7 @@ import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question"
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 type CapturedSelection = {
 	text: string;
@@ -169,6 +170,7 @@ async function handleSave() {
 		});
 
 		const result = deserialize(await response.text());
+		dispatchQuotaNoticeFromData(result);
 		if (result.type === "success") {
 			const count = (result.data?.count as number | undefined) ?? 0;
 			const reason = (result.data?.reason as string | undefined) ?? "No note-worthy point found.";

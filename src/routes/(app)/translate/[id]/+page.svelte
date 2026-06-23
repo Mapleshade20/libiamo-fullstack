@@ -18,6 +18,7 @@ import { Button } from "$lib/components/ui/button";
 import { type LanguageCode, t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
 import type { ActionNotificationContent } from "$lib/notifications";
+import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
 type Evaluation = {
@@ -176,6 +177,7 @@ async function handleSaveDraft() {
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/saveDraft", { method: "POST", body: form });
 		const result = deserialize(await res.text());
+		dispatchQuotaNoticeFromData(result);
 		if (result.type !== "success") {
 			const message =
 				result.type === "failure"
@@ -210,6 +212,7 @@ async function handleSubmit() {
 		if (attemptId) form.set("attemptId", String(attemptId));
 		const res = await fetch("?/submit", { method: "POST", body: form });
 		const result = deserialize(await res.text());
+		dispatchQuotaNoticeFromData(result);
 
 		if (result.type === "success") {
 			await invalidateAll();
@@ -263,6 +266,7 @@ async function handleShowReference(key: string, sourceSentence: string) {
 		form.set("language", lang);
 		const res = await fetch("?/translateSentence", { method: "POST", body: form });
 		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		dispatchQuotaNoticeFromData(r);
 		if (r.type === "success" && r.data) {
 			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
 			persistRefs();
@@ -305,6 +309,7 @@ async function handleAskTutor(key: string, question: string, history: { question
 		form.set("language", lang);
 		const res = await fetch("?/askTutor", { method: "POST", body: form });
 		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
+		dispatchQuotaNoticeFromData(r);
 		if (r.type === "success" && r.data) {
 			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
 		} else {
