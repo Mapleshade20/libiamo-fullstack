@@ -182,6 +182,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ templateJson: "not json" }, "1");
 			const result = (await actions.importJson(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("importJson");
 			expect(result.data?.message).toContain("Invalid JSON");
 		});
 
@@ -335,6 +336,7 @@ describe("Admin Templates [id] +page.server", () => {
 			);
 			const result = (await actions.addVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("addVariant");
 			expect(result.data?.message).toContain("topic");
 		});
 
@@ -357,6 +359,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.saveVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("saveVariant");
 		});
 
 		it("returns savedVariant: true on success", async () => {
@@ -382,6 +385,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.activateVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("activateVariant");
 		});
 
 		it("returns activated: true when updating an inactive variant", async () => {
@@ -399,6 +403,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent({ variantId: "abc" }, "1");
 			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deactivateVariant");
 		});
 
 		it("fails if it tries to deactivate the last active variant", async () => {
@@ -409,6 +414,7 @@ describe("Admin Templates [id] +page.server", () => {
 			const result = (await actions.deactivateVariant(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deactivateVariant");
 			expect(result.data?.message).toContain("last active variant");
 		});
 

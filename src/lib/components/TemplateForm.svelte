@@ -58,6 +58,7 @@ interface Props {
 	template?: TemplateData;
 	variants?: VariantData[];
 	form?: {
+		action?: string;
 		message?: string;
 		errors?: Record<string, string[]>;
 	} | null;
@@ -105,7 +106,28 @@ $effect(() => {
 	return () => mainFormEl?.removeEventListener("keydown", handler);
 });
 
-const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save template", message: form.message } : null);
+function templateFormErrorTitle(action: string | undefined) {
+	switch (action) {
+		case "importJson":
+			return null;
+		case "addVariant":
+			return "Unable to add variant";
+		case "saveVariant":
+			return "Unable to save variant";
+		case "activateVariant":
+			return "Unable to activate variant";
+		case "deactivateVariant":
+			return "Unable to deactivate variant";
+		default:
+			return "Unable to save template";
+	}
+}
+
+const actionNotification = $derived.by(() => {
+	if (!form?.message) return null;
+	const title = templateFormErrorTitle(form.action);
+	return title ? { variant: "error" as const, title, message: form.message } : null;
+});
 
 const templateFieldOrder = [
 	"language",

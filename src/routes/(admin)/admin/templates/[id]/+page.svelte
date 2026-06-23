@@ -16,7 +16,7 @@ let importConfirmed = $state(false);
 let importPreview = $state<ReturnType<typeof buildTemplateImportPreview> | null>(null);
 
 const actionNotification = $derived(
-	form?.message
+	form?.action === "importJson" && form?.message
 		? { variant: "error" as const, title: "Unable to import template", message: form.message }
 		: form?.saved
 			? { variant: "success" as const, title: "Template saved", message: "Your template changes have been saved." }

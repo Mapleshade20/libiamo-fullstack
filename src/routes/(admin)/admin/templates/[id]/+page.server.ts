@@ -15,30 +15,37 @@ type VariantStatusActionResult =
 			variantId: number;
 			variant: { isActive: boolean };
 	  }
-	| ActionFailure<{ message: string }>;
+	| ActionFailure<{ action: string; message: string }>;
 
-function isActionFailure(result: VariantStatusActionResult): result is ActionFailure<{ message: string }> {
+function isActionFailure(result: VariantStatusActionResult): result is ActionFailure<{ action: string; message: string }> {
 	return "status" in result;
 }
 
-async function getVariantStatusForAction(event: {
-	locals: App.Locals;
-	params: { id: string };
-	request: Request;
-}): Promise<VariantStatusActionResult> {
+function failWithMessage(action: string, status: number, message: string) {
+	return fail(status, { action, message });
+}
+
+async function getVariantStatusForAction(
+	event: {
+		locals: App.Locals;
+		params: { id: string };
+		request: Request;
+	},
+	action: string,
+): Promise<VariantStatusActionResult> {
 	requireAdmin(event);
 
 	const templateId = Number(event.params.id);
 	const formData = await event.request.formData();
 	const variantId = Number(formData.get("variantId"));
-	if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
+	if (Number.isNaN(variantId)) return failWithMessage(action, 400, "Invalid variant id");
 
 	const [variant] = await db
 		.select({ isActive: templateVariant.isActive })
 		.from(templateVariant)
 		.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, templateId)))
 		.limit(1);
-	if (!variant) return fail(404, { message: "Variant not found" });
+	if (!variant) return failWithMessage(action, 404, "Variant not found");
 
 	return { templateId, variantId, variant };
 }
@@ -67,7 +74,7 @@ export const actions: Actions = {
 
 		const result = templateSchema.safeParse(raw);
 		if (!result.success) {
-			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+			return fail(400, { action: "save", errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
 
 		await db.update(template).set(result.data).where(eq(template.id, id));
@@ -87,11 +94,11 @@ export const actions: Actions = {
 		requireAdmin(event);
 
 		const id = Number(event.params.id);
-		if (Number.isNaN(id)) return fail(400, { message: "Invalid template id" });
+		if (Number.isNaN(id)) return failWithMessage("importJson", 400, "Invalid template id");
 
 		const formData = await event.request.formData();
 		const rawJson = formData.get("templateJson");
-		if (typeof rawJson !== "string" || rawJson.trim() === "") return fail(400, { message: "Paste template JSON before importing." });
+		if (typeof rawJson !== "string" || rawJson.trim() === "") return failWithMessage("importJson", 400, "Paste template JSON before importing.");
 
 		const existingVariants = await db
 			.select({ id: templateVariant.id, slotValues: templateVariant.slotValues })
@@ -99,7 +106,7 @@ export const actions: Actions = {
 			.where(eq(templateVariant.templateId, id))
 			.orderBy(templateVariant.id);
 		const preview = buildTemplateImportPreview(rawJson, existingVariants);
-		if (!preview.ok) return fail(400, { message: preview.error });
+		if (!preview.ok) return failWithMessage("importJson", 400, preview.error);
 
 		const { template: importedTemplate, variants } = preview.payload;
 		const importedVariantIds = variants.map((variant) => variant.id).filter((variantId): variantId is number => typeof variantId === "number");
@@ -149,11 +156,11 @@ export const actions: Actions = {
 
 		// Get template to know selected UI
 		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
-		if (!tpl) return fail(404, { message: "Template not found" });
+		if (!tpl) return failWithMessage("addVariant", 404, "Template not found");
 
 		const variantResult = prepareVariantPayload(tpl, slotValues, openingState);
 		if (variantResult.error) {
-			return fail(400, { message: variantResult.error });
+			return failWithMessage("addVariant", 400, variantResult.error);
 		}
 
 		await db.insert(templateVariant).values({
@@ -172,17 +179,17 @@ export const actions: Actions = {
 		const id = Number(event.params.id);
 		const formData = await event.request.formData();
 		const variantId = Number(formData.get("variantId"));
-		if (Number.isNaN(variantId)) return fail(400, { message: "Invalid variant id" });
+		if (Number.isNaN(variantId)) return failWithMessage("saveVariant", 400, "Invalid variant id");
 
 		const { slotValues, openingState } = parseVariantFormData(formData);
 
 		// Get template to know selected UI
 		const [tpl] = await db.select().from(template).where(eq(template.id, id)).limit(1);
-		if (!tpl) return fail(404, { message: "Template not found" });
+		if (!tpl) return failWithMessage("saveVariant", 404, "Template not found");
 
 		const variantResult = prepareVariantPayload(tpl, slotValues, openingState);
 		if (variantResult.error) {
-			return fail(400, { message: variantResult.error });
+			return failWithMessage("saveVariant", 400, variantResult.error);
 		}
 
 		const [variant] = await db
@@ -190,7 +197,7 @@ export const actions: Actions = {
 			.from(templateVariant)
 			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)))
 			.limit(1);
-		if (!variant) return fail(404, { message: "Variant not found" });
+		if (!variant) return failWithMessage("saveVariant", 404, "Variant not found");
 
 		await db
 			.update(templateVariant)
@@ -201,10 +208,10 @@ export const actions: Actions = {
 	},
 
 	activateVariant: async (event) => {
-		const result = await getVariantStatusForAction(event);
+		const result = await getVariantStatusForAction(event, "activateVariant");
 		if (isActionFailure(result)) return result;
 		const { templateId, variantId, variant } = result;
-		if (variant.isActive) return fail(400, { message: "Variant is already active" });
+		if (variant.isActive) return failWithMessage("activateVariant", 400, "Variant is already active");
 
 		await db
 			.update(templateVariant)
@@ -215,10 +222,10 @@ export const actions: Actions = {
 	},
 
 	deactivateVariant: async (event) => {
-		const result = await getVariantStatusForAction(event);
+		const result = await getVariantStatusForAction(event, "deactivateVariant");
 		if (isActionFailure(result)) return result;
 		const { templateId, variantId, variant } = result;
-		if (!variant.isActive) return fail(400, { message: "Variant is already inactive" });
+		if (!variant.isActive) return failWithMessage("deactivateVariant", 400, "Variant is already inactive");
 
 		// Enforce at-least-one-active-variant rule
 		const activeVariants = await db
@@ -227,7 +234,7 @@ export const actions: Actions = {
 			.where(and(eq(templateVariant.templateId, templateId), eq(templateVariant.isActive, true)));
 
 		if (activeVariants.length <= 1) {
-			return fail(400, { message: "Cannot deactivate the last active variant. Add another variant first." });
+			return failWithMessage("deactivateVariant", 400, "Cannot deactivate the last active variant. Add another variant first.");
 		}
 
 		await db
