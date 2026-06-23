@@ -13,14 +13,20 @@ interface NavItem {
 	exact?: boolean;
 }
 
+type TrialQuotaNavBalance = {
+	trialTokensLeft: number;
+	trialTotal: number;
+};
+
 interface Props {
 	mode: "app" | "admin";
 	user: { name: string; email: string; role: string; activeLanguage: string };
 	avatarUrl?: string;
 	pendingReviewCount?: number;
+	trialQuota?: TrialQuotaNavBalance | null;
 }
 
-let { mode, user, avatarUrl, pendingReviewCount = 0 }: Props = $props();
+let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props = $props();
 
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
@@ -121,6 +127,13 @@ let mobileButton: HTMLButtonElement | undefined = $state();
 function closeMobile() {
 	mobileOpen = false;
 }
+
+function formatTokens(value: number) {
+	return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, value));
+}
+
+let quotaPercent = $derived(trialQuota ? Math.max(0, Math.min(100, (trialQuota.trialTokensLeft / trialQuota.trialTotal) * 100)) : 0);
+let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
 </script>
 
 <header
@@ -170,6 +183,21 @@ function closeMobile() {
 
 		<!-- Right section -->
 		<div class="flex items-center gap-3">
+			{#if mode === "app" && trialQuota}
+				<a
+					href="/profile"
+					class="hidden sm:flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {quotaTone === 'depleted'
+						? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+						: quotaTone === 'low'
+							? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+							: 'border-border bg-background/70 text-muted-foreground hover:bg-secondary hover:text-foreground'}"
+					title="Trial AI token balance"
+				>
+					<span>AI</span>
+					<span class="tabular-nums">{formatTokens(trialQuota.trialTokensLeft)} / {formatTokens(trialQuota.trialTotal)}</span>
+				</a>
+			{/if}
+
 			<!-- Mobile hamburger -->
 			<button
 				type="button"

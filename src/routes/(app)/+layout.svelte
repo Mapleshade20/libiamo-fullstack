@@ -83,7 +83,7 @@ $effect(() => {
 
 <div class="min-h-screen">
 	{#if !isSessionPage}
-		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />
+		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} trialQuota={data.trialQuota} />
 	{/if}
 
 	{#if overlayVisible && !isSessionPage}

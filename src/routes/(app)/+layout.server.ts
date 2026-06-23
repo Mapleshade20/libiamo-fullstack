@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { requireUser } from "$lib/server/auth/authz";
+import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/llm";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
@@ -8,6 +9,8 @@ export const load: LayoutServerLoad = async (event) => {
 	const email = user.email?.toLowerCase() || "";
 	const hash = crypto.createHash("md5").update(email).digest("hex");
 	const avatarUrl = `https://gravatar.com/avatar/${hash}?d=identicon&s=192`;
+	const hasApiKey = await hasUserApiKey(user.id);
+	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
 		user: {
@@ -19,5 +22,7 @@ export const load: LayoutServerLoad = async (event) => {
 			nativeLanguage: user.nativeLanguage,
 		},
 		avatarUrl,
+		hasApiKey,
+		trialQuota,
 	};
 };

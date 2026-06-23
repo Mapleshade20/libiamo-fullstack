@@ -46,6 +46,13 @@ const actionNotification = $derived(
 			: null,
 );
 
+let trialPercent = $derived(data.trialQuota ? Math.max(0, Math.min(100, (data.trialQuota.trialTokensLeft / data.trialQuota.trialTotal) * 100)) : 0);
+let trialTone = $derived(!data.trialQuota ? "normal" : data.trialQuota.trialTokensLeft <= 0 ? "depleted" : trialPercent <= 10 ? "low" : "normal");
+
+function formatTokenCount(value: number) {
+	return new Intl.NumberFormat("en-US").format(Math.max(0, value));
+}
+
 $effect(() => {
 	const val = form?.values?.timezone ?? data.user.timezone ?? "";
 	timezoneInputValue = val;
@@ -225,6 +232,30 @@ function applyDetectedTimezone() {
 		</Card.Content>
 	</Card.Root>
 
+	{#if !data.hasApiKey && data.trialQuota}
+		<Card.Root>
+			<Card.Header> <Card.Title>Trial AI Balance</Card.Title> </Card.Header>
+			<Card.Content class="space-y-3">
+				<div class="flex items-center justify-between text-sm">
+					<span class="text-muted-foreground">Visible output tokens remaining</span>
+					<span class="font-medium tabular-nums"
+						>{formatTokenCount(data.trialQuota.trialTokensLeft)}
+						/ {formatTokenCount(data.trialQuota.trialTotal)}</span
+					>
+				</div>
+				<div class="h-3 overflow-hidden rounded-full bg-secondary">
+					<div
+						class="h-full rounded-full transition-all {trialTone === 'depleted' ? 'bg-red-500' : trialTone === 'low' ? 'bg-amber-500' : 'bg-primary'}"
+						style="width: {trialPercent}%"
+					></div>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					Trial balance is used only when no BYOK API key is configured. Adding your own key preserves this balance for later.
+				</p>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
 	<Card.Root>
 		<Card.Header> <Card.Title>API Key (BYOK)</Card.Title> </Card.Header>
 		<Card.Content>
@@ -232,6 +263,17 @@ function applyDetectedTimezone() {
 				<p class="mb-4 text-sm text-green-700">&#x2705; Your own API key is configured.</p>
 			{:else}
 				<p class="mb-4 text-sm text-muted-foreground">No custom API key set. The default platform key is used for AI responses.</p>
+				{#if data.trialQuota && trialTone === "depleted"}
+					<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+						<p class="font-semibold">Your trial AI balance is depleted.</p>
+						<p class="mt-1">Add an API key from DeepSeek or another OpenAI-compatible provider to continue using AI features.</p>
+					</div>
+				{:else if data.trialQuota && trialTone === "low"}
+					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+						<p class="font-semibold">Your trial AI balance is running low.</p>
+						<p class="mt-1">Configure your own API key now to avoid interruption.</p>
+					</div>
+				{/if}
 			{/if}
 
 			<FormErrorFocus formRef={apiKeyForm} errors={form?.errors} fieldOrder={["apiKey", "apiBaseUrl", "apiModel"]} />

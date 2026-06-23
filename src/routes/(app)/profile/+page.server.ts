@@ -7,7 +7,7 @@ import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { userApiKey } from "$lib/server/db/schema";
-import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { encryptApiKey, getTrialQuotaBalance, verifyApiKey } from "$lib/server/llm";
 import { switchActiveLanguage } from "../user-language-action";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -67,11 +67,13 @@ export const load: PageServerLoad = async (event) => {
 		columns: { userId: true, baseUrl: true, model: true },
 	});
 	const hasApiKey = row !== undefined;
+	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
 		serverTimezones: getMemoizedTimezones(),
 		serverNativeLanguages: getNativeLanguageOptions("en"),
 		hasApiKey,
+		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 	};
