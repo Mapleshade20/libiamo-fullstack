@@ -42,10 +42,19 @@ export type TrialQuotaBalance = {
 	trialTotal: number;
 };
 
+export type TrialQuotaWarning = "low" | "depleted";
+
 export type TrialQuotaStatus = TrialQuotaBalance & {
 	trialTokensUsed: number;
 	trialUsageEstimated: boolean;
-	trialQuotaWarning: "low" | "depleted" | null;
+	trialQuotaWarning: TrialQuotaWarning | null;
+};
+
+export type TrialQuotaNotice = TrialQuotaBalance & {
+	kind: TrialQuotaWarning;
+	title: string;
+	message: string;
+	href: "/profile";
 };
 
 export type ChatMessage = {
@@ -179,14 +188,33 @@ async function debitTrialQuota(userId: string, tokens: number, estimated: boolea
 		return { ...balance, trialTokensUsed: 0, trialUsageEstimated: estimated, trialQuotaWarning: null };
 	}
 
+	const nextBalance = sql`${userQuota.trialTokens} - ${tokensToDebit}`;
 	const [updated] = await db
 		.update(userQuota)
 		.set({
-			trialTokens: sql`${userQuota.trialTokens} - ${tokensToDebit}`,
+			trialTokens: nextBalance,
+			lowBalanceNoticePending: sql`CASE
+				WHEN ${userQuota.lowBalanceNotifiedAt} IS NULL
+				 AND ${nextBalance} > 0
+				 AND ${nextBalance} <= FLOOR(${userQuota.trialTotalTokens} * 0.10)
+				THEN TRUE
+				ELSE ${userQuota.lowBalanceNoticePending}
+			END`,
+			depletedNoticePending: sql`CASE
+				WHEN ${userQuota.depletedNotifiedAt} IS NULL
+				 AND ${nextBalance} <= 0
+				THEN TRUE
+				ELSE ${userQuota.depletedNoticePending}
+			END`,
 			updatedAt: new Date(),
 		})
 		.where(eq(userQuota.userId, userId))
-		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
+		.returning({
+			trialTokens: userQuota.trialTokens,
+			trialTotalTokens: userQuota.trialTotalTokens,
+			lowBalanceNoticePending: userQuota.lowBalanceNoticePending,
+			depletedNoticePending: userQuota.depletedNoticePending,
+		});
 
 	if (!updated) {
 		throw new Error("Failed to debit trial quota");
@@ -197,7 +225,68 @@ async function debitTrialQuota(userId: string, tokens: number, estimated: boolea
 		trialTotal: updated.trialTotalTokens,
 		trialTokensUsed: tokensToDebit,
 		trialUsageEstimated: estimated,
-		trialQuotaWarning: null,
+		trialQuotaWarning: updated.depletedNoticePending ? "depleted" : updated.lowBalanceNoticePending ? "low" : null,
+	};
+}
+
+export async function consumePendingQuotaNotice(userId: string): Promise<TrialQuotaNotice | null> {
+	const row = await db.query.userQuota.findFirst({
+		where: eq(userQuota.userId, userId),
+		columns: {
+			trialTokens: true,
+			trialTotalTokens: true,
+			lowBalanceNoticePending: true,
+			depletedNoticePending: true,
+		},
+	});
+
+	if (!row?.lowBalanceNoticePending && !row?.depletedNoticePending) return null;
+
+	const now = new Date();
+	if (row.depletedNoticePending) {
+		await db
+			.update(userQuota)
+			.set({
+				lowBalanceNoticePending: false,
+				depletedNoticePending: false,
+				lowBalanceNotifiedAt: now,
+				depletedNotifiedAt: now,
+				updatedAt: now,
+			})
+			.where(eq(userQuota.userId, userId));
+		return quotaNotice("depleted", row.trialTokens, row.trialTotalTokens);
+	}
+
+	await db
+		.update(userQuota)
+		.set({
+			lowBalanceNoticePending: false,
+			lowBalanceNotifiedAt: now,
+			updatedAt: now,
+		})
+		.where(eq(userQuota.userId, userId));
+	return quotaNotice("low", row.trialTokens, row.trialTotalTokens);
+}
+
+function quotaNotice(kind: TrialQuotaWarning, trialTokensLeft: number, trialTotal: number): TrialQuotaNotice {
+	if (kind === "depleted") {
+		return {
+			kind,
+			trialTokensLeft,
+			trialTotal,
+			title: "Trial balance depleted",
+			message: "Your free AI trial balance is depleted. Add your own API key from DeepSeek or another OpenAI-compatible provider to continue.",
+			href: "/profile",
+		};
+	}
+
+	return {
+		kind,
+		trialTokensLeft,
+		trialTotal,
+		title: "Trial balance running low",
+		message: "Your free AI trial balance is below 10%. Add your own API key to keep practicing without interruption.",
+		href: "/profile",
 	};
 }
 
