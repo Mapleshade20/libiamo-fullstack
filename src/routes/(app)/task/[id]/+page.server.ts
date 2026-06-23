@@ -12,7 +12,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template } from "$lib/server/db/schema";
-import { consumePendingQuotaNotice, OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
+import { OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -140,7 +140,7 @@ export const actions: Actions = {
 				user.id,
 			);
 
-			return { success: true, expressions, quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, expressions });
 		} catch (err) {
 			if (err instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(err));
@@ -186,7 +186,7 @@ export const actions: Actions = {
 				user.id,
 			);
 
-			return { success: true, feedback, correction, quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, feedback, correction });
 		} catch (err) {
 			if (err instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(err));

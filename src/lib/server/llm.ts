@@ -230,6 +230,8 @@ async function debitTrialQuota(userId: string, tokens: number, estimated: boolea
 }
 
 export async function consumePendingQuotaNotice(userId: string): Promise<TrialQuotaNotice | null> {
+	if (!db.query?.userQuota?.findFirst) return null;
+
 	const row = await db.query.userQuota.findFirst({
 		where: eq(userQuota.userId, userId),
 		columns: {
@@ -266,6 +268,14 @@ export async function consumePendingQuotaNotice(userId: string): Promise<TrialQu
 		})
 		.where(eq(userQuota.userId, userId));
 	return quotaNotice("low", row.trialTokens, row.trialTotalTokens);
+}
+
+export async function withPendingQuotaNotice<T extends Record<string, unknown>>(
+	userId: string,
+	data: T,
+): Promise<T & { quotaNotice?: TrialQuotaNotice }> {
+	const notice = await consumePendingQuotaNotice(userId);
+	return notice ? { ...data, quotaNotice: notice } : data;
 }
 
 export function trialQuotaExhaustedData(error: TrialQuotaExhaustedError) {

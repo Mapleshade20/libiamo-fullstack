@@ -5,7 +5,7 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MA
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { chatJson, chatText, consumePendingQuotaNotice, OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
+import { chatJson, chatText, OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -360,7 +360,7 @@ export const actions: Actions = {
 			await db.update(translationAttempt).set({ status: "submitted", updatedAt: new Date() }).where(eq(translationAttempt.id, recordId));
 		}
 
-		return { success: true, quotaNotice: await consumePendingQuotaNotice(user.id) };
+		return withPendingQuotaNotice(user.id, { success: true });
 	},
 
 	generateModelTranslation: async (event) => {
@@ -395,7 +395,7 @@ export const actions: Actions = {
 				options: { temperature: 0.5, maxTokens: 4096 },
 				userId: user.id,
 			});
-			return { success: true, modelTranslations, quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, modelTranslations });
 		} catch (err) {
 			if (err instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(err));
@@ -437,7 +437,7 @@ export const actions: Actions = {
 				options: { temperature: 0.7, maxTokens: 4096 },
 				userId: user.id,
 			});
-			return { success: true, explanation: reply.content, quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, explanation: reply.content });
 		} catch (err) {
 			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
 		}
@@ -467,7 +467,7 @@ export const actions: Actions = {
 				options: { temperature: 0.3, maxTokens: 512 },
 				userId: user.id,
 			});
-			return { success: true, translation: reply.content.trim(), quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, translation: reply.content.trim() });
 		} catch (err) {
 			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
 		}
@@ -506,7 +506,7 @@ export const actions: Actions = {
 				options: { temperature: 0.7, maxTokens: 2048 },
 				userId: user.id,
 			});
-			return { success: true, answer: reply.content, quotaNotice: await consumePendingQuotaNotice(user.id) };
+			return withPendingQuotaNotice(user.id, { success: true, answer: reply.content });
 		} catch (err) {
 			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");
 		}

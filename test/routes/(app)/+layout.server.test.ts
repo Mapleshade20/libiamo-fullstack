@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { load } from "$routes/(app)/+layout.server";
+
+vi.mock("$lib/server/llm", () => ({
+	hasUserApiKey: vi.fn(async () => false),
+	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTotal: 50_000 })),
+}));
 
 const ALICE_EMAIL_MD5 = "c160f8cc69a4f0bf2b0362752353d060";
 const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";

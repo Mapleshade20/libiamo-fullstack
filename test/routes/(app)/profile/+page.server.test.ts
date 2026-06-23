@@ -37,13 +37,15 @@ vi.mock("$lib/server/db/schema", () => ({
 	userApiKey: { userId: Symbol("userApiKey.userId") },
 }));
 
-const { mockEncryptApiKey, mockVerifyApiKey } = vi.hoisted(() => ({
+const { mockEncryptApiKey, mockGetTrialQuotaBalance, mockVerifyApiKey } = vi.hoisted(() => ({
 	mockEncryptApiKey: vi.fn((k: string) => `encrypted:${k}`),
+	mockGetTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTotal: 50_000 })),
 	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
 }));
 
 vi.mock("$lib/server/llm", () => ({
 	encryptApiKey: mockEncryptApiKey,
+	getTrialQuotaBalance: mockGetTrialQuotaBalance,
 	verifyApiKey: mockVerifyApiKey,
 }));
 

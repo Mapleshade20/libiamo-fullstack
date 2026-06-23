@@ -30,6 +30,7 @@ vi.mock("$lib/server/db", () => ({
 
 vi.mock("$lib/server/db/schema", () => ({
 	userLearningProfile: Symbol("userLearningProfile"),
+	userQuota: Symbol("userQuota"),
 }));
 
 vi.mock("better-auth/api", () => {
