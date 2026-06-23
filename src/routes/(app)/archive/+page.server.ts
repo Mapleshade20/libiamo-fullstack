@@ -3,7 +3,7 @@ import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { listCompletedSessions } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
 import { followUpOnFeedback } from "$lib/server/feedback";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
+import { consumePendingQuotaNotice, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import { deleteNote, getNote, updateNote } from "$lib/server/note";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -78,7 +78,7 @@ export const actions: Actions = {
 				category: "grammar",
 				question,
 			});
-			return { success: true, answer: result.answer };
+			return { success: true, answer: result.answer, quotaNotice: await consumePendingQuotaNotice(user.id) };
 		} catch (e) {
 			if (e instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(e));

@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { reviewCreateCardSchema } from "$lib/schemas";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
+import { consumePendingQuotaNotice, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import { createCardFromNote } from "$lib/server/review-cards";
 import type { RequestHandler } from "./$types";
 
@@ -24,7 +24,7 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const result = await createCardFromNote(parsed.data.noteId, user.id);
-		return json(result);
+		return json({ ...result, quotaNotice: await consumePendingQuotaNotice(user.id) });
 	} catch (error) {
 		if (error instanceof TrialQuotaExhaustedError) {
 			return json(trialQuotaExhaustedData(error), { status: 402 });

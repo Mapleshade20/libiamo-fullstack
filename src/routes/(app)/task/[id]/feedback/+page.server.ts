@@ -5,7 +5,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
+import { consumePendingQuotaNotice, TrialQuotaExhaustedError, trialQuotaExhaustedData } from "$lib/server/llm";
 import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
@@ -142,6 +142,7 @@ export const actions: Actions = {
 			return {
 				success: true,
 				feedback,
+				quotaNotice: await consumePendingQuotaNotice(user.id),
 			};
 		} catch (e) {
 			if (e instanceof TrialQuotaExhaustedError) {
@@ -193,7 +194,7 @@ export const actions: Actions = {
 				previousContext,
 				explanationMode,
 			});
-			return { success: true, answer: result.answer };
+			return { success: true, answer: result.answer, quotaNotice: await consumePendingQuotaNotice(user.id) };
 		} catch (e) {
 			if (e instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(e));
@@ -249,7 +250,7 @@ export const actions: Actions = {
 				.join("\n\n");
 			const notes = await createNotesBatch(user.id, sessionId, sessionContext.language, [{ tutorComment, category, sourceContext }], user.id);
 
-			return { success: true, note: notes[0] };
+			return { success: true, note: notes[0], quotaNotice: await consumePendingQuotaNotice(user.id) };
 		} catch (e) {
 			if (e instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(e));
@@ -295,7 +296,13 @@ export const actions: Actions = {
 				sourceKind,
 			});
 
-			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
+			return {
+				success: true,
+				count: result.count,
+				notes: result.notes,
+				reason: result.reason,
+				quotaNotice: await consumePendingQuotaNotice(user.id),
+			};
 		} catch (e) {
 			if (e instanceof TrialQuotaExhaustedError) {
 				return fail(402, trialQuotaExhaustedData(e));
