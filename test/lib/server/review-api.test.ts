@@ -12,6 +12,18 @@ vi.mock("$lib/server/review-cards", () => ({
 	noteHasCard: vi.fn(),
 }));
 
+vi.mock("$lib/server/llm", () => {
+	class TrialQuotaExhaustedError extends Error {
+		trialTotal = 50_000;
+		trialTokensLeft = 0;
+	}
+	return {
+		TrialQuotaExhaustedError,
+		trialQuotaExhaustedData: (error: TrialQuotaExhaustedError) => ({ error: error.message, quotaExhausted: true }),
+		withPendingQuotaNotice: async (_userId: string, data: Record<string, unknown>) => data,
+	};
+});
+
 import { POST as rateCard } from "../../../src/routes/api/review/[cardId]/rate/+server";
 import { POST as createCard } from "../../../src/routes/api/review/create-card/+server";
 import { GET as dueCards } from "../../../src/routes/api/review/due/+server";
