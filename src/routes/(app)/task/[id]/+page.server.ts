@@ -12,7 +12,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template } from "$lib/server/db/schema";
-import { OpenAIAuthError } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -142,11 +142,7 @@ export const actions: Actions = {
 
 			return { success: true, expressions };
 		} catch (err) {
-			console.error("Failed to generate expressions:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to generate expressions. You may need to configure your own API key." });
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 
@@ -185,11 +181,7 @@ export const actions: Actions = {
 
 			return { success: true, feedback, correction };
 		} catch (err) {
-			console.error("Failed to evaluate translation:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to evaluate translation. You may need to configure your own API key." });
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 };

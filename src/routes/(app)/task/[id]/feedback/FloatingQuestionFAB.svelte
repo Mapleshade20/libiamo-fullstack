@@ -86,12 +86,14 @@ async function handleSubmit() {
 
 		if (result.type === "success" && result.data?.answer) {
 			answer = result.data.answer as string;
+		} else if (result.type === "failure") {
+			error = (result.data?.error as string | undefined) ?? "The AI request failed. Please try again.";
 		} else {
-			error = "Failed to get answer";
+			error = "The AI request failed. Please try again.";
 		}
 	} catch (e) {
 		console.error("Failed to ask question:", e);
-		error = "Network error";
+		error = e instanceof Error && e.message.trim() ? e.message : "Network error";
 	} finally {
 		isLoading = false;
 	}

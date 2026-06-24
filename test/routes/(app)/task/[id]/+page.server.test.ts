@@ -271,7 +271,7 @@ describe("Task detail +page.server", () => {
 			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate expressions. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API error");
 		});
 	});
 
@@ -431,7 +431,7 @@ describe("Task detail +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to evaluate translation. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API timeout");
 		});
 	});
 });

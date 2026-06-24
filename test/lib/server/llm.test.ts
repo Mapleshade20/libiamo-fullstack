@@ -233,15 +233,15 @@ describe("chatText", () => {
 		vi.stubGlobal("fetch", vi.fn());
 
 		mockEnv.OPENAI_API_KEY = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_API_KEY is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 
 		mockEnv.OPENAI_API_KEY = "test-key";
 		mockEnv.OPENAI_BASE_URL = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_BASE_URL is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 
 		mockEnv.OPENAI_BASE_URL = "https://example.com/v1";
 		mockEnv.OPENAI_MODEL = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_MODEL is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 	});
 
 	it("maps OpenAI-compatible API and network errors", async () => {
@@ -257,13 +257,13 @@ describe("chatText", () => {
 			"fetch",
 			vi.fn<FetchLike>(async () => new Response("Server Error", { status: 500 })),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OpenAI API error (500)");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The AI provider is temporarily unavailable");
 
 		vi.stubGlobal(
 			"fetch",
 			vi.fn<FetchLike>(async () => createChatCompletionResponse("")),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("LLM returned empty content");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The AI provider returned an empty response");
 
 		vi.stubGlobal(
 			"fetch",
@@ -271,7 +271,7 @@ describe("chatText", () => {
 				throw new Error("ECONNREFUSED");
 			}),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("ECONNREFUSED");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("Could not connect to the AI provider");
 	});
 
 	it("logs request and response bodies only when LLM_DEBUG is enabled", async () => {
@@ -349,7 +349,7 @@ describe("chatJson", () => {
 
 		const { chatJson } = await import("$lib/server/llm");
 		await expect(chatJson(z.object({ reply: z.string() }), { messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
-			"LLM returned invalid structured JSON",
+			"The AI response was not in the expected format. Please try again.",
 		);
 	});
 });

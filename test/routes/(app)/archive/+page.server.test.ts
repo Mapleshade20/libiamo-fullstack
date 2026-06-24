@@ -275,7 +275,7 @@ describe("archive page server", () => {
 
 			const result = await actions.followUp(createFormEvent({ values: { noteId: "42", question: "why" } }));
 
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to get follow-up answer" } });
+			expect(result).toMatchObject({ status: 500, data: { error: "AI error" } });
 		});
 	});
 });

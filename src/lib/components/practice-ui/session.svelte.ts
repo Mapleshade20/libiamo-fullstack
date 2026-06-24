@@ -130,7 +130,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
 			addAgentMessage({
-				text: labels.retryFailedMessage,
+				text: result.error ?? labels.retryFailedMessage,
 				deliveryState: "failed",
 				clientMessageId,
 				retryText,
@@ -141,9 +141,20 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		}
 	}
 
+	function actionErrorMessage(result: unknown): string | undefined {
+		if (!result || typeof result !== "object") return undefined;
+		const data = (result as { data?: unknown }).data;
+		if (!data || typeof data !== "object") return undefined;
+		const error = (data as { error?: unknown }).error;
+		return typeof error === "string" && error.trim() ? error : undefined;
+	}
+
 	function mapOpeningActionResult(result: any): SendAttemptResult {
-		if (result?.type === "failure" && result.status >= 400 && result.status < 500) {
-			return { status: "rejected" };
+		if (result?.type === "failure") {
+			const error = actionErrorMessage(result);
+			if (error) return { status: "failed", error };
+			if (result.status >= 400 && result.status < 500) return { status: "rejected" };
+			return { status: "failed" };
 		}
 		if (result?.type === "success" && result.data) {
 			if ((result.data as any).pending) return { status: "pending" };

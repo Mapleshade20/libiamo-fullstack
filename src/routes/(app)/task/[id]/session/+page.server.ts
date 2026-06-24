@@ -15,6 +15,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
 	completeSession,
@@ -269,8 +270,7 @@ export const actions: Actions = {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
 
-			console.error("Failed to send message:", e);
-			return fail(500, { error: "Failed to send message" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 
@@ -308,8 +308,7 @@ export const actions: Actions = {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
 
-			console.error("Failed to request agent opening:", e);
-			return fail(500, { error: "Failed to request agent opening" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 
@@ -369,8 +368,7 @@ export const actions: Actions = {
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to generate hints" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 };

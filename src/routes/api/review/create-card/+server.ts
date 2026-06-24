@@ -1,5 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { reviewCreateCardSchema } from "$lib/schemas";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createCardFromNote } from "$lib/server/review-cards";
 import type { RequestHandler } from "./$types";
 
@@ -28,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 		if (error instanceof Error && error.message === "Note not found") {
 			return json({ error: "Note not found" }, { status: 404 });
 		}
-		console.error("Failed to create review card:", error);
-		return json({ error: "Failed to create review card" }, { status: 500 });
+
+		return json({ error: llmErrorMessage(error) }, { status: llmErrorStatus(error) });
 	}
 };
