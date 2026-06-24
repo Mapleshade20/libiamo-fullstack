@@ -3,7 +3,7 @@ import { env } from "$env/dynamic/private";
 import { db } from "./db";
 import { userApiKey, userQuota } from "./db/schema";
 
-const DEFAULT_TRIAL_TOKEN_BUDGET = 50_000;
+const FALLBACK_TRIAL_TOKEN_BUDGET = 50_000;
 
 export class TrialQuotaExhaustedError extends Error {
 	constructor(
@@ -30,7 +30,9 @@ export type TrialQuotaStatus = TrialQuotaBalance & {
 
 export function getTrialTokenBudget(): number {
 	const raw = env.TRIAL_TOKEN_BUDGET?.trim();
-	if (!raw) return DEFAULT_TRIAL_TOKEN_BUDGET;
+	// Source of truth for new user trial grants. Existing users keep the values
+	// persisted in user_quota; changing this env var does not mutate existing rows.
+	if (!raw) return FALLBACK_TRIAL_TOKEN_BUDGET;
 
 	if (!/^\d+$/.test(raw)) {
 		throw new Error("TRIAL_TOKEN_BUDGET must be a positive integer");

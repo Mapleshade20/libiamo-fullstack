@@ -100,8 +100,8 @@ export const userQuota = pgTable(
 		userId: text("user_id")
 			.primaryKey()
 			.references(() => user.id, { onDelete: "cascade" }),
-		trialTokensLeft: integer("trial_tokens_left").default(50000).notNull(),
-		trialTokensTotal: integer("trial_tokens_total").default(50000).notNull(),
+		trialTokensLeft: integer("trial_tokens_left").notNull(),
+		trialTokensTotal: integer("trial_tokens_total").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

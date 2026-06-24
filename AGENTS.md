@@ -9,7 +9,8 @@ pnpm build        # production build
 pnpm preview      # preview production build
 pnpm check        # svelte-check + biome check --write (format included, use this instead of build or format for development)
 pnpm test         # run unit tests (vitest) (use this for development)
-pnpm db:push      # push schema changes to DB (interactively done by user)
+pnpm db:generate --name migration_name  # generate a migration script
+pnpm db:migrate   # apply migration scripts
 ```
 
 ## Overview

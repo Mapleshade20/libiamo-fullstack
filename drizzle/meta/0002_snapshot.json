@@ -1,5 +1,5 @@
 {
-  "id": "647fa4c9-1be5-4668-8f45-ac825da8fa2e",
+  "id": "7dbc4b8c-3a12-4516-a5b6-4af60c7a1c9b",
   "prevId": "faf322d3-236b-43dd-a612-683676cd2b32",
   "version": "7",
   "dialect": "postgresql",
@@ -1906,15 +1906,13 @@
           "name": "trial_tokens_left",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "default": 50000
+          "notNull": true
         },
         "trial_tokens_total": {
           "name": "trial_tokens_total",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "default": 50000
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",

@@ -1,7 +1,7 @@
 CREATE TABLE "user_quota" (
 	"user_id" text PRIMARY KEY NOT NULL,
-	"trial_tokens_left" integer DEFAULT 50000 NOT NULL,
-	"trial_tokens_total" integer DEFAULT 50000 NOT NULL,
+	"trial_tokens_left" integer NOT NULL,
+	"trial_tokens_total" integer NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "user_quota_trial_tokens_left_non_negative" CHECK ("user_quota"."trial_tokens_left" >= 0),
