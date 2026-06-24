@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
+import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
-	event.depends?.("app:trial-quota");
+	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 
 	const email = user.email?.toLowerCase() || "";

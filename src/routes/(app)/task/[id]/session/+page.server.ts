@@ -11,6 +11,7 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -102,7 +103,8 @@ function parseHintContextPath(value: FormDataEntryValue | null, maxLength: numbe
 	}
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, depends }) => {
+	depends?.(PRACTICE_SESSION_DEPENDENCY);
 	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;

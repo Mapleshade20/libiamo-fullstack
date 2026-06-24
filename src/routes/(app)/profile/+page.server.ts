@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getNativeLanguageOptions } from "$lib/constants";
+import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
@@ -62,6 +63,7 @@ function getMemoizedTimezones(): { value: string; label: string }[] {
 }
 
 export const load: PageServerLoad = async (event) => {
+	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const row = await db.query.userApiKey.findFirst({
 		where: (t, { eq }) => eq(t.userId, user.id),
