@@ -15,7 +15,6 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
 	completeSession,
@@ -265,13 +264,10 @@ export const actions: Actions = {
 			}
 
 			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
-			return withPendingQuotaNotice(user.id, { success: true, ...result });
+			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 
 			console.error("Failed to send message:", e);
 			return fail(500, { error: "Failed to send message" });
@@ -307,13 +303,10 @@ export const actions: Actions = {
 			const result = await requestAgentOpening(sessionId, user.id, clientMessageId || undefined, {
 				maxTurns: taskData.template.maxTurns,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, ...result });
+			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 
 			console.error("Failed to request agent opening:", e);
 			return fail(500, { error: "Failed to request agent opening" });
@@ -374,11 +367,8 @@ export const actions: Actions = {
 
 			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.template.maxTurns));
 			const result = await generateHint(sessionId, contextPath);
-			return withPendingQuotaNotice(user.id, { success: true, ...result });
+			return { success: true, ...result };
 		} catch (e) {
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 			console.error(e);
 			return fail(500, { error: "Failed to generate hints" });
 		}

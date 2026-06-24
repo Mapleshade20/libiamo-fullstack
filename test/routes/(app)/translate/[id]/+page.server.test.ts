@@ -552,7 +552,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate model translation. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to generate model translation. You may need to configure your own API key.");
 		});
 
 		it("returns 500 when LLM response is not valid JSON", async () => {
@@ -686,7 +686,7 @@ describe("(app) translate/[id] +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate explanation. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to generate explanation. You may need to configure your own API key.");
 		});
 	});
 
@@ -749,7 +749,7 @@ describe("(app) translate/[id] +page.server", () => {
 			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to translate sentence. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to translate sentence. You may need to configure your own API key.");
 		});
 	});
 
@@ -862,7 +862,7 @@ describe("(app) translate/[id] +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to get answer. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to get answer. You may need to configure your own API key.");
 		});
 	});
 });

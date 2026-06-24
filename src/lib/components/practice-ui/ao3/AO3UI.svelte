@@ -4,7 +4,6 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { createPracticeSession } from "../session.svelte";
 import {
@@ -169,7 +168,6 @@ async function handleGetHint() {
 			signal: hintAbortController.signal,
 		});
 		const result = deserialize(await res.text());
-		dispatchQuotaNoticeFromData(result);
 		if (result.type === "success" && result.data) {
 			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
 		}

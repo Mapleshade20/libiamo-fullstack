@@ -15,7 +15,7 @@ interface NavItem {
 
 type TrialQuotaNavBalance = {
 	trialTokensLeft: number;
-	trialTotal: number;
+	trialTokensTotal: number;
 };
 
 interface Props {
@@ -128,11 +128,11 @@ function closeMobile() {
 	mobileOpen = false;
 }
 
-function formatTokens(value: number) {
-	return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, value));
+function quotaPercentage(balance: TrialQuotaNavBalance) {
+	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
 }
 
-let quotaPercent = $derived(trialQuota ? Math.max(0, Math.min(100, (trialQuota.trialTokensLeft / trialQuota.trialTotal) * 100)) : 0);
+let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
 let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
 </script>
 
@@ -191,10 +191,10 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 						: quotaTone === 'low'
 							? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
 							: 'border-border bg-background/70 text-muted-foreground hover:bg-secondary hover:text-foreground'}"
-					title="Trial AI token balance"
+					title="Trial AI balance"
 				>
-					<span>AI</span>
-					<span class="tabular-nums">{formatTokens(trialQuota.trialTokensLeft)} / {formatTokens(trialQuota.trialTotal)}</span>
+					<span>Trial</span>
+					<span class="tabular-nums">{quotaPercent}%</span>
 				</a>
 			{/if}
 

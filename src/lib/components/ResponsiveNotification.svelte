@@ -15,21 +15,10 @@ interface Props {
 	title?: string;
 	message?: string;
 	durationMs?: number;
-	actionHref?: string;
-	actionLabel?: string;
 	onClose?: () => void;
 }
 
-let {
-	open = false,
-	variant = "info",
-	title,
-	message = "",
-	durationMs = 4000,
-	actionHref,
-	actionLabel = "Open",
-	onClose = () => {},
-}: Props = $props();
+let { open = false, variant = "info", title, message = "", durationMs = 4000, onClose = () => {} }: Props = $props();
 
 let isWide = $state(false);
 let desktopTop = $state(20);
@@ -134,24 +123,13 @@ onDestroy(clearTimer);
 					<div class="min-w-0 flex-1 pt-0.5">
 						<h2 id="notification-title" class="text-base font-semibold tracking-tight">{resolvedTitle}</h2>
 						<p class="mt-1 text-sm leading-6 text-muted-foreground">{message}</p>
-						<div class="mt-5 flex gap-2">
-							{#if actionHref}
-								<a
-									href={actionHref}
-									class="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
-									onclick={onClose}
-								>
-									{actionLabel}
-								</a>
-							{/if}
-							<button
-								type="button"
-								class="inline-flex h-10 flex-1 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-medium shadow-sm transition hover:bg-secondary"
-								onclick={onClose}
-							>
-								OK
-							</button>
-						</div>
+						<button
+							type="button"
+							class="mt-5 inline-flex h-10 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+							onclick={onClose}
+						>
+							OK
+						</button>
 					</div>
 				</div>
 			</div>
@@ -175,9 +153,6 @@ onDestroy(clearTimer);
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-semibold leading-5">{resolvedTitle}</p>
 						<p class="mt-1 text-sm leading-5 text-muted-foreground">{message}</p>
-						{#if actionHref}
-							<a href={actionHref} class="mt-2 inline-flex text-sm font-medium text-primary hover:underline" onclick={onClose}>{actionLabel}</a>
-						{/if}
 					</div>
 					<button
 						type="button"

@@ -1,5 +1,4 @@
 import { deserialize } from "$app/forms";
-import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 const AGENT_REPLY_TIMEOUT_MS = 25_000;
 
@@ -34,7 +33,6 @@ export async function attemptAgentReply(
 			signal: controller.signal,
 		});
 		const result = deserialize(await res.text());
-		dispatchQuotaNoticeFromData(result);
 
 		if (result?.type === "failure" && result.status >= 400 && result.status < 500) {
 			return { status: "rejected" };

@@ -8,7 +8,6 @@ import { invalidateAll } from "$app/navigation";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
-import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -60,7 +59,6 @@ async function triggerGeneration() {
 		});
 
 		const result = deserialize(await response.text());
-		dispatchQuotaNoticeFromData(result);
 
 		if (result.type === "success" && result.data?.feedback) {
 			feedback = result.data.feedback as FeedbackResult;

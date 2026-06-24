@@ -1,11 +1,11 @@
 <script lang="ts">
-import { onMount, tick } from "svelte";
+import { tick } from "svelte";
+import { browser } from "$app/environment";
 import { page } from "$app/state";
 import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/client/task-transition";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
 import type { ActionNotificationContent } from "$lib/notifications";
-import { QUOTA_NOTICE_EVENT } from "$lib/quota-notices";
 
 let { children, data } = $props();
 let overlayStyle = $state("");
@@ -17,6 +17,12 @@ let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
 let isSessionPage = $derived(page.url.pathname.includes("/session"));
+let quotaWarning = $derived.by(() => {
+	if (!data.trialQuota) return null;
+	if (data.trialQuota.trialTokensLeft <= 0) return "depleted";
+	if (data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal <= 0.1) return "low";
+	return null;
+});
 
 function rectStyle(top: number, left: number, width: number, height: number, radius: number) {
 	return `top:${top}px;left:${left}px;width:${width}px;height:${height}px;border-radius:${radius}px;`;
@@ -76,12 +82,31 @@ $effect(() => {
 	void runTaskEnterOverlay();
 });
 
-onMount(() => {
-	const handleQuotaNotice = (event: Event) => {
-		quotaNotification = (event as CustomEvent<ActionNotificationContent>).detail;
-	};
-	window.addEventListener(QUOTA_NOTICE_EVENT, handleQuotaNotice);
-	return () => window.removeEventListener(QUOTA_NOTICE_EVENT, handleQuotaNotice);
+$effect(() => {
+	if (!quotaWarning || !data.trialQuota) {
+		quotaNotification = null;
+		return;
+	}
+	if (!browser) return;
+
+	const key = `trial-quota:${data.user.email}:${data.trialQuota.trialTokensTotal}:${quotaWarning}`;
+	if (localStorage.getItem(key)) return;
+	localStorage.setItem(key, "1");
+
+	quotaNotification =
+		quotaWarning === "depleted"
+			? {
+					variant: "error",
+					title: "Trial AI balance depleted",
+					message: "Add your own API key in Profile to continue using AI features.",
+					key,
+				}
+			: {
+					variant: "info",
+					title: "Trial AI balance running low",
+					message: "Your trial AI balance is below 10%. Add your own API key in Profile to avoid interruption.",
+					key,
+				};
 });
 
 $effect(() => {

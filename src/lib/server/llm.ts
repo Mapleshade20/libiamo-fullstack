@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import OpenAI from "openai";
 import type {
 	ChatCompletion,
@@ -11,7 +11,8 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { db } from "./db";
-import { userApiKey, userQuota } from "./db/schema";
+import { userApiKey } from "./db/schema";
+import { assertTrialQuotaAvailable, debitTrialQuota, type TrialQuotaStatus } from "./trial-quota";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -25,37 +26,6 @@ export class OpenAIAuthError extends Error {
 		this.name = "OpenAIAuthError";
 	}
 }
-
-/** Thrown when a non-BYOK user has no trial tokens left before an LLM call. */
-export class TrialQuotaExhaustedError extends Error {
-	constructor(
-		public readonly trialTotal: number,
-		public readonly trialTokensLeft = 0,
-	) {
-		super("Trial token budget exhausted. Configure your own API key to continue using AI features.");
-		this.name = "TrialQuotaExhaustedError";
-	}
-}
-
-export type TrialQuotaBalance = {
-	trialTokensLeft: number;
-	trialTotal: number;
-};
-
-export type TrialQuotaWarning = "low" | "depleted";
-
-export type TrialQuotaStatus = TrialQuotaBalance & {
-	trialTokensUsed: number;
-	trialUsageEstimated: boolean;
-	trialQuotaWarning: TrialQuotaWarning | null;
-};
-
-export type TrialQuotaNotice = TrialQuotaBalance & {
-	kind: TrialQuotaWarning;
-	title: string;
-	message: string;
-	href: "/profile";
-};
 
 export type ChatMessage = {
 	role: "system" | "user" | "assistant";
@@ -101,212 +71,6 @@ export type ToolChatRequest = ChatRequest & {
 		toolChoice?: ChatCompletionToolChoiceOption;
 	};
 };
-
-// ── Trial quota helpers ──────────────────────────────────────────────
-
-const DEFAULT_TRIAL_TOKEN_BUDGET = 50_000;
-
-export function getTrialTokenBudget(): number {
-	const raw = env.TRIAL_TOKEN_BUDGET?.trim();
-	if (!raw) return DEFAULT_TRIAL_TOKEN_BUDGET;
-
-	const parsed = Number.parseInt(raw, 10);
-	if (!Number.isFinite(parsed) || parsed <= 0) {
-		throw new Error("TRIAL_TOKEN_BUDGET must be a positive integer");
-	}
-	return parsed;
-}
-
-export async function hasUserApiKey(userId: string): Promise<boolean> {
-	const row = await db.query.userApiKey.findFirst({
-		where: eq(userApiKey.userId, userId),
-		columns: { userId: true },
-	});
-	return row !== undefined;
-}
-
-async function ensureUserQuota(userId: string): Promise<TrialQuotaBalance> {
-	const existing = await db.query.userQuota.findFirst({
-		where: eq(userQuota.userId, userId),
-		columns: { trialTokens: true, trialTotalTokens: true },
-	});
-	if (existing) {
-		return { trialTokensLeft: existing.trialTokens, trialTotal: existing.trialTotalTokens };
-	}
-
-	const budget = getTrialTokenBudget();
-	const [inserted] = await db
-		.insert(userQuota)
-		.values({ userId, trialTokens: budget, trialTotalTokens: budget })
-		.onConflictDoNothing()
-		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
-
-	if (inserted) {
-		return { trialTokensLeft: inserted.trialTokens, trialTotal: inserted.trialTotalTokens };
-	}
-
-	const row = await db.query.userQuota.findFirst({
-		where: eq(userQuota.userId, userId),
-		columns: { trialTokens: true, trialTotalTokens: true },
-	});
-	if (!row) throw new Error("Failed to initialize trial quota");
-	return { trialTokensLeft: row.trialTokens, trialTotal: row.trialTotalTokens };
-}
-
-export async function getTrialTokensLeft(userId: string): Promise<number> {
-	return (await ensureUserQuota(userId)).trialTokensLeft;
-}
-
-export async function getTrialQuotaBalance(userId: string): Promise<TrialQuotaBalance> {
-	return ensureUserQuota(userId);
-}
-
-async function assertTrialQuotaAvailable(userId: string): Promise<TrialQuotaBalance> {
-	const balance = await ensureUserQuota(userId);
-	if (balance.trialTokensLeft <= 0) {
-		throw new TrialQuotaExhaustedError(balance.trialTotal, balance.trialTokensLeft);
-	}
-
-	const [gated] = await db
-		.update(userQuota)
-		.set({ updatedAt: new Date() })
-		.where(and(eq(userQuota.userId, userId), gt(userQuota.trialTokens, 0)))
-		.returning({ trialTokens: userQuota.trialTokens, trialTotalTokens: userQuota.trialTotalTokens });
-
-	if (!gated) {
-		const current = await ensureUserQuota(userId);
-		throw new TrialQuotaExhaustedError(current.trialTotal, current.trialTokensLeft);
-	}
-
-	return { trialTokensLeft: gated.trialTokens, trialTotal: gated.trialTotalTokens };
-}
-
-async function debitTrialQuota(userId: string, tokens: number, estimated: boolean): Promise<TrialQuotaStatus> {
-	const tokensToDebit = Math.max(0, Math.ceil(tokens));
-	if (tokensToDebit === 0) {
-		const balance = await ensureUserQuota(userId);
-		return { ...balance, trialTokensUsed: 0, trialUsageEstimated: estimated, trialQuotaWarning: null };
-	}
-
-	const nextBalance = sql`${userQuota.trialTokens} - ${tokensToDebit}`;
-	const [updated] = await db
-		.update(userQuota)
-		.set({
-			trialTokens: nextBalance,
-			lowBalanceNoticePending: sql`CASE
-				WHEN ${userQuota.lowBalanceNotifiedAt} IS NULL
-				 AND ${nextBalance} > 0
-				 AND ${nextBalance} <= FLOOR(${userQuota.trialTotalTokens} * 0.10)
-				THEN TRUE
-				ELSE ${userQuota.lowBalanceNoticePending}
-			END`,
-			depletedNoticePending: sql`CASE
-				WHEN ${userQuota.depletedNotifiedAt} IS NULL
-				 AND ${nextBalance} <= 0
-				THEN TRUE
-				ELSE ${userQuota.depletedNoticePending}
-			END`,
-			updatedAt: new Date(),
-		})
-		.where(eq(userQuota.userId, userId))
-		.returning({
-			trialTokens: userQuota.trialTokens,
-			trialTotalTokens: userQuota.trialTotalTokens,
-			lowBalanceNoticePending: userQuota.lowBalanceNoticePending,
-			depletedNoticePending: userQuota.depletedNoticePending,
-		});
-
-	if (!updated) {
-		throw new Error("Failed to debit trial quota");
-	}
-
-	return {
-		trialTokensLeft: updated.trialTokens,
-		trialTotal: updated.trialTotalTokens,
-		trialTokensUsed: tokensToDebit,
-		trialUsageEstimated: estimated,
-		trialQuotaWarning: updated.depletedNoticePending ? "depleted" : updated.lowBalanceNoticePending ? "low" : null,
-	};
-}
-
-export async function consumePendingQuotaNotice(userId: string): Promise<TrialQuotaNotice | null> {
-	if (!db.query?.userQuota?.findFirst) return null;
-
-	const row = await db.query.userQuota.findFirst({
-		where: eq(userQuota.userId, userId),
-		columns: {
-			trialTokens: true,
-			trialTotalTokens: true,
-			lowBalanceNoticePending: true,
-			depletedNoticePending: true,
-		},
-	});
-
-	if (!row?.lowBalanceNoticePending && !row?.depletedNoticePending) return null;
-
-	const now = new Date();
-	if (row.depletedNoticePending) {
-		await db
-			.update(userQuota)
-			.set({
-				lowBalanceNoticePending: false,
-				depletedNoticePending: false,
-				lowBalanceNotifiedAt: now,
-				depletedNotifiedAt: now,
-				updatedAt: now,
-			})
-			.where(eq(userQuota.userId, userId));
-		return quotaNotice("depleted", row.trialTokens, row.trialTotalTokens);
-	}
-
-	await db
-		.update(userQuota)
-		.set({
-			lowBalanceNoticePending: false,
-			lowBalanceNotifiedAt: now,
-			updatedAt: now,
-		})
-		.where(eq(userQuota.userId, userId));
-	return quotaNotice("low", row.trialTokens, row.trialTotalTokens);
-}
-
-export async function withPendingQuotaNotice<T extends Record<string, unknown>>(
-	userId: string,
-	data: T,
-): Promise<T & { quotaNotice?: TrialQuotaNotice }> {
-	const notice = await consumePendingQuotaNotice(userId);
-	return notice ? { ...data, quotaNotice: notice } : data;
-}
-
-export function trialQuotaExhaustedData(error: TrialQuotaExhaustedError) {
-	return {
-		error: error.message,
-		quotaExhausted: true as const,
-		quotaNotice: quotaNotice("depleted", error.trialTokensLeft, error.trialTotal),
-	};
-}
-
-function quotaNotice(kind: TrialQuotaWarning, trialTokensLeft: number, trialTotal: number): TrialQuotaNotice {
-	if (kind === "depleted") {
-		return {
-			kind,
-			trialTokensLeft,
-			trialTotal,
-			title: "Trial balance depleted",
-			message: "Your free AI trial balance is depleted. Add your own API key from DeepSeek or another OpenAI-compatible provider to continue.",
-			href: "/profile",
-		};
-	}
-
-	return {
-		kind,
-		trialTokensLeft,
-		trialTotal,
-		title: "Trial balance running low",
-		message: "Your free AI trial balance is below 10%. Add your own API key to keep practicing without interruption.",
-		href: "/profile",
-	};
-}
 
 // ── API key encryption and verification ──────────────────────────────
 

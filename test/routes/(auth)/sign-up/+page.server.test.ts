@@ -30,11 +30,6 @@ vi.mock("$lib/server/db", () => ({
 
 vi.mock("$lib/server/db/schema", () => ({
 	userLearningProfile: Symbol("userLearningProfile"),
-	userQuota: Symbol("userQuota"),
-}));
-
-vi.mock("$lib/server/llm", () => ({
-	getTrialTokenBudget: vi.fn(() => 123),
 }));
 
 vi.mock("better-auth/api", () => {
@@ -134,11 +129,6 @@ describe("Sign-up +page.server", () => {
 			expect(mockValues).toHaveBeenCalledWith({
 				userId: "new-user-id",
 				language: "en",
-			});
-			expect(mockValues).toHaveBeenCalledWith({
-				userId: "new-user-id",
-				trialTokens: 123,
-				trialTotalTokens: 123,
 			});
 			expect(mockOnConflictDoNothing).toHaveBeenCalled();
 		});

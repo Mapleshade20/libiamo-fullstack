@@ -5,7 +5,6 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 import type { ContextComment } from "./types";
 
 let {
@@ -60,7 +59,6 @@ async function handleGetHint() {
 			signal: hintAbortController.signal,
 		});
 		const result = deserialize(await res.text());
-		dispatchQuotaNoticeFromData(result);
 		if (result.type === "success" && result.data) {
 			hints = (
 				(

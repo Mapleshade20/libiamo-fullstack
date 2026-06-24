@@ -17,17 +17,6 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 vi.mock("$lib/server/archive", () => mockArchiveService);
 vi.mock("$lib/server/note", () => mockNoteService);
 vi.mock("$lib/server/feedback", () => mockSessionService);
-vi.mock("$lib/server/llm", () => {
-	class TrialQuotaExhaustedError extends Error {
-		trialTotal = 50_000;
-		trialTokensLeft = 0;
-	}
-	return {
-		TrialQuotaExhaustedError,
-		trialQuotaExhaustedData: (error: TrialQuotaExhaustedError) => ({ error: error.message, quotaExhausted: true }),
-		withPendingQuotaNotice: async (_userId: string, data: Record<string, unknown>) => data,
-	};
-});
 
 import { actions, load } from "$routes/(app)/archive/+page.server";
 

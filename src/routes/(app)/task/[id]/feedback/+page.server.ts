@@ -5,7 +5,6 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
 import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
@@ -139,14 +138,11 @@ export const actions: Actions = {
 
 			const feedback = await generateFeedback(session.id);
 
-			return withPendingQuotaNotice(user.id, {
+			return {
 				success: true,
 				feedback,
-			});
+			};
 		} catch (e) {
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 			console.error("Failed to generate feedback:", e);
 			return fail(500, { error: "Failed to generate feedback" });
 		}
@@ -193,11 +189,8 @@ export const actions: Actions = {
 				previousContext,
 				explanationMode,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, answer: result.answer });
+			return { success: true, answer: result.answer };
 		} catch (e) {
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 			console.error(e);
 			return fail(500, { error: "Failed to get follow-up answer" });
 		}
@@ -249,11 +242,8 @@ export const actions: Actions = {
 				.join("\n\n");
 			const notes = await createNotesBatch(user.id, sessionId, sessionContext.language, [{ tutorComment, category, sourceContext }], user.id);
 
-			return withPendingQuotaNotice(user.id, { success: true, note: notes[0] });
+			return { success: true, note: notes[0] };
 		} catch (e) {
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 			console.error("Failed to save note:", e);
 			return fail(500, { error: "Failed to save note" });
 		}
@@ -295,16 +285,8 @@ export const actions: Actions = {
 				sourceKind,
 			});
 
-			return withPendingQuotaNotice(user.id, {
-				success: true,
-				count: result.count,
-				notes: result.notes,
-				reason: result.reason,
-			});
+			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
 		} catch (e) {
-			if (e instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(e));
-			}
 			console.error("Failed to save selected notes:", e);
 			return fail(500, { error: "Failed to save selected notes" });
 		}

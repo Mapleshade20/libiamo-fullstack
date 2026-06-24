@@ -7,7 +7,8 @@ import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { userApiKey } from "$lib/server/db/schema";
-import { encryptApiKey, getTrialQuotaBalance, verifyApiKey } from "$lib/server/llm";
+import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import { switchActiveLanguage } from "../user-language-action";
 import type { Actions, PageServerLoad } from "./$types";
 

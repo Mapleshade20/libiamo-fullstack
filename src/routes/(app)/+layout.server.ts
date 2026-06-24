@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { requireUser } from "$lib/server/auth/authz";
-import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/llm";
+import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {

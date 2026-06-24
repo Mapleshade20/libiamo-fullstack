@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { TrialQuotaExhaustedError } from "$lib/server/llm";
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
@@ -222,37 +221,6 @@ describe("Task detail +page.server", () => {
 			expect(mockChatJson).toHaveBeenCalled();
 		});
 
-		it("allows useful expressions without BYOK when trial balance is available", async () => {
-			mockChatJson.mockResolvedValueOnce(["Could I have the check?"]);
-
-			const result = await actions.generateExpressions(
-				createActionEvent({
-					title: "Ordering at a restaurant",
-					nativeLanguage: "en",
-					targetLanguage: "fr",
-				}),
-			);
-
-			expect(result).toEqual({ success: true, expressions: ["Could I have the check?"] });
-			expect(mockChatJson).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ userId: "u1" }));
-		});
-
-		it("blocks useful expressions only when non-BYOK trial quota is exhausted", async () => {
-			mockChatJson.mockRejectedValueOnce(new TrialQuotaExhaustedError(50_000, 0));
-
-			const result = (await actions.generateExpressions(
-				createActionEvent({
-					title: "Ordering at a restaurant",
-					nativeLanguage: "en",
-					targetLanguage: "fr",
-				}),
-			)) as any;
-
-			expect(result.status).toBe(402);
-			expect(result.data?.quotaExhausted).toBe(true);
-			expect(result.data?.quotaNotice?.href).toBe("/profile");
-		});
-
 		it("generates expressions with full task context", async () => {
 			mockChatJson.mockResolvedValueOnce(["How do I address the professor?", "What is the formal greeting?"]);
 
@@ -303,7 +271,7 @@ describe("Task detail +page.server", () => {
 			const result = (await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "fr" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate expressions. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to generate expressions. You may need to configure your own API key.");
 		});
 	});
 
@@ -463,7 +431,7 @@ describe("Task detail +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to evaluate translation. Check your trial balance or configure your own API key.");
+			expect(result.data?.error).toBe("Failed to evaluate translation. You may need to configure your own API key.");
 		});
 	});
 });

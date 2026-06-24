@@ -14,18 +14,18 @@ const { mockEnv } = vi.hoisted(() => ({
 vi.mock("$env/dynamic/private", () => ({ env: mockEnv }));
 
 const { mockUserQuotaFindFirst, mockDbUpdate, mockDbInsert } = vi.hoisted(() => {
-	const mockUserQuotaFindFirst = vi.fn().mockResolvedValue({ trialTokens: 50_000, trialTotalTokens: 50_000 });
+	const mockUserQuotaFindFirst = vi.fn().mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
 	const mockDbUpdate = vi.fn(() => ({
 		set: vi.fn(() => ({
 			where: vi.fn(() => ({
-				returning: vi.fn().mockResolvedValue([{ trialTokens: 49_999, trialTotalTokens: 50_000 }]),
+				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 49_999, trialTokensTotal: 50_000 }]),
 			})),
 		})),
 	}));
 	const mockDbInsert = vi.fn(() => ({
 		values: vi.fn(() => ({
 			onConflictDoNothing: vi.fn(() => ({
-				returning: vi.fn().mockResolvedValue([{ trialTokens: 50_000, trialTotalTokens: 50_000 }]),
+				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 50_000, trialTokensTotal: 50_000 }]),
 			})),
 		})),
 	}));
@@ -93,7 +93,7 @@ beforeEach(() => {
 	mockEnv.OPENAI_MODEL = "test-model";
 	mockEnv.LLM_DEBUG = "";
 	mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
-	mockUserQuotaFindFirst.mockResolvedValue({ trialTokens: 50_000, trialTotalTokens: 50_000 });
+	mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
 	mockDbUpdate.mockClear();
 	mockDbInsert.mockClear();
 });
@@ -197,7 +197,7 @@ describe("chatText", () => {
 
 		const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://example.com/v1/chat/completions");
-		expect(mockDbUpdate).toHaveBeenCalledTimes(2);
+		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
 		expect(result.quota).toMatchObject({ trialTokensUsed: 10, trialUsageEstimated: false });
 	});
 
@@ -218,11 +218,12 @@ describe("chatText", () => {
 	it("blocks non-BYOK calls before the provider when trial quota is exhausted", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
-		mockUserQuotaFindFirst.mockResolvedValueOnce({ trialTokens: 0, trialTotalTokens: 50_000 });
+		mockUserQuotaFindFirst.mockResolvedValueOnce({ trialTokensLeft: 0, trialTokensTotal: 50_000 });
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText, TrialQuotaExhaustedError } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm");
+		const { TrialQuotaExhaustedError } = await import("$lib/server/trial-quota");
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toBeInstanceOf(TrialQuotaExhaustedError);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
@@ -353,22 +354,7 @@ describe("chatJson", () => {
 	});
 });
 
-describe("trial quota notices", () => {
-	it("consumes a depleted notice once and stamps notification timestamps", async () => {
-		mockUserQuotaFindFirst.mockResolvedValueOnce({
-			trialTokens: -2,
-			trialTotalTokens: 50_000,
-			lowBalanceNoticePending: true,
-			depletedNoticePending: true,
-		});
-
-		const { consumePendingQuotaNotice } = await import("$lib/server/llm");
-		const notice = await consumePendingQuotaNotice("env-user");
-
-		expect(notice).toMatchObject({ kind: "depleted", href: "/profile", trialTokensLeft: -2, trialTotal: 50_000 });
-		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
-	});
-
+describe("trial quota", () => {
 	it("preserves and resumes trial quota around BYOK by only debiting env-sourced calls", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		const { chatText, encryptApiKey } = await import("$lib/server/llm");
@@ -380,7 +366,7 @@ describe("trial quota notices", () => {
 				model: "user-model",
 			} as any)
 			.mockResolvedValueOnce(undefined);
-		mockUserQuotaFindFirst.mockResolvedValue({ trialTokens: 123, trialTotalTokens: 50_000 });
+		mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 123, trialTokensTotal: 50_000 });
 		vi.stubGlobal(
 			"fetch",
 			vi.fn<FetchLike>(async () => createChatCompletionResponse("ok")),
@@ -390,10 +376,9 @@ describe("trial quota notices", () => {
 		expect(mockDbUpdate).not.toHaveBeenCalled();
 
 		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "user-1" });
-		expect(mockDbUpdate).toHaveBeenCalledTimes(2);
+		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
 	});
 });
-
 describe("chatTools", () => {
 	it("sends function tools and returns parsed tool calls", async () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createToolCallResponse("Goodbye!"));

@@ -1,5 +1,5 @@
 {
-  "id": "c473d4e4-cf51-4288-9983-280d067cc4de",
+  "id": "647fa4c9-1be5-4668-8f45-ac825da8fa2e",
   "prevId": "faf322d3-236b-43dd-a612-683676cd2b32",
   "version": "7",
   "dialect": "postgresql",
@@ -1902,45 +1902,19 @@
           "primaryKey": true,
           "notNull": true
         },
-        "trial_tokens": {
-          "name": "trial_tokens",
+        "trial_tokens_left": {
+          "name": "trial_tokens_left",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 50000
         },
-        "trial_total_tokens": {
-          "name": "trial_total_tokens",
+        "trial_tokens_total": {
+          "name": "trial_tokens_total",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 50000
-        },
-        "low_balance_notice_pending": {
-          "name": "low_balance_notice_pending",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "depleted_notice_pending": {
-          "name": "depleted_notice_pending",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "low_balance_notified_at": {
-          "name": "low_balance_notified_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "depleted_notified_at": {
-          "name": "depleted_notified_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1977,9 +1951,13 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "user_quota_trial_total_positive": {
-          "name": "user_quota_trial_total_positive",
-          "value": "\"user_quota\".\"trial_total_tokens\" > 0"
+        "user_quota_trial_tokens_left_non_negative": {
+          "name": "user_quota_trial_tokens_left_non_negative",
+          "value": "\"user_quota\".\"trial_tokens_left\" >= 0"
+        },
+        "user_quota_trial_tokens_total_positive": {
+          "name": "user_quota_trial_tokens_total_positive",
+          "value": "\"user_quota\".\"trial_tokens_total\" > 0"
         }
       },
       "isRLSEnabled": false

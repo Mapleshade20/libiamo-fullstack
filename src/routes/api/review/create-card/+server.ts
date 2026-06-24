@@ -1,6 +1,5 @@
 import { json } from "@sveltejs/kit";
 import { reviewCreateCardSchema } from "$lib/schemas";
-import { TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
 import { createCardFromNote } from "$lib/server/review-cards";
 import type { RequestHandler } from "./$types";
 
@@ -24,11 +23,8 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const result = await createCardFromNote(parsed.data.noteId, user.id);
-		return json(await withPendingQuotaNotice(user.id, result));
+		return json(result);
 	} catch (error) {
-		if (error instanceof TrialQuotaExhaustedError) {
-			return json(trialQuotaExhaustedData(error), { status: 402 });
-		}
 		if (error instanceof Error && error.message === "Note not found") {
 			return json({ error: "Note not found" }, { status: 404 });
 		}

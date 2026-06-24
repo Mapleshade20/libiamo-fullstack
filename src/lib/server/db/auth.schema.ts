@@ -100,19 +100,18 @@ export const userQuota = pgTable(
 		userId: text("user_id")
 			.primaryKey()
 			.references(() => user.id, { onDelete: "cascade" }),
-		trialTokens: integer("trial_tokens").default(50000).notNull(),
-		trialTotalTokens: integer("trial_total_tokens").default(50000).notNull(),
-		lowBalanceNoticePending: boolean("low_balance_notice_pending").default(false).notNull(),
-		depletedNoticePending: boolean("depleted_notice_pending").default(false).notNull(),
-		lowBalanceNotifiedAt: timestamp("low_balance_notified_at"),
-		depletedNotifiedAt: timestamp("depleted_notified_at"),
+		trialTokensLeft: integer("trial_tokens_left").default(50000).notNull(),
+		trialTokensTotal: integer("trial_tokens_total").default(50000).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(t) => [check("user_quota_trial_total_positive", sql`${t.trialTotalTokens} > 0`)],
+	(t) => [
+		check("user_quota_trial_tokens_left_non_negative", sql`${t.trialTokensLeft} >= 0`),
+		check("user_quota_trial_tokens_total_positive", sql`${t.trialTokensTotal} > 0`),
+	],
 );
 
 export const userRelations = relations(user, ({ many, one }) => ({

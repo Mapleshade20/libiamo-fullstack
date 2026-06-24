@@ -8,7 +8,6 @@ import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
-import { dispatchQuotaNoticeFromData } from "$lib/quota-notices";
 
 interface Props {
 	show: boolean;
@@ -66,9 +65,8 @@ async function handleGenerate() {
 		const res = await fetch("?/generateExpressions", { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
-			data?: { expressions?: string[]; error?: string; quotaNotice?: unknown };
+			data?: { expressions?: string[]; error?: string };
 		};
-		dispatchQuotaNoticeFromData(r);
 
 		if (!mounted) return;
 
@@ -104,9 +102,8 @@ async function handleCheck(idx: number) {
 		const res = await fetch("?/evaluateTranslation", { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
-			data?: { feedback?: string; correction?: string; error?: string; quotaNotice?: unknown };
+			data?: { feedback?: string; correction?: string; error?: string };
 		};
-		dispatchQuotaNoticeFromData(r);
 
 		if (!mounted) return;
 

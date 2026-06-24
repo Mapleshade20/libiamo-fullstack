@@ -5,7 +5,7 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MA
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { chatJson, chatText, OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
+import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -38,9 +38,6 @@ function hasOversizedTutorHelpText(values: string[]) {
 
 /** Handle LLM errors with auth-specific messaging */
 function handleLlmError(err: unknown, fallback: string) {
-	if (err instanceof TrialQuotaExhaustedError) {
-		return fail(402, trialQuotaExhaustedData(err));
-	}
 	console.error(fallback, err);
 	if (err instanceof OpenAIAuthError) {
 		return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
@@ -345,9 +342,6 @@ export const actions: Actions = {
 					.set({ status: "evaluated", evaluation, updatedAt: new Date() })
 					.where(eq(translationAttempt.id, recordId));
 			} catch (err) {
-				if (err instanceof TrialQuotaExhaustedError) {
-					return fail(402, trialQuotaExhaustedData(err));
-				}
 				console.error("Translation evaluation failed:", err);
 				if (err instanceof OpenAIAuthError) {
 					return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
@@ -360,7 +354,7 @@ export const actions: Actions = {
 			await db.update(translationAttempt).set({ status: "submitted", updatedAt: new Date() }).where(eq(translationAttempt.id, recordId));
 		}
 
-		return withPendingQuotaNotice(user.id, { success: true });
+		return { success: true };
 	},
 
 	generateModelTranslation: async (event) => {
@@ -395,16 +389,13 @@ export const actions: Actions = {
 				options: { temperature: 0.5, maxTokens: 4096 },
 				userId: user.id,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, modelTranslations });
+			return { success: true, modelTranslations };
 		} catch (err) {
-			if (err instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(err));
-			}
 			console.error("Model translation generation failed:", err);
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to generate model translation. Check your trial balance or configure your own API key." });
+			return fail(500, { error: "Failed to generate model translation. You may need to configure your own API key." });
 		}
 	},
 
@@ -437,9 +428,9 @@ export const actions: Actions = {
 				options: { temperature: 0.7, maxTokens: 4096 },
 				userId: user.id,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, explanation: reply.content });
+			return { success: true, explanation: reply.content };
 		} catch (err) {
-			return handleLlmError(err, "Failed to generate explanation. Check your trial balance or configure your own API key.");
+			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
 		}
 	},
 
@@ -467,9 +458,9 @@ export const actions: Actions = {
 				options: { temperature: 0.3, maxTokens: 512 },
 				userId: user.id,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, translation: reply.content.trim() });
+			return { success: true, translation: reply.content.trim() };
 		} catch (err) {
-			return handleLlmError(err, "Failed to translate sentence. Check your trial balance or configure your own API key.");
+			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
 		}
 	},
 
@@ -506,9 +497,9 @@ export const actions: Actions = {
 				options: { temperature: 0.7, maxTokens: 2048 },
 				userId: user.id,
 			});
-			return withPendingQuotaNotice(user.id, { success: true, answer: reply.content });
+			return { success: true, answer: reply.content };
 		} catch (err) {
-			return handleLlmError(err, "Failed to get answer. Check your trial balance or configure your own API key.");
+			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");
 		}
 	},
 };

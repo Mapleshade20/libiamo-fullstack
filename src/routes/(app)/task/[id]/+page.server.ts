@@ -12,7 +12,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task, template } from "$lib/server/db/schema";
-import { OpenAIAuthError, TrialQuotaExhaustedError, trialQuotaExhaustedData, withPendingQuotaNotice } from "$lib/server/llm";
+import { OpenAIAuthError } from "$lib/server/llm";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -140,16 +140,13 @@ export const actions: Actions = {
 				user.id,
 			);
 
-			return withPendingQuotaNotice(user.id, { success: true, expressions });
+			return { success: true, expressions };
 		} catch (err) {
-			if (err instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(err));
-			}
 			console.error("Failed to generate expressions:", err);
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to generate expressions. Check your trial balance or configure your own API key." });
+			return fail(500, { error: "Failed to generate expressions. You may need to configure your own API key." });
 		}
 	},
 
@@ -186,16 +183,13 @@ export const actions: Actions = {
 				user.id,
 			);
 
-			return withPendingQuotaNotice(user.id, { success: true, feedback, correction });
+			return { success: true, feedback, correction };
 		} catch (err) {
-			if (err instanceof TrialQuotaExhaustedError) {
-				return fail(402, trialQuotaExhaustedData(err));
-			}
 			console.error("Failed to evaluate translation:", err);
 			if (err instanceof OpenAIAuthError) {
 				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
 			}
-			return fail(500, { error: "Failed to evaluate translation. Check your trial balance or configure your own API key." });
+			return fail(500, { error: "Failed to evaluate translation. You may need to configure your own API key." });
 		}
 	},
 };
