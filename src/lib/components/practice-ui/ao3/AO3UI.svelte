@@ -79,7 +79,6 @@ const categories = $derived(opening.categories?.filter(Boolean) ?? []);
 const relationships = $derived(opening.relationships?.filter(Boolean) ?? []);
 const characters = $derived(opening.characters?.filter(Boolean) ?? []);
 const additionalTags = $derived(getAo3AdditionalTags(opening));
-const stats = $derived(opening.stats ?? {});
 const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl }));
 const commentCount = $derived(countAo3Comments(commentTree));
 const characterLimit = PRACTICE_UI_TEXT_MAX_LENGTH;
@@ -206,12 +205,7 @@ function handleWindowClick(event: MouseEvent) {
 	if (!target.closest(".ao3-hint-wrapper") && showHintMenu) closeHintMenu();
 }
 
-function preventNavigation(event: MouseEvent) {
-	event.preventDefault();
-}
-
-function scrollToTop(event: MouseEvent) {
-	event.preventDefault();
+function scrollToTop() {
 	scrollContainer?.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -239,9 +233,7 @@ function handleFinishCancel() {
 
 <div bind:this={scrollContainer} class="fixed inset-0 z-[999] overflow-y-auto bg-white text-[#2a2a2a] ao3-root">
 	<header class="flex items-center justify-between gap-3 border-b-[5px] border-black bg-[#900] px-[5%] py-2.5 text-white">
-		<h1 class="m-0 min-w-0 font-[Georgia,serif] text-[1.25em] font-normal md:text-[1.5em]">
-			<a href="/" class="text-white no-underline" onclick={preventNavigation}>Archive of Our Own</a>
-		</h1>
+		<h1 class="m-0 min-w-0 font-[Georgia,serif] text-[1.25em] font-normal md:text-[1.5em]"><span class="ao3-site-title">Archive of Our Own</span></h1>
 		<TurnsLeftMobileBadge
 			remainingTurns={session.remainingTurns}
 			isCompleted={session.isCompleted}
@@ -276,39 +268,33 @@ function handleFinishCancel() {
 		<section class="mb-8 border border-[#ccc] bg-[#eee] p-2.5">
 			<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1 md:grid-cols-[150px_1fr]">
 				<dt class="pt-1 text-right font-bold">Rating:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]" onclick={preventNavigation}>{rating}</a></dd>
+				<dd class="border-b border-[#ddd] pb-1"><span class="ao3-tag-link">{rating}</span></dd>
 				<dt class="pt-1 text-right font-bold">Archive Warning:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><a href="/" class="text-[#900]" onclick={preventNavigation}>{warning}</a></dd>
+				<dd class="border-b border-[#ddd] pb-1"><span class="ao3-tag-link">{warning}</span></dd>
 				{#if tagList(categories).length}
 					<dt class="pt-1 text-right font-bold">Category:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{tagList(categories).join(", ")}</dd>
+					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(categories))}</dd>
 				{/if}
 				<dt class="pt-1 text-right font-bold">Fandoms:</dt>
-				<dd class="border-b border-[#ddd] pb-1">{tagList(fandoms).join(", ")}</dd>
+				<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(fandoms))}</dd>
 				{#if tagList(relationships).length}
 					<dt class="pt-1 text-right font-bold">Relationships:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{tagList(relationships).join(", ")}</dd>
+					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(relationships))}</dd>
 				{/if}
 				{#if tagList(characters).length}
 					<dt class="pt-1 text-right font-bold">Characters:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{tagList(characters).join(", ")}</dd>
+					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(characters))}</dd>
 				{/if}
 				{#if tagList(additionalTags).length}
 					<dt class="pt-1 text-right font-bold">Additional Tags:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{tagList(additionalTags).join(", ")}</dd>
+					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(additionalTags))}</dd>
 				{/if}
-				<dt class="pt-1 text-right font-bold">Stats:</dt>
-				<dd class="pb-1">
-					Published: {stats.published ?? "2026-05-18"} &nbsp; Words: {stats.words ?? "4,500"} &nbsp; Chapters: {stats.chapters ?? "1/?"} &nbsp;
-					Comments: {stats.comments ?? commentCount} &nbsp; Kudos: {stats.kudos ?? "63"} &nbsp; Bookmarks: {stats.bookmarks ?? "12"} &nbsp; Hits:
-					{stats.hits ?? "400"}
-				</dd>
 			</dl>
 		</section>
 
 		<section class="mb-8 border-b border-[#ccc] pb-4 text-center">
 			<h2 class="m-0 font-[Georgia,serif] text-3xl">{workTitle}</h2>
-			<h3 class="m-0 mt-1 text-lg font-normal"><a href="/" class="text-[#900]" onclick={preventNavigation}>{authorName}</a></h3>
+			<h3 class="m-0 mt-1 text-lg font-normal"><span class="ao3-byline-link">{authorName}</span></h3>
 			{#if summary}
 				<div class="mx-auto mt-4 max-w-[800px] border border-[#ccc] bg-[#fdfdfd] p-4 text-left">
 					<p class="font-bold">Summary:</p>
@@ -323,17 +309,14 @@ function handleFinishCancel() {
 		</section>
 
 		<ul class="my-6 flex list-none flex-wrap justify-center gap-2 p-0">
-			<li><a href="#top" class="ao3-action" onclick={scrollToTop}>↑ Top</a></li>
+			<li><button type="button" class="ao3-action" onclick={scrollToTop}>↑ Top</button></li>
 			<li><button type="button" class="ao3-action">{t.kudos}</button></li>
 			<li><button type="button" class="ao3-action">{t.bookmark}</button></li>
 			<li><button type="button" class="ao3-action">{t.hideComments} ({commentCount})</button></li>
 		</ul>
 
 		<div class="mb-8 border-y border-[#eee] bg-[#f9f9f9] p-4">
-			<p class="m-0">
-				<a href="/" class="text-[#900]" onclick={preventNavigation}>Licht_Yumi</a>,
-				<a href="/" class="text-[#900]" onclick={preventNavigation}>Silver3</a>, and many guests left kudos on this work!
-			</p>
+			<p class="m-0"><span class="ao3-link">Licht_Yumi</span>, <span class="ao3-link">Silver3</span>, and many guests left kudos on this work!</p>
 		</div>
 
 		<section id="comments">
@@ -350,7 +333,7 @@ function handleFinishCancel() {
 							</p>
 						{/if}
 					</div>
-					<p class="m-0 text-xs">{t.plainText} <a href="/" class="text-[#900]" onclick={preventNavigation}>?</a></p>
+					<p class="m-0 text-xs">{t.plainText} <span class="ao3-link">?</span></p>
 				</div>
 				<textarea
 					bind:value={commentText}
@@ -425,12 +408,20 @@ function handleFinishCancel() {
 	onCancel={handleFinishCancel}
 />
 
+{#snippet renderTagList(values: string[])}
+	<ul class="ao3-commas m-0 list-none p-0">
+		{#each values as value}
+			<li><span class="ao3-tag-link">{value}</span></li>
+		{/each}
+	</ul>
+{/snippet}
+
 {#snippet renderComment(comment: Ao3RenderableComment)}
 	<li class="mb-4" style={`margin-left: ${Math.min(comment.depth, 5) * 2}%`}>
 		<article class="rounded border border-[#ddd] bg-white shadow-sm">
 			<div class="flex items-center justify-between border-b border-[#ddd] bg-[#eee] px-4 py-2 text-[13px]">
 				<span
-					><a href="/" class="text-base font-bold text-[#900]" onclick={preventNavigation}>{comment.username}</a>
+					><span class="ao3-comment-link">{comment.username}</span>
 					on {comment.chapterTitle ?? chapterTitle}</span
 				>
 				<span class="text-[#666]">{comment.timestamp ?? t.earlier}</span>
@@ -483,6 +474,56 @@ function handleFinishCancel() {
 .ao3-root :global(a:hover),
 .ao3-root :global(a:focus) {
 	border-bottom: 1px dotted #900;
+}
+.ao3-link,
+.ao3-comment-link,
+.ao3-byline-link,
+.ao3-tag-link,
+.ao3-site-title {
+	display: inline;
+	text-decoration: none;
+}
+.ao3-link,
+.ao3-comment-link {
+	border-bottom: 1px solid currentColor;
+	color: #111;
+}
+.ao3-link:hover,
+.ao3-comment-link:hover,
+.ao3-byline-link:hover {
+	color: #999;
+}
+.ao3-tag-link {
+	border-bottom: 1px dotted currentColor;
+	color: #111;
+	line-height: 1.5;
+	padding: 0;
+}
+.ao3-tag-link:hover {
+	border-color: #fff;
+	background: #900;
+	color: #fff;
+}
+.ao3-commas li {
+	display: inline;
+}
+.ao3-commas li::after {
+	content: ", ";
+}
+.ao3-commas li:last-child::after,
+.ao3-commas li:only-child::after {
+	content: none;
+}
+.ao3-byline-link {
+	border: 0;
+	color: #111;
+}
+.ao3-site-title {
+	border: 0;
+	color: #fff;
+}
+.ao3-site-title:hover {
+	border-bottom: 1px dotted currentColor;
 }
 .ao3-action {
 	display: inline-block;
