@@ -75,8 +75,8 @@ function getColor(kind: string): string {
 }
 </script>
 
-<div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-	<p class="text-[#2a2520]">
+<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+	<p class="text-[#2a2520] [overflow-wrap:anywhere]">
 		{#each parts as part}
 			{#if part.type === "text"}
 				{part.content}
