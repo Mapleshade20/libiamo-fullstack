@@ -5,8 +5,16 @@ const AGENT_REPLY_TIMEOUT_MS = 25_000;
 export type SendAttemptResult =
 	| { status: "reply"; text: string; terminated: boolean }
 	| { status: "pending" }
-	| { status: "failed" }
+	| { status: "failed"; error?: string }
 	| { status: "rejected" };
+
+function actionErrorMessage(result: unknown): string | undefined {
+	if (!result || typeof result !== "object") return undefined;
+	const data = (result as { data?: unknown }).data;
+	if (!data || typeof data !== "object") return undefined;
+	const error = (data as { error?: unknown }).error;
+	return typeof error === "string" && error.trim() ? error : undefined;
+}
 
 export async function attemptAgentReply(
 	sessionId: number,
@@ -34,8 +42,11 @@ export async function attemptAgentReply(
 		});
 		const result = deserialize(await res.text());
 
-		if (result?.type === "failure" && result.status >= 400 && result.status < 500) {
-			return { status: "rejected" };
+		if (result?.type === "failure") {
+			const error = actionErrorMessage(result);
+			if (error) return { status: "failed", error };
+			if (result.status >= 400 && result.status < 500) return { status: "rejected" };
+			return { status: "failed" };
 		}
 
 		if (result?.type === "success" && result.data) {

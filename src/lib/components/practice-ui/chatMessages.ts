@@ -16,6 +16,7 @@ type RetryLabels = {
 type MessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
+	failureError?: string | null;
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
@@ -69,10 +70,11 @@ function compactStringSnapshot(value: string) {
 
 export function stableMetadataSnapshot(value: unknown) {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-	const metadata = value as { clientMessageId?: unknown; failed?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
+	const metadata = value as { clientMessageId?: unknown; failed?: unknown; failureError?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
 	return JSON.stringify({
 		clientMessageId: metadata.clientMessageId ?? "",
 		failed: metadata.failed === true,
+		failureError: typeof metadata.failureError === "string" ? metadata.failureError : "",
 		hidden: metadata.hidden === true,
 		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? compactStringSnapshot(metadata.mailBodyHtml) : "",
 	});
@@ -196,7 +198,7 @@ export function buildChatMessages({
 		const retryPlaceholder = {
 			id: `retry-${message.id}`,
 			role: "agent",
-			text: metadata.failed === true ? labels.retryFailedMessage : labels.stillProcessingMessage,
+			text: metadata.failed === true ? metadata.failureError || labels.retryFailedMessage : labels.stillProcessingMessage,
 			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName,
 			avatarColor: agentColor,

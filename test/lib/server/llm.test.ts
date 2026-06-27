@@ -13,15 +13,39 @@ const { mockEnv } = vi.hoisted(() => ({
 
 vi.mock("$env/dynamic/private", () => ({ env: mockEnv }));
 
+const { mockUserQuotaFindFirst, mockDbUpdate, mockDbInsert } = vi.hoisted(() => {
+	const mockUserQuotaFindFirst = vi.fn().mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
+	const mockDbUpdate = vi.fn(() => ({
+		set: vi.fn(() => ({
+			where: vi.fn(() => ({
+				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 49_999, trialTokensTotal: 50_000 }]),
+			})),
+		})),
+	}));
+	const mockDbInsert = vi.fn(() => ({
+		values: vi.fn(() => ({
+			onConflictDoNothing: vi.fn(() => ({
+				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 50_000, trialTokensTotal: 50_000 }]),
+			})),
+		})),
+	}));
+	return { mockUserQuotaFindFirst, mockDbUpdate, mockDbInsert };
+});
+
 vi.mock("$lib/server/db", () => ({
 	db: {
-		query: { userApiKey: { findFirst: vi.fn().mockResolvedValue(null) } },
+		query: {
+			userApiKey: { findFirst: vi.fn().mockResolvedValue(null) },
+			userQuota: { findFirst: mockUserQuotaFindFirst },
+		},
+		update: mockDbUpdate,
+		insert: mockDbInsert,
 	},
 }));
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-function createChatCompletionResponse(content: string | null, extraMessage: Record<string, unknown> = {}) {
+function createChatCompletionResponse(content: string | null, extraMessage: Record<string, unknown> = {}, extraRoot: Record<string, unknown> = {}) {
 	return new Response(
 		JSON.stringify({
 			id: "chatcmpl-test",
@@ -35,6 +59,7 @@ function createChatCompletionResponse(content: string | null, extraMessage: Reco
 					},
 				},
 			],
+			...extraRoot,
 		}),
 		{ status: 200, headers: { "Content-Type": "application/json" } },
 	);
@@ -68,6 +93,9 @@ beforeEach(() => {
 	mockEnv.OPENAI_MODEL = "test-model";
 	mockEnv.LLM_DEBUG = "";
 	mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
+	mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
+	mockDbUpdate.mockClear();
+	mockDbInsert.mockClear();
 });
 
 describe("chatText", () => {
@@ -153,19 +181,51 @@ describe("chatText", () => {
 		expect(url).toBe("https://user-api.example.com/v1/chat/completions");
 		expect(getHeader(init.headers, "authorization")).toBe("Bearer user-key");
 		expect(JSON.parse(String(init.body)).model).toBe("user-model");
+		expect(mockDbUpdate).not.toHaveBeenCalled();
 	});
 
-	it("falls back to env config when user has no BYOK row", async () => {
+	it("falls back to env config when user has no BYOK row and debits visible output tokens", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
-		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
+		const fetchMock = vi.fn<FetchLike>(async () =>
+			createChatCompletionResponse("ok", {}, { usage: { completion_tokens: 12, completion_tokens_details: { reasoning_tokens: 2 } } }),
+		);
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatText } = await import("$lib/server/llm");
-		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "byok-user" });
+		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
 
 		const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://example.com/v1/chat/completions");
+		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
+		expect(result.quota).toMatchObject({ trialTokensUsed: 10, trialUsageEstimated: false });
+	});
+
+	it("estimates non-BYOK output usage from response text when provider usage is missing", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () => createChatCompletionResponse("hello world")),
+		);
+
+		const { chatText } = await import("$lib/server/llm");
+		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
+
+		expect(result.quota).toMatchObject({ trialTokensUsed: 3, trialUsageEstimated: true });
+	});
+
+	it("blocks non-BYOK calls before the provider when trial quota is exhausted", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+		mockUserQuotaFindFirst.mockResolvedValueOnce({ trialTokensLeft: 0, trialTokensTotal: 50_000 });
+		const fetchMock = vi.fn<FetchLike>();
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatText } = await import("$lib/server/llm");
+		const { TrialQuotaExhaustedError } = await import("$lib/server/trial-quota");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toBeInstanceOf(TrialQuotaExhaustedError);
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("throws config and provider errors clearly", async () => {
@@ -173,15 +233,15 @@ describe("chatText", () => {
 		vi.stubGlobal("fetch", vi.fn());
 
 		mockEnv.OPENAI_API_KEY = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_API_KEY is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 
 		mockEnv.OPENAI_API_KEY = "test-key";
 		mockEnv.OPENAI_BASE_URL = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_BASE_URL is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 
 		mockEnv.OPENAI_BASE_URL = "https://example.com/v1";
 		mockEnv.OPENAI_MODEL = "";
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OPENAI_MODEL is not set");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The shared AI service is not configured");
 	});
 
 	it("maps OpenAI-compatible API and network errors", async () => {
@@ -197,13 +257,13 @@ describe("chatText", () => {
 			"fetch",
 			vi.fn<FetchLike>(async () => new Response("Server Error", { status: 500 })),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("OpenAI API error (500)");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The AI provider is temporarily unavailable");
 
 		vi.stubGlobal(
 			"fetch",
 			vi.fn<FetchLike>(async () => createChatCompletionResponse("")),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("LLM returned empty content");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("The AI provider returned an empty response");
 
 		vi.stubGlobal(
 			"fetch",
@@ -211,7 +271,7 @@ describe("chatText", () => {
 				throw new Error("ECONNREFUSED");
 			}),
 		);
-		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("ECONNREFUSED");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("Could not connect to the AI provider");
 	});
 
 	it("logs request and response bodies only when LLM_DEBUG is enabled", async () => {
@@ -289,11 +349,36 @@ describe("chatJson", () => {
 
 		const { chatJson } = await import("$lib/server/llm");
 		await expect(chatJson(z.object({ reply: z.string() }), { messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
-			"LLM returned invalid structured JSON",
+			"The AI response was not in the expected format. Please try again.",
 		);
 	});
 });
 
+describe("trial quota", () => {
+	it("preserves and resumes trial quota around BYOK by only debiting env-sourced calls", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		const { chatText, encryptApiKey } = await import("$lib/server/llm");
+		vi.mocked(mockDb.query.userApiKey.findFirst)
+			.mockResolvedValueOnce({
+				userId: "user-1",
+				encryptedKey: encryptApiKey("user-key"),
+				baseUrl: "https://user-api.example.com/v1",
+				model: "user-model",
+			} as any)
+			.mockResolvedValueOnce(undefined);
+		mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 123, trialTokensTotal: 50_000 });
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () => createChatCompletionResponse("ok")),
+		);
+
+		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "user-1" });
+		expect(mockDbUpdate).not.toHaveBeenCalled();
+
+		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "user-1" });
+		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
+	});
+});
 describe("chatTools", () => {
 	it("sends function tools and returns parsed tool calls", async () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createToolCallResponse("Goodbye!"));

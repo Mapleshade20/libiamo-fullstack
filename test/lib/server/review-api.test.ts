@@ -11,6 +11,10 @@ vi.mock("$lib/server/review-cards", () => ({
 	rateCard: vi.fn(),
 	noteHasCard: vi.fn(),
 }));
+vi.mock("$lib/server/llm", () => ({
+	llmErrorStatus: () => 500,
+	llmErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "The AI request failed. Please try again."),
+}));
 
 import { POST as rateCard } from "../../../src/routes/api/review/[cardId]/rate/+server";
 import { POST as createCard } from "../../../src/routes/api/review/create-card/+server";

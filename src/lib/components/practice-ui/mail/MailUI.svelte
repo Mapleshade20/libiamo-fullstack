@@ -2,9 +2,10 @@
 import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
-import { invalidateAll } from "$app/navigation";
+import { invalidate } from "$app/navigation";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
+import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
@@ -53,6 +54,21 @@ let {
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
+
+function refreshTrialQuota() {
+	return invalidate(TRIAL_QUOTA_DEPENDENCY);
+}
+
+function refreshPracticeSession() {
+	return invalidate(PRACTICE_SESSION_DEPENDENCY);
+}
+
+function refreshAfterSendResult(result: SendAttemptResult) {
+	if (result.status === "pending") {
+		return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
+	}
+	return refreshTrialQuota();
+}
 
 let sessionId = $state<number | null>(null);
 let lastLoadedSessionId = $state<number | null>(null);
@@ -329,7 +345,7 @@ async function handleRetry(messageId: string) {
 		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
 
 		appendAgentMessageFromSendResult(result, message.clientMessageId, retryText);
-		await invalidateAll();
+		await refreshAfterSendResult(result);
 	} finally {
 		await scrollToMessageBottom();
 		isSubmitting = false;
@@ -374,7 +390,7 @@ async function handleSendEmail() {
 			} else if (result.status === "reply" && result.terminated === true) {
 				await handleComplete(true);
 			}
-			await invalidateAll();
+			await refreshAfterSendResult(result);
 		} else {
 			console.error("Mail submission was rejected:", result);
 			messages = messages.filter((message) => message.id !== sentMessage.id);
@@ -451,7 +467,7 @@ onMount(async () => {
 		try {
 			const result = await requestAgentOpeningAction(existingSession.id, MAIL_AGENT_OPENING_MESSAGE);
 			if (result.type === "success" && result.data) {
-				await invalidateAll();
+				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 			} else {
 				openComposer(true);
 			}
@@ -476,7 +492,7 @@ onMount(async () => {
 				} else {
 					openComposer(true);
 				}
-				await invalidateAll();
+				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 			} else {
 				console.error("Mail session initialization was rejected:", startResult);
 			}
@@ -508,7 +524,8 @@ $effect(() => {
 $effect(() => {
 	if (isAnyMessagePending && !isSubmitting && sessionId) {
 		const interval = setInterval(() => {
-			invalidateAll();
+			void refreshPracticeSession();
+			void refreshTrialQuota();
 		}, 3000);
 		return () => clearInterval(interval);
 	}

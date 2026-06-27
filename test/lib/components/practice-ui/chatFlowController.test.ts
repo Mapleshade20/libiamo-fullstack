@@ -59,18 +59,18 @@ describe("attemptAgentReply", () => {
 		expect(result).toEqual({ status: "pending" } satisfies SendAttemptResult);
 	});
 
-	it("returns rejected on 4xx client error", async () => {
+	it("returns server error message on 4xx client error", async () => {
 		mockFailure(400);
 
 		const result = await attemptAgentReply(1, "Hi", "client-1");
 
-		expect(result).toEqual({ status: "rejected" } satisfies SendAttemptResult);
+		expect(result).toEqual({ status: "failed", error: "err" } satisfies SendAttemptResult);
 	});
 
-	it.each([401, 499])("returns rejected for client error status %s", async (status) => {
+	it.each([401, 499])("returns server error message for client error status %s", async (status) => {
 		mockFailure(status);
 		const result = await attemptAgentReply(1, "Hi", "client-1");
-		expect(result).toEqual({ status: "rejected" } satisfies SendAttemptResult);
+		expect(result).toEqual({ status: "failed", error: "err" } satisfies SendAttemptResult);
 	});
 
 	it("returns failed on network error", async () => {
@@ -128,7 +128,7 @@ describe("attemptAgentReply", () => {
 	it.each([0, 500, 503])("returns failed for non-client failure status %s", async (status) => {
 		mockFailure(status);
 		const result = await attemptAgentReply(1, "Hi", "client-1");
-		expect(result).toEqual({ status: "failed" } satisfies SendAttemptResult);
+		expect(result).toEqual({ status: "failed", error: "err" } satisfies SendAttemptResult);
 	});
 
 	it("appends extra fields to FormData", async () => {

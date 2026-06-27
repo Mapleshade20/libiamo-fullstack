@@ -17,6 +17,10 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 vi.mock("$lib/server/archive", () => mockArchiveService);
 vi.mock("$lib/server/note", () => mockNoteService);
 vi.mock("$lib/server/feedback", () => mockSessionService);
+vi.mock("$lib/server/llm", () => ({
+	llmErrorStatus: () => 500,
+	llmErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "The AI request failed. Please try again."),
+}));
 
 import { actions, load } from "$routes/(app)/archive/+page.server";
 
@@ -275,7 +279,7 @@ describe("archive page server", () => {
 
 			const result = await actions.followUp(createFormEvent({ values: { noteId: "42", question: "why" } }));
 
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to get follow-up answer" } });
+			expect(result).toMatchObject({ status: 500, data: { error: "AI error" } });
 		});
 	});
 });

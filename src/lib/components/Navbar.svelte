@@ -13,14 +13,20 @@ interface NavItem {
 	exact?: boolean;
 }
 
+type TrialQuotaNavBalance = {
+	trialTokensLeft: number;
+	trialTokensTotal: number;
+};
+
 interface Props {
 	mode: "app" | "admin";
 	user: { name: string; email: string; role: string; activeLanguage: string };
 	avatarUrl?: string;
 	pendingReviewCount?: number;
+	trialQuota?: TrialQuotaNavBalance | null;
 }
 
-let { mode, user, avatarUrl, pendingReviewCount = 0 }: Props = $props();
+let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props = $props();
 
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
@@ -121,6 +127,13 @@ let mobileButton: HTMLButtonElement | undefined = $state();
 function closeMobile() {
 	mobileOpen = false;
 }
+
+function quotaPercentage(balance: TrialQuotaNavBalance) {
+	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
+}
+
+let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
+let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
 </script>
 
 <header
@@ -170,6 +183,21 @@ function closeMobile() {
 
 		<!-- Right section -->
 		<div class="flex items-center gap-3">
+			{#if mode === "app" && trialQuota}
+				<a
+					href="/profile"
+					class="hidden sm:flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {quotaTone === 'depleted'
+						? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+						: quotaTone === 'low'
+							? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+							: 'border-border bg-background/70 text-muted-foreground hover:bg-secondary hover:text-foreground'}"
+					title="Trial AI balance"
+				>
+					<span>Trial</span>
+					<span class="tabular-nums">{quotaPercent}%</span>
+				</a>
+			{/if}
+
 			<!-- Mobile hamburger -->
 			<button
 				type="button"

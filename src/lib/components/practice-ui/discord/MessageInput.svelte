@@ -44,6 +44,7 @@ let filteredMentionUsers = $derived(allUsers.filter((u) => u.name.toLowerCase().
 let showEmojiPicker = $state(false);
 let showHintMenu = $state(false);
 let hints = $state<Array<{ text: string; translation: string }>>([]);
+let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 
@@ -93,6 +94,7 @@ async function handleGetHint() {
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
+	hintError = null;
 	hintAbortController = new AbortController();
 	try {
 		const formData = new FormData();
@@ -105,11 +107,15 @@ async function handleGetHint() {
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
 			hints = (result.data as any).hints;
+		} else if (result.type === "failure") {
+			const error = (result.data as { error?: string } | undefined)?.error;
+			hintError = error?.trim() || "Failed to generate hints";
 		}
 	} catch (error) {
 		if (error instanceof DOMException && error.name === "AbortError") {
 			console.log("Hint request was aborted by user.");
 		} else {
+			hintError = error instanceof Error && error.message.trim() ? error.message : "Failed to generate hints";
 			console.error("Failed to get hints:", error);
 		}
 	} finally {
@@ -120,6 +126,7 @@ async function handleGetHint() {
 
 function closeHintMenu() {
 	showHintMenu = false;
+	hintError = null;
 	if (isGettingHint && hintAbortController) {
 		hintAbortController.abort();
 		isGettingHint = false;
@@ -277,6 +284,8 @@ function handleKeyDown(e: KeyboardEvent) {
 							<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
 								{#if isGettingHint}
 									<div class="py-6 text-center text-sm text-[#80848E] italic animate-pulse">{t.thinking}</div>
+								{:else if hintError}
+									<div class="py-6 text-center text-sm text-red-300">{hintError}</div>
 								{:else}
 									{#each hints as hint}
 										<button

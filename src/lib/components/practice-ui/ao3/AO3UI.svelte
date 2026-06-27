@@ -88,6 +88,7 @@ let replyTarget = $state<Ao3RenderableComment | null>(null);
 let showHintMenu = $state(false);
 let showFinishConfirm = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 let scrollContainer: HTMLDivElement;
@@ -158,6 +159,7 @@ async function handleGetHint() {
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
+	hintError = null;
 	hintAbortController = new AbortController();
 	try {
 		const formData = new FormData();
@@ -170,9 +172,15 @@ async function handleGetHint() {
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
 			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
+		} else if (result.type === "failure") {
+			const error = (result.data as { error?: string } | undefined)?.error;
+			hintError = error?.trim() || "Failed to generate hints";
 		}
 	} catch (error) {
-		if (!(error instanceof DOMException && error.name === "AbortError")) console.error("Failed to get hints:", error);
+		if (!(error instanceof DOMException && error.name === "AbortError")) {
+			hintError = error instanceof Error && error.message.trim() ? error.message : "Failed to generate hints";
+			console.error("Failed to get hints:", error);
+		}
 	} finally {
 		isGettingHint = false;
 		hintAbortController = null;
@@ -181,6 +189,7 @@ async function handleGetHint() {
 
 function closeHintMenu() {
 	showHintMenu = false;
+	hintError = null;
 	if (isGettingHint && hintAbortController) hintAbortController.abort();
 	isGettingHint = false;
 	hintAbortController = null;
@@ -365,6 +374,8 @@ function handleFinishCancel() {
 									<div class="max-h-64 overflow-y-auto p-2">
 										{#if isGettingHint}
 											<p class="py-5 text-center text-sm italic text-[#666]">{t.thinking}</p>
+										{:else if hintError}
+											<p class="py-5 text-center text-sm text-[#900]">{hintError}</p>
 										{:else if hints.length === 0}
 											<p class="py-5 text-center text-sm text-[#666]">{t.noHints}</p>
 										{:else}

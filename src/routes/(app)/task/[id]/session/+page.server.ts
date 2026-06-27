@@ -11,10 +11,12 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { practiceSession, task } from "$lib/server/db/schema";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
 	completeSession,
@@ -101,7 +103,8 @@ function parseHintContextPath(value: FormDataEntryValue | null, maxLength: numbe
 	}
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, depends }) => {
+	depends?.(PRACTICE_SESSION_DEPENDENCY);
 	const user = requireUser({ locals });
 
 	const taskIdStr = params.id;
@@ -269,8 +272,7 @@ export const actions: Actions = {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
 
-			console.error("Failed to send message:", e);
-			return fail(500, { error: "Failed to send message" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 
@@ -308,8 +310,7 @@ export const actions: Actions = {
 			const mappedError = mapSendMessageError(e);
 			if (mappedError) return mappedError;
 
-			console.error("Failed to request agent opening:", e);
-			return fail(500, { error: "Failed to request agent opening" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 
@@ -369,8 +370,7 @@ export const actions: Actions = {
 			const result = await generateHint(sessionId, contextPath);
 			return { success: true, ...result };
 		} catch (e) {
-			console.error(e);
-			return fail(500, { error: "Failed to generate hints" });
+			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
 		}
 	},
 };

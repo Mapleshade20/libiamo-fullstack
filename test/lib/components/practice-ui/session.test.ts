@@ -1,10 +1,11 @@
 import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice-ui/session.svelte";
+import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 
 const mocks = vi.hoisted(() => ({
 	tick: vi.fn(async () => {}),
-	invalidateAll: vi.fn(async () => {}),
+	invalidate: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
 	requestAgentFirstReplyAction: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("svelte", () => ({
 }));
 
 vi.mock("$app/navigation", () => ({
-	invalidateAll: mocks.invalidateAll,
+	invalidate: mocks.invalidate,
 }));
 
 vi.mock("$lib/components/practice-ui/apiService", () => ({
@@ -252,7 +253,7 @@ describe("createPracticeSession", () => {
 		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.text === "Great reply")).toBe(true);
-		expect(mocks.invalidateAll).toHaveBeenCalled();
+		expect(mocks.invalidate).toHaveBeenCalledWith(TRIAL_QUOTA_DEPENDENCY);
 	});
 
 	it("completes when a sent reply terminates the session", async () => {

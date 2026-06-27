@@ -43,6 +43,27 @@ describe("buildChatMessages", () => {
 		expect(result[1].thread).toBeUndefined();
 	});
 
+	it("uses the persisted failure error for retry placeholders", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Hello",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: true, failureError: "Trial token budget exhausted." },
+				},
+			],
+		});
+
+		expect(result[1]).toMatchObject({
+			id: "retry-1",
+			text: "Trial token budget exhausted.",
+			deliveryState: "failed",
+		});
+	});
+
 	it("adds a pending retry placeholder after an unfinished persisted user turn", () => {
 		const result = buildChatMessages({
 			...baseOptions,

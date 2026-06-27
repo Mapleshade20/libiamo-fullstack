@@ -22,6 +22,8 @@ pnpm dev
 
 Optional LLM debugging: set `LLM_DEBUG=true` in `.env` to print OpenAI-compatible request and response bodies to the server console. API keys are not logged.
 
+Trial quota: `TRIAL_TOKEN_BUDGET` in `.env` controls the starting visible-output token grant for new non-BYOK users. Existing user quota balances are stored in the database and are not changed by editing the env var.
+
 ## Building
 
 To create a production version of your app:

@@ -118,12 +118,14 @@ async function fetchExplanation() {
 			explanation = result.data.answer as string;
 			// Cache the result
 			sessionStorage.setItem(cacheKey, explanation);
+		} else if (result.type === "failure") {
+			error = (result.data?.error as string | undefined) ?? "The AI request failed. Please try again.";
 		} else {
-			error = "Failed to load explanation";
+			error = "The AI request failed. Please try again.";
 		}
 	} catch (e) {
 		console.error("Failed to fetch explanation:", e);
-		error = "Network error";
+		error = e instanceof Error && e.message.trim() ? e.message : "Network error";
 	} finally {
 		isLoading = false;
 	}
@@ -165,7 +167,7 @@ async function handleSaveNote() {
 		}
 	} catch (e) {
 		console.error("Failed to save note:", e);
-		saveError = "Network error";
+		saveError = e instanceof Error && e.message.trim() ? e.message : "Network error";
 	} finally {
 		isSaving = false;
 	}

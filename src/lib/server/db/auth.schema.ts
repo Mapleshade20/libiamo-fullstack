@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { boolean, check, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
 export const user = pgTable("user", {
@@ -94,15 +94,43 @@ export const userApiKey = pgTable("user_api_key", {
 		.notNull(),
 });
 
+export const userQuota = pgTable(
+	"user_quota",
+	{
+		userId: text("user_id")
+			.primaryKey()
+			.references(() => user.id, { onDelete: "cascade" }),
+		trialTokensLeft: integer("trial_tokens_left").notNull(),
+		trialTokensTotal: integer("trial_tokens_total").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(t) => [
+		check("user_quota_trial_tokens_left_non_negative", sql`${t.trialTokensLeft} >= 0`),
+		check("user_quota_trial_tokens_total_positive", sql`${t.trialTokensTotal} > 0`),
+	],
+);
+
 export const userRelations = relations(user, ({ many, one }) => ({
 	sessions: many(session),
 	accounts: many(account),
 	apiKey: one(userApiKey),
+	quota: one(userQuota),
 }));
 
 export const userApiKeyRelations = relations(userApiKey, ({ one }) => ({
 	user: one(user, {
 		fields: [userApiKey.userId],
+		references: [user.id],
+	}),
+}));
+
+export const userQuotaRelations = relations(userQuota, ({ one }) => ({
+	user: one(user, {
+		fields: [userQuota.userId],
 		references: [user.id],
 	}),
 }));

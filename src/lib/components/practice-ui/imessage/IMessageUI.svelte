@@ -78,6 +78,7 @@ const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text
 let showHintMenu = $state(false);
 let showFinishConfirm = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 
@@ -101,6 +102,7 @@ async function handleGetHint() {
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
+	hintError = null;
 	hintAbortController = new AbortController();
 	try {
 		const formData = new FormData();
@@ -113,9 +115,13 @@ async function handleGetHint() {
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
 			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
+		} else if (result.type === "failure") {
+			const error = (result.data as { error?: string } | undefined)?.error;
+			hintError = error?.trim() || "Failed to generate hints";
 		}
 	} catch (error) {
 		if (!(error instanceof DOMException && error.name === "AbortError")) {
+			hintError = error instanceof Error && error.message.trim() ? error.message : "Failed to generate hints";
 			console.error("Failed to get hints:", error);
 		}
 	} finally {
@@ -126,6 +132,7 @@ async function handleGetHint() {
 
 function closeHintMenu() {
 	showHintMenu = false;
+	hintError = null;
 	if (isGettingHint && hintAbortController) {
 		hintAbortController.abort();
 	}
@@ -360,6 +367,8 @@ onMount(() => {
 										<div class="max-h-64 space-y-1 overflow-y-auto p-2">
 											{#if isGettingHint}
 												<p class="py-5 text-center text-sm text-[#8E8E93] italic">{t.thinking}</p>
+											{:else if hintError}
+												<p class="py-5 text-center text-sm text-red-600">{hintError}</p>
 											{:else if hints.length === 0}
 												<p class="py-5 text-center text-sm text-[#8E8E93]">{t.noHints}</p>
 											{:else}

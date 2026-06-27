@@ -5,7 +5,7 @@ import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MA
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAttempt } from "$lib/server/db/schema";
-import { chatJson, chatText, OpenAIAuthError } from "$lib/server/llm";
+import { chatJson, chatText, llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** Maximum form data size for translation JSON (100KB) */
@@ -34,15 +34,6 @@ function getLangName(code: unknown): string {
 
 function hasOversizedTutorHelpText(values: string[]) {
 	return values.some((value) => value.length > TUTOR_HELP_TEXT_MAX_LENGTH);
-}
-
-/** Handle LLM errors with auth-specific messaging */
-function handleLlmError(err: unknown, fallback: string) {
-	console.error(fallback, err);
-	if (err instanceof OpenAIAuthError) {
-		return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-	}
-	return fail(500, { error: fallback });
 }
 
 /** Template filter conditions shared by load and action auth checks */
@@ -342,12 +333,8 @@ export const actions: Actions = {
 					.set({ status: "evaluated", evaluation, updatedAt: new Date() })
 					.where(eq(translationAttempt.id, recordId));
 			} catch (err) {
-				console.error("Translation evaluation failed:", err);
-				if (err instanceof OpenAIAuthError) {
-					return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-				}
 				// Keep as "draft" — user can retry
-				return fail(500, { error: "Evaluation failed. Please try again." });
+				return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 			}
 		} else {
 			// No translation base — just mark as submitted
@@ -391,11 +378,7 @@ export const actions: Actions = {
 			});
 			return { success: true, modelTranslations };
 		} catch (err) {
-			console.error("Model translation generation failed:", err);
-			if (err instanceof OpenAIAuthError) {
-				return fail(401, { error: "Invalid API key. Please configure a valid API key in your profile settings." });
-			}
-			return fail(500, { error: "Failed to generate model translation. You may need to configure your own API key." });
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 
@@ -430,7 +413,7 @@ export const actions: Actions = {
 			});
 			return { success: true, explanation: reply.content };
 		} catch (err) {
-			return handleLlmError(err, "Failed to generate explanation. You may need to configure your own API key.");
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 
@@ -460,7 +443,7 @@ export const actions: Actions = {
 			});
 			return { success: true, translation: reply.content.trim() };
 		} catch (err) {
-			return handleLlmError(err, "Failed to translate sentence. You may need to configure your own API key.");
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 
@@ -499,7 +482,7 @@ export const actions: Actions = {
 			});
 			return { success: true, answer: reply.content };
 		} catch (err) {
-			return handleLlmError(err, "Failed to get answer. You may need to configure your own API key.");
+			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
 		}
 	},
 };

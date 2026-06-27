@@ -713,7 +713,7 @@ describe("session page server", () => {
 			mockSessionService.sendMessage.mockRejectedValue({ some: "object error" });
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
+			expect(result).toMatchObject({ status: 500, data: { error: "The AI request failed. Please try again." } });
 		});
 
 		it("returns 500 for unexpected Error failures", async () => {
@@ -725,7 +725,7 @@ describe("session page server", () => {
 			mockSessionService.sendMessage.mockRejectedValue(new Error("Unexpected transport error"));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to send message" } });
+			expect(result).toMatchObject({ status: 500, data: { error: "Unexpected transport error" } });
 		});
 
 		it("returns fail 403 when maximum conversation turns reached", async () => {
@@ -1007,7 +1007,7 @@ describe("session page server", () => {
 			mockSessionService.generateHint.mockRejectedValue(new Error("AI error"));
 
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
-			expect(result).toMatchObject({ status: 500, data: { error: "Failed to generate hints" } });
+			expect(result).toMatchObject({ status: 500, data: { error: "AI error" } });
 		});
 	});
 });

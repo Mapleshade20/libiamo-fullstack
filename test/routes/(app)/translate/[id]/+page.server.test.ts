@@ -362,7 +362,7 @@ describe("(app) translate/[id] +page.server", () => {
 			const result = (await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Evaluation failed. Please try again.");
+			expect(result.data?.error).toBe("API timeout");
 		});
 
 		it("marks as submitted when template has no translationBase", async () => {
@@ -410,7 +410,7 @@ describe("(app) translate/[id] +page.server", () => {
 			const result = (await actions.submit(createActionEvent({ translations: JSON.stringify(translations) }, { id: "1" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Evaluation failed. Please try again.");
+			expect(result.data?.error).toBe("LLM returned invalid structured JSON");
 		});
 
 		it("updates existing attempt when attemptId provided (no insert)", async () => {
@@ -552,7 +552,7 @@ describe("(app) translate/[id] +page.server", () => {
 
 			const result = (await actions.generateModelTranslation(createActionEvent({}, { id: "1" }))) as any;
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate model translation. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API error");
 		});
 
 		it("returns 500 when LLM response is not valid JSON", async () => {
@@ -686,7 +686,7 @@ describe("(app) translate/[id] +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to generate explanation. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API timeout");
 		});
 	});
 
@@ -749,7 +749,7 @@ describe("(app) translate/[id] +page.server", () => {
 			const result = (await actions.translateSentence(createActionEvent({ sourceSentence: "Hello", language: "fr" }, { id: "1" }))) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to translate sentence. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API timeout");
 		});
 	});
 
@@ -862,7 +862,7 @@ describe("(app) translate/[id] +page.server", () => {
 			)) as any;
 
 			expect(result.status).toBe(500);
-			expect(result.data?.error).toBe("Failed to get answer. You may need to configure your own API key.");
+			expect(result.data?.error).toBe("API error");
 		});
 	});
 });

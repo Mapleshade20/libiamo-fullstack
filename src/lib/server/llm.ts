@@ -12,18 +12,40 @@ import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
+import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "./trial-quota";
 
 // ── Public types ──────────────────────────────────────────────────────
 
 /** Thrown when the API key is invalid, expired, or unauthorized (401/403). */
 export class OpenAIAuthError extends Error {
 	constructor(
-		message: string,
+		message = "Invalid API key. Please configure a valid API key in your profile settings.",
 		public readonly status: number,
 	) {
 		super(message);
 		this.name = "OpenAIAuthError";
 	}
+}
+
+/** Expected provider-side failures that are safe to show to learners. */
+class LlmProviderError extends Error {
+	constructor(
+		message: string,
+		public readonly status = 500,
+	) {
+		super(message);
+		this.name = "LlmProviderError";
+	}
+}
+
+export function llmErrorStatus(error: unknown): number {
+	if (error instanceof TrialQuotaExhaustedError) return 402;
+	if (error instanceof OpenAIAuthError || error instanceof LlmProviderError) return error.status;
+	return 500;
+}
+
+export function llmErrorMessage(error: unknown): string {
+	return error instanceof Error && error.message.trim() ? error.message : "The AI request failed. Please try again.";
 }
 
 export type ChatMessage = {
@@ -41,6 +63,7 @@ export type ChatResponse = {
 	model?: string;
 	content: string;
 	raw: unknown;
+	quota?: TrialQuotaStatus;
 };
 
 export type ChatRequest = {
@@ -176,26 +199,32 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 
 // ── Config resolution ─────────────────────────────────────────────────
 
+type OpenAIConfigSource = "byok" | "env";
+
 type OpenAIConfig = {
 	apiKey: string;
 	baseUrl: string;
 	model: string;
 };
 
+type ResolvedOpenAIConfig = OpenAIConfig & {
+	source: OpenAIConfigSource;
+};
+
 function getEnvOpenAIConfig(): OpenAIConfig {
 	const apiKey = env.OPENAI_API_KEY?.trim();
 	if (!apiKey) {
-		throw new Error("OPENAI_API_KEY is not set. Please set OPENAI_API_KEY in .env");
+		throw new LlmProviderError("The shared AI service is not configured. Add your own API key in Profile to keep using AI features.", 503);
 	}
 
 	const baseUrlRaw = env.OPENAI_BASE_URL?.trim();
 	if (!baseUrlRaw) {
-		throw new Error("OPENAI_BASE_URL is not set. Please set OPENAI_BASE_URL in .env");
+		throw new LlmProviderError("The shared AI service is not configured. Add your own API key in Profile to keep using AI features.", 503);
 	}
 
 	const model = env.OPENAI_MODEL?.trim();
 	if (!model) {
-		throw new Error("OPENAI_MODEL is not set. Please set OPENAI_MODEL in .env");
+		throw new LlmProviderError("The shared AI service is not configured. Add your own API key in Profile to keep using AI features.", 503);
 	}
 
 	return { apiKey, baseUrl: trimTrailingSlash(baseUrlRaw), model };
@@ -215,18 +244,20 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 	};
 }
 
-async function resolveOpenAIConfig(userId?: string): Promise<OpenAIConfig> {
+async function resolveOpenAIConfig(userId?: string): Promise<ResolvedOpenAIConfig> {
 	if (userId) {
 		const userConfig = await getUserOpenAIConfig(userId);
 		if (userConfig) {
-			debugLog("config", { source: "byok", model: userConfig.model, baseUrl: userConfig.baseUrl });
-			return userConfig;
+			const resolved = { ...userConfig, source: "byok" as const };
+			debugLog("config", { source: resolved.source, model: resolved.model, baseUrl: resolved.baseUrl });
+			return resolved;
 		}
 	}
 
 	const envConfig = getEnvOpenAIConfig();
-	debugLog("config", { source: "env", model: envConfig.model, baseUrl: envConfig.baseUrl });
-	return envConfig;
+	const resolved = { ...envConfig, source: "env" as const };
+	debugLog("config", { source: resolved.source, model: resolved.model, baseUrl: resolved.baseUrl });
+	return resolved;
 }
 
 function trimTrailingSlash(value: string) {
@@ -333,7 +364,7 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 		}
 	}
 
-	throw new Error(`LLM returned invalid structured JSON: ${text.slice(0, 300)}`);
+	throw new LlmProviderError("The AI response was not in the expected format. Please try again.", 502);
 }
 
 // ── OpenAI call ───────────────────────────────────────────────────────
@@ -343,10 +374,19 @@ type CompletionOptions = ChatOptions & {
 	toolChoice?: ChatCompletionToolChoiceOption;
 };
 
-async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletion> {
+type ChatCompletionResult = {
+	completion: ChatCompletion;
+	quota?: TrialQuotaStatus;
+};
+
+async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletionResult> {
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId);
+	const shouldApplyTrialQuota = Boolean(userId && config.source === "env");
+	if (userId && shouldApplyTrialQuota) {
+		await assertTrialQuotaAvailable(userId);
+	}
 	const url = `${config.baseUrl}/chat/completions`;
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
@@ -371,12 +411,46 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 
 	const responseError = (completion as unknown as { error?: { message?: string } }).error;
 	if (responseError) {
-		throw new Error(`OpenAI API error: ${responseError.message ?? JSON.stringify(responseError)}`);
+		throw new LlmProviderError(responseError.message ?? "The AI provider returned an error. Please try again.", 502);
 	}
 
 	debugLog("response", { url, status: response.status, body: completion });
 
-	return completion;
+	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractVisibleOutputTokenUsage(completion)) : undefined;
+
+	return { completion, quota };
+}
+
+function extractVisibleOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {
+	const usage = completion.usage as
+		| {
+				completion_tokens?: unknown;
+				completion_tokens_details?: { reasoning_tokens?: unknown };
+		  }
+		| null
+		| undefined;
+
+	if (typeof usage?.completion_tokens === "number" && Number.isFinite(usage.completion_tokens)) {
+		const reasoningTokens =
+			typeof usage.completion_tokens_details?.reasoning_tokens === "number" && Number.isFinite(usage.completion_tokens_details.reasoning_tokens)
+				? usage.completion_tokens_details.reasoning_tokens
+				: 0;
+		return [Math.max(0, usage.completion_tokens - reasoningTokens), false];
+	}
+
+	const text = completionOutputTextForEstimate(completion);
+	return [text.trim() ? Math.max(1, Math.ceil(text.length / 4)) : 0, true];
+}
+
+function completionOutputTextForEstimate(completion: ChatCompletion): string {
+	const message = completion.choices[0]?.message;
+	const parts = [message?.content ?? ""];
+	for (const toolCall of message?.tool_calls ?? []) {
+		if (toolCall.type === "function") {
+			parts.push(toolCall.function.arguments);
+		}
+	}
+	return parts.join("\n");
 }
 
 function completionContent(completion: ChatCompletion) {
@@ -413,16 +487,21 @@ function completionToolCalls(completion: ChatCompletion): ChatToolCall[] {
 }
 
 function normalizeOpenAIError(error: unknown): Error {
-	if (error instanceof OpenAI.APIConnectionError && error.cause instanceof Error) {
-		return error.cause;
+	if (error instanceof OpenAI.APIConnectionError) {
+		return new LlmProviderError("Could not connect to the AI provider. Please try again.", 503);
 	}
 
 	if (error instanceof OpenAI.APIError && typeof error.status === "number") {
-		const message = `OpenAI API error (${error.status}): ${error.message}`;
 		if (error.status === 401 || error.status === 403) {
-			return new OpenAIAuthError(message, error.status);
+			return new OpenAIAuthError(undefined, error.status);
 		}
-		return new Error(message);
+		if (error.status === 429) {
+			return new LlmProviderError("The AI provider is rate-limiting requests. Please try again shortly.", 429);
+		}
+		if (error.status >= 500) {
+			return new LlmProviderError("The AI provider is temporarily unavailable. Please try again shortly.", 502);
+		}
+		return new LlmProviderError(error.message || "The AI provider returned an error. Please try again.", 502);
 	}
 
 	return error instanceof Error ? error : new Error(String(error));
@@ -431,12 +510,12 @@ function normalizeOpenAIError(error: unknown): Error {
 // ── Public facade ─────────────────────────────────────────────────────
 
 export async function chatText({ messages, options = {}, userId }: ChatRequest): Promise<ChatResponse> {
-	const completion = await callChatCompletion(messages, options, userId);
-	const response = completionResponse(completion);
+	const result = await callChatCompletion(messages, options, userId);
+	const response = completionResponse(result.completion);
 	if (!response.content) {
-		throw new Error("LLM returned empty content");
+		throw new LlmProviderError("The AI provider returned an empty response. Please try again.", 502);
 	}
-	return response;
+	return { ...response, quota: result.quota };
 }
 
 export async function chatJson<T extends z.ZodType>(schema: T, { messages, options = {}, userId }: ChatRequest): Promise<z.infer<T>> {
@@ -460,16 +539,17 @@ export async function chatTools({ messages, tools, options = {}, userId }: ToolC
 		throw new Error("tools must contain at least one item");
 	}
 
-	const completion = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
-	const response = completionResponse(completion);
-	const toolCalls = completionToolCalls(completion);
+	const result = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
+	const response = completionResponse(result.completion);
+	const toolCalls = completionToolCalls(result.completion);
 
 	if (!response.content && toolCalls.length === 0) {
-		throw new Error("LLM returned empty content");
+		throw new LlmProviderError("The AI provider returned an empty response. Please try again.", 502);
 	}
 
 	return {
 		...response,
+		quota: result.quota,
 		toolCalls,
 	};
 }

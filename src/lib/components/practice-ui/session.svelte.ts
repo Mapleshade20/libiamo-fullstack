@@ -1,5 +1,6 @@
 import { onMount, tick } from "svelte";
-import { invalidateAll } from "$app/navigation";
+import { invalidate } from "$app/navigation";
+import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
@@ -45,7 +46,7 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
-	// Use $derived to keep values reactive after invalidateAll() re-runs getOptions().
+	// Use $derived to keep values reactive after targeted invalidation re-runs getOptions().
 	// One-time destructuring would capture stale values and never update.
 	const userName = $derived(getOptions().userName);
 	const avatarUrl = $derived(getOptions().avatarUrl);
@@ -130,7 +131,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
 			addAgentMessage({
-				text: labels.retryFailedMessage,
+				text: result.error ?? labels.retryFailedMessage,
 				deliveryState: "failed",
 				clientMessageId,
 				retryText,
@@ -141,9 +142,20 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		}
 	}
 
+	function actionErrorMessage(result: unknown): string | undefined {
+		if (!result || typeof result !== "object") return undefined;
+		const data = (result as { data?: unknown }).data;
+		if (!data || typeof data !== "object") return undefined;
+		const error = (data as { error?: unknown }).error;
+		return typeof error === "string" && error.trim() ? error : undefined;
+	}
+
 	function mapOpeningActionResult(result: any): SendAttemptResult {
-		if (result?.type === "failure" && result.status >= 400 && result.status < 500) {
-			return { status: "rejected" };
+		if (result?.type === "failure") {
+			const error = actionErrorMessage(result);
+			if (error) return { status: "failed", error };
+			if (result.status >= 400 && result.status < 500) return { status: "rejected" };
+			return { status: "failed" };
 		}
 		if (result?.type === "success" && result.data) {
 			if ((result.data as any).pending) return { status: "pending" };
@@ -157,6 +169,21 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	}
 
 	// ── Actions ────────────────────────────────────────────────────
+
+	function refreshTrialQuota() {
+		return invalidate(TRIAL_QUOTA_DEPENDENCY);
+	}
+
+	function refreshPracticeSession() {
+		return invalidate(PRACTICE_SESSION_DEPENDENCY);
+	}
+
+	function refreshAfterSendResult(result: SendAttemptResult) {
+		if (result.status === "pending") {
+			return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
+		}
+		return refreshTrialQuota();
+	}
 
 	async function scrollToBottom() {
 		await tick();
@@ -188,7 +215,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		});
 
 		await scrollToBottom();
-		await invalidateAll();
+		await refreshAfterSendResult(result);
 		isSubmitting = false;
 	}
 
@@ -266,7 +293,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		applySendResult(result, clientMessageId, currentText, agentPatch);
 
 		await scrollToBottom();
-		await invalidateAll();
+		await refreshAfterSendResult(result);
 		isSubmitting = false;
 	}
 
@@ -351,7 +378,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				}
 
 				await scrollToBottom();
-				await invalidateAll();
+				await refreshTrialQuota();
 			}
 		} catch (error) {
 			console.error("Initialization failed:", error);
@@ -376,7 +403,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
 		if (needsPolling && !isSubmitting && sessionId) {
 			const interval = setInterval(() => {
-				invalidateAll();
+				void refreshPracticeSession();
+				void refreshTrialQuota();
 			}, 3000);
 			return () => clearInterval(interval);
 		}

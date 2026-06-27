@@ -2,12 +2,14 @@ import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getNativeLanguageOptions } from "$lib/constants";
+import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { userApiKey } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import { switchActiveLanguage } from "../user-language-action";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -61,17 +63,20 @@ function getMemoizedTimezones(): { value: string; label: string }[] {
 }
 
 export const load: PageServerLoad = async (event) => {
+	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const row = await db.query.userApiKey.findFirst({
 		where: (t, { eq }) => eq(t.userId, user.id),
 		columns: { userId: true, baseUrl: true, model: true },
 	});
 	const hasApiKey = row !== undefined;
+	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
 		serverTimezones: getMemoizedTimezones(),
 		serverNativeLanguages: getNativeLanguageOptions("en"),
 		hasApiKey,
+		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 	};

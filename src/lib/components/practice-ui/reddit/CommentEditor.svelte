@@ -37,6 +37,7 @@ let textareaEl = $state<HTMLTextAreaElement | null>(null);
 // ── Hint state ───────────────────────────────────────────────────────
 let showHintMenu = $state(false);
 let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 let hintButtonEl = $state<HTMLButtonElement | null>(null);
@@ -46,6 +47,7 @@ async function handleGetHint() {
 	isGettingHint = true;
 	showHintMenu = true;
 	hints = [];
+	hintError = null;
 	hintAbortController = new AbortController();
 	try {
 		const formData = new FormData();
@@ -70,9 +72,15 @@ async function handleGetHint() {
 					}
 				).hints ?? []
 			).filter((h) => Boolean(h.text));
+		} else if (result.type === "failure") {
+			const error = (result.data as { error?: string } | undefined)?.error;
+			hintError = error?.trim() || "Failed to generate hints";
 		}
 	} catch (err) {
-		if (!(err instanceof DOMException && err.name === "AbortError")) console.error("Failed to get hints:", err);
+		if (!(err instanceof DOMException && err.name === "AbortError")) {
+			hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+			console.error("Failed to get hints:", err);
+		}
 	} finally {
 		isGettingHint = false;
 		hintAbortController = null;
@@ -83,6 +91,7 @@ function closeHintMenu() {
 	showHintMenu = false;
 	if (isGettingHint && hintAbortController) hintAbortController.abort();
 	isGettingHint = false;
+	hintError = null;
 	hintAbortController = null;
 }
 
@@ -235,6 +244,8 @@ onMount(() => () => {
 								<div class="max-h-56 space-y-1 overflow-y-auto p-2">
 									{#if isGettingHint}
 										<p class="py-5 text-center text-sm italic text-[#878A8C]">{t.thinking}</p>
+									{:else if hintError}
+										<p class="py-5 text-center text-sm text-red-600">{hintError}</p>
 									{:else if hints.length === 0}
 										<p class="py-5 text-center text-sm text-[#878A8C]">{t.noHints}</p>
 									{:else}
