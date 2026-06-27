@@ -6,6 +6,7 @@ import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { createPracticeSession } from "../session.svelte";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import {
 	type Ao3OpeningState,
 	type Ao3RenderableComment,
@@ -237,10 +238,16 @@ function handleFinishCancel() {
 {/if}
 
 <div bind:this={scrollContainer} class="fixed inset-0 z-[999] overflow-y-auto bg-white text-[#2a2a2a] ao3-root">
-	<header class="flex items-center justify-between border-b-[5px] border-black bg-[#900] px-[5%] py-2.5 text-white">
-		<h1 class="m-0 font-[Georgia,serif] text-[1.5em] font-normal">
+	<header class="flex items-center justify-between gap-3 border-b-[5px] border-black bg-[#900] px-[5%] py-2.5 text-white">
+		<h1 class="m-0 min-w-0 font-[Georgia,serif] text-[1.25em] font-normal md:text-[1.5em]">
 			<a href="/" class="text-white no-underline" onclick={preventNavigation}>Archive of Our Own</a>
 		</h1>
+		<TurnsLeftMobileBadge
+			remainingTurns={session.remainingTurns}
+			isCompleted={session.isCompleted}
+			label={t.turnsLeft}
+			class="shrink-0 rounded border border-white/35 bg-white/10 px-2.5 py-1 text-sm font-bold text-white shadow-inner"
+		/>
 		<nav class="hidden md:block">
 			<ul class="m-0 flex list-none gap-4 p-0 text-sm font-bold">
 				<li><span>Hi, {userName}!</span></li>

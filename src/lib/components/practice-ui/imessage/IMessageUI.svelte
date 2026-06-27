@@ -12,6 +12,7 @@ import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
 
@@ -252,6 +253,12 @@ onMount(() => {
 					</div>
 					<div class="ml-auto flex items-center gap-3">
 						{#if session.remainingTurns !== null && !session.isCompleted}
+							<TurnsLeftMobileBadge
+								remainingTurns={session.remainingTurns}
+								isCompleted={session.isCompleted}
+								label={t.turnsLeft}
+								class="rounded-full bg-[#E5E5EA] px-2.5 py-1 text-xs font-semibold text-[#8E8E93]"
+							/>
 							<span class="hidden text-xs text-[#8E8E93] md:inline">{t.turnsLeft}: {session.remainingTurns}</span>
 						{/if}
 						{#if !session.isCompleted && session.sessionId}

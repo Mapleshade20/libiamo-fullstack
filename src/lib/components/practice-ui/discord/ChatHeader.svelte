@@ -2,6 +2,7 @@
 import CheckCircle from "@lucide/svelte/icons/check-circle";
 import Hash from "@lucide/svelte/icons/hash";
 import Users from "@lucide/svelte/icons/users";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 
 let {
 	channelName = "",
@@ -41,7 +42,13 @@ let {
 	</div>
 	<div class="flex items-center gap-4 text-[#B5BAC1]">
 		{#if remainingTurns !== null && !isCompleted}
-			<div class="flex items-center gap-2 px-3 py-1 rounded bg-[#232428] shadow-inner border border-[#1E1F22]">
+			<TurnsLeftMobileBadge
+				{remainingTurns}
+				{isCompleted}
+				label={turnsLeftLabel}
+				class="rounded bg-[#232428] px-2.5 py-1 text-sm font-black {remainingTurns <= 2 ? 'text-[#DA373C]' : 'text-[#23A559]'} shadow-inner border border-[#1E1F22]"
+			/>
+			<div class="hidden items-center gap-2 px-3 py-1 rounded bg-[#232428] shadow-inner border border-[#1E1F22] md:flex">
 				<span class="text-xs font-bold text-[#949BA4] uppercase tracking-wider">{turnsLeftLabel}</span>
 				<span
 					class="text-sm font-black {remainingTurns <= 2
