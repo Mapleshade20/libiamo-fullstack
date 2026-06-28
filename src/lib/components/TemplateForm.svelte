@@ -114,6 +114,8 @@ function templateFormErrorTitle(action: string | undefined) {
 			return "Unable to add variant";
 		case "saveVariant":
 			return "Unable to save variant";
+		case "deleteVariant":
+			return "Unable to delete variant";
 		case "activateVariant":
 			return "Unable to activate variant";
 		case "deactivateVariant":
@@ -255,6 +257,11 @@ $effect(() => {
 // ── Variant editing state (edit mode) ────────────────────────────
 let editingVariantId = $state<number | null>(null);
 let showAddVariant = $state(false);
+let pendingDeleteVariantId = $state<number | null>(null);
+let pendingDeleteVariantForm: HTMLFormElement | null = $state(null);
+let deleteVariantConfirmed = $state(false);
+
+const pendingDeleteVariant = $derived(variants.find((variant) => variant.id === pendingDeleteVariantId) ?? null);
 
 // Track draft state per variant for dirty detection
 type VariantDraft = {
@@ -374,6 +381,44 @@ function enhanceAddVariant() {
 			newVariantOpeningState = getDefaultOpeningState(selectedUi) as Record<string, unknown>;
 		}
 	};
+}
+
+function enhanceDeleteVariant(variantId: number) {
+	return ({ cancel, formElement }: { cancel: () => void; formElement: HTMLFormElement }) => {
+		if (!deleteVariantConfirmed) {
+			cancel();
+			pendingDeleteVariantId = variantId;
+			pendingDeleteVariantForm = formElement;
+			return;
+		}
+
+		deleteVariantConfirmed = false;
+		return async ({
+			result,
+			update,
+		}: {
+			result: { type: string };
+			update: (options?: { reset?: boolean; invalidateAll?: boolean }) => Promise<void>;
+		}) => {
+			await update({ reset: false });
+			if (result.type === "success" && editingVariantId === variantId) editingVariantId = null;
+		};
+	};
+}
+
+function cancelDeleteVariant() {
+	pendingDeleteVariantId = null;
+	pendingDeleteVariantForm = null;
+	deleteVariantConfirmed = false;
+}
+
+function confirmDeleteVariant() {
+	if (!pendingDeleteVariantForm) return;
+	deleteVariantConfirmed = true;
+	const formElement = pendingDeleteVariantForm;
+	pendingDeleteVariantId = null;
+	pendingDeleteVariantForm = null;
+	formElement.requestSubmit();
 }
 </script>
 
@@ -759,6 +804,10 @@ function enhanceAddVariant() {
 								<button type="submit" class="text-xs text-green-600 underline underline-offset-2 hover:opacity-80">Activate</button>
 							</form>
 						{/if}
+						<form method="POST" action="?/deleteVariant" use:enhance={enhanceDeleteVariant(v.id)}>
+							<input type="hidden" name="variantId" value={v.id}>
+							<button type="submit" class="text-xs text-destructive underline underline-offset-2 hover:opacity-80">Delete</button>
+						</form>
 					</div>
 				</div>
 
@@ -833,3 +882,19 @@ function enhanceAddVariant() {
 		{/if}
 	</div>
 {/if}
+
+<BottomSheet
+	show={pendingDeleteVariant !== null}
+	title="Delete Variant?"
+	confirmLabel="Delete Variant"
+	cancelLabel="Cancel"
+	onConfirm={confirmDeleteVariant}
+	onCancel={cancelDeleteVariant}
+>
+	{#snippet children()}
+		<div class="space-y-3 text-sm text-muted-foreground">
+			<p>Variant #{pendingDeleteVariant?.id} will be permanently removed if it has no scheduled tasks or practice history.</p>
+			<p>Used variants are blocked by the server and can remain inactive instead.</p>
+		</div>
+	{/snippet}
+</BottomSheet>

@@ -14,15 +14,22 @@ let importJsonText = $state("");
 let showImportPreview = $state(false);
 let importConfirmed = $state(false);
 let importPreview = $state<ReturnType<typeof buildTemplateImportPreview> | null>(null);
+let deleteFormEl: HTMLFormElement | null = $state(null);
+let showDeleteConfirm = $state(false);
+let deleteConfirmed = $state(false);
 
 const actionNotification = $derived(
 	form?.action === "importJson" && form?.message
 		? { variant: "error" as const, title: "Unable to import template", message: form.message }
-		: form?.saved
-			? { variant: "success" as const, title: "Template saved", message: "Your template changes have been saved." }
-			: form?.imported
-				? { variant: "success" as const, title: "Template imported", message: "Template fields and variants were updated from JSON." }
-				: null,
+		: form?.action === "delete" && form?.message
+			? { variant: "error" as const, title: "Unable to delete template", message: form.message }
+			: form?.saved
+				? { variant: "success" as const, title: "Template saved", message: "Your template changes have been saved." }
+				: form?.imported
+					? { variant: "success" as const, title: "Template imported", message: "Template fields and variants were updated from JSON." }
+					: form?.deletedVariant
+						? { variant: "success" as const, title: "Variant deleted", message: "The unused variant was removed." }
+						: null,
 );
 
 const existingImportVariants = $derived(data.variants.map((variant) => ({ id: variant.id, slotValues: variant.slotValues })));
@@ -82,6 +89,12 @@ function confirmImportJson() {
 	importConfirmed = true;
 	showImportPreview = false;
 	importFormEl?.requestSubmit();
+}
+
+function confirmDeleteTemplate() {
+	deleteConfirmed = true;
+	showDeleteConfirm = false;
+	deleteFormEl?.requestSubmit();
 }
 
 function statusClass(status: "Edited" | "Created" | "Deactivated") {
@@ -145,6 +158,32 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 		submitLabel="Save Changes"
 		resetKey={String(data.template.updatedAt ?? data.template.id)}
 	/>
+
+	<section class="rounded-md border border-destructive/20 bg-destructive/5 p-4">
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			<div class="space-y-1">
+				<h2 class="text-sm font-medium text-destructive">Delete Template</h2>
+				<p class="text-sm text-muted-foreground">Remove this template and all unused variants.</p>
+			</div>
+			<form
+				method="POST"
+				action="?/delete"
+				bind:this={deleteFormEl}
+				use:enhance={({ cancel }) => {
+					if (!deleteConfirmed) {
+						cancel();
+						showDeleteConfirm = true;
+						return;
+					}
+
+					deleteConfirmed = false;
+					return async ({ update }) => update({ reset: false });
+				}}
+			>
+				<Button type="submit" variant="destructive">Delete Template</Button>
+			</form>
+		</div>
+	</section>
 </div>
 
 <BottomSheet
@@ -197,6 +236,22 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 					</div>
 				{/if}
 			{/if}
+		</div>
+	{/snippet}
+</BottomSheet>
+
+<BottomSheet
+	show={showDeleteConfirm}
+	title="Delete Template?"
+	confirmLabel="Delete Template"
+	cancelLabel="Cancel"
+	onConfirm={confirmDeleteTemplate}
+	onCancel={() => { showDeleteConfirm = false; }}
+>
+	{#snippet children()}
+		<div class="space-y-3 text-sm text-muted-foreground">
+			<p>Template #{data.template.id} will be permanently removed if it has no scheduled tasks, practice history, or translation attempts.</p>
+			<p>Used templates are blocked by the server and remain available as inactive content.</p>
 		</div>
 	{/snippet}
 </BottomSheet>
