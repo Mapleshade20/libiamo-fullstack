@@ -41,27 +41,28 @@ const position = $derived(
 	(() => {
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
-		const popupWidth = 400;
+		const popupWidth = Math.min(400, viewportWidth - 24);
 		const maxPopupHeight = 500;
 
 		let top = rect.bottom + 8;
 		let left = rect.left;
 
 		// Adjust if too far right
-		if (left + popupWidth > viewportWidth - 20) {
-			left = viewportWidth - popupWidth - 20;
+		if (left + popupWidth > viewportWidth - 12) {
+			left = viewportWidth - popupWidth - 12;
 		}
-		if (left < 20) left = 20;
+		if (left < 12) left = 12;
 
 		// Prefer below, but flip above if there's not enough room
 		const spaceBelow = viewportHeight - rect.bottom - 8;
 		const spaceAbove = rect.top - 8;
 
 		if (spaceBelow < maxPopupHeight && spaceAbove > spaceBelow) {
-			top = Math.max(20, rect.top - maxPopupHeight - 8);
+			top = Math.max(12, rect.top - maxPopupHeight - 8);
 		} else {
-			top = Math.min(top, viewportHeight - maxPopupHeight - 20);
+			top = Math.min(top, viewportHeight - maxPopupHeight - 12);
 		}
+		top = Math.max(12, top);
 
 		return { top, left };
 	})(),
@@ -217,7 +218,7 @@ const kindColor = $derived(
 <!-- Popup card -->
 <div
 	data-selection-ignore
-	class="fixed z-50 w-[400px] flex flex-col overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
+	class="fixed z-50 flex w-[calc(100vw-1.5rem)] max-w-[400px] flex-col overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
 	style="top: {position.top}px; left: {position.left}px; max-height: calc(100vh - {position.top}px - 20px);"
 	transition:scale={{ duration: 200, start: 0.95 }}
 >
@@ -232,8 +233,8 @@ const kindColor = $derived(
 	<!-- Content -->
 	<div class="p-4 overflow-y-auto flex-1">
 		<!-- Annotated text -->
-		<div class="mb-4 rounded-lg bg-[#f5f2ed] p-3 border border-[#e8e3db]">
-			<p class="text-sm font-medium text-[#2a2520]">"{annotation.text}"</p>
+		<div class="mb-4 rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-3">
+			<p class="text-sm font-medium text-[#2a2520] [overflow-wrap:anywhere]">"{annotation.text}"</p>
 		</div>
 
 		<!-- Explanation -->
@@ -246,13 +247,13 @@ const kindColor = $derived(
 		{:else if error}
 			<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
 		{:else if explanation}
-			<div class="prose prose-sm max-w-none text-[#2a2520]">{@html renderMarkdown(explanation)}</div>
+			<div class="prose prose-sm max-w-none text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
 		{/if}
 	</div>
 
 	<!-- Footer -->
 	{#if explanation}
-		<div class="border-t border-[#e8e3db] p-4 bg-[#fdfcf9] flex items-center justify-between gap-3">
+		<div class="flex items-center justify-between gap-3 border-t border-[#e8e3db] bg-[#fdfcf9] p-4">
 			{#if saveSuccess}
 				<span class="text-sm text-green-600 font-medium">Saved to notes!</span>
 			{:else if saveError}

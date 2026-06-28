@@ -167,14 +167,14 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 <div class="min-h-screen bg-[#fdfcf9] text-[#2a2520]">
 	<!-- Header -->
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
-		<div class="mx-auto max-w-7xl px-6 py-4">
+		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
 				<a href="/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
 					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-					<span class="text-sm font-medium uppercase tracking-wide">Back to Task</span>
+					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
 				</a>
-				<div class="flex items-center gap-3">
-					<h1 class="text-base">{data.taskTitle}</h1>
+				<div class="min-w-0 flex items-center gap-3">
+					<h1 class="min-w-0 truncate text-base">{data.taskTitle}</h1>
 					<Button
 						href="/task/{data.taskId}/session"
 						variant="outline"
@@ -191,7 +191,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	</div>
 
 	<!-- Main content -->
-	<div class="mx-auto max-w-7xl px-6 py-12">
+	<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
 		{#if generationError}
 			<div class="mb-8 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
 				<p class="text-red-800 mb-4">{generationError}</p>
@@ -200,13 +200,13 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 		{/if}
 
 		<!-- Conversation + Comments Layout -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+		<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
 			<!-- Left: Conversation History (2/3 on wide) -->
-			<div class="lg:col-span-2 space-y-8">
+			<div class="min-w-0 space-y-8 lg:col-span-2">
 				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
 				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative font-inter-stack">
+					<div class="relative min-w-0 font-inter-stack">
 						<!-- Chain label -->
 						<div class="mb-4 flex items-center gap-3">
 							<div class="h-px flex-1 bg-[#e8e3db]"></div>
@@ -215,7 +215,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 						</div>
 
 						<!-- Messages in chain -->
-						<div class="relative pl-6 border-l-2 border-[#e8e3db] text-sm">
+						<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
 							{#each chain.messages as message}
 								<div class="mb-6 relative">
 									<!-- Author badge -->
@@ -241,17 +241,17 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											{#if annotation}
 												<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
 											{:else if isGenerating}
-												<div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-													<p>{message.text}</p>
+												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+													<p class="[overflow-wrap:anywhere]">{message.text}</p>
 												</div>
 											{:else}
-												<div class="rounded-lg bg-white border border-[#e8e3db] p-4">
-													<p>{message.text}</p>
+												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+													<p class="[overflow-wrap:anywhere]">{message.text}</p>
 												</div>
 											{/if}
 										{:else}
-											<div class="rounded-lg bg-[#f5f2ed] border border-[#e8e3db] p-4">
-												<p>{message.text}</p>
+											<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
+												<p class="[overflow-wrap:anywhere]">{message.text}</p>
 											</div>
 										{/if}
 									</div>
@@ -263,12 +263,12 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			</div>
 
 			<!-- Right: Comments (1/3 on wide) -->
-			<div class="lg:col-span-1">
-				<div class="sticky top-24 space-y-6">
+			<div class="min-w-0 lg:col-span-1">
+				<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
 					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
 
 					{#if isGenerating}
-						<div class="space-y-4">
+						<div class="min-w-0 space-y-4">
 							{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
 								<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
 									<Skeleton class="h-4 w-3/4 mb-2" />
@@ -278,7 +278,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 							{/each}
 						</div>
 					{:else if feedback}
-						<div class="space-y-4">
+						<div class="min-w-0 space-y-4">
 							{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
 								{@const comment = getCommentForMessage(message.seqId)}
 								{#if comment}
@@ -289,7 +289,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 										data-message-id={message.seqId}
 										data-current-context={getCommentContext(message.seqId, comment)}
 										data-previous-context={commentContext.previousContext}
-										class="rounded-lg border border-[#e8e3db] bg-white p-4 shadow-sm"
+										class="rounded-lg border border-[#e8e3db] bg-white p-4 shadow-sm [overflow-wrap:anywhere]"
 										transition:fade={{ duration: 200 }}
 									>
 										<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
@@ -323,7 +323,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											>
 												{objective.grade}
 											</span>
-											<p class="text-sm text-[#2a2520] flex-1">{objective.text}</p>
+											<p class="min-w-0 flex-1 text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
 										</div>
 									{/each}
 								</div>
@@ -336,7 +336,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 									data-feedback-kind="summary"
 									data-current-context={feedback.summary}
 									data-previous-context={getConversationExcerpt()}
-									class="whitespace-pre-wrap"
+									class="whitespace-pre-wrap [overflow-wrap:anywhere]"
 								>
 									{feedback.summary}
 								</p>

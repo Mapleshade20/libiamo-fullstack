@@ -4,6 +4,7 @@ import Menu from "@lucide/svelte/icons/menu";
 import Plus from "@lucide/svelte/icons/plus";
 import Search from "@lucide/svelte/icons/search";
 import Video from "@lucide/svelte/icons/video";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 
 let {
 	t = {} as Record<string, string>,
@@ -84,6 +85,12 @@ let {
 
 		<!-- Turns counter -->
 		{#if remainingTurns !== null && !isCompleted}
+			<TurnsLeftMobileBadge
+				{remainingTurns}
+				{isCompleted}
+				label={t.turnsLeft}
+				class="rounded-full border border-[#EDEFF1] bg-[#F6F7F8] px-2.5 py-1 text-xs font-bold text-[#1C1C1C]"
+			/>
 			<span class="hidden text-xs text-[#878A8C] md:inline">
 				{t.turnsLeft}: <strong class="{remainingTurns <= 2 ? 'text-[#FF4500]' : 'text-[#1C1C1C]'}">{remainingTurns}</strong>
 			</span>

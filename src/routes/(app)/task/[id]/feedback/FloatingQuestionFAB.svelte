@@ -112,7 +112,7 @@ function handleKeydown(event: KeyboardEvent) {
 	<button
 		type="button"
 		data-selection-ignore
-		class="fixed bottom-8 right-8 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#4a7c59] to-[#3d6849] text-white shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+		class="fixed right-4 bottom-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#4a7c59] to-[#3d6849] text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-95 sm:right-8 sm:bottom-8"
 		onclick={toggleExpanded}
 		transition:scale={{ duration: 200 }}
 	>
@@ -122,7 +122,7 @@ function handleKeydown(event: KeyboardEvent) {
 	<!-- Expanded input panel -->
 	<div
 		data-selection-ignore
-		class="fixed bottom-8 right-8 z-30 w-[400px] rounded-2xl border border-[#e8e3db] bg-white/95 backdrop-blur-md shadow-2xl overflow-hidden"
+		class="fixed right-4 bottom-4 left-4 z-30 overflow-hidden rounded-2xl border border-[#e8e3db] bg-white/95 shadow-2xl backdrop-blur-md sm:right-8 sm:bottom-8 sm:left-auto sm:w-[400px]"
 		transition:fly={{ y: 20, duration: 300 }}
 	>
 		<!-- Header -->
@@ -137,12 +137,12 @@ function handleKeydown(event: KeyboardEvent) {
 		</div>
 
 		<!-- Content -->
-		<div class="p-4 max-h-[400px] overflow-y-auto">
+		<div class="max-h-[min(400px,55dvh)] min-w-0 overflow-y-auto p-4">
 			{#if answer || isLoading}
 				<!-- User's question -->
-				<div class="mb-4 rounded-lg bg-[#f5f2ed] p-3 border border-[#e8e3db]">
+				<div class="mb-4 rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-3">
 					<p class="text-xs font-bold text-[#9b8f85] mb-2 uppercase tracking-wider">Your Question</p>
-					<p class="text-sm text-[#2a2520]">{question}</p>
+					<p class="text-sm text-[#2a2520] [overflow-wrap:anywhere]">{question}</p>
 				</div>
 				<!-- Answer or loading -->
 				<div class="rounded-lg bg-gradient-to-br from-[#4a7c59]/5 to-[#3d6849]/5 p-4 border border-[#4a7c59]/20">
@@ -154,7 +154,7 @@ function handleKeydown(event: KeyboardEvent) {
 							<Skeleton class="h-4 w-4/6" />
 						</div>
 					{:else if answer}
-						<div class="prose prose-sm max-w-none text-[#2a2520]">{@html renderMarkdown(answer)}</div>
+						<div class="prose prose-sm max-w-none text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(answer)}</div>
 					{/if}
 				</div>
 				{#if answer}
@@ -180,14 +180,14 @@ function handleKeydown(event: KeyboardEvent) {
 
 		<!-- Input -->
 		{#if !answer && !isLoading}
-			<div class="border-t border-[#e8e3db] p-4 bg-[#fdfcf9]">
+			<div class="border-t border-[#e8e3db] bg-[#fdfcf9] p-4">
 				<div class="flex items-end gap-2">
 					<textarea
 						bind:this={textareaElement}
 						bind:value={question}
 						onkeydown={handleKeydown}
 						placeholder="Type your question..."
-						class="flex-1 resize-none rounded-lg border border-[#e8e3db] bg-white px-3 py-2 text-sm text-[#2a2520] placeholder:text-[#9b8f85] focus:outline-none focus:ring-2 focus:ring-[#4a7c59]/20 focus:border-[#4a7c59]"
+						class="min-w-0 flex-1 resize-none rounded-lg border border-[#e8e3db] bg-white px-3 py-2 text-sm text-[#2a2520] placeholder:text-[#9b8f85] focus:border-[#4a7c59] focus:outline-none focus:ring-2 focus:ring-[#4a7c59]/20"
 						rows="2"
 					></textarea>
 					<Button
