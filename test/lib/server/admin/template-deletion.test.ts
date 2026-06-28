@@ -22,7 +22,6 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/db/schema", () => ({
 	task: { id: "task.id", templateId: "task.templateId", variantId: "task.variantId" },
 	template: { id: "template.id" },
-	templateVariant: { id: "templateVariant.id", templateId: "templateVariant.templateId" },
 	translationAttempt: { id: "translationAttempt.id", templateId: "translationAttempt.templateId" },
 }));
 vi.mock("drizzle-orm", () => ({
@@ -87,32 +86,14 @@ describe("template deletion safety", () => {
 		expect(mockDb.select).toHaveBeenCalledTimes(3);
 	});
 
-	it("blocks deleting a template when one of its variants has scheduled tasks", async () => {
+	it("allows deleting a template when the template has no scheduled tasks or translation attempts", async () => {
 		dbSelectQueue.push([{ id: 1 }]);
-		dbSelectQueue.push([]);
-		dbSelectQueue.push([]);
-		dbSelectQueue.push([{ id: 7 }, { id: 8 }]);
-		dbSelectQueue.push([]);
-		dbSelectQueue.push([{ id: 11 }]);
-
-		const result = await checkTemplateDeletionSafety(1);
-
-		expect(result.safe).toBe(false);
-		if (!result.safe) expect(result.message).toContain("variants");
-		expect(mockDb.select).toHaveBeenCalledTimes(6);
-	});
-
-	it("allows deleting a template when the template and all variants are unused", async () => {
-		dbSelectQueue.push([{ id: 1 }]);
-		dbSelectQueue.push([]);
-		dbSelectQueue.push([]);
-		dbSelectQueue.push([{ id: 7 }, { id: 8 }]);
 		dbSelectQueue.push([]);
 		dbSelectQueue.push([]);
 
 		const result = await checkTemplateDeletionSafety(1);
 
 		expect(result).toEqual({ safe: true });
-		expect(mockDb.select).toHaveBeenCalledTimes(6);
+		expect(mockDb.select).toHaveBeenCalledTimes(3);
 	});
 });

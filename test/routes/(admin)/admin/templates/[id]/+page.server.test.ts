@@ -175,9 +175,6 @@ describe("Admin Templates [id] +page.server", () => {
 			dbSelectQueue.push([{ id: 1 }]); // template exists
 			dbSelectQueue.push([]); // no tasks for template
 			dbSelectQueue.push([]); // no translation attempts
-			dbSelectQueue.push([{ id: 2 }, { id: 3 }]); // variants
-			dbSelectQueue.push([]); // no tasks for variant #2
-			dbSelectQueue.push([]); // no tasks for variant #3
 
 			const event = createActionEvent({}, "1");
 			await expect(actions.delete(event)).rejects.toMatchObject({
@@ -225,23 +222,6 @@ describe("Admin Templates [id] +page.server", () => {
 			expect(result.status).toBe(400);
 			expect(result.data?.action).toBe("delete");
 			expect(result.data?.message).toContain("translation attempts");
-			expect(db.transaction).not.toHaveBeenCalled();
-			expect(db.delete).not.toHaveBeenCalled();
-		});
-
-		it("blocks deleting a template when one variant is used", async () => {
-			dbSelectQueue.push([{ id: 1 }]); // template exists
-			dbSelectQueue.push([]); // no tasks for template
-			dbSelectQueue.push([]); // no translation attempts
-			dbSelectQueue.push([{ id: 2 }]); // variant
-			dbSelectQueue.push([{ id: 10 }]); // task for variant
-
-			const event = createActionEvent({}, "1");
-			const result = (await actions.delete(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.action).toBe("delete");
-			expect(result.data?.message).toContain("variants");
 			expect(db.transaction).not.toHaveBeenCalled();
 			expect(db.delete).not.toHaveBeenCalled();
 		});

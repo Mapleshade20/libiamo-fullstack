@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { task, template, templateVariant, translationAttempt } from "$lib/server/db/schema";
+import { task, template, translationAttempt } from "$lib/server/db/schema";
 
 export type DeletionSafetyResult =
 	| { safe: true }
@@ -62,17 +62,6 @@ export async function checkTemplateDeletionSafety(templateId: number): Promise<D
 			safe: false,
 			message: "This template has translation attempts. Leave it inactive to preserve learner data.",
 		};
-	}
-
-	const variants = await db.select({ id: templateVariant.id }).from(templateVariant).where(eq(templateVariant.templateId, templateId));
-	for (const variant of variants) {
-		const variantSafety = await checkTemplateVariantDeletionSafety(variant.id);
-		if (!variantSafety.safe) {
-			return {
-				safe: false,
-				message: "This template has variants with scheduled tasks or practice history. Leave it inactive to preserve learner data.",
-			};
-		}
 	}
 
 	return safeToDelete;

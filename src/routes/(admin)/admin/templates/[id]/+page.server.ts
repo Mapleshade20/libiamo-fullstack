@@ -26,12 +26,13 @@ function failWithMessage(action: string, status: number, message: string) {
 	return fail(status, { action, message });
 }
 
-async function getActiveVariantCount(templateId: number) {
+async function hasMultipleActiveVariants(templateId: number) {
 	const activeVariants = await db
-		.select({ count: templateVariant.id })
+		.select({ id: templateVariant.id })
 		.from(templateVariant)
-		.where(and(eq(templateVariant.templateId, templateId), eq(templateVariant.isActive, true)));
-	return activeVariants.length;
+		.where(and(eq(templateVariant.templateId, templateId), eq(templateVariant.isActive, true)))
+		.limit(2);
+	return activeVariants.length > 1;
 }
 
 async function getVariantStatusForAction(
@@ -233,7 +234,7 @@ export const actions: Actions = {
 		const safety = await checkTemplateVariantDeletionSafety(variantId);
 		if (!safety.safe) return failWithMessage("deleteVariant", 400, safety.message);
 
-		if (result.variant.isActive && (await getActiveVariantCount(templateId)) <= 1) {
+		if (result.variant.isActive && !(await hasMultipleActiveVariants(templateId))) {
 			return failWithMessage("deleteVariant", 400, "Cannot delete the last active variant. Add another variant first or delete the template.");
 		}
 
@@ -263,7 +264,7 @@ export const actions: Actions = {
 		if (!variant.isActive) return failWithMessage("deactivateVariant", 400, "Variant is already inactive");
 
 		// Enforce at-least-one-active-variant rule
-		if ((await getActiveVariantCount(templateId)) <= 1) {
+		if (!(await hasMultipleActiveVariants(templateId))) {
 			return failWithMessage("deactivateVariant", 400, "Cannot deactivate the last active variant. Add another variant first.");
 		}
 
