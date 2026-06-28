@@ -1,0 +1,79 @@
+import { eq } from "drizzle-orm";
+import { db } from "$lib/server/db";
+import { task, template, templateVariant, translationAttempt } from "$lib/server/db/schema";
+
+export type DeletionSafetyResult =
+	| { safe: true }
+	| {
+			safe: false;
+			message: string;
+	  };
+
+const safeToDelete: DeletionSafetyResult = { safe: true };
+
+async function hasScheduledTaskForTemplate(templateId: number) {
+	const [existingTask] = await db.select({ id: task.id }).from(task).where(eq(task.templateId, templateId)).limit(1);
+	return Boolean(existingTask);
+}
+
+async function hasScheduledTaskForVariant(variantId: number) {
+	const [existingTask] = await db.select({ id: task.id }).from(task).where(eq(task.variantId, variantId)).limit(1);
+	return Boolean(existingTask);
+}
+
+async function hasTranslationAttemptForTemplate(templateId: number) {
+	const [existingAttempt] = await db
+		.select({ id: translationAttempt.id })
+		.from(translationAttempt)
+		.where(eq(translationAttempt.templateId, templateId))
+		.limit(1);
+	return Boolean(existingAttempt);
+}
+
+export async function checkTemplateVariantDeletionSafety(variantId: number): Promise<DeletionSafetyResult> {
+	if (await hasScheduledTaskForVariant(variantId)) {
+		return {
+			safe: false,
+			message: "This variant has scheduled tasks or practice history. Leave it inactive to preserve learner data.",
+		};
+	}
+
+	return safeToDelete;
+}
+
+export async function checkTemplateDeletionSafety(templateId: number): Promise<DeletionSafetyResult> {
+	const [existingTemplate] = await db.select({ id: template.id }).from(template).where(eq(template.id, templateId)).limit(1);
+	if (!existingTemplate) {
+		return {
+			safe: false,
+			message: "Template not found.",
+		};
+	}
+
+	if (await hasScheduledTaskForTemplate(templateId)) {
+		return {
+			safe: false,
+			message: "This template has scheduled tasks or practice history. Leave it inactive to preserve learner data.",
+		};
+	}
+
+	if (await hasTranslationAttemptForTemplate(templateId)) {
+		return {
+			safe: false,
+			message: "This template has translation attempts. Leave it inactive to preserve learner data.",
+		};
+	}
+
+	const variants = await db.select({ id: templateVariant.id }).from(templateVariant).where(eq(templateVariant.templateId, templateId));
+	for (const variant of variants) {
+		const variantSafety = await checkTemplateVariantDeletionSafety(variant.id);
+		if (!variantSafety.safe) {
+			return {
+				safe: false,
+				message: "This template has variants with scheduled tasks or practice history. Leave it inactive to preserve learner data.",
+			};
+		}
+	}
+
+	return safeToDelete;
+}
