@@ -488,12 +488,27 @@ describe("Admin Templates [id] +page.server", () => {
 		it("hard deletes an unused variant", async () => {
 			dbSelectQueue.push([{ isActive: true }]); // variant exists
 			dbSelectQueue.push([]); // no task for variant
+			dbSelectQueue.push([{ id: 2 }, { id: 3 }]); // other active variants remain
 
 			const event = createActionEvent({ variantId: "2" }, "1");
 			const result = await actions.deleteVariant(event);
 
 			expect(result).toEqual({ deletedVariant: true });
 			expect(db.delete).toHaveBeenCalledTimes(1);
+		});
+
+		it("blocks deleting the last active unused variant", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // variant exists
+			dbSelectQueue.push([]); // no task for variant
+			dbSelectQueue.push([{ id: 2 }]); // only active variant
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = (await actions.deleteVariant(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deleteVariant");
+			expect(result.data?.message).toContain("last active variant");
+			expect(db.delete).not.toHaveBeenCalled();
 		});
 	});
 
