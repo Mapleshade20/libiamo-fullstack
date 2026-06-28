@@ -4,6 +4,7 @@ import { z } from "zod";
 import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { buildTemplateImportPreview } from "$lib/admin/template-import-preview";
 import { templateSchema } from "$lib/schemas";
+import { checkTemplateDeletionSafety, checkTemplateVariantDeletionSafety } from "$lib/server/admin/template-deletion";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, templateVariant } from "$lib/server/db/schema";
@@ -86,7 +87,16 @@ export const actions: Actions = {
 		requireAdmin(event);
 
 		const id = Number(event.params.id);
-		await db.update(template).set({ isActive: false }).where(eq(template.id, id));
+		if (Number.isNaN(id)) return failWithMessage("delete", 400, "Invalid template id");
+
+		const safety = await checkTemplateDeletionSafety(id);
+		if (!safety.safe) return failWithMessage("delete", 400, safety.message);
+
+		await db.transaction(async (tx) => {
+			await tx.delete(templateVariant).where(eq(templateVariant.templateId, id));
+			await tx.delete(template).where(eq(template.id, id));
+		});
+
 		return redirect(302, "/admin/templates");
 	},
 
@@ -205,6 +215,19 @@ export const actions: Actions = {
 			.where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, id)));
 
 		return { savedVariant: true };
+	},
+
+	deleteVariant: async (event) => {
+		const result = await getVariantStatusForAction(event, "deleteVariant");
+		if (isActionFailure(result)) return result;
+		const { templateId, variantId } = result;
+
+		const safety = await checkTemplateVariantDeletionSafety(variantId);
+		if (!safety.safe) return failWithMessage("deleteVariant", 400, safety.message);
+
+		await db.delete(templateVariant).where(and(eq(templateVariant.id, variantId), eq(templateVariant.templateId, templateId)));
+
+		return { deletedVariant: true };
 	},
 
 	activateVariant: async (event) => {
