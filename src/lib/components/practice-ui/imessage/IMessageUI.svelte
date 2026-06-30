@@ -12,6 +12,7 @@ import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
 
@@ -165,6 +166,10 @@ function handleFinishCancel() {
 	showFinishConfirm = false;
 }
 
+function getTaskHref() {
+	return `/task/${taskId}`;
+}
+
 function getBubbleClasses(message: (typeof renderableMessages)[0], index: number) {
 	const position = getBubbleGroupPosition(renderableMessages, index);
 	if (message.role === "user") {
@@ -213,7 +218,12 @@ onMount(() => {
 			<aside class="hidden w-[290px] shrink-0 flex-col border-r border-[#E0D3D8] bg-[#F6E9EE] md:flex">
 				<div class="border-b border-[#E8DDE2] px-4 py-3">
 					<div class="mb-3 flex items-center gap-2">
-						<span class="h-3 w-3 rounded-full bg-[#FF5F57]"></span>
+						<a
+							href={getTaskHref()}
+							class="block h-3 w-3 rounded-full bg-[#FF5F57] transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
+							aria-label={t.returnTask}
+							title={t.returnTask}
+						></a>
 						<span class="h-3 w-3 rounded-full bg-[#FEBC2E]"></span>
 						<span class="h-3 w-3 rounded-full bg-[#28C840]"></span>
 					</div>
@@ -236,22 +246,25 @@ onMount(() => {
 						</div>
 					</button>
 				</div>
-				<div class="mt-auto border-t border-[#E8DDE2] p-3">
-					<a href={`/task/${taskId}`} class="text-xs font-medium text-[#0A84FF] hover:underline">{t.returnTask}</a>
-				</div>
 			</aside>
 
 			<section class="relative flex min-w-0 flex-1 flex-col bg-[#F2F2F7] md:bg-white">
 				<div class="flex h-14 shrink-0 items-center justify-between border-b border-[#E5E5EA] bg-white px-4">
-					<div class="flex items-center gap-1 text-[#0A84FF] md:hidden">
+					<a href={getTaskHref()} class="flex items-center gap-1 text-[#0A84FF] md:hidden" aria-label={t.leaveTask}>
 						<ChevronLeft size={18} />
-						<span class="text-sm">{t.messages}</span>
-					</div>
+						<span class="text-sm">{t.leaveTask}</span>
+					</a>
 					<div class="absolute left-1/2 -translate-x-1/2 text-center">
 						<p class="text-sm font-semibold text-[#1C1C1E]">{contactName}</p>
 					</div>
 					<div class="ml-auto flex items-center gap-3">
 						{#if session.remainingTurns !== null && !session.isCompleted}
+							<TurnsLeftMobileBadge
+								remainingTurns={session.remainingTurns}
+								isCompleted={session.isCompleted}
+								label={t.turnsLeft}
+								class="rounded-full bg-[#E5E5EA] px-2.5 py-1 text-xs font-semibold text-[#8E8E93]"
+							/>
 							<span class="hidden text-xs text-[#8E8E93] md:inline">{t.turnsLeft}: {session.remainingTurns}</span>
 						{/if}
 						{#if !session.isCompleted && session.sessionId}

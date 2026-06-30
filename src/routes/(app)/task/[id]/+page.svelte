@@ -50,7 +50,7 @@ function difficultyLabel(level: number): string {
 	{/if}
 </div>
 
-<div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
+<div class="task-stagger relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-2xl min-w-0 flex-col">
 	<a href="/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
 		<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 		<span class="text-sm font-medium uppercase tracking-wide">Return to Quest Hall</span>
@@ -112,7 +112,7 @@ function difficultyLabel(level: number): string {
 
 		<div class="mt-auto pt-12 pb-4">
 			<div class="h-px w-full bg-border mb-6"></div>
-			<div class="flex items-center justify-between">
+			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div class="flex items-center gap-4 text-sm text-muted-foreground">
 					<span class="flex items-center gap-1.5">
 						<Star size={14} strokeWidth={1.5} />
@@ -121,22 +121,25 @@ function difficultyLabel(level: number): string {
 					</span>
 				</div>
 
-				<div class="flex items-center gap-3">
+				<div class="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
 					{#if canShowUsefulExpressions}
-						<Button variant="outline" onclick={openTranslateModal}>
+						<Button variant="outline" class="w-full justify-center sm:w-auto" onclick={openTranslateModal}>
 							<Languages size={14} class="mr-1.5" />
 							{t(lang, "task.usefulExpressions")}
 						</Button>
 					{/if}
 
 					{#if isFinished}
-						<Button class="px-8 border border-green-400 bg-green-100 text-black hover:bg-green-200" href="/task/{task.id}/feedback">
+						<Button
+							class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
+							href="/task/{task.id}/feedback"
+						>
 							{t(lang, "hall.reviewReport")}
 						</Button>
 					{:else if isPracticeEnabled}
-						<Button class="px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
+						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
 					{:else}
-						<Button class="px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
+						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
 					{/if}
 				</div>
 			</div>

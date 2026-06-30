@@ -94,7 +94,7 @@ let allUsers = $derived([session.agentUser, ...onlineUsers, ...offlineUsers]);
 
 let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
-let showMembers = $state(true);
+let showMembers = $state(false);
 let showFinishConfirm = $state(false);
 
 let contextMenu = $state({

@@ -7,6 +7,7 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import UserCircle from "@lucide/svelte/icons/user-circle";
 import type { ChatMessage } from "../chatMessages";
+import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { plainTextToDraftHtml } from "./mailUtils";
 import type { DraftEmail, NormalizedMailEmail } from "./types";
 
@@ -101,7 +102,15 @@ const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft
 					</div>
 				{/if}
 				{#if remainingTurns !== null}
-					<div class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73]">{remainingTurnsLabel}</div>
+					<TurnsLeftMobileBadge
+						{remainingTurns}
+						{isCompleted}
+						label={t.turnsLeft || "Up to {count} more"}
+						class="rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-[#6E6E73]"
+					/>
+					<div class="hidden rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#6E6E73] md:block">
+						{remainingTurnsLabel}
+					</div>
 				{/if}
 				<button
 					type="button"

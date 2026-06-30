@@ -1,6 +1,7 @@
 <script lang="ts">
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import Plus from "@lucide/svelte/icons/plus";
+import Send from "@lucide/svelte/icons/send";
 import Smile from "@lucide/svelte/icons/smile";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
@@ -49,6 +50,7 @@ let isGettingHint = $state(false);
 let hintAbortController: AbortController | null = null;
 
 const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || isWaitingRetry);
+const canSend = $derived(Boolean(inputText.trim()) && !disabled);
 
 function limitInputText(value: string) {
 	return value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
@@ -139,6 +141,16 @@ function selectHint(text: string) {
 	showHintMenu = false;
 }
 
+function submitInput() {
+	if (!canSend) return;
+	const text = limitInputText(inputText);
+	inputText = "";
+	showMentionMenu = false;
+	showEmojiPicker = false;
+	showHintMenu = false;
+	onSend(text);
+}
+
 function handleWindowClick(e: MouseEvent) {
 	const target = e.target as HTMLElement;
 	if (!target.closest(".emoji-container-wrapper")) {
@@ -177,12 +189,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		const isMobile = window.matchMedia("(max-width: 768px)").matches;
 		if (!isMobile) {
 			e.preventDefault();
-			if (!inputText.trim() || disabled) return;
-			const text = limitInputText(inputText);
-			inputText = "";
-			showMentionMenu = false;
-			showEmojiPicker = false;
-			onSend(text);
+			submitInput();
 		}
 	}
 }
@@ -190,7 +197,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
 <svelte:window onclick={handleWindowClick} />
 
-<div class="px-4 pb-6 pt-1 shrink-0 relative">
+<div class="relative shrink-0 px-3 pb-6 pt-1 md:px-4">
 	{#if showMentionMenu && filteredMentionUsers.length > 0}
 		<div class="absolute bottom-[100%] left-4 mb-2 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded shadow-xl overflow-hidden z-50">
 			<div class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428]">Members</div>
@@ -223,109 +230,175 @@ function handleKeyDown(e: KeyboardEvent) {
 		</div>
 	{/if}
 
-	<div class="flex flex-col relative rounded-lg bg-[#383A40]">
-		<div class="flex items-start px-4 {disabled ? 'opacity-50' : ''}">
-			<div class="flex h-[44px] shrink-0 items-center justify-center mr-4">
-				<button type="button" class="rounded-full bg-[#B5BAC1] p-1 text-[#383A40] transition-colors hover:bg-[#DBDEE1]" {disabled}>
-					<Plus size={16} strokeWidth={3} />
-				</button>
-			</div>
-
-			<div class="flex-1 min-w-0">
-				<ResizeableTextarea
-					bind:value={inputText}
-					maxRows={10}
-					maxLength={PRACTICE_UI_TEXT_MAX_LENGTH}
-					{disabled}
-					placeholder={isCompleted
-						? "Session ended"
-						: limitReached
-							? "Turn limit reached"
-							: isWaitingRetry
-								? t.retryInputPlaceholder
-								: messagePlaceholder}
-					onKeyDown={handleKeyDown}
-				/>
-			</div>
-
-			<div class="flex h-[44px] shrink-0 items-center justify-center gap-3 ml-3 text-[#B5BAC1] relative">
-				<div class="relative flex h-full items-center hint-container-wrapper">
-					<button
-						type="button"
-						class="transition-colors {isGettingHint ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
-						onclick={(e) => {
-							e.stopPropagation();
-							handleGetHint();
-						}}
-						title={t.getHint}
-						{disabled}
-					>
-						<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
-					</button>
-					{#if showHintMenu}
-						<div
-							class="absolute bottom-[100%] right-0 mb-4 w-72 bg-[#2B2D31] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden z-50 flex flex-col"
+	<div class="flex items-center gap-2">
+		<div class="relative flex shrink-0 items-center hint-container-wrapper md:hidden">
+			<button
+				type="button"
+				class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#4E5058] bg-[#3F4147] text-[#DBDEE1] shadow-sm transition-all hover:border-[#5B5E66] hover:bg-[#4E5058] disabled:opacity-50 {isGettingHint ? 'text-yellow-400' : ''}"
+				onclick={(e) => {
+					e.stopPropagation();
+					handleGetHint();
+				}}
+				title={t.getHint}
+				{disabled}
+			>
+				<Lightbulb size={20} class={isGettingHint ? "animate-pulse" : ""} />
+			</button>
+			{#if showHintMenu}
+				<div
+					class="absolute bottom-full left-0 z-50 mb-3 flex w-72 flex-col overflow-hidden rounded-lg border border-[#1E1F22] bg-[#2B2D31] shadow-xl"
+				>
+					<div class="flex items-center justify-between border-b border-[#1E1F22] bg-[#232428] px-3 py-2 text-xs font-bold uppercase text-[#949BA4]">
+						<span>{t.hintTitle}</span>
+						<button
+							type="button"
+							onclick={(e) => {
+								e.stopPropagation();
+								closeHintMenu();
+							}}
+							class="text-lg hover:text-white"
 						>
-							<div
-								class="px-3 py-2 text-xs font-bold text-[#949BA4] uppercase bg-[#232428] border-b border-[#1E1F22] flex justify-between items-center"
-							>
-								<span>{t.hintTitle}</span>
+							&times;
+						</button>
+					</div>
+					<div class="hide-scrollbar flex max-h-60 flex-col gap-1 overflow-y-auto p-2">
+						{#if isGettingHint}
+							<div class="animate-pulse py-6 text-center text-sm italic text-[#80848E]">{t.thinking}</div>
+						{:else if hintError}
+							<div class="py-6 text-center text-sm text-red-300">{hintError}</div>
+						{:else}
+							{#each hints as hint}
 								<button
 									type="button"
-									onclick={(e) => {
-										e.stopPropagation();
-										closeHintMenu();
-									}}
-									class="hover:text-white text-lg"
+									class="w-full rounded border border-transparent p-2.5 text-left transition-colors hover:border-[#404249] hover:bg-[#35373C]"
+									onclick={() => selectHint(hint.text)}
 								>
-									&times;
+									<div class="text-[13px] font-medium leading-snug text-[#DBDEE1]">{hint.text}</div>
 								</button>
-							</div>
-							<div class="p-2 flex flex-col gap-1 max-h-60 overflow-y-auto hide-scrollbar">
-								{#if isGettingHint}
-									<div class="py-6 text-center text-sm text-[#80848E] italic animate-pulse">{t.thinking}</div>
-								{:else if hintError}
-									<div class="py-6 text-center text-sm text-red-300">{hintError}</div>
-								{:else}
-									{#each hints as hint}
-										<button
-											type="button"
-											class="w-full text-left p-2.5 rounded hover:bg-[#35373C] transition-colors border border-transparent hover:border-[#404249]"
-											onclick={() => selectHint(hint.text)}
-										>
-											<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
-										</button>
-									{/each}
-								{/if}
-							</div>
-						</div>
-					{/if}
+							{/each}
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
+
+		<div class="relative min-w-0 flex-1 rounded-lg bg-[#383A40]">
+			<div class="flex items-center px-2 md:px-4 {disabled ? 'opacity-50' : ''}">
+				<div class="mr-4 hidden h-[44px] shrink-0 items-center justify-center md:flex">
+					<button type="button" class="rounded-full bg-[#B5BAC1] p-1 text-[#383A40] transition-colors hover:bg-[#DBDEE1]" {disabled}>
+						<Plus size={16} strokeWidth={3} />
+					</button>
 				</div>
 
-				<div class="relative flex h-full items-center emoji-container-wrapper">
-					<button
-						type="button"
-						class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
-						onclick={(e) => {
-							e.stopPropagation();
-							if (disabled) return;
-							showEmojiPicker = !showEmojiPicker;
-						}}
+				<div class="flex-1 min-w-0">
+					<ResizeableTextarea
+						bind:value={inputText}
+						maxRows={10}
+						maxLength={PRACTICE_UI_TEXT_MAX_LENGTH}
 						{disabled}
-					>
-						<Smile size={22} />
-					</button>
-					{#if showEmojiPicker}
-						<div
-							class="absolute bottom-[100%] right-0 mb-4 z-[1002] bg-[#232428] border border-[#1E1F22] rounded-lg shadow-xl overflow-hidden"
-							transition:fade={{ duration: 100 }}
+						placeholder={isCompleted
+							? "Session ended"
+							: limitReached
+								? "Turn limit reached"
+								: isWaitingRetry
+									? t.retryInputPlaceholder
+									: messagePlaceholder}
+						onKeyDown={handleKeyDown}
+					/>
+				</div>
+
+				<div class="relative ml-2 flex shrink-0 items-center justify-center gap-3 text-[#B5BAC1] md:ml-3">
+					<div class="relative hidden items-center hint-container-wrapper md:flex">
+						<button
+							type="button"
+							class="transition-colors {isGettingHint ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
+							onclick={(e) => {
+								e.stopPropagation();
+								handleGetHint();
+							}}
+							title={t.getHint}
+							{disabled}
 						>
-							<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker onEmojiSelected={handleEmojiSelected} /></div>
-						</div>
-					{/if}
+							<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
+						</button>
+						{#if showHintMenu}
+							<div
+								class="absolute bottom-full right-0 z-50 mb-4 flex w-72 flex-col overflow-hidden rounded-lg border border-[#1E1F22] bg-[#2B2D31] shadow-xl"
+							>
+								<div
+									class="flex items-center justify-between border-b border-[#1E1F22] bg-[#232428] px-3 py-2 text-xs font-bold uppercase text-[#949BA4]"
+								>
+									<span>{t.hintTitle}</span>
+									<button
+										type="button"
+										onclick={(e) => {
+											e.stopPropagation();
+											closeHintMenu();
+										}}
+										class="text-lg hover:text-white"
+									>
+										&times;
+									</button>
+								</div>
+								<div class="hide-scrollbar flex max-h-60 flex-col gap-1 overflow-y-auto p-2">
+									{#if isGettingHint}
+										<div class="animate-pulse py-6 text-center text-sm italic text-[#80848E]">{t.thinking}</div>
+									{:else if hintError}
+										<div class="py-6 text-center text-sm text-red-300">{hintError}</div>
+									{:else}
+										{#each hints as hint}
+											<button
+												type="button"
+												class="w-full rounded border border-transparent p-2.5 text-left transition-colors hover:border-[#404249] hover:bg-[#35373C]"
+												onclick={() => selectHint(hint.text)}
+											>
+												<div class="text-[13px] text-[#DBDEE1] font-medium leading-snug">{hint.text}</div>
+											</button>
+										{/each}
+									{/if}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<div class="relative flex items-center emoji-container-wrapper">
+						<button
+							type="button"
+							class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+							onclick={(e) => {
+								e.stopPropagation();
+								if (disabled) return;
+								showEmojiPicker = !showEmojiPicker;
+							}}
+							{disabled}
+						>
+							<Smile size={22} />
+						</button>
+						{#if showEmojiPicker}
+							<div
+								class="fixed inset-x-3 bottom-24 z-[1002] overflow-hidden rounded-lg border border-[#1E1F22] bg-[#232428] shadow-xl md:absolute md:inset-auto md:bottom-full md:right-0 md:mb-4 md:w-[360px]"
+								transition:fade={{ duration: 100 }}
+							>
+								<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker onEmojiSelected={handleEmojiSelected} /></div>
+							</div>
+						{/if}
+					</div>
 				</div>
 			</div>
 		</div>
+
+		<button
+			type="button"
+			class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-150 md:hidden {canSend
+				? 'bg-gradient-to-br from-[#5865F2] to-[#3B82F6] text-white shadow-lg shadow-[#5865F2]/25 active:scale-95'
+				: 'bg-[#383A40] text-[#80848E]'}"
+			style:color={canSend ? "#FFFFFF" : "#80848E"}
+			onclick={submitInput}
+			disabled={!canSend}
+			aria-label="Send message"
+		>
+			<Send size={18} />
+		</button>
 	</div>
 </div>
 

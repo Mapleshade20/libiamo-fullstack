@@ -132,7 +132,7 @@
 	}
 
 	body {
-		@apply bg-background text-foreground font-light;
+		@apply bg-background text-foreground font-[350];
 	}
 
 	h1 {
