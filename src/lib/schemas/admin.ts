@@ -131,10 +131,6 @@ export const templateSchema = z
 		estimatedWords: z.coerce.number().int().min(0).optional(),
 		pointReward: z.coerce.number().int().min(0),
 		gemReward: z.coerce.number().int().min(0),
-		isActive: z
-			.string()
-			.optional()
-			.transform((v) => v === "on"),
 		agentStartsFirst: z.any().transform((v) => v === "on"),
 		agentPromptBase: z.string().optional(),
 	})

@@ -17,20 +17,26 @@ let importPreview = $state<ReturnType<typeof buildTemplateImportPreview> | null>
 let deleteFormEl: HTMLFormElement | null = $state(null);
 let showDeleteConfirm = $state(false);
 let deleteConfirmed = $state(false);
+let templateStatusFormEl: HTMLFormElement | null = $state(null);
+let showTemplateStatusConfirm = $state(false);
+let templateStatusConfirmed = $state(false);
 
-const actionNotification = $derived(
-	form?.action === "importJson" && form?.message
-		? { variant: "error" as const, title: "Unable to import template", message: form.message }
-		: form?.action === "delete" && form?.message
-			? { variant: "error" as const, title: "Unable to delete template", message: form.message }
-			: form?.saved
-				? { variant: "success" as const, title: "Template saved", message: "Your template changes have been saved." }
-				: form?.imported
-					? { variant: "success" as const, title: "Template imported", message: "Template fields and variants were updated from JSON." }
-					: form?.deletedVariant
-						? { variant: "success" as const, title: "Variant deleted", message: "The unused variant was removed." }
-						: null,
-);
+const actionNotification = $derived.by(() => {
+	if (form?.action === "importJson" && form.message) return { variant: "error" as const, title: "Unable to import template", message: form.message };
+	if (form?.action === "delete" && form.message) return { variant: "error" as const, title: "Unable to delete template", message: form.message };
+	if ((form?.action === "activateTemplate" || form?.action === "deactivateTemplate") && form.message) {
+		return { variant: "error" as const, title: "Unable to update template status", message: form.message };
+	}
+	if (form?.saved) return { variant: "success" as const, title: "Template saved", message: "Your template changes have been saved." };
+	if (form?.imported)
+		return { variant: "success" as const, title: "Template imported", message: "Template fields and variants were updated from JSON." };
+	if (form?.activatedTemplate)
+		return { variant: "success" as const, title: "Template activated", message: "This template is available for scheduling again." };
+	if (form?.deactivatedTemplate)
+		return { variant: "success" as const, title: "Template deactivated", message: "This template is no longer available for new scheduling." };
+	if (form?.deletedVariant) return { variant: "success" as const, title: "Variant deleted", message: "The unused variant was removed." };
+	return null;
+});
 
 const existingImportVariants = $derived(data.variants.map((variant) => ({ id: variant.id, slotValues: variant.slotValues })));
 const importPreviewItems = $derived(importPreview?.ok ? importPreview.items : []);
@@ -78,6 +84,9 @@ const templateExportJson = $derived(
 );
 
 const exportHref = $derived(`data:application/json;charset=utf-8,${encodeURIComponent(templateExportJson)}`);
+const templateStatusAction = $derived(data.template.isActive ? "deactivateTemplate" : "activateTemplate");
+const templateStatusLabel = $derived(data.template.isActive ? "Deactivate Template" : "Activate Template");
+const templateStatusTone = $derived(data.template.isActive ? "destructive" : "default");
 
 function previewImportJson() {
 	importPreview = buildTemplateImportPreview(importJsonText, existingImportVariants);
@@ -95,6 +104,12 @@ function confirmDeleteTemplate() {
 	deleteConfirmed = true;
 	showDeleteConfirm = false;
 	deleteFormEl?.requestSubmit();
+}
+
+function confirmTemplateStatusChange() {
+	templateStatusConfirmed = true;
+	showTemplateStatusConfirm = false;
+	templateStatusFormEl?.requestSubmit();
 }
 
 function statusClass(status: "Edited" | "Created" | "Deactivated") {
@@ -159,31 +174,61 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 		resetKey={String(data.template.updatedAt ?? data.template.id)}
 	/>
 
-	<section class="rounded-md border border-destructive/20 bg-destructive/5 p-4">
-		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-			<div class="space-y-1">
-				<h2 class="text-sm font-medium text-destructive">Delete Template</h2>
-				<p class="text-sm text-muted-foreground">Remove this template and all unused variants.</p>
-			</div>
-			<form
-				method="POST"
-				action="?/delete"
-				bind:this={deleteFormEl}
-				use:enhance={({ cancel }) => {
-					if (!deleteConfirmed) {
-						cancel();
-						showDeleteConfirm = true;
-						return;
-					}
+	<div class="grid gap-4 lg:grid-cols-2">
+		<section class="rounded-md border border-input bg-muted/20 p-4">
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-1">
+					<h2 class="text-sm font-medium">{data.template.isActive ? "Deactivate Template" : "Activate Template"}</h2>
+					<p class="text-sm text-muted-foreground">
+						{data.template.isActive ? "Pause this template so it is not scheduled for new practice." : "Make this template available for new practice scheduling."}
+					</p>
+				</div>
+				<form
+					method="POST"
+					action={`?/${templateStatusAction}`}
+					bind:this={templateStatusFormEl}
+					use:enhance={({ cancel }) => {
+						if (!templateStatusConfirmed) {
+							cancel();
+							showTemplateStatusConfirm = true;
+							return;
+						}
 
-					deleteConfirmed = false;
-					return async ({ update }) => update({ reset: false });
-				}}
-			>
-				<Button type="submit" variant="destructive">Delete Template</Button>
-			</form>
-		</div>
-	</section>
+						templateStatusConfirmed = false;
+						return async ({ update }) => update({ reset: false });
+					}}
+				>
+					<Button type="submit" variant={templateStatusTone}>{templateStatusLabel}</Button>
+				</form>
+			</div>
+		</section>
+
+		<section class="rounded-md border border-destructive/20 bg-destructive/5 p-4">
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-1">
+					<h2 class="text-sm font-medium text-destructive">Delete Template</h2>
+					<p class="text-sm text-muted-foreground">Remove this template and all unused variants.</p>
+				</div>
+				<form
+					method="POST"
+					action="?/delete"
+					bind:this={deleteFormEl}
+					use:enhance={({ cancel }) => {
+						if (!deleteConfirmed) {
+							cancel();
+							showDeleteConfirm = true;
+							return;
+						}
+
+						deleteConfirmed = false;
+						return async ({ update }) => update({ reset: false });
+					}}
+				>
+					<Button type="submit" variant="destructive">Delete Template</Button>
+				</form>
+			</div>
+		</section>
+	</div>
 </div>
 
 <BottomSheet
@@ -235,6 +280,27 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 						</table>
 					</div>
 				{/if}
+			{/if}
+		</div>
+	{/snippet}
+</BottomSheet>
+
+<BottomSheet
+	show={showTemplateStatusConfirm}
+	title={`${templateStatusLabel}?`}
+	confirmLabel={templateStatusLabel}
+	cancelLabel="Cancel"
+	onConfirm={confirmTemplateStatusChange}
+	onCancel={() => { showTemplateStatusConfirm = false; }}
+>
+	{#snippet children()}
+		<div class="space-y-3 text-sm text-muted-foreground">
+			{#if data.template.isActive}
+				<p>Template #{data.template.id} will stop being used for newly scheduled practice.</p>
+				<p>Existing scheduled tasks, history, and variants remain unchanged.</p>
+			{:else}
+				<p>Template #{data.template.id} will become available for newly scheduled practice.</p>
+				<p>Only active variants are eligible for non-translation practice.</p>
 			{/if}
 		</div>
 	{/snippet}

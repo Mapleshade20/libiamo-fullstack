@@ -35,6 +35,18 @@ async function hasMultipleActiveVariants(templateId: number) {
 	return activeVariants.length > 1;
 }
 
+async function setTemplateActive(id: number, isActive: boolean, action: "activateTemplate" | "deactivateTemplate") {
+	if (Number.isNaN(id)) return failWithMessage(action, 400, "Invalid template id");
+
+	const [tpl] = await db.select({ isActive: template.isActive }).from(template).where(eq(template.id, id)).limit(1);
+	if (!tpl) return failWithMessage(action, 404, "Template not found");
+	if (tpl.isActive === isActive) return failWithMessage(action, 400, `Template is already ${isActive ? "active" : "inactive"}`);
+
+	await db.update(template).set({ isActive }).where(eq(template.id, id));
+
+	return isActive ? { activatedTemplate: true } : { deactivatedTemplate: true };
+}
+
 async function getVariantStatusForAction(
 	event: {
 		locals: App.Locals;
@@ -107,6 +119,16 @@ export const actions: Actions = {
 		});
 
 		return redirect(302, "/admin/templates");
+	},
+
+	activateTemplate: async (event) => {
+		requireAdmin(event);
+		return setTemplateActive(Number(event.params.id), true, "activateTemplate");
+	},
+
+	deactivateTemplate: async (event) => {
+		requireAdmin(event);
+		return setTemplateActive(Number(event.params.id), false, "deactivateTemplate");
 	},
 
 	importJson: async (event) => {
