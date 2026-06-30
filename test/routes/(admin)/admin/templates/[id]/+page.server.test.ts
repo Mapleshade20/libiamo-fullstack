@@ -41,8 +41,10 @@ vi.mock("$lib/server/db", () => {
 });
 
 vi.mock("$lib/server/db/schema", () => ({
+	task: { id: "task.id", templateId: "task.templateId", variantId: "task.variantId" },
 	template: { id: "id", isActive: "isActive" },
 	templateVariant: { id: "id", templateId: "templateId", isActive: "isActive" },
+	translationAttempt: { id: "translationAttempt.id", templateId: "translationAttempt.templateId" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -138,6 +140,7 @@ describe("Admin Templates [id] +page.server", () => {
 			"importJson",
 			"addVariant",
 			"saveVariant",
+			"deleteVariant",
 			"activateVariant",
 			"deactivateVariant",
 		] as const)("returns 403 for non-admin users before %s", async (actionName) => {
@@ -168,12 +171,59 @@ describe("Admin Templates [id] +page.server", () => {
 	});
 
 	describe("delete action", () => {
-		it("soft deletes the template and redirects", async () => {
+		it("hard deletes an unused template and its variants, then redirects", async () => {
+			dbSelectQueue.push([{ id: 1 }]); // template exists
+			dbSelectQueue.push([]); // no tasks for template
+			dbSelectQueue.push([]); // no translation attempts
+
 			const event = createActionEvent({}, "1");
 			await expect(actions.delete(event)).rejects.toMatchObject({
 				status: 302,
 				location: "/admin/templates",
 			});
+			expect(db.transaction).toHaveBeenCalledOnce();
+			expect(db.delete).toHaveBeenCalledTimes(2);
+			expect(db.update).not.toHaveBeenCalled();
+		});
+
+		it("returns 400 for non-numeric template id", async () => {
+			const event = createActionEvent({}, "abc");
+			const result = (await actions.delete(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("delete");
+			expect(result.data?.message).toBe("Invalid template id");
+			expect(db.transaction).not.toHaveBeenCalled();
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("blocks deleting a template with scheduled tasks", async () => {
+			dbSelectQueue.push([{ id: 1 }]); // template exists
+			dbSelectQueue.push([{ id: 10 }]); // task exists
+
+			const event = createActionEvent({}, "1");
+			const result = (await actions.delete(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("delete");
+			expect(result.data?.message).toContain("scheduled tasks");
+			expect(db.transaction).not.toHaveBeenCalled();
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("blocks deleting a template with translation attempts", async () => {
+			dbSelectQueue.push([{ id: 1 }]); // template exists
+			dbSelectQueue.push([]); // no tasks for template
+			dbSelectQueue.push([{ id: 20 }]); // translation attempt exists
+
+			const event = createActionEvent({}, "1");
+			const result = (await actions.delete(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("delete");
+			expect(result.data?.message).toContain("translation attempts");
+			expect(db.transaction).not.toHaveBeenCalled();
+			expect(db.delete).not.toHaveBeenCalled();
 		});
 	});
 
@@ -377,6 +427,68 @@ describe("Admin Templates [id] +page.server", () => {
 
 			const result = await actions.saveVariant(event);
 			expect(result).toEqual({ savedVariant: true });
+		});
+	});
+
+	describe("deleteVariant action", () => {
+		it("returns 400 for non-numeric variantId", async () => {
+			const event = createActionEvent({ variantId: "abc" }, "1");
+			const result = (await actions.deleteVariant(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deleteVariant");
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("returns 404 when variant does not belong to the template", async () => {
+			dbSelectQueue.push([]);
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = (await actions.deleteVariant(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(404);
+			expect(result.data?.action).toBe("deleteVariant");
+			expect(result.data?.message).toBe("Variant not found");
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("blocks deleting a variant with scheduled tasks", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // variant exists
+			dbSelectQueue.push([{ id: 10 }]); // task exists for variant
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = (await actions.deleteVariant(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deleteVariant");
+			expect(result.data?.message).toContain("practice history");
+			expect(db.delete).not.toHaveBeenCalled();
+		});
+
+		it("hard deletes an unused variant", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // variant exists
+			dbSelectQueue.push([]); // no task for variant
+			dbSelectQueue.push([{ id: 2 }, { id: 3 }]); // other active variants remain
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = await actions.deleteVariant(event);
+
+			expect(result).toEqual({ deletedVariant: true });
+			expect(db.delete).toHaveBeenCalledTimes(1);
+		});
+
+		it("blocks deleting the last active unused variant", async () => {
+			dbSelectQueue.push([{ isActive: true }]); // variant exists
+			dbSelectQueue.push([]); // no task for variant
+			dbSelectQueue.push([{ id: 2 }]); // only active variant
+
+			const event = createActionEvent({ variantId: "2" }, "1");
+			const result = (await actions.deleteVariant(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.action).toBe("deleteVariant");
+			expect(result.data?.message).toContain("last active variant");
+			expect(db.delete).not.toHaveBeenCalled();
 		});
 	});
 

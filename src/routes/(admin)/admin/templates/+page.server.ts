@@ -1,10 +1,9 @@
-import { fail } from "@sveltejs/kit";
 import { and, eq, type SQL } from "drizzle-orm";
 import type { InteractionType, LanguageCode } from "$lib/constants";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template } from "$lib/server/db/schema";
-import type { Actions, PageServerLoad } from "./$types";
+import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	requireAdmin(event);
@@ -29,20 +28,4 @@ export const load: PageServerLoad = async (event) => {
 		templates,
 		filters: { language, interactionType, active },
 	};
-};
-
-export const actions: Actions = {
-	toggleActive: async (event) => {
-		requireAdmin(event);
-
-		const formData = await event.request.formData();
-		const id = Number(formData.get("id"));
-		const currentActive = formData.get("isActive") === "true";
-
-		if (Number.isNaN(id)) return fail(400, { message: "Invalid template id" });
-
-		await db.update(template).set({ isActive: !currentActive }).where(eq(template.id, id));
-
-		return { toggled: true };
-	},
 };

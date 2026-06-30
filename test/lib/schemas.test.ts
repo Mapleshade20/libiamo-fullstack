@@ -80,12 +80,9 @@ describe("schemas", () => {
 		materialsMd: "# Background",
 	};
 
-	it("transforms template isActive from on to true and off to false", () => {
-		const onParsed = templateSchema.parse({ ...baseTemplate, isActive: "on" });
-		expect(onParsed.isActive).toBe(true);
-
-		const offParsed = templateSchema.parse({ ...baseTemplate, isActive: "off" });
-		expect(offParsed.isActive).toBe(false);
+	it("does not accept template isActive through the edit form schema", () => {
+		const parsed = templateSchema.parse({ ...baseTemplate, isActive: "on" });
+		expect("isActive" in parsed).toBe(false);
 	});
 
 	it("transforms objectivesBase newline string to array", () => {

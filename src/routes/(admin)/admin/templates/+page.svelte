@@ -1,5 +1,4 @@
 <script lang="ts">
-import { enhance } from "$app/forms";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Table from "$lib/components/ui/table";
@@ -70,18 +69,9 @@ function submitFilters(event: Event) {
 					<Table.Cell>{tpl.cadence}</Table.Cell>
 					<Table.Cell class="text-xs text-muted-foreground">{tpl.tags?.join(', ') ?? ''}</Table.Cell>
 					<Table.Cell>
-						<form method="POST" action="?/toggleActive" use:enhance class="inline">
-							<input type="hidden" name="id" value={tpl.id}>
-							<input type="hidden" name="isActive" value={String(tpl.isActive)}>
-							<button
-								type="submit"
-								class="rounded-full px-2 py-0.5 text-xs {tpl.isActive
-									? 'bg-green-100 text-green-700'
-									: 'bg-red-100 text-red-700'}"
-							>
-								{tpl.isActive ? 'Active' : 'Inactive'}
-							</button>
-						</form>
+						<span class="rounded-full px-2 py-0.5 text-xs {tpl.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+							{tpl.isActive ? 'Active' : 'Inactive'}
+						</span>
 					</Table.Cell>
 					<Table.Cell> <a href="/admin/templates/{tpl.id}" class="text-sm text-muted-foreground hover:underline">Edit</a> </Table.Cell>
 				</Table.Row>
