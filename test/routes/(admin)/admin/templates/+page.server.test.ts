@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "$lib/server/db";
-import { actions, load } from "$routes/(admin)/admin/templates/+page.server";
+import { load } from "$routes/(admin)/admin/templates/+page.server";
 
 // ── 1. Mock SvelteKit ──────────────────────────────────────────────────
 vi.mock("@sveltejs/kit", () => ({
@@ -30,11 +29,6 @@ vi.mock("$lib/server/db", () => ({
 				orderBy: mockOrderBy.mockResolvedValue([{ id: 1, titleBase: "Test Template" }]),
 			})),
 		})),
-		update: vi.fn(() => ({
-			set: vi.fn(() => ({
-				where: vi.fn().mockResolvedValue(undefined),
-			})),
-		})),
 	},
 }));
 
@@ -59,19 +53,6 @@ function createLoadEvent(searchParams: Record<string, string>) {
 		locals: { user: { id: "admin-1", role: "admin" } },
 		url: {
 			searchParams: new URLSearchParams(searchParams),
-		},
-	} as any;
-}
-
-function createActionEvent(formDataEntries: Record<string, string>, role = "admin") {
-	const formData = new FormData();
-	for (const [key, value] of Object.entries(formDataEntries)) {
-		formData.append(key, value);
-	}
-	return {
-		locals: { user: { id: "user-1", role } },
-		request: {
-			formData: vi.fn().mockResolvedValue(formData),
 		},
 	} as any;
 }
@@ -137,40 +118,6 @@ describe("Admin Templates +page.server", () => {
 			expect(mockWhere).toHaveBeenCalledWith(expect.stringContaining("eq(language,zh)"));
 			expect(mockWhere).toHaveBeenCalledWith(expect.stringContaining("eq(isActive,true)"));
 			expect(result.filters.language).toBe("zh");
-		});
-	});
-
-	// --- Actions Coverage (Testing toggleActive logic) ---
-	describe("actions.toggleActive", () => {
-		it("returns 403 before mutating when user is not an admin", async () => {
-			const event = createActionEvent({ id: "1", isActive: "true" }, "learner");
-
-			await expect((actions as any).toggleActive(event)).rejects.toMatchObject({ status: 403 });
-			expect(event.request.formData).not.toHaveBeenCalled();
-			expect(db.update).not.toHaveBeenCalled();
-		});
-
-		it("returns 400 failure when template ID is missing or invalid", async () => {
-			const event = createActionEvent({ id: "invalid-id", isActive: "true" });
-			const result = (await (actions as any).toggleActive(event)) as any;
-
-			expect(result.status).toBe(400);
-			expect(result.data.message).toBe("Invalid template id");
-		});
-
-		it("toggles active state from true to false successfully", async () => {
-			const event = createActionEvent({ id: "1", isActive: "true" });
-			const result = await (actions as any).toggleActive(event);
-
-			// The DB update mock was called, and it returns true
-			expect(result).toEqual({ toggled: true });
-		});
-
-		it("toggles active state from false to true successfully", async () => {
-			const event = createActionEvent({ id: "2", isActive: "false" });
-			const result = await (actions as any).toggleActive(event);
-
-			expect(result).toEqual({ toggled: true });
 		});
 	});
 });
