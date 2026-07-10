@@ -1,115 +1,71 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { type LanguageCode, NATIVE_LANGUAGE_CODES, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { template, translationAttempt } from "$lib/server/db/schema";
-import { chatJson, chatText, llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { template, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
+import { chatText, llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import {
+	evaluateTranslationAgainstReferences,
+	getOrCreateTranslationAttempt,
+	getOrCreateTranslationSourceSet,
+	type TranslationEvaluation,
+} from "$lib/server/translation";
 import type { Actions, PageServerLoad } from "./$types";
 
-/** Maximum form data size for translation JSON (100KB) */
-const MAX_TRANSLATION_FORM_SIZE = 100 * 1024;
-const TUTOR_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
+const MAX_FORM_SIZE = 100 * 1024;
 
-/** Validate and cast a language code, defaulting to "en" */
-function validateLanguageCode(code: unknown): LanguageCode {
-	if (typeof code === "string" && (LANGUAGE_CODES as readonly string[]).includes(code)) {
-		return code as LanguageCode;
-	}
-	return "en";
+const AnswerPayloadSchema = z
+	.array(
+		z.object({
+			paragraphIndex: z.number().int().nonnegative(),
+			translation: z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH),
+			candidateIndex: z.number().int().min(0).max(2),
+		}),
+	)
+	.max(1000);
+
+type AnswerPayload = z.infer<typeof AnswerPayloadSchema>;
+
+function templateIdFrom(value: string) {
+	const id = Number(value);
+	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** Extract a required non-empty string field from FormData, or null */
-function getFormString(formData: FormData, field: string): string | null {
-	const value = formData.get(field);
-	if (!value || typeof value !== "string" || !value.trim()) return null;
-	return value.trim();
-}
-
-/** Validate language code and return its display name */
-function getLangName(code: unknown): string {
-	return LANGUAGE_LABELS[validateLanguageCode(code)];
-}
-
-function hasOversizedTutorHelpText(values: string[]) {
-	return values.some((value) => value.length > TUTOR_HELP_TEXT_MAX_LENGTH);
-}
-
-/** Template filter conditions shared by load and action auth checks */
-const translateTemplateFilter = (templateId: number, userLanguage: string) =>
-	and(
+function translateTemplateFilter(templateId: number, activeLanguage: string) {
+	return and(
 		eq(template.id, templateId),
 		eq(template.interactionType, "translate"),
 		eq(template.isActive, true),
-		eq(template.language, userLanguage as LanguageCode),
+		eq(template.language, activeLanguage as LanguageCode),
 	);
+}
 
-/** Parse translations and attemptId from form data, with size limit */
-function parseTranslationsForm(
-	formData: FormData,
-): { ok: true; translations: Record<string, string>; attemptId: number | null } | { ok: false; error: string } {
-	const raw = formData.get("translations");
-	if (!raw || typeof raw !== "string") {
-		return { ok: false, error: "Missing translations" };
-	}
+function validPromptLanguage(value: unknown): value is string {
+	return typeof value === "string" && NATIVE_LANGUAGE_CODES.includes(value as (typeof NATIVE_LANGUAGE_CODES)[number]);
+}
 
-	// Reject oversized payloads to prevent DoS
-	if (raw.length > MAX_TRANSLATION_FORM_SIZE) {
-		return { ok: false, error: "Translation data too large" };
-	}
+function parseAttemptId(formData: FormData) {
+	const value = Number(formData.get("attemptId"));
+	return Number.isInteger(value) && value > 0 ? value : null;
+}
 
-	let translations: Record<string, string>;
+function parseAnswers(formData: FormData): { ok: true; answers: AnswerPayload; attemptId: number } | { ok: false; error: string } {
+	const attemptId = parseAttemptId(formData);
+	if (!attemptId) return { ok: false, error: "Invalid attempt ID" };
+	const raw = formData.get("answers");
+	if (typeof raw !== "string" || raw.length > MAX_FORM_SIZE) return { ok: false, error: "Invalid answer data" };
 	try {
-		translations = JSON.parse(raw);
+		const parsed = AnswerPayloadSchema.safeParse(JSON.parse(raw));
+		if (!parsed.success) return { ok: false, error: "Invalid answer data" };
+		return { ok: true, answers: parsed.data, attemptId };
 	} catch {
-		return { ok: false, error: "Invalid translations JSON" };
+		return { ok: false, error: "Invalid answer data" };
 	}
-	if (!translations || typeof translations !== "object" || Array.isArray(translations)) {
-		return { ok: false, error: "Invalid translations JSON" };
-	}
-	if (Object.values(translations).some((value) => typeof value !== "string")) {
-		return { ok: false, error: "Invalid translations JSON" };
-	}
-	if (Object.values(translations).some((value) => value.length > PRACTICE_UI_TEXT_MAX_LENGTH)) {
-		return { ok: false, error: "Translation text is too long" };
-	}
-	const attemptIdRaw = formData.get("attemptId");
-	const attemptId = attemptIdRaw ? Number(attemptIdRaw) : null;
-	if (attemptIdRaw && (!Number.isFinite(attemptId) || !Number.isInteger(attemptId))) {
-		return { ok: false, error: "Invalid attempt ID" };
-	}
-	return { ok: true, translations, attemptId };
 }
 
-/** Insert a new attempt or update an existing one, returning the record ID */
-async function upsertAttempt(userId: string, templateId: number, translations: Record<string, string>, attemptId: number | null): Promise<number> {
-	if (attemptId && !Number.isNaN(attemptId)) {
-		const [updated] = await db
-			.update(translationAttempt)
-			.set({ translations, updatedAt: new Date() })
-			.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.userId, userId), eq(translationAttempt.templateId, templateId)))
-			.returning({ id: translationAttempt.id });
-		if (!updated) {
-			throw error(403, "Attempt not found or not owned by user");
-		}
-		return updated.id;
-	}
-	const [inserted] = await db
-		.insert(translationAttempt)
-		.values({ userId, templateId, translations, status: "draft" })
-		.returning({ id: translationAttempt.id });
-	return inserted.id;
-}
-
-export const load: PageServerLoad = async (event) => {
-	const user = requireUser(event);
-
-	const templateId = Number(event.params.id);
-	if (Number.isNaN(templateId)) {
-		return error(404, "Template not found");
-	}
-
+async function getTemplate(templateId: number, activeLanguage: string) {
 	const [tpl] = await db
 		.select({
 			id: template.id,
@@ -117,372 +73,292 @@ export const load: PageServerLoad = async (event) => {
 			description: template.descriptionBase,
 			language: template.language,
 			materialsMd: template.materialsMd,
-			translationBase: template.translationBase,
+			translationReference: template.translationReference,
+			context: template.agentPromptBase,
 			difficulty: template.difficulty,
 			estimatedWords: template.estimatedWords,
 			pointReward: template.pointReward,
 			gemReward: template.gemReward,
 		})
 		.from(template)
-		.where(translateTemplateFilter(templateId, user.activeLanguage))
+		.where(translateTemplateFilter(templateId, activeLanguage))
 		.limit(1);
+	return tpl;
+}
 
-	if (!tpl) {
-		return error(404, "Translation template not found");
-	}
-
-	// Load latest draft for this user + template
-	const [latestAttempt] = await db
+async function getOwnedAttempt(attemptId: number, userId: string, templateId: number) {
+	const [record] = await db
 		.select({
 			id: translationAttempt.id,
-			translations: translationAttempt.translations,
 			status: translationAttempt.status,
 			evaluation: translationAttempt.evaluation,
+			sourceSetId: translationAttempt.sourceSetId,
+			candidates: translationSourceSet.candidates,
+			referenceParagraphs: translationSourceSet.referenceParagraphs,
+			context: translationSourceSet.context,
+			sourceLanguage: translationSourceSet.sourceLanguage,
+			promptLanguage: translationSourceSet.promptLanguage,
 		})
 		.from(translationAttempt)
-		.where(and(eq(translationAttempt.userId, user.id), eq(translationAttempt.templateId, templateId)))
-		.orderBy(desc(translationAttempt.updatedAt))
+		.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
+		.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.userId, userId), eq(translationSourceSet.templateId, templateId)))
 		.limit(1);
-
-	return {
-		template: tpl,
-		attempt: latestAttempt ?? null,
-	};
-};
-
-/** Resolve a display name for a language code, with fallback for runtime-cast values */
-function promptLangName(targetLang: LanguageCode): string {
-	return LANGUAGE_LABELS[targetLang] ?? targetLang.toUpperCase();
+	return record;
 }
 
-/** Build the global translation evaluation prompt for the given target language */
-function buildTranslationEvalPrompt(targetLang: LanguageCode): string {
-	const langName = promptLangName(targetLang);
-	return `You are an expert ${langName} translation evaluator. The user will provide original source sentences (with keys like [0-1]) and their ${langName} translations (with the same keys).
-
-Evaluate the translations and respond with ONLY this JSON object shape (no markdown fences): {"overallScore":"<A, B, or C>","overallFeedback":"<brief overall comment on translation quality>","highlights":[{"key":"<paragraph-index-sentence-index>","type":"good or bad","feedback":"<specific comment>","grammarNote":"<for bad highlights: one-sentence explanation of the grammar rule or error>"}]}
-
-GRADING SCALE:
-- A: Excellent — accurate, natural, appropriate register
-- B: Good — mostly accurate with minor issues
-- C: Needs improvement — significant errors
-
-CRITICAL RULES FOR FEEDBACK:
-1. NEVER use key indices like [0-1] in the feedback text
-2. When commenting on a translation, QUOTE FROM THE USER'S ${langName.toUpperCase()} TRANSLATION (not the original source). Always quote the exact words the user wrote.
-3. Be specific about what is wrong and how to fix it
-4. Focus on: accuracy, grammatical correctness, appropriate register, natural phrasing
-5. You MUST provide a highlight entry for EVERY single sentence key in the source text. Do NOT skip or omit any sentence. If a sentence has no issues, still include it with type "good" and brief positive feedback.
-6. For "bad" highlights, ALWAYS include a "grammarNote" field: a one-sentence explanation of the grammar rule or error (e.g., "The verb 'enfocar' requires the reflexive 'se' and preposition 'en' — it should be 'se centra en' or 'está enfocada en'."). For "good" highlights, omit the grammarNote field.`;
+function validateCompleteAnswers(answers: AnswerPayload, paragraphCount: number) {
+	if (answers.length !== paragraphCount) return false;
+	const ordered = [...answers].sort((a, b) => a.paragraphIndex - b.paragraphIndex);
+	return ordered.every((answer, index) => answer.paragraphIndex === index && answer.translation.trim().length > 0);
 }
 
-const TranslationEvalSchema = z.object({
-	overallScore: z.enum(["A", "B", "C"]),
-	overallFeedback: z.string(),
-	highlights: z
-		.array(
-			z.object({
-				key: z.string(),
-				type: z.enum(["good", "bad"]),
-				feedback: z.string(),
-				grammarNote: z.string().optional(),
-			}),
-		)
-		.optional(),
-});
-
-const ModelTranslationsSchema = z.record(z.string(), z.string());
-
-/** Flatten passages (string[][]) into a numbered sentence list */
-function flattenPassages(passages: string[][]): { key: string; text: string }[] {
-	const sentences: { key: string; text: string }[] = [];
-	for (let pi = 0; pi < passages.length; pi++) {
-		for (let si = 0; si < passages[pi].length; si++) {
-			sentences.push({ key: `${pi}-${si}`, text: passages[pi][si] });
+async function submitAnswers(attemptId: number, answers: AnswerPayload) {
+	await db.transaction(async (tx) => {
+		const [claimed] = await tx
+			.update(translationAttempt)
+			.set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
+			.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.status, "draft")))
+			.returning({ id: translationAttempt.id });
+		if (!claimed) throw new TranslationActionError(409, "Attempt is no longer editable");
+		for (const answer of answers) {
+			await tx
+				.update(translationAnswer)
+				.set({ translation: answer.translation.trim(), candidateIndex: answer.candidateIndex, updatedAt: new Date() })
+				.where(and(eq(translationAnswer.attemptId, attemptId), eq(translationAnswer.paragraphIndex, answer.paragraphIndex)));
 		}
-	}
-	return sentences;
-}
-
-async function evaluateTranslation(
-	agentPromptBase: string,
-	sentences: { key: string; text: string }[],
-	translations: Record<string, string>,
-	userId: string,
-): Promise<z.infer<typeof TranslationEvalSchema>> {
-	const sourceLines = sentences.map((s) => `[${s.key}] ${s.text}`).join("\n");
-	const translationLines = sentences.map((s) => `[${s.key}] ${translations[s.key] ?? "(missing)"}`).join("\n");
-
-	const userMessage = `Source text sentences:
-${sourceLines}
-
-User's translations:
-${translationLines}`;
-
-	return await chatJson(TranslationEvalSchema, {
-		messages: [
-			{ role: "system", content: agentPromptBase },
-			{ role: "user", content: userMessage },
-		],
-		options: { temperature: 0.7, maxTokens: 4096 },
-		userId,
 	});
 }
 
-/** Build a prompt for generating a reference model translation */
-function buildModelTranslationPrompt(targetLang: LanguageCode): string {
-	const langName = promptLangName(targetLang);
-	return `You are an expert ${langName} translator. Translate the following sentences into natural, fluent ${langName}. Return ONLY a JSON object mapping each sentence key to its translation (no markdown fences, no extra text).
-
-Example format: {"0-0":"translated sentence here","0-1":"another translation"}`;
+class TranslationActionError extends Error {
+	constructor(
+		public readonly status: number,
+		message: string,
+	) {
+		super(message);
+		this.name = "TranslationActionError";
+	}
 }
 
-/** Build a prompt for explaining a specific grammar/translation feedback in detail */
-function buildExplainFeedbackPrompt(targetLang: LanguageCode): string {
-	const langName = promptLangName(targetLang);
-	return `You are an expert ${langName} language tutor. A learner received the following feedback on their ${langName} translation. Your job is to expand on this feedback with a detailed, pedagogical explanation.
-
-## Response Format
-Respond in Markdown. Structure your explanation as follows:
-
-1. **What went wrong** — Explain the specific error in the learner's translation.
-2. **The rule** — Explain the relevant grammar rule, usage convention, or idiom.
-3. **Examples** — Provide 2-3 example sentences showing correct usage (with translations).
-4. **Related expressions** — Mention any alternative ways to express the same idea, or related patterns.
-
-Keep the tone encouraging and instructive. Use the learner's target language (${langName}) for examples, with English explanations where helpful.`;
+function actionErrorStatus(cause: unknown) {
+	return cause instanceof TranslationActionError ? cause.status : llmErrorStatus(cause);
 }
 
-/** Check if a sentence is too short to be worth translating/evaluating */
-function isShortSentence(text: string): boolean {
-	const trimmed = text.trim();
-	if (trimmed.length === 0) return true;
-	const wordCount = trimmed.split(/\s+/).length;
-	return wordCount <= 3 || trimmed.length <= 20;
+async function evaluateAttempt(attemptId: number, userId: string, templateId: number) {
+	const record = await getOwnedAttempt(attemptId, userId, templateId);
+	if (!record) throw new TranslationActionError(403, "Attempt not found or not owned by user");
+	if (record.status !== "submitted") throw new TranslationActionError(409, "Attempt is not awaiting evaluation");
+	const answers = await db
+		.select({
+			paragraphIndex: translationAnswer.paragraphIndex,
+			translation: translationAnswer.translation,
+			candidateIndex: translationAnswer.candidateIndex,
+		})
+		.from(translationAnswer)
+		.where(eq(translationAnswer.attemptId, attemptId))
+		.orderBy(translationAnswer.paragraphIndex);
+	if (!validateCompleteAnswers(answers, record.candidates.length)) throw new TranslationActionError(409, "Attempt answers are incomplete");
+
+	const evaluation = await evaluateTranslationAgainstReferences({
+		promptParagraphs: answers.map((answer) => record.candidates[answer.paragraphIndex][answer.candidateIndex]),
+		userTranslations: answers.map((answer) => answer.translation),
+		referenceParagraphs: record.referenceParagraphs.map((reference) => [reference]),
+		promptLanguage: record.promptLanguage,
+		targetLanguage: record.sourceLanguage,
+		context: record.context,
+		feedbackLanguage: record.promptLanguage,
+		userId,
+	});
+	await db
+		.update(translationAttempt)
+		.set({ status: "evaluated", evaluation, evaluatedAt: new Date(), updatedAt: new Date() })
+		.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.status, "submitted")));
+	return evaluation;
 }
+
+export const load: PageServerLoad = async (event) => {
+	const user = requireUser(event);
+	const templateId = templateIdFrom(event.params.id);
+	if (!templateId) throw error(404, "Template not found");
+	const tpl = await getTemplate(templateId, user.activeLanguage);
+	if (!tpl) throw error(404, "Translation template not found");
+
+	const templateData = {
+		id: tpl.id,
+		title: tpl.title,
+		description: tpl.description,
+		language: tpl.language,
+		materialsMd: tpl.materialsMd,
+		difficulty: tpl.difficulty,
+		estimatedWords: tpl.estimatedWords,
+		pointReward: tpl.pointReward,
+		gemReward: tpl.gemReward,
+	};
+	const promptLanguage = user.nativeLanguage;
+	if (!validPromptLanguage(promptLanguage)) {
+		return { template: templateData, promptLanguage: null, blockedReason: "missing-native-language", prepared: false, attempt: null };
+	}
+	if (promptLanguage === tpl.language) {
+		return { template: templateData, promptLanguage, blockedReason: "same-language", prepared: false, attempt: null };
+	}
+	if (!tpl.translationReference?.length || !tpl.context?.trim()) throw error(404, "Translation template is incomplete");
+
+	const [existingAttempt] = await db
+		.select({
+			id: translationAttempt.id,
+			status: translationAttempt.status,
+			evaluation: translationAttempt.evaluation,
+			sourceSetId: translationSourceSet.id,
+			candidates: translationSourceSet.candidates,
+			referenceParagraphs: translationSourceSet.referenceParagraphs,
+			context: translationSourceSet.context,
+		})
+		.from(translationAttempt)
+		.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
+		.where(
+			and(
+				eq(translationAttempt.userId, user.id),
+				eq(translationSourceSet.templateId, templateId),
+				eq(translationSourceSet.promptLanguage, promptLanguage),
+			),
+		)
+		.orderBy(desc(translationAttempt.updatedAt))
+		.limit(1);
+
+	if (!existingAttempt) {
+		return { template: templateData, promptLanguage, blockedReason: null, prepared: false, attempt: null };
+	}
+
+	const answers = await db
+		.select({
+			paragraphIndex: translationAnswer.paragraphIndex,
+			translation: translationAnswer.translation,
+			candidateIndex: translationAnswer.candidateIndex,
+		})
+		.from(translationAnswer)
+		.where(eq(translationAnswer.attemptId, existingAttempt.id))
+		.orderBy(translationAnswer.paragraphIndex);
+	const revealReferences = existingAttempt.status !== "draft";
+	return {
+		template: templateData,
+		promptLanguage,
+		blockedReason: null,
+		prepared: true,
+		attempt: {
+			id: existingAttempt.id,
+			status: existingAttempt.status,
+			evaluation: existingAttempt.evaluation as TranslationEvaluation | null,
+			candidates: existingAttempt.candidates,
+			context: existingAttempt.context,
+			answers: answers.map((answer) => ({ ...answer, translation: revealReferences ? answer.translation : "" })),
+			referenceParagraphs: revealReferences ? existingAttempt.referenceParagraphs : null,
+		},
+	};
+};
 
 export const actions: Actions = {
-	saveDraft: async (event) => {
+	prepare: async (event) => {
 		const user = requireUser(event);
-
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
-
-		const parsed = parseTranslationsForm(await event.request.formData());
-		if (!parsed.ok) return fail(400, { error: parsed.error });
-
-		// Verify template exists, is active, is a translate template, and matches user language
-		const [tpl] = await db.select({ id: template.id }).from(template).where(translateTemplateFilter(templateId, user.activeLanguage)).limit(1);
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
+		const tpl = await getTemplate(templateId, user.activeLanguage);
 		if (!tpl) return fail(404, { error: "Template not found" });
-
-		await upsertAttempt(user.id, templateId, parsed.translations, parsed.attemptId);
-		return { success: true };
+		if (!validPromptLanguage(user.nativeLanguage)) return fail(400, { error: "Set your native language before starting." });
+		if (user.nativeLanguage === tpl.language) return fail(400, { error: "Your native and learning languages must be different." });
+		if (!tpl.translationReference?.length || !tpl.context?.trim()) return fail(404, { error: "Translation template is incomplete" });
+		try {
+			const sourceSet = await getOrCreateTranslationSourceSet({
+				templateId,
+				referenceParagraphs: tpl.translationReference,
+				context: tpl.context,
+				sourceLanguage: tpl.language,
+				promptLanguage: user.nativeLanguage,
+			});
+			const attemptId = await getOrCreateTranslationAttempt(user.id, sourceSet.id, sourceSet.candidates.length);
+			return { success: true, attemptId };
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
+		}
 	},
 
 	submit: async (event) => {
 		const user = requireUser(event);
-
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
-
-		const parsed = parseTranslationsForm(await event.request.formData());
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
+		const parsed = parseAnswers(await event.request.formData());
 		if (!parsed.ok) return fail(400, { error: parsed.error });
-
-		// Fetch the template to get passages and agent prompt for evaluation
-		const [tpl] = await db
-			.select({
-				translationBase: template.translationBase,
-				language: template.language,
-			})
-			.from(template)
-			.where(translateTemplateFilter(templateId, user.activeLanguage))
-			.limit(1);
-
-		if (!tpl) return fail(404, { error: "Template not found" });
-
-		const recordId = await upsertAttempt(user.id, templateId, parsed.translations, parsed.attemptId);
-
-		// Evaluate via Agent API using the global hardcoded prompt
-		if (tpl?.translationBase) {
-			try {
-				const fullPassages = tpl.translationBase as string[][];
-				// Build evaluable sentence list preserving original keys
-				const allSentences = flattenPassages(fullPassages);
-				const evaluableSentences = allSentences.filter((s) => !isShortSentence(s.text));
-				const evaluableTranslations: Record<string, string> = {};
-				for (const s of evaluableSentences) {
-					if (parsed.translations[s.key]?.trim()) {
-						evaluableTranslations[s.key] = parsed.translations[s.key];
-					}
-				}
-
-				const evalPrompt = buildTranslationEvalPrompt(tpl.language as LanguageCode);
-				// If all sentences were filtered as short, skip LLM evaluation
-				let evaluation: {
-					overallScore?: string;
-					overallFeedback?: string;
-					highlights?: { key: string; type: "good" | "bad"; feedback: string }[];
-				};
-				if (evaluableSentences.length === 0) {
-					evaluation = {};
-				} else {
-					evaluation = await evaluateTranslation(evalPrompt, evaluableSentences, evaluableTranslations, user.id);
-				}
-				await db
-					.update(translationAttempt)
-					.set({ status: "evaluated", evaluation, updatedAt: new Date() })
-					.where(eq(translationAttempt.id, recordId));
-			} catch (err) {
-				// Keep as "draft" — user can retry
-				return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
-			}
-		} else {
-			// No translation base — just mark as submitted
-			await db.update(translationAttempt).set({ status: "submitted", updatedAt: new Date() }).where(eq(translationAttempt.id, recordId));
+		const record = await getOwnedAttempt(parsed.attemptId, user.id, templateId);
+		if (!record) return fail(403, { error: "Attempt not found or not owned by user" });
+		if (record.status !== "draft") return fail(409, { error: "Attempt has already been submitted" });
+		if (!validateCompleteAnswers(parsed.answers, record.candidates.length)) {
+			return fail(400, { error: "Complete every paragraph before submitting" });
 		}
-
-		return { success: true };
-	},
-
-	generateModelTranslation: async (event) => {
-		const user = requireUser(event);
-
-		const templateId = Number(event.params.id);
-		if (Number.isNaN(templateId)) return fail(400, { error: "Invalid template ID" });
-
-		const [tpl] = await db
-			.select({
-				translationBase: template.translationBase,
-				language: template.language,
-			})
-			.from(template)
-			.where(translateTemplateFilter(templateId, user.activeLanguage))
-			.limit(1);
-
-		if (!tpl?.translationBase) return fail(404, { error: "Template has no translation base" });
-
-		const passages = tpl.translationBase as string[][];
-		const sentences = flattenPassages(passages);
-
-		const sourceLines = sentences.map((s) => `[${s.key}] ${s.text}`).join("\n");
-		const prompt = buildModelTranslationPrompt(tpl.language as LanguageCode);
-
 		try {
-			const modelTranslations = await chatJson(ModelTranslationsSchema, {
-				messages: [
-					{ role: "system", content: prompt },
-					{ role: "user", content: `Translate these sentences:\n${sourceLines}` },
-				],
-				options: { temperature: 0.5, maxTokens: 4096 },
-				userId: user.id,
-			});
-			return { success: true, modelTranslations };
-		} catch (err) {
-			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
+			await submitAnswers(parsed.attemptId, parsed.answers);
+		} catch (cause) {
+			return fail(actionErrorStatus(cause), { error: llmErrorMessage(cause) });
+		}
+		try {
+			const evaluation = await evaluateAttempt(parsed.attemptId, user.id, templateId);
+			return { success: true, evaluation };
+		} catch (cause) {
+			return fail(actionErrorStatus(cause), { error: llmErrorMessage(cause), submitted: true });
 		}
 	},
 
-	explainFeedback: async (event) => {
+	retryEvaluation: async (event) => {
 		const user = requireUser(event);
-		const formData = await event.request.formData();
-
-		const sourceSentence = getFormString(formData, "sourceSentence");
-		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
-		const userTranslation = getFormString(formData, "userTranslation");
-		if (!userTranslation) return fail(400, { error: "Missing user translation" });
-		const feedback = getFormString(formData, "feedback");
-		if (!feedback) return fail(400, { error: "Missing feedback" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
-		if (hasOversizedTutorHelpText([sourceSentence, userTranslation, feedback])) return fail(400, { error: "Tutor help text is too long" });
-
-		const langName = getLangName(language);
-		const prompt = buildExplainFeedbackPrompt(validateLanguageCode(language));
-
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
+		const attemptId = parseAttemptId(await event.request.formData());
+		if (!attemptId) return fail(400, { error: "Invalid attempt ID" });
 		try {
-			const reply = await chatText({
-				messages: [
-					{ role: "system", content: prompt },
-					{
-						role: "user",
-						content: `Source sentence: "${sourceSentence}"\n\nLearner's ${langName} translation: "${userTranslation}"\n\nThe feedback they received: "${feedback}"\n\nPlease expand on this feedback with a detailed explanation.`,
-					},
-				],
-				options: { temperature: 0.7, maxTokens: 4096 },
-				userId: user.id,
-			});
-			return { success: true, explanation: reply.content };
-		} catch (err) {
-			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
-		}
-	},
-
-	translateSentence: async (event) => {
-		const user = requireUser(event);
-		const formData = await event.request.formData();
-
-		const sourceSentence = getFormString(formData, "sourceSentence");
-		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
-		if (hasOversizedTutorHelpText([sourceSentence])) return fail(400, { error: "Tutor help text is too long" });
-
-		const langName = getLangName(language);
-
-		try {
-			const reply = await chatText({
-				messages: [
-					{
-						role: "system",
-						content: `You are an expert ${langName} translator. Translate the following sentence into natural, fluent ${langName}. Return ONLY the translation, no extra text, no quotes, no explanation.`,
-					},
-					{ role: "user", content: sourceSentence },
-				],
-				options: { temperature: 0.3, maxTokens: 512 },
-				userId: user.id,
-			});
-			return { success: true, translation: reply.content.trim() };
-		} catch (err) {
-			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
+			const evaluation = await evaluateAttempt(attemptId, user.id, templateId);
+			return { success: true, evaluation };
+		} catch (cause) {
+			return fail(actionErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
 	},
 
 	askTutor: async (event) => {
 		const user = requireUser(event);
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
 		const formData = await event.request.formData();
-
-		const sourceSentence = getFormString(formData, "sourceSentence");
-		if (!sourceSentence) return fail(400, { error: "Missing source sentence" });
-		const userTranslation = getFormString(formData, "userTranslation");
-		if (!userTranslation) return fail(400, { error: "Missing user translation" });
-		const feedback = getFormString(formData, "feedback");
-		if (!feedback) return fail(400, { error: "Missing feedback" });
-		const question = getFormString(formData, "question");
-		if (!question) return fail(400, { error: "Missing question" });
-		const language = formData.get("language");
-		if (!language || typeof language !== "string") return fail(400, { error: "Missing language" });
-		if (hasOversizedTutorHelpText([sourceSentence, userTranslation, feedback, question])) return fail(400, { error: "Tutor help text is too long" });
-
-		const langName = getLangName(language);
-
+		const attemptId = parseAttemptId(formData);
+		const paragraphIndex = Number(formData.get("paragraphIndex"));
+		const question = formData.get("question");
+		if (!attemptId || !Number.isInteger(paragraphIndex) || paragraphIndex < 0 || typeof question !== "string" || !question.trim()) {
+			return fail(400, { error: "Invalid tutor question" });
+		}
+		if (question.length > PRACTICE_UI_TEXT_MAX_LENGTH) return fail(400, { error: "Tutor question is too long" });
+		const record = await getOwnedAttempt(attemptId, user.id, templateId);
+		if (!record) return fail(403, { error: "Attempt not found or not owned by user" });
+		if (record.status !== "evaluated" || !record.evaluation) return fail(409, { error: "Evaluation is not available" });
+		const [answer] = await db
+			.select({ translation: translationAnswer.translation, candidateIndex: translationAnswer.candidateIndex })
+			.from(translationAnswer)
+			.where(and(eq(translationAnswer.attemptId, attemptId), eq(translationAnswer.paragraphIndex, paragraphIndex)))
+			.limit(1);
+		const feedback = record.evaluation.paragraphs.find((item) => item.paragraphIndex === paragraphIndex);
+		if (!answer || !feedback || !record.referenceParagraphs[paragraphIndex]) return fail(404, { error: "Paragraph not found" });
 		try {
 			const reply = await chatText({
 				messages: [
 					{
 						role: "system",
-						content: `You are an expert ${langName} language tutor. A learner received feedback on their translation. Answer their follow-up question helpfully and concisely in Markdown. Reference the original sentence and feedback in your answer.`,
+						content: `Answer concisely as a translation tutor in ${record.promptLanguage}. Use ${record.sourceLanguage} only for examples and suggested wording. Accept natural synonymous translations.`,
 					},
 					{
 						role: "user",
-						content: `Source sentence: "${sourceSentence}"\n\nLearner's translation: "${userTranslation}"\n\nFeedback received: "${feedback}"\n\nLearner's question: ${question}`,
+						content: `Context: ${record.context}\nPrompt: ${record.candidates[paragraphIndex][answer.candidateIndex]}\nLearner translation: ${answer.translation}\nAuthentic reference: ${record.referenceParagraphs[paragraphIndex]}\nTutor feedback: ${feedback.feedback}\nQuestion: ${question.trim()}`,
 					},
 				],
 				options: { temperature: 0.7, maxTokens: 2048 },
 				userId: user.id,
 			});
 			return { success: true, answer: reply.content };
-		} catch (err) {
-			return fail(llmErrorStatus(err), { error: llmErrorMessage(err) });
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
 	},
 };

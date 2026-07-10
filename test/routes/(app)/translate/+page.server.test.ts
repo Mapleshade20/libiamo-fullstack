@@ -1,13 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { load } from "$routes/(app)/translate/+page.server";
 
-const { mockOrderBy, mockWhere, mockSelect } = vi.hoisted(() => {
+const { mockAnd, mockEq, mockOrderBy, mockWhere, mockSelect } = vi.hoisted(() => {
+	const mockAnd = vi.fn((...conditions: unknown[]) => ({ operator: "and", conditions }));
+	const mockEq = vi.fn((left: unknown, right: unknown) => ({ operator: "eq", left, right }));
 	const mockOrderBy = vi.fn<() => any>();
 	const mockWhere = vi.fn<() => any>(() => ({ orderBy: mockOrderBy }));
-	const mockFrom = vi.fn<() => any>(() => ({ where: mockWhere }));
+	const mockFrom = vi.fn<() => any>(() => ({ where: mockWhere, innerJoin: vi.fn(() => ({ where: mockWhere })) }));
 	const mockSelect = vi.fn<() => any>(() => ({ from: mockFrom }));
-	return { mockOrderBy, mockWhere, mockFrom, mockSelect };
+	return { mockAnd, mockEq, mockOrderBy, mockWhere, mockFrom, mockSelect };
 });
+
+vi.mock("drizzle-orm", () => ({
+	and: mockAnd,
+	desc: vi.fn((column: unknown) => ({ operator: "desc", column })),
+	eq: mockEq,
+}));
 
 vi.mock("$lib/server/db", () => ({
 	db: {
@@ -27,14 +35,19 @@ vi.mock("$lib/server/db/schema", () => ({
 		isActive: "isActive",
 	},
 	translationAttempt: {
-		templateId: "templateId",
+		sourceSetId: "sourceSetId",
 		status: "status",
 		userId: "userId",
 		updatedAt: "updatedAt",
 	},
+	translationSourceSet: { id: "sourceSet.id", templateId: "sourceSet.templateId", promptLanguage: "sourceSet.promptLanguage" },
 }));
 
 describe("(app) translate +page.server", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("redirects unauthenticated users", async () => {
 		await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({
 			status: 302,
@@ -51,11 +64,15 @@ describe("(app) translate +page.server", () => {
 		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
 		mockOrderBy.mockResolvedValueOnce([]);
 
-		const user = { id: "u1", activeLanguage: "en" };
+		const user = { id: "u1", activeLanguage: "en", nativeLanguage: "fr" };
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.templates).toEqual(templates);
 		expect(result.statusMap).toEqual({});
+		expect(mockAnd).toHaveBeenLastCalledWith(
+			{ operator: "eq", left: "userId", right: "u1" },
+			{ operator: "eq", left: "sourceSet.promptLanguage", right: "fr" },
+		);
 	});
 
 	it("returns empty array when no translator templates exist", async () => {
@@ -65,7 +82,7 @@ describe("(app) translate +page.server", () => {
 		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
 		mockOrderBy.mockResolvedValueOnce([]);
 
-		const user = { id: "u1", activeLanguage: "ja" };
+		const user = { id: "u1", activeLanguage: "ja", nativeLanguage: "en" };
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.templates).toEqual([]);
@@ -85,9 +102,20 @@ describe("(app) translate +page.server", () => {
 			{ templateId: 2, status: "submitted" },
 		]);
 
-		const user = { id: "u1", activeLanguage: "en" };
+		const user = { id: "u1", activeLanguage: "en", nativeLanguage: "fr" };
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.statusMap).toEqual({ 1: "evaluated", 2: "submitted" });
+	});
+
+	it("does not reuse attempt statuses when native language is unset", async () => {
+		const templates = [{ id: 1, titleBase: "T1", shortObjectiveBase: "S1", difficulty: 1, interactionType: "translate" }];
+		mockWhere.mockResolvedValueOnce(templates);
+
+		const user = { id: "u1", activeLanguage: "en", nativeLanguage: null };
+		const result = (await load({ locals: { user } } as any)) as any;
+
+		expect(result.statusMap).toEqual({});
+		expect(mockSelect).toHaveBeenCalledTimes(1);
 	});
 });

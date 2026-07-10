@@ -49,7 +49,7 @@ type TemplateData = {
 	agentPromptBase?: string | null;
 	materialsMd?: string | null;
 	objectivesBase?: string[] | null;
-	translationBase?: string[][] | null;
+	translationReference?: string[] | null;
 	tags?: string[] | null;
 };
 
@@ -143,7 +143,7 @@ const templateFieldOrder = [
 	"descriptionBase",
 	"agentPromptBase",
 	"objectivesBase",
-	"translationBase",
+	"translationReference",
 	"tags",
 ];
 
@@ -164,7 +164,7 @@ let descriptionBase = $state(untrack(() => template.descriptionBase ?? ""));
 let agentPromptBase = $state(untrack(() => template.agentPromptBase ?? ""));
 let objectivesText = $state(untrack(() => (template.objectivesBase ?? []).join("\n")));
 let tagsText = $state(untrack(() => (template.tags ?? []).join(", ")));
-let translationText = $state(untrack(() => (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n")));
+let translationText = $state(untrack(() => (template.translationReference ?? []).join("\n\n")));
 
 // Parse objectives text to array for slot extraction
 const objectivesArray = $derived(
@@ -239,7 +239,7 @@ function syncTemplateDraftFromProps() {
 	agentPromptBase = template.agentPromptBase ?? "";
 	objectivesText = (template.objectivesBase ?? []).join("\n");
 	tagsText = (template.tags ?? []).join(", ");
-	translationText = (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n");
+	translationText = (template.translationReference ?? []).join("\n\n");
 	mdSource = template.materialsMd ?? "";
 }
 
@@ -600,7 +600,19 @@ function confirmDeleteVariant() {
 			<Textarea id="descriptionBase" name="descriptionBase" rows={3} bind:value={descriptionBase} />
 		</div>
 
-		{#if !isTranslate && !hideAdminFields}
+		{#if isTranslate}
+			<div class="space-y-2">
+				<Label for="agentPromptBase">Translation Context</Label>
+				<div class="grid grid-cols-1 items-start gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+					<span class="pt-2 text-muted-foreground">This is in the context of [</span>
+					<Textarea id="agentPromptBase" name="agentPromptBase" rows={3} bind:value={agentPromptBase} required />
+					<span class="pt-2 text-muted-foreground">].</span>
+				</div>
+				{#if form?.errors?.agentPromptBase}
+					<p class="text-sm text-red-600">{form.errors.agentPromptBase[0]}</p>
+				{/if}
+			</div>
+		{:else if !hideAdminFields}
 			<div class="space-y-2">
 				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at session start) </Label>
 				<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
@@ -657,15 +669,19 @@ function confirmDeleteVariant() {
 	<!-- Passages (translate mode only) -->
 	{#if isTranslate}
 		<div class="space-y-2">
-			<Label for="translationBase">Source Text (one sentence per line, empty line = new paragraph)</Label>
+			<Label for="translationReference">Authentic Reference Text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})</Label>
 			<Textarea
-				id="translationBase"
-				name="translationBase"
+				id="translationReference"
+				name="translationReference"
 				rows={10}
 				bind:value={translationText}
-				placeholder="The sun was setting behind the mountains.&#10;The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank.&#10;The water reflected the fading light."
+				required
+				placeholder="The sun was setting behind the mountains. The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank. The water reflected the fading light."
 			/>
-			<p class="text-xs text-muted-foreground">Each line = one sentence. Blank line = paragraph break.</p>
+			<p class="text-xs text-muted-foreground">Separate paragraphs with a blank line. Store only authentic text in the template language.</p>
+			{#if form?.errors?.translationReference}
+				<p class="text-sm text-red-600">{form.errors.translationReference[0]}</p>
+			{/if}
 		</div>
 	{/if}
 

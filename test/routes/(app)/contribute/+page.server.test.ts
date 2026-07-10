@@ -107,7 +107,8 @@ describe("Contribute +page.server", () => {
 				interactionType: "translate",
 				ui: "translator",
 				titleBase: "Translate this",
-				translationBase: "Hello\nWorld\n\nGoodbye\nMoon",
+				agentPromptBase: "a friendly letter between former colleagues",
+				translationReference: "Hello\nWorld\n\nGoodbye\nMoon",
 			};
 
 			const event = createEvent(entries);

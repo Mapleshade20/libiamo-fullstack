@@ -22,6 +22,20 @@
       "when": 1782304798471,
       "tag": "0002_trial_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783675740407,
+      "tag": "0003_translation_source_sets",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783680060724,
+      "tag": "0004_remove_translation_prompt_version",
+      "breakpoints": true
     }
   ]
 }

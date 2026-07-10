@@ -46,7 +46,7 @@ const canConfirmImport = $derived(importPreview?.ok === true);
 const templateExportJson = $derived(
 	JSON.stringify(
 		{
-			version: 1,
+			version: 2,
 			template: {
 				language: data.template.language,
 				interactionType: data.template.interactionType,
@@ -65,7 +65,7 @@ const templateExportJson = $derived(
 				agentPromptBase: data.template.agentPromptBase,
 				materialsMd: data.template.materialsMd,
 				objectivesBase: data.template.objectivesBase,
-				translationBase: data.template.translationBase,
+				translationReference: data.template.translationReference,
 				tags: data.template.tags,
 			},
 			variants:

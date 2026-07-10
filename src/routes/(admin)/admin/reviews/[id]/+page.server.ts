@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (event) => {
 			objectivesBase: templateContribution.objectivesBase,
 			agentPromptBase: templateContribution.agentPromptBase,
 			materialsMd: templateContribution.materialsMd,
-			translationBase: templateContribution.translationBase,
+			translationReference: templateContribution.translationReference,
 			tags: templateContribution.tags,
 			slotValues: templateContribution.slotValues,
 			openingState: templateContribution.openingState,

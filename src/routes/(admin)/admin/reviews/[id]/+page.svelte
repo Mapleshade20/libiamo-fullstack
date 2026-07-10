@@ -126,16 +126,12 @@ function fmtDate(d: Date | null): string {
 		</div>
 	{/if}
 
-	{#if isTranslate && c.translationBase}
+	{#if isTranslate && c.translationReference}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Source Text</Label>
 			<div class="space-y-2">
-				{#each c.translationBase as paragraph}
-					<p class="text-sm">
-						{#each paragraph as sentence}
-							{sentence}
-						{/each}
-					</p>
+				{#each c.translationReference as paragraph}
+					<p class="text-sm whitespace-pre-wrap">{paragraph}</p>
 				{/each}
 			</div>
 		</div>

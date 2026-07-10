@@ -198,19 +198,41 @@ describe("schemas", () => {
 		expect(result.tags).toEqual(["travel", "food"]);
 	});
 
-	it("templateContributionSchema transforms translationBase paragraphs", () => {
+	it("templateContributionSchema transforms translationReference paragraphs", () => {
 		const result = templateContributionSchema.parse({
 			...baseContribution,
-			translationBase: "Hello\nWorld\n\nGoodbye",
+			translationReference: "Hello\nWorld\n\nGoodbye",
 		});
-		expect(result.translationBase).toEqual([["Hello", "World"], ["Goodbye"]]);
+		expect(result.translationReference).toEqual(["Hello\nWorld", "Goodbye"]);
+	});
+
+	it("templateContributionSchema requires context and authentic references for translation templates", () => {
+		const missing = templateContributionSchema.safeParse({
+			...baseContribution,
+			interactionType: "translate",
+			ui: "translator",
+		});
+		expect(missing.success).toBe(false);
+		if (!missing.success) {
+			expect(missing.error.issues.map((issue) => issue.path[0])).toEqual(expect.arrayContaining(["agentPromptBase", "translationReference"]));
+		}
+
+		expect(
+			templateContributionSchema.safeParse({
+				...baseContribution,
+				interactionType: "translate",
+				ui: "translator",
+				agentPromptBase: "a message to a close friend",
+				translationReference: "Authentic source paragraph.",
+			}).success,
+		).toBe(true);
 	});
 
 	it("templateContributionSchema returns empty for optional fields when not provided", () => {
 		const result = templateContributionSchema.parse(baseContribution);
 		expect(result.objectivesBase).toEqual([]);
 		expect(result.tags).toEqual([]);
-		expect(result.translationBase).toBeNull();
+		expect(result.translationReference).toBeNull();
 		expect(result.shortObjectiveBase).toBeUndefined();
 		expect(result.descriptionBase).toBeUndefined();
 	});

@@ -39,7 +39,7 @@ export const template = pgTable(
 		objectivesBase: text("objectives_base").array(),
 		agentPromptBase: text("agent_prompt_base"),
 		materialsMd: text("materials_md"),
-		translationBase: jsonb("translation_base").$type<string[][]>(),
+		translationReference: jsonb("translation_reference").$type<string[]>(),
 		tags: text("tags").array(),
 
 		maxTurns: integer("max_turns"),
@@ -76,7 +76,7 @@ export const templateContribution = pgTable("template_contribution", {
 	objectivesBase: text("objectives_base").array(),
 	agentPromptBase: text("agent_prompt_base"),
 	materialsMd: text("materials_md"),
-	translationBase: jsonb("translation_base").$type<string[][]>(),
+	translationReference: jsonb("translation_reference").$type<string[]>(),
 	tags: text("tags").array(),
 
 	slotValues: jsonb("slot_values").notNull().default({}),
@@ -191,6 +191,28 @@ export const sessionMessage = pgTable(
 	(t) => [index("session_message_session_idx").on(t.sessionId)],
 );
 
+// ── translationSourceSet ────────────────────────────────────────────
+export const translationSourceSet = pgTable(
+	"translation_source_set",
+	{
+		id: serial("id").primaryKey(),
+		templateId: integer("template_id")
+			.notNull()
+			.references(() => template.id),
+		sourceLanguage: text("source_language").notNull(),
+		promptLanguage: text("prompt_language").notNull(),
+		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>().notNull(),
+		context: text("context").notNull(),
+		contentFingerprint: text("content_fingerprint").notNull(),
+		candidates: jsonb("candidates").$type<string[][]>().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [
+		uniqueIndex("translation_source_set_template_prompt_fingerprint_idx").on(t.templateId, t.promptLanguage, t.contentFingerprint),
+		index("translation_source_set_template_idx").on(t.templateId),
+	],
+);
+
 // ── translationAttempt ──────────────────────────────────────────────
 export const translationAttempt = pgTable(
 	"translation_attempt",
@@ -199,23 +221,46 @@ export const translationAttempt = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		templateId: integer("template_id")
+		sourceSetId: integer("source_set_id")
 			.notNull()
-			.references(() => template.id),
-		translations: jsonb("translations").$type<Record<string, string>>().notNull().default({}),
+			.references(() => translationSourceSet.id),
 		status: text("status").$type<"draft" | "submitted" | "evaluated">().notNull().default("draft"),
 		evaluation: jsonb("evaluation").$type<{
-			overallScore?: string;
-			overallFeedback?: string;
-			highlights?: { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string }[];
+			overallScore: "A" | "B" | "C";
+			overallFeedback: string;
+			paragraphs: { paragraphIndex: number; feedback: string; rewriteSuggestion: string }[];
 		}>(),
+		submittedAt: timestamp("submitted_at"),
+		evaluatedAt: timestamp("evaluated_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(t) => [index("translation_attempt_user_template_idx").on(t.userId, t.templateId)],
+	(t) => [uniqueIndex("translation_attempt_user_source_set_idx").on(t.userId, t.sourceSetId), index("translation_attempt_user_idx").on(t.userId)],
+);
+
+// ── translationAnswer ───────────────────────────────────────────────
+export const translationAnswer = pgTable(
+	"translation_answer",
+	{
+		attemptId: integer("attempt_id")
+			.notNull()
+			.references(() => translationAttempt.id, { onDelete: "cascade" }),
+		paragraphIndex: integer("paragraph_index").notNull(),
+		translation: text("translation").notNull().default(""),
+		candidateIndex: integer("candidate_index").notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.attemptId, t.paragraphIndex] }),
+		check("translation_answer_paragraph_index_check", sql`${t.paragraphIndex} >= 0`),
+		check("translation_answer_candidate_index_check", sql`${t.candidateIndex} >= 0 AND ${t.candidateIndex} <= 2`),
+	],
 );
 
 // ── note ───────────────────────────────────────────────────────────
@@ -298,6 +343,7 @@ export const templateRelations = relations(template, ({ one, many }) => ({
 	}),
 	tasks: many(task),
 	variants: many(templateVariant),
+	translationSourceSets: many(translationSourceSet),
 }));
 
 export const templateVariantRelations = relations(templateVariant, ({ one, many }) => ({
@@ -321,14 +367,30 @@ export const templateContributionRelations = relations(templateContribution, ({ 
 	}),
 }));
 
-export const translationAttemptRelations = relations(translationAttempt, ({ one }) => ({
+export const translationSourceSetRelations = relations(translationSourceSet, ({ one, many }) => ({
+	template: one(template, {
+		fields: [translationSourceSet.templateId],
+		references: [template.id],
+	}),
+	attempts: many(translationAttempt),
+}));
+
+export const translationAttemptRelations = relations(translationAttempt, ({ one, many }) => ({
 	user: one(user, {
 		fields: [translationAttempt.userId],
 		references: [user.id],
 	}),
-	template: one(template, {
-		fields: [translationAttempt.templateId],
-		references: [template.id],
+	sourceSet: one(translationSourceSet, {
+		fields: [translationAttempt.sourceSetId],
+		references: [translationSourceSet.id],
+	}),
+	answers: many(translationAnswer),
+}));
+
+export const translationAnswerRelations = relations(translationAnswer, ({ one }) => ({
+	attempt: one(translationAttempt, {
+		fields: [translationAnswer.attemptId],
+		references: [translationAttempt.id],
 	}),
 }));
 

@@ -27,7 +27,7 @@ type ImportedTemplateData = {
 	agentPromptBase?: string | null;
 	materialsMd?: string | null;
 	objectivesBase?: string[] | null;
-	translationBase?: string[][] | null;
+	translationReference?: string[] | null;
 	tags?: string[] | null;
 };
 

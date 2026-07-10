@@ -44,7 +44,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	task: { id: "task.id", templateId: "task.templateId", variantId: "task.variantId" },
 	template: { id: "id", isActive: "isActive" },
 	templateVariant: { id: "id", templateId: "templateId", isActive: "isActive" },
-	translationAttempt: { id: "translationAttempt.id", templateId: "translationAttempt.templateId" },
+	translationSourceSet: { id: "translationSourceSet.id", templateId: "translationSourceSet.templateId" },
 }));
 
 vi.mock("drizzle-orm", () => ({

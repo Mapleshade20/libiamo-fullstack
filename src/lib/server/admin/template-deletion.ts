@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { task, template, translationAttempt } from "$lib/server/db/schema";
+import { task, template, translationSourceSet } from "$lib/server/db/schema";
 
 export type DeletionSafetyResult =
 	| { safe: true }
@@ -23,9 +23,9 @@ async function hasScheduledTaskForVariant(variantId: number) {
 
 async function hasTranslationAttemptForTemplate(templateId: number) {
 	const [existingAttempt] = await db
-		.select({ id: translationAttempt.id })
-		.from(translationAttempt)
-		.where(eq(translationAttempt.templateId, templateId))
+		.select({ id: translationSourceSet.id })
+		.from(translationSourceSet)
+		.where(eq(translationSourceSet.templateId, templateId))
 		.limit(1);
 	return Boolean(existingAttempt);
 }

@@ -2,565 +2,469 @@
 import AlertCircle from "@lucide/svelte/icons/alert-circle";
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
+import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Clock from "@lucide/svelte/icons/clock";
 import Gem from "@lucide/svelte/icons/gem";
-import Languages from "@lucide/svelte/icons/languages";
-import Save from "@lucide/svelte/icons/save";
+import Loader from "@lucide/svelte/icons/loader-circle";
+import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Send from "@lucide/svelte/icons/send";
 import Star from "@lucide/svelte/icons/star";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import {
+	parseTranslationDraft,
+	serializeTranslationDraft,
+	type TranslationDraftAnswer,
+	translationDraftStorageKey,
+} from "$lib/client/translation-draft";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import EvaluationSummary from "$lib/components/translate/EvaluationSummary.svelte";
-import TranslationSentence from "$lib/components/translate/TranslationSentence.svelte";
-import { Badge } from "$lib/components/ui/badge";
+import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
 import { Button } from "$lib/components/ui/button";
-import { type LanguageCode, t } from "$lib/i18n";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { renderMarkdown } from "$lib/markdown";
 import type { ActionNotificationContent } from "$lib/notifications";
 
-type EvalHighlight = { key: string; type: "good" | "bad"; feedback: string; grammarNote?: string; explanation?: string };
-type Evaluation = {
-	overallScore?: string;
-	overallFeedback?: string;
-	highlights?: EvalHighlight[];
-};
+type Answer = TranslationDraftAnswer;
+type ParagraphEvaluation = { paragraphIndex: number; feedback: string; rewriteSuggestion: string };
+type Evaluation = { overallScore: "A" | "B" | "C"; overallFeedback: string; paragraphs: ParagraphEvaluation[] };
 
 let { data } = $props();
 let tpl = $derived(data.template);
-let lang = $derived(tpl.language as LanguageCode);
-
-// translationBase is string[][] (paragraphs → sentences)
-type Passage = string[][];
-let passages = $derived<Passage>((tpl.translationBase as Passage) ?? []);
-
-// Reactive values from attempt data
-let attemptId = $derived<number | null>(data.attempt?.id ?? null);
-let attemptStatus = $derived<string>(data.attempt?.status ?? "");
-let canTranslate = $derived(attemptStatus === "" || attemptStatus === "draft");
-let isDone = $derived(attemptStatus === "submitted" || attemptStatus === "evaluated");
-let savedEvaluation = $derived<Evaluation | null>(data.attempt?.evaluation ?? null);
-
-// State
-let translating = $state(false);
-let translations = $state<Record<string, string>>({});
-let activeKey = $state<string | null>(null);
-let saving = $state(false);
-let saveError = $state<string | null>(null);
-let submitted = $state(false);
-let submitError = $state<string | null>(null);
+let attempt = $derived(data.attempt);
+let answers = $state<Answer[]>([]);
+let initializedAttemptId = $state<number | null>(null);
+let autoPreparedTemplateId = $state<number | null>(null);
+let preparing = $state(false);
+let evaluating = $state(false);
+let showConfirmation = $state(false);
+let candidatePickerIndex = $state<number | null>(null);
+let expandedReferences = $state<Set<number>>(new Set());
+let tutorQuestions = $state<Record<number, string>>({});
+let tutorAnswers = $state<Record<number, string>>({});
+let tutorLoading = $state<Set<number>>(new Set());
 let notificationKey = $state(0);
 let actionNotification = $state<ActionNotificationContent | null>(null);
 
-// Live evaluation state (after submit)
-let liveEvaluation = $state<Evaluation | null>(null);
-let visibleHighlightKeys = $state<Set<string>>(new Set());
-let evaluating = $state(false);
+let isDraft = $derived(attempt?.status === "draft");
+let isSubmitted = $derived(attempt?.status === "submitted");
+let isEvaluated = $derived(attempt?.status === "evaluated");
+let allComplete = $derived(answers.length > 0 && answers.every((answer) => answer.translation.trim().length > 0));
+let evaluation = $derived((attempt?.evaluation ?? null) as Evaluation | null);
 
-// The effective evaluation to display
-let evaluation = $derived<Evaluation | null>(liveEvaluation ?? savedEvaluation);
+$effect(() => {
+	if (!attempt || initializedAttemptId === attempt.id) return;
+	initializedAttemptId = attempt.id;
+	const initialAnswers = attempt.answers.map((answer: Answer) => ({ ...answer, translation: attempt.status === "draft" ? "" : answer.translation }));
+	answers = attempt.status === "draft" ? loadSessionDraft(attempt.id, initialAnswers, attempt.candidates) : initialAnswers;
+	if (attempt.status === "draft") persistSessionDraft();
+});
 
-function isShort(text: string): boolean {
-	const t = text.trim();
-	if (t.length === 0) return true;
-	const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff]/.test(t);
-	if (hasCJK) return t.replace(/\s+/g, "").length <= 8;
-	return t.split(/\s+/).length <= 3 || t.length <= 20;
-}
+$effect(() => {
+	if (attempt && attempt.status !== "draft") clearSessionDraft(attempt.id);
+});
 
-// Computed
-let totalSentences = $derived(passages.reduce((s, p) => s + p.length, 0));
-let shortKeys = $derived(new Set(passages.flatMap((p, pi) => p.map((_, si) => sentenceKey(pi, si)).filter((_, si) => isShort(p[si])))));
-let effectiveTotal = $derived(totalSentences - shortKeys.size);
-let allShort = $derived(effectiveTotal === 0 && totalSentences > 0);
-let sentenceReferences = $state<Record<string, string>>({});
-let loadingReferences = $state<Set<string>>(new Set());
-let referenceErrors = $state<Record<string, string>>({});
-let qaHistories = $state<Record<string, { question: string; answer?: string }[]>>({});
-let tutorAnswers = $state<Record<string, string>>({});
-let loadingTutorAnswers = $state<Set<string>>(new Set());
-let tutorErrors = $state<Record<string, string>>({});
-let saveIndicator = $state<string | null>(null);
-let lastSavedValue = $state<string>("");
-let saveTimer = $state<ReturnType<typeof setTimeout> | null>(null);
-let lastSaveError = $state(false);
+$effect(() => {
+	if (data.prepared || data.blockedReason || autoPreparedTemplateId === tpl.id) return;
+	autoPreparedTemplateId = tpl.id;
+	void prepareTranslation();
+});
 
-function showActionNotification(variant: "success" | "error" | "info", title: string, message: string) {
+function notify(variant: "success" | "error" | "info", title: string, message: string) {
 	notificationKey += 1;
 	actionNotification = { variant, title, message, key: notificationKey };
 }
 
-// localStorage persistence
-let storageKey = $derived(`translate-${tpl.id}`);
-function persistRefs() {
-	if (typeof localStorage === "undefined") return;
+async function postAction(action: string, form: FormData) {
+	const response = await fetch(`?/${action}`, { method: "POST", body: form });
+	return deserialize(await response.text()) as { type: string; data?: Record<string, unknown> };
+}
+
+function resultError(result: { type: string; data?: Record<string, unknown> }, fallback: string) {
+	return result.type === "failure" && typeof result.data?.error === "string" ? result.data.error : fallback;
+}
+
+async function prepareTranslation() {
+	preparing = true;
 	try {
-		localStorage.setItem(`${storageKey}-refs`, JSON.stringify(sentenceReferences));
-	} catch {
-		/* ignore */
-	}
-}
-function persistQA() {
-	if (typeof localStorage === "undefined") return;
-	try {
-		localStorage.setItem(`${storageKey}-qa`, JSON.stringify(qaHistories));
-	} catch {
-		/* ignore */
-	}
-}
-
-// Initialize once on mount
-let initialized = false;
-$effect(() => {
-	if (initialized) return;
-	initialized = true;
-	if (data.attempt?.translations) {
-		translations = { ...(data.attempt.translations as Record<string, string>) };
-		lastSavedValue = JSON.stringify(translations);
-	}
-	// Restore ephemeral data from localStorage
-	if (typeof localStorage !== "undefined") {
-		try {
-			const refs = localStorage.getItem(`${storageKey}-refs`);
-			if (refs) sentenceReferences = JSON.parse(refs);
-			const qa = localStorage.getItem(`${storageKey}-qa`);
-			if (qa) qaHistories = JSON.parse(qa);
-		} catch {
-			/* ignore */
-		}
-	}
-	if (attemptStatus === "draft") {
-		translating = true;
-	}
-	if (isDone) {
-		submitted = true;
-		// Show all highlights immediately for loaded evaluations
-		if (savedEvaluation?.highlights) {
-			visibleHighlightKeys = new Set(savedEvaluation.highlights.map((h) => h.key));
-		}
-	}
-});
-
-const effectiveTranslatedCount = $derived(Object.entries(translations).filter(([k, v]) => !shortKeys.has(k) && v?.trim()).length);
-const allTranslated = $derived(allShort || (effectiveTranslatedCount >= effectiveTotal && effectiveTotal > 0));
-function sentenceKey(pi: number, si: number): string {
-	return `${pi}-${si}`;
-}
-
-function startTranslation() {
-	translating = true;
-}
-
-function backToPreview() {
-	translating = false;
-	activeKey = null;
-}
-
-function toggleSentence(key: string) {
-	activeKey = activeKey === key ? null : key;
-}
-
-function difficultyLabel(level: number): string {
-	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
-}
-
-function getHighlight(key: string): EvalHighlight | undefined {
-	return evaluation?.highlights?.find((h) => h.key === key);
-}
-async function handleSaveDraft() {
-	saving = true;
-	saveError = null;
-	try {
-		const form = new FormData();
-		form.set("translations", JSON.stringify(translations));
-		if (attemptId) form.set("attemptId", String(attemptId));
-		const res = await fetch("?/saveDraft", { method: "POST", body: form });
-		const result = deserialize(await res.text());
+		const result = await postAction("prepare", new FormData());
 		if (result.type !== "success") {
-			const message =
-				result.type === "failure"
-					? ((result.data?.error as string | undefined) ?? "Failed to save draft. Please try again.")
-					: "Failed to save draft. Please try again.";
-			saveError = message;
-			showActionNotification("error", "Unable to save draft", message);
+			notify("error", "Unable to prepare translation", resultError(result, "Please try again."));
 			return;
 		}
 		await invalidateAll();
-		showActionNotification("success", "Draft saved", "Your translation draft has been saved.");
 	} catch {
-		const message = "Failed to save draft. Please try again.";
-		saveError = message;
-		showActionNotification("error", "Unable to save draft", message);
+		notify("error", "Unable to prepare translation", "Please check your connection and try again.");
 	} finally {
-		saving = false;
+		preparing = false;
 	}
 }
 
-async function handleSubmit() {
-	if (!allTranslated) return;
-	saving = true;
-	evaluating = true;
-	submitted = true;
-	submitError = null;
-	// Don't exit translation mode — stay for in-place annotation
+function updateAnswer(paragraphIndex: number, patch: Partial<Answer>) {
+	answers = answers.map((answer) => (answer.paragraphIndex === paragraphIndex ? { ...answer, ...patch } : answer));
+	persistSessionDraft();
+}
 
+function chooseCandidate(paragraphIndex: number, candidateIndex: number) {
+	updateAnswer(paragraphIndex, { candidateIndex });
+	candidatePickerIndex = null;
+}
+
+function loadSessionDraft(attemptId: number, fallback: Answer[], candidates: string[][]): Answer[] {
+	if (typeof sessionStorage === "undefined") return fallback;
 	try {
-		const form = new FormData();
-		form.set("translations", JSON.stringify(translations));
-		if (attemptId) form.set("attemptId", String(attemptId));
-		const res = await fetch("?/submit", { method: "POST", body: form });
-		const result = deserialize(await res.text());
-
-		if (result.type === "success") {
-			await invalidateAll();
-			showActionNotification("success", "Translation submitted", "Your translation was submitted for evaluation.");
-			// After invalidation, savedEvaluation should be populated
-			// Animate highlights appearing one by one
-			const evalResult = data.attempt?.evaluation as Evaluation | null;
-			const evalToUse = evalResult?.highlights ? evalResult : null;
-
-			if (evalToUse?.highlights && evalToUse.highlights.length > 0) {
-				liveEvaluation = { ...evalToUse, highlights: [] };
-				// Stagger highlight animations
-				for (let i = 0; i < evalToUse.highlights.length; i++) {
-					await new Promise((r) => setTimeout(r, 400));
-					liveEvaluation = {
-						...evalToUse,
-						highlights: evalToUse.highlights.slice(0, i + 1),
-					};
-					visibleHighlightKeys = new Set([...visibleHighlightKeys, evalToUse.highlights[i].key]);
-				}
-			} else {
-				liveEvaluation = evalToUse;
-			}
-		} else {
-			// LLM failed — reset to draft state so user can retry
-			submitted = false;
-			const message =
-				result.type === "failure"
-					? ((result.data?.error as string | undefined) ?? "Evaluation failed. Please try again.")
-					: "Evaluation failed. Please try again.";
-			submitError = message;
-			showActionNotification("error", "Evaluation failed", message);
-		}
+		return parseTranslationDraft(
+			sessionStorage.getItem(translationDraftStorageKey(attemptId)),
+			fallback,
+			candidates.map((candidateSet) => candidateSet.length),
+		);
 	} catch {
-		// Network error — reset to draft state so user can retry
-		const message = "Evaluation failed. Please try again.";
-		submitted = false;
-		submitError = message;
-		showActionNotification("error", "Evaluation failed", message);
+		return fallback;
+	}
+}
+
+function persistSessionDraft() {
+	if (!attempt || !isDraft || typeof sessionStorage === "undefined") return;
+	try {
+		sessionStorage.setItem(translationDraftStorageKey(attempt.id), serializeTranslationDraft(answers));
+	} catch {
+		// Storage can be unavailable in restricted browser contexts.
+	}
+}
+
+function clearSessionDraft(attemptId: number) {
+	if (typeof sessionStorage === "undefined") return;
+	try {
+		sessionStorage.removeItem(translationDraftStorageKey(attemptId));
+	} catch {
+		// Storage can be unavailable in restricted browser contexts.
+	}
+}
+
+function answerFormData() {
+	const form = new FormData();
+	form.set("attemptId", String(attempt?.id));
+	form.set("answers", JSON.stringify(answers));
+	return form;
+}
+
+async function submitTranslation() {
+	if (!attempt || !allComplete) return;
+	showConfirmation = false;
+	evaluating = true;
+	try {
+		const result = await postAction("submit", answerFormData());
+		if (result.type !== "success") {
+			const submitted = result.type === "failure" && result.data?.submitted === true;
+			if (submitted) clearSessionDraft(attempt.id);
+			notify(
+				"error",
+				submitted ? "Submitted; evaluation pending" : "Unable to submit",
+				resultError(result, submitted ? "Your answers were saved. Retry the Tutor evaluation when ready." : "Please try again."),
+			);
+			await invalidateAll();
+			return;
+		}
+		clearSessionDraft(attempt.id);
+		await invalidateAll();
+		notify("success", "Evaluation ready", "The Tutor has reviewed every paragraph.");
+	} catch {
+		notify("error", "Evaluation interrupted", "Reload the page. If your submission was saved, you can retry evaluation without submitting again.");
+		await invalidateAll();
 	} finally {
 		evaluating = false;
-		saving = false;
 	}
 }
-async function handleShowReference(key: string, sourceSentence: string) {
-	loadingReferences = new Set([...loadingReferences, key]);
-	referenceErrors = { ...referenceErrors, [key]: "" };
+
+async function retryEvaluation() {
+	if (!attempt) return;
+	evaluating = true;
+	const form = new FormData();
+	form.set("attemptId", String(attempt.id));
 	try {
-		const form = new FormData();
-		form.set("sourceSentence", sourceSentence);
-		form.set("language", lang);
-		const res = await fetch("?/translateSentence", { method: "POST", body: form });
-		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
-		if (r.type === "success" && r.data) {
-			sentenceReferences = { ...sentenceReferences, [key]: r.data.translation as string };
-			persistRefs();
+		const result = await postAction("retryEvaluation", form);
+		if (result.type !== "success") {
+			notify("error", "Evaluation failed", resultError(result, "Please try again."));
+			return;
+		}
+		await invalidateAll();
+		notify("success", "Evaluation ready", "The Tutor has reviewed your translation.");
+	} catch {
+		notify("error", "Evaluation failed", "Please check your connection and try again.");
+	} finally {
+		evaluating = false;
+	}
+}
+
+function toggleReference(paragraphIndex: number) {
+	const next = new Set(expandedReferences);
+	if (next.has(paragraphIndex)) next.delete(paragraphIndex);
+	else next.add(paragraphIndex);
+	expandedReferences = next;
+}
+
+async function askTutor(paragraphIndex: number) {
+	if (!attempt) return;
+	const question = tutorQuestions[paragraphIndex]?.trim();
+	if (!question) return;
+	tutorLoading = new Set([...tutorLoading, paragraphIndex]);
+	const form = new FormData();
+	form.set("attemptId", String(attempt.id));
+	form.set("paragraphIndex", String(paragraphIndex));
+	form.set("question", question);
+	try {
+		const result = await postAction("askTutor", form);
+		if (result.type === "success" && typeof result.data?.answer === "string") {
+			tutorAnswers = { ...tutorAnswers, [paragraphIndex]: result.data.answer };
 		} else {
-			referenceErrors = { ...referenceErrors, [key]: r.data?.error ?? "Failed to translate. Please try again." };
+			notify("error", "Tutor unavailable", resultError(result, "Please try again."));
 		}
 	} catch {
-		referenceErrors = { ...referenceErrors, [key]: "Failed to connect. Please try again." };
+		notify("error", "Tutor unavailable", "Please check your connection and try again.");
 	} finally {
-		loadingReferences = new Set([...loadingReferences].filter((k) => k !== key));
+		tutorLoading = new Set([...tutorLoading].filter((index) => index !== paragraphIndex));
 	}
 }
-function findSourceSentence(key: string): string {
-	for (const para of passages) {
-		for (let si = 0; si < para.length; si++) {
-			if (sentenceKey(passages.indexOf(para), si) === key) return para[si];
-		}
-	}
-	return "";
-}
-async function handleAskTutor(key: string, question: string, history: { question: string; answer?: string }[]) {
-	const highlight = getHighlight(key);
-	if (!highlight) return;
-	loadingTutorAnswers = new Set([...loadingTutorAnswers, key]);
-	tutorErrors = { ...tutorErrors, [key]: "" };
-	try {
-		// Build context from previous Q&A
-		let context = "";
-		if (history.length > 1) {
-			context = "\n\nPrevious conversation:\n";
-			for (const qa of history.slice(0, -1)) {
-				context += `Q: ${qa.question}\nA: ${qa.answer ?? "(no answer yet)"}\n`;
-			}
-		}
-		const form = new FormData();
-		form.set("sourceSentence", findSourceSentence(key));
-		form.set("userTranslation", translations[key] ?? "");
-		form.set("feedback", highlight.feedback);
-		form.set("question", question + context);
-		form.set("language", lang);
-		const res = await fetch("?/askTutor", { method: "POST", body: form });
-		const r = deserialize(await res.text()) as { type: string; data?: Record<string, any> };
-		if (r.type === "success" && r.data) {
-			tutorAnswers = { ...tutorAnswers, [key]: r.data.answer as string };
-		} else {
-			tutorErrors = { ...tutorErrors, [key]: r.data?.error ?? "Failed to get answer. Please try again." };
-		}
-	} catch {
-		tutorErrors = { ...tutorErrors, [key]: "Failed to connect. Please try again." };
-	} finally {
-		loadingTutorAnswers = new Set([...loadingTutorAnswers].filter((k) => k !== key));
-	}
-}
-async function handleBlur() {
-	const cv = JSON.stringify(translations);
-	if (cv === lastSavedValue) return;
-	if (saveTimer) clearTimeout(saveTimer);
-	saveTimer = setTimeout(async () => {
-		const vts = JSON.stringify(translations);
-		if (vts === lastSavedValue) return;
-		try {
-			saveIndicator = "Saving...";
-			const form = new FormData();
-			form.set("translations", JSON.stringify(translations));
-			if (attemptId) form.set("attemptId", String(attemptId));
-			const res = await fetch("?/saveDraft", { method: "POST", body: form });
-			if (res.ok) {
-				lastSavedValue = vts;
-				saveIndicator = "Saved";
-				lastSaveError = false;
-				setTimeout(() => {
-					if (saveIndicator === "Saved") saveIndicator = null;
-				}, 2000);
-				await invalidateAll();
-			} else {
-				lastSaveError = true;
-				saveIndicator = null;
-			}
-		} catch {
-			lastSaveError = true;
-			saveIndicator = null;
-		}
-	}, 500);
-}
-$effect(() => {
-	return () => {
-		if (saveTimer) clearTimeout(saveTimer);
-	};
-});
 </script>
 
-<svelte:head>
-	<title>{tpl.title} · Translation · Libiamo</title>
-	<meta name="description" content={`Translate and review “${tpl.title}” with targeted feedback.`}>
-</svelte:head>
+<svelte:head><title>{tpl.title} · Translation</title></svelte:head>
 <ActionNotification notification={actionNotification} />
-<div class="fixed inset-0 bg-card"></div>
-<div class="task-stagger relative z-10 mx-auto max-w-2xl flex flex-col min-h-[calc(100vh-8rem)]">
-	{#if translating}
-		<button
-			type="button"
-			onclick={backToPreview}
-			class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
-		>
-			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-			<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "common.back")}</span>
-		</button>
-	{:else}
-		<a href="/translate" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
-			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-			<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "common.back")}</span>
-		</a>
-	{/if}
-	<div class="mt-12 flex-1 flex flex-col">
-		<div>
-			<div class="mb-4 flex flex-wrap items-center gap-2">
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest"><Languages size={12} class="mr-1" />Translation</Badge>
-				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{difficultyLabel(tpl.difficulty)}</span>
-				{#if isDone || submitted}
-					<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest bg-green-100 text-green-700 border-green-200"
-						><Check size={10} class="mr-0.5" />Done</Badge
-					>
-				{/if}
+
+<main class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl flex-col px-5 py-8 sm:px-8 lg:px-12">
+	<a href="/translate" class="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+		<ArrowLeft size={15} />
+		Back to translations
+	</a>
+
+	<header class="border-b border-border pb-8">
+		<p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Translation Studio</p>
+		<h1 class="max-w-3xl text-2xl md:text-3xl leading-tight">{tpl.title}</h1>
+		{#if tpl.description}
+			<p class="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">{tpl.description}</p>
+		{/if}
+	</header>
+
+	{#if data.blockedReason}
+		<section class="my-12 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/70 p-6">
+			<div class="flex gap-3">
+				<AlertCircle class="mt-0.5 text-amber-700" size={20} />
+				<div>
+					<h2 class="font-serif text-2xl">Language settings needed</h2>
+					<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+						{data.blockedReason === "same-language"
+							? "Your native language and learning language are the same. Choose a different native language to create a useful translation prompt."
+							: "Set your native language so Libiamo can prepare the prompt you will translate back into your learning language."}
+					</p>
+					<Button href="/profile" class="mt-5">Open language settings</Button>
+				</div>
 			</div>
-			<h1 class="font-serif text-3xl md:text-5xl text-foreground leading-tight">{tpl.title}</h1>
-		</div>
-		{#if evaluation && !translating}
-			<div class="mt-6 max-w-xl"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} /></div>
-		{/if}
-		{#if !translating}
-			{#if tpl.description}
-				<p class="mt-8 max-w-xl text-base leading-relaxed text-muted-foreground">{tpl.description}</p>
+		</section>
+	{:else if !data.prepared}
+		<section class="my-16 flex flex-col items-center text-center">
+			<Loader class="animate-spin text-muted-foreground" size={28} />
+			<h2 class="mt-5 font-serif text-2xl">Preparing three natural versions per paragraph</h2>
+			<p class="mt-2 max-w-lg text-sm text-muted-foreground">
+				This happens once for this text and native language; future learners reuse the prepared set.
+			</p>
+			{#if !preparing}
+				<Button onclick={prepareTranslation} class="mt-5">Try again</Button>
 			{/if}
-			{#if isDone && passages.length > 0}
-				<div class="mt-10">
-					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Your Translation</h2>
-					<div class="space-y-4 max-w-xl">
-						{#each passages as paragraph, pi}
-							<div class="space-y-1">
-								{#each paragraph as sentence, si}
-									{@const key = sentenceKey(pi, si)}
-									<TranslationSentence
-										{sentence}
-										sentenceKey={key}
-										translation={translations[key] ?? ""}
-										highlight={getHighlight(key)}
-										isAnnotated={visibleHighlightKeys.has(key)}
-										isShort={shortKeys.has(key)}
-										mode="submitted"
-										isActive={false}
-										reference={sentenceReferences[key]}
-										loadingReference={loadingReferences.has(key)}
-										onShowReference={() => handleShowReference(key, sentence)}
-										tutorAnswer={tutorAnswers[key]}
-										loadingTutorAnswer={loadingTutorAnswers.has(key)}
-										tutorError={tutorErrors[key] ?? ""}
-										onToggle={() => {}}
-										onBlur={() => {}}
-										onTranslationChange={() => {}}
-										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
-										qaHistory={qaHistories[key] ?? []}
-										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
-									/>
-								{/each}
+		</section>
+	{:else if attempt}
+		<section class="py-10">
+			{#if isSubmitted}
+				<div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 sm:flex sm:items-center sm:justify-between">
+					<div>
+						<h2 class="font-serif text-xl">Your submission is safely recorded</h2>
+						<p class="mt-1 text-sm text-muted-foreground">
+							Your answers and candidate votes are stored in server. Only the tutor evaluation needs retrying.
+						</p>
+					</div>
+					<Button onclick={retryEvaluation} disabled={evaluating} class="mt-4 sm:mt-0"
+						><RotateCcw size={14} /> {evaluating ? "Evaluating…" : "Retry evaluation"}</Button
+					>
+				</div>
+			{/if}
+
+			{#if evaluation}
+				<div class="mb-8 max-w-2xl"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} /></div>
+			{/if}
+
+			<div class="space-y-10">
+				{#each answers as answer, index (answer.paragraphIndex)}
+					{@const paragraphEvaluation = evaluation?.paragraphs.find((item) => item.paragraphIndex === answer.paragraphIndex)}
+					<article class="grid gap-5 border-b border-border pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+						<div>
+							<div class="mb-3 flex items-center justify-between gap-3">
+								<span class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Paragraph {index + 1}</span>
+								{#if isDraft}
+									<button
+										type="button"
+										onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
+										class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+									>
+										Version {answer.candidateIndex + 1}<ChevronDown size={13} />
+									</button>
+								{/if}
 							</div>
-						{/each}
-					</div>
-				</div>
-			{:else if passages.length > 0}
-				<div class="mt-10">
-					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Source Text</h2>
-					<div class="space-y-4 max-w-xl">
-						{#each passages as paragraph, pi}
-							<p class="text-base leading-relaxed text-foreground">
-								{#each paragraph as sentence, si}
-									<span>{sentence}{si < paragraph.length - 1 ? " " : ""}</span>
-								{/each}
-							</p>
-						{/each}
-					</div>
-				</div>
-			{/if}
+							<button
+								type="button"
+								disabled={!isDraft}
+								onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
+								class="w-full text-left font-serif text-xl leading-relaxed disabled:cursor-default"
+							>
+								{attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
+							</button>
+						</div>
+
+						<div class="space-y-4">
+							{#if isDraft}
+								<textarea
+									class="min-h-32 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 text-sm leading-relaxed outline-none transition-shadow focus:ring-2 focus:ring-foreground/15"
+									placeholder={`Translate paragraph ${index + 1} into ${tpl.language.toUpperCase()}…`}
+									maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+									value={answer.translation}
+									oninput={(event) => updateAnswer(answer.paragraphIndex, { translation: (event.currentTarget as HTMLTextAreaElement).value })}
+								></textarea>
+							{:else}
+								<div>
+									<p class="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Your translation</p>
+									<p class="text-base leading-relaxed">{answer.translation}</p>
+								</div>
+								{#if paragraphEvaluation}
+									<div class="rounded-xl border border-border bg-foreground/[0.025] p-4">
+										<p class="text-sm leading-relaxed">{paragraphEvaluation.feedback}</p>
+										<p class="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggested rewrite</p>
+										<p class="mt-1 text-sm leading-relaxed">{paragraphEvaluation.rewriteSuggestion}</p>
+									</div>
+								{/if}
+								{#if attempt.referenceParagraphs}
+									<button
+										type="button"
+										onclick={() => toggleReference(answer.paragraphIndex)}
+										class="text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground"
+									>
+										{expandedReferences.has(answer.paragraphIndex) ? "Hide" : "Show"}
+										authentic reference
+									</button>
+									{#if expandedReferences.has(answer.paragraphIndex)}
+										<p class="rounded-lg border-l-2 border-foreground/20 bg-foreground/[0.025] px-4 py-3 text-sm leading-relaxed">
+											{attempt.referenceParagraphs[answer.paragraphIndex]}
+										</p>
+									{/if}
+								{/if}
+								{#if isEvaluated}
+									<div class="flex gap-2">
+										<input
+											class="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+											maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+											placeholder="Ask about this paragraph…"
+											value={tutorQuestions[answer.paragraphIndex] ?? ""}
+											oninput={(event) => (tutorQuestions = { ...tutorQuestions, [answer.paragraphIndex]: (event.currentTarget as HTMLInputElement).value })}
+										>
+										<Button
+											size="sm"
+											variant="outline"
+											onclick={() => askTutor(answer.paragraphIndex)}
+											disabled={tutorLoading.has(answer.paragraphIndex)}
+											>{tutorLoading.has(answer.paragraphIndex) ? "Thinking…" : "Ask"}</Button
+										>
+									</div>
+									{#if tutorAnswers[answer.paragraphIndex]}
+										<div class="prose prose-sm max-w-none rounded-lg bg-foreground/[0.025] p-4">
+											{@html renderMarkdown(tutorAnswers[answer.paragraphIndex])}
+										</div>
+									{/if}
+								{/if}
+							{/if}
+						</div>
+					</article>
+				{/each}
+			</div>
+
 			{#if tpl.materialsMd}
-				<div class="mt-10">
-					<h2 class="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Background Material</h2>
-					<div class="prose prose-neutral max-w-xl text-base leading-relaxed">{@html renderMarkdown(tpl.materialsMd)}</div>
-				</div>
+				<div class="prose prose-neutral mt-10 max-w-2xl">{@html renderMarkdown(tpl.materialsMd)}</div>
 			{/if}
-		{:else}
-			{#if totalSentences > 0}
-				<div class="mt-8">
-					{#if allShort}
-						<div class="mb-6 p-4 rounded-xl bg-foreground/5 border border-border">
-							<p class="text-sm text-muted-foreground">
-								All sentences in this section are short (excluded from evaluation). You can still translate them below.
-							</p>
-						</div>
-					{/if}
-					{#if !submitted && !allShort}
-						<div class="mb-6">
-							<div class="flex items-center justify-between mb-2">
-								<span class="text-xs font-bold uppercase tracking-widest text-muted-foreground"
-									>{effectiveTranslatedCount}/{effectiveTotal}
-									sentences</span
-								>
-								<span class="text-xs text-muted-foreground"
-									>{effectiveTotal > 0 ? Math.round((effectiveTranslatedCount / effectiveTotal) * 100) : 0}%</span
-								>
-							</div>
-							<div class="h-1.5 w-full bg-border rounded-full overflow-hidden">
-								<div
-									class="h-full bg-foreground rounded-full transition-all duration-500"
-									style="width: {effectiveTotal > 0 ? (effectiveTranslatedCount / effectiveTotal) * 100 : 0}%"
-								></div>
-							</div>
-						</div>
-					{/if}
-					{#if evaluation && submitted}
-						<div class="mb-6"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} compact /></div>
-					{/if}
-					<div class="space-y-6 max-w-xl">
-						{#each passages as paragraph, pi}
-							<div class="space-y-1">
-								{#each paragraph as sentence, si}
-									{@const key = sentenceKey(pi, si)}
-									<TranslationSentence
-										{sentence}
-										sentenceKey={key}
-										translation={translations[key] ?? ""}
-										highlight={getHighlight(key)}
-										isAnnotated={visibleHighlightKeys.has(key)}
-										isShort={shortKeys.has(key)}
-										mode={submitted ? "submitted" : "editing"}
-										isActive={activeKey === key}
-										reference={sentenceReferences[key]}
-										loadingReference={loadingReferences.has(key)}
-										onShowReference={() => handleShowReference(key, sentence)}
-										tutorAnswer={tutorAnswers[key]}
-										loadingTutorAnswer={loadingTutorAnswers.has(key)}
-										tutorError={tutorErrors[key] ?? ""}
-										onToggle={() => toggleSentence(key)}
-										onBlur={handleBlur}
-										onTranslationChange={(v: string) => { translations = { ...translations, [key]: v }; }}
-										onAskTutor={(q: string, history: { question: string; answer?: string }[]) => handleAskTutor(key, q, history)}
-										qaHistory={qaHistories[key] ?? []}
-										onQaChange={(history) => { qaHistories = { ...qaHistories, [key]: history }; persistQA(); }}
-									/>
-								{/each}
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/if}
-		{/if}
-		<div class="mt-auto pt-12 pb-4">
-			<div class="h-px w-full bg-border mb-6"></div>
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-4 text-sm text-muted-foreground">
-					<span class="flex items-center gap-1.5"><Star size={14} strokeWidth={1.5} />{tpl.pointReward} pts</span>
-					<span class="flex items-center gap-1.5"><Gem size={14} strokeWidth={1.5} />{tpl.gemReward} gems</span>
+
+			<footer class="mt-12 flex flex-col gap-5 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex flex-wrap gap-4 text-sm text-muted-foreground">
+					<span class="flex items-center gap-1.5"><Star size={14} />{tpl.pointReward} pts</span>
+					<span class="flex items-center gap-1.5"><Gem size={14} />{tpl.gemReward} gems</span>
 					{#if tpl.estimatedWords}
-						<span class="flex items-center gap-1.5"><Clock size={14} strokeWidth={1.5} />~{tpl.estimatedWords} words</span>
-					{/if}
-					{#if saveIndicator}
-						<span class="text-xs text-muted-foreground animate-fade-in">{saveIndicator}</span>
-					{/if}
-					{#if lastSaveError}
-						<span class="flex items-center gap-1 text-xs text-amber-600"><AlertCircle size={12} /> Auto-save failed</span>
+						<span class="flex items-center gap-1.5"><Clock size={14} />~{tpl.estimatedWords} words</span>
 					{/if}
 				</div>
-				<div class="flex gap-2">
-					{#if !translating}
-						{#if canTranslate && !submitted}
-							<Button onclick={startTranslation} class="px-8">{attemptStatus === "draft" ? "Continue Translation" : "Start Translation"}</Button>
-						{/if}
-					{:else if !submitted}
-						<Button variant="outline" onclick={handleSaveDraft} disabled={saving}
-							><Save size={14} class="mr-1.5" />{saving ? "Saving..." : "Save Draft"}</Button
+				{#if isDraft}
+					<Button onclick={() => (showConfirmation = true)} disabled={!allComplete || evaluating}><Send size={14} /> Review & submit</Button>
+				{/if}
+			</footer>
+		</section>
+	{/if}
+</main>
+
+{#if attempt && candidatePickerIndex !== null}
+	<div
+		class="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
+		role="presentation"
+		onclick={(event) => { if (event.currentTarget === event.target) candidatePickerIndex = null; }}
+	>
+		<div class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-background p-5 shadow-xl">
+			<div class="mb-5 flex items-center justify-between">
+				<div>
+					<p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Paragraph {candidatePickerIndex + 1}</p>
+					<h2 class="mt-1 font-serif text-2xl">Choose a prompt version</h2>
+				</div>
+				<Button variant="ghost" onclick={() => (candidatePickerIndex = null)}>Close</Button>
+			</div>
+			<div class="space-y-3">
+				{#each attempt.candidates[candidatePickerIndex] as candidate, candidateIndex}
+					<button
+						type="button"
+						onclick={() => chooseCandidate(Number(candidatePickerIndex), candidateIndex)}
+						class="flex w-full gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-foreground/[0.035] {answers[candidatePickerIndex]?.candidateIndex === candidateIndex ? 'border-foreground bg-foreground/[0.035]' : 'border-border'}"
+					>
+						<span class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-current"
+							>{#if answers[candidatePickerIndex]?.candidateIndex === candidateIndex}
+								<Check size={13} />
+							{/if}</span
 						>
-						<Button onclick={handleSubmit} disabled={!allTranslated || saving}><Send size={14} class="mr-1.5" />Submit</Button>
-					{/if}
-				</div>
+						<span class="font-serif text-lg leading-relaxed">{candidate}</span>
+					</button>
+				{/each}
 			</div>
 		</div>
 	</div>
-</div>
-<style>
-@keyframes fade-in {
-	from {
-		opacity: 0;
-		transform: translateY(-4px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-.animate-fade-in {
-	animation: fade-in 0.4s ease-out;
-}
-</style>
+{/if}
+
+{#if attempt}
+	<BottomSheet
+		show={showConfirmation}
+		title="Vote for prompts"
+		confirmLabel={evaluating ? "Evaluating…" : "Confirm"}
+		confirmDisabled={evaluating}
+		cancelLabel="Keep editing"
+		onConfirm={submitTranslation}
+		onCancel={() => (showConfirmation = false)}
+	>
+		{#snippet children()}
+			<p class="mb-5 text-sm text-muted-foreground">Which prompt do you think is the most natural for each paragraph?</p>
+			<div class="space-y-5">
+				{#each answers as answer, index}
+					<div class="space-y-2">
+						<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Paragraph {index + 1}</p>
+						{#each attempt.candidates[answer.paragraphIndex] as candidate, candidateIndex}
+							<label class="flex cursor-pointer gap-3 rounded-lg border border-border p-3 text-sm leading-relaxed"
+								><input
+									type="radio"
+									name={`confirm-${answer.paragraphIndex}`}
+									checked={answer.candidateIndex === candidateIndex}
+									onchange={() => updateAnswer(answer.paragraphIndex, { candidateIndex })}
+								><span>{candidate}</span></label
+							>
+						{/each}
+					</div>
+				{/each}
+			</div>
+		{/snippet}
+	</BottomSheet>
+{/if}

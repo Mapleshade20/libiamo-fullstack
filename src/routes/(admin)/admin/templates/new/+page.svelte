@@ -22,7 +22,7 @@ let templateData = $derived(
 				agentPromptBase: contributed.agentPromptBase,
 				materialsMd: contributed.materialsMd,
 				objectivesBase: contributed.objectivesBase,
-				translationBase: contributed.translationBase,
+				translationReference: contributed.translationReference,
 				tags: contributed.tags,
 				cadence: contributed.cadence ?? undefined,
 				difficulty: contributed.difficulty ?? undefined,
