@@ -36,7 +36,7 @@ const hintDisabled = $derived(isSubmitting || isCompleted || isInitializing || l
 <div class="flex items-center gap-2 border-t border-black/10 bg-[#F7F7F9] px-4 py-3">
 	<button type="button" class="icon-button" onclick={onMockAction}><Paperclip size={17} /></button>
 	<div class="mail-hint-wrapper">
-		<button type="button" class="icon-button" disabled={hintDisabled} onclick={onHintClick} title="Hint" aria-label="Hint">
+		<button type="button" class="icon-button" disabled={hintDisabled} onclick={onHintClick} title={t.getHint} aria-label={t.getHint}>
 			<Lightbulb size={17} />
 		</button>
 	</div>

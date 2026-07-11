@@ -702,6 +702,7 @@ export type HintRequest = {
 export type HintResult = { contentHint: string } | { phrases: string[] };
 
 const HINT_HISTORY_MAX_CHARACTERS = 20_000;
+const HINT_HISTORY_TRUNCATION_MARKER = "\n[... message truncated ...]\n";
 
 const ContentHintSchema = z.object({
 	contentHint: z.string().min(1).max(500).describe("One concise direction for content the learner could add, without drafting it for them."),
@@ -719,6 +720,15 @@ export type ContextComment = {
 	text: string;
 };
 
+function truncateHintHistoryMessage(content: string) {
+	if (content.length <= HINT_HISTORY_MAX_CHARACTERS) return content;
+
+	const availableCharacters = HINT_HISTORY_MAX_CHARACTERS - HINT_HISTORY_TRUNCATION_MARKER.length;
+	const headLength = Math.ceil(availableCharacters / 2);
+	const tailLength = availableCharacters - headLength;
+	return `${content.slice(0, headLength)}${HINT_HISTORY_TRUNCATION_MARKER}${content.slice(-tailLength)}`;
+}
+
 function buildHintConversationHistory(messages: Array<{ role: string; content: string; llmMetadata?: unknown }>) {
 	const history: Array<{ role: string; content: string }> = [];
 	let usedCharacters = 0;
@@ -728,7 +738,10 @@ function buildHintConversationHistory(messages: Array<{ role: string; content: s
 		if (!message || isHiddenUserMessage(message)) continue;
 
 		const content = getMessageDisplayContent(message);
-		if (history.length > 0 && usedCharacters + content.length > HINT_HISTORY_MAX_CHARACTERS) break;
+		if (usedCharacters + content.length > HINT_HISTORY_MAX_CHARACTERS) {
+			if (history.length === 0) history.push({ role: message.role, content: truncateHintHistoryMessage(content) });
+			break;
+		}
 		history.push({ role: message.role, content });
 		usedCharacters += content.length;
 	}

@@ -880,6 +880,27 @@ describe("session service", () => {
 				{ role: "user", content: newest },
 			]);
 		});
+
+		it("truncates a single oversized latest message to the hint history budget", async () => {
+			const oversized = `start:${"x".repeat(29_988)}:end`;
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				task: { language: "en" },
+				agentPromptSnapshot: { scenarioContext: "Scenario: Test" },
+				messages: [{ role: "user", content: oversized }],
+			});
+			mockClient.chatJson.mockResolvedValue({ contentHint: "Add context." });
+
+			await generateHint(123, { mode: "content" });
+
+			const userPayload = JSON.parse(mockClient.chatJson.mock.calls[0][1].messages[1].content);
+			const [message] = userPayload.conversationHistory;
+			expect(message.content).toHaveLength(20_000);
+			expect(message.content).toMatch(/^start:/);
+			expect(message.content).toContain("[... message truncated ...]");
+			expect(message.content).toMatch(/:end$/);
+		});
 	});
 
 	describe("getSessionOrFail", () => {
