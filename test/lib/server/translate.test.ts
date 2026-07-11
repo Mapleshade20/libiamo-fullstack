@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LanguageCode } from "$lib/constants";
-import { LANGUAGE_LABELS } from "$lib/constants";
+import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
 import { buildEvaluationPrompt, buildExpressionsPrompt } from "$lib/server/translate";
 
 const { mockChatJson } = vi.hoisted(() => ({
@@ -28,8 +27,8 @@ const lang = (code: string): LanguageCode => code as LanguageCode;
 describe("buildExpressionsPrompt", () => {
 	it("includes native and target language names in the prompt", () => {
 		const prompt = buildExpressionsPrompt(lang("en"), lang("fr"));
-		expect(prompt).toContain(LANGUAGE_LABELS.en);
-		expect(prompt).toContain(LANGUAGE_LABELS.fr);
+		expect(prompt).toContain(getLanguageEnglishName("en"));
+		expect(prompt).toContain(getLanguageEnglishName("fr"));
 		expect(prompt).toContain("JSON array of strings");
 	});
 
@@ -43,8 +42,8 @@ describe("buildExpressionsPrompt", () => {
 describe("buildEvaluationPrompt", () => {
 	it("includes native and target language names", () => {
 		const prompt = buildEvaluationPrompt(lang("en"), lang("ja"));
-		expect(prompt).toContain(LANGUAGE_LABELS.en);
-		expect(prompt).toContain(LANGUAGE_LABELS.ja);
+		expect(prompt).toContain(getLanguageEnglishName("en"));
+		expect(prompt).toContain(getLanguageEnglishName("ja"));
 	});
 
 	it("includes evaluation criteria and JSON shape", () => {
@@ -69,7 +68,7 @@ describe("generateExpressions", () => {
 			expect.anything(),
 			expect.objectContaining({
 				messages: [
-					expect.objectContaining({ role: "system", content: expect.stringContaining("expert Français language teacher") }),
+					expect.objectContaining({ role: "system", content: expect.stringContaining("expert French language teacher") }),
 					expect.objectContaining({ role: "user", content: expect.stringContaining("Ordering at a café") }),
 				],
 				options: { temperature: 0.7, maxTokens: 1024 },

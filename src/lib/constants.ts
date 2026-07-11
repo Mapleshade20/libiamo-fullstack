@@ -132,7 +132,7 @@ export function getNativeLanguageOptions(locale = "en"): { value: NativeLanguage
 	}));
 }
 
-export const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
+const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Spanish",
 	fr: "French",
@@ -140,7 +140,11 @@ export const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
 };
 
 export function getLanguageEnglishName(code: string): string {
-	return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+	try {
+		return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
+	} catch {
+		return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+	}
 }
 
 export const INTERACTION_TYPES = ["chat", "slow", "translate"] as const;

@@ -1,24 +1,6 @@
 import { z } from "zod";
-import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
 import { chatJson } from "$lib/server/llm";
-
-/** Resolve a language name from a code, using Intl.DisplayNames for non-learning languages */
-function languageName(code: string, fallbackLocale = "en"): string {
-	// First check our known learning languages
-	if (code in LANGUAGE_LABELS) {
-		return LANGUAGE_LABELS[code as LanguageCode];
-	}
-	// Use Intl API for any other language (e.g. "pl" → "Polish", "zh" → "Chinese")
-	try {
-		const names = new Intl.DisplayNames([fallbackLocale], { type: "language" });
-		const name = names.of(code);
-		if (name && name !== code) return name;
-	} catch {
-		// Intl not available, fall through
-	}
-	// Last resort: uppercase the code
-	return code.toUpperCase();
-}
 
 /** A single expression with optional user translation and feedback */
 export interface ExpressionItem {
@@ -44,8 +26,8 @@ const TranslationFeedbackSchema = z.object({
  * Expressions are generated in the native language for the learner to translate into the target language.
  */
 export function buildExpressionsPrompt(nativeLang: string, targetLang: LanguageCode): string {
-	const nativeName = languageName(nativeLang);
-	const targetName = LANGUAGE_LABELS[targetLang];
+	const nativeName = getLanguageEnglishName(nativeLang);
+	const targetName = getLanguageEnglishName(targetLang);
 
 	return `You are an expert ${targetName} language teacher. Based on the task/scenario context provided, generate 2-3 useful expressions or short phrases that a learner would find helpful to know before attempting this task.
 
@@ -65,8 +47,8 @@ Example: For a task about ordering at a restaurant, if the native language were 
  * Build a prompt for evaluating a user's translation attempt.
  */
 export function buildEvaluationPrompt(nativeLang: string, targetLang: LanguageCode): string {
-	const nativeName = languageName(nativeLang);
-	const targetName = LANGUAGE_LABELS[targetLang];
+	const nativeName = getLanguageEnglishName(nativeLang);
+	const targetName = getLanguageEnglishName(targetLang);
 
 	return `You are an expert ${targetName} language tutor evaluating a learner's translation.
 
@@ -145,8 +127,8 @@ export async function evaluateUserTranslation(
 ): Promise<{ feedback: string; correction: string }> {
 	const prompt = buildEvaluationPrompt(nativeLang, targetLang);
 
-	const nativeName = languageName(nativeLang);
-	const targetName = LANGUAGE_LABELS[targetLang];
+	const nativeName = getLanguageEnglishName(nativeLang);
+	const targetName = getLanguageEnglishName(targetLang);
 
 	return await chatJson(TranslationFeedbackSchema, {
 		messages: [

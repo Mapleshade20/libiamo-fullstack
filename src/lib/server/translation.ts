@@ -8,7 +8,6 @@ import { chatJson } from "$lib/server/llm";
 
 export const TRANSLATION_CANDIDATE_COUNT = 3;
 export const TRANSLATION_VOTE_THRESHOLD = 30;
-export const TRANSLATION_PROMPT_VERSION = "translation-variants-v2-json-few-shot";
 
 const VariantsSchema = z.object({
 	paragraphs: z.array(
@@ -52,21 +51,12 @@ export type EvaluateTranslationInput = {
 	userId: string;
 };
 
-function languageName(code: string) {
-	try {
-		return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? getLanguageEnglishName(code);
-	} catch {
-		return getLanguageEnglishName(code);
-	}
-}
-
 const SPANISH_GREETING_VARIANTS = [
 	"Hola.",
 	"Buenas.",
-	"Que tal.",
+	"¿Qué tal?",
 	"Saludos.",
 	"Muy buenas.",
-	"Hola, que tal?",
 	"Buenas tardes.",
 	"Un saludo.",
 	"Hola a todos.",
@@ -74,16 +64,15 @@ const SPANISH_GREETING_VARIANTS = [
 ];
 
 const SPANISH_FAREWELL_VARIANTS = [
-	"Adios.",
+	"Adiós.",
 	"Hasta luego.",
 	"Nos vemos.",
 	"Hasta pronto.",
 	"Que te vaya bien.",
-	"Hasta la proxima.",
-	"Cuidate.",
+	"Hasta la próxima.",
 	"Nos vemos pronto.",
 	"Me despido.",
-	"Hasta otra ocasion.",
+	"Hasta otra ocasión.",
 ];
 
 const ENGLISH_THANKS_VARIANTS = [
@@ -94,7 +83,6 @@ const ENGLISH_THANKS_VARIANTS = [
 	"I am very grateful.",
 	"Thank you kindly.",
 	"I truly appreciate that.",
-	"My sincere thanks.",
 	"Thanks a million.",
 	"I cannot thank you enough.",
 ];
@@ -228,20 +216,20 @@ export async function generateTranslationVariants({
 		messages: [
 			{
 				role: "system",
-				content: `You are a literary and pragmatic translator. Translate each ${languageName(sourceLanguage)} paragraph into ${languageName(targetLanguage)}. Produce exactly ${candidateCount} natural alternatives per paragraph. Preserve meaning, register, voice, and paragraph boundaries; vary phrasing without adding facts.
+				content: `You are a literary and pragmatic translator. Translate each ${getLanguageEnglishName(sourceLanguage)} paragraph into ${getLanguageEnglishName(targetLanguage)}. Produce exactly ${candidateCount} natural alternatives per paragraph. Preserve meaning, register, voice, and paragraph boundaries; vary phrasing without adding facts.
 
 OUTPUT CONTRACT:
 - Return ONLY one valid JSON object. Do not use Markdown fences or add any explanation.
 - Use exactly this shape: ${outputShape}
 - Return every input paragraph exactly once in its original numeric order, using the same zero-based paragraphIndex.
-- Each candidates array must contain exactly ${candidateCount} non-empty strings in ${languageName(targetLanguage)}.
+- Each candidates array must contain exactly ${candidateCount} non-empty strings in ${getLanguageEnglishName(targetLanguage)}.
 - Never return headings such as "[Paragraph 0]" or "**Paragraph 0:**". Never return a numbered list.
 - The following exchanges are format examples only. Follow their JSON structure, but follow the requested languages and content for the real task.`,
 			},
 			...variantsFewShotMessages(candidateCount),
 			{
 				role: "user",
-				content: `REAL TASK\nTranslate from ${languageName(sourceLanguage)} to ${languageName(targetLanguage)}. This is in the context of [${context}].\n\n${paragraphs.map((paragraph, index) => `[Paragraph ${index}]\n${paragraph}`).join("\n\n")}`,
+				content: `REAL TASK\nTranslate from ${getLanguageEnglishName(sourceLanguage)} to ${getLanguageEnglishName(targetLanguage)}. This is in the context of [${context}].\n\n${paragraphs.map((paragraph, index) => `[Paragraph ${index}]\n${paragraph}`).join("\n\n")}`,
 			},
 		],
 		options: { temperature: 0.8, maxTokens: 8192 },
@@ -277,12 +265,12 @@ export async function evaluateTranslationAgainstReferences({
 	}
 	const outputShape = JSON.stringify({
 		overallScore: "A",
-		overallFeedback: `<overall feedback in ${languageName(feedbackLanguage)}>`,
+		overallFeedback: `<overall feedback in ${getLanguageEnglishName(feedbackLanguage)}>`,
 		paragraphs: [
 			{
 				paragraphIndex: 0,
-				feedback: `<paragraph feedback in ${languageName(feedbackLanguage)}>`,
-				rewriteSuggestion: `<suggested rewrite in ${languageName(targetLanguage)}>`,
+				feedback: `<paragraph feedback in ${getLanguageEnglishName(feedbackLanguage)}>`,
+				rewriteSuggestion: `<suggested rewrite in ${getLanguageEnglishName(targetLanguage)}>`,
 			},
 		],
 	});
@@ -291,14 +279,14 @@ export async function evaluateTranslationAgainstReferences({
 		messages: [
 			{
 				role: "system",
-				content: `You are an expert ${languageName(targetLanguage)} translation tutor. Evaluate a learner translating from ${languageName(promptLanguage)} into ${languageName(targetLanguage)}. Accept natural synonyms and valid renderings that differ from the references. Grade A, B, or C for accuracy, naturalness, grammar, register, and contextual fit.
+				content: `You are an expert ${getLanguageEnglishName(targetLanguage)} translation tutor. Evaluate a learner translating from ${getLanguageEnglishName(promptLanguage)} into ${getLanguageEnglishName(targetLanguage)}. Accept natural synonyms and valid renderings that differ from the references. Grade A, B, or C for accuracy, naturalness, grammar, register, and contextual fit.
 
 OUTPUT CONTRACT:
 - Return ONLY one valid JSON object. Do not use Markdown fences, headings, bullet points, or add any explanation outside the JSON.
 - Use exactly this shape: ${outputShape}
 - overallScore must be exactly one of "A", "B", or "C". Do not use numbers, percentages, or longer labels.
-- overallFeedback and every feedback value must be non-empty strings written only in ${languageName(feedbackLanguage)}.
-- Every rewriteSuggestion must be a non-empty string written only in ${languageName(targetLanguage)}.
+- overallFeedback and every feedback value must be non-empty strings written only in ${getLanguageEnglishName(feedbackLanguage)}.
+- Every rewriteSuggestion must be a non-empty string written only in ${getLanguageEnglishName(targetLanguage)}.
 - Return exactly one paragraphs item for every input paragraph, in the original order, using the same zero-based paragraphIndex.
 - Do not add, rename, or omit fields. Do not use paragraph indices as object keys.
 - The authentic references are examples of valid renderings, not the only acceptable answers. Accept accurate natural synonyms.
@@ -308,13 +296,13 @@ OUTPUT CONTRACT:
 			{
 				role: "user",
 				content: `REAL TASK
-Write feedback in ${languageName(feedbackLanguage)} and rewriteSuggestion values in ${languageName(targetLanguage)}.
+Write feedback in ${getLanguageEnglishName(feedbackLanguage)} and rewriteSuggestion values in ${getLanguageEnglishName(targetLanguage)}.
 Context: ${context}.
 
 ${promptParagraphs
 	.map(
 		(prompt, index) =>
-			`[Paragraph ${index}]\nPrompt (${languageName(promptLanguage)}): ${prompt}\nLearner translation (${languageName(targetLanguage)}): ${userTranslations[index]}\nAuthentic reference(s) (${languageName(targetLanguage)}):\n${referenceParagraphs[index].map((reference, referenceIndex) => `${referenceIndex + 1}. ${reference}`).join("\n")}`,
+			`[Paragraph ${index}]\nPrompt (${getLanguageEnglishName(promptLanguage)}): ${prompt}\nLearner translation (${getLanguageEnglishName(targetLanguage)}): ${userTranslations[index]}\nAuthentic reference(s) (${getLanguageEnglishName(targetLanguage)}):\n${referenceParagraphs[index].map((reference, referenceIndex) => `${referenceIndex + 1}. ${reference}`).join("\n")}`,
 	)
 	.join("\n\n")}`,
 			},
@@ -335,7 +323,6 @@ export function translationContentFingerprint(input: {
 	context: string;
 	sourceLanguage: string;
 	promptLanguage: string;
-	promptVersion?: string;
 }) {
 	return createHash("sha256")
 		.update(
@@ -344,7 +331,6 @@ export function translationContentFingerprint(input: {
 				context: input.context,
 				sourceLanguage: input.sourceLanguage,
 				promptLanguage: input.promptLanguage,
-				promptVersion: input.promptVersion ?? TRANSLATION_PROMPT_VERSION,
 			}),
 		)
 		.digest("hex");

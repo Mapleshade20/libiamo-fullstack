@@ -159,7 +159,6 @@ describe("translation service", () => {
 		expect(translationContentFingerprint(base)).toBe(fingerprint);
 		expect(translationContentFingerprint({ ...base, context: "a formal greeting" })).not.toBe(fingerprint);
 		expect(translationContentFingerprint({ ...base, promptLanguage: "ja" })).not.toBe(fingerprint);
-		expect(translationContentFingerprint({ ...base, promptVersion: "v-next" })).not.toBe(fingerprint);
 	});
 
 	it("returns a cached source set without invoking the LLM", async () => {
