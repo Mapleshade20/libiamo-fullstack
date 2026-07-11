@@ -33,6 +33,9 @@ let {
 	sessionId = null as number | null,
 	t = {} as Record<string, string>,
 	language = "en",
+	activeHintEditorId = null as string | null,
+	onHintActivate = (_editorId: string) => {},
+	onHintDeactivate = (_editorId: string) => {},
 	onMockAction = () => {},
 	replyingToId = null as string | null,
 	isAgentTyping = false,
@@ -50,6 +53,9 @@ let {
 	sessionId?: number | null;
 	t?: Record<string, string>;
 	language?: string;
+	activeHintEditorId?: string | null;
+	onHintActivate?: (editorId: string) => void;
+	onHintDeactivate?: (editorId: string) => void;
 	onMockAction?: () => void;
 	replyingToId?: string | null;
 	isAgentTyping?: boolean;
@@ -252,6 +258,10 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 						{sessionId}
 						placeholder={replyPlaceholder}
 						contextPath={extendedPath}
+						hintEditorId={`reply-${node.id}`}
+						{activeHintEditorId}
+						{onHintActivate}
+						{onHintDeactivate}
 						onSubmit={handleReplySubmit}
 					/>
 				</div>
@@ -277,6 +287,9 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 					{sessionId}
 					{t}
 					{language}
+					{activeHintEditorId}
+					{onHintActivate}
+					{onHintDeactivate}
 					{onMockAction}
 					{replyingToId}
 					{isAgentTyping}

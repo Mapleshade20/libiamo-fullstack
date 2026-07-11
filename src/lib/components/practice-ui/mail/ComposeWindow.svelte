@@ -1,9 +1,10 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { fly } from "svelte/transition";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requestHint } from "../hint/api";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
+import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
@@ -62,7 +63,7 @@ let expressionPhrases = $state<string[]>([]);
 let contentHint = $state("");
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintRequestId = 0;
+const hintRequests = createHintRequestLifecycle();
 
 const isCompact = $derived(viewportWidth <= 640);
 const editorIsEmpty = $derived(!draft.body.trim());
@@ -398,7 +399,7 @@ function openHintMenu(event: MouseEvent) {
 }
 
 function closeHintMenu() {
-	hintRequestId++;
+	hintRequests.invalidate();
 	showHintMenu = false;
 	isGettingHint = false;
 	contentHint = "";
@@ -409,7 +410,7 @@ function closeHintMenu() {
 
 async function handleGetHint() {
 	if (!sessionId || isGettingHint) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("content");
 	isGettingHint = true;
 	contentHint = "";
 	expressionPhrases = [];
@@ -417,18 +418,20 @@ async function handleGetHint() {
 	try {
 		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
 		const result = await requestHint({ sessionId, mode: "content", draft: mailDraft });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		contentHint = result.contentHint ?? "";
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
 
 async function handleExpressionHelp() {
 	if (!sessionId || isGettingHint || !expressionQuery.trim()) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("expression");
 	isGettingHint = true;
 	contentHint = "";
 	expressionPhrases = [];
@@ -436,14 +439,18 @@ async function handleExpressionHelp() {
 	try {
 		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
 		const result = await requestHint({ sessionId, mode: "expression", draft: mailDraft, expression: expressionQuery });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		expressionPhrases = result.phrases ?? [];
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
+
+onDestroy(() => hintRequests.invalidate());
 
 function handleWindowClick(event: MouseEvent) {
 	if (!showHintMenu) return;

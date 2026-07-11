@@ -3,6 +3,7 @@ export type HintLabels = {
 	submit: string;
 	back: string;
 	clear: string;
+	expressionInput: string;
 	expressionPlaceholder: string;
 	contentIdea: string;
 };
@@ -13,6 +14,7 @@ const hintI18n: Record<string, HintLabels> = {
 		submit: "Submit",
 		back: "Back",
 		clear: "Clear",
+		expressionInput: "Meaning to express",
 		expressionPlaceholder: "How do I say this...",
 		contentIdea: "Content idea",
 	},
@@ -21,6 +23,7 @@ const hintI18n: Record<string, HintLabels> = {
 		submit: "Enviar",
 		back: "Volver",
 		clear: "Borrar",
+		expressionInput: "Significado que quieres expresar",
 		expressionPlaceholder: "¿Cómo se dice esto...?",
 		contentIdea: "Idea de contenido",
 	},
@@ -29,6 +32,7 @@ const hintI18n: Record<string, HintLabels> = {
 		submit: "Envoyer",
 		back: "Retour",
 		clear: "Effacer",
+		expressionInput: "Sens à exprimer",
 		expressionPlaceholder: "Comment dire ceci...",
 		contentIdea: "Idée de contenu",
 	},
@@ -37,6 +41,7 @@ const hintI18n: Record<string, HintLabels> = {
 		submit: "送信",
 		back: "戻る",
 		clear: "クリア",
+		expressionInput: "表現したい意味",
 		expressionPlaceholder: "これはどう言う...",
 		contentIdea: "内容のヒント",
 	},

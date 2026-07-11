@@ -2,9 +2,11 @@
 import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import Image from "@lucide/svelte/icons/image";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
+import { onDestroy } from "svelte";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requestHint } from "../hint/api";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
+import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import type { ContextComment } from "./types";
 
 let {
@@ -16,6 +18,10 @@ let {
 	avatarColor = "bg-[#FF4500]",
 	t = {} as Record<string, string>,
 	language = "en",
+	hintEditorId = "comment-editor",
+	activeHintEditorId = null as string | null,
+	onHintActivate = (_editorId: string) => {},
+	onHintDeactivate = (_editorId: string) => {},
 	onSubmit,
 	sessionId = null as number | null,
 	contextPath = [] as ContextComment[],
@@ -28,6 +34,10 @@ let {
 	avatarColor?: string;
 	t?: Record<string, string>;
 	language?: string;
+	hintEditorId?: string;
+	activeHintEditorId?: string | null;
+	onHintActivate?: (editorId: string) => void;
+	onHintDeactivate?: (editorId: string) => void;
 	onSubmit: (text: string) => void;
 	sessionId?: number | null;
 	contextPath?: ContextComment[];
@@ -45,10 +55,12 @@ let expressionQuery = $state("");
 let expressionPhrases = $state<string[]>([]);
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintRequestId = 0;
+const hintRequests = createHintRequestLifecycle();
+const hintAnchorName = $derived(`--libiamo-reddit-hint-${hintEditorId.replace(/[^a-zA-Z0-9_-]/g, "-")}`);
 
 function openHintMenu(trigger: HTMLElement) {
 	if (disabled) return;
+	onHintActivate(hintEditorId);
 	hintMotionOrigin = trigger;
 	showHintMenu = true;
 	hintError = null;
@@ -59,7 +71,7 @@ function openHintMenu(trigger: HTMLElement) {
 async function handleGetHint() {
 	if (disabled || isGettingHint) return;
 	if (!sessionId) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("content");
 	isGettingHint = true;
 	showHintMenu = true;
 	contentHint = "";
@@ -67,19 +79,21 @@ async function handleGetHint() {
 	hintError = null;
 	try {
 		const result = await requestHint({ sessionId, mode: "content", draft: inputText, contextPath });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		contentHint = result.contentHint ?? "";
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 		console.error("Failed to get hints:", err);
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
 
 async function handleExpressionHelp() {
 	if (disabled || isGettingHint || !expressionQuery.trim()) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("expression");
 	isGettingHint = true;
 	showHintMenu = true;
 	contentHint = "";
@@ -88,25 +102,37 @@ async function handleExpressionHelp() {
 	try {
 		if (!sessionId) return;
 		const result = await requestHint({ sessionId, mode: "expression", draft: inputText, expression: expressionQuery, contextPath });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		expressionPhrases = result.phrases ?? [];
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 		console.error("Failed to get expression help:", err);
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
 
-function closeHintMenu() {
-	hintRequestId++;
+function closeHintMenu(notifyParent = true) {
+	hintRequests.invalidate();
 	showHintMenu = false;
 	isGettingHint = false;
 	hintError = null;
 	contentHint = "";
 	expressionQuery = "";
 	expressionPhrases = [];
+	if (notifyParent) onHintDeactivate(hintEditorId);
 }
+
+onDestroy(() => {
+	hintRequests.invalidate();
+	onHintDeactivate(hintEditorId);
+});
+
+$effect(() => {
+	if (showHintMenu && activeHintEditorId !== null && activeHintEditorId !== hintEditorId) closeHintMenu(false);
+});
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
@@ -133,6 +159,7 @@ function collapse() {
 
 function submit() {
 	if (!inputText.trim() || disabled) return;
+	closeHintMenu();
 	onSubmit(inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH));
 	inputText = "";
 	isExpanded = false;
@@ -272,7 +299,7 @@ $effect(() => {
 		</div>
 		{#if sessionId && showHintMenu}
 			<HintFloatingPanel
-				anchorName="--libiamo-reddit-hint-anchor"
+				anchorName={hintAnchorName}
 				layoutReference={hintLayoutReference}
 				motionOrigin={hintMotionOrigin}
 				{language}

@@ -79,11 +79,20 @@ const renderableCommentTree = $derived(buildRedditCommentTree({ openingState: ty
 
 // Top-level input text (separate from inline reply inputs which manage their own state)
 let topLevelInput = $state("");
+let activeHintEditorId = $state<string | null>(null);
 
 // Global disabled: all editors locked while agent is generating
 const allDisabled = $derived(session.disabled);
 
 const userAvatarColor = $derived(getAvatarColor(userName));
+
+function activateHintEditor(editorId: string) {
+	activeHintEditorId = editorId;
+}
+
+function deactivateHintEditor(editorId: string) {
+	if (activeHintEditorId === editorId) activeHintEditorId = null;
+}
 
 function findRenderableComment(comments: RedditRenderableComment[], id: string): RedditRenderableComment | null {
 	for (const comment of comments) {
@@ -277,6 +286,10 @@ function handleFinishCancel() {
 								{language}
 								sessionId={session.sessionId}
 								contextPath={postContext}
+								hintEditorId="top-level"
+								{activeHintEditorId}
+								onHintActivate={activateHintEditor}
+								onHintDeactivate={deactivateHintEditor}
 								onSubmit={handleTopLevelSubmit}
 							/>
 						</div>
@@ -316,6 +329,9 @@ function handleFinishCancel() {
 								sessionId={session.sessionId}
 								{t}
 								{language}
+								{activeHintEditorId}
+								onHintActivate={activateHintEditor}
+								onHintDeactivate={deactivateHintEditor}
 								onMockAction={handleMockAction}
 							/>
 						{/each}

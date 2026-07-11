@@ -3,6 +3,7 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import Plus from "@lucide/svelte/icons/plus";
 import Send from "@lucide/svelte/icons/send";
 import Smile from "@lucide/svelte/icons/smile";
+import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import EmojiPicker from "../../EmojiPicker.svelte";
@@ -10,6 +11,7 @@ import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";
 import { requestHint } from "../hint/api";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
+import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import type { ChatUser } from "./types";
 
 let {
@@ -52,7 +54,7 @@ let expressionQuery = $state("");
 let expressionPhrases = $state<string[]>([]);
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintRequestId = 0;
+const hintRequests = createHintRequestLifecycle();
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
 let hintMotionOrigin = $state<HTMLElement | null>(null);
 
@@ -106,7 +108,7 @@ function openHintMenu(trigger: HTMLElement) {
 async function handleGetHint() {
 	if (!sessionId || isCompleted || disabled) return;
 	if (isGettingHint) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("content");
 	isGettingHint = true;
 	showHintMenu = true;
 	contentHint = "";
@@ -114,19 +116,21 @@ async function handleGetHint() {
 	hintError = null;
 	try {
 		const result = await requestHint({ sessionId, mode: "content", draft: inputText });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		contentHint = result.contentHint ?? "";
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 		console.error("Failed to get hints:", err);
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
 
 async function handleExpressionHelp() {
 	if (disabled || isGettingHint || !expressionQuery.trim()) return;
-	const requestId = ++hintRequestId;
+	const request = hintRequests.begin("expression");
 	isGettingHint = true;
 	showHintMenu = true;
 	contentHint = "";
@@ -135,18 +139,20 @@ async function handleExpressionHelp() {
 	try {
 		if (!sessionId) return;
 		const result = await requestHint({ sessionId, mode: "expression", draft: inputText, expression: expressionQuery });
-		if (requestId !== hintRequestId || !showHintMenu) return;
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		expressionPhrases = result.phrases ?? [];
 	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
 		console.error("Failed to get expression help:", err);
 	} finally {
-		if (requestId === hintRequestId) isGettingHint = false;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
 }
 
 function closeHintMenu() {
-	hintRequestId++;
+	hintRequests.invalidate();
 	showHintMenu = false;
 	isGettingHint = false;
 	hintError = null;
@@ -161,9 +167,11 @@ function submitInput() {
 	inputText = "";
 	showMentionMenu = false;
 	showEmojiPicker = false;
-	showHintMenu = false;
+	closeHintMenu();
 	onSend(text);
 }
+
+onDestroy(() => hintRequests.invalidate());
 
 function handleWindowClick(e: MouseEvent) {
 	const target = e.target as HTMLElement;

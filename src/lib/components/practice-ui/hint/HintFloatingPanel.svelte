@@ -209,15 +209,31 @@ function handleWindowPointerdownCapture(event: PointerEvent) {
 
 function handleWindowKeydownCapture(event: KeyboardEvent) {
 	if (event.key !== "Escape") return;
-
-	if (document.activeElement === expressionInputEl) {
-		event.preventDefault();
-		event.stopImmediatePropagation();
-		expressionInputEl?.blur();
-		return;
-	}
-
+	event.preventDefault();
+	event.stopImmediatePropagation();
+	const trigger = motionOrigin;
 	onClose();
+	requestAnimationFrame(() => trigger?.focus());
+}
+
+function positionFallback(node: HTMLElement) {
+	if (CSS.supports("position-anchor: --fallback-anchor")) return;
+	const reference = layoutReference ?? motionOrigin;
+	if (!reference) return;
+
+	const referenceRect = reference.getBoundingClientRect();
+	const width = Math.min(referenceRect.width, window.innerWidth - 24);
+	const left = Math.min(Math.max(referenceRect.left + (referenceRect.width - width) / 2, 12), window.innerWidth - width - 12);
+	node.style.setProperty("--hint-fallback-width", `${width}px`);
+	node.style.setProperty("--hint-fallback-left", `${left}px`);
+
+	const panelHeight = node.offsetHeight;
+	const spaceAbove = referenceRect.top - 20;
+	const spaceBelow = window.innerHeight - referenceRect.bottom - 20;
+	const side = placement === "above" || (placement === "auto" && spaceAbove >= panelHeight && spaceAbove > spaceBelow) ? "above" : "below";
+	const desiredTop = side === "above" ? referenceRect.top - panelHeight - 8 : referenceRect.bottom + 8;
+	const top = Math.min(Math.max(desiredTop, 12), Math.max(12, window.innerHeight - panelHeight - 12));
+	node.style.setProperty("--hint-fallback-top", `${top}px`);
 }
 
 $effect(() => {
@@ -259,6 +275,12 @@ $effect(() => {
 		}
 	};
 });
+
+$effect(() => {
+	if (!panelEl) return;
+	const frame = requestAnimationFrame(() => panelEl?.focus());
+	return () => cancelAnimationFrame(frame);
+});
 </script>
 
 <svelte:window onkeydowncapture={handleWindowKeydownCapture} onpointerdowncapture={handleWindowPointerdownCapture} />
@@ -268,6 +290,7 @@ $effect(() => {
 	role="dialog"
 	aria-label={labels.panel}
 	tabindex="-1"
+	use:positionFallback
 	class="hint-bubble fixed z-[80] overflow-hidden rounded-[14px] border border-white/70 bg-[#f7f1ea]/90 shadow-[0_18px_46px_rgba(54,42,25,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl"
 	style:--hint-anchor={anchorName}
 	style:--hint-position-area={prefersAbove ? "block-start center" : "block-end center"}
@@ -325,6 +348,7 @@ $effect(() => {
 						bind:this={expressionInputEl}
 						value={expressionQuery}
 						class="min-w-0 flex-1 bg-transparent text-xs text-[#2f2a25] outline-none placeholder:text-[#8c8782]"
+						aria-label={labels.expressionInput}
 						placeholder={labels.expressionPlaceholder}
 						onfocus={() => { expressionFocused = true; }}
 						onblur={() => { expressionFocused = false; }}
@@ -359,15 +383,13 @@ $effect(() => {
 				class:opacity-100={showContentHintButton || contentMode}
 				class:translate-x-2={!showContentHintButton && !contentMode}
 			>
-				<button
-					type="button"
-					class="flex min-h-9 w-full items-center gap-2 rounded-[10px] bg-[#fbfaf7]/90 px-3 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] transition-[background-color,color,transform,box-shadow] duration-200 hover:bg-[#fffdf9] hover:text-[#2f2a25] disabled:opacity-100"
-					class:whitespace-nowrap={!contentMode}
-					onclick={requestContentHint}
-					disabled={isGettingHint || disabled || contentMode}
-				>
-					<Pilcrow size={17} strokeWidth={1.9} class="shrink-0 text-[#8c7b6c]" />
-					{#if contentMode}
+				{#if contentMode}
+					<div
+						role="status"
+						aria-live="polite"
+						class="flex min-h-9 w-full items-center gap-2 rounded-[10px] bg-[#fbfaf7]/90 px-3 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
+					>
+						<Pilcrow size={17} strokeWidth={1.9} class="shrink-0 text-[#8c7b6c]" />
 						<div
 							class="min-w-0 flex-1 overflow-hidden transition-[height,opacity] duration-200 ease-out"
 							style:height={`${contentHintHeight}px`}
@@ -383,10 +405,18 @@ $effect(() => {
 								{/if}
 							</div>
 						</div>
-					{:else}
+					</div>
+				{:else}
+					<button
+						type="button"
+						class="flex min-h-9 w-full items-center gap-2 whitespace-nowrap rounded-[10px] bg-[#fbfaf7]/90 px-3 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] transition-[background-color,color,transform,box-shadow] duration-200 hover:bg-[#fffdf9] hover:text-[#2f2a25]"
+						onclick={requestContentHint}
+						disabled={isGettingHint || disabled}
+					>
+						<Pilcrow size={17} strokeWidth={1.9} class="shrink-0 text-[#8c7b6c]" />
 						<span class="font-bold">{labels.contentIdea}</span>
-					{/if}
-				</button>
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -396,7 +426,7 @@ $effect(() => {
 				style:height={`${resultHeight}px`}
 				style:opacity={hasExpressionResult ? 1 : 0}
 			>
-				<div bind:this={resultContentEl} class="relative px-4 pb-2 pt-0.5">
+				<div bind:this={resultContentEl} role="status" aria-live="polite" aria-busy={expressionLoading} class="relative px-4 pb-2 pt-0.5">
 					{#if expressionLoading}
 						<div class="grid gap-1.5 py-1">
 							<Skeleton class="h-2.5 w-3/4 bg-[#d8d3cd]/80" />
@@ -432,9 +462,9 @@ $effect(() => {
 
 @supports not (position-anchor: --fallback-anchor) {
 	.hint-bubble {
-		top: 12px;
-		left: 12px;
-		width: calc(100vw - 24px);
+		top: var(--hint-fallback-top, 12px);
+		left: var(--hint-fallback-left, 12px);
+		width: var(--hint-fallback-width, calc(100vw - 24px));
 	}
 }
 </style>

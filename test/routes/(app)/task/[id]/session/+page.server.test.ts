@@ -36,7 +36,13 @@ vi.mock("$lib/server/feedback", () => ({
 vi.mock("$lib/server/note", () => mockNoteService);
 
 import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
-import { CLIENT_MESSAGE_ID_MAX_LENGTH, MAIL_TEXT_MAX_LENGTH, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH } from "$lib/constants";
+import {
+	CLIENT_MESSAGE_ID_MAX_LENGTH,
+	MAIL_TEXT_MAX_LENGTH,
+	PRACTICE_UI_TEXT_MAX_LENGTH,
+	USER_LONG_TEXT_MAX_LENGTH,
+	USER_TEXT_MAX_LENGTH,
+} from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
@@ -823,30 +829,30 @@ describe("session page server", () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 		});
 
-		it("returns success with hints when called correctly", async () => {
-			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
+		it("returns a content direction when called correctly", async () => {
+			const mockHint = { contentHint: "Add the relevant date." };
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue(mockHints);
+			mockSessionService.generateHint.mockResolvedValue(mockHint);
 
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 
-			expect(result).toEqual({ success: true, ...mockHints });
+			expect(result).toEqual({ success: true, ...mockHint });
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it("uses the shared hint generator for apple_mail after mail hints are removed", async () => {
-			const mockHints = { hints: [{ text: "Test", translation: "Test" }] };
+			const mockHint = { contentHint: "Clarify the request." };
 			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "apple_mail" as const } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue(mockHints);
+			mockSessionService.generateHint.mockResolvedValue(mockHint);
 
 			const result = await actions.hint(
 				createFormEvent({
@@ -859,8 +865,26 @@ describe("session page server", () => {
 				}),
 			);
 
-			expect(result).toEqual({ success: true, ...mockHints });
+			expect(result).toEqual({ success: true, ...mockHint });
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
+		});
+
+		it("returns expression fragments and passes the draft and intended meaning", async () => {
+			const mockHint = { phrases: ["j'ai vérifié", "le détail de facture"] };
+			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 123, userId: "user_123", taskId: 456 });
+			mockSessionService.generateHint.mockResolvedValue(mockHint);
+
+			const result = await actions.hint(
+				createFormEvent({
+					values: { sessionId: "123", mode: "expression", draft: "Bonjour", expression: "我已经检查过账单" },
+				}),
+			);
+
+			expect(result).toEqual({ success: true, ...mockHint });
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
+				123,
+				expect.objectContaining({ mode: "expression", draft: "Bonjour", expression: "我已经检查过账单" }),
+			);
 		});
 
 		it.each([
@@ -879,6 +903,26 @@ describe("session page server", () => {
 				name: "invalid session id",
 				event: () => createFormEvent({ values: {} }),
 				expected: { status: 400, data: { error: "Invalid session" } },
+			},
+			{
+				name: "invalid hint mode",
+				event: () => createFormEvent({ values: { sessionId: "123", mode: "polish" } }),
+				expected: { status: 400, data: { error: "Invalid hint mode" } },
+			},
+			{
+				name: "missing expression",
+				event: () => createFormEvent({ values: { sessionId: "123", mode: "expression" } }),
+				expected: { status: 400, data: { error: "Expression is required" } },
+			},
+			{
+				name: "oversized draft",
+				event: () => createFormEvent({ values: { sessionId: "123", draft: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) } }),
+				expected: { status: 400, data: { error: "Draft is too long" } },
+			},
+			{
+				name: "oversized expression",
+				event: () => createFormEvent({ values: { sessionId: "123", mode: "expression", expression: "x".repeat(USER_TEXT_MAX_LENGTH + 1) } }),
+				expected: { status: 400, data: { error: "Expression is too long" } },
 			},
 		])("returns controlled failures for $name", async ({ event, expected, redirect }) => {
 			const actualEvent = event();
@@ -906,13 +950,13 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			const mockHints = { hints: [{ text: "Reply", translation: "Reply" }] };
-			mockSessionService.generateHint.mockResolvedValue(mockHints);
+			const mockHint = { contentHint: "Reply to the selected comment." };
+			mockSessionService.generateHint.mockResolvedValue(mockHint);
 			const contextPath = JSON.stringify([{ author: "alice", text: "hello" }]);
 
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
 
-			expect(result).toEqual({ success: true, ...mockHints });
+			expect(result).toEqual({ success: true, ...mockHint });
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
 				123,
 				expect.objectContaining({ mode: "content", contextPath: [{ author: "alice", text: "hello" }] }),
@@ -926,7 +970,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			mockSessionService.generateHint.mockResolvedValue({ contentHint: "Add context." });
 			const contextPath = JSON.stringify(
 				Array.from({ length: 6 }, (_, i) => ({
 					author: `speaker-${i}`,
@@ -954,7 +998,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			mockSessionService.generateHint.mockResolvedValue({ contentHint: "Add context." });
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "not-json" } }));
 
@@ -968,7 +1012,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			mockSessionService.generateHint.mockResolvedValue({ contentHint: "Add context." });
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: '{"author":"a","text":"t"}' } }));
 
@@ -982,7 +1026,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			mockSessionService.generateHint.mockResolvedValue({ contentHint: "Add context." });
 			const contextPath = JSON.stringify([{}, { author: 123, text: null }, { author: "alice", text: "hello" }]);
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
@@ -1000,7 +1044,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.generateHint.mockResolvedValue({ hints: [] });
+			mockSessionService.generateHint.mockResolvedValue({ contentHint: "Add context." });
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "   " } }));
 
