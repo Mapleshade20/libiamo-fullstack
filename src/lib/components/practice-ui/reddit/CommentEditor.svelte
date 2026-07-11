@@ -2,9 +2,9 @@
 import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import Image from "@lucide/svelte/icons/image";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
-import { onMount } from "svelte";
-import { deserialize } from "$app/forms";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { requestHint } from "../hint/api";
+import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
 import type { ContextComment } from "./types";
 
 let {
@@ -15,6 +15,7 @@ let {
 	avatarUrl = "",
 	avatarColor = "bg-[#FF4500]",
 	t = {} as Record<string, string>,
+	language = "en",
 	onSubmit,
 	sessionId = null as number | null,
 	contextPath = [] as ContextComment[],
@@ -26,6 +27,7 @@ let {
 	avatarUrl?: string;
 	avatarColor?: string;
 	t?: Record<string, string>;
+	language?: string;
 	onSubmit: (text: string) => void;
 	sessionId?: number | null;
 	contextPath?: ContextComment[];
@@ -33,79 +35,84 @@ let {
 
 let isExpanded = $state(false);
 let textareaEl = $state<HTMLTextAreaElement | null>(null);
+let hintLayoutReference = $state<HTMLDivElement | null>(null);
+let hintMotionOrigin = $state<HTMLElement | null>(null);
 
 // ── Hint state ───────────────────────────────────────────────────────
 let showHintMenu = $state(false);
-let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let contentHint = $state("");
+let expressionQuery = $state("");
+let expressionPhrases = $state<string[]>([]);
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintAbortController: AbortController | null = null;
-let hintButtonEl = $state<HTMLButtonElement | null>(null);
+let hintRequestId = 0;
+
+function openHintMenu(trigger: HTMLElement) {
+	if (disabled) return;
+	hintMotionOrigin = trigger;
+	showHintMenu = true;
+	hintError = null;
+	contentHint = "";
+	expressionPhrases = [];
+}
 
 async function handleGetHint() {
-	if (!sessionId || disabled || isGettingHint) return;
+	if (disabled || isGettingHint) return;
+	if (!sessionId) return;
+	const requestId = ++hintRequestId;
 	isGettingHint = true;
 	showHintMenu = true;
-	hints = [];
+	contentHint = "";
+	expressionPhrases = [];
 	hintError = null;
-	hintAbortController = new AbortController();
 	try {
-		const formData = new FormData();
-		formData.append("sessionId", String(sessionId));
-		if (contextPath.length > 0) {
-			formData.append("contextPath", JSON.stringify(contextPath));
-		}
-		const res = await fetch("?/hint", {
-			method: "POST",
-			body: formData,
-			signal: hintAbortController.signal,
-		});
-		const result = deserialize(await res.text());
-		if (result.type === "success" && result.data) {
-			hints = (
-				(
-					result.data as {
-						hints?: Array<{
-							text: string;
-							translation?: string;
-						}>;
-					}
-				).hints ?? []
-			).filter((h) => Boolean(h.text));
-		} else if (result.type === "failure") {
-			const error = (result.data as { error?: string } | undefined)?.error;
-			hintError = error?.trim() || "Failed to generate hints";
-		}
+		const result = await requestHint({ sessionId, mode: "content", draft: inputText, contextPath });
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		contentHint = result.contentHint ?? "";
 	} catch (err) {
-		if (!(err instanceof DOMException && err.name === "AbortError")) {
-			hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-			console.error("Failed to get hints:", err);
-		}
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get hints:", err);
 	} finally {
-		isGettingHint = false;
-		hintAbortController = null;
+		if (requestId === hintRequestId) isGettingHint = false;
+	}
+}
+
+async function handleExpressionHelp() {
+	if (disabled || isGettingHint || !expressionQuery.trim()) return;
+	const requestId = ++hintRequestId;
+	isGettingHint = true;
+	showHintMenu = true;
+	contentHint = "";
+	expressionPhrases = [];
+	hintError = null;
+	try {
+		if (!sessionId) return;
+		const result = await requestHint({ sessionId, mode: "expression", draft: inputText, expression: expressionQuery, contextPath });
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		expressionPhrases = result.phrases ?? [];
+	} catch (err) {
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get expression help:", err);
+	} finally {
+		if (requestId === hintRequestId) isGettingHint = false;
 	}
 }
 
 function closeHintMenu() {
+	hintRequestId++;
 	showHintMenu = false;
-	if (isGettingHint && hintAbortController) hintAbortController.abort();
 	isGettingHint = false;
 	hintError = null;
-	hintAbortController = null;
+	contentHint = "";
+	expressionQuery = "";
+	expressionPhrases = [];
 }
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
-	if (!target.closest(".hint-btn-wrapper") && !target.closest(".hint-popup")) {
+	if (!target.closest(".hint-btn-wrapper") && !target.closest(".hint-bubble")) {
 		if (showHintMenu) closeHintMenu();
 	}
-}
-
-function selectHint(text: string) {
-	inputText = text.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
-	if (!isExpanded) isExpanded = true;
-	showHintMenu = false;
 }
 
 // ── Expand / Collapse ────────────────────────────────────────────────
@@ -147,10 +154,6 @@ $effect(() => {
 		isExpanded = true;
 	}
 });
-
-onMount(() => () => {
-	if (hintAbortController) hintAbortController.abort();
-});
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -181,10 +184,9 @@ onMount(() => () => {
 	</div>
 {:else}
 	<!-- Expanded: full editor -->
-	<!-- Note: NO overflow-hidden on editor box — it would clip the hint popup -->
 	<div class="relative mb-2">
 		<!-- Editor box -->
-		<div class="rounded-md border border-[#0079D3] bg-white">
+		<div bind:this={hintLayoutReference} class="rounded-md border border-[#0079D3] bg-white">
 			<!-- Textarea -->
 			<textarea
 				bind:this={textareaEl}
@@ -222,67 +224,29 @@ onMount(() => () => {
 				</button>
 				<div class="flex-1"></div>
 				{#if sessionId}
-					<!-- Hint button with absolute-positioned popup above it -->
 					<div class="hint-btn-wrapper relative">
-						{#if showHintMenu}
-							<div
-								class="hint-popup absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border border-[#EDEFF1] bg-white shadow-xl"
-							>
-								<div class="flex items-center justify-between border-b border-[#EDEFF1] px-3 py-2">
-									<span class="text-xs font-bold uppercase tracking-wide text-[#878A8C]">{t.hintTitle}</span>
-									<button
-										type="button"
-										class="text-sm text-[#878A8C] hover:text-[#1C1C1C]"
-										onclick={(e) => {
-                                            e.stopPropagation();
-                                            closeHintMenu();
-                                        }}
-									>
-										&times;
-									</button>
-								</div>
-								<div class="max-h-56 space-y-1 overflow-y-auto p-2">
-									{#if isGettingHint}
-										<p class="py-5 text-center text-sm italic text-[#878A8C]">{t.thinking}</p>
-									{:else if hintError}
-										<p class="py-5 text-center text-sm text-red-600">{hintError}</p>
-									{:else if hints.length === 0}
-										<p class="py-5 text-center text-sm text-[#878A8C]">{t.noHints}</p>
-									{:else}
-										{#each hints as hint}
-											<button
-												type="button"
-												class="w-full rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-[#EDEFF1] hover:bg-[#F6F7F8]"
-												onclick={() =>
-                                                    selectHint(hint.text)}
-											>
-												<p class="text-sm text-[#1C1C1C]">{hint.text}</p>
-											</button>
-										{/each}
-									{/if}
-								</div>
-							</div>
-						{/if}
 						<button
-							bind:this={hintButtonEl}
 							type="button"
-							class="flex h-6 w-6 items-center justify-center rounded text-[#878A8C] transition-colors hover:text-[#FF4500] disabled:opacity-40"
+							class="grid h-7 w-7 place-items-center rounded text-[#878A8C] transition-colors hover:bg-[#EDEFF1] hover:text-[#FF4500] disabled:opacity-40 {showHintMenu
+								? 'bg-[#FFF3EC] text-[#FF4500]'
+								: ''}"
 							title={t.getHint}
+							aria-label={t.getHint}
 							onclick={(e) => {
-                                e.stopPropagation();
-                                if (showHintMenu) {
-                                    closeHintMenu();
-                                } else {
-                                    handleGetHint();
-                                }
-                            }}
+								e.stopPropagation();
+								if (showHintMenu) {
+									closeHintMenu();
+								} else {
+									openHintMenu(e.currentTarget);
+								}
+							}}
 							{disabled}
 						>
 							<Lightbulb
 								size={14}
 								class={isGettingHint
-                                    ? "animate-pulse text-[#FF4500]"
-                                    : ""}
+									? "animate-pulse text-[#FF4500]"
+									: ""}
 							/>
 						</button>
 					</div>
@@ -306,5 +270,22 @@ onMount(() => () => {
 				</button>
 			</div>
 		</div>
+		{#if sessionId && showHintMenu}
+			<HintFloatingPanel
+				anchorName="--libiamo-reddit-hint-anchor"
+				layoutReference={hintLayoutReference}
+				motionOrigin={hintMotionOrigin}
+				{language}
+				bind:expressionQuery
+				{expressionPhrases}
+				{contentHint}
+				{hintError}
+				{isGettingHint}
+				{disabled}
+				onExpressionSubmit={handleExpressionHelp}
+				onContentHint={handleGetHint}
+				onClose={closeHintMenu}
+			/>
+		{/if}
 	</div>
 {/if}

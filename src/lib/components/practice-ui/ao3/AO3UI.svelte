@@ -1,10 +1,11 @@
 <script lang="ts">
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { fade } from "svelte/transition";
-import { deserialize } from "$app/forms";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
+import { requestHint } from "../hint/api";
+import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import {
@@ -87,10 +88,14 @@ let commentText = $state("");
 let replyTarget = $state<Ao3RenderableComment | null>(null);
 let showHintMenu = $state(false);
 let showFinishConfirm = $state(false);
-let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let contentHint = $state("");
+let expressionQuery = $state("");
+let expressionPhrases = $state<string[]>([]);
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintAbortController: AbortController | null = null;
+let hintRequestId = 0;
+let hintLayoutReference = $state<HTMLDivElement | null>(null);
+let hintMotionOrigin = $state<HTMLElement | null>(null);
 let scrollContainer: HTMLDivElement;
 
 const disabled = $derived(session.disabled);
@@ -156,53 +161,75 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 
 async function handleGetHint() {
 	if (!session.sessionId || session.isCompleted || disabled || isGettingHint) return;
+	const requestId = ++hintRequestId;
 	isGettingHint = true;
 	showHintMenu = true;
-	hints = [];
+	contentHint = "";
+	expressionPhrases = [];
 	hintError = null;
-	hintAbortController = new AbortController();
 	try {
-		const formData = new FormData();
-		formData.append("sessionId", String(session.sessionId));
-		const res = await fetch(`?/hint`, {
-			method: "POST",
-			body: formData,
-			signal: hintAbortController.signal,
-		});
-		const result = deserialize(await res.text());
-		if (result.type === "success" && result.data) {
-			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
-		} else if (result.type === "failure") {
-			const error = (result.data as { error?: string } | undefined)?.error;
-			hintError = error?.trim() || "Failed to generate hints";
-		}
-	} catch (error) {
-		if (!(error instanceof DOMException && error.name === "AbortError")) {
-			hintError = error instanceof Error && error.message.trim() ? error.message : "Failed to generate hints";
-			console.error("Failed to get hints:", error);
-		}
+		const contextPath = replyTarget ? [{ author: replyTarget.username, text: replyTarget.comment }] : undefined;
+		const result = await requestHint({ sessionId: session.sessionId, mode: "content", draft: commentText, contextPath });
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		contentHint = result.contentHint ?? "";
+	} catch (err) {
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get hints:", err);
 	} finally {
-		isGettingHint = false;
-		hintAbortController = null;
+		if (requestId === hintRequestId) isGettingHint = false;
 	}
 }
 
-function closeHintMenu() {
-	showHintMenu = false;
+async function handleExpressionHelp() {
+	if (disabled || isGettingHint || !expressionQuery.trim()) return;
+	const requestId = ++hintRequestId;
+	isGettingHint = true;
+	showHintMenu = true;
+	contentHint = "";
+	expressionPhrases = [];
 	hintError = null;
-	if (isGettingHint && hintAbortController) hintAbortController.abort();
-	isGettingHint = false;
-	hintAbortController = null;
+	try {
+		if (!session.sessionId) return;
+		const contextPath = replyTarget ? [{ author: replyTarget.username, text: replyTarget.comment }] : undefined;
+		const result = await requestHint({
+			sessionId: session.sessionId,
+			mode: "expression",
+			draft: commentText,
+			expression: expressionQuery,
+			contextPath,
+		});
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		expressionPhrases = result.phrases ?? [];
+	} catch (err) {
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get expression help:", err);
+	} finally {
+		if (requestId === hintRequestId) isGettingHint = false;
+	}
 }
 
-function selectHint(text: string) {
-	commentText = text.slice(0, characterLimit);
+function openHintMenu(trigger: HTMLElement) {
+	if (!session.sessionId || session.isCompleted || disabled) return;
+	hintMotionOrigin = trigger;
+	showHintMenu = true;
+	hintError = null;
+	contentHint = "";
+	expressionPhrases = [];
+}
+
+function closeHintMenu() {
+	hintRequestId++;
 	showHintMenu = false;
+	hintError = null;
+	isGettingHint = false;
+	contentHint = "";
+	expressionQuery = "";
+	expressionPhrases = [];
 }
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
-	if (!target.closest(".ao3-hint-wrapper") && showHintMenu) closeHintMenu();
+	if (!target.closest(".ao3-hint-wrapper") && !target.closest(".hint-bubble") && showHintMenu) closeHintMenu();
 }
 
 function scrollToTop() {
@@ -322,7 +349,7 @@ function handleFinishCancel() {
 		<section id="comments">
 			<h3 class="mb-4 border-b border-[#ddd] pb-1 text-2xl font-normal">{t.comments}</h3>
 
-			<div id="ao3-comment-form" class="mb-8 border border-[#ddd] bg-[#f3efec] p-4 shadow-inner">
+			<div bind:this={hintLayoutReference} id="ao3-comment-form" class="mb-8 border border-[#ddd] bg-[#f3efec] p-4 shadow-inner">
 				<div class="mb-2 flex items-start justify-between gap-3">
 					<div>
 						<h4 class="m-0 text-base font-normal">{t.commentAs} <strong>{userName}</strong></h4>
@@ -350,37 +377,14 @@ function handleFinishCancel() {
 							<button
 								type="button"
 								class="ao3-action inline-flex items-center gap-1 whitespace-nowrap"
-								onclick={(event) => { event.stopPropagation(); showHintMenu ? closeHintMenu() : handleGetHint(); }}
+								onclick={(event) => {
+									event.stopPropagation();
+									showHintMenu ? closeHintMenu() : openHintMenu(event.currentTarget);
+								}}
 								disabled={!session.sessionId || disabled}
 							>
 								<Lightbulb size={14} class={isGettingHint ? "animate-pulse text-[#900]" : ""} /> {t.getHint}
 							</button>
-							{#if showHintMenu}
-								<div class="absolute right-0 bottom-[calc(100%+8px)] z-20 w-80 border border-[#ccc] bg-white shadow-xl">
-									<div class="flex items-center justify-between border-b border-[#ddd] bg-[#eee] px-3 py-2 text-sm font-bold">
-										<span>{t.hintTitle}</span>
-										<button type="button" onclick={(event) => { event.stopPropagation(); closeHintMenu(); }}>×</button>
-									</div>
-									<div class="max-h-64 overflow-y-auto p-2">
-										{#if isGettingHint}
-											<p class="py-5 text-center text-sm italic text-[#666]">{t.thinking}</p>
-										{:else if hintError}
-											<p class="py-5 text-center text-sm text-[#900]">{hintError}</p>
-										{:else if hints.length === 0}
-											<p class="py-5 text-center text-sm text-[#666]">{t.noHints}</p>
-										{:else}
-											{#each hints as hint}
-												<button type="button" class="block w-full p-2 text-left hover:bg-[#f3efec]" onclick={() => selectHint(hint.text)}>
-													<span class="text-sm">{hint.text}</span>
-													{#if hint.translation}
-														<span class="mt-1 block text-xs text-[#666]">{hint.translation}</span>
-													{/if}
-												</button>
-											{/each}
-										{/if}
-									</div>
-								</div>
-							{/if}
 						</div>
 						<button type="button" class="ao3-action" onclick={submitComment} disabled={!commentText.trim() || disabled}>
 							{replyTarget ? t.reply : t.comment}
@@ -388,6 +392,23 @@ function handleFinishCancel() {
 					</div>
 				</div>
 			</div>
+			{#if showHintMenu}
+				<HintFloatingPanel
+					anchorName="--libiamo-ao3-hint-anchor"
+					layoutReference={hintLayoutReference}
+					motionOrigin={hintMotionOrigin}
+					{language}
+					bind:expressionQuery
+					{expressionPhrases}
+					{contentHint}
+					{hintError}
+					{isGettingHint}
+					{disabled}
+					onExpressionSubmit={handleExpressionHelp}
+					onContentHint={handleGetHint}
+					onClose={closeHintMenu}
+				/>
+			{/if}
 
 			<ol class="m-0 list-none p-0">
 				{#each commentTree as comment (comment.id)}

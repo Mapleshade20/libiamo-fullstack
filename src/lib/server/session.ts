@@ -691,20 +691,25 @@ export async function completeSession(sessionId: number): Promise<void> {
 	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 }
 
-export type HintResult = {
-	hints: Array<{ text: string; translation: string }>;
+export type HintRequest = {
+	mode: "content" | "expression";
+	draft?: string;
+	expression?: string;
+	nativeLanguage?: string | null;
+	contextPath?: ContextComment[];
 };
 
-const HintSchema = z.object({
-	hints: z
-		.array(
-			z.object({
-				text: z.string().describe("The suggested reply in the learning language."),
-				translation: z.string().describe("English translation of the suggestion."),
-			}),
-		)
+export type HintResult = { contentHint: string } | { phrases: string[] };
+
+const ContentHintSchema = z.object({
+	contentHint: z.string().min(1).max(500).describe("One concise direction for content the learner could add, without drafting it for them."),
+});
+
+const ExpressionHintSchema = z.object({
+	phrases: z
+		.array(z.string().min(1).max(100).describe("A word, phrase, or sentence fragment in the learning language, never a complete reply."))
 		.min(1)
-		.max(3),
+		.max(4),
 });
 
 export type ContextComment = {
@@ -712,7 +717,7 @@ export type ContextComment = {
 	text: string;
 };
 
-export async function generateHint(sessionId: number, contextPath?: ContextComment[]): Promise<HintResult> {
+export async function generateHint(sessionId: number, input: HintRequest): Promise<HintResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 		with: {
@@ -725,6 +730,9 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 	if (!session.task) throw new Error("Task not found");
 
 	const learningLanguageName = getLanguageEnglishName(session.task.language);
+	const hintLanguageName = input.nativeLanguage
+		? (new Intl.DisplayNames(["en"], { type: "language" }).of(input.nativeLanguage) ?? input.nativeLanguage)
+		: learningLanguageName;
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
 	const history = session.messages
@@ -734,38 +742,64 @@ export async function generateHint(sessionId: number, contextPath?: ContextComme
 
 	// Build context section from the ancestor comment path (precise thread extraction)
 	let contextSection = "";
-	if (contextPath && contextPath.length > 0) {
-		const threadLines = contextPath.map((c, i) => `${"  ".repeat(i)}u/${c.author}: ${c.text}`).join("\n");
+	if (input.contextPath && input.contextPath.length > 0) {
+		const threadLines = input.contextPath.map((c, i) => `${"  ".repeat(i)}${c.author}: ${c.text}`).join("\n");
 		contextSection = `\n\n## Reply Context (comment thread from root to the comment being replied to)\n${threadLines}`;
 	}
 
-	const threadInstruction =
-		contextPath && contextPath.length > 0
-			? "\n4. The suggestions should be relevant to the specific comment thread shown in the Reply Context section."
-			: "";
+	const taskGoals = [session.task.shortObjective, session.task.description, ...(session.task.objectives ?? [])].filter(Boolean).join("\n- ");
+	const sharedContext = `You are an expert language tutor. A learner is practicing ${learningLanguageName} in a roleplay.
 
-	const prompt = `You are an expert language tutor. A student is practicing ${learningLanguageName} in a roleplay.
+## Task Goals
+- ${taskGoals || "Complete the current communication task appropriately."}
 
-## Roleplay Rules & Context
+## Roleplay Rules and Scenario
 ${snapshot.systemPrompt}
 
 ## Conversation History
 ${history || "(No messages yet)"}${contextSection}
 
-## Critical Instructions
-Suggest 3 natural ways for the student to reply.
-1. The "text" field MUST be written in ${learningLanguageName.toUpperCase()} ONLY.
-2. The suggestions must be consistent with the persona and context provided above.
-3. The "translation" field should provide an English translation of that suggestion.${threadInstruction}
+## Current Unsent Draft
+${input.draft?.trim() || "(Empty)"}`;
 
-Respond in JSON format: {"hints":[{"text":"suggested reply in ${learningLanguageName}","translation":"English translation"}]}`;
+	if (input.mode === "expression") {
+		const prompt = `${sharedContext}
 
-	const messages: ChatMessage[] = [
-		{ role: "system", content: prompt },
-		{ role: "user", content: `Give me hints for my next reply in ${learningLanguageName}.` },
-	];
+## Meaning the Learner Wants to Express
+${input.expression?.trim() || "(Missing)"}
 
-	return await chatJson(HintSchema, { messages, userId: session.userId });
+Return 2 to 4 useful ${learningLanguageName} words, short phrases, or sentence fragments that help express this meaning.
+- Never write a complete sentence or a complete reply.
+- Keep each item short enough that the learner must choose grammar and assemble it themselves.
+- Do not explain, evaluate, polish, or offer one-click replacement text.
+
+Return valid JSON only, in this exact shape: {"phrases":["fragment one","fragment two"]}`;
+		return await chatJson(ExpressionHintSchema, {
+			messages: [
+				{ role: "system", content: prompt },
+				{ role: "user", content: "Give only the requested expression fragments." },
+			],
+			userId: session.userId,
+		});
+	}
+
+	const prompt = `${sharedContext}
+
+Give exactly one concise direction for what content the learner could add.
+- Write the direction in ${hintLanguageName}.
+- Decide the highest-priority missing content from the task goals, scenario, conversation, and current draft together.
+- Mention whether it belongs before, after, or within the draft only when that is genuinely useful.
+- Do not provide a complete sentence, suggested reply, rewrite, polishing, or text that can be pasted directly.
+
+Return valid JSON only, in this exact shape: {"contentHint":"one concise direction"}`;
+
+	return await chatJson(ContentHintSchema, {
+		messages: [
+			{ role: "system", content: prompt },
+			{ role: "user", content: "Give only the single content direction." },
+		],
+		userId: session.userId,
+	});
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

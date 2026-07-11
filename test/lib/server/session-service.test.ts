@@ -783,18 +783,15 @@ describe("session service", () => {
 			};
 
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatJson.mockResolvedValue({
-				hints: [{ text: "こんにちは", translation: "Hello" }],
-			});
+			mockClient.chatJson.mockResolvedValue({ contentHint: "背景をもう少し説明する。" });
 
-			const result = await generateHint(123);
+			const result = await generateHint(123, { mode: "content", nativeLanguage: "ja" });
 
-			expect(result.hints).toHaveLength(1);
-			expect(result.hints[0].text).toBe("こんにちは");
+			expect(result).toEqual({ contentHint: "背景をもう少し説明する。" });
 			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.any(Object),
 				expect.objectContaining({
-					messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("JAPANESE") })]),
+					messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Japanese") })]),
 					userId: USER_ID,
 				}),
 			);
@@ -802,13 +799,13 @@ describe("session service", () => {
 
 		it("throws error if session is not found", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-			await expect(generateHint(999)).rejects.toThrow("Session not found");
+			await expect(generateHint(999, { mode: "content" })).rejects.toThrow("Session not found");
 		});
 
 		it("throws when normal hint session has no task", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({ id: 123, userId: USER_ID, task: null, messages: [] });
 
-			await expect(generateHint(123)).rejects.toThrow("Task not found");
+			await expect(generateHint(123, { mode: "content" })).rejects.toThrow("Task not found");
 		});
 
 		it("uses an empty-history placeholder for normal hints", async () => {
@@ -819,9 +816,9 @@ describe("session service", () => {
 				agentPromptSnapshot: { systemPrompt: "Context" },
 				messages: [],
 			});
-			mockClient.chatJson.mockResolvedValue({ hints: [] });
+			mockClient.chatJson.mockResolvedValue({ contentHint: "Add context." });
 
-			await generateHint(123);
+			await generateHint(123, { mode: "content" });
 
 			const systemPrompt = mockClient.chatJson.mock.calls[0]?.[1]?.messages?.[0]?.content ?? "";
 			expect(systemPrompt).toContain("(No messages yet)");
@@ -1038,41 +1035,35 @@ describe("session service", () => {
 
 		it("adds comment thread context to the prompt when contextPath is provided", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
-			mockClient.chatJson.mockResolvedValue({
-				hints: [{ text: "¡Me parece bien!", translation: "Sounds good to me!" }],
-			});
+			mockClient.chatJson.mockResolvedValue({ contentHint: "Añade el motivo principal." });
 
 			const contextPath = [
 				{ author: "OriginalPoster", text: "Has anyone tried this method?" },
 				{ author: "Replier", text: "Yes, it works great!" },
 			];
 
-			const result = await generateHint(123, contextPath);
+			const result = await generateHint(123, { mode: "content", contextPath });
 
-			expect(result.hints).toHaveLength(1);
+			expect(result).toEqual({ contentHint: "Añade el motivo principal." });
 
 			const promptMessages = mockClient.chatJson.mock.calls[0][1].messages;
 			const systemContent = promptMessages[0].content as string;
 
 			expect(systemContent).toContain("Reply Context");
-			expect(systemContent).toContain("u/OriginalPoster: Has anyone tried this method?");
-			expect(systemContent).toContain("  u/Replier: Yes, it works great!");
-			expect(systemContent).toContain("4. The suggestions should be relevant");
+			expect(systemContent).toContain("OriginalPoster: Has anyone tried this method?");
+			expect(systemContent).toContain("  Replier: Yes, it works great!");
 		});
 
 		it("skips the context section when contextPath is an empty array", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockHintSession);
-			mockClient.chatJson.mockResolvedValue({
-				hints: [{ text: "Hola", translation: "Hello" }],
-			});
+			mockClient.chatJson.mockResolvedValue({ contentHint: "Añade contexto." });
 
-			await generateHint(123, []);
+			await generateHint(123, { mode: "content", contextPath: [] });
 
 			const promptMessages = mockClient.chatJson.mock.calls[0][1].messages;
 			const systemContent = promptMessages[0].content as string;
 
 			expect(systemContent).not.toContain("Reply Context");
-			expect(systemContent).not.toContain("4. The suggestions should be relevant");
 		});
 
 		it("throws when the session has no task", async () => {
@@ -1084,7 +1075,7 @@ describe("session service", () => {
 				messages: [],
 			});
 
-			await expect(generateHint(123)).rejects.toThrow("Task not found");
+			await expect(generateHint(123, { mode: "content" })).rejects.toThrow("Task not found");
 		});
 	});
 

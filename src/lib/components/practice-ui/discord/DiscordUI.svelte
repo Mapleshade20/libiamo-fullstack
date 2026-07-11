@@ -239,6 +239,7 @@ $effect(() => {
 					limitReached={session.limitReached}
 					isWaitingRetry={session.isWaitingRetry}
 					{messagePlaceholder}
+					{language}
 					sessionId={session.sessionId}
 					{t}
 					{allUsers}

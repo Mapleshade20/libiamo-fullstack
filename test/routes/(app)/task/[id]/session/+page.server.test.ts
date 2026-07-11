@@ -835,7 +835,7 @@ describe("session page server", () => {
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123" } }));
 
 			expect(result).toEqual({ success: true, ...mockHints });
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it("uses the shared hint generator for apple_mail after mail hints are removed", async () => {
@@ -860,7 +860,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toEqual({ success: true, ...mockHints });
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it.each([
@@ -913,7 +913,10 @@ describe("session page server", () => {
 			const result = await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
 
 			expect(result).toEqual({ success: true, ...mockHints });
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
+				123,
+				expect.objectContaining({ mode: "content", contextPath: [{ author: "alice", text: "hello" }] }),
+			);
 		});
 
 		it("allows large hint contextPaths up to the task turn-based context budget", async () => {
@@ -937,7 +940,10 @@ describe("session page server", () => {
 
 			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
 				123,
-				expect.arrayContaining([expect.objectContaining({ author: "speaker-0", text: expect.stringMatching(/^x+$/) })]),
+				expect.objectContaining({
+					mode: "content",
+					contextPath: expect.arrayContaining([expect.objectContaining({ author: "speaker-0", text: expect.stringMatching(/^x+$/) })]),
+				}),
 			);
 		});
 
@@ -952,7 +958,7 @@ describe("session page server", () => {
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "not-json" } }));
 
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it("ignores contextPath when it is a JSON object instead of array", async () => {
@@ -966,7 +972,7 @@ describe("session page server", () => {
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: '{"author":"a","text":"t"}' } }));
 
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it("filters malformed contextPath entries before calling generateHint", async () => {
@@ -981,7 +987,10 @@ describe("session page server", () => {
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath } }));
 
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, [{ author: "alice", text: "hello" }]);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(
+				123,
+				expect.objectContaining({ mode: "content", contextPath: [{ author: "alice", text: "hello" }] }),
+			);
 		});
 
 		it("ignores contextPath when it is an empty string", async () => {
@@ -995,7 +1004,7 @@ describe("session page server", () => {
 
 			await actions.hint(createFormEvent({ values: { sessionId: "123", contextPath: "   " } }));
 
-			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, undefined);
+			expect(mockSessionService.generateHint).toHaveBeenCalledWith(123, expect.objectContaining({ mode: "content", contextPath: undefined }));
 		});
 
 		it("returns 500 when generateHint fails", async () => {

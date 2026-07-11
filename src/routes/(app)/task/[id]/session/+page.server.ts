@@ -352,9 +352,19 @@ export const actions: Actions = {
 
 		const formData = await event.request.formData();
 		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const modeValue = formData.get("mode");
+		const mode = modeValue ?? "content";
+		const draftValue = formData.get("draft");
+		const expressionValue = formData.get("expression");
 		const contextPathRaw = formData.get("contextPath");
 
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session" });
+		if (mode !== "content" && mode !== "expression") return fail(400, { error: "Invalid hint mode" });
+		const draft = typeof draftValue === "string" ? draftValue.trim() : "";
+		const expression = typeof expressionValue === "string" ? expressionValue.trim() : "";
+		if (draft.length > USER_LONG_TEXT_MAX_LENGTH) return fail(400, { error: "Draft is too long" });
+		if (expression.length > USER_TEXT_MAX_LENGTH) return fail(400, { error: "Expression is too long" });
+		if (mode === "expression" && !expression) return fail(400, { error: "Expression is required" });
 
 		try {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
@@ -367,7 +377,13 @@ export const actions: Actions = {
 			if (!taskData) return fail(404, { error: "Task not found" });
 
 			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.template.maxTurns));
-			const result = await generateHint(sessionId, contextPath);
+			const result = await generateHint(sessionId, {
+				mode,
+				draft,
+				expression,
+				nativeLanguage: user.nativeLanguage,
+				contextPath,
+			});
 			return { success: true, ...result };
 		} catch (e) {
 			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });

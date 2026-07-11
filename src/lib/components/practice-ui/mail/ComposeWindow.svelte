@@ -2,6 +2,8 @@
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
+import { requestHint } from "../hint/api";
+import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
@@ -17,6 +19,7 @@ let {
 	limitReached = false,
 	sessionId = null as number | null,
 	t = {} as Record<string, string>,
+	language = "en",
 	onClose = () => {},
 	onMockAction = () => {},
 	onSend = () => {},
@@ -29,13 +32,17 @@ let {
 	limitReached?: boolean;
 	sessionId?: number | null;
 	t?: Record<string, string>;
+	language?: string;
 	onClose?: () => void;
 	onMockAction?: () => void;
 	onSend?: () => void;
 	onPersistDraft?: (draft: DraftEmail) => void;
 } = $props();
 
+let composeWindowEl = $state<HTMLDivElement | null>(null);
 let bodyEditor = $state<HTMLDivElement | null>(null);
+let hintLayoutReference = $state<HTMLDivElement | null>(null);
+let hintMotionOrigin = $state<HTMLElement | null>(null);
 let frame = $state({ x: 0, y: 0, width: 900, height: 680 });
 let frameReady = $state(false);
 let viewportWidth = $state(1024);
@@ -49,6 +56,13 @@ let activeLayouts = $state<ComposeActiveLayouts>({
 	insertUnorderedList: false,
 	insertOrderedList: false,
 });
+let showHintMenu = $state(false);
+let expressionQuery = $state("");
+let expressionPhrases = $state<string[]>([]);
+let contentHint = $state("");
+let hintError = $state<string | null>(null);
+let isGettingHint = $state(false);
+let hintRequestId = 0;
 
 const isCompact = $derived(viewportWidth <= 640);
 const editorIsEmpty = $derived(!draft.body.trim());
@@ -370,6 +384,73 @@ function redoEditorChange() {
 	runEditorCommand("redo");
 }
 
+function openHintMenu(event: MouseEvent) {
+	if (showHintMenu) {
+		closeHintMenu();
+		return;
+	}
+	hintMotionOrigin = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+	showHintMenu = true;
+	contentHint = "";
+	hintError = null;
+	expressionQuery = "";
+	expressionPhrases = [];
+}
+
+function closeHintMenu() {
+	hintRequestId++;
+	showHintMenu = false;
+	isGettingHint = false;
+	contentHint = "";
+	hintError = null;
+	expressionQuery = "";
+	expressionPhrases = [];
+}
+
+async function handleGetHint() {
+	if (!sessionId || isGettingHint) return;
+	const requestId = ++hintRequestId;
+	isGettingHint = true;
+	contentHint = "";
+	expressionPhrases = [];
+	hintError = null;
+	try {
+		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
+		const result = await requestHint({ sessionId, mode: "content", draft: mailDraft });
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		contentHint = result.contentHint ?? "";
+	} catch (err) {
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+	} finally {
+		if (requestId === hintRequestId) isGettingHint = false;
+	}
+}
+
+async function handleExpressionHelp() {
+	if (!sessionId || isGettingHint || !expressionQuery.trim()) return;
+	const requestId = ++hintRequestId;
+	isGettingHint = true;
+	contentHint = "";
+	expressionPhrases = [];
+	hintError = null;
+	try {
+		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
+		const result = await requestHint({ sessionId, mode: "expression", draft: mailDraft, expression: expressionQuery });
+		if (requestId !== hintRequestId || !showHintMenu) return;
+		expressionPhrases = result.phrases ?? [];
+	} catch (err) {
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+	} finally {
+		if (requestId === hintRequestId) isGettingHint = false;
+	}
+}
+
+function handleWindowClick(event: MouseEvent) {
+	if (!showHintMenu) return;
+	const target = event.target as HTMLElement;
+	if (!target.closest(".mail-hint-wrapper") && !target.closest(".hint-bubble")) closeHintMenu();
+}
+
 function handleEditorKeydown(event: KeyboardEvent) {
 	if (event.key !== "Tab") return;
 	event.preventDefault();
@@ -466,9 +547,10 @@ $effect(() => {
 });
 </script>
 
-<svelte:window bind:innerWidth={viewportWidth} />
+<svelte:window bind:innerWidth={viewportWidth} onclick={handleWindowClick} />
 
 <div
+	bind:this={composeWindowEl}
 	class="compose-window"
 	class:frame-ready={frameReady}
 	class:length-warning={showLengthWarning}
@@ -512,7 +594,38 @@ $effect(() => {
 		onBlur={syncDraftFromEditor}
 		onPaste={handlePaste}
 	/>
-	<ComposeActionBar {draft} {sessionId} {isSubmitting} {isCompleted} {isInitializing} {limitReached} {t} {onMockAction} {onSend} />
+	<div bind:this={hintLayoutReference}>
+		<ComposeActionBar
+			{draft}
+			{sessionId}
+			{isSubmitting}
+			{isCompleted}
+			{isInitializing}
+			{limitReached}
+			{t}
+			{onMockAction}
+			onHintClick={openHintMenu}
+			{onSend}
+		/>
+	</div>
+	{#if showHintMenu}
+		<HintFloatingPanel
+			anchorName="--libiamo-mail-hint-anchor"
+			layoutReference={hintLayoutReference}
+			motionOrigin={hintMotionOrigin}
+			{language}
+			bind:expressionQuery
+			{expressionPhrases}
+			{contentHint}
+			{hintError}
+			{isGettingHint}
+			disabled={editorDisabled}
+			placement="above"
+			onExpressionSubmit={handleExpressionHelp}
+			onContentHint={handleGetHint}
+			onClose={closeHintMenu}
+		/>
+	{/if}
 	{#if showLengthWarning}
 		<div class="length-warning-banner" transition:fly={{ y: -4, duration: 200 }}>
 			{t.lengthLimitReached ?? "Character limit reached — content has been trimmed."}

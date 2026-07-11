@@ -274,6 +274,7 @@ function handleFinishCancel() {
 								{avatarUrl}
 								avatarColor={userAvatarColor}
 								{t}
+								{language}
 								sessionId={session.sessionId}
 								contextPath={postContext}
 								onSubmit={handleTopLevelSubmit}
@@ -314,6 +315,7 @@ function handleFinishCancel() {
 								agentName={session.agentName}
 								sessionId={session.sessionId}
 								{t}
+								{language}
 								onMockAction={handleMockAction}
 							/>
 						{/each}

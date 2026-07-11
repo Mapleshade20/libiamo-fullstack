@@ -32,6 +32,7 @@ let {
 	agentName = "",
 	sessionId = null as number | null,
 	t = {} as Record<string, string>,
+	language = "en",
 	onMockAction = () => {},
 	replyingToId = null as string | null,
 	isAgentTyping = false,
@@ -48,6 +49,7 @@ let {
 	agentName?: string;
 	sessionId?: number | null;
 	t?: Record<string, string>;
+	language?: string;
 	onMockAction?: () => void;
 	replyingToId?: string | null;
 	isAgentTyping?: boolean;
@@ -246,6 +248,7 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 						{avatarUrl}
 						{avatarColor}
 						{t}
+						{language}
 						{sessionId}
 						placeholder={replyPlaceholder}
 						contextPath={extendedPath}
@@ -273,6 +276,7 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 					{agentName}
 					{sessionId}
 					{t}
+					{language}
 					{onMockAction}
 					{replyingToId}
 					{isAgentTyping}
