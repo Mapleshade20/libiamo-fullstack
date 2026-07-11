@@ -408,6 +408,13 @@ function closeHintMenu() {
 	expressionPhrases = [];
 }
 
+function getHintDraft() {
+	const headers = [draft.to.trim() && `To: ${draft.to.trim()}`, draft.subject.trim() && `Subject: ${draft.subject.trim()}`]
+		.filter(Boolean)
+		.join("\n");
+	return [headers, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
+}
+
 async function handleGetHint() {
 	if (!sessionId || isGettingHint) return;
 	const request = hintRequests.begin("content");
@@ -416,8 +423,7 @@ async function handleGetHint() {
 	expressionPhrases = [];
 	hintError = null;
 	try {
-		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
-		const result = await requestHint({ sessionId, mode: "content", draft: mailDraft });
+		const result = await requestHint({ sessionId, mode: "content", draft: getHintDraft() });
 		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		contentHint = result.contentHint ?? "";
 	} catch (err) {
@@ -437,8 +443,7 @@ async function handleExpressionHelp() {
 	expressionPhrases = [];
 	hintError = null;
 	try {
-		const mailDraft = [draft.subject.trim() && `Subject: ${draft.subject.trim()}`, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
-		const result = await requestHint({ sessionId, mode: "expression", draft: mailDraft, expression: expressionQuery });
+		const result = await requestHint({ sessionId, mode: "expression", draft: getHintDraft(), expression: expressionQuery });
 		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
 		expressionPhrases = result.phrases ?? [];
 	} catch (err) {
