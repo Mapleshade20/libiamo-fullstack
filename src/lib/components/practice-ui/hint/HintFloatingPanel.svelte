@@ -7,9 +7,9 @@ import X from "@lucide/svelte/icons/x";
 import type { TransitionConfig } from "svelte/transition";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import { getHintLabels } from "./i18n";
+import { isImeKeyboardEvent } from "./keyboard";
 
 type HintFloatingPlacement = "auto" | "above" | "below";
-type HintFloatingSide = "above" | "below";
 
 let {
 	anchorName,
@@ -47,10 +47,13 @@ let panelEl = $state<HTMLDivElement | null>(null);
 let resultContentEl = $state<HTMLDivElement | null>(null);
 let contentHintContentEl = $state<HTMLDivElement | null>(null);
 let expressionInputEl = $state<HTMLInputElement | null>(null);
+let anchoredLayoutReference: HTMLElement | null = null;
+let previousLayoutAnchorName = "";
 let resultHeight = $state(0);
 let contentHintHeight = $state(0);
 let expressionFocused = $state(false);
 let contentMode = $state(false);
+let suppressNextOutsideClick = false;
 let submittedExpressionQuery = $state("");
 let expressionResultCleared = $state(false);
 const labels = $derived(getHintLabels(language));
@@ -70,70 +73,82 @@ const hasContentHintResult = $derived(contentMode && (isGettingHint || Boolean(h
 const prefersAbove = $derived(placement === "above");
 const allowsBlockFlip = $derived(placement === "auto");
 
-function transitionCss(t: number, side: HintFloatingSide, originX: number, originY: number) {
-	const eased = 1 - (1 - t) ** 3;
-	const closed = 1 - eased;
-	const y = closed * (side === "below" ? -10 : 10);
-	const scaleX = 0.72 + eased * 0.28;
-	const scaleY = 0.6 + eased * 0.4;
-	const insetInline = closed * 17;
-	const insetNear = closed * 6;
-	const insetFar = closed * 34;
-	const insetTop = side === "below" ? insetNear : insetFar;
-	const insetBottom = side === "below" ? insetFar : insetNear;
-	const radius = 14 + closed * 5;
-
-	return `
-		opacity: ${Math.min(1, eased * 1.15)};
-		transform-origin: ${originX}px ${originY}px;
-		transform: translateY(${y}px) scale(${scaleX}, ${scaleY});
-		clip-path: inset(${insetTop}% ${insetInline}% ${insetBottom}% ${insetInline}% round ${radius}px);
-		will-change: opacity, transform, clip-path;
-	`;
+function ensureLayoutAnchor() {
+	if (!layoutReference || anchoredLayoutReference === layoutReference) return;
+	restoreLayoutAnchor();
+	anchoredLayoutReference = layoutReference;
+	previousLayoutAnchorName = layoutReference.style.getPropertyValue("anchor-name");
+	layoutReference.style.setProperty("anchor-name", anchorName);
 }
 
-function getTransitionGeometry(node: Element) {
+function restoreLayoutAnchor() {
+	if (!anchoredLayoutReference) return;
+	if (previousLayoutAnchorName) {
+		anchoredLayoutReference.style.setProperty("anchor-name", previousLayoutAnchorName);
+	} else {
+		anchoredLayoutReference.style.removeProperty("anchor-name");
+	}
+	anchoredLayoutReference = null;
+	previousLayoutAnchorName = "";
+}
+
+function getPanelMotionOffset(node: Element) {
+	ensureLayoutAnchor();
 	const panelRect = node.getBoundingClientRect();
 	const originRect = motionOrigin?.getBoundingClientRect() ?? layoutReference?.getBoundingClientRect();
-	const originCenterX = originRect ? originRect.left + originRect.width / 2 : panelRect.left + panelRect.width / 2;
 	const originCenterY = originRect ? originRect.top + originRect.height / 2 : panelRect.top + panelRect.height / 2;
-
-	return {
-		panelRect,
-		side: panelRect.top >= originCenterY ? ("below" as const) : ("above" as const),
-		originX: originCenterX - panelRect.left,
-		originY: originCenterY - panelRect.top,
-	};
+	return panelRect.top >= originCenterY ? -6 : 6;
 }
 
 function panelIntro(node: Element): TransitionConfig {
-	const transitionGeometry = getTransitionGeometry(node);
+	const hiddenY = getPanelMotionOffset(node);
 
 	return {
-		duration: 300,
-		css: (t) => transitionCss(t, transitionGeometry.side, transitionGeometry.originX, transitionGeometry.originY),
+		duration: 190,
+		css: (t) => {
+			const eased = 1 - (1 - t) ** 3;
+			return `
+				opacity: ${eased};
+				transform: translateY(${(1 - eased) * hiddenY}px);
+				will-change: opacity, transform;
+			`;
+		},
 	};
 }
 
+function freezePanelPosition(node: HTMLElement, panelRect: DOMRect) {
+	Object.assign(node.style, {
+		position: "fixed",
+		inset: "auto",
+		top: "0px",
+		right: "auto",
+		bottom: "auto",
+		left: "0px",
+		width: `${panelRect.width}px`,
+		maxHeight: `${panelRect.height}px`,
+		margin: "0px",
+	});
+	node.style.setProperty("position-area", "none");
+	node.style.setProperty("position-anchor", "none");
+	node.style.setProperty("position-try-fallbacks", "none");
+	node.style.justifySelf = "auto";
+
+	const fixedOrigin = node.getBoundingClientRect();
+	node.style.top = `${panelRect.top - fixedOrigin.top}px`;
+	node.style.left = `${panelRect.left - fixedOrigin.left}px`;
+}
+
 function panelOutro(node: Element): TransitionConfig {
-	const transitionGeometry = getTransitionGeometry(node);
-	const { panelRect } = transitionGeometry;
+	const panelRect = node.getBoundingClientRect();
+	const hiddenY = getPanelMotionOffset(node);
+	if (node instanceof HTMLElement) freezePanelPosition(node, panelRect);
 
 	return {
-		duration: 180,
+		duration: 150,
 		css: (t) => `
-			position: fixed;
-			position-area: none;
-			position-anchor: none;
-			inset: auto;
-			top: ${panelRect.top}px;
-			right: auto;
-			bottom: auto;
-			left: ${panelRect.left}px;
-			width: ${panelRect.width}px;
-			max-height: ${panelRect.height}px;
-			margin: 0;
-			${transitionCss(t, transitionGeometry.side, transitionGeometry.originX, transitionGeometry.originY)}
+			opacity: ${t};
+			transform: translateY(${(1 - t) * hiddenY}px);
+			will-change: opacity, transform;
 		`,
 	};
 }
@@ -147,6 +162,7 @@ function updateContentHintHeight() {
 }
 
 function handleExpressionKeydown(e: KeyboardEvent) {
+	if (isImeKeyboardEvent(e)) return;
 	if (e.key === "Enter" && !e.shiftKey) {
 		e.preventDefault();
 		submitExpression();
@@ -205,21 +221,33 @@ function handleWindowPointerdownCapture(event: PointerEvent) {
 	if (target === expressionInputEl) return;
 
 	expressionInputEl?.blur();
+	if (!panelEl?.contains(target)) suppressNextOutsideClick = true;
+}
+
+function handleWindowClickCapture(event: MouseEvent) {
+	if (!suppressNextOutsideClick) return;
+	suppressNextOutsideClick = false;
+	event.stopImmediatePropagation();
 }
 
 function handleWindowKeydownCapture(event: KeyboardEvent) {
+	if (isImeKeyboardEvent(event)) return;
 	if (event.key !== "Escape") return;
-	event.preventDefault();
-	event.stopImmediatePropagation();
-	const trigger = motionOrigin;
+	if (document.activeElement === expressionInputEl) {
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		expressionInputEl?.blur();
+		return;
+	}
+
 	onClose();
-	requestAnimationFrame(() => trigger?.focus());
 }
 
 function positionFallback(node: HTMLElement) {
-	if (CSS.supports("position-anchor: --fallback-anchor")) return;
+	ensureLayoutAnchor();
+	if (CSS.supports("position-anchor: --fallback-anchor")) return { destroy: restoreLayoutAnchor };
 	const reference = layoutReference ?? motionOrigin;
-	if (!reference) return;
+	if (!reference) return { destroy: restoreLayoutAnchor };
 
 	const referenceRect = reference.getBoundingClientRect();
 	const width = Math.min(referenceRect.width, window.innerWidth - 24);
@@ -234,6 +262,8 @@ function positionFallback(node: HTMLElement) {
 	const desiredTop = side === "above" ? referenceRect.top - panelHeight - 8 : referenceRect.bottom + 8;
 	const top = Math.min(Math.max(desiredTop, 12), Math.max(12, window.innerHeight - panelHeight - 12));
 	node.style.setProperty("--hint-fallback-top", `${top}px`);
+
+	return { destroy: restoreLayoutAnchor };
 }
 
 $effect(() => {
@@ -261,29 +291,13 @@ $effect(() => {
 
 	return () => observer.disconnect();
 });
-
-$effect(() => {
-	if (!layoutReference) return;
-	const previousAnchorName = layoutReference.style.getPropertyValue("anchor-name");
-	layoutReference.style.setProperty("anchor-name", anchorName);
-
-	return () => {
-		if (previousAnchorName) {
-			layoutReference.style.setProperty("anchor-name", previousAnchorName);
-		} else {
-			layoutReference.style.removeProperty("anchor-name");
-		}
-	};
-});
-
-$effect(() => {
-	if (!panelEl) return;
-	const frame = requestAnimationFrame(() => panelEl?.focus());
-	return () => cancelAnimationFrame(frame);
-});
 </script>
 
-<svelte:window onkeydowncapture={handleWindowKeydownCapture} onpointerdowncapture={handleWindowPointerdownCapture} />
+<svelte:window
+	onclickcapture={handleWindowClickCapture}
+	onkeydowncapture={handleWindowKeydownCapture}
+	onpointerdowncapture={handleWindowPointerdownCapture}
+/>
 
 <div
 	bind:this={panelEl}
