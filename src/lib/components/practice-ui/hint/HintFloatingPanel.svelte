@@ -401,7 +401,7 @@ $effect(() => {
 					<div
 						role="status"
 						aria-live="polite"
-						class="flex min-h-9 w-full items-center gap-2 rounded-[10px] bg-[#fbfaf7]/90 px-3 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
+						class="flex min-h-9 w-full items-center gap-2 rounded-[10px] bg-[#fbfaf7]/90 px-3 py-1.5 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
 					>
 						<Pilcrow size={17} strokeWidth={1.9} class="shrink-0 text-[#8c7b6c]" />
 						<div
@@ -413,9 +413,9 @@ $effect(() => {
 								{#if isGettingHint}
 									<div class="flex h-6 items-center"><Skeleton class="h-2.5 w-full bg-[#d8d3cd]/80" /></div>
 								{:else if hintError}
-									<span class="block min-w-0 whitespace-normal leading-6 text-red-600">{hintError}</span>
+									<span class="block min-w-0 whitespace-normal leading-5 text-red-600">{hintError}</span>
 								{:else}
-									<span class="block min-w-0 whitespace-normal leading-6 text-[#2f2a25]">{contentHint}</span>
+									<span class="block min-w-0 whitespace-normal leading-5 text-[#2f2a25]">{contentHint}</span>
 								{/if}
 							</div>
 						</div>
