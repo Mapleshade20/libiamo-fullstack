@@ -4,13 +4,15 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import Search from "@lucide/svelte/icons/search";
 import EmojiConvertor from "emoji-js";
-import { onMount } from "svelte";
+import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
-import { deserialize } from "$app/forms";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
+import { requestHint } from "../hint/api";
+import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
+import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
@@ -78,10 +80,14 @@ const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text
 
 let showHintMenu = $state(false);
 let showFinishConfirm = $state(false);
-let hints = $state<Array<{ text: string; translation?: string }>>([]);
+let contentHint = $state("");
+let expressionQuery = $state("");
+let expressionPhrases = $state<string[]>([]);
 let hintError = $state<string | null>(null);
 let isGettingHint = $state(false);
-let hintAbortController: AbortController | null = null;
+const hintRequests = createHintRequestLifecycle();
+let hintLayoutReference = $state<HTMLDivElement | null>(null);
+let hintMotionOrigin = $state<HTMLElement | null>(null);
 
 function handleInputKeydown(event: KeyboardEvent) {
 	if (event.key === "Enter" && !event.shiftKey) {
@@ -90,6 +96,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 			event.preventDefault();
 			if (!session.inputText.trim() || session.disabled) return;
 			const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
+			closeHintMenu();
 			session.inputText = "";
 			session.handleSend(text);
 		}
@@ -99,56 +106,73 @@ function handleInputKeydown(event: KeyboardEvent) {
 async function handleGetHint() {
 	if (!session.sessionId || session.isCompleted || session.disabled) return;
 	if (isGettingHint) return;
-
+	const request = hintRequests.begin("content");
 	isGettingHint = true;
 	showHintMenu = true;
-	hints = [];
+	contentHint = "";
+	expressionPhrases = [];
 	hintError = null;
-	hintAbortController = new AbortController();
 	try {
-		const formData = new FormData();
-		formData.append("sessionId", String(session.sessionId));
-		const res = await fetch(`?/hint`, {
-			method: "POST",
-			body: formData,
-			signal: hintAbortController.signal,
-		});
-		const result = deserialize(await res.text());
-		if (result.type === "success" && result.data) {
-			hints = ((result.data as { hints?: Array<{ text: string; translation?: string }> }).hints ?? []).filter((hint) => Boolean(hint.text));
-		} else if (result.type === "failure") {
-			const error = (result.data as { error?: string } | undefined)?.error;
-			hintError = error?.trim() || "Failed to generate hints";
-		}
-	} catch (error) {
-		if (!(error instanceof DOMException && error.name === "AbortError")) {
-			hintError = error instanceof Error && error.message.trim() ? error.message : "Failed to generate hints";
-			console.error("Failed to get hints:", error);
-		}
+		const result = await requestHint({ sessionId: session.sessionId, mode: "content", draft: session.inputText });
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
+		contentHint = result.contentHint ?? "";
+	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get hints:", err);
 	} finally {
-		isGettingHint = false;
-		hintAbortController = null;
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
 	}
+}
+
+async function handleExpressionHelp() {
+	if (session.disabled || isGettingHint || !expressionQuery.trim()) return;
+	const request = hintRequests.begin("expression");
+	isGettingHint = true;
+	showHintMenu = true;
+	contentHint = "";
+	expressionPhrases = [];
+	hintError = null;
+	try {
+		if (!session.sessionId) return;
+		const result = await requestHint({ sessionId: session.sessionId, mode: "expression", draft: session.inputText, expression: expressionQuery });
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
+		expressionPhrases = result.phrases ?? [];
+	} catch (err) {
+		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
+		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
+		console.error("Failed to get expression help:", err);
+	} finally {
+		if (hintRequests.isCurrent(request)) isGettingHint = false;
+		hintRequests.finish(request);
+	}
+}
+
+function openHintMenu(trigger: HTMLElement) {
+	if (!session.sessionId || session.isCompleted || session.disabled) return;
+	hintMotionOrigin = trigger;
+	showHintMenu = true;
+	hintError = null;
+	contentHint = "";
+	expressionPhrases = [];
 }
 
 function closeHintMenu() {
+	hintRequests.invalidate();
 	showHintMenu = false;
 	hintError = null;
-	if (isGettingHint && hintAbortController) {
-		hintAbortController.abort();
-	}
 	isGettingHint = false;
-	hintAbortController = null;
+	contentHint = "";
+	expressionQuery = "";
+	expressionPhrases = [];
 }
 
-function selectHint(text: string) {
-	session.inputText = text.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
-	showHintMenu = false;
-}
+onDestroy(() => hintRequests.invalidate());
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
-	if (!target.closest(".hint-container-wrapper")) {
+	if (!target.closest(".hint-container-wrapper") && !target.closest(".hint-bubble")) {
 		if (showHintMenu) closeHintMenu();
 	}
 }
@@ -190,12 +214,6 @@ function showIncomingSender(index: number) {
 	const prev = index > 0 ? renderableMessages[index - 1] : null;
 	return current?.role === "agent" && prev?.role !== "agent";
 }
-
-onMount(() => {
-	return () => {
-		if (hintAbortController) hintAbortController.abort();
-	};
-});
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -325,7 +343,7 @@ onMount(() => {
 				</div>
 
 				<div class="shrink-0 border-t border-[#E5E5EA] bg-white px-3 py-3 md:px-6">
-					<div class="relative">
+					<div bind:this={hintLayoutReference} class="relative">
 						<textarea
 							bind:value={session.inputText}
 							maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
@@ -347,60 +365,19 @@ onMount(() => {
 									type="button"
 									class="flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D1D6] bg-white text-[#8E8E93] transition-colors hover:text-[#1C1C1E] disabled:opacity-50"
 									title={t.getHint}
+									aria-label={t.getHint}
 									onclick={(event) => {
 										event.stopPropagation();
 										if (showHintMenu) {
 											closeHintMenu();
 										} else {
-											handleGetHint();
+											openHintMenu(event.currentTarget);
 										}
 									}}
 									disabled={!session.sessionId || session.disabled}
 								>
 									<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
 								</button>
-
-								{#if showHintMenu}
-									<div
-										class="absolute right-0 bottom-[calc(100%+8px)] z-20 w-72 overflow-hidden rounded-xl border border-[#D1D1D6] bg-white shadow-xl"
-									>
-										<div class="flex items-center justify-between border-b border-[#E5E5EA] px-3 py-2">
-											<span class="text-xs font-semibold uppercase tracking-wide text-[#8E8E93]">{t.hintTitle}</span>
-											<button
-												type="button"
-												class="text-sm text-[#8E8E93] hover:text-[#1C1C1E]"
-												onclick={(event) => {
-													event.stopPropagation();
-													closeHintMenu();
-												}}
-											>
-												&times;
-											</button>
-										</div>
-										<div class="max-h-64 space-y-1 overflow-y-auto p-2">
-											{#if isGettingHint}
-												<p class="py-5 text-center text-sm text-[#8E8E93] italic">{t.thinking}</p>
-											{:else if hintError}
-												<p class="py-5 text-center text-sm text-red-600">{hintError}</p>
-											{:else if hints.length === 0}
-												<p class="py-5 text-center text-sm text-[#8E8E93]">{t.noHints}</p>
-											{:else}
-												{#each hints as hint}
-													<button
-														type="button"
-														class="w-full rounded-lg border border-transparent px-2.5 py-2 text-left hover:border-[#E5E5EA] hover:bg-[#F7F7FA]"
-														onclick={() => selectHint(hint.text)}
-													>
-														<p class="text-sm text-[#1C1C1E]">{hint.text}</p>
-														{#if hint.translation}
-															<p class="mt-0.5 text-xs text-[#8E8E93]">{hint.translation}</p>
-														{/if}
-													</button>
-												{/each}
-											{/if}
-										</div>
-									</div>
-								{/if}
 							</div>
 							<button
 								type="button"
@@ -409,6 +386,7 @@ onMount(() => {
 								onclick={() => {
 									if (!session.inputText.trim() || session.disabled) return;
 									const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
+									closeHintMenu();
 									session.inputText = "";
 									session.handleSend(text);
 								}}
@@ -418,6 +396,23 @@ onMount(() => {
 							</button>
 						</div>
 					</div>
+					{#if showHintMenu}
+						<HintFloatingPanel
+							anchorName="--libiamo-imessage-hint-anchor"
+							layoutReference={hintLayoutReference}
+							motionOrigin={hintMotionOrigin}
+							{language}
+							bind:expressionQuery
+							{expressionPhrases}
+							{contentHint}
+							{hintError}
+							{isGettingHint}
+							disabled={session.disabled}
+							onExpressionSubmit={handleExpressionHelp}
+							onContentHint={handleGetHint}
+							onClose={closeHintMenu}
+						/>
+					{/if}
 				</div>
 			</section>
 		</div>
