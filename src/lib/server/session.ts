@@ -762,9 +762,7 @@ export async function generateHint(sessionId: number, input: HintRequest): Promi
 	if (!session.task) throw new Error("Task not found");
 
 	const learningLanguageName = getLanguageEnglishName(session.task.language);
-	const hintLanguageName = input.nativeLanguage
-		? (new Intl.DisplayNames(["en"], { type: "language" }).of(input.nativeLanguage) ?? input.nativeLanguage)
-		: learningLanguageName;
+	const hintLanguageName = input.nativeLanguage ? getLanguageEnglishName(input.nativeLanguage) : learningLanguageName;
 
 	const snapshot = session.agentPromptSnapshot as { scenarioContext?: string };
 	const history = buildHintConversationHistory(session.messages);
