@@ -618,6 +618,7 @@ $effect(() => {
 			{limitReached}
 			{sessionId}
 			{t}
+			{language}
 			onClose={() => (showCompose = false)}
 			onMockAction={handleMockAction}
 			onSend={handleSendEmail}
