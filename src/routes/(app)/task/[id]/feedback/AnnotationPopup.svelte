@@ -147,8 +147,6 @@ async function handleSaveNote() {
 		formData.append("explanation", explanation);
 		formData.append("currentContext", currentContext);
 		formData.append("previousContext", previousContext);
-		formData.append("sourceMessageId", String(messageId));
-
 		const response = await fetch("?/saveNote", {
 			method: "POST",
 			body: formData,

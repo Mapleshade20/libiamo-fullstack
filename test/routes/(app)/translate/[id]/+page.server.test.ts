@@ -1,37 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { selectQueue, mockDb, mockEvaluate, mockGetSourceSet, mockGetAttempt, mockChatText } = vi.hoisted(() => {
-	const selectQueue: unknown[][] = [];
-	const makeSelectChain = (value: unknown[]) => {
-		const chain = Promise.resolve(value) as Promise<unknown[]> & Record<string, ReturnType<typeof vi.fn>>;
-		chain.from = vi.fn(() => chain);
-		chain.innerJoin = vi.fn(() => chain);
-		chain.where = vi.fn(() => chain);
-		chain.orderBy = vi.fn(() => chain);
-		chain.limit = vi.fn(() => chain);
-		return chain;
-	};
-	const makeWriteChain = () => {
-		const chain = Promise.resolve([] as unknown[]) as unknown as Promise<unknown[]> & Record<string, ReturnType<typeof vi.fn>>;
-		chain.set = vi.fn(() => chain);
-		chain.where = vi.fn(() => chain);
-		chain.returning = vi.fn(() => Promise.resolve([{ id: 9 }]));
-		return chain;
-	};
-	const mockDb = {
-		select: vi.fn(() => makeSelectChain(selectQueue.shift() ?? [])),
-		update: vi.fn(() => makeWriteChain()),
-		transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockDb)),
-	};
-	return {
-		selectQueue,
-		mockDb,
-		mockEvaluate: vi.fn(),
-		mockGetSourceSet: vi.fn(),
-		mockGetAttempt: vi.fn(),
-		mockChatText: vi.fn(),
-	};
-});
+const { selectQueue, mockDb, mockEvaluate, mockGetSourceSet, mockGetAttempt, mockFollowUp, mockCreateSelectionNotes, mockCreateQaNote } = vi.hoisted(
+	() => {
+		const selectQueue: unknown[][] = [];
+		const makeSelectChain = (value: unknown[]) => {
+			const chain = Promise.resolve(value) as Promise<unknown[]> & Record<string, ReturnType<typeof vi.fn>>;
+			chain.from = vi.fn(() => chain);
+			chain.innerJoin = vi.fn(() => chain);
+			chain.where = vi.fn(() => chain);
+			chain.orderBy = vi.fn(() => chain);
+			chain.limit = vi.fn(() => chain);
+			return chain;
+		};
+		const makeWriteChain = () => {
+			const chain = Promise.resolve([] as unknown[]) as unknown as Promise<unknown[]> & Record<string, ReturnType<typeof vi.fn>>;
+			chain.set = vi.fn(() => chain);
+			chain.where = vi.fn(() => chain);
+			chain.returning = vi.fn(() => Promise.resolve([{ id: 9 }]));
+			return chain;
+		};
+		const mockDb = {
+			select: vi.fn(() => makeSelectChain(selectQueue.shift() ?? [])),
+			update: vi.fn(() => makeWriteChain()),
+			transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockDb)),
+		};
+		return {
+			selectQueue,
+			mockDb,
+			mockEvaluate: vi.fn(),
+			mockGetSourceSet: vi.fn(),
+			mockGetAttempt: vi.fn(),
+			mockFollowUp: vi.fn(),
+			mockCreateSelectionNotes: vi.fn(),
+			mockCreateQaNote: vi.fn(),
+		};
+	},
+);
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/db/schema", () => ({
@@ -87,9 +91,10 @@ vi.mock("$lib/server/translation", () => ({
 	getOrCreateTranslationSourceSet: mockGetSourceSet,
 	getOrCreateTranslationAttempt: mockGetAttempt,
 }));
-vi.mock("$lib/server/llm", async (importOriginal) => ({
-	...(await importOriginal<typeof import("$lib/server/llm")>()),
-	chatText: mockChatText,
+vi.mock("$lib/server/feedback", () => ({ followUpOnLearningContent: mockFollowUp }));
+vi.mock("$lib/server/note", () => ({
+	createNotesFromSelectionBatch: mockCreateSelectionNotes,
+	createNoteFromSelectionQA: mockCreateQaNote,
 }));
 
 import { actions, load } from "$routes/(app)/translate/[id]/+page.server";
@@ -253,5 +258,47 @@ describe("translation page server", () => {
 		const result = await actions.retryEvaluation(event({ attemptId: "9" }));
 		expect(result).toMatchObject({ success: true });
 		expect(mockDb.transaction).not.toHaveBeenCalled();
+	});
+
+	it("saves selected evaluation text as translation notes", async () => {
+		selectQueue.push([{ ...attemptRecord, status: "evaluated", evaluation: { overallScore: "A", overallFeedback: "Good", paragraphs: [] } }]);
+		mockCreateSelectionNotes.mockResolvedValue({ count: 1, notes: [{ id: 3 }], reason: null });
+		const result = await actions.saveSelectionNotes(
+			event({
+				attemptId: "9",
+				selectedText: "subjunctive form",
+				currentContext: "Tutor feedback about the subjunctive",
+				sourceKind: "tutor-feedback",
+			}),
+		);
+		expect(result).toMatchObject({ success: true, count: 1 });
+		expect(mockCreateSelectionNotes).toHaveBeenCalledWith(expect.objectContaining({ source: { type: "translation", attemptId: 9 }, language: "fr" }));
+	});
+
+	it("answers a question about selected translation feedback", async () => {
+		selectQueue.push([{ ...attemptRecord, status: "evaluated", evaluation: { overallScore: "A", overallFeedback: "Good", paragraphs: [] } }]);
+		mockFollowUp.mockResolvedValue({ answer: "Use this form after expressions of doubt." });
+		const result = await actions.askSelection(
+			event({ attemptId: "9", selectedText: "subjunctive form", question: "Why?", currentContext: "Tutor feedback" }),
+		);
+		expect(result).toEqual({ success: true, answer: "Use this form after expressions of doubt." });
+		expect(mockFollowUp).toHaveBeenCalledWith(expect.objectContaining({ learningLanguage: "fr", responseLanguage: "en" }));
+	});
+
+	it("rejects selection actions before evaluation", async () => {
+		selectQueue.push([attemptRecord]);
+		const result = (await actions.saveSelectionNotes(event({ attemptId: "9", selectedText: "text" }))) as any;
+		expect(result).toMatchObject({ status: 409, data: { error: "Evaluation is not available" } });
+		expect(mockCreateSelectionNotes).not.toHaveBeenCalled();
+	});
+
+	it("saves selection Q&A with the translation attempt as its source", async () => {
+		selectQueue.push([{ ...attemptRecord, status: "evaluated", evaluation: { overallScore: "A", overallFeedback: "Good", paragraphs: [] } }]);
+		mockCreateQaNote.mockResolvedValue({ note: { id: 4 } });
+		const result = await actions.saveSelectionQaNote(
+			event({ attemptId: "9", selectedText: "natural phrase", surroundingContext: "Context", question: "Why natural?", answer: "Because..." }),
+		);
+		expect(result).toMatchObject({ success: true, note: { id: 4 } });
+		expect(mockCreateQaNote).toHaveBeenCalledWith(expect.objectContaining({ source: { type: "translation", attemptId: 9 }, language: "fr" }));
 	});
 });

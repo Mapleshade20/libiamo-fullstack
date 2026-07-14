@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted(() => ({
 	mockArchiveService: {
-		listCompletedSessions: vi.fn(),
+		listCompletedActivities: vi.fn(),
 	},
 	mockNoteService: {
 		updateNote: vi.fn(),
@@ -11,6 +11,7 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 	},
 	mockSessionService: {
 		followUpOnFeedback: vi.fn(),
+		followUpOnLearningContent: vi.fn(),
 	},
 }));
 
@@ -47,7 +48,7 @@ describe("archive page server", () => {
 			const mockGroups = [
 				{
 					label: "Today",
-					sessions: [
+					activities: [
 						{
 							id: 1,
 							taskTitle: "Ordering coffee",
@@ -58,12 +59,12 @@ describe("archive page server", () => {
 					],
 				},
 			];
-			mockArchiveService.listCompletedSessions.mockResolvedValue(mockGroups);
+			mockArchiveService.listCompletedActivities.mockResolvedValue(mockGroups);
 
 			const result = await load({ locals: { user: mockUser } } as any);
 
 			expect(result).toEqual({ groups: mockGroups });
-			expect(mockArchiveService.listCompletedSessions).toHaveBeenCalledWith("user_123");
+			expect(mockArchiveService.listCompletedActivities).toHaveBeenCalledWith("user_123");
 		});
 
 		it("redirects when unauthenticated", async () => {
@@ -222,7 +223,24 @@ describe("archive page server", () => {
 				itemText: "Incorrect verb conjugation",
 				category: "grammar",
 				question: "why",
+				currentContext: undefined,
 			});
+		});
+
+		it("uses source-independent follow-up for a translation note", async () => {
+			mockNoteService.getNote.mockResolvedValue({
+				...mockNote,
+				sourceSessionId: null,
+				sourceTranslationAttemptId: 12,
+				language: "es",
+				sourceContext: "Learner translation context",
+			});
+			mockSessionService.followUpOnLearningContent.mockResolvedValue({ answer: "Translation explanation" });
+			const result = await actions.followUp(createFormEvent({ values: { noteId: "42", question: "why" } }));
+			expect(result).toEqual({ success: true, answer: "Translation explanation" });
+			expect(mockSessionService.followUpOnLearningContent).toHaveBeenCalledWith(
+				expect.objectContaining({ learningLanguage: "es", itemText: "Incorrect verb conjugation" }),
+			);
 		});
 
 		it.each([

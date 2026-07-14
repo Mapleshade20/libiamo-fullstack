@@ -1,6 +1,7 @@
 <script lang="ts">
 import BookOpen from "@lucide/svelte/icons/book-open";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
+import Languages from "@lucide/svelte/icons/languages";
 import Mail from "@lucide/svelte/icons/mail";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
@@ -12,13 +13,13 @@ import { type LanguageCode, t } from "$lib/i18n";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];
-type ArchiveNote = ArchiveGroups[number]["sessions"][number]["notes"][number];
+type ArchiveNote = ArchiveGroups[number]["activities"][number]["notes"][number];
 
 let { data } = $props();
 
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 let groups = $state<ArchiveGroups>((() => data.groups ?? [])());
-let expandedSessionIds = $state(new Set<number>());
+let expandedActivityKeys = $state(new Set<string>());
 let editingNoteId = $state<number | null>(null);
 let deletingNoteId = $state<number | null>(null);
 let deleteError = $state<string | null>(null);
@@ -43,26 +44,27 @@ const uiIcons: Record<string, Component> = {
 	reddit: MessageSquare,
 	imessage: MessageCircle,
 	ao3: BookOpen,
+	translator: Languages,
 };
 
 /** Flatten groups into rows, with per-row showDate flag for dedup */
 let rows = $derived(
 	groups.flatMap((group) => {
 		let prevDate = "";
-		return group.sessions.map((session) => {
-			const dateStr = formatDate(new Date(session.completedAt));
+		return group.activities.map((activity) => {
+			const dateStr = formatDate(new Date(activity.completedAt));
 			const show = dateStr !== prevDate;
 			prevDate = dateStr;
-			return { session, group, dateStr, showDate: show };
+			return { activity, group, dateStr, showDate: show };
 		});
 	}),
 );
 
-function toggleSession(id: number) {
-	const next = new Set(expandedSessionIds);
-	if (next.has(id)) next.delete(id);
-	else next.add(id);
-	expandedSessionIds = next;
+function toggleActivity(key: string) {
+	const next = new Set(expandedActivityKeys);
+	if (next.has(key)) next.delete(key);
+	else next.add(key);
+	expandedActivityKeys = next;
 }
 
 function handleEdit(noteId: number) {
@@ -120,9 +122,9 @@ async function deleteNote(noteId: number) {
 function replaceNote(updated: ArchiveNote) {
 	groups = groups.map((group) => ({
 		...group,
-		sessions: group.sessions.map((session) => ({
-			...session,
-			notes: session.notes.map((note) => (note.id === updated.id ? updated : note)),
+		activities: group.activities.map((activity) => ({
+			...activity,
+			notes: activity.notes.map((note) => (note.id === updated.id ? updated : note)),
 		})),
 	}));
 }
@@ -130,9 +132,9 @@ function replaceNote(updated: ArchiveNote) {
 function removeNote(noteId: number) {
 	groups = groups.map((group) => ({
 		...group,
-		sessions: group.sessions.map((session) => ({
-			...session,
-			notes: session.notes.filter((note) => note.id !== noteId),
+		activities: group.activities.map((activity) => ({
+			...activity,
+			notes: activity.notes.filter((note) => note.id !== noteId),
 		})),
 	}));
 }
@@ -164,9 +166,9 @@ async function createReviewCard(noteId: number) {
 function markNoteHasCard(noteId: number) {
 	groups = groups.map((group) => ({
 		...group,
-		sessions: group.sessions.map((session) => ({
-			...session,
-			notes: session.notes.map((note) => (note.id === noteId ? { ...note, hasReviewCard: true } : note)),
+		activities: group.activities.map((activity) => ({
+			...activity,
+			notes: activity.notes.map((note) => (note.id === noteId ? { ...note, hasReviewCard: true } : note)),
 		})),
 	}));
 }
@@ -186,11 +188,11 @@ function markNoteHasCard(noteId: number) {
 		<!-- Continuous vertical timeline line -->
 		<div class="absolute left-6 sm:left-[72px] top-0 bottom-0 w-0.5 bg-border"></div>
 
-		{#each rows as row (row.session.id)}
-			{@const { session, dateStr, showDate } = row}
-			{@const allKeywords = session.notes.flatMap((n) => n.keywords ?? []).filter((k, i, arr) => arr.indexOf(k) === i)}
-			{@const Icon = uiIcons[session.ui] ?? MessageCircle}
-			{@const isExpanded = expandedSessionIds.has(session.id)}
+		{#each rows as row (row.activity.activityKey)}
+			{@const { activity, dateStr, showDate } = row}
+			{@const allKeywords = activity.notes.flatMap((n) => n.keywords ?? []).filter((k, i, arr) => arr.indexOf(k) === i)}
+			{@const Icon = uiIcons[activity.ui] ?? MessageCircle}
+			{@const isExpanded = expandedActivityKeys.has(activity.activityKey)}
 			<div class="flex gap-0 pb-8">
 				<!-- Date (left of line, desktop) -->
 				<div class="hidden sm:block w-[72px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">
@@ -198,7 +200,7 @@ function markNoteHasCard(noteId: number) {
 				</div>
 				<div class="w-6 sm:hidden shrink-0"></div>
 				<!-- Icon node on the line -->
-				<a href="/task/{session.taskId}/feedback" class="shrink-0 flex items-start relative -ml-[18px]">
+				<a href={activity.href} class="shrink-0 flex items-start relative -ml-[18px]">
 					<div
 						class="relative z-10 mt-[5px] flex h-9 w-9 items-center justify-center rounded border-2 border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
 					>
@@ -215,7 +217,7 @@ function markNoteHasCard(noteId: number) {
 						type="button"
 						class="relative inline-flex items-center text-left font-serif text-lg text-foreground hover:text-muted-foreground transition-colors"
 						aria-expanded={isExpanded}
-						onclick={() => toggleSession(session.id)}
+						onclick={() => toggleActivity(activity.activityKey)}
 					>
 						<ChevronRight
 							size={18}
@@ -225,7 +227,7 @@ function markNoteHasCard(noteId: number) {
 							size={18}
 							class={`hidden shrink-0 text-muted-foreground transition-transform sm:block sm:mr-1.5${isExpanded ? ' rotate-90' : ''}`}
 						/>
-						<span>{session.taskTitle}</span>
+						<span>{activity.title}</span>
 					</button>
 
 					{#if !isExpanded && allKeywords.length > 0}
@@ -238,10 +240,10 @@ function markNoteHasCard(noteId: number) {
 
 					{#if isExpanded}
 						<div class="mt-4 space-y-3">
-							{#if session.notes.length === 0}
-								<p class="text-sm text-muted-foreground">No notes in this session.</p>
+							{#if activity.notes.length === 0}
+								<p class="text-sm text-muted-foreground">No notes in this activity.</p>
 							{/if}
-							{#each session.notes as note (note.id)}
+							{#each activity.notes as note (note.id)}
 								{#if editingNoteId === note.id}
 									<NoteEditor {note} oncancel={handleCancel} onsave={(input) => saveNote(note.id, input)} />
 								{:else if deletingNoteId === note.id}

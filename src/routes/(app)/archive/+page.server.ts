@@ -1,8 +1,8 @@
 import { fail } from "@sveltejs/kit";
 import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
-import { listCompletedSessions } from "$lib/server/archive";
+import { listCompletedActivities } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
-import { followUpOnFeedback } from "$lib/server/feedback";
+import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { deleteNote, getNote, updateNote } from "$lib/server/note";
 import type { Actions, PageServerLoad } from "./$types";
@@ -10,7 +10,7 @@ import type { Actions, PageServerLoad } from "./$types";
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser({ locals });
 
-	const groups = await listCompletedSessions(user.id);
+	const groups = await listCompletedActivities(user.id);
 	return { groups };
 };
 
@@ -71,13 +71,24 @@ export const actions: Actions = {
 		if (!note) return fail(404, { error: "Note not found" });
 
 		try {
-			const result = await followUpOnFeedback({
-				sessionId: note.sourceSessionId,
-				userId: user.id,
-				itemText: note.tutorComment,
-				category: "grammar",
-				question,
-			});
+			const result = note.sourceSessionId
+				? await followUpOnFeedback({
+						sessionId: note.sourceSessionId,
+						userId: user.id,
+						itemText: note.tutorComment,
+						category: "grammar",
+						question,
+						currentContext: note.sourceContext ?? undefined,
+					})
+				: await followUpOnLearningContent({
+						userId: user.id,
+						learningLanguage: note.language,
+						responseLanguage: user.nativeLanguage ?? "en",
+						itemText: note.tutorComment,
+						category: "grammar",
+						question,
+						currentContext: note.sourceContext ?? undefined,
+					});
 			return { success: true, answer: result.answer };
 		} catch (e) {
 			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });

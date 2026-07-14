@@ -2,16 +2,18 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName } from "$lib/constants";
 import { db } from "./db";
-import { note, practiceSession } from "./db/schema";
+import { note, practiceSession, translationAttempt } from "./db/schema";
 import { chatJson } from "./llm";
 import { sessionMessageChronologicalOrder } from "./session";
 
 // ── createNote ─────────────────────────────────────────────────────
 
+export type NoteSource = { type: "practice"; sessionId: number } | { type: "translation"; attemptId: number };
+
 interface CreateNoteInput {
 	userId: string;
-	sourceSessionId: number;
-	sourceMessageId?: number;
+	language: string;
+	source: NoteSource;
 	tutorComment: string;
 	keywords?: string[];
 	sourceContext?: string;
@@ -22,8 +24,9 @@ export async function createNote(input: CreateNoteInput) {
 		.insert(note)
 		.values({
 			userId: input.userId,
-			sourceSessionId: input.sourceSessionId,
-			sourceMessageId: input.sourceMessageId ?? null,
+			language: input.language as typeof note.$inferInsert.language,
+			sourceSessionId: input.source.type === "practice" ? input.source.sessionId : null,
+			sourceTranslationAttemptId: input.source.type === "translation" ? input.source.attemptId : null,
 			tutorComment: input.tutorComment,
 			keywords: input.keywords ?? null,
 			sourceContext: input.sourceContext ?? null,
@@ -69,29 +72,38 @@ const ExtractKnowledgeSchema = z.object({
 
 export async function createNotesBatch(
 	userId: string,
-	sourceSessionId: number,
+	source: NoteSource,
 	language: string,
 	feedbackItems: { tutorComment: string; category?: "grammar" | "vocabulary" | "coherence"; sourceContext?: string }[],
 	sessionOwnerId?: string,
 ) {
 	if (feedbackItems.length === 0) return [];
 
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, sourceSessionId), sessionOwnerId ? eq(practiceSession.userId, sessionOwnerId) : undefined),
-		with: {
-			messages: {
-				orderBy: sessionMessageChronologicalOrder,
-				columns: { role: true, content: true },
+	let conversationSnippet = "";
+	if (source.type === "practice") {
+		const session = await db.query.practiceSession.findFirst({
+			where: and(eq(practiceSession.id, source.sessionId), sessionOwnerId ? eq(practiceSession.userId, sessionOwnerId) : undefined),
+			with: {
+				messages: {
+					orderBy: sessionMessageChronologicalOrder,
+					columns: { role: true, content: true },
+				},
 			},
-		},
-	});
-	if (sessionOwnerId && !session) throw new Error("Session not found");
-	const conversationSnippet =
-		session?.messages
-			.filter((m) => m.content && m.content.trim().length > 0)
-			.map((m) => `[${m.role}] ${m.content.slice(0, 300)}`)
-			.join("\n")
-			.slice(0, 3000) ?? "";
+		});
+		if (sessionOwnerId && !session) throw new Error("Session not found");
+		conversationSnippet =
+			session?.messages
+				.filter((message) => message.content && message.content.trim().length > 0)
+				.map((message) => `[${message.role}] ${message.content.slice(0, 300)}`)
+				.join("\n")
+				.slice(0, 3000) ?? "";
+	} else if (sessionOwnerId) {
+		const attempt = await db.query.translationAttempt.findFirst({
+			where: and(eq(translationAttempt.id, source.attemptId), eq(translationAttempt.userId, sessionOwnerId)),
+			columns: { id: true, status: true },
+		});
+		if (!attempt || attempt.status !== "evaluated") throw new Error("Translation attempt not found");
+	}
 
 	const knowledgeMap: Map<number, { knowledgePoint: string; keywords: string[]; sourceContext: string }> = new Map();
 	if (feedbackItems.length > 0) {
@@ -137,7 +149,9 @@ CRITICAL RULES:
 		const extracted = knowledgeMap.get(i);
 		return {
 			userId,
-			sourceSessionId,
+			language: language as typeof note.$inferInsert.language,
+			sourceSessionId: source.type === "practice" ? source.sessionId : null,
+			sourceTranslationAttemptId: source.type === "translation" ? source.attemptId : null,
 			tutorComment: extracted?.knowledgePoint ?? item.tutorComment,
 			keywords: extracted?.keywords ?? null,
 			sourceContext: extracted?.sourceContext ?? null,
@@ -162,7 +176,7 @@ const SelectionNotesSchema = z.object({
 
 export async function createNotesFromSelectionBatch(input: {
 	userId: string;
-	sessionId: number;
+	source: NoteSource;
 	language: string;
 	selectedText: string;
 	currentContext: string;
@@ -201,7 +215,7 @@ Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint":
 		userId: input.userId,
 	});
 
-	const items = result.items.slice(0, 3);
+	const items = result.items.slice(0, 2);
 	if (items.length === 0) {
 		return { success: true as const, notes: [], count: 0, reason: result.reason ?? "No note-worthy point found." };
 	}
@@ -211,7 +225,9 @@ Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint":
 		.values(
 			items.map((item) => ({
 				userId: input.userId,
-				sourceSessionId: input.sessionId,
+				language: input.language as typeof note.$inferInsert.language,
+				sourceSessionId: input.source.type === "practice" ? input.source.sessionId : null,
+				sourceTranslationAttemptId: input.source.type === "translation" ? input.source.attemptId : null,
 				tutorComment: item.knowledgePoint,
 				keywords: item.keywords,
 				sourceContext: item.sourceContext,
@@ -269,7 +285,7 @@ const DistillQASchema = z.object({
 
 export async function createNoteFromSelectionQA(input: {
 	userId: string;
-	sessionId: number;
+	source: NoteSource;
 	selectedText: string;
 	surroundingContext: string;
 	question: string;
@@ -306,7 +322,8 @@ Return JSON: { "knowledgePoint": "...", "keywords": ["..."], "sourceContext": ".
 
 	const created = await createNote({
 		userId: input.userId,
-		sourceSessionId: input.sessionId,
+		language: input.language,
+		source: input.source,
 		tutorComment: result.knowledgePoint,
 		keywords: result.keywords,
 		sourceContext: result.sourceContext,

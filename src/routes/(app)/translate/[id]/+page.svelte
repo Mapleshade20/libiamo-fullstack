@@ -18,6 +18,9 @@ import {
 	translationDraftStorageKey,
 } from "$lib/client/translation-draft";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
+import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
+import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
+import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
 import EvaluationSummary from "$lib/components/translate/EvaluationSummary.svelte";
 import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -40,11 +43,10 @@ let evaluating = $state(false);
 let showConfirmation = $state(false);
 let candidatePickerIndex = $state<number | null>(null);
 let expandedReferences = $state<Set<number>>(new Set());
-let tutorQuestions = $state<Record<number, string>>({});
-let tutorAnswers = $state<Record<number, string>>({});
-let tutorLoading = $state<Set<number>>(new Set());
 let notificationKey = $state(0);
 let actionNotification = $state<ActionNotificationContent | null>(null);
+let selectionRequest = $state<SelectionAppendRequest | null>(null);
+let selectionRequestId = $state(0);
 
 let isDraft = $derived(attempt?.status === "draft");
 let isSubmitted = $derived(attempt?.status === "submitted");
@@ -203,27 +205,62 @@ function toggleReference(paragraphIndex: number) {
 	expandedReferences = next;
 }
 
-async function askTutor(paragraphIndex: number) {
-	if (!attempt) return;
-	const question = tutorQuestions[paragraphIndex]?.trim();
-	if (!question) return;
-	tutorLoading = new Set([...tutorLoading, paragraphIndex]);
+function handleAskSelection(selection: LearningSelection) {
+	selectionRequestId += 1;
+	selectionRequest = { id: selectionRequestId, selection };
+}
+
+async function saveSelection(selection: LearningSelection) {
+	if (!attempt) throw new Error("Translation attempt is unavailable");
 	const form = new FormData();
 	form.set("attemptId", String(attempt.id));
-	form.set("paragraphIndex", String(paragraphIndex));
-	form.set("question", question);
-	try {
-		const result = await postAction("askTutor", form);
-		if (result.type === "success" && typeof result.data?.answer === "string") {
-			tutorAnswers = { ...tutorAnswers, [paragraphIndex]: result.data.answer };
-		} else {
-			notify("error", "Tutor unavailable", resultError(result, "Please try again."));
-		}
-	} catch {
-		notify("error", "Tutor unavailable", "Please check your connection and try again.");
-	} finally {
-		tutorLoading = new Set([...tutorLoading].filter((index) => index !== paragraphIndex));
+	form.set("selectedText", selection.text);
+	form.set("currentContext", selection.currentContext);
+	form.set("previousContext", selection.previousContext);
+	form.set("sourceKind", selection.sourceKind);
+	const result = await postAction("saveSelectionNotes", form);
+	if (result.type !== "success") throw new Error(resultError(result, "Failed to save notes"));
+	return { count: Number(result.data?.count ?? 0), reason: result.data?.reason as string | null | undefined };
+}
+
+async function askSelection(input: LearningSelection & { question: string }) {
+	if (!attempt) throw new Error("Translation attempt is unavailable");
+	const form = new FormData();
+	form.set("attemptId", String(attempt.id));
+	form.set("selectedText", input.text);
+	form.set("currentContext", input.currentContext);
+	form.set("previousContext", input.previousContext);
+	form.set("question", input.question);
+	const result = await postAction("askSelection", form);
+	if (result.type !== "success" || typeof result.data?.answer !== "string") {
+		throw new Error(resultError(result, "The Tutor returned an invalid response"));
 	}
+	return result.data.answer;
+}
+
+async function saveSelectionQa(input: LearningSelection & { question: string; answer: string }) {
+	if (!attempt) throw new Error("Translation attempt is unavailable");
+	const form = new FormData();
+	form.set("attemptId", String(attempt.id));
+	form.set("selectedText", input.text);
+	form.set("surroundingContext", [input.previousContext, input.currentContext].filter(Boolean).join("\n\n"));
+	form.set("question", input.question);
+	form.set("answer", input.answer);
+	const result = await postAction("saveSelectionQaNote", form);
+	if (result.type !== "success") throw new Error(resultError(result, "Failed to save note"));
+}
+
+function paragraphContext(answer: Answer, paragraphEvaluation?: ParagraphEvaluation) {
+	if (!attempt) return "";
+	return [
+		`Prompt: ${attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}`,
+		`Learner translation: ${answer.translation}`,
+		paragraphEvaluation ? `Tutor feedback: ${paragraphEvaluation.feedback}` : "",
+		paragraphEvaluation ? `Suggested rewrite: ${paragraphEvaluation.rewriteSuggestion}` : "",
+		attempt.referenceParagraphs?.[answer.paragraphIndex] ? `Authentic reference: ${attempt.referenceParagraphs[answer.paragraphIndex]}` : "",
+	]
+		.filter(Boolean)
+		.join("\n");
 }
 </script>
 
@@ -287,7 +324,14 @@ async function askTutor(paragraphIndex: number) {
 			{/if}
 
 			{#if evaluation}
-				<div class="mb-8 max-w-2xl"><EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} /></div>
+				<div
+					data-learning-selectable
+					data-learning-kind="translation-summary"
+					data-current-context={evaluation.overallFeedback}
+					class="mb-8 max-w-2xl"
+				>
+					<EvaluationSummary overallScore={evaluation.overallScore} overallFeedback={evaluation.overallFeedback} />
+				</div>
 			{/if}
 
 			<div class="space-y-10">
@@ -307,14 +351,24 @@ async function askTutor(paragraphIndex: number) {
 									</button>
 								{/if}
 							</div>
-							<button
-								type="button"
-								disabled={!isDraft}
-								onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
-								class="w-full text-left font-serif text-xl leading-relaxed disabled:cursor-default"
-							>
-								{attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
-							</button>
+							{#if isDraft}
+								<button
+									type="button"
+									onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
+									class="w-full text-left font-serif text-xl leading-relaxed"
+								>
+									{attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
+								</button>
+							{:else}
+								<p
+									data-learning-selectable={isEvaluated ? "" : undefined}
+									data-learning-kind="translation-prompt"
+									data-current-context={paragraphContext(answer, paragraphEvaluation)}
+									class="font-serif text-xl leading-relaxed"
+								>
+									{attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
+								</p>
+							{/if}
 						</div>
 
 						<div class="space-y-4">
@@ -329,10 +383,22 @@ async function askTutor(paragraphIndex: number) {
 							{:else}
 								<div>
 									<p class="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Your translation</p>
-									<p class="text-base leading-relaxed">{answer.translation}</p>
+									<p
+										data-learning-selectable
+										data-learning-kind="learner-translation"
+										data-current-context={paragraphContext(answer, paragraphEvaluation)}
+										class="text-base leading-relaxed"
+									>
+										{answer.translation}
+									</p>
 								</div>
 								{#if paragraphEvaluation}
-									<div class="rounded-xl border border-border bg-foreground/[0.025] p-4">
+									<div
+										data-learning-selectable
+										data-learning-kind="tutor-feedback"
+										data-current-context={paragraphContext(answer, paragraphEvaluation)}
+										class="rounded-xl border border-border bg-foreground/[0.025] p-4"
+									>
 										<p class="text-sm leading-relaxed">{paragraphEvaluation.feedback}</p>
 										<p class="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggested rewrite</p>
 										<p class="mt-1 text-sm leading-relaxed">{paragraphEvaluation.rewriteSuggestion}</p>
@@ -348,32 +414,14 @@ async function askTutor(paragraphIndex: number) {
 										authentic reference
 									</button>
 									{#if expandedReferences.has(answer.paragraphIndex)}
-										<p class="rounded-lg border-l-2 border-foreground/20 bg-foreground/[0.025] px-4 py-3 text-sm leading-relaxed">
+										<p
+											data-learning-selectable
+											data-learning-kind="authentic-reference"
+											data-current-context={paragraphContext(answer, paragraphEvaluation)}
+											class="rounded-lg border-l-2 border-foreground/20 bg-foreground/[0.025] px-4 py-3 text-sm leading-relaxed"
+										>
 											{attempt.referenceParagraphs[answer.paragraphIndex]}
 										</p>
-									{/if}
-								{/if}
-								{#if isEvaluated}
-									<div class="flex gap-2">
-										<input
-											class="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-											maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
-											placeholder="Ask about this paragraph…"
-											value={tutorQuestions[answer.paragraphIndex] ?? ""}
-											oninput={(event) => (tutorQuestions = { ...tutorQuestions, [answer.paragraphIndex]: (event.currentTarget as HTMLInputElement).value })}
-										>
-										<Button
-											size="sm"
-											variant="outline"
-											onclick={() => askTutor(answer.paragraphIndex)}
-											disabled={tutorLoading.has(answer.paragraphIndex)}
-											>{tutorLoading.has(answer.paragraphIndex) ? "Thinking…" : "Ask"}</Button
-										>
-									</div>
-									{#if tutorAnswers[answer.paragraphIndex]}
-										<div class="prose prose-sm max-w-none rounded-lg bg-foreground/[0.025] p-4">
-											{@html renderMarkdown(tutorAnswers[answer.paragraphIndex])}
-										</div>
 									{/if}
 								{/if}
 							{/if}
@@ -434,6 +482,21 @@ async function askTutor(paragraphIndex: number) {
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if attempt && isEvaluated}
+	<SelectionActionBubble sourceKey={`translation:${attempt.id}`} onAskSelection={handleAskSelection} onSaveSelection={saveSelection} />
+	<TutorQuestionPanel
+		appendRequest={selectionRequest}
+		defaultSelection={{
+			text: evaluation?.overallFeedback ?? attempt.context,
+			currentContext: evaluation?.overallFeedback ?? attempt.context,
+			previousContext: attempt.context,
+			sourceKind: "translation-evaluation",
+		}}
+		onAsk={askSelection}
+		onSaveQa={saveSelectionQa}
+	/>
 {/if}
 
 {#if attempt}

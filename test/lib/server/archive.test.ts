@@ -6,6 +6,7 @@ const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
 		query: {
 			practiceSession: { findMany: vi.fn() },
+			translationAttempt: { findMany: vi.fn() },
 			reviewCard: { findMany: vi.fn(() => []) },
 		},
 	},
@@ -13,10 +14,11 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
-import { listCompletedSessions } from "$lib/server/archive";
+import { listCompletedActivities } from "$lib/server/archive";
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockDb.query.translationAttempt.findMany.mockResolvedValue([]);
 });
 
 function makeSession(overrides: Record<string, unknown> = {}) {
@@ -38,25 +40,25 @@ function makeNote(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-describe("listCompletedSessions", () => {
+describe("listCompletedActivities", () => {
 	it("returns empty array when no completed sessions exist", async () => {
 		mockDb.query.practiceSession.findMany.mockResolvedValue([]);
-		const result = await listCompletedSessions(USER_ID);
+		const result = await listCompletedActivities(USER_ID);
 		expect(result).toEqual([]);
 	});
 
 	it("includes sessions with no notes", async () => {
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [] }), makeSession({ id: 2, notes: [makeNote()] })]);
-		const result = await listCompletedSessions(USER_ID);
+		const result = await listCompletedActivities(USER_ID);
 		expect(result).toHaveLength(1);
-		expect(result[0].sessions).toHaveLength(2);
-		expect(result[0].sessions.map((session) => session.id)).toEqual([1, 2]);
-		expect(result[0].sessions[0].notes).toEqual([]);
+		expect(result[0].activities).toHaveLength(2);
+		expect(result[0].activities.map((activity) => activity.id)).toEqual([1, 2]);
+		expect(result[0].activities[0].notes).toEqual([]);
 	});
 
 	it("groups sessions into Today", async () => {
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [makeNote()], completedAt: new Date() })]);
-		const result = await listCompletedSessions(USER_ID);
+		const result = await listCompletedActivities(USER_ID);
 		expect(result).toHaveLength(1);
 		expect(result[0].label).toBe("Today");
 	});
@@ -65,7 +67,7 @@ describe("listCompletedSessions", () => {
 		const yesterday = new Date();
 		yesterday.setDate(yesterday.getDate() - 1);
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [makeNote()], completedAt: yesterday })]);
-		const result = await listCompletedSessions(USER_ID);
+		const result = await listCompletedActivities(USER_ID);
 		expect(result).toHaveLength(1);
 		expect(result[0].label).toBe("Yesterday");
 	});
@@ -75,7 +77,7 @@ describe("listCompletedSessions", () => {
 		const wednesday = new Date(2025, 5, 11, 12, 0, 0); // Wednesday June 11, 2025
 		const monday = new Date(2025, 5, 9, 12, 0, 0); // Monday June 9 — this week
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [makeNote()], completedAt: monday })]);
-		const result = await listCompletedSessions(USER_ID, wednesday);
+		const result = await listCompletedActivities(USER_ID, wednesday);
 		expect(result).toHaveLength(1);
 		expect(result[0].label).toBe("This Week");
 	});
@@ -84,7 +86,7 @@ describe("listCompletedSessions", () => {
 		const wednesday = new Date(2025, 5, 11, 12, 0, 0);
 		const twoWeeksAgo = new Date(wednesday.getTime() - 14 * 86400000);
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [makeNote()], completedAt: twoWeeksAgo })]);
-		const result = await listCompletedSessions(USER_ID, wednesday);
+		const result = await listCompletedActivities(USER_ID, wednesday);
 		expect(result[0].label).toBe("Earlier");
 	});
 
@@ -93,9 +95,9 @@ describe("listCompletedSessions", () => {
 		const session1 = makeSession({ id: 1, notes: [makeNote()], completedAt: new Date(2025, 5, 11, 10, 0, 0) });
 		const session2 = makeSession({ id: 2, notes: [makeNote()], completedAt: new Date(2025, 5, 11, 11, 0, 0) });
 		mockDb.query.practiceSession.findMany.mockResolvedValue([session2, session1]);
-		const result = await listCompletedSessions(USER_ID, now);
-		expect(result[0].sessions[0].id).toBe(2);
-		expect(result[0].sessions[1].id).toBe(1);
+		const result = await listCompletedActivities(USER_ID, now);
+		expect(result[0].activities[0].id).toBe(2);
+		expect(result[0].activities[1].id).toBe(1);
 	});
 
 	it("preserves group order: Today, Yesterday, This Week, Earlier", async () => {
@@ -112,7 +114,23 @@ describe("listCompletedSessions", () => {
 			makeSession({ id: 3, notes: [makeNote()], completedAt: thisWeek }),
 			makeSession({ id: 4, notes: [makeNote()], completedAt: earlier }),
 		]);
-		const result = await listCompletedSessions(USER_ID, wednesday);
+		const result = await listCompletedActivities(USER_ID, wednesday);
 		expect(result.map((g) => g.label)).toEqual(["Today", "Yesterday", "This Week", "Earlier"]);
+	});
+
+	it("merges evaluated translation attempts with practice sessions", async () => {
+		const now = new Date(2025, 5, 11, 12, 0, 0);
+		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, completedAt: new Date(2025, 5, 11, 10, 0, 0) })]);
+		mockDb.query.translationAttempt.findMany.mockResolvedValue([
+			{
+				id: 7,
+				evaluatedAt: new Date(2025, 5, 11, 11, 0, 0),
+				sourceSet: { templateId: 4, template: { titleBase: "Letter translation" } },
+				notes: [makeNote({ id: 8 })],
+			},
+		]);
+		const result = await listCompletedActivities(USER_ID, now);
+		expect(result[0].activities.map((activity) => activity.activityKey)).toEqual(["translation:7", "practice:1"]);
+		expect(result[0].activities[0]).toMatchObject({ title: "Letter translation", ui: "translator", href: "/translate/4" });
 	});
 });

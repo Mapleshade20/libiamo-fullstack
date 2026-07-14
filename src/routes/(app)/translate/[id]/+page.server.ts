@@ -1,11 +1,13 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { type LanguageCode, NATIVE_LANGUAGE_CODES, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { type LanguageCode, NATIVE_LANGUAGE_CODES, PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { template, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
-import { chatText, llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { followUpOnLearningContent } from "$lib/server/feedback";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { createNoteFromSelectionQA, createNotesFromSelectionBatch } from "$lib/server/note";
 import {
 	evaluateTranslationAgainstReferences,
 	getOrCreateTranslationAttempt,
@@ -49,6 +51,15 @@ function validPromptLanguage(value: unknown): value is string {
 function parseAttemptId(formData: FormData) {
 	const value = Number(formData.get("attemptId"));
 	return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function formText(formData: FormData, key: string) {
+	const value = formData.get(key);
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function selectionTextIsValid(...values: string[]) {
+	return values.every((value) => value.length <= USER_LONG_TEXT_MAX_LENGTH);
 }
 
 function parseAnswers(formData: FormData): { ok: true; answers: AnswerPayload; attemptId: number } | { ok: false; error: string } {
@@ -319,44 +330,98 @@ export const actions: Actions = {
 		}
 	},
 
-	askTutor: async (event) => {
+	askSelection: async (event) => {
 		const user = requireUser(event);
 		const templateId = templateIdFrom(event.params.id);
 		if (!templateId) return fail(400, { error: "Invalid template ID" });
 		const formData = await event.request.formData();
 		const attemptId = parseAttemptId(formData);
-		const paragraphIndex = Number(formData.get("paragraphIndex"));
-		const question = formData.get("question");
-		if (!attemptId || !Number.isInteger(paragraphIndex) || paragraphIndex < 0 || typeof question !== "string" || !question.trim()) {
-			return fail(400, { error: "Invalid tutor question" });
+		const selectedText = formText(formData, "selectedText");
+		const question = formText(formData, "question");
+		const currentContext = formText(formData, "currentContext");
+		const previousContext = formText(formData, "previousContext");
+		if (!attemptId || !selectedText || !question) return fail(400, { error: "Missing required fields" });
+		if (selectedText.length > PRACTICE_UI_TEXT_MAX_LENGTH || question.length > PRACTICE_UI_TEXT_MAX_LENGTH) {
+			return fail(400, { error: "Text is too long" });
 		}
-		if (question.length > PRACTICE_UI_TEXT_MAX_LENGTH) return fail(400, { error: "Tutor question is too long" });
+		if (!selectionTextIsValid(currentContext, previousContext)) return fail(400, { error: "Context is too long" });
 		const record = await getOwnedAttempt(attemptId, user.id, templateId);
 		if (!record) return fail(403, { error: "Attempt not found or not owned by user" });
 		if (record.status !== "evaluated" || !record.evaluation) return fail(409, { error: "Evaluation is not available" });
-		const [answer] = await db
-			.select({ translation: translationAnswer.translation, candidateIndex: translationAnswer.candidateIndex })
-			.from(translationAnswer)
-			.where(and(eq(translationAnswer.attemptId, attemptId), eq(translationAnswer.paragraphIndex, paragraphIndex)))
-			.limit(1);
-		const feedback = record.evaluation.paragraphs.find((item) => item.paragraphIndex === paragraphIndex);
-		if (!answer || !feedback || !record.referenceParagraphs[paragraphIndex]) return fail(404, { error: "Paragraph not found" });
 		try {
-			const reply = await chatText({
-				messages: [
-					{
-						role: "system",
-						content: `Answer concisely as a translation tutor in ${record.promptLanguage}. Use ${record.sourceLanguage} only for examples and suggested wording. Accept natural synonymous translations.`,
-					},
-					{
-						role: "user",
-						content: `Context: ${record.context}\nPrompt: ${record.candidates[paragraphIndex][answer.candidateIndex]}\nLearner translation: ${answer.translation}\nAuthentic reference: ${record.referenceParagraphs[paragraphIndex]}\nTutor feedback: ${feedback.feedback}\nQuestion: ${question.trim()}`,
-					},
-				],
-				options: { temperature: 0.7, maxTokens: 2048 },
+			const result = await followUpOnLearningContent({
 				userId: user.id,
+				learningLanguage: record.sourceLanguage,
+				responseLanguage: record.promptLanguage,
+				itemText: selectedText,
+				category: "grammar",
+				question,
+				currentContext,
+				previousContext,
 			});
-			return { success: true, answer: reply.content };
+			return { success: true, answer: result.answer };
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
+		}
+	},
+
+	saveSelectionNotes: async (event) => {
+		const user = requireUser(event);
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
+		const formData = await event.request.formData();
+		const attemptId = parseAttemptId(formData);
+		const selectedText = formText(formData, "selectedText");
+		const currentContext = formText(formData, "currentContext");
+		const previousContext = formText(formData, "previousContext");
+		const sourceKind = formText(formData, "sourceKind") || "translation feedback";
+		if (!attemptId || !selectedText) return fail(400, { error: "Missing selected text" });
+		if (!selectionTextIsValid(selectedText, currentContext, previousContext, sourceKind)) return fail(400, { error: "Text is too long" });
+		const record = await getOwnedAttempt(attemptId, user.id, templateId);
+		if (!record) return fail(403, { error: "Attempt not found or not owned by user" });
+		if (record.status !== "evaluated" || !record.evaluation) return fail(409, { error: "Evaluation is not available" });
+		try {
+			const result = await createNotesFromSelectionBatch({
+				userId: user.id,
+				source: { type: "translation", attemptId },
+				language: record.sourceLanguage,
+				selectedText,
+				currentContext,
+				previousContext,
+				sourceKind,
+			});
+			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
+		}
+	},
+
+	saveSelectionQaNote: async (event) => {
+		const user = requireUser(event);
+		const templateId = templateIdFrom(event.params.id);
+		if (!templateId) return fail(400, { error: "Invalid template ID" });
+		const formData = await event.request.formData();
+		const attemptId = parseAttemptId(formData);
+		const selectedText = formText(formData, "selectedText");
+		const surroundingContext = formText(formData, "surroundingContext");
+		const question = formText(formData, "question");
+		const answer = formText(formData, "answer");
+		if (!attemptId || !selectedText || !question || !answer) return fail(400, { error: "Missing required fields" });
+		if (!selectionTextIsValid(selectedText, surroundingContext, question, answer)) return fail(400, { error: "Text is too long" });
+		const record = await getOwnedAttempt(attemptId, user.id, templateId);
+		if (!record) return fail(403, { error: "Attempt not found or not owned by user" });
+		if (record.status !== "evaluated" || !record.evaluation) return fail(409, { error: "Evaluation is not available" });
+		try {
+			const result = await createNoteFromSelectionQA({
+				userId: user.id,
+				source: { type: "translation", attemptId },
+				selectedText,
+				surroundingContext,
+				question,
+				answer,
+				language: record.sourceLanguage,
+			});
+			return { success: true, note: result.note };
 		} catch (cause) {
 			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}

@@ -6,7 +6,7 @@ import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
+import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -239,7 +239,13 @@ export const actions: Actions = {
 			]
 				.filter(Boolean)
 				.join("\n\n");
-			const notes = await createNotesBatch(user.id, sessionId, sessionContext.language, [{ tutorComment, category, sourceContext }], user.id);
+			const notes = await createNotesBatch(
+				user.id,
+				{ type: "practice", sessionId },
+				sessionContext.language,
+				[{ tutorComment, category, sourceContext }],
+				user.id,
+			);
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
@@ -275,7 +281,7 @@ export const actions: Actions = {
 
 			const result = await createNotesFromSelectionBatch({
 				userId: user.id,
-				sessionId,
+				source: { type: "practice", sessionId },
 				language: sessionContext.language,
 				selectedText,
 				currentContext,
@@ -286,6 +292,39 @@ export const actions: Actions = {
 			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
 		} catch (e) {
 			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
+		}
+	},
+
+	saveSelectionQaNote: async ({ request, params, locals }) => {
+		const user = requireUser({ locals });
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const selectedText = (formData.get("selectedText") as string | null)?.trim() ?? "";
+		const surroundingContext = (formData.get("surroundingContext") as string | null)?.trim() ?? "";
+		const question = (formData.get("question") as string | null)?.trim() ?? "";
+		const answer = (formData.get("answer") as string | null)?.trim() ?? "";
+		if (Number.isNaN(sessionId) || !selectedText || !question || !answer) return fail(400, { error: "Missing required fields" });
+		if (hasOversizedUserText([selectedText, question]) || answer.length > USER_LONG_TEXT_MAX_LENGTH) {
+			return fail(400, { error: "Text is too long" });
+		}
+		try {
+			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (hasOversizedConversationContext([surroundingContext], sessionContext.maxTurns)) return fail(400, { error: "Text is too long" });
+			const result = await createNoteFromSelectionQA({
+				userId: user.id,
+				source: { type: "practice", sessionId },
+				selectedText,
+				surroundingContext,
+				question,
+				answer,
+				language: sessionContext.language,
+			});
+			return { success: true, note: result.note };
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
 	},
 };

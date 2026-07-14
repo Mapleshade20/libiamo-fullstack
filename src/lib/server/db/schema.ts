@@ -271,16 +271,20 @@ export const note = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		sourceSessionId: integer("source_session_id")
-			.notNull()
-			.references(() => practiceSession.id, { onDelete: "cascade" }),
-		sourceMessageId: integer("source_message_id").references(() => sessionMessage.id, { onDelete: "set null" }),
+		language: languageCodeEnum("language").notNull(),
+		sourceSessionId: integer("source_session_id").references(() => practiceSession.id, { onDelete: "cascade" }),
+		sourceTranslationAttemptId: integer("source_translation_attempt_id").references(() => translationAttempt.id, { onDelete: "cascade" }),
 		tutorComment: text("tutor_comment").notNull(),
 		keywords: text("keywords").array(),
 		sourceContext: text("source_context"),
 		reviewStatus: text("review_status").$type<"pending" | "generated" | "skipped">(),
 	},
-	(t) => [index("note_user_id_idx").on(t.userId), index("note_source_session_id_idx").on(t.sourceSessionId)],
+	(t) => [
+		index("note_user_id_idx").on(t.userId),
+		index("note_source_session_id_idx").on(t.sourceSessionId),
+		index("note_source_translation_attempt_id_idx").on(t.sourceTranslationAttemptId),
+		check("note_exactly_one_source_check", sql`num_nonnulls(${t.sourceSessionId}, ${t.sourceTranslationAttemptId}) = 1`),
+	],
 );
 
 // ── reviewCard ──────────────────────────────────────────────────────
@@ -385,6 +389,7 @@ export const translationAttemptRelations = relations(translationAttempt, ({ one,
 		references: [translationSourceSet.id],
 	}),
 	answers: many(translationAnswer),
+	notes: many(note),
 }));
 
 export const translationAnswerRelations = relations(translationAnswer, ({ one }) => ({
@@ -428,7 +433,10 @@ export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
 export const noteRelations = relations(note, ({ one, many }) => ({
 	user: one(user, { fields: [note.userId], references: [user.id] }),
 	sourceSession: one(practiceSession, { fields: [note.sourceSessionId], references: [practiceSession.id] }),
-	sourceMessage: one(sessionMessage, { fields: [note.sourceMessageId], references: [sessionMessage.id] }),
+	sourceTranslationAttempt: one(translationAttempt, {
+		fields: [note.sourceTranslationAttemptId],
+		references: [translationAttempt.id],
+	}),
 	reviewCards: many(reviewCard),
 }));
 

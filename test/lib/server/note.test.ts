@@ -8,6 +8,7 @@ const { mockDb } = vi.hoisted(() => ({
 		query: {
 			note: { findFirst: vi.fn() },
 			practiceSession: { findFirst: vi.fn() },
+			translationAttempt: { findFirst: vi.fn() },
 		},
 		insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => []) })) })),
 		select: vi.fn(() => ({
@@ -52,7 +53,8 @@ describe("createNote", () => {
 
 		const result = await createNote({
 			userId: USER_ID,
-			sourceSessionId: SESSION_ID,
+			language: "en",
+			source: { type: "practice", sessionId: SESSION_ID },
 			tutorComment: "Use past tense",
 		});
 
@@ -63,22 +65,22 @@ describe("createNote", () => {
 		expect(insertedValues).not.toHaveProperty("backContent");
 	});
 
-	it("stores sourceMessageId, keywords and sourceContext when provided", async () => {
+	it("stores a translation attempt source, language, keywords and context", async () => {
 		const returning = vi.fn().mockResolvedValue([{ id: 3 }]);
 		const valuesFn = vi.fn().mockReturnValue({ returning });
 		mockDb.insert.mockReturnValue({ values: valuesFn });
 
 		await createNote({
 			userId: USER_ID,
-			sourceSessionId: SESSION_ID,
-			sourceMessageId: 99,
+			language: "es",
+			source: { type: "translation", attemptId: 99 },
 			tutorComment: "Use past tense",
 			keywords: ["past tense", "yesterday"],
 			sourceContext: "I go to the store yesterday.",
 		});
 
 		const insertedValues = valuesFn.mock.calls[0]?.[0];
-		expect(insertedValues.sourceMessageId).toBe(99);
+		expect(insertedValues).toMatchObject({ language: "es", sourceSessionId: null, sourceTranslationAttemptId: 99 });
 		expect(insertedValues.keywords).toEqual(["past tense", "yesterday"]);
 		expect(insertedValues.sourceContext).toBe("I go to the store yesterday.");
 	});
@@ -86,7 +88,7 @@ describe("createNote", () => {
 
 describe("createNotesBatch", () => {
 	it("returns empty array for empty input", async () => {
-		const result = await createNotesBatch(USER_ID, SESSION_ID, "en", []);
+		const result = await createNotesBatch(USER_ID, { type: "practice", sessionId: SESSION_ID }, "en", []);
 		expect(result).toEqual([]);
 	});
 
@@ -103,7 +105,7 @@ describe("createNotesBatch", () => {
 		const valuesFn = vi.fn().mockReturnValue({ returning });
 		mockDb.insert.mockReturnValue({ values: valuesFn });
 
-		const result = await createNotesBatch(USER_ID, SESSION_ID, "en", [
+		const result = await createNotesBatch(USER_ID, { type: "practice", sessionId: SESSION_ID }, "en", [
 			{ tutorComment: "Wrong tense used", category: "grammar" },
 			{ tutorComment: "Vocabulary too basic", category: "vocabulary" },
 		]);
@@ -120,7 +122,7 @@ describe("createNotesBatch", () => {
 });
 
 describe("createNotesFromSelectionBatch", () => {
-	it("creates up to three notes from a long selection", async () => {
+	it("creates up to two notes from a long selection", async () => {
 		mockChatJson.mockResolvedValueOnce({
 			items: [
 				{ knowledgePoint: "Use the preterite for completed past actions.", keywords: ["pretérito"], sourceContext: "Ayer fui al mercado." },
@@ -130,13 +132,13 @@ describe("createNotesFromSelectionBatch", () => {
 			],
 		});
 
-		const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+		const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
 		const valuesFn = vi.fn().mockReturnValue({ returning });
 		mockDb.insert.mockReturnValue({ values: valuesFn });
 
 		const result = await createNotesFromSelectionBatch({
 			userId: USER_ID,
-			sessionId: SESSION_ID,
+			source: { type: "practice", sessionId: SESSION_ID },
 			language: "es",
 			selectedText: "Ayer fui al mercado, aunque estaba cansado. Me parece que fue útil.",
 			previousContext: "[Agent] ¿Qué hiciste ayer?",
@@ -144,11 +146,11 @@ describe("createNotesFromSelectionBatch", () => {
 			sourceKind: "message",
 		});
 
-		expect(result.count).toBe(3);
+		expect(result.count).toBe(2);
 		expect(valuesFn).toHaveBeenCalledWith(
 			expect.arrayContaining([expect.objectContaining({ tutorComment: "Use the preterite for completed past actions." })]),
 		);
-		expect(valuesFn.mock.calls[0]?.[0]).toHaveLength(3);
+		expect(valuesFn.mock.calls[0]?.[0]).toHaveLength(2);
 		const prompt = mockChatJson.mock.calls[0]?.[1]?.messages?.[1]?.content as string;
 		expect(prompt).toContain("Previous visible message/context");
 		expect(prompt).toContain("[Agent] ¿Qué hiciste ayer?");
@@ -160,7 +162,7 @@ describe("createNotesFromSelectionBatch", () => {
 
 		const result = await createNotesFromSelectionBatch({
 			userId: USER_ID,
-			sessionId: SESSION_ID,
+			source: { type: "practice", sessionId: SESSION_ID },
 			language: "en",
 			selectedText: "ok",
 			currentContext: "ok",
@@ -254,7 +256,7 @@ describe("createNoteFromSelectionQA", () => {
 
 		const result = await createNoteFromSelectionQA({
 			userId: USER_ID,
-			sessionId: SESSION_ID,
+			source: { type: "practice", sessionId: SESSION_ID },
 			selectedText: "I could of done that",
 			surroundingContext: "Why didn't you? I could of done that.",
 			question: "Why is this wrong?",

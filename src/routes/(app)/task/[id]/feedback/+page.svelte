@@ -5,14 +5,15 @@ import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
+import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
+import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
-import FloatingQuestionFAB from "./FloatingQuestionFAB.svelte";
-import SelectionActionBubble from "./SelectionActionBubble.svelte";
 
 let { data } = $props();
 
@@ -27,7 +28,7 @@ let activeAnnotation = $state<{
 	previousContext: string;
 	explanationMode: "issue" | "good_expression";
 } | null>(null);
-let askAppendRequest = $state<{ id: number; text: string } | null>(null);
+let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
 
 // Keep local state in sync if page data is refreshed.
@@ -95,9 +96,52 @@ function handleCommentHighlightClick(span: AnnotationSpan, messageId: number, el
 	};
 }
 
-function handleAskSelection(text: string) {
+function handleAskSelection(selection: LearningSelection) {
 	askAppendCounter += 1;
-	askAppendRequest = { id: askAppendCounter, text };
+	askAppendRequest = { id: askAppendCounter, selection };
+}
+
+async function postFeedbackAction(action: string, formData: FormData) {
+	const response = await fetch(`?/${action}`, { method: "POST", body: formData });
+	const result = deserialize(await response.text());
+	if (result.type !== "success") {
+		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Request failed");
+	}
+	return result.data;
+}
+
+async function saveSelection(selection: LearningSelection) {
+	const formData = new FormData();
+	formData.set("sessionId", String(data.sessionId));
+	formData.set("selectedText", selection.text);
+	formData.set("currentContext", selection.currentContext);
+	formData.set("previousContext", selection.previousContext);
+	formData.set("sourceKind", selection.sourceKind);
+	const result = await postFeedbackAction("saveSelectionNotes", formData);
+	return { count: Number(result?.count ?? 0), reason: result?.reason as string | null | undefined };
+}
+
+async function askTutor(input: LearningSelection & { question: string }) {
+	const formData = new FormData();
+	formData.set("sessionId", String(data.sessionId));
+	formData.set("itemText", input.text);
+	formData.set("category", "grammar");
+	formData.set("question", input.question);
+	formData.set("currentContext", input.currentContext);
+	formData.set("previousContext", input.previousContext);
+	const result = await postFeedbackAction("followUp", formData);
+	if (typeof result?.answer !== "string") throw new Error("The Tutor returned an invalid response");
+	return result.answer;
+}
+
+async function saveQaNote(input: LearningSelection & { question: string; answer: string }) {
+	const formData = new FormData();
+	formData.set("sessionId", String(data.sessionId));
+	formData.set("selectedText", input.text);
+	formData.set("surroundingContext", [input.previousContext, input.currentContext].filter(Boolean).join("\n\n"));
+	formData.set("question", input.question);
+	formData.set("answer", input.answer);
+	await postFeedbackAction("saveSelectionQaNote", formData);
 }
 
 function closeAnnotationPopup() {
@@ -230,8 +274,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 
 									<!-- Message content -->
 									<div
-										data-feedback-selectable
-										data-feedback-kind="message"
+										data-learning-selectable
+										data-learning-kind="message"
 										data-message-id={message.seqId}
 										data-current-context={getMessageContext(message.seqId).currentContext}
 										data-previous-context={getMessageContext(message.seqId).previousContext}
@@ -284,8 +328,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 								{#if comment}
 									{@const commentContext = getMessageContext(message.seqId)}
 									<div
-										data-feedback-selectable
-										data-feedback-kind="comment"
+										data-learning-selectable
+										data-learning-kind="comment"
 										data-message-id={message.seqId}
 										data-current-context={getCommentContext(message.seqId, comment)}
 										data-previous-context={commentContext.previousContext}
@@ -312,8 +356,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 								<div class="space-y-3">
 									{#each feedback.objectives as objective}
 										<div
-											data-feedback-selectable
-											data-feedback-kind="objective"
+											data-learning-selectable
+											data-learning-kind="objective"
 											data-current-context={objective.text}
 											data-previous-context={getConversationExcerpt()}
 											class="flex items-start gap-3"
@@ -332,8 +376,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 							<div class="border-t border-[#e8e3db] pt-6">
 								<h3 class="text-lg font-serif mb-4">Summary</h3>
 								<p
-									data-feedback-selectable
-									data-feedback-kind="summary"
+									data-learning-selectable
+									data-learning-kind="summary"
 									data-current-context={feedback.summary}
 									data-previous-context={getConversationExcerpt()}
 									class="whitespace-pre-wrap [overflow-wrap:anywhere]"
@@ -363,8 +407,13 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	{/if}
 
 	<!-- Selection actions -->
-	<SelectionActionBubble sessionId={data.sessionId} language={data.language} onAskSelection={handleAskSelection} />
+	<SelectionActionBubble sourceKey={`practice:${data.sessionId}`} onAskSelection={handleAskSelection} onSaveSelection={saveSelection} />
 
 	<!-- Floating question FAB -->
-	<FloatingQuestionFAB sessionId={data.sessionId} conversation={data.conversation} appendRequest={askAppendRequest} />
+	<TutorQuestionPanel
+		appendRequest={askAppendRequest}
+		defaultSelection={{ text: getConversationExcerpt(), currentContext: getConversationExcerpt(), previousContext: "", sourceKind: "conversation" }}
+		onAsk={askTutor}
+		onSaveQa={saveQaNote}
+	/>
 </div>

@@ -36,6 +36,13 @@
       "when": 1783680060724,
       "tag": "0004_remove_translation_prompt_version",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783753652033,
+      "tag": "0005_support_translation_notes",
+      "breakpoints": true
     }
   ]
 }

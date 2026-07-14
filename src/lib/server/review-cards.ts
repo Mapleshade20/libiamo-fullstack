@@ -142,13 +142,7 @@ export async function noteHasCard(noteId: number): Promise<boolean> {
 export async function createCardFromNote(noteId: number, userId: string, language?: string): Promise<{ created: boolean }> {
 	const foundNote = await db.query.note.findFirst({
 		where: and(eq(note.id, noteId), eq(note.userId, userId)),
-		columns: { id: true, tutorComment: true, keywords: true, sourceContext: true },
-		with: {
-			sourceSession: {
-				columns: {},
-				with: { task: { columns: { language: true } } },
-			},
-		},
+		columns: { id: true, language: true, tutorComment: true, keywords: true, sourceContext: true },
 	});
 
 	if (!foundNote) throw new Error("Note not found");
@@ -160,7 +154,7 @@ export async function createCardFromNote(noteId: number, userId: string, languag
 
 	if (existingCard) return { created: false };
 
-	const detectedLanguage = (language ?? foundNote.sourceSession?.task?.language ?? "en") as LanguageCode;
+	const detectedLanguage = (language ?? foundNote.language) as LanguageCode;
 	const languageName = getLanguageEnglishName(detectedLanguage);
 
 	const result = await chatJson(CardGenerationSchema, {

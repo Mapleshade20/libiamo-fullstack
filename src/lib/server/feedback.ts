@@ -671,15 +671,19 @@ type FollowUpOnFeedbackResult = {
 	answer: string;
 };
 
-export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
-		with: { task: { columns: { language: true } } },
-	});
-
-	if (!session) throw new Error("Session not found");
-
-	const learningLanguageName = getLanguageEnglishName(session.task?.language ?? "en");
+export async function followUpOnLearningContent(input: {
+	userId: string;
+	learningLanguage: string;
+	responseLanguage?: string;
+	itemText: string;
+	category: "grammar" | "vocabulary" | "coherence";
+	question: string;
+	currentContext?: string;
+	previousContext?: string;
+	explanationMode?: "issue" | "good_expression";
+}): Promise<FollowUpOnFeedbackResult> {
+	const learningLanguageName = getLanguageEnglishName(input.learningLanguage);
+	const responseLanguageName = getLanguageEnglishName(input.responseLanguage ?? "en");
 	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
 	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
 	const explanationMode = input.explanationMode ?? "issue";
@@ -709,7 +713,7 @@ Their follow-up question: ${resolvedQuestion}
 - Be concise but thorough — 2-5 sentences is usually enough unless examples are requested.
 ${modeInstructions}
 - Use the original context above to explain the item specifically, not generically.
-- Write your entire answer in English (the examples can mix ${learningLanguageName} and English).
+- Write your entire answer in ${responseLanguageName} (the examples can mix ${learningLanguageName} and ${responseLanguageName}).
 - Do NOT roleplay as a character — you are a tutor, not the scenario persona.
 
 Respond in JSON format: { "answer": "your response here" }`;
@@ -721,4 +725,18 @@ Respond in JSON format: { "answer": "your response here" }`;
 
 	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
 	return { answer: result.answer };
+}
+
+export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {
+	const session = await db.query.practiceSession.findFirst({
+		where: and(eq(practiceSession.id, input.sessionId), eq(practiceSession.userId, input.userId)),
+		with: { task: { columns: { language: true } } },
+	});
+
+	if (!session) throw new Error("Session not found");
+
+	return followUpOnLearningContent({
+		...input,
+		learningLanguage: session.task?.language ?? "en",
+	});
 }

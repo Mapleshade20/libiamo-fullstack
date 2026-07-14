@@ -161,7 +161,7 @@ describe("createCardFromNote", () => {
 	});
 
 	it("returns { created: false } when card already exists", async () => {
-		mockQuery.note.findFirst.mockResolvedValue({ id: NOTE_ID, tutorComment: "test", keywords: null, sourceContext: null });
+		mockQuery.note.findFirst.mockResolvedValue({ id: NOTE_ID, language: "es", tutorComment: "test", keywords: null, sourceContext: null });
 		mockQuery.reviewCard.findFirst.mockResolvedValueOnce({ id: 1 });
 		const result = await createCardFromNote(NOTE_ID, USER_ID);
 		expect(result).toEqual({ created: false });
@@ -173,7 +173,7 @@ describe("createCardFromNote", () => {
 			tutorComment: "test",
 			keywords: null,
 			sourceContext: null,
-			sourceSession: { task: { language: "es" } },
+			language: "es",
 		});
 		mockQuery.reviewCard.findFirst.mockResolvedValueOnce(undefined);
 		mockChatJson.mockResolvedValueOnce({ shouldSkip: true });
@@ -188,7 +188,7 @@ describe("createCardFromNote", () => {
 			tutorComment: "Use subjunctive",
 			keywords: ["subj"],
 			sourceContext: "test",
-			sourceSession: { task: { language: "es" } },
+			language: "es",
 		});
 		mockQuery.reviewCard.findFirst.mockResolvedValueOnce(undefined);
 		mockChatJson.mockResolvedValueOnce({
