@@ -10,6 +10,7 @@ node_modules
 /.pnpm-store
 /build
 /coverage
+/db
 
 # OS
 .DS_Store

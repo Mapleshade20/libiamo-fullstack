@@ -8,8 +8,8 @@ Quick guidance for agents working in this repo.
 pnpm build        # production build
 pnpm preview      # preview production build
 pnpm check        # svelte-check + biome check --write (format included, use this instead of build or format for development)
-pnpm test         # run unit tests (vitest) (use this for development)
-pnpm db:generate --name migration_name  # generate a migration script
+pnpm test         # run unit tests
+pnpm db:generate --name migration_name  # generate a migration script (needs tty)
 pnpm db:migrate   # apply migration scripts
 ```
 
@@ -21,9 +21,9 @@ UI design:
 
 Adopt a premium, silky-smooth retro editorial magazine aesthetic. Use a very light warm paper-colored base. Let headlines and section titles stand out naturally with elegant serif typography, while all body copy, navigation, controls, and functional UI text should use clean sans-serif fonts for readability.
 
-The interface should feel refined, calm, tactile, and highly polished, with appropriate spacing, subtle borders, soft shadows, muted contrast, and smooth transitions. Avoid generic modern SaaS styling, loud gradients, harsh colors, or excessive decoration. The goal is a high-end magazine-like reading experience expressed as a fluid digital interface.
+The interface should feel refined, calm, tactile, and highly polished, with appropriate spacing, subtle borders, soft shadows, and muted contrast. Avoid generic modern SaaS styling, loud gradients, harsh colors, or excessive decoration. Utilize smooth, continuous transition animations without abrupt flashes or large layout jumps. The goal is a high-end magazine-like reading experience expressed as a fluid digital interface.
 
-Key areas:
+## Key areas
 
 - Routes: `(app)/` authenticated learner pages (home, session, feedback, archive, review, translate, contribute, profile), `(auth)/`, `(admin)/`; `/api/review/` for review card CRUD.
 - Server: `src/lib/server/` for auth (`auth/`), scheduling (`scheduling/`), db, LLM, sessions, feedback, notes, review-cards (FSRS), archive, translate. `src/lib/admin/` for template/variant action helpers.
@@ -42,12 +42,14 @@ Key areas:
 - Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/client/form-attention.ts`.
 - Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
 
-## Notes for agents
+## Codebase conventions
 
 - Use tabs for indentation.
 - Refer to `README.md` for core concepts.
 - Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
-- If stuck on a problem after 2-3 failed attempts, do not brutely retry. Search the web for solutions and come up with new approaches.
 - Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
-- **Time-dependent tests:** use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
+    - Time-dependent tests: use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
 - Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).
+- The repository follows an issue-plan-implement workflow. Issues and plans are at `docs/`. An issue should present "what to do", which is a detailed description of new features to implement and bugs to fix. Its corresponding plan records "how to do", which goes through technical decisions, implementation specs and work stages.
+    - Issue's frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test) `link` (a GitHub issue link), `status` (needs-review / needs-plan / implementing / done),
+    - Plan's frontmatter: `title`, `related-issue` (a path of the issue from project root)
