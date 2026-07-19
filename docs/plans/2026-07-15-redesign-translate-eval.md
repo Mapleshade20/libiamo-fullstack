@@ -51,8 +51,14 @@ related-issue: docs/issues/2026-07-15-redesign-translate-eval.md
 ### 4. Diff
 
 - 模型生成受限类 XML；服务端解析为 AST 并重建 old/new 文本。
-- UI 不使用 `{@html}` 渲染模型标记。
-- 参考 Diff 无效时允许纯文本 `referenceAnswer` 降级；accepted Diff 无效时不确认教学结果，保留输入供原样重试。
+- Generation 1 每张卡同时产出 `minimalDiff`、`referenceDiff` 与 `teachersNote`（母语讲解本句问题与语言点）。
+- Prompt/few-shot 要求**语块级** Diff（可迁移短语/搭配），禁止逐词碎拆，也避免几乎整句单一 replace。
+- UI 不使用 `{@html}` 渲染模型标记；无 “Suggested revisions” 装饰总标题；`teachersNote` 与 Diff 同区展示。
+- accept 态只展示 accepted Diff + reference Diff + teachersNote，不展示 Your revision 纯文本；窄屏纵向堆叠。
+- second reject 先 minimal Diff 再 reference Diff，并展示 teachersNote；任一非法 Diff 对应纯文本降级。accepted Diff 无效时不确认教学结果，保留输入供原样重试。
+- 迁移练习揭示前不展示 targetPattern。
+- 二稿底部只展示模型 commentary（无固定 resolved/unresolved 文案），带平滑进入动画。
+- 所有会调用 LLM 的交互在 demo 中用约 2s 固定等待态演示（正式实现仍以真实请求时长为准，动画为 indeterminate）。
 
 ### 5. Note
 
@@ -411,7 +417,6 @@ Parser 必须：
 
 - `pnpm check`、`pnpm test` 通过；
 - 产品负责人明确回复视觉 demo 通过；
-- 在本计划“视觉审查记录”中记录日期、批准状态和必要修改；
 - 未获批准时，本计划停在此阶段，不得进入阶段 2。
 
 ## 阶段 2：LLM 协议、Diff parser 与真实模型 A/B
@@ -421,7 +426,7 @@ Parser 必须：
 - 实现 detailed JSON result 和定向 repair。
 - 定义 Generation 1、verifier、Generation 2 schema。
 - 实现 Diff parser、AST、重建校验和 safe renderer contract。
-- 为 Generation 1 制作 shape-only 与 few-shot 两个可切换 prompt 版本。
+- 为 Generation 1 制作 shape-only 与 few-shot 两种 prompt 版本。
 - 新增显式 live-eval harness，使用 `.env` 模型和 `docs/references/2026-07-15.md`。
 - 每个 prompt 版本至少重复运行三次；记录：
   - parse 成功；
@@ -432,7 +437,7 @@ Parser 必须：
   - 无问题句误报；
   - 输出语言；
   - token/延迟。
-- 根据结果确定生产 prompt；评测结论写入计划实施记录或独立 reference 文档。
+- 根据结果，分别不断调整迭代各提示词，最终根据结果比较确定生产 prompt；评测结论写入计划实施记录。
 
 ### 测试
 
@@ -516,7 +521,8 @@ Parser 必须：
 - verifier action 按 attempt ID、evaluatedAt 和 card ordinal 从 evaluation JSON 取上下文。
 - accept 时验证 accepted Diff，再更新内存和 session snapshot。
 - first reject/second reject 只更新内存和 session snapshot。
-- second reject 揭示 reference Diff；非法 reference Diff 使用纯文本降级。
+- second reject 先揭示 minimal Diff 再 reference Diff；非法时分别纯文本降级。
+- accept 态仅双 Diff，无 Your revision 纯文本块；窄屏堆叠布局。
 - 所有卡完成后进入二稿，并由浏览器立即调用 Generation 2 action。
 
 ### 测试
@@ -574,7 +580,8 @@ Parser 必须：
 - 进入二稿时由浏览器自动发起 action；不使用后台 runner 或 polling。
 - 实现右上角胶囊的 generating、failed/retry 和 ready 状态；环形动画明确为 indeterminate。
 - 接入全文二稿，从不可变首稿初始化。
-- 实现 second draft verifier、unresolved 标记、重交和 confirmed skip，并写入 session snapshot。
+- 实现 second draft verifier（完整 Generation 1 history + system 指令 + 用户二稿；返回 per-card resolved + commentary）、unresolved 标记、重交和 confirmed skip，并写入 session snapshot。
+- pass/unresolved/commentary UI 放在底部提交区上方；二稿 textarea 最小高度 + 随内容自动增高。
 - 二稿与 Generation 2 请求并行；二稿完成但 Notes 未 ready 时禁用 Continue，要求等待或从胶囊 Retry。
 - 组件销毁时 abort 浏览器请求；服务端即使完成也可由下一次 action 识别并返回已有 Notes。
 
@@ -633,11 +640,11 @@ Parser 必须：
 - 使用 `docs/references/2026-07-15.md` 的例子完整测试一遍全流程，而三阶段中多测试几种用户的输入情况，确保提示词设计足够良好，使得模型能给予足够严格的和内容丰富的评价。
 - 删除被新流程替代的静态评价组件、旧 action、旧 schema 和死代码。
 - 检查所有临时 flag、mock 数据和调试日志。
-- 移除 dev-only demo。
 - 完成本地化四种 UI 语言。
 - 浏览器检查 desktop/mobile、键盘、screen reader 语义和 reduced-motion。
 - 对真实参考样例再次运行最终 prompt，确认实现后没有质量回退。
 - 更新项目本地 `AGENTS.md`，只记录真正影响未来开发的最终架构事实。
+- 向用户申请移除 dev-only demo。
 
 ### 最终验证
 
@@ -706,11 +713,14 @@ pnpm build
 
 ---
 
-# 七、视觉审查记录
+# 进度追踪和实施记录
 
-- 状态：待实现、待产品负责人审查
-- Demo 路由：`/translate-eval-demo`（仅开发环境）
-- 批准日期：待填写
-- 批准人：待填写
-- 必须修改项：待填写
-- 结论：未批准前不得开始阶段 2
+## 阶段 1
+
+- Demo 路由：`/translate-eval-demo`（仅开发环境；生产 load 返回 404）
+- 组件目录：`src/lib/components/translate-evaluation/`
+- 覆盖场景：evaluating / evaluating-failed / evaluated match / warning+regenerate / no-cards / card initial / first reject / accept dual-diff（无 Your revision 纯文本） / second reject minimal+reference Diff / provider error / second draft capsule generating·failed·ready / draft done waiting practice / transfer / complete；侧栏可切换 390px 与 reduced-motion
+- 产品复审反馈（已写入 issue）：句级高亮、accept 仅双 Diff、second reject minimal Diff、细粒度 Diff、二稿底部 status + history/commentary verifier、textarea 自动增高
+- 动效：`motion` 编排等待页 SVG pathLength 循环与 overview 入场/荧光笔；局部 enter/exit 用 Svelte transition；Motion controls 在 `$effect` cleanup 中 stop
+
+用户审查：经若干轮修改，通过

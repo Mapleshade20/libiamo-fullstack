@@ -118,7 +118,10 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
       "initialHint": "进入卡片时直接展示的初级提示",
       "deeperHint": "第一次尝试被拒绝后替换初级提示的第二级提示",
       "referenceAnswer": "自然、准确并符合语境的参考译文",
-      "referenceDiff": "参考译文相对于 originalAnswer 的受限类 XML Diff"
+      "minimalAnswer": "在 originalAnswer 上做较少修改后达到正确且自然度很高的目标语言句子",
+      "minimalDiff": "minimalAnswer 相对于 originalAnswer 的受限类 XML Diff",
+      "referenceDiff": "referenceAnswer 相对于 originalAnswer 的受限类 XML Diff",
+      "teachersNote": "使用学习者母语，对本句 originalAnswer 的问题与 reference 相关语言点做详细讲解"
     }
   ]
 }
@@ -128,16 +131,19 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
 
 每个模型字段都必须有唯一、明确的展示位置：
 
-| 字段                | 展示位置                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `overallCommentary` | 总体评价页右栏正文                                                                                 |
-| `ratings.*`         | 总体评价页右栏评分区                                                                               |
-| `sourceText`        | 改错卡原文区                                                                                       |
-| `originalAnswer`    | 总体评价页左栏匹配高亮来源；改错卡用户原始作答区                                                   |
-| `initialHint`       | 改错卡初始提示位                                                                                   |
-| `deeperHint`        | 第一次拒绝后覆盖同一提示位                                                                         |
-| `referenceAnswer`   | 参考答案里的目标文本；Diff 无法安全渲染时的纯文本降级内容                                          |
-| `referenceDiff`     | 参考答案里的目标文本与用户原始作答的 Diff（通过后展示为第二组 Diff，或第二次拒绝后的最终揭示内容） |
+| 字段                | 展示位置                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `overallCommentary` | 总体评价页右栏正文                                                                                           |
+| `ratings.*`         | 总体评价页右栏评分区                                                                                         |
+| `sourceText`        | 改错卡原文区                                                                                                 |
+| `originalAnswer`    | 总体评价页左栏匹配高亮来源（应为一句或必要的连续短句，不得把整段作答当作一张卡的匹配串）；改错卡用户原始作答区 |
+| `initialHint`       | 改错卡初始提示位                                                                                             |
+| `deeperHint`        | 第一次拒绝后覆盖同一提示位                                                                                   |
+| `referenceAnswer`   | Diff 无法安全渲染时的纯文本降级内容；不在 accept 态单独作为“你的改写”展示                                    |
+| `minimalAnswer`     | 第二次拒绝揭示时的 minimal Diff 重建目标；非法 Diff 时的纯文本降级                                           |
+| `minimalDiff`       | 第二次拒绝后，在 reference Diff 之前展示的“最小改动” Diff                                                    |
+| `referenceDiff`     | 通过后的第二组 Diff；第二次拒绝后在 minimal Diff 之后展示的参考 Diff                                         |
+| `teachersNote`      | 通过后或第二次拒绝揭示 Diff 时，与 Diff 一同展示的教师讲解（不单独增加 Suggested revisions 类装饰标题栏）     |
 
 不得增加仅用于“让结果看起来完整”但没有展示或验证用途的模型字段。
 
@@ -190,9 +196,9 @@ OpenAI-compatible provider 若支持 JSON Schema structured output，可以将�
 - 所有字段非空；
 - `sourceText` 是否原样包含于发送给模型的原文；
 - `originalAnswer` 是否原样包含于不可变首稿；
-- `referenceDiff` 是否符合受限标记语法；
-- 从 `referenceDiff` 重建的旧文本是否等于 `originalAnswer`；
-- 从 `referenceDiff` 重建的新文本是否等于 `referenceAnswer`；
+- `referenceDiff` / `minimalDiff` 是否符合受限标记语法；
+- 从 `referenceDiff` 重建的旧/新文本是否分别等于 `originalAnswer` / `referenceAnswer`；
+- 从 `minimalDiff` 重建的旧/新文本是否分别等于 `originalAnswer` / `minimalAnswer`；
 - 卡片是否存在完全重复。
 
 JSON/schema 无法解析、总体评价缺失、评分非法或生成被截断属于致命错误：不暴露部分评价，保留可重试的失败状态。
@@ -208,7 +214,7 @@ JSON/schema 无法解析、总体评价缺失、评分非法或生成被截断�
 - 用户一旦从总体评价页选择 Continue，当前标签页 snapshot 记录 overview gate，此后本标签页不再展示重新生成入口；该 gate 不写入数据库，因此新标签页、跨设备或 snapshot 丢失时会重新从总体评价开始。
 - `practiceGeneratedAt` 已存在时服务端拒绝重新生成评价，避免已写入的 Notes 与评价失配。
 
-若用户继续使用 `referenceDiff` 无法验证的卡片，最终揭示时安全降级为 escaped `referenceAnswer` 纯文本，不得渲染未经解析的模型标记。
+若用户继续使用 `referenceDiff` 或 `minimalDiff` 无法验证的卡片，对应 Diff 最终揭示时安全降级为 escaped `referenceAnswer` / `minimalAnswer` 纯文本，不得渲染未经解析的模型标记。
 
 ---
 
@@ -296,7 +302,7 @@ Generation 1 成功后执行连续过渡：
 - 在当前标签页 snapshot 中记录第二次尝试、评价和 `revealed` 状态；
 - 移除输入框和提示；
 - 展示对第二次尝试的评价；
-- 直接展开参考答案相对于 `originalAnswer` 的 Diff；
+- 先展示 `minimalDiff`（相对 `originalAnswer` 的较少修改），再展示 `referenceDiff`；
 - 不允许第三次输入。
 
 通过或第二次拒绝后，页面底部显示圆形右箭头按钮，不包含文字。按钮必须有本地化的 `aria-label`。
@@ -346,13 +352,12 @@ verifier 必须把 provider/配额错误 与 教学拒绝 分开。provider 错�
 
 ## 6.5 通过后的双 Diff 结果态
 
-通过后展示：
+通过后**不**再单独展示“Your revision / 你的改写”纯文本块。只展示两组 Diff：
 
-1. 用户刚才输入的最终内容；
-2. 用户最终内容相对于 `originalAnswer` 的 Diff；
-3. `referenceAnswer` 相对于 `originalAnswer` 的 Diff。
+1. 用户最终内容相对于 `originalAnswer` 的 Diff（`acceptedDiff`，标签如 Your changes）；
+2. `referenceAnswer` 相对于 `originalAnswer` 的 Diff（`referenceDiff`，标签如 Reference changes）。
 
-两组 Diff 在桌面端并列，在移动端按上述顺序堆叠。通过后不再展示提示、输入框或模型文字评价。
+桌面端两组 Diff 并列；窄屏/移动端按上述顺序纵向堆叠，不得横向挤爆。通过后不再展示提示、输入框或模型文字评价。
 
 用户最终答案与参考答案应尽可能相同，或有差别但完全正确且自然。应引导 LLM 更为严格地判断，而不是随意接受任何意思相似但不自然、不最优的改法。
 
@@ -382,7 +387,16 @@ unchanged
 
 服务端必须使用专用 parser 将标记转换为受限 AST，并同时重建 old/new 两份文本。渲染层只消费 AST，不使用 `{@html}`。
 
-参考 Diff 的 old/new 必须分别等于 `originalAnswer`/`referenceAnswer`；通过 Diff 的 old/new 必须分别等于 `originalAnswer`/用户最终内容。
+参考 Diff 的 old/new 必须分别等于 `originalAnswer`/`referenceAnswer`；minimal Diff 的 old/new 必须分别等于 `originalAnswer`/`minimalAnswer`；通过 Diff 的 old/new 必须分别等于 `originalAnswer`/用户最终内容。
+
+### Diff 粒度
+
+Diff 服务教学可读性：学习者应看到**可迁移的表达语块**如何变化，而不是每个单词被拆成碎片。
+
+- 以有意义的短语/搭配/子句为单位做 `delete` / `add` / `replace`（例如 `weakens the crucial parts` → `undermines major parts`，而不是逐词 weakens/undermines、the crucial/major）；
+- 不要为了“对齐粒度最细”把介词、冠词、单个形容词各自拆成独立 replace；
+- 也避免把几乎整句塞进一个巨大 replace；在语块级与整句级之间取可读折中；
+- prompt 与 few-shot 必须示范**语块级** Diff，并明确禁止逐词碎拆。
 
 视觉语义：
 
@@ -428,7 +442,7 @@ unchanged
 - overview 是否已经 Continue；
 - 当前 card index；
 - 每张卡的本地尝试次数、输入、feedback、passed/revealed、accepted answer 和 accepted Diff；
-- 全文二稿输入、最近一次 unresolved 结果和本地 pass/skip；
+- 全文二稿输入、最近一次 unresolved 结果、commentary 和本地 pass/skip；
 - 迁移练习本地队列、variant 使用情况和 Incorrect 次数。
 
 snapshot 同时保存 attempt ID 和 `evaluatedAt`。整体重新生成成功后清除旧 snapshot；加载时只接受与当前 attempt/evaluation version 一致的数据。解析失败、版本不兼容或字段越界时删除 snapshot，并从总体评价页重新开始。
@@ -468,17 +482,29 @@ snapshot 不提供跨设备保证。新标签页、另一台设备或浏览器�
 
 “跳过全文二稿”必须有确认说明，并把 confirmed skip 写入当前标签页 snapshot，不写数据库。
 
-提交二稿后，verifier 检查所有 correction cards，包括独立通过的卡片和第二次失败后揭示答案的卡片。模型返回每个服务端提供 card ordinal 的 resolved 状态；服务端要求结果完整且不重复。
+提交二稿后，verifier 检查所有 correction cards，包括独立通过的卡片和第二次失败后揭示答案的卡片。
 
-如果全部 resolved，在当前标签页 snapshot 中记录 pass。否则：
+二稿 verifier 的上下文固定为：
+
+1. 完整 Generation 1 的 message history（便于 prefix cache）；
+2. 追加的 system role 指令（说明二稿任务、resolved 判定与输出 contract）；
+3. 用户刚刚提交的全文二稿。
+
+不得把上述内容全部塞进单条 user message。逻辑返回值除每个 card ordinal 的 resolved 状态外，还必须包含一段面向学习者的 `commentary`（使用学习者母语），概括二稿整体表现或仍未落实的模式；不得只返回通过/不通过布尔值。服务端要求 ordinal 结果完整且不重复。
+
+如果全部 resolved，在当前标签页 snapshot 中记录 pass 与 commentary。否则：
 
 - 标记受影响段落或相关原文片段，但不展示答案；
+- 在页面底部、提交按钮紧上方**只展示模型 `commentary`**（不得再叠加固定文案如 “All correction points look resolved…” / “Some sentences still need work…”）；
+- commentary 的出现/替换须有平滑过渡，不得造成底部按钮位置突变；
 - 保留用户二稿；
 - 允许修改并再次提交；
 - 允许确认跳过剩余检查；
 - provider 错误不作为教学失败。
 
-二稿输入、unresolved 结果和 pass/skip 只写入当前标签页 snapshot。二稿完成或确认跳过后，如果迁移练习仍在生成，Continue 保持禁用并说明需要等待；如果生成失败，用户必须从右上角胶囊 Retry。这里不提供 Finish for now 或“稍后从迁移阶段继续”。
+全部通过时同样只展示 commentary（位置与动画要求相同）。二稿输入框有明确的最小初始高度，并随内容自动增高以完整显示，不在框内滚动截断可见正文。
+
+二稿输入、unresolved 结果、commentary 和 pass/skip 只写入当前标签页 snapshot。二稿完成或确认跳过后，如果迁移练习仍在生成，Continue 保持禁用并说明需要等待；如果生成失败，用户必须从右上角胶囊 Retry。这里不提供 Finish for now 或“稍后从迁移阶段继续”。
 
 如果 Generation 1 没有生成卡片，则整个 Stage 2 跳过。
 
@@ -596,7 +622,7 @@ Review log 直接引用 Note。应用 FSRS rating 和插入 review log 必须在
 
 迁移练习读取本 attempt 的 Generation 2 Notes。`generating/failed/ready` 由全文二稿右上角胶囊承载；failed 只提供 Retry，不提供 Finish for now。Generation 1 无 cards 时不会进入本阶段；有 cards 时 Generation 2 coverage 校验要求至少生成一个 Note。
 
-每张 Note 从四个 variants 中抽取一个。正面显示母语 `front`，用户必须先输入目标语言答案，才能揭示 `back`。输入只用于主动回忆和自我比较，不做模型评分。
+每张 Note 从四个 variants 中抽取一个。正面只显示母语 `front`（练习句）；**在用户提交自己的答案并揭示之前，不展示 `targetPattern`**。用户必须先输入目标语言答案，才能揭示 `back` 与 `targetPattern`。输入只用于主动回忆和自我比较，不做模型评分。揭示时注意布局与动画，避免按钮与内容突跳。
 
 迁移练习只显示：
 
@@ -700,8 +726,8 @@ Incorrect 后把 Note 放到其他 pending Notes 末尾，并优先使用未见 
 - [ ] 初始态只显示原文、原始作答、空输入框和默认展开的初级提示。
 - [ ] 每张卡最多两次教学尝试，没有 Ignore/Skip。
 - [ ] 第一次拒绝保留输入，展示本次评价，并以二级提示替换初级提示。
-- [ ] 第二次拒绝展示本次评价和参考 Diff，不再允许输入。
-- [ ] 任一次通过后移除输入、提示和文字评价，展示用户最终内容和两组 Diff。
+- [ ] 第二次拒绝展示本次评价，以及 minimal Diff 后再接 reference Diff，不再允许输入。
+- [ ] 任一次通过后移除输入、提示和文字评价；不单独展示 Your revision 纯文本，只展示 accepted Diff 与 reference Diff 两组（窄屏纵向堆叠）。
 - [ ] 两种 verifier 上下文方案经过真实模型对比，最终方案的拒绝反馈不泄露或暗示标准答案。
 - [ ] provider/配额/格式错误不增加教学尝试次数。
 - [ ] 通过状态和 accepted Diff 在展示前写入当前标签页 snapshot，不写数据库。
@@ -710,9 +736,11 @@ Incorrect 后把 Note 放到其他 pending Notes 末尾，并优先使用未见 
 ## Diff
 
 - [ ] Diff 仅允许 delete、add、replace/from/to 协议。
-- [ ] 专用 parser 能从每个 Diff 重建 old/new 文本并严格比对预期。
+- [ ] 专用 parser 能从每个 Diff 重建 old/new 文本并严格比对预期（含 minimal / reference / accepted）。
 - [ ] 渲染消费 AST，不直接注入模型 HTML/XML。
-- [ ] 非法参考 Diff 降级为 escaped reference answer，不渲染原始标记。
+- [ ] 非法 minimal/reference Diff 分别降级为 escaped minimal/reference answer，不渲染原始标记。
+- [ ] Prompt/few-shot 要求语块级 Diff（可迁移短语/搭配），禁止逐词碎拆，也避免几乎整句单一 replace。
+- [ ] 通过或二次拒绝揭示时展示 `teachersNote`，与 Diff 同区呈现；无 “Suggested revisions” 装饰性总标题。
 - [ ] Diff 不依赖 tokenization，并支持 screen reader 和非颜色提示。
 
 ## 持久化与二稿
@@ -726,6 +754,9 @@ Incorrect 后把 Note 放到其他 pending Notes 末尾，并优先使用未见 
 - [ ] 未完成 attempt 不允许放弃后立即 retake，只能继续现有首稿和评价。
 - [ ] 全文二稿始终从不可变首稿初始化。
 - [ ] 全文二稿验证全部 correction cards，包括 passed 和 revealed。
+- [ ] 二稿 verifier 使用完整 Generation 1 history + 新 system 指令 + 用户二稿；返回 per-card resolved 与 commentary。
+- [ ] 底部提交区上方只展示模型 commentary（无固定 pass/unresolved 文案），出现有平滑过渡且不造成按钮突跳。
+- [ ] 二稿输入框有最小高度并随内容自动增高完整显示。
 - [ ] 用户可以修改重交或确认跳过，当前标签页内可恢复。
 - [ ] 二稿完成时若迁移练习未 ready，Continue 禁用并要求等待或重试。
 
@@ -740,6 +771,7 @@ Incorrect 后把 Note 放到其他 pending Notes 末尾，并优先使用未见 
 - [ ] 重复或中断的 Generation 2 请求不会重复创建 Notes，也不会写入基于旧评价版本的结果。
 - [ ] Note 直接持有 FSRS state，review log 直接引用 Note。
 - [ ] 旧 ReviewCard 写入路径和独立卡片生成步骤全部删除。
+- [ ] 迁移练习揭示前不展示 targetPattern；揭示后展示 pattern 与 back，布局动画平滑。
 - [ ] 迁移练习只显示 Incorrect/Pass，并分别映射 Again/Hard。
 - [ ] 普通 Review 轮换四个 variants，并保留四档 rating。
 - [ ] generating、failed 和 deferred 状态都不会渲染空白页面。
