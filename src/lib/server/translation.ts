@@ -212,7 +212,8 @@ export async function generateTranslationVariants({
 		],
 	});
 
-	const result = await chatJson(VariantsSchema, {
+	const { value: result } = await chatJson({
+		schema: VariantsSchema,
 		messages: [
 			{
 				role: "system",
@@ -275,7 +276,8 @@ export async function evaluateTranslationAgainstReferences({
 		],
 	});
 
-	const result = await chatJson(TranslationEvaluationSchema, {
+	const { value: result } = await chatJson({
+		schema: TranslationEvaluationSchema,
 		messages: [
 			{
 				role: "system",

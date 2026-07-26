@@ -282,7 +282,7 @@ describe("translation page server", () => {
 			event({ attemptId: "9", selectedText: "subjunctive form", question: "Why?", currentContext: "Tutor feedback" }),
 		);
 		expect(result).toEqual({ success: true, answer: "Use this form after expressions of doubt." });
-		expect(mockFollowUp).toHaveBeenCalledWith(expect.objectContaining({ learningLanguage: "fr", responseLanguage: "en" }));
+		expect(mockFollowUp).toHaveBeenCalledWith(expect.objectContaining({ learningLanguage: "fr", feedbackLanguage: "en" }));
 	});
 
 	it("rejects selection actions before evaluation", async () => {

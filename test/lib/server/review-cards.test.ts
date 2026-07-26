@@ -176,7 +176,7 @@ describe("createCardFromNote", () => {
 			language: "es",
 		});
 		mockQuery.reviewCard.findFirst.mockResolvedValueOnce(undefined);
-		mockChatJson.mockResolvedValueOnce({ shouldSkip: true });
+		mockChatJson.mockResolvedValueOnce({ value: { shouldSkip: true } });
 
 		const result = await createCardFromNote(NOTE_ID, USER_ID);
 		expect(result).toEqual({ created: false });
@@ -192,10 +192,12 @@ describe("createCardFromNote", () => {
 		});
 		mockQuery.reviewCard.findFirst.mockResolvedValueOnce(undefined);
 		mockChatJson.mockResolvedValueOnce({
-			cardType: "grammar",
-			front: "No porque ___ fácil.",
-			back: "No porque sea fácil.",
-			context: "test",
+			value: {
+				cardType: "grammar",
+				front: "No porque ___ fácil.",
+				back: "No porque sea fácil.",
+				context: "test",
+			},
 		});
 
 		mockDb.values.mockReturnValue(mockDb);

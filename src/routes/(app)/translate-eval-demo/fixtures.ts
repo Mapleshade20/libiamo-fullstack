@@ -41,34 +41,6 @@ const CARD_0_MINIMAL: DiffPart[] = [
 	{ type: "unchanged", text: " for a ship we have never asked for." },
 ];
 
-const CARD_0_REF: DiffPart[] = [
-	{ type: "unchanged", text: "It also " },
-	{
-		type: "replace",
-		from: "weakens the crucial parts",
-		to: "undermines major parts",
-	},
-	{ type: "unchanged", text: " " },
-	{
-		type: "replace",
-		from: "in their existing stories and bonds",
-		to: "of their established stories and relationships",
-	},
-	{ type: "unchanged", text: " " },
-	{
-		type: "replace",
-		from: "rewriting the whole backstory going for years",
-		to: "and rewrites years of lore",
-	},
-	{ type: "unchanged", text: " " },
-	{
-		type: "replace",
-		from: "for a ship we have never asked for",
-		to: "for the sake of a pairing that we literally never asked for",
-	},
-	{ type: "unchanged", text: "." },
-];
-
 const ACCEPTED_0 =
 	"It also weakens the crucial parts of their existing stories and relationships, rewriting years of backstory for a ship we never asked for.";
 
@@ -117,27 +89,6 @@ const CARD_1_MINIMAL: DiffPart[] = [
 	},
 ];
 
-const CARD_1_REF: DiffPart[] = [
-	{
-		type: "replace",
-		from: "The character feature of Crowfeather is always about",
-		to: "Crowfeather's character has always been defined by",
-	},
-	{ type: "unchanged", text: " " },
-	{
-		type: "replace",
-		from: "his emotional struggles between Feathertail and Leafpool",
-		to: "his complicated, deeply emotional relationships with Feathertail and Leafpool",
-	},
-	{ type: "unchanged", text: " " },
-	{
-		type: "replace",
-		from: "and their long-lasting impact on him",
-		to: "and the lasting impact those loves had on him",
-	},
-	{ type: "unchanged", text: "." },
-];
-
 const ANSWER_2 =
 	"Brutely tugging him into a romance with Tawnypelt completely disregards the emotional baggage and personal growth that have shaped him for a long time.";
 
@@ -152,15 +103,6 @@ const CARD_2_MINIMAL: DiffPart[] = [
 		type: "unchanged",
 		text: " him into a romance with Tawnypelt completely disregards the emotional baggage and personal growth that have shaped him for a long time.",
 	},
-];
-
-const CARD_2_REF: DiffPart[] = [
-	{ type: "replace", from: "Brutely tugging him into", to: "Throwing him into" },
-	{ type: "unchanged", text: " a romance with Tawnypelt " },
-	{ type: "replace", from: "completely disregards", to: "ignores" },
-	{ type: "unchanged", text: " the emotional baggage and " },
-	{ type: "replace", from: "personal growth that have shaped him for a long time", to: "growth that have shaped him for so long" },
-	{ type: "unchanged", text: "." },
 ];
 
 const SOURCE_P0 =
@@ -180,53 +122,87 @@ const SOURCE_CARD_0 = "它还削弱了他们既有故事和关系中那些重要
 const SOURCE_CARD_1 = "鸦羽这个角色的特点始终围绕他与羽尾、叶池之间复杂而深沉的情感纠葛，以及这些爱恋对他留下的持久影响。";
 const SOURCE_CARD_2 = "把他硬塞进与褐皮的恋情里，完全无视了那些长期以来塑造他的情感包袱和成长历程。";
 
-const NOTE_0 =
-	"本句的核心问题是搭配与信息压缩：weakens the crucial parts in… 偏直译；bonds 在此不如 relationships；rewriting the whole backstory going for years 定语松散。参考译法用 undermines major parts of their established stories and relationships 收紧评价力度，并用 years of lore / pairing we literally never asked for 把「世界观」与粉丝语境一次说清。注意 lore 比 backstory 更贴虚构设定。";
+const NOTES_0 = [
+	"你用 weakens 表达「削弱」可以理解，但这里说的是新配对损害原有叙事的说服力，undermine 更有分析色彩，例如 The retcon undermines her earlier character arc。它常用于某件事逐步破坏基础、可信度或既有成果。",
+	"你写的 parts in their existing stories and bonds 在介词与名词选择上不够自然：英语通常说 parts of a story，而分析角色互动时 relationships 比 bonds 更直接。类似场景可用 established storylines 强调既有剧情线，用 existing relationships 强调已经建立的人际关系。",
+	"你写的 the whole backstory going for years 缺少清楚的修饰关系；在系列小说语境里，lore 指长期积累的历史、规则和设定，比人物前史 backstory 更贴切。可以比较 years of lore、years of continuity，以及 This twist contradicts years of established lore。",
+];
 
-const NOTE_1 =
-	"「The character feature of X is always about…」是典型中式主谓。英文更自然的是 X's character has always been defined by…。同时 emotional struggles 偏「挣扎」，原文强调复杂深沉的情感纠葛，complicated, deeply emotional relationships 更贴切；末尾 lasting impact those loves had on him 比 their long-lasting impact on him 更有指向。";
+const NOTES_1 = [
+	"你写的 The character feature of Crowfeather is always about… 是逐词直译；英语人物分析通常直接让角色作主语。be defined by 强调核心特质，be shaped by 强调经历造成的变化，revolve around 强调叙事中心，例如 Her arc is shaped by the loss of her family。",
+	"你用 emotional struggles between… 把「复杂而深沉的情感纠葛」写成了在两人之间挣扎，偏离了关系及其塑造作用。relationships with 能准确引出关系对象，例如 His storyline revolves around his complicated relationships with his family。",
+	"你写的 their long-lasting impact 中 their 指向不清，读者无法立即判断它指两只猫还是多段感情。把所指内容直接写成 those loves 或 those relationships 会更清楚，例如 the lasting impact those relationships had on him。",
+];
 
-const NOTE_2 =
-	"Brutely 为拼写错误，应为 Brutally；tugging 可接受但 Throwing / forcing 更自然。completely disregards 略重，ignores 更口语流畅；personal growth 可收成 growth，for a long time → for so long 更干脆。";
+const NOTES_2 = [
+	"你写的 Brutely 是拼写错误；若要表达「粗暴地」，副词应为 brutally，例如 The writers brutally dismissed his earlier development。不过即使拼写正确，也还要继续检查它所修饰的动作是否符合叙事语境。",
+	"你用 tugging 描绘具体的拖拉动作，不适合「编剧硬把角色塞进恋情」这种叙事安排。forcing him into a romance 是稳妥表达，throwing him into 更口语，shoehorn a character into a romance 则专指生硬地把元素塞进作品。",
+];
 
 export const DEMO_CARDS: CorrectionCardData[] = [
 	{
 		ordinal: 0,
 		sourceText: SOURCE_CARD_0,
 		originalAnswer: ANSWER_0,
-		initialHint: "后半句 rewriting the whole backstory going for years 结构松散；in…bonds 的介词与选词也可更自然。",
-		deeperHint: "试着用 of their existing stories and relationships，并把「多年世界观」收成 years of lore / years of backstory 一类语块。",
+		initialHint:
+			"这句有三处主要问题：weakens 没充分体现对叙事基础的损害；parts in…bonds 的介词和关系名词不自然；the whole backstory going for years 的修饰结构松散。请按语义力度、关系搭配和时间语块三个方向调整。",
+		deeperHint:
+			"沿着同样三处处理：为「削弱既有叙事」选择更有破坏基础含义的动词；用 parts of…relationships 一类搭配；再把长期积累的世界观收成 years of lore / continuity 这类清楚名词组。",
 		referenceAnswer: REF_0,
+		referenceMarked: [
+			{ type: "text", content: "It also " },
+			{ type: "mark", content: "undermines major parts of their established stories and relationships" },
+			{ type: "text", content: " and " },
+			{ type: "mark", content: "rewrites years of lore for the sake of" },
+			{ type: "text", content: " a pairing that we " },
+			{ type: "mark", content: "literally never asked for" },
+			{ type: "text", content: "." },
+		],
 		minimalAnswer: MINIMAL_0,
 		minimalDiff: CARD_0_MINIMAL,
-		referenceDiff: CARD_0_REF,
-		teachersNote: NOTE_0,
+		teacherNotes: NOTES_0,
 		warnings: [],
 	},
 	{
 		ordinal: 1,
 		sourceText: SOURCE_CARD_1,
 		originalAnswer: ANSWER_1,
-		initialHint: "「The character feature of…」偏中式。想想角色作主语 + is defined by 的写法。",
-		deeperHint: "用 Crowfeather's character has always been defined by…，并把 emotional struggles 提升为更贴「复杂而深沉」的 relationships。",
+		initialHint:
+			"这句有三处主要问题：The character feature of… 是直译框架；emotional struggles between 偏离了多段深厚关系的含义；their 的所指不清。请分别调整人物分析句式、关系描述和代词指向。",
+		deeperHint:
+			"沿着同样三处处理：让 Crowfeather's character 作主语并用表示塑造的谓语；用 relationships with 表达他与两人的关系；最后把 their 改成明确指向这些感情或关系的名词短语。",
 		referenceAnswer: REF_1,
+		referenceMarked: [
+			{ type: "text", content: "Crowfeather's character " },
+			{ type: "mark", content: "has always been defined by" },
+			{ type: "text", content: " his " },
+			{ type: "mark", content: "complicated, deeply emotional relationships with" },
+			{ type: "text", content: " Feathertail and Leafpool and " },
+			{ type: "mark", content: "the lasting impact those loves had on him" },
+			{ type: "text", content: "." },
+		],
 		minimalAnswer: MINIMAL_1,
 		minimalDiff: CARD_1_MINIMAL,
-		referenceDiff: CARD_1_REF,
-		teachersNote: NOTE_1,
+		teacherNotes: NOTES_1,
 		warnings: [],
 	},
 	{
 		ordinal: 2,
 		sourceText: SOURCE_CARD_2,
 		originalAnswer: ANSWER_2,
-		initialHint: "有拼写 Brutely；tugging 也可换成更自然的 forcing / throwing。",
-		deeperHint: "修正 Brutally/Throwing，并考虑 ignores … for so long 这类更紧凑的表达。",
+		initialHint: "这句开头有两个相关但不同的问题：Brutely 拼写错误；tugging 又把叙事上的「硬塞」写成了具体拉扯动作。请分别修正副词拼写和动作搭配。",
+		deeperHint:
+			"沿着同样两个问题处理：先使用 brutally 的正确拼写，再把 tugging 换成表示强行安排角色进入恋情的 forcing、throwing 或 shoehorning 一类动词。",
 		referenceAnswer: REF_2,
+		referenceMarked: [
+			{ type: "mark", content: "Throwing him into a romance with" },
+			{ type: "text", content: " Tawnypelt " },
+			{ type: "mark", content: "ignores the emotional baggage and growth that have shaped him for so long" },
+			{ type: "text", content: "." },
+		],
 		minimalAnswer: MINIMAL_2,
 		minimalDiff: CARD_2_MINIMAL,
-		referenceDiff: CARD_2_REF,
-		teachersNote: NOTE_2,
+		teacherNotes: NOTES_2,
 		warnings: [],
 	},
 ];
@@ -245,12 +221,10 @@ export const DEMO_EVALUATION: EvaluationData = {
 	overallCommentary:
 		"整体来看，您的译文准确传达了原文的批判性和略带激动的语气，核心意思都表达到位了。但存在几处中式英语痕迹、一处拼写错误以及少数搭配不当，使得行文不够地道。重点注意：避免直译中文的主谓结构（如「XX的特点是……」），多积累英文中「人/角色作主语 + 被动/动态动词」的表达习惯。",
 	ratings: {
-		accuracy: "A-",
+		accuracy: "A",
 		naturalness: "B",
 		grammar: "B",
-		register: "B+",
-		contextualFit: "A-",
-		overall: "B+",
+		overall: "B",
 	},
 	cards: DEMO_CARDS,
 	firstDraft: [DRAFT_P0, DRAFT_P1, DRAFT_P2].join("\n\n"),
@@ -268,10 +242,8 @@ export const DEMO_EVALUATION_NO_CARDS: EvaluationData = {
 	overallCommentary: "译文自然流畅，语义准确，语域契合 AO3 评论语境。没有需要单独修改的句子。",
 	ratings: {
 		accuracy: "A",
-		naturalness: "A-",
+		naturalness: "A",
 		grammar: "A",
-		register: "A",
-		contextualFit: "A",
 		overall: "A",
 	},
 	cards: [],

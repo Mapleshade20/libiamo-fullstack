@@ -75,6 +75,7 @@ export const actions: Actions = {
 				? await followUpOnFeedback({
 						sessionId: note.sourceSessionId,
 						userId: user.id,
+						feedbackLanguage: user.nativeLanguage ?? note.language,
 						itemText: note.tutorComment,
 						category: "grammar",
 						question,
@@ -83,7 +84,7 @@ export const actions: Actions = {
 				: await followUpOnLearningContent({
 						userId: user.id,
 						learningLanguage: note.language,
-						responseLanguage: user.nativeLanguage ?? "en",
+						feedbackLanguage: user.nativeLanguage ?? note.language,
 						itemText: note.tutorComment,
 						category: "grammar",
 						question,

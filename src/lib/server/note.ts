@@ -108,7 +108,8 @@ export async function createNotesBatch(
 	const knowledgeMap: Map<number, { knowledgePoint: string; keywords: string[]; sourceContext: string }> = new Map();
 	if (feedbackItems.length > 0) {
 		const languageName = getLanguageEnglishName(language);
-		const knowledgeResult = await chatJson(ExtractKnowledgeSchema, {
+		const { value: knowledgeResult } = await chatJson({
+			schema: ExtractKnowledgeSchema,
 			messages: [
 				{
 					role: "system" as const,
@@ -187,7 +188,8 @@ export async function createNotesFromSelectionBatch(input: {
 	if (!selectedText) return { success: true as const, notes: [], count: 0, reason: "Selection is empty." };
 
 	const languageName = getLanguageEnglishName(input.language);
-	const result = await chatJson(SelectionNotesSchema, {
+	const { value: result } = await chatJson({
+		schema: SelectionNotesSchema,
 		messages: [
 			{
 				role: "system" as const,
@@ -294,7 +296,8 @@ export async function createNoteFromSelectionQA(input: {
 }) {
 	const languageName = getLanguageEnglishName(input.language);
 
-	const result = await chatJson(DistillQASchema, {
+	const { value: result } = await chatJson({
+		schema: DistillQASchema,
 		messages: [
 			{
 				role: "system" as const,

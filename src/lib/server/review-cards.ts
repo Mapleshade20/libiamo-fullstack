@@ -157,7 +157,8 @@ export async function createCardFromNote(noteId: number, userId: string, languag
 	const detectedLanguage = (language ?? foundNote.language) as LanguageCode;
 	const languageName = getLanguageEnglishName(detectedLanguage);
 
-	const result = await chatJson(CardGenerationSchema, {
+	const { value: result } = await chatJson({
+		schema: CardGenerationSchema,
 		messages: [
 			{
 				role: "system",

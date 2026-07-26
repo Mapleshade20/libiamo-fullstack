@@ -8,6 +8,7 @@ import { fade } from "svelte/transition";
 import { autoGrowTextarea } from "$lib/client/auto-grow-textarea";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
+import { renderMarkdown } from "$lib/markdown";
 import CorrectionResult from "./CorrectionResult.svelte";
 import { prefersReducedMotion } from "./motion";
 import type { CorrectionCardData, LocalCardState } from "./types";
@@ -23,6 +24,8 @@ interface Props {
 	originalLabel: string;
 	hintLabel: string;
 	deeperHintLabel?: string;
+	showDeeperHintLabel?: string;
+	showInitialHintLabel?: string;
 	reviseLabel?: string;
 	inputPlaceholder: string;
 	/** Used as aria-label for the icon submit control. */
@@ -33,9 +36,11 @@ interface Props {
 	nextAriaLabel: string;
 	yourDiffLabel: string;
 	minimalDiffLabel: string;
-	referenceDiffLabel: string;
+	referenceLabel: string;
 	feedbackLabel: string;
-	teachersNoteLabel?: string;
+	teacherNotesLabel?: string;
+	/** Dev review mode: show generated hint/result UI without accepting correction input. */
+	reviewOnly?: boolean;
 	submitting?: boolean;
 	onsubmit?: (input: string) => void;
 	onretry?: () => void;
@@ -54,6 +59,8 @@ let {
 	originalLabel,
 	hintLabel,
 	deeperHintLabel = "Deeper hint",
+	showDeeperHintLabel = "Show deeper hint",
+	showInitialHintLabel = "Show initial hint",
 	reviseLabel = "Your revision",
 	inputPlaceholder,
 	continueLabel,
@@ -63,9 +70,10 @@ let {
 	nextAriaLabel,
 	yourDiffLabel,
 	minimalDiffLabel,
-	referenceDiffLabel,
+	referenceLabel,
 	feedbackLabel,
-	teachersNoteLabel = "Teacher's note",
+	teacherNotesLabel = "Teacher's notes",
+	reviewOnly = false,
 	submitting = false,
 	onsubmit,
 	onretry,
@@ -82,6 +90,8 @@ const isFirstReject = $derived(local.phase === "first_reject");
 const showFeedback = $derived(Boolean(local.feedback && isFirstReject));
 const wantDeeperHint = $derived(isFirstReject || local.attemptCount >= 1);
 const canSubmit = $derived(showInput && local.input.trim().length > 0 && !submitting);
+const initialHintHtml = $derived(renderMarkdown(card.initialHint));
+const deeperHintHtml = $derived(renderMarkdown(card.deeperHint));
 
 let inputEl: HTMLTextAreaElement | null = $state(null);
 let hintRailEl: HTMLDivElement | null = $state(null);
@@ -101,6 +111,11 @@ const FEEDBACK_PUSH_MS = 560;
 /** Horizontal rail slide duration. */
 const HINT_SLIDE_MS = 620;
 const PROVIDER_SLOT_MS = 420;
+
+$effect(() => {
+	cardIndex;
+	if (reviewOnly) hintShowDeeper = false;
+});
 
 $effect(() => {
 	if (!showInput) return;
@@ -225,16 +240,17 @@ function handleRetry() {
 		<blockquote class="border-l-2 border-[#c9a4a4] pl-4 text-base leading-relaxed break-words text-foreground/75">{card.originalAnswer}</blockquote>
 	</div>
 
-	{#if isAccepted && local.acceptedDiff}
+	{#if isAccepted}
 		<div class="mt-9" in:fade={{ duration: 280 }}>
 			<CorrectionResult
 				primaryDiff={local.acceptedDiff}
 				primaryLabel={yourDiffLabel}
-				referenceDiff={card.referenceDiff}
-				referenceLabel={referenceDiffLabel}
-				teachersNote={card.teachersNote}
-				{teachersNoteLabel}
-				referenceFallback={card.warnings.includes("reference_diff_invalid") ? card.referenceAnswer : null}
+				primaryFallback={local.acceptedDiff ? null : local.acceptedAnswer}
+				referenceAnswer={card.referenceAnswer}
+				referenceMarked={card.referenceMarked}
+				{referenceLabel}
+				teacherNotes={card.teacherNotes}
+				{teacherNotesLabel}
 			/>
 		</div>
 	{:else if isSecondReject}
@@ -251,85 +267,87 @@ function handleRetry() {
 			<CorrectionResult
 				primaryDiff={card.minimalDiff}
 				primaryLabel={minimalDiffLabel}
-				referenceDiff={card.referenceDiff}
-				referenceLabel={referenceDiffLabel}
-				teachersNote={card.teachersNote}
-				{teachersNoteLabel}
-				primaryFallback={card.warnings.includes("reference_diff_invalid") ? card.minimalAnswer : null}
-				referenceFallback={card.warnings.includes("reference_diff_invalid") ? card.referenceAnswer : null}
+				referenceAnswer={card.referenceAnswer}
+				referenceMarked={card.referenceMarked}
+				{referenceLabel}
+				teacherNotes={card.teacherNotes}
+				{teacherNotesLabel}
+				primaryFallback={card.warnings.includes("minimal_diff_invalid") ? card.minimalAnswer : null}
 			/>
 		</div>
 	{:else}
 		<div class="mt-7 border-t border-stone-400/25 pt-6">
-			<label for="correction-input" class="mb-3 block text-sm font-semibold">{reviseLabel}</label>
+			{#if !reviewOnly}
+				<label for="correction-input" class="mb-3 block text-sm font-semibold">{reviseLabel}</label>
 
-			<div class="flex items-center gap-2.5">
-				<Textarea
-					id="correction-input"
-					bind:ref={inputEl}
-					rows={4}
-					value={local.input}
-					readonly={submitting}
-					placeholder={inputPlaceholder}
-					class="min-h-28 flex-1 resize-none overflow-hidden rounded-md bg-card/75 text-base leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
-					oninput={(e) => {
-						if (submitting) return;
-						const el = e.currentTarget;
-						oninput?.(el.value);
-						autoGrowTextarea(el, 112);
-					}}
-					onkeydown={(e) => {
-						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-							e.preventDefault();
-							handleSubmit();
-						}
-					}}
-				/>
-				<button
-					type="button"
-					class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40
+				<div class="flex items-center gap-2.5">
+					<Textarea
+						id="correction-input"
+						bind:ref={inputEl}
+						rows={4}
+						value={local.input}
+						readonly={submitting}
+						placeholder={inputPlaceholder}
+						class="min-h-28 flex-1 resize-none overflow-hidden rounded-md bg-card/75 text-base leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+						oninput={(e) => {
+							if (submitting) return;
+							const el = e.currentTarget;
+							oninput?.(el.value);
+							autoGrowTextarea(el, 112);
+						}}
+						onkeydown={(e) => {
+							if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+								e.preventDefault();
+								handleSubmit();
+							}
+						}}
+					/>
+					<button
+						type="button"
+						class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40
 						{canSubmit || submitting ? 'opacity-100' : 'opacity-40'}
 						{submitting ? 'submit-orbit--busy scale-[1.02]' : 'hover:scale-[1.03] active:scale-[0.97]'}"
-					disabled={!canSubmit && !submitting}
-					aria-label={continueLabel}
-					aria-busy={submitting}
-					onclick={handleSubmit}
-				>
-					<span class="submit-orbit__ring" aria-hidden="true"></span>
-					<span
-						class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300
-							{submitting ? 'bg-primary/90' : ''}"
+						disabled={!canSubmit && !submitting}
+						aria-label={continueLabel}
+						aria-busy={submitting}
+						onclick={handleSubmit}
 					>
-						<ArrowUp
-							class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting
+						<span class="submit-orbit__ring" aria-hidden="true"></span>
+						<span
+							class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300
+							{submitting ? 'bg-primary/90' : ''}"
+						>
+							<ArrowUp
+								class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting
 								? '-translate-y-0.5 opacity-90'
 								: ''}"
-							strokeWidth={2.25}
-						/>
-					</span>
-				</button>
-			</div>
+								strokeWidth={2.25}
+							/>
+						</span>
+					</button>
+				</div>
 
-			{#if providerBannerVisible}
-				<div class="provider-slot mt-4" class:provider-slot--open={providerBannerOpen}>
-					<div class="provider-slot__inner">
-						<div
-							class="mb-0 flex flex-col gap-3 border-l-2 border-amber-600 bg-amber-50/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-							role="alert"
-						>
-							<div class="flex gap-3">
-								<AlertCircle class="mt-0.5 size-4 shrink-0 text-amber-800" />
-								<div>
-									<p class="text-sm font-medium text-amber-950">{providerErrorTitle}</p>
-									<p class="mt-0.5 text-sm leading-relaxed text-amber-950/85">{providerErrorBody}</p>
+				{#if providerBannerVisible}
+					<div class="provider-slot mt-4" class:provider-slot--open={providerBannerOpen}>
+						<div class="provider-slot__inner">
+							<div
+								class="mb-0 flex flex-col gap-3 border-l-2 border-amber-600 bg-amber-50/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+								role="alert"
+							>
+								<div class="flex gap-3">
+									<AlertCircle class="mt-0.5 size-4 shrink-0 text-amber-800" />
+									<div>
+										<p class="text-sm font-medium text-amber-950">{providerErrorTitle}</p>
+										<p class="mt-0.5 text-sm leading-relaxed text-amber-950/85">{providerErrorBody}</p>
+									</div>
 								</div>
+								<Button size="sm" variant="outline" class="bg-transparent" disabled={submitting} onclick={handleRetry}>
+									<RotateCcw />{retryLabel}
+								</Button>
 							</div>
-							<Button size="sm" variant="outline" class="bg-transparent" disabled={submitting} onclick={handleRetry}>
-								<RotateCcw />{retryLabel}
-							</Button>
 						</div>
 					</div>
-				</div>
+				{/if}
 			{/if}
 
 			<!--
@@ -338,7 +356,7 @@ function handleRetry() {
 				2) Feedback wipe-down enters inside that space.
 				3) After push settles, green box content: initial slides left out, deeper slides left in (no opacity change).
 			-->
-			<div class="mt-5">
+			<div class={reviewOnly ? "mt-0" : "mt-5"}>
 				<div class="feedback-slot" class:feedback-slot--open={feedbackSlotOpen && Boolean(local.feedback)}>
 					<div class="feedback-slot__inner">
 						{#if showFeedback && local.feedback}
@@ -355,22 +373,37 @@ function handleRetry() {
 
 				<div class="hint-rail" bind:this={hintRailEl} aria-live="polite">
 					<div class="hint-track" class:hint-track--deeper={hintShowDeeper} style="--hint-slide-ms: {HINT_SLIDE_MS}ms">
-						<div class="hint-panel">
+						<div class="hint-panel" id="correction-hint-{cardIndex}-initial" aria-hidden={hintShowDeeper}>
 							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
 							<div class="min-w-0">
 								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{hintLabel}</p>
-								<p class="text-sm leading-relaxed text-[#34463a]">{card.initialHint}</p>
+								<div class="hint-markdown prose text-sm leading-relaxed text-[#34463a]">{@html initialHintHtml}</div>
 							</div>
 						</div>
-						<div class="hint-panel">
+						<div class="hint-panel" id="correction-hint-{cardIndex}-deeper" aria-hidden={!hintShowDeeper}>
 							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
 							<div class="min-w-0">
 								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{deeperHintLabel}</p>
-								<p class="text-sm leading-relaxed text-[#34463a]">{card.deeperHint}</p>
+								<div class="hint-markdown prose text-sm leading-relaxed text-[#34463a]">{@html deeperHintHtml}</div>
 							</div>
 						</div>
 					</div>
 				</div>
+				{#if reviewOnly}
+					<div class="mt-3 flex justify-end">
+						<Button
+							variant="ghost"
+							size="sm"
+							class="text-[#405b47] hover:bg-[#dce8de]/60 hover:text-[#2f4936]"
+							aria-expanded={hintShowDeeper}
+							aria-controls="correction-hint-{cardIndex}-deeper"
+							onclick={() => (hintShowDeeper = !hintShowDeeper)}
+						>
+							<Lightbulb size={14} />
+							{hintShowDeeper ? showInitialHintLabel : showDeeperHintLabel}
+						</Button>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -496,6 +529,21 @@ function handleRetry() {
 	padding: 1rem;
 	box-sizing: border-box;
 	background: color-mix(in oklch, #dde4d8 55%, transparent);
+}
+
+.hint-markdown :global(p),
+.hint-markdown :global(ol),
+.hint-markdown :global(ul) {
+	margin-bottom: 0.5rem;
+}
+
+.hint-markdown :global(:last-child) {
+	margin-bottom: 0;
+}
+
+.hint-markdown :global(ol),
+.hint-markdown :global(ul) {
+	padding-left: 1.25rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

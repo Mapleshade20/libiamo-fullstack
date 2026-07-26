@@ -111,7 +111,7 @@ export function parseAnnotationSpans(annotatedText: string): AnnotationSpan[] {
 
 /** Strip all XML-like tags from text, leaving only content */
 export function stripAllTags(text: string): string {
-	return text.replace(/<\/?(?:grammar|vocab|delete|highlight)>/g, "");
+	return text.replace(/<\/?(?:grammar|vocab|delete|mark)>/g, "");
 }
 
 /** Get plain text from annotated text (for display comparison) */
@@ -122,7 +122,7 @@ export function getPlainText(annotatedText: string): string {
 // ── Main parser ──────────────────────────────────────────────────────
 
 export function parseFeedbackXml(xmlResponse: string): FeedbackResult {
-	// Guard against oversized input: LLM response is bounded by maxTokens (8192),
+	// Guard against oversized input: LLM response is bounded by maxTokens (32768),
 	// but a hard size cap provides defense-in-depth against ReDoS on the tag regex.
 	const MAX_XML_LENGTH = 100_000;
 	if (xmlResponse.length > MAX_XML_LENGTH) {
@@ -511,7 +511,16 @@ export function buildFeedbackConversation(messages: SessionMessageRow[], opening
 
 // ── Prompt building ──────────────────────────────────────────────────
 
-function buildAnnotationPrompt(conversation: FeedbackConversation, objectives: string[], learningLanguage: string, scenarioContext: string): string {
+export function buildAnnotationPrompt(input: {
+	conversation: FeedbackConversation;
+	objectives: string[];
+	learningLanguage: string;
+	feedbackLanguage: string;
+	scenarioContext: string;
+}): string {
+	const { conversation, objectives, scenarioContext } = input;
+	const learningLanguage = getLanguageEnglishName(input.learningLanguage);
+	const feedbackLanguage = getLanguageEnglishName(input.feedbackLanguage);
 	// Build conversation text with sequential IDs
 	const conversationLines = conversation.allMessages.map((msg) => {
 		const roleLabel = msg.role === "user" ? "LEARNER" : msg.role === "agent" ? "PARTNER" : "CONTEXT";
@@ -544,38 +553,38 @@ Annotate ONLY the LEARNER messages (IDs: ${userMessageIds.join(", ")}). For each
    - <vocab>...</vocab> for vocabulary issues (wrong word choice, unnatural phrasing)
    - <delete>...</delete> for words/phrases that should be removed
    If a message has no issues, reproduce it without tags.
-2. Write a brief comment (1-3 sentences) about that message's quality. In the comment, use <highlight>word</highlight> to tag key vocabulary the learner should remember (not grammar terms, but useful target-language words/phrases worth learning).
+2. Write a brief ${feedbackLanguage} comment (1-3 sentences) about that message's quality. In the comment, use <mark>word</mark> to tag useful ${learningLanguage} words or phrases the learner should remember. Keep marked vocabulary in ${learningLanguage}; write the surrounding explanation in ${feedbackLanguage}.
 
-Then grade each objective and write a brief overall summary.
+Then grade each objective. Express each objective's learner-facing text in ${feedbackLanguage}, preserving its meaning. Write the overall summary in ${feedbackLanguage}.
 
 ## Response Format (XML)
 
 <feedback>
 <message id="[sequential_id]">
 <annotated>[full message text with inline annotation tags]</annotated>
-<comment>[brief tutor comment with optional <highlight> tags for key vocab]</comment>
+<comment>[brief ${feedbackLanguage} tutor comment with optional <mark> tags around ${learningLanguage} vocabulary]</comment>
 </message>
 ... (one <message> block per LEARNER message)
 <objectives>
 <objective grade="A|B|C">[objective text]</objective>
 ...
 </objectives>
-<summary>[2-4 sentence overall performance summary in ${learningLanguage}]</summary>
+<summary>[2-4 sentence overall performance summary in ${feedbackLanguage}]</summary>
 </feedback>
 
 IMPORTANT:
 - The <annotated> text MUST contain the EXACT same words as the original learner message, only adding annotation tags around problematic spans. Do not rephrase or correct the text.
-- Write the <summary> in ${learningLanguage.toUpperCase()}.
-- Write <comment> sections in English for clarity.
+- Write every <comment>, objective text, and <summary> entirely in ${feedbackLanguage}, except for quoted ${learningLanguage} examples and marked vocabulary.
 - Grade: A = excellent, B = good with minor issues, C = needs significant improvement.
-- If there are no objectives, create one entry: "General conversational fluency" with an appropriate grade.`;
+- If there are no objectives, create one appropriately graded general-fluency objective written in ${feedbackLanguage}.`;
 }
 
 // ── Main generation function ─────────────────────────────────────────
 
-export async function generateFeedback(sessionId: number): Promise<FeedbackResult> {
+export async function generateFeedback(input: { sessionId: number; feedbackLanguage: string }): Promise<FeedbackResult> {
+	if (!input.feedbackLanguage.trim()) throw new Error("Feedback language is required");
 	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
+		where: eq(practiceSession.id, input.sessionId),
 		with: {
 			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: {
@@ -594,20 +603,25 @@ export async function generateFeedback(sessionId: number): Promise<FeedbackResul
 	const ui = (snapshot.ui ?? session.task.template?.ui ?? "discord") as UiVariant;
 	const openingState = (session.task.variant?.openingState as Record<string, unknown>) ?? {};
 	const objectives = session.task.objectives ?? [];
-	const learningLanguage = getLanguageEnglishName(session.task.language);
 	const scenarioContext = snapshot.scenarioContext ?? "";
 
 	const visibleMessages = session.messages.filter((m) => !isHidden(m));
 	const conversation = buildFeedbackConversation(visibleMessages, openingState, ui);
 
-	const prompt = buildAnnotationPrompt(conversation, objectives, learningLanguage, scenarioContext);
+	const prompt = buildAnnotationPrompt({
+		conversation,
+		objectives,
+		learningLanguage: session.task.language,
+		feedbackLanguage: input.feedbackLanguage,
+		scenarioContext,
+	});
 
 	const messages: ChatMessage[] = [
 		{ role: "system", content: prompt },
 		{ role: "user", content: "Please review and annotate this conversation." },
 	];
 
-	const response = await chatText({ messages, userId: session.userId, options: { maxTokens: 8192 } });
+	const response = await chatText({ messages, userId: session.userId, options: { maxTokens: 32_768 } });
 	const result = parseFeedbackXml(response.content);
 
 	if (!isFeedbackResultValid(result)) {
@@ -621,7 +635,7 @@ export async function generateFeedback(sessionId: number): Promise<FeedbackResul
 			status: "evaluated",
 			tutorFeedback: result,
 		})
-		.where(eq(practiceSession.id, sessionId));
+		.where(eq(practiceSession.id, input.sessionId));
 
 	return result;
 }
@@ -647,9 +661,11 @@ export async function getExistingFeedback(sessionId: number): Promise<FeedbackRe
 
 // ── Follow-up on feedback items ──────────────────────────────────────
 
-const FollowUpAnswerSchema = z.object({
-	answer: z.string().describe("A helpful, concise explanation answering the learner's follow-up question."),
-});
+const FollowUpAnswerSchema = z
+	.object({
+		answer: z.string().trim().min(1).describe("A helpful, concise explanation answering the learner's follow-up question."),
+	})
+	.strict();
 
 const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
 	why: "Why is this wrong? Please explain the underlying rule or principle.",
@@ -659,6 +675,7 @@ const FOLLOWUP_PRESET_PROMPTS: Record<string, string> = {
 type FollowUpOnFeedbackInput = {
 	sessionId: number;
 	userId: string;
+	feedbackLanguage: string;
 	itemText: string;
 	category: "grammar" | "vocabulary" | "coherence";
 	question: string;
@@ -674,7 +691,7 @@ type FollowUpOnFeedbackResult = {
 export async function followUpOnLearningContent(input: {
 	userId: string;
 	learningLanguage: string;
-	responseLanguage?: string;
+	feedbackLanguage: string;
 	itemText: string;
 	category: "grammar" | "vocabulary" | "coherence";
 	question: string;
@@ -682,8 +699,11 @@ export async function followUpOnLearningContent(input: {
 	previousContext?: string;
 	explanationMode?: "issue" | "good_expression";
 }): Promise<FollowUpOnFeedbackResult> {
+	if (!input.learningLanguage.trim() || !input.feedbackLanguage.trim()) {
+		throw new Error("Learning and feedback languages are required");
+	}
 	const learningLanguageName = getLanguageEnglishName(input.learningLanguage);
-	const responseLanguageName = getLanguageEnglishName(input.responseLanguage ?? "en");
+	const feedbackLanguageName = getLanguageEnglishName(input.feedbackLanguage);
 	const resolvedQuestion = FOLLOWUP_PRESET_PROMPTS[input.question] ?? input.question;
 	const categoryLabel = { grammar: "Grammar", vocabulary: "Vocabulary", coherence: "Coherence" }[input.category];
 	const explanationMode = input.explanationMode ?? "issue";
@@ -696,8 +716,8 @@ export async function followUpOnLearningContent(input: {
 	const focusLabel = explanationMode === "good_expression" ? "Good expression" : "Feedback issue";
 	const modeInstructions =
 		explanationMode === "good_expression"
-			? `- Treat the selected text as a good/natural expression worth learning, not as a mistake.\n- Explain what it means, why it is useful or natural in this context, and how the learner can reuse it.\n- If examples are useful, provide natural ${learningLanguageName} examples with brief English explanations.`
-			: `- Treat the selected text as an issue from the learner's message unless the context clearly says otherwise.\n- Explain what is wrong or unnatural and give the correct rule, wording, or more natural alternative.\n- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief English explanations.`;
+			? `- Treat the selected text as a good/natural expression worth learning, not as a mistake.\n- Explain what it means, why it is useful or natural in this context, and how the learner can reuse it.\n- If examples are useful, provide natural ${learningLanguageName} examples with brief ${feedbackLanguageName} explanations.`
+			: `- Treat the selected text as an issue from the learner's message unless the context clearly says otherwise.\n- Explain what is wrong or unnatural and give the correct rule, wording, or more natural alternative.\n- If the learner asks for examples, provide natural ${learningLanguageName} examples with brief ${feedbackLanguageName} explanations.`;
 
 	const systemPrompt = `You are an expert ${learningLanguageName} language tutor. A learner has just received feedback on their ${learningLanguageName} practice and wants to understand a specific item better.
 
@@ -713,7 +733,7 @@ Their follow-up question: ${resolvedQuestion}
 - Be concise but thorough — 2-5 sentences is usually enough unless examples are requested.
 ${modeInstructions}
 - Use the original context above to explain the item specifically, not generically.
-- Write your entire answer in ${responseLanguageName} (the examples can mix ${learningLanguageName} and ${responseLanguageName}).
+- Write your entire answer in ${feedbackLanguageName} (examples may mix ${learningLanguageName} and ${feedbackLanguageName}).
 - Do NOT roleplay as a character — you are a tutor, not the scenario persona.
 
 Respond in JSON format: { "answer": "your response here" }`;
@@ -723,8 +743,8 @@ Respond in JSON format: { "answer": "your response here" }`;
 		{ role: "user", content: resolvedQuestion },
 	];
 
-	const result = await chatJson(FollowUpAnswerSchema, { messages, userId: input.userId });
-	return { answer: result.answer };
+	const { value } = await chatJson({ schema: FollowUpAnswerSchema, messages, userId: input.userId });
+	return { answer: value.answer };
 }
 
 export async function followUpOnFeedback(input: FollowUpOnFeedbackInput): Promise<FollowUpOnFeedbackResult> {

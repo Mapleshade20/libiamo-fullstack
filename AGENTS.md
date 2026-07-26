@@ -32,6 +32,11 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Session prompts: `src/lib/server/session.ts` starts practice sessions, builds scenario context from variant `openingState`, prepends random MBTI persona at session start, enforces target-language replies, and owns session message ordering helpers.
 - LLM: calls are centralized in `src/lib/server/llm.ts` and use the official `openai` SDK with `baseURL` for both env and BYOK credentials.
     - `test/lib/server/llm.test.ts` stubs global `fetch`; this still works because the OpenAI SDK uses fetch under the hood.
+    - Structured calls use the object-form `chatJson({ schema, messages, ... })`, which returns parsed `value` plus provider metadata and performs at most one targeted repair; truncation is never repaired.
+- Translation evaluation LLM contracts live in `src/lib/server/translation-evaluation/` (schemas, prompts, validation, Gen1/verifiers/Gen2, restricted Diff parser). Shared serializable grades/Diff AST types live in `src/lib/translation-evaluation/types.ts`; model Diff markup is never rendered directly.
+- The dev-only `/translate-eval-live-demo` route runs the production translation-evaluation services without persisting attempts and exposes exact request/response artifacts for qualitative prompt review.
+- Correction Verifier uses only the current card's trusted context; Second Draft Verifier instead appends to the successful Generation 1 history. Keep these context strategies separate.
+- Detailed translation-evaluation protocol decisions and implementation history belong in `docs/plans/2026-07-15-redesign-translate-eval.md`, not this file.
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas live in `src/lib/schemas/` with `index.ts` re-exporting the public API. Admin variant helpers validate slot coverage for `{{slot}}` placeholders.
@@ -49,6 +54,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
 - Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
     - Time-dependent tests: use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
+    - Do not build prompt tests from piles of `toContain()` assertions against fixed prose. Test message roles/order, structured JSON payloads, schemas, and behavioral invariants instead; review qualitative wording through the live-model harness.
 - Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).
 - The repository follows an issue-plan-implement workflow. Issues and plans are at `docs/`. An issue should present "what to do", which is a detailed description of new features to implement and bugs to fix. Its corresponding plan records "how to do", which goes through technical decisions, implementation specs and work stages.
     - Issue's frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test) `link` (a GitHub issue link), `status` (needs-review / needs-plan / implementing / done),

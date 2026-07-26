@@ -95,10 +95,12 @@ describe("createNotesBatch", () => {
 	it("creates notes with knowledge points in tutorComment", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue({ messages: [] });
 		mockChatJson.mockResolvedValueOnce({
-			items: [
-				{ knowledgePoint: "Use infinitive after 'to'", keywords: ["to + infinitive"], sourceContext: "I want to go." },
-				{ knowledgePoint: "Choose precise vocabulary", keywords: ["precise word"], sourceContext: "He said it was good." },
-			],
+			value: {
+				items: [
+					{ knowledgePoint: "Use infinitive after 'to'", keywords: ["to + infinitive"], sourceContext: "I want to go." },
+					{ knowledgePoint: "Choose precise vocabulary", keywords: ["precise word"], sourceContext: "He said it was good." },
+				],
+			},
 		});
 
 		const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
@@ -124,12 +126,18 @@ describe("createNotesBatch", () => {
 describe("createNotesFromSelectionBatch", () => {
 	it("creates up to two notes from a long selection", async () => {
 		mockChatJson.mockResolvedValueOnce({
-			items: [
-				{ knowledgePoint: "Use the preterite for completed past actions.", keywords: ["pretérito"], sourceContext: "Ayer fui al mercado." },
-				{ knowledgePoint: "Use 'aunque' to concede a contrasting point.", keywords: ["aunque"], sourceContext: "Aunque estaba cansado, fui." },
-				{ knowledgePoint: "Use 'me parece que' for softened opinions.", keywords: ["me parece que"], sourceContext: "Me parece que es buena idea." },
-				{ knowledgePoint: "Extra item should be capped.", keywords: ["extra"], sourceContext: "Extra." },
-			],
+			value: {
+				items: [
+					{ knowledgePoint: "Use the preterite for completed past actions.", keywords: ["pretérito"], sourceContext: "Ayer fui al mercado." },
+					{ knowledgePoint: "Use 'aunque' to concede a contrasting point.", keywords: ["aunque"], sourceContext: "Aunque estaba cansado, fui." },
+					{
+						knowledgePoint: "Use 'me parece que' for softened opinions.",
+						keywords: ["me parece que"],
+						sourceContext: "Me parece que es buena idea.",
+					},
+					{ knowledgePoint: "Extra item should be capped.", keywords: ["extra"], sourceContext: "Extra." },
+				],
+			},
 		});
 
 		const returning = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
@@ -151,14 +159,14 @@ describe("createNotesFromSelectionBatch", () => {
 			expect.arrayContaining([expect.objectContaining({ tutorComment: "Use the preterite for completed past actions." })]),
 		);
 		expect(valuesFn.mock.calls[0]?.[0]).toHaveLength(2);
-		const prompt = mockChatJson.mock.calls[0]?.[1]?.messages?.[1]?.content as string;
+		const prompt = mockChatJson.mock.calls[0]?.[0]?.messages?.[1]?.content as string;
 		expect(prompt).toContain("Previous visible message/context");
 		expect(prompt).toContain("[Agent] ¿Qué hiciste ayer?");
 		expect(prompt).toContain("Current message/comment/context");
 	});
 
 	it("returns zero notes with reason when selection is not useful", async () => {
-		mockChatJson.mockResolvedValueOnce({ items: [], reason: "Selection is too generic." });
+		mockChatJson.mockResolvedValueOnce({ value: { items: [], reason: "Selection is too generic." } });
 
 		const result = await createNotesFromSelectionBatch({
 			userId: USER_ID,
@@ -244,9 +252,11 @@ describe("deleteNote", () => {
 describe("createNoteFromSelectionQA", () => {
 	it("creates note from Q&A distillation", async () => {
 		mockChatJson.mockResolvedValueOnce({
-			knowledgePoint: "'Could have' expresses past possibility, not 'could of'",
-			keywords: ["could have", "could of"],
-			sourceContext: "I could of done that.",
+			value: {
+				knowledgePoint: "'Could have' expresses past possibility, not 'could of'",
+				keywords: ["could have", "could of"],
+				sourceContext: "I could of done that.",
+			},
 		});
 
 		const expectedNote = { id: 1, tutorComment: "'Could have' expresses past possibility, not 'could of'" };

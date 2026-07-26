@@ -105,7 +105,8 @@ export async function generateExpressions(
 
 	const context = contextParts.join("\n");
 
-	return await chatJson(ExpressionsSchema, {
+	const { value } = await chatJson({
+		schema: ExpressionsSchema,
 		messages: [
 			{ role: "system", content: prompt },
 			{ role: "user", content: `Generate useful expressions for this task scenario:\n\n${context}` },
@@ -113,6 +114,7 @@ export async function generateExpressions(
 		options: { temperature: 0.7, maxTokens: 1024 },
 		userId,
 	});
+	return value;
 }
 
 /**
@@ -130,7 +132,8 @@ export async function evaluateUserTranslation(
 	const nativeName = getLanguageEnglishName(nativeLang);
 	const targetName = getLanguageEnglishName(targetLang);
 
-	return await chatJson(TranslationFeedbackSchema, {
+	const { value } = await chatJson({
+		schema: TranslationFeedbackSchema,
 		messages: [
 			{ role: "system", content: prompt },
 			{
@@ -141,4 +144,5 @@ export async function evaluateUserTranslation(
 		options: { temperature: 0.7, maxTokens: 1024 },
 		userId,
 	});
+	return value;
 }

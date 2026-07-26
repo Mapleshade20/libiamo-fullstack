@@ -19,7 +19,7 @@ link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4
 - `title`、`summary`、多组近义说明字段缺乏清晰展示位置；
 - UI 状态和字段数量过多，使视觉实现退化为普通表单切换，难以形成连续、克制且具有编辑感的体验。
 
-本 issue 改为以“句级改错卡片”为核心的主动学习流程。模型直接生成卡片需要展示的原文、用户原始作答、两级提示、参考译文和 LLM Diff。系统不再建立 token 定位协议，不再让学习者标记 confidence，也不再计算实时 diff。
+本 issue 改为以“句级改错卡片”为核心的主动学习流程。模型直接生成卡片需要展示的原文、用户原始作答、两级提示、参考译文和最小改动 LLM Diff。系统不再建立 token 定位协议，不再让学习者标记 confidence，也不再计算实时 diff。
 
 本 issue 同时保留全文二稿、Note 生成、迁移练习、**服务端 `workflowPhase` 粗粒度续做**、改错阶段内细进度的标签页 snapshot，以及全局统一 Note/FSRS 模型。路由对齐沉浸式任务：详情页 → 作答 / 评估分页面。
 
@@ -28,7 +28,7 @@ link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4
 | 主题 | 决定 |
 | --- | --- |
 | Gen1 history | 成功 Gen1 的 request messages + assistant raw 落库；二稿通过/确认跳过并进入 `transfer` 时清空；无卡直接完成时同事务清空；放弃时随 attempt 删除 |
-| Verifier 上下文 | 每次 verifier **只**拼 DB 中那一轮 Gen1 history + 本轮新消息；verifier 对话本身不持久化 |
+| Verifier 上下文 | Correction Verifier 仅发送当前 card trusted context；Second Draft Verifier 拼 DB 中成功 Gen1 history + 本轮新消息；verifier 对话本身不持久化 |
 | Diff | 信任 LLM 输出；受限 parser 防注入，非法则纯文本降级；**不做** old/new 与原文的恒等重建核验 |
 | 阶段 | 单一 `workflowPhase`：`draft` → `submitted` → `correction` → `second_draft` → `transfer` → `completed`；总览是 correction 内首个 UI step，不是独立 phase |
 | 细进度 | correction 内总览 gate、卡片位置/尝试/输入/feedback/Diff，二稿正文、迁移队列 → `sessionStorage` only；无 snapshot 的 correction 恢复到总览 |
@@ -52,7 +52,7 @@ link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4
 - 服务端 `workflowPhase` 支持从阶段起点恢复；改错细状态仅当前标签页 snapshot。
 - 详情页提供继续评估 / 放弃重做；评估子路由内刷新只按 phase 恢复。
 - 允许用户在 Profile 选择 LLM 教学反馈使用母语或任务目标语言，并统一应用于翻译评估、传统 task feedback 和对应追问。
-- 通过真实模型评测证明输出可稳定解析，并能覆盖 `docs/references/2026-07-15.md` 中绝大多数高价值反馈点。
+- 提供 dev-only live review demo，使用 `docs/references/2026-07-15.md` 的完整样例真实调用固定 few-shot Gen1，并让产品直接审阅完整 prompt、原始响应和正式 UI 反馈。
 - 业务实现前独立视觉 demo 已通过产品审查（阶段 1 完成）。
 
 # 1. 完整工作流
@@ -112,7 +112,7 @@ correction: EVALUATION_OVERVIEW
             ├ ACCEPT → DUAL_DIFF_RESULT
             └ FIRST_REJECT → FEEDBACK + DEEPER_HINT
                  ├ ACCEPT → DUAL_DIFF_RESULT
-                 └ SECOND_REJECT → FEEDBACK + minimalDiff + referenceDiff
+                 └ SECOND_REJECT → FEEDBACK + minimalDiff + referenceAnswer
 second_draft: 并行 Gen2 胶囊；PASS | MODIFY_AND_RESUBMIT | CONFIRM_SKIP
 transfer:     等待 Notes ready 后迁移；Incorrect/Pass
 completed
@@ -150,12 +150,10 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
 {
   "overallCommentary": "使用本 attempt 冻结的 feedbackLanguage 撰写的一段总体评价",
   "ratings": {
-    "accuracy": "A-",
+    "accuracy": "A",
     "naturalness": "B",
     "grammar": "B",
-    "register": "B+",
-    "contextualFit": "A-",
-    "overall": "B+"
+    "overall": "B"
   },
   "cards": [
     {
@@ -164,10 +162,12 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
       "initialHint": "进入卡片时直接展示的初级提示",
       "deeperHint": "第一次尝试被拒绝后替换初级提示的第二级提示",
       "referenceAnswer": "自然、准确并符合语境的参考译文",
+      "referenceMarked": "完整 referenceAnswer，仅用 <mark></mark> 标记值得学习且用户首稿未使用的表达",
       "minimalAnswer": "在 originalAnswer 上做较少修改后达到正确且自然度很高的目标语言句子",
       "minimalDiff": "minimalAnswer 相对于 originalAnswer 的受限类 XML Diff",
-      "referenceDiff": "referenceAnswer 相对于 originalAnswer 的受限类 XML Diff",
-      "teachersNote": "使用 feedbackLanguage，对本句 originalAnswer 的问题与 reference 相关语言点做详细讲解"
+      "teacherNotes": [
+        "一个条目完整讲解一个主要问题，并在同一条中整合原文意图、语言知识、相关表达和适用例子"
+      ]
     }
   ]
 }
@@ -185,11 +185,11 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
 | `originalAnswer`    | 总体评价页左栏匹配高亮来源（应为一句或必要的连续短句，不得把整段作答当作一张卡的匹配串）；改错卡用户原始作答区 |
 | `initialHint`       | 改错卡初始提示位                                                                                             |
 | `deeperHint`        | 第一次拒绝后覆盖同一提示位                                                                                   |
-| `referenceAnswer`   | Diff 非法无法渲染 AST 时的纯文本降级；不在 accept 态单独作为“你的改写”展示                                  |
+| `referenceAnswer`   | accept 与二次拒绝结果中的完整参考译文；作为 referenceMarked 的逐字校验与非法标记降级文本，不生成 Diff             |
+| `referenceMarked`   | Reference 块完整文本；值得学习且 originalAnswer 未使用的表达渲染为可点击的语义化 `<mark>`，暂不展开悬浮窗         |
 | `minimalAnswer`     | minimalDiff 非法时的纯文本降级；第二次拒绝时与 minimalDiff 配套展示意图                                    |
-| `minimalDiff`       | 第二次拒绝后、reference Diff 之前的“最小改动” Diff（信任模型；非法则降级 minimalAnswer）                   |
-| `referenceDiff`     | 通过后第二组 Diff；二次拒绝时在 minimal 之后；非法则降级 referenceAnswer                                   |
-| `teachersNote`      | 通过后或第二次拒绝揭示 Diff 时，与 Diff 一同展示的教师讲解（不单独增加 Suggested revisions 类装饰标题栏）     |
+| `minimalDiff`       | 第二次拒绝后的“最小改动” Diff（信任模型；非法则降级 minimalAnswer）                                            |
+| `teacherNotes`      | 每个主要问题对应一条完整讲解；通过后或第二次拒绝揭示 Diff 时，以圆圈序号列表与 Diff 一同展示                 |
 
 不得增加仅用于“让结果看起来完整”但没有展示或验证用途的模型字段。
 
@@ -197,21 +197,25 @@ Generation 1 是一次逻辑生成，必须同时返回总体评价和全部改�
 
 - 改错单位通常是一个句子；拆句、并句或句界本身有问题时，`sourceText` 可以包含必要的连续短句。
 - 同一个用户句子中的拼写、标点、搭配、语法、语义和语域问题应合并到一张综合卡，不建立 minor issue 子类型。
+- Generation 1 必须按顺序审阅每个用户句子；只要存在明确的非标准形式、不地道结构、含义或关系表达不完整等值得主动改正的问题，就生成一张卡。不得因为句意勉强可懂、附近有更严重的问题或希望减少卡片数量而漏掉该句；输出前应逐句核对覆盖情况。
 - 已经准确、自然且符合语境的句子不生成卡片。
 - 不得把同一底层问题拆成多张近似卡片。
 - `sourceText` 和 `originalAnswer` 必须原样复制输入内容，不得在所谓“原文”或“原始作答”中先行修正。
 - 参考文本是有效译法的重要依据，但不是唯一标准；模型可以生成同样自然且更适合卡片上下文的参考答案。
-- 两级提示应逐步增加方向性，但即使 `deeperHint` 也不得直接给出完整参考答案。
+- `initialHint` 与 `deeperHint` 必须覆盖该卡同一组全部主要问题，不得把不同错误拆成并列的两批提示。initial 可引用用户的错误片段来定位问题，但只能说明每个问题为何要改及语义/语法方向；不得给出确切替换词或短语、正确拼写或词形、目标语答案片段、可直接套用的结构模板，或包含当前答案的例句，也不得使用“应该用 X”“把 X 换成 Y”“应写成 X”等同义表述。deeper 针对 initial 中这些相同问题进一步解释，可逐项给出候选词、短语、搭配、正确短词形或结构框架，但仍不得直接给出完整正确分句或句子。
+- 两级 hint 使用安全 Markdown renderer 展示，保留模型输出的段落、换行和有序/无序列表；不得把模型原始 HTML 直接传给 `{@html}`。
+- `teacherNotes` 与该卡主要问题一一对应并保持 hint 的问题顺序。每条只讲一个问题，并在同一条内整合诊断、原文含义、语言/背景知识、关联表达、例子与迁移方式；不得把例句、背景或拓展单拆成独立条目，也不得把无关问题合并在一条。
+- `teacherNotes` 必须采用 tutor 与用户直接交流的第二人称口吻，不得用「学习者」「学生」或对应反馈语言中的第三人称标签客观描述用户。
 
 ## 3.4 评分
 
 评分只允许：
 
 ```text
-A+ A A- B+ B B- C+ C C- F
+A B C F
 ```
 
-总体评价需覆盖准确性、自然度、语法、语域、语境契合度、主要优点和最值得改进的模式，不得只是评分字段的重复描述。
+不得添加 `+` 或 `-` 修饰。只返回 `accuracy`、`naturalness`、`grammar`、`overall` 四项评分。`naturalness` 同时涵盖地道程度、语域、声音、语用效果和语境契合度，不再单列 `register` 与 `contextualFit`。总体评价需覆盖准确性、自然度、语法、主要优点和最值得改进的模式，不得只是评分字段的重复描述。
 
 ## 3.5 Prompt 与解析可靠性
 
@@ -229,12 +233,12 @@ A+ A A- B+ B B- C+ C C- F
 数据库：
 
 - 保存最终通过致命校验的**结构化**评价 JSON；
-- 额外保存**成功** Gen1 的 message history + assistant raw（供后续 verifier 多轮拼接）；进入 `transfer` 或无卡直接完成时清空；
+- 额外保存**成功** Gen1 的 message history + assistant raw（仅供后续 Second Draft Verifier 拼接）；进入 `transfer` 或无卡直接完成时清空；
 - 不保存 repair 中间轮次、usage 计费明细到业务表（日志可另记）。
 
 OpenAI-compatible provider 若支持 JSON Schema structured output，可以将其作为提高成功率的能力使用；BYOK 不支持时必须回退到文本 JSON + 本地校验 + repair。正确性不得依赖 structured output 或 prompt cache。
 
-实现阶段必须使用 `.env` 中配置的真实模型，对 `docs/references/2026-07-15.md` 完整样例重复运行：shape-only vs contract+few-shot。评测记录结构解析成功率、值得学习的问题覆盖率、错误拆分质量、无问题句误报率、反馈语言正确性。最终 prompt 以评测结果为依据。
+Generation 1 固定使用 contract + multi-issue/no-card few-shot，不保留 shape-only variant 或自动 prompt 对比脚本。dev-only live review demo 必须使用 `.env` / BYOK 中配置的真实模型和 `docs/references/2026-07-15.md` 完整样例；页面展示完整 request messages、原始 assistant JSON、解析后的正式 UI、model/usage/finish reason，供产品人工检查值得学习的问题覆盖、拆卡质量、误报和反馈语言。
 
 ## 3.6 校验、警告与重新生成
 
@@ -245,7 +249,7 @@ OpenAI-compatible provider 若支持 JSON Schema structured output，可以将�
 - `originalAnswer` 是否原样 **exact 包含**于不可变首稿；
 - 多卡匹配时对首稿做**长度降序、区间不重叠**分配；无法安全唯一分配 → soft warning，不高亮该卡；
 - Diff 字符串经受限 parser：合法则出 AST，非法则该 Diff 标记为降级纯文本（不阻评价）；
-- **不做** Diff 重建文本与 original/reference/minimal 的恒等比对；
+- **不做** Diff 重建文本与 original/minimal 的恒等比对；
 - 卡片是否完全重复。
 
 JSON/schema 无法解析、总体评价缺失、评分非法或生成被截断 → 致命错误：不暴露部分评价，phase 保持 `submitted`，可 Retry。
@@ -261,7 +265,7 @@ containment 失败、重复卡、非法 Diff 降级 → 非致命 warning：评�
 - 因总览 gate 不持久化，另一标签页可在 correction 总览重新生成；成功后更新 `evaluatedAt` 并清除该标签页 snapshot，其他标签页的旧 snapshot / verifier 请求因版本不一致返回 409；
 - `practiceGeneratedAt` 已存在时服务端拒绝重新生成评价。
 
-非法 Diff 揭示时渲染 escaped `referenceAnswer` / `minimalAnswer` / 用户最终句纯文本，不得 `{@html}` 原始模型标记。
+非法 Diff 揭示时渲染 escaped `minimalAnswer` / 用户最终句纯文本，不得 `{@html}` 原始模型标记。`referenceMarked` 仅允许无属性 `<mark>` 标签，去除标签后的文本必须逐字等于 `referenceAnswer`；页面通过安全 AST 渲染，非法时降级为普通 `referenceAnswer`。
 
 # 4. 评估等待页
 
@@ -277,7 +281,7 @@ Generation 1 失败时 phase 保持 `submitted`，显示 Retry。刷新后仍 Re
 
 # 5. 总体评价页
 
-`phase=correction` 的首个 UI step。Gen1 成功后连续过渡：Evaluating→Evaluated，标题上移，左右栏展开；左栏不可变首稿，右栏总体评价 + 六项评分。
+`phase=correction` 的首个 UI step。Gen1 成功后连续过渡：Evaluating→Evaluated，标题上移，左右栏展开；左栏不可变首稿，右栏总体评价 + 四项评分。
 
 左栏按段展示完整首稿。对能 **exact 匹配且不重叠分配** 成功的 `originalAnswer` 浅红荧光笔高亮；失败不高亮、不猜测。
 
@@ -299,7 +303,7 @@ Generation 1 失败时 phase 保持 `submitted`，显示 Retry。刷新后仍 Re
 
 第一次拒绝：snapshot 记尝试与 feedback；保留输入；展示本次评价；`deeperHint` 替换 `initialHint`。
 
-第二次拒绝：snapshot 记 revealed；移除输入；评价 + `minimalDiff` 再 `referenceDiff`（各非法则对应答案纯文本）；禁止第三次输入。
+第二次拒绝：snapshot 记 revealed；移除输入；评价 + `minimalDiff`，再展示带可学习表达标记的完整参考答案；禁止第三次输入。
 
 通过或二次拒绝后底栏圆形右箭头，仅 `aria-label` 本地化。
 
@@ -309,34 +313,36 @@ Generation 1 失败时 phase 保持 `submitted`，显示 Retry。刷新后仍 Re
 
 provider/配额错误与教学拒绝分开；前者不增加尝试次数，展示 Retry。
 
-**上下文（锁定）**：从 DB 读取该 attempt 保存的 **Gen1 单轮 history**（成功评价那次的 messages + assistant 内容），追加本轮 system/user（当前卡必要字段、已展示提示、用户改写、防泄题规则）。**不**把历次 verifier 对话写回 DB。二稿 verifier 同策略。
+**上下文（锁定）**：只发送当前 card 必要 trusted fields、已展示提示和本次用户改写，不附带其他 cards 或完整 Gen1 history。Second Draft Verifier 另按 6.7 的完整 history 策略执行。**不**把历次 verifier 对话写回 DB。
 
 逻辑返回：
 
 ```json
-{ "verdict": "reject", "feedback": "只评价本次尝试" }
+{ "verdict": "reject", "checks": { "allCardIssuesResolved": false, "noNewErrors": true, "fullyNatural": false }, "feedback": "只评价本次尝试" }
 ```
 
 或
 
 ```json
-{ "verdict": "accept", "acceptedDiff": "相对 originalAnswer 的受限 XML Diff" }
+{ "verdict": "accept", "checks": { "allCardIssuesResolved": true, "noNewErrors": true, "fullyNatural": true }, "acceptedDiff": "相对 originalAnswer 的受限 XML Diff" }
 ```
 
 拒绝反馈：只谈本次尝试；不得提标准/参考答案；不得复述或给出可复制完整正确句。
 
 **信任模型 Diff**：accept 成立不依赖 Diff 重建核验；解析失败仅影响展示降级，不撤销 accept、不强制用户重交同一答案。
 
-阶段 2 live harness 抽查 reject 泄题率与严格性；实现期不维护第二套 verifier 上下文代码路径。
+Correction Verifier 只维护当前 card 上下文这一条代码路径，并通过 live harness 人工抽查严格性、合理转述误拒和泄题。
 
 ## 6.5 通过后的双 Diff
 
 不单独展示 “Your revision” 纯文本。只展示：
 
 1. acceptedDiff（Your changes）
-2. referenceDiff（Reference changes）
+2. referenceMarked（Reference；完整参考答案，重点表达使用语义化 `<mark>`）
 
-桌面并列，窄屏纵向。通过后无提示/输入/文字评价（`teachersNote` 与 Diff 同区展示，见字段表）。引导模型严格 accept，勿接受不自然近义。
+Reference 不使用 Diff；它安全解析 `referenceMarked`，把值得学习且用户首稿未使用的表达显示为与 Tutor Comments 相同的可点击荧光笔 `<mark>`，暂不展开悬浮窗。Your changes 与 Minimal changes 继续展示标准的前后对照。
+
+桌面并列，窄屏纵向。通过后无提示/输入/文字评价（`teacherNotes` 与 Diff 同区展示，见字段表）。引导模型严格 accept，勿接受不自然近义。
 
 ---
 
@@ -552,7 +558,7 @@ Review log 直接引用 Note；rating + log 同事务。
 
 简单 enter/exit 优先 Svelte transition。
 
-dev-only `/translate-eval-demo` 已覆盖主要状态并通过产品审查；正式组件复用已批准 layout/motion token，不另起炉灶。实现期按新路由/phase 名校正 demo 标签即可，不阻断阶段 2+。
+dev-only `/translate-eval-demo` 已覆盖主要静态状态并通过产品审查；`/translate-eval-live-demo` 复制这套视觉语言，增加猫武士初始作答、正式 Gen1 调用以及 prompt/raw response 审阅面板。两者都不写业务数据库，正式组件继续复用已批准 layout/motion token。
 
 ---
 
@@ -567,7 +573,7 @@ target  # 使用当前任务的目标学习语言
 
 - 数据库存储用户偏好 `feedbackLanguagePreference`，默认 `native`；Profile 使用本地化 segmented control 或 radio group，不使用自由文本；
 - 若偏好为 `native` 但用户没有设置 `nativeLanguage`，生成时回退到任务目标语言，Profile 同时提示先设置母语；
-- 翻译 attempt 在首稿提交前把偏好解析为具体 `feedbackLanguage` 并持久化；Gen1、两级 hint、`teachersNote`、correction verifier、二稿 commentary 和 Note `explanation` 都使用该冻结语言；
+- 翻译 attempt 在首稿提交前把偏好解析为具体 `feedbackLanguage` 并持久化；Gen1、两级 hint、`teacherNotes`、correction verifier、二稿 commentary 和 Note `explanation` 都使用该冻结语言；
 - 传统 task 在首次生成 `tutorFeedback` 时解析并把具体 `feedbackLanguage` 写入 `FeedbackResult`；message comment、objective 文字、summary 及该反馈页的后续 tutor Q&A 使用同一语言；
 - 用户之后修改 Profile 只影响未来新生成的反馈，不重写已生成评价，也不改变进行中翻译 attempt / 已生成传统 task feedback；
 - 原始学习者消息、annotated text、用户作答、参考答案、`targetPattern` 和 exercise back 始终保持任务目标语言；翻译原文和 exercise front 继续使用题目规定的源语言，不随反馈语言偏好改变；
@@ -581,14 +587,18 @@ target  # 使用当前任务的目标学习语言
 
 ## LLM
 
-- [ ] Gen1 一次逻辑生成返回总评、六项评分、全部句级卡。
+- [ ] Gen1 一次逻辑生成返回总评、四项评分、全部句级卡。
 - [ ] 无 token range/confidence/issue type/title/summary/model ref/diff_type。
 - [ ] 最小 contract + few-shot + Zod + 轻量领域校验 + 定向 repair。
 - [ ] 截断/非法评分/不可解析 → 不暴露部分结果。
 - [ ] 成功 Gen1 history 落库；进入 transfer 或无卡完成时清空，Gen2 先完成不得提前删除。
 - [ ] Profile `native|target` 偏好解析正确；翻译与传统 task 的反馈文本均使用冻结语言。
 - [ ] BYOK 无 structured output 仍可用。
-- [ ] 真实模型评测覆盖 reference 样例多数高价值点。
+- [ ] live review demo 可用 reference 猫武士预填作答调用真实 Gen1，并完整展示实际 prompt、原始响应与解析后的反馈供人工审阅；成功结果通过校验后的 sessionStorage 在同一标签页刷新后恢复。
+- [ ] live review demo 提供 `0.0`–`1.0`、步长 `0.1`、默认 `0.4` 的 temperature 控件；服务端拒绝范围外值，选择值同标签页持久化并显示在实际调用 metadata 中。
+- [ ] live review demo 接通 Correction Verifier、二稿编辑和 Second Draft Verifier 的真实 LLM 调用。Correction Verifier 仅提供当前 card trusted context，不附带完整 Gen1 history；Second Draft Verifier 固定追加到完整成功 Gen1 history。每次调用均展示准确 prompt、raw response、provider metadata 和解析结果。
+- [ ] completion budget 统一为公共默认 `8,192`；Correction Verifier 与 Second Draft Verifier 使用该默认值。Generation 1、Generation 2 与场景练习完整会话反馈显式使用 `32,768`。
+- [ ] Correction Verifier 判断 learnerRevision 的意思、用法与自然度，使用 card issues 作为问题清单并检查修改是否引入退步。`referenceAnswer` 是主要语义基准，`sourceText` 只是较低优先级且可能不精确的原文语境；source/original/minimal 中未被 reference 要求的细节不得成为拒绝依据。不得因合理转述或语义强度差异而拒绝。输出固定 `allCardIssuesResolved`、`noNewErrors`、`fullyNatural` 三项 checks；仅三项全部通过时 schema 才允许 accept，reject 至少有一项失败。prompt 显式携带 `referenceAnswer` 与 `teacherNotes`，简要定义主要字段（尤其 `originalAnswer` 是用户首稿而非标准答案），且不包含 `attemptNumber`。
 
 ## 路由与阶段
 
@@ -608,13 +618,14 @@ target  # 使用当前任务的目标学习语言
 ## 改错
 
 - [ ] 空输入 + initialHint；最多两次；无 Skip。
-- [ ] 拒绝保留输入 + deeperHint；二次拒绝 minimal 再 reference Diff。
-- [ ] 通过仅双 Diff + teachersNote；非法 Diff 纯文本降级，不撤销 accept。
-- [ ] Verifier 用 Gen1 history 单轮拼接；verifier 对话不落库；provider 错误不计数。
+- [ ] 拒绝保留输入 + deeperHint；二次拒绝展示 minimal Diff，再以安全解析的 referenceMarked 展示完整参考答案和可学习表达。
+- [ ] 通过仅双 Diff + 圆圈序号 teacherNotes；非法 Diff 纯文本降级，不撤销 accept。
+- [ ] Correction Verifier 只用当前 card context；verifier 对话不落库；provider 错误不计数。
 
 ## Diff
 
 - [ ] 仅 delete/add/replace 协议；parser→AST；无 `{@html}`。
+- [ ] 只要协议语法可解析即展示 AST；不因 Diff 内容与 originalAnswer/minimalAnswer 不匹配而隐藏。replace 单边可为空以表达删除或插入。
 - [ ] 无强制重建恒等；语块级 prompt/few-shot。
 
 ## 二稿与 Gen2

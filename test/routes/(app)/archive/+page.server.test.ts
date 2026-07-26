@@ -30,7 +30,7 @@ describe("archive page server", () => {
 		vi.resetAllMocks();
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", nativeLanguage: "en" };
 
 	const createFormEvent = ({ user = mockUser, values = {} }: { user?: typeof mockUser | null; values?: Record<string, string> } = {}) => {
 		const formData = new FormData();
@@ -202,6 +202,7 @@ describe("archive page server", () => {
 			id: 42,
 			sourceSessionId: 99,
 			userId: "user_123",
+			language: "es",
 			tutorComment: "Incorrect verb conjugation",
 		};
 
@@ -220,6 +221,7 @@ describe("archive page server", () => {
 			expect(mockSessionService.followUpOnFeedback).toHaveBeenCalledWith({
 				sessionId: 99,
 				userId: "user_123",
+				feedbackLanguage: "en",
 				itemText: "Incorrect verb conjugation",
 				category: "grammar",
 				question: "why",

@@ -5,7 +5,9 @@ import { prefersReducedMotion, revealPanel, stopAll } from "./motion";
 import type { DiffPart } from "./types";
 
 interface Props {
-	parts: DiffPart[];
+	parts: DiffPart[] | null;
+	/** Escaped plain-text fallback used when the server rejects a model Diff. */
+	fallbackText?: string;
 	/** Optional label announced before the diff content. */
 	label?: string;
 	/** Animate parts in on mount. */
@@ -13,7 +15,7 @@ interface Props {
 	class?: string;
 }
 
-let { parts, label, animate = true, class: className = "" }: Props = $props();
+let { parts, fallbackText = "", label, animate = true, class: className = "" }: Props = $props();
 
 let rootEl: HTMLElement | null = $state(null);
 let controls: AnimationPlaybackControls[] = [];
@@ -39,7 +41,7 @@ onDestroy(() => stopAll(controls));
 	{#if label}
 		<span class="sr-only">{label}</span>
 	{/if}
-	{#each parts as part, i (i)}
+	{#each parts ?? [] as part, i (i)}
 		{#if part.type === "unchanged"}
 			<span data-diff-part class="diff-unchanged">{part.text}</span>
 		{:else if part.type === "delete"}
@@ -53,6 +55,9 @@ onDestroy(() => stopAll(controls));
 			</span>
 		{/if}
 	{/each}
+	{#if !parts}
+		<span data-diff-part>{fallbackText}</span>
+	{/if}
 </div>
 
 <style>
@@ -68,9 +73,6 @@ onDestroy(() => stopAll(controls));
 
 .diff-add {
 	color: color-mix(in oklch, var(--chart-3) 75%, var(--foreground));
-	text-decoration: underline;
-	text-decoration-thickness: 1.5px;
-	text-underline-offset: 3px;
 	background: color-mix(in oklch, var(--chart-3) 12%, transparent);
 	border-radius: 0.15em;
 	padding: 0 0.15em;

@@ -130,6 +130,7 @@ export const actions: Actions = {
 			const session = await db.query.practiceSession.findFirst({
 				where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
 				columns: { id: true, userId: true, status: true },
+				with: { task: { columns: { language: true } } },
 			});
 
 			if (!session) return fail(400, { error: "Session not completed" });
@@ -137,7 +138,11 @@ export const actions: Actions = {
 				return fail(400, { error: "Session not completed" });
 			}
 
-			const feedback = await generateFeedback(session.id);
+			if (!session.task) return fail(400, { error: "Task not found" });
+			const feedback = await generateFeedback({
+				sessionId: session.id,
+				feedbackLanguage: user.nativeLanguage ?? session.task.language,
+			});
 
 			return {
 				success: true,
@@ -182,6 +187,7 @@ export const actions: Actions = {
 			const result = await followUpOnFeedback({
 				sessionId,
 				userId: user.id,
+				feedbackLanguage: user.nativeLanguage ?? sessionContext.language,
 				itemText,
 				category: category as "grammar" | "vocabulary" | "coherence",
 				question,

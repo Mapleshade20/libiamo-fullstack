@@ -1,18 +1,23 @@
 /** Shared types for the translation evaluation learning flow. */
 
-export type Grade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "F";
+import type { MarkedTextPart } from "$lib/marked-text";
+import type {
+	TranslationCardWarning,
+	TranslationDiffPart,
+	TranslationGrade,
+	TranslationRatingKey,
+	TranslationRatings,
+} from "$lib/translation-evaluation/types";
 
-export type RatingKey = "accuracy" | "naturalness" | "grammar" | "register" | "contextualFit" | "overall";
+export type Grade = TranslationGrade;
 
-export type Ratings = Record<RatingKey, Grade>;
+export type RatingKey = TranslationRatingKey;
 
-export type DiffPart =
-	| { type: "unchanged"; text: string }
-	| { type: "delete"; text: string }
-	| { type: "add"; text: string }
-	| { type: "replace"; from: string; to: string };
+export type Ratings = TranslationRatings;
 
-export type CardValidationWarning = "source_unmatched" | "answer_unmatched" | "reference_diff_invalid" | "duplicate";
+export type DiffPart = TranslationDiffPart;
+
+export type CardValidationWarning = TranslationCardWarning;
 
 export type CorrectionCardData = {
 	ordinal: number;
@@ -22,13 +27,14 @@ export type CorrectionCardData = {
 	initialHint: string;
 	deeperHint: string;
 	referenceAnswer: string;
+	/** Complete referenceAnswer split into safe semantic-mark rendering parts. */
+	referenceMarked: MarkedTextPart[] | null;
 	/** Fewer edits from originalAnswer that still read as correct and natural. */
 	minimalAnswer: string;
 	/** Pre-parsed ASTs for demo/runtime rendering. Raw XML lives on the server. */
-	minimalDiff: DiffPart[];
-	referenceDiff: DiffPart[];
-	/** Native-language explanation of the learner issues and language points. */
-	teachersNote: string;
+	minimalDiff: DiffPart[] | null;
+	/** Numbered, professor-style lessons about the issue and reusable language knowledge. */
+	teacherNotes: string[];
 	/** Server-derived warnings; empty when fully verified. */
 	warnings: CardValidationWarning[];
 };
@@ -112,13 +118,11 @@ export const MOTION_TOKENS: MotionTokens = {
 	easeInOut: [0.45, 0, 0.15, 1],
 };
 
-export const RATING_ORDER: RatingKey[] = ["accuracy", "naturalness", "grammar", "register", "contextualFit", "overall"];
+export const RATING_ORDER: RatingKey[] = ["accuracy", "naturalness", "grammar", "overall"];
 
 export const RATING_I18N_KEYS: Record<RatingKey, string> = {
 	accuracy: "eval.rating.accuracy",
 	naturalness: "eval.rating.naturalness",
 	grammar: "eval.rating.grammar",
-	register: "eval.rating.register",
-	contextualFit: "eval.rating.contextualFit",
 	overall: "eval.rating.overall",
 };

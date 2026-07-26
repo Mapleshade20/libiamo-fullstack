@@ -70,8 +70,6 @@ const ratingLabels = $derived({
 	"eval.rating.accuracy": t(UI_LANG, "eval.rating.accuracy"),
 	"eval.rating.naturalness": t(UI_LANG, "eval.rating.naturalness"),
 	"eval.rating.grammar": t(UI_LANG, "eval.rating.grammar"),
-	"eval.rating.register": t(UI_LANG, "eval.rating.register"),
-	"eval.rating.contextualFit": t(UI_LANG, "eval.rating.contextualFit"),
 	"eval.rating.overall": t(UI_LANG, "eval.rating.overall"),
 });
 
@@ -279,9 +277,9 @@ $effect(() => {
 					nextAriaLabel={t(UI_LANG, "eval.card.nextAria")}
 					yourDiffLabel={t(UI_LANG, "eval.card.yourDiff")}
 					minimalDiffLabel={t(UI_LANG, "eval.card.minimalDiff")}
-					referenceDiffLabel={t(UI_LANG, "eval.card.referenceDiff")}
+					referenceLabel={t(UI_LANG, "eval.card.reference")}
 					feedbackLabel={t(UI_LANG, "eval.card.feedback")}
-					teachersNoteLabel={t(UI_LANG, "eval.card.teachersNote")}
+					teacherNotesLabel={t(UI_LANG, "eval.card.teacherNotes")}
 					{submitting}
 					oninput={(v) => (cardState = { ...cardState, input: v })}
 					onsubmit={(input) => void handleCardSubmit(input)}

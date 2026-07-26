@@ -24,7 +24,7 @@ export type MessageAnnotation = {
 	annotatedText: string;
 	/** Parsed annotation spans for interaction */
 	spans: AnnotationSpan[];
-	/** Tutor comment for this message (may contain <highlight> tags) */
+	/** Tutor comment for this message (may contain semantic <mark> tags) */
 	comment: string;
 };
 

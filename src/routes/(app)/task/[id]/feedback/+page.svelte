@@ -183,7 +183,7 @@ function getMessageContext(messageId: number): { currentContext: string; previou
 
 function getCommentContext(messageId: number, comment: string): string {
 	const message = findMessage(messageId);
-	return [`Learner message: ${message?.text ?? ""}`, `Tutor comment: ${stripHighlightTags(comment)}`].filter(Boolean).join("\n");
+	return [`Learner message: ${message?.text ?? ""}`, `Tutor comment: ${stripMarkTags(comment)}`].filter(Boolean).join("\n");
 }
 
 function getConversationExcerpt(): string {
@@ -193,8 +193,8 @@ function getConversationExcerpt(): string {
 		.slice(0, 2500);
 }
 
-function stripHighlightTags(value: string): string {
-	return value.replace(/<\/?highlight>/g, "");
+function stripMarkTags(value: string): string {
+	return value.replace(/<\/?mark>/g, "");
 }
 
 // Grade color helper

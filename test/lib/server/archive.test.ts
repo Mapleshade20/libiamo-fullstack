@@ -48,8 +48,12 @@ describe("listCompletedActivities", () => {
 	});
 
 	it("includes sessions with no notes", async () => {
-		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, notes: [] }), makeSession({ id: 2, notes: [makeNote()] })]);
-		const result = await listCompletedActivities(USER_ID);
+		const now = new Date(2025, 5, 11, 12, 0, 0);
+		mockDb.query.practiceSession.findMany.mockResolvedValue([
+			makeSession({ id: 1, notes: [], completedAt: new Date(2025, 5, 11, 11, 0, 0) }),
+			makeSession({ id: 2, notes: [makeNote()], completedAt: new Date(2025, 5, 11, 10, 0, 0) }),
+		]);
+		const result = await listCompletedActivities(USER_ID, now);
 		expect(result).toHaveLength(1);
 		expect(result[0].activities).toHaveLength(2);
 		expect(result[0].activities.map((activity) => activity.id)).toEqual([1, 2]);

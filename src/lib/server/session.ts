@@ -793,13 +793,15 @@ Return 2 to 4 useful ${learningLanguageName} words, short phrases, or sentence f
 - Do not explain, evaluate, polish, or offer one-click replacement text.
 
 Return valid JSON only, in this exact shape: {"phrases":["fragment one","fragment two"]}`;
-		return await chatJson(ExpressionHintSchema, {
+		const { value } = await chatJson({
+			schema: ExpressionHintSchema,
 			messages: [
 				{ role: "system", content: prompt },
 				{ role: "user", content: JSON.stringify({ ...learnerData, intendedMeaning: input.expression?.trim() || "" }) },
 			],
 			userId: session.userId,
 		});
+		return value;
 	}
 
 	const prompt = `${trustedSystemContext}
@@ -812,13 +814,15 @@ Give exactly one concise direction for what content the learner could add.
 
 Return valid JSON only, in this exact shape: {"contentHint":"one concise direction"}`;
 
-	return await chatJson(ContentHintSchema, {
+	const { value } = await chatJson({
+		schema: ContentHintSchema,
 		messages: [
 			{ role: "system", content: prompt },
 			{ role: "user", content: JSON.stringify(learnerData) },
 		],
 		userId: session.userId,
 	});
+	return value;
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {

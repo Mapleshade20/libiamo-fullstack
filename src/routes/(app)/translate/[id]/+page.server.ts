@@ -352,7 +352,7 @@ export const actions: Actions = {
 			const result = await followUpOnLearningContent({
 				userId: user.id,
 				learningLanguage: record.sourceLanguage,
-				responseLanguage: record.promptLanguage,
+				feedbackLanguage: record.promptLanguage,
 				itemText: selectedText,
 				category: "grammar",
 				question,

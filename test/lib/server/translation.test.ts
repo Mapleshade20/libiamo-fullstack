@@ -76,10 +76,12 @@ describe("translation service", () => {
 
 	it("generates the requested candidate count for every paragraph in one call", async () => {
 		mockChatJson.mockResolvedValue({
-			paragraphs: [
-				{ paragraphIndex: 0, candidates: ["One", "First"] },
-				{ paragraphIndex: 1, candidates: ["Two", "Second"] },
-			],
+			value: {
+				paragraphs: [
+					{ paragraphIndex: 0, candidates: ["One", "First"] },
+					{ paragraphIndex: 1, candidates: ["Two", "Second"] },
+				],
+			},
 		});
 		const result = await generateTranslationVariants({
 			paragraphs: ["Un", "Deux"],
@@ -93,7 +95,7 @@ describe("translation service", () => {
 			["Two", "Second"],
 		]);
 		expect(mockChatJson).toHaveBeenCalledTimes(1);
-		const request = mockChatJson.mock.calls[0][1];
+		const request = mockChatJson.mock.calls[0][0];
 		expect(request.userId).toBeUndefined();
 		expect(request.messages[0].content).toContain("French");
 		expect(request.messages[0].content).toContain("English");
@@ -110,7 +112,7 @@ describe("translation service", () => {
 	});
 
 	it("rejects missing paragraphs, duplicate indices, and incorrect candidate counts", async () => {
-		mockChatJson.mockResolvedValue({ paragraphs: [{ paragraphIndex: 0, candidates: ["One", "First", "Another"] }] });
+		mockChatJson.mockResolvedValue({ value: { paragraphs: [{ paragraphIndex: 0, candidates: ["One", "First", "Another"] }] } });
 		await expect(
 			generateTranslationVariants({
 				paragraphs: ["Un", "Deux"],
@@ -124,9 +126,11 @@ describe("translation service", () => {
 
 	it("evaluates actual prompts against multiple references with feedback in K", async () => {
 		mockChatJson.mockResolvedValue({
-			overallScore: "A",
-			overallFeedback: "Very natural.",
-			paragraphs: [{ paragraphIndex: 0, feedback: "Good register.", rewriteSuggestion: "Bonjour a tous." }],
+			value: {
+				overallScore: "A",
+				overallFeedback: "Very natural.",
+				paragraphs: [{ paragraphIndex: 0, feedback: "Good register.", rewriteSuggestion: "Bonjour a tous." }],
+			},
 		});
 		const result = await evaluateTranslationAgainstReferences({
 			promptParagraphs: ["Hello everyone."],
@@ -139,7 +143,7 @@ describe("translation service", () => {
 			userId: "u1",
 		});
 		expect(result.overallScore).toBe("A");
-		const request = mockChatJson.mock.calls[0][1];
+		const request = mockChatJson.mock.calls[0][0];
 		expect(request.userId).toBe("u1");
 		expect(request.messages[0].content).toContain("feedback in English");
 		expect(request.messages[0].content).toContain("Every rewriteSuggestion must be a non-empty string written only in French");
@@ -180,7 +184,7 @@ describe("translation service", () => {
 		selectQueue.push([], [winner]);
 		insertQueue.push([]);
 		mockChatJson.mockResolvedValue({
-			paragraphs: [{ paragraphIndex: 0, candidates: ["Mine 1", "Mine 2", "Mine 3"] }],
+			value: { paragraphs: [{ paragraphIndex: 0, candidates: ["Mine 1", "Mine 2", "Mine 3"] }] },
 		});
 		const result = await getOrCreateTranslationSourceSet({
 			templateId: 1,
