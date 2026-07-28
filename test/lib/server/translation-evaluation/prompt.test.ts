@@ -122,7 +122,7 @@ describe("translation evaluation prompt builders", () => {
 			secondDraftParagraphs: ["I disagree."],
 		});
 
-		const generation2 = buildGeneration2Messages({ cards: [validatedCard], sourceLanguage: "zh", targetLanguage: "en", feedbackLanguage: "fr" });
+		const generation2 = buildGeneration2Messages({ cards: [validatedCard], sourceLanguage: "zh", targetLanguage: "en" });
 		expect(generation2.map((message) => message.role)).toEqual(["system", "user"]);
 		expect(JSON.parse(generation2[1].content)).toEqual({
 			cards: [

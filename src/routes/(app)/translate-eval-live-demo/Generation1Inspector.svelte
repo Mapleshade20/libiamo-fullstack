@@ -19,6 +19,7 @@ interface Props {
 	title?: string;
 	description?: string;
 	promptOpen?: boolean;
+	embedded?: boolean;
 }
 
 let {
@@ -30,6 +31,7 @@ let {
 	title = "Generation 1 request",
 	description = "",
 	promptOpen = true,
+	embedded = false,
 }: Props = $props();
 
 function displayContent(content: string): string {
@@ -41,7 +43,11 @@ function displayContent(content: string): string {
 }
 </script>
 
-<section id={sectionId} class="mx-auto mt-12 w-full max-w-5xl border-t border-border pt-8" aria-labelledby="{sectionId}-title">
+<section
+	id={sectionId}
+	class={embedded ? "mt-7 w-full border-y border-border py-7" : "mx-auto mt-12 w-full max-w-5xl border-t border-border pt-8"}
+	aria-labelledby="{sectionId}-title"
+>
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 		<div>
 			<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{eyebrow}</p>

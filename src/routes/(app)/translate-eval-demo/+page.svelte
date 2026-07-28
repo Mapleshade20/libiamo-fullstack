@@ -54,11 +54,10 @@ const SCENES: Array<{ id: DemoScene; label: string }> = [
 
 let scene = $state<DemoScene>("evaluating");
 let panelOpen = $state(true);
-let simulateMobile = $state(false);
 let forceReduced = $state(false);
 let overviewConfirmed = $state(false);
 let submitting = $state(false);
-let transferIndex = $state(0);
+let transferNotes = $state(DEMO_TRANSFER_NOTES.map((note) => ({ ...note })));
 /** Bumps so card animation sequences can re-play without leaving the scene. */
 let demoRemountKey = $state(0);
 
@@ -89,7 +88,7 @@ function applyScene(next: DemoScene) {
 	demoRemountKey += 1;
 	overviewConfirmed = false;
 	submitting = false;
-	transferIndex = 0;
+	transferNotes = DEMO_TRANSFER_NOTES.map((note) => ({ ...note }));
 
 	switch (next) {
 		case "card-initial":
@@ -224,201 +223,197 @@ $effect(() => {
 
 <svelte:head> <title>Translate eval demo · Libiamo</title> </svelte:head>
 
-<div class="relative {simulateMobile ? 'mx-auto max-w-[390px] border-x border-border shadow-sm' : ''}">
-	{#key `${scene}:${demoRemountKey}`}
-		<div in:fade={{ duration: 180 }}>
-			{#if scene === "evaluating" || scene === "evaluating-failed"}
-				<EvaluationWaiting
-					title={t(UI_LANG, "eval.waiting.evaluating")}
-					failed={scene === "evaluating-failed"}
-					retryLabel={t(UI_LANG, "common.retry")}
-					failedBody={t(UI_LANG, "eval.waiting.failedBody")}
-					onretry={() => applyScene("evaluating")}
-				/>
-			{:else if scene === "evaluated" || scene === "evaluated-warning" || scene === "no-cards"}
-				<EvaluationOverview
-					evaluation={activeEvaluation()}
-					title={t(UI_LANG, "eval.overview.title")}
-					subtitle={t(UI_LANG, "eval.overview.subtitle")}
-					{ratingLabels}
-					continueLabel={t(UI_LANG, "eval.overview.continue")}
-					regenerateLabel={t(UI_LANG, "eval.overview.regenerate")}
-					yourDraftLabel={t(UI_LANG, "eval.overview.yourDraft")}
-					overallLabel={t(UI_LANG, "eval.overview.overall")}
-					warningTitle={t(UI_LANG, "eval.overview.warningTitle")}
-					warningBody={t(UI_LANG, "eval.overview.warningBody")}
-					showRegenerate={scene === "evaluated-warning"}
-					{overviewConfirmed}
-					oncontinue={() => {
+{#key `${scene}:${demoRemountKey}`}
+	<div in:fade={{ duration: 180 }}>
+		{#if scene === "evaluating" || scene === "evaluating-failed"}
+			<EvaluationWaiting
+				title={t(UI_LANG, "eval.waiting.evaluating")}
+				failed={scene === "evaluating-failed"}
+				retryLabel={t(UI_LANG, "common.retry")}
+				failedBody={t(UI_LANG, "eval.waiting.failedBody")}
+				onretry={() => applyScene("evaluating")}
+			/>
+		{:else if scene === "evaluated" || scene === "evaluated-warning" || scene === "no-cards"}
+			<EvaluationOverview
+				evaluation={activeEvaluation()}
+				title={t(UI_LANG, "eval.overview.title")}
+				subtitle={t(UI_LANG, "eval.overview.subtitle")}
+				{ratingLabels}
+				continueLabel={t(UI_LANG, "eval.overview.continue")}
+				regenerateLabel={t(UI_LANG, "eval.overview.regenerate")}
+				yourDraftLabel={t(UI_LANG, "eval.overview.yourDraft")}
+				overallLabel={t(UI_LANG, "eval.overview.overall")}
+				warningTitle={t(UI_LANG, "eval.overview.warningTitle")}
+				warningBody={t(UI_LANG, "eval.overview.warningBody")}
+				showRegenerate={scene === "evaluated-warning"}
+				{overviewConfirmed}
+				oncontinue={() => {
 						overviewConfirmed = true;
 						if (scene === "no-cards") applyScene("complete");
 						else applyScene("card-initial");
 					}}
-					onregenerate={() => void handleRegenerate()}
-				/>
-			{:else if scene.startsWith("card-") || scene === "provider-error"}
-				<CorrectionCard
-					card={DEMO_EVALUATION.cards[0]}
-					local={cardState}
-					cardIndex={0}
-					cardTotal={DEMO_EVALUATION.cards.length}
-					titleLabel={t(UI_LANG, "eval.card.title")}
-					eyebrowLabel={t(UI_LANG, "eval.card.stage")}
-					sourceLabel={t(UI_LANG, "eval.card.source")}
-					originalLabel={t(UI_LANG, "eval.card.original")}
-					reviseLabel={t(UI_LANG, "eval.card.revise")}
-					hintLabel={t(UI_LANG, "eval.card.hint")}
-					deeperHintLabel={t(UI_LANG, "eval.card.deeperHint")}
-					inputPlaceholder={t(UI_LANG, "eval.card.placeholder")}
-					continueLabel={submitting ? t(UI_LANG, "eval.card.verifying") : t(UI_LANG, "eval.card.continue")}
-					retryLabel={t(UI_LANG, "common.retry")}
-					providerErrorTitle={t(UI_LANG, "eval.card.providerErrorTitle")}
-					providerErrorBody={t(UI_LANG, "eval.card.providerErrorBody")}
-					nextAriaLabel={t(UI_LANG, "eval.card.nextAria")}
-					yourDiffLabel={t(UI_LANG, "eval.card.yourDiff")}
-					minimalDiffLabel={t(UI_LANG, "eval.card.minimalDiff")}
-					referenceLabel={t(UI_LANG, "eval.card.reference")}
-					feedbackLabel={t(UI_LANG, "eval.card.feedback")}
-					teacherNotesLabel={t(UI_LANG, "eval.card.teacherNotes")}
-					{submitting}
-					oninput={(v) => (cardState = { ...cardState, input: v })}
-					onsubmit={(input) => void handleCardSubmit(input)}
-					onretry={() => {
+				onregenerate={() => void handleRegenerate()}
+			/>
+		{:else if scene.startsWith("card-") || scene === "provider-error"}
+			<CorrectionCard
+				card={DEMO_EVALUATION.cards[0]}
+				local={cardState}
+				cardIndex={0}
+				cardTotal={DEMO_EVALUATION.cards.length}
+				titleLabel={t(UI_LANG, "eval.card.title")}
+				eyebrowLabel={t(UI_LANG, "eval.card.stage")}
+				sourceLabel={t(UI_LANG, "eval.card.source")}
+				originalLabel={t(UI_LANG, "eval.card.original")}
+				reviseLabel={t(UI_LANG, "eval.card.revise")}
+				hintLabel={t(UI_LANG, "eval.card.hint")}
+				deeperHintLabel={t(UI_LANG, "eval.card.deeperHint")}
+				inputPlaceholder={t(UI_LANG, "eval.card.placeholder")}
+				continueLabel={submitting ? t(UI_LANG, "eval.card.verifying") : t(UI_LANG, "eval.card.continue")}
+				retryLabel={t(UI_LANG, "common.retry")}
+				providerErrorTitle={t(UI_LANG, "eval.card.providerErrorTitle")}
+				providerErrorBody={t(UI_LANG, "eval.card.providerErrorBody")}
+				nextAriaLabel={t(UI_LANG, "eval.card.nextAria")}
+				yourDiffLabel={t(UI_LANG, "eval.card.yourDiff")}
+				minimalDiffLabel={t(UI_LANG, "eval.card.minimalDiff")}
+				referenceLabel={t(UI_LANG, "eval.card.reference")}
+				feedbackLabel={t(UI_LANG, "eval.card.feedback")}
+				teacherNotesLabel={t(UI_LANG, "eval.card.teacherNotes")}
+				{submitting}
+				oninput={(v) => (cardState = { ...cardState, input: v })}
+				onsubmit={(input) => void handleCardSubmit(input)}
+				onretry={() => {
 						// Empty draft only: clear error phase. Non-empty goes through onsubmit (same as ↑).
 						cardState = { ...cardState, phase: cardState.attemptCount >= 1 ? "first_reject" : "initial" };
 					}}
-					onnext={() => {
+				onnext={() => {
 						applyScene("second-draft-generating");
 						void (async () => {
 							await wait(DEMO_LLM_WAIT_MS);
 							if (scene.startsWith("second-draft")) practiceStatus = "ready";
 						})();
 					}}
-				/>
-			{:else if scene.startsWith("second-draft")}
-				<SecondDraft
-					sourceParagraphs={DEMO_EVALUATION.sourceParagraphs}
-					draft={secondDraft}
-					{practiceStatus}
-					title={t(UI_LANG, "eval.secondDraft.title")}
-					sourceLabel={t(UI_LANG, "eval.secondDraft.source")}
-					yourDraftLabel={t(UI_LANG, "eval.secondDraft.yourDraft")}
-					submitLabel={submitting ? t(UI_LANG, "eval.card.verifying") : t(UI_LANG, "eval.secondDraft.submit")}
-					skipLabel={t(UI_LANG, "eval.secondDraft.skip")}
-					skipConfirmTitle={t(UI_LANG, "eval.secondDraft.skipConfirmTitle")}
-					skipConfirmBody={t(UI_LANG, "eval.secondDraft.skipConfirmBody")}
-					skipConfirmAction={t(UI_LANG, "eval.secondDraft.skipConfirmAction")}
-					waitingPracticeLabel={t(UI_LANG, "eval.secondDraft.waitingPractice")}
-					generatingLabel={t(UI_LANG, "eval.practice.generating")}
-					failedLabel={t(UI_LANG, "eval.practice.failed")}
-					readyLabel={t(UI_LANG, "eval.practice.ready")}
-					retryLabel={t(UI_LANG, "common.retry")}
-					cancelLabel={t(UI_LANG, "common.cancel")}
-					continueLabel={t(UI_LANG, "eval.overview.continue")}
-					feedbackLabel={t(UI_LANG, "eval.card.feedback")}
-					{submitting}
-					onupdate={(i, v) => {
+			/>
+		{:else if scene.startsWith("second-draft")}
+			<SecondDraft
+				sourceParagraphs={DEMO_EVALUATION.sourceParagraphs}
+				draft={secondDraft}
+				{practiceStatus}
+				title={t(UI_LANG, "eval.secondDraft.title")}
+				sourceLabel={t(UI_LANG, "eval.secondDraft.source")}
+				yourDraftLabel={t(UI_LANG, "eval.secondDraft.yourDraft")}
+				submitLabel={submitting ? t(UI_LANG, "eval.card.verifying") : t(UI_LANG, "eval.secondDraft.submit")}
+				skipLabel={t(UI_LANG, "eval.secondDraft.skip")}
+				skipConfirmTitle={t(UI_LANG, "eval.secondDraft.skipConfirmTitle")}
+				skipConfirmBody={t(UI_LANG, "eval.secondDraft.skipConfirmBody")}
+				skipConfirmAction={t(UI_LANG, "eval.secondDraft.skipConfirmAction")}
+				waitingPracticeLabel={t(UI_LANG, "eval.secondDraft.waitingPractice")}
+				generatingLabel={t(UI_LANG, "eval.practice.generating")}
+				failedLabel={t(UI_LANG, "eval.practice.failed")}
+				readyLabel={t(UI_LANG, "eval.practice.ready")}
+				retryLabel={t(UI_LANG, "common.retry")}
+				cancelLabel={t(UI_LANG, "common.cancel")}
+				continueLabel={t(UI_LANG, "eval.overview.continue")}
+				feedbackLabel={t(UI_LANG, "eval.card.feedback")}
+				{submitting}
+				onupdate={(i, v) => {
 						const paragraphs = [...secondDraft.paragraphs];
 						paragraphs[i] = v;
 						secondDraft = { ...secondDraft, paragraphs };
 					}}
-					onsubmit={() => void handleSecondDraftSubmit()}
-					onskip={() =>
+				onsubmit={() => void handleSecondDraftSubmit()}
+				onskip={() =>
 						(secondDraft = {
 							...secondDraft,
 							skipped: true,
 							unresolvedOrdinals: [],
 							commentary: null,
 						})}
-					oncontinue={() => applyScene("transfer")}
-					onretryPractice={() => void handleRetryPractice()}
-				/>
-			{:else if scene === "transfer"}
-				<TransferPractice
-					notes={DEMO_TRANSFER_NOTES}
-					currentIndex={transferIndex}
-					title={t(UI_LANG, "eval.transfer.title")}
-					stageLabel={t(UI_LANG, "eval.transfer.stage")}
-					patternLabel={t(UI_LANG, "eval.transfer.pattern")}
-					yourAnswerLabel={t(UI_LANG, "eval.transfer.yourAnswer")}
-					answerLabel={t(UI_LANG, "eval.transfer.answer")}
-					answerPlaceholder={t(UI_LANG, "eval.transfer.placeholder")}
-					revealLabel={t(UI_LANG, "eval.transfer.reveal")}
-					incorrectLabel={t(UI_LANG, "eval.transfer.incorrect")}
-					passLabel={t(UI_LANG, "eval.transfer.pass")}
-					deferredLabel={t(UI_LANG, "eval.transfer.deferred")}
-					onincorrect={() => {
-						transferIndex = Math.min(transferIndex + 1, DEMO_TRANSFER_NOTES.length);
+				oncontinue={() => applyScene("transfer")}
+				onretryPractice={() => void handleRetryPractice()}
+			/>
+		{:else if scene === "transfer"}
+			<TransferPractice
+				notes={transferNotes}
+				currentIndex={0}
+				title={t(UI_LANG, "eval.transfer.title")}
+				stageLabel={t(UI_LANG, "eval.transfer.stage")}
+				revealLabel={t(UI_LANG, "eval.transfer.reveal")}
+				incorrectLabel={t(UI_LANG, "eval.transfer.incorrect")}
+				passLabel={t(UI_LANG, "eval.transfer.pass")}
+				countLabels={{
+						new: t(UI_LANG, "review.count.new"),
+						learning: t(UI_LANG, "review.count.learning"),
+						review: t(UI_LANG, "review.count.review"),
 					}}
-					onpass={() => {
-						transferIndex = Math.min(transferIndex + 1, DEMO_TRANSFER_NOTES.length);
+				onincorrect={() => {
+						const [active, ...remaining] = transferNotes;
+						if (active) transferNotes = [...remaining, { ...active, queueKind: "learning" }];
+						return true;
 					}}
-					onfinish={() => applyScene("complete")}
-				/>
-			{:else}
-				<section class="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-3xl flex-col items-center justify-center text-center" aria-live="polite">
-					<CheckCircle2 class="mb-7 size-12 text-[#55705b]" strokeWidth={1.25} />
-					<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{t(UI_LANG, "eval.complete.eyebrow")}</p>
-					<h1 tabindex="-1" class="font-serif text-4xl tracking-tight focus:outline-none">{t(UI_LANG, "eval.complete.title")}</h1>
-					<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(UI_LANG, "eval.complete.body")}</p>
-					<div class="mt-8">
-						<Button
-							href="/translate"
-							size="icon"
-							class="size-12 rounded-full"
-							aria-label={t(UI_LANG, "eval.complete.homeAria")}
-							title={t(UI_LANG, "eval.complete.homeAria")}
-						>
-							<Home />
-						</Button>
-					</div>
-				</section>
-			{/if}
-		</div>
-	{/key}
+				onpass={() => {
+						const remaining = transferNotes.slice(1);
+						if (remaining.length === 0) applyScene("complete");
+						else transferNotes = remaining;
+						return true;
+					}}
+			/>
+		{:else}
+			<section class="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center" aria-live="polite">
+				<CheckCircle2 class="mb-7 size-12 text-[#55705b]" strokeWidth={1.25} />
+				<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{t(UI_LANG, "eval.complete.eyebrow")}</p>
+				<h1 tabindex="-1" class="font-serif text-4xl tracking-tight focus:outline-none">{t(UI_LANG, "eval.complete.title")}</h1>
+				<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(UI_LANG, "eval.complete.body")}</p>
+				<Button
+					href="/translate"
+					size="icon"
+					class="mt-8 size-12 rounded-full"
+					aria-label={t(UI_LANG, "eval.complete.homeAria")}
+					title={t(UI_LANG, "eval.complete.homeAria")}
+				>
+					<Home />
+				</Button>
+			</section>
+		{/if}
+	</div>
+{/key}
 
-	{#if panelOpen}
-		<aside
-			class="fixed bottom-4 left-4 z-50 max-h-[min(70vh,28rem)] w-[min(100vw-2rem,18rem)] overflow-y-auto rounded-2xl border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur-md"
-			aria-label="Demo state switcher"
-		>
-			<div class="mb-2 flex items-center justify-between gap-2">
-				<p class="font-semibold tracking-wide text-muted-foreground uppercase">Demo</p>
-				<button type="button" class="text-muted-foreground hover:text-foreground" onclick={() => (panelOpen = false)}>Hide</button>
-			</div>
-			<div class="mb-3 flex flex-wrap gap-2">
-				<label class="inline-flex items-center gap-1.5">
-					<input type="checkbox" bind:checked={simulateMobile}>
-					390px
-				</label>
-				<label class="inline-flex items-center gap-1.5">
-					<input type="checkbox" bind:checked={forceReduced}>
-					reduced-motion
-				</label>
-			</div>
-			<ul class="space-y-0.5">
-				{#each SCENES as s (s.id)}
-					<li>
-						<button
-							type="button"
-							class="w-full rounded-md px-2 py-1.5 text-left transition-colors {scene === s.id
-								? 'bg-primary text-primary-foreground'
-								: 'hover:bg-muted'}"
-							onclick={() => applyScene(s.id)}
-						>
-							{s.label}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</aside>
-	{:else}
-		<button
-			type="button"
-			class="fixed bottom-4 left-4 z-50 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm"
-			onclick={() => (panelOpen = true)}
-		>
-			Demo
-		</button>
-	{/if}
-</div>
+{#if panelOpen}
+	<aside
+		class="fixed bottom-4 left-4 z-50 max-h-[min(70vh,28rem)] w-[min(100vw-2rem,18rem)] overflow-y-auto rounded-2xl border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur-md"
+		aria-label="Demo state switcher"
+	>
+		<div class="mb-2 flex items-center justify-between gap-2">
+			<p class="font-semibold tracking-wide text-muted-foreground uppercase">Demo</p>
+			<button type="button" class="text-muted-foreground hover:text-foreground" onclick={() => (panelOpen = false)}>Hide</button>
+		</div>
+		<div class="mb-3">
+			<label class="inline-flex items-center gap-1.5">
+				<input type="checkbox" bind:checked={forceReduced}>
+				reduced-motion
+			</label>
+		</div>
+		<ul class="space-y-0.5">
+			{#each SCENES as s (s.id)}
+				<li>
+					<button
+						type="button"
+						class="w-full rounded-md px-2 py-1.5 text-left transition-colors {scene === s.id
+							? 'bg-primary text-primary-foreground'
+							: 'hover:bg-muted'}"
+						onclick={() => applyScene(s.id)}
+					>
+						{s.label}
+					</button>
+				</li>
+			{/each}
+		</ul>
+	</aside>
+{:else}
+	<button
+		type="button"
+		class="fixed bottom-4 left-4 z-50 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm"
+		onclick={() => (panelOpen = true)}
+	>
+		Demo
+	</button>
+{/if}

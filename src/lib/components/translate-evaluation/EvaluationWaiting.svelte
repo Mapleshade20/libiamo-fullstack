@@ -197,7 +197,7 @@ onDestroy(() => {
 </script>
 
 <section
-	class="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-3xl flex-col items-center justify-center text-center"
+	class="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-3xl flex-col items-center justify-center text-center"
 	aria-live="polite"
 	aria-busy={!failed}
 >

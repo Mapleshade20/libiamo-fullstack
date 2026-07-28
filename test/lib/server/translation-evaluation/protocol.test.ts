@@ -122,9 +122,19 @@ describe("translation evaluation model protocols", () => {
 	});
 
 	it("validates Gen2 coverage before returning", async () => {
-		const exercises = Array.from({ length: 4 }, (_, index) => ({ front: `句子 ${index}`, back: `Sentence ${index}` }));
+		const examples = Array.from({ length: 4 }, (_, index) => ({ nativeText: `句子 ${index}`, targetText: `Sentence ${index}` }));
 		mockChatJson.mockResolvedValue(
-			response({ notes: [{ sourceCardOrdinals: [0], targetPattern: "disagree", explanation: "表达不同意。", exercises }] }),
+			response({
+				notes: [
+					{
+						sourceCardOrdinals: [0],
+						vocab: "disagree",
+						targetDefinition: "to have a different opinion",
+						nativeDefinition: "不同意",
+						examples,
+					},
+				],
+			}),
 		);
 		const result = await generateTranslationPractice({
 			cards: [
@@ -144,9 +154,8 @@ describe("translation evaluation model protocols", () => {
 			],
 			sourceLanguage: "zh",
 			targetLanguage: "en",
-			feedbackLanguage: "zh",
 		});
-		expect(result.value.notes[0].exercises).toHaveLength(4);
+		expect(result.value.notes[0].examples).toHaveLength(4);
 		expect(mockChatJson.mock.calls[0][0].options).toEqual({ temperature: 0.6, maxTokens: 32_768 });
 	});
 
@@ -165,7 +174,7 @@ describe("translation evaluation model protocols", () => {
 			}),
 		).rejects.toThrow("must cover every card ordinal exactly once");
 
-		await expect(generateTranslationPractice({ cards: [], sourceLanguage: "zh", targetLanguage: "en", feedbackLanguage: "zh" })).rejects.toThrow(
+		await expect(generateTranslationPractice({ cards: [], sourceLanguage: "zh", targetLanguage: "en" })).rejects.toThrow(
 			"at least one correction card",
 		);
 		expect(mockChatJson).not.toHaveBeenCalled();

@@ -307,24 +307,28 @@ export function providerErrorState(): LocalCardState {
 export const DEMO_TRANSFER_NOTES: TransferNoteFixture[] = [
 	{
 		id: 1,
-		targetPattern: "X's character has always been defined by…",
-		explanation: "描述角色特点时，用角色作主语 + is defined by / revolves around，比「The character feature of X is…」更地道。",
-		exercises: [
-			{ front: "她的个性一直由独立和倔强定义。", back: "Her personality has always been defined by independence and stubbornness." },
-			{ front: "这部小说的魅力在于它细腻的人物弧线。", back: "The novel's charm has always been defined by its carefully drawn character arcs." },
-			{ front: "他的领导风格以倾听和果断著称。", back: "His leadership style has always been defined by listening and decisiveness." },
-			{ front: "该系列的世界观由复杂的氏族政治塑造。", back: "The series' world has always been defined by intricate clan politics." },
+		vocab: "be defined by",
+		targetDefinition: "to have a particular quality or feature as the most important part of something",
+		nativeDefinition: "以……为最重要的特征；由……界定",
+		queueKind: "new",
+		examples: [
+			{ nativeText: "她的个性一直以独立和倔强为特征。", targetText: "Her personality has always been defined by independence and stubbornness." },
+			{ nativeText: "这部小说以细腻的人物弧线见长。", targetText: "The novel is defined by its carefully drawn character arcs." },
+			{ nativeText: "他的领导风格以倾听和果断著称。", targetText: "His leadership style is defined by listening and decisiveness." },
+			{ nativeText: "该系列的世界观由复杂的氏族政治塑造。", targetText: "The series' world is defined by intricate clan politics." },
 		],
 	},
 	{
 		id: 2,
-		targetPattern: "years of lore / buildup",
-		explanation: "表示虚构世界长期设定时，lore 比 backstory 更精准；剧情铺垫常用 buildup。",
-		exercises: [
-			{ front: "他们重写了多年积累的世界观。", back: "They rewrote years of lore." },
-			{ front: "这场反转完全没有铺垫。", back: "There was absolutely no buildup to this twist." },
-			{ front: "粉丝们珍惜那些年的设定细节。", back: "Fans treasure those years of carefully built lore." },
-			{ front: "这段感情缺少足够的情感铺垫。", back: "This romance lacks enough emotional buildup." },
+		vocab: "lore",
+		targetDefinition: "traditional knowledge and stories about a subject, especially a fictional world",
+		nativeDefinition: "（尤指虚构世界的）背景知识、传说与设定",
+		queueKind: "review",
+		examples: [
+			{ nativeText: "他们重写了多年积累的世界观设定。", targetText: "They rewrote years of lore." },
+			{ nativeText: "这款游戏有丰富而复杂的背景设定。", targetText: "The game has rich and complicated lore." },
+			{ nativeText: "粉丝们喜欢讨论这个系列的设定。", targetText: "Fans love discussing the lore of the series." },
+			{ nativeText: "我需要先补一下背景设定。", targetText: "I need to catch up on the lore first." },
 		],
 	},
 ];

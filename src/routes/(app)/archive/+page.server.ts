@@ -1,5 +1,5 @@
 import { fail } from "@sveltejs/kit";
-import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { listCompletedActivities } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
 import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/feedback";
@@ -20,23 +20,17 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const noteId = Number.parseInt(formData.get("noteId") as string, 10);
-		const tutorComment = (formData.get("tutorComment") as string)?.trim();
-		const keywordsRaw = (formData.get("keywords") as string)?.trim();
+		const vocab = (formData.get("vocab") as string)?.trim();
+		const targetDefinition = (formData.get("targetDefinition") as string)?.trim();
+		const nativeDefinition = (formData.get("nativeDefinition") as string)?.trim();
 
 		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
-		if (!tutorComment) return fail(400, { error: "Content is required" });
-		if (tutorComment.length > USER_TEXT_MAX_LENGTH) return fail(400, { error: "Content is too long" });
-		if (keywordsRaw && keywordsRaw.length > USER_KEYWORDS_MAX_LENGTH) return fail(400, { error: "Keywords are too long" });
+		if (!vocab || !targetDefinition || !nativeDefinition) return fail(400, { error: "Vocabulary and both definitions are required" });
+		if ([vocab, targetDefinition, nativeDefinition].some((value) => value.length > USER_TEXT_MAX_LENGTH)) {
+			return fail(400, { error: "Content is too long" });
+		}
 
-		const updated = await updateNote(noteId, user.id, {
-			tutorComment,
-			keywords: keywordsRaw
-				? keywordsRaw
-						.split(",")
-						.map((k) => k.trim())
-						.filter(Boolean)
-				: [],
-		});
+		const updated = await updateNote(noteId, user.id, { vocab, targetDefinition, nativeDefinition });
 		if (!updated) return fail(404, { error: "Note not found" });
 
 		return { success: true, note: updated };
@@ -76,19 +70,19 @@ export const actions: Actions = {
 						sessionId: note.sourceSessionId,
 						userId: user.id,
 						feedbackLanguage: user.nativeLanguage ?? note.language,
-						itemText: note.tutorComment,
-						category: "grammar",
+						itemText: `${note.vocab}\n${note.targetDefinition}\n${note.nativeDefinition}`,
+						category: "vocabulary",
 						question,
-						currentContext: note.sourceContext ?? undefined,
+						currentContext: `${note.targetDefinition}\n${note.nativeDefinition}`,
 					})
 				: await followUpOnLearningContent({
 						userId: user.id,
 						learningLanguage: note.language,
 						feedbackLanguage: user.nativeLanguage ?? note.language,
-						itemText: note.tutorComment,
-						category: "grammar",
+						itemText: `${note.vocab}\n${note.targetDefinition}\n${note.nativeDefinition}`,
+						category: "vocabulary",
 						question,
-						currentContext: note.sourceContext ?? undefined,
+						currentContext: `${note.targetDefinition}\n${note.nativeDefinition}`,
 					});
 			return { success: true, answer: result.answer };
 		} catch (e) {

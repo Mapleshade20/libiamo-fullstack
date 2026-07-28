@@ -54,7 +54,7 @@ describe("archive page server", () => {
 							taskTitle: "Ordering coffee",
 							ui: "discord",
 							completedAt: new Date(),
-							notes: [{ id: 1, tutorComment: "Use past tense", keywords: ["past tense"], sourceContext: "I go yesterday." }],
+							notes: [{ id: 1, vocab: "decide", targetDefinition: "to make a choice", nativeDefinition: "决定" }],
 						},
 					],
 				},
@@ -74,41 +74,45 @@ describe("archive page server", () => {
 
 	describe("actions.update", () => {
 		it("returns success when note is updated", async () => {
-			mockNoteService.updateNote.mockResolvedValue({ id: 1, tutorComment: "Updated content" });
+			const updated = { id: 1, vocab: "Updated vocab", targetDefinition: "Updated target definition", nativeDefinition: "Updated native definition" };
+			mockNoteService.updateNote.mockResolvedValue(updated);
 
 			const result = await actions.update(
 				createFormEvent({
-					values: { noteId: "42", tutorComment: "Updated content" },
+					values: { noteId: "42", vocab: updated.vocab, targetDefinition: updated.targetDefinition, nativeDefinition: updated.nativeDefinition },
 				}),
 			);
 
-			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated content" } });
+			expect(result).toEqual({ success: true, note: updated });
 			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				tutorComment: "Updated content",
-				keywords: [],
+				vocab: updated.vocab,
+				targetDefinition: updated.targetDefinition,
+				nativeDefinition: updated.nativeDefinition,
 			});
 		});
 
-		it("parses keywords from form data", async () => {
-			mockNoteService.updateNote.mockResolvedValue({ id: 1, tutorComment: "Updated" });
+		it("trims all editable Note fields", async () => {
+			const updated = { id: 1, vocab: "Updated", targetDefinition: "Target definition", nativeDefinition: "Native definition" };
+			mockNoteService.updateNote.mockResolvedValue(updated);
 
 			const result = await actions.update(
 				createFormEvent({
-					values: { noteId: "42", tutorComment: "Updated", keywords: "past tense,  , yesterday" },
+					values: { noteId: "42", vocab: "  Updated  ", targetDefinition: "  Target definition  ", nativeDefinition: "  Native definition  " },
 				}),
 			);
 
-			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated" } });
+			expect(result).toEqual({ success: true, note: updated });
 			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				tutorComment: "Updated",
-				keywords: ["past tense", "yesterday"],
+				vocab: "Updated",
+				targetDefinition: "Target definition",
+				nativeDefinition: "Native definition",
 			});
 		});
 
 		it("redirects before parsing form data when unauthenticated", async () => {
 			const event = createFormEvent({
 				user: null,
-				values: { noteId: "42", tutorComment: "Updated" },
+				values: { noteId: "42", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" },
 			});
 
 			await expect(actions.update(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
@@ -119,38 +123,38 @@ describe("archive page server", () => {
 		it("returns fail 400 when noteId is invalid", async () => {
 			const result = await actions.update(
 				createFormEvent({
-					values: { noteId: "not-a-number", tutorComment: "Updated" },
+					values: { noteId: "not-a-number", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" },
 				}),
 			);
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid note ID" } });
 		});
 
-		it("returns fail 400 when tutorComment is missing", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42" } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
+		it("returns fail 400 when a Note field is missing", async () => {
+			const result = await actions.update(createFormEvent({ values: { noteId: "42", vocab: "Expression" } }));
+			expect(result).toMatchObject({ status: 400, data: { error: "Vocabulary and both definitions are required" } });
 		});
 
-		it("returns fail 400 when tutorComment is whitespace only", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "   " } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
+		it("returns fail 400 when a Note field is whitespace only", async () => {
+			const result = await actions.update(
+				createFormEvent({ values: { noteId: "42", vocab: "   ", targetDefinition: "Target", nativeDefinition: "Native" } }),
+			);
+			expect(result).toMatchObject({ status: 400, data: { error: "Vocabulary and both definitions are required" } });
 		});
 
-		it("returns fail 400 when tutorComment is too long", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "x".repeat(10001) } }));
+		it("returns fail 400 when Note content is too long", async () => {
+			const result = await actions.update(
+				createFormEvent({ values: { noteId: "42", vocab: "x".repeat(10001), targetDefinition: "Target", nativeDefinition: "Native" } }),
+			);
 			expect(result).toMatchObject({ status: 400, data: { error: "Content is too long" } });
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 400 when keywords are too long", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated", keywords: "x".repeat(10001) } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Keywords are too long" } });
 			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
 		});
 
 		it("returns fail 404 when note not found", async () => {
 			mockNoteService.updateNote.mockResolvedValue(undefined);
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated" } }));
+			const result = await actions.update(
+				createFormEvent({ values: { noteId: "42", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" } }),
+			);
 			expect(result).toMatchObject({ status: 404, data: { error: "Note not found" } });
 		});
 	});
@@ -203,7 +207,9 @@ describe("archive page server", () => {
 			sourceSessionId: 99,
 			userId: "user_123",
 			language: "es",
-			tutorComment: "Incorrect verb conjugation",
+			vocab: "tomar una decisión",
+			targetDefinition: "elegir qué hacer tras considerar las opciones",
+			nativeDefinition: "作出决定",
 		};
 
 		it("returns success with answer when called correctly", async () => {
@@ -222,10 +228,10 @@ describe("archive page server", () => {
 				sessionId: 99,
 				userId: "user_123",
 				feedbackLanguage: "en",
-				itemText: "Incorrect verb conjugation",
-				category: "grammar",
+				itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				category: "vocabulary",
 				question: "why",
-				currentContext: undefined,
+				currentContext: "elegir qué hacer tras considerar las opciones\n作出决定",
 			});
 		});
 
@@ -235,13 +241,15 @@ describe("archive page server", () => {
 				sourceSessionId: null,
 				sourceTranslationAttemptId: 12,
 				language: "es",
-				sourceContext: "Learner translation context",
 			});
 			mockSessionService.followUpOnLearningContent.mockResolvedValue({ answer: "Translation explanation" });
 			const result = await actions.followUp(createFormEvent({ values: { noteId: "42", question: "why" } }));
 			expect(result).toEqual({ success: true, answer: "Translation explanation" });
 			expect(mockSessionService.followUpOnLearningContent).toHaveBeenCalledWith(
-				expect.objectContaining({ learningLanguage: "es", itemText: "Incorrect verb conjugation" }),
+				expect.objectContaining({
+					learningLanguage: "es",
+					itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				}),
 			);
 		});
 

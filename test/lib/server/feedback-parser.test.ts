@@ -192,6 +192,7 @@ describe("isFeedbackResultValid", () => {
 	it("returns true for result with annotations and summary", () => {
 		expect(
 			isFeedbackResultValid({
+				feedbackLanguage: "en",
 				annotations: [{ messageId: 1, annotatedText: "text", spans: [], comment: "good" }],
 				objectives: [],
 				summary: "Great!",
@@ -200,12 +201,13 @@ describe("isFeedbackResultValid", () => {
 	});
 
 	it("returns false when annotations empty", () => {
-		expect(isFeedbackResultValid({ annotations: [], objectives: [], summary: "Great!" })).toBe(false);
+		expect(isFeedbackResultValid({ feedbackLanguage: "en", annotations: [], objectives: [], summary: "Great!" })).toBe(false);
 	});
 
 	it("returns false when summary empty", () => {
 		expect(
 			isFeedbackResultValid({
+				feedbackLanguage: "en",
 				annotations: [{ messageId: 1, annotatedText: "text", spans: [], comment: "good" }],
 				objectives: [],
 				summary: "",

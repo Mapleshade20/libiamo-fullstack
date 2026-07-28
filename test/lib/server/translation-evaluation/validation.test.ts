@@ -137,27 +137,42 @@ describe("translation evaluation validation", () => {
 			TranslationEvaluationContractError,
 		);
 
-		const exercises = Array.from({ length: 4 }, (_, index) => ({ front: `前 ${index}`, back: `Back ${index}` }));
+		const examples = Array.from({ length: 4 }, (_, index) => ({ nativeText: `前 ${index}`, targetText: `Back ${index}` }));
+		const note = (sourceCardOrdinals: number[], vocab: string) => ({
+			sourceCardOrdinals,
+			vocab,
+			targetDefinition: `${vocab} definition`,
+			nativeDefinition: `${vocab} 释义`,
+			examples,
+		});
 		expect(
 			validateGeneration2Result(
 				{
-					notes: [
-						{ sourceCardOrdinals: [0], targetPattern: "one", explanation: "一", exercises },
-						{ sourceCardOrdinals: [1], targetPattern: "two", explanation: "二", exercises },
-					],
+					notes: [note([0], "one"), note([1], "two")],
 				},
 				2,
 			),
 		).toBeDefined();
-		expect(() =>
-			validateGeneration2Result({ notes: [{ sourceCardOrdinals: [0, 0], targetPattern: "one", explanation: "一", exercises }] }, 2),
-		).toThrow("cover every card ordinal exactly once");
+		expect(() => validateGeneration2Result({ notes: [note([0, 0], "one")] }, 2)).toThrow("cover every card ordinal exactly once");
 	});
 
-	it("rejects duplicate exercises within a note", () => {
-		const exercises = Array.from({ length: 4 }, () => ({ front: "同一句", back: "Same" }));
-		expect(() => validateGeneration2Result({ notes: [{ sourceCardOrdinals: [0], targetPattern: "one", explanation: "一", exercises }] }, 1)).toThrow(
-			"four distinct exercises",
-		);
+	it("rejects duplicate examples within a note", () => {
+		const examples = Array.from({ length: 4 }, () => ({ nativeText: "同一句", targetText: "Same" }));
+		expect(() =>
+			validateGeneration2Result(
+				{
+					notes: [
+						{
+							sourceCardOrdinals: [0],
+							vocab: "same",
+							targetDefinition: "identical",
+							nativeDefinition: "相同",
+							examples,
+						},
+					],
+				},
+				1,
+			),
+		).toThrow("four distinct examples");
 	});
 });

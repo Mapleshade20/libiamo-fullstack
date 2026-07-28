@@ -24,7 +24,7 @@ export const load: PageServerLoad = async (event) => {
 		? await db
 				.select({
 					templateId: translationSourceSet.templateId,
-					status: translationAttempt.status,
+					status: translationAttempt.workflowPhase,
 				})
 				.from(translationAttempt)
 				.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))

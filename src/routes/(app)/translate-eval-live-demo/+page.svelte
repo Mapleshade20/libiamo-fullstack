@@ -21,10 +21,12 @@ import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
 import { t } from "$lib/i18n";
 import type { ChatMessage } from "$lib/server/llm";
+import type { Generation2Result } from "$lib/server/translation-evaluation/schema";
 import type { ValidatedGeneration1Evaluation } from "$lib/server/translation-evaluation/validation";
 import { LIVE_DEMO_TEMPERATURE } from "$lib/translation-evaluation/live-demo-fixture";
 import type { TranslationDiffPart } from "$lib/translation-evaluation/types";
 import Generation1Inspector from "./Generation1Inspector.svelte";
+import Generation2Review from "./Generation2Review.svelte";
 import {
 	DEPRECATED_LIVE_REVIEW_STORAGE_KEYS,
 	type GenerationMetadata,
@@ -97,6 +99,15 @@ type SecondDraftActionData = {
 	metadata?: GenerationMetadata;
 };
 
+type Generation2ActionData = {
+	success?: boolean;
+	error?: string;
+	generation?: Generation2Result;
+	promptMessages?: ChatMessage[];
+	rawResponse?: string;
+	metadata?: GenerationMetadata;
+};
+
 let { data } = $props();
 
 const UI_LANG = "en" as const;
@@ -127,6 +138,8 @@ let secondDraft = $state<SecondDraftLocalState>({
 });
 let secondDraftSubmitting = $state(false);
 let secondDraftCall = $state<CallArtifact<SecondDraftVerification> | null>(null);
+let generation2Submitting = $state(false);
+let generation2Call = $state<CallArtifact<Generation2Result> | null>(null);
 
 const canSubmit = $derived(
 	learnerParagraphs.length === data.task.sourceParagraphs.length && learnerParagraphs.every((answer) => answer.trim().length > 0),
@@ -180,6 +193,7 @@ function initializeWorkflow(value: EvaluationData): void {
 		commentary: null,
 	};
 	secondDraftCall = null;
+	generation2Call = null;
 }
 
 function removePersistedReview(): void {
@@ -211,6 +225,9 @@ onMount(() => {
 			metadata = restored.metadata;
 			evaluation = restored.evaluation;
 			initializeWorkflow(restored.evaluation);
+			if (restored.generation2Call) {
+				generation2Call = { ...restored.generation2Call, error: null };
+			}
 			cardIndex = Math.max(0, Math.min(restored.cardIndex, restored.evaluation.cards.length - 1));
 			revealGeneratedAnswers = restored.revealGeneratedAnswers;
 			reviewView = restored.reviewView === "card" && restored.evaluation.cards.length > 0 ? "card" : "overview";
@@ -239,7 +256,7 @@ $effect(() => {
 	}
 
 	const persisted: PersistedReview = {
-		version: 5,
+		version: 7,
 		learnerParagraphs: [...learnerParagraphs],
 		promptMessages: [...promptMessages],
 		rawResponse,
@@ -248,6 +265,15 @@ $effect(() => {
 		reviewView,
 		cardIndex,
 		revealGeneratedAnswers,
+		generation2Call:
+			generation2Call?.result && generation2Call.rawResponse && generation2Call.metadata
+				? {
+						promptMessages: generation2Call.promptMessages,
+						rawResponse: generation2Call.rawResponse,
+						metadata: generation2Call.metadata,
+						result: generation2Call.result,
+					}
+				: null,
 	};
 	try {
 		sessionStorage.setItem(LIVE_REVIEW_STORAGE_KEY, JSON.stringify(persisted));
@@ -327,6 +353,7 @@ function returnToAnswer() {
 	evaluation = null;
 	correctionExperiments = [];
 	secondDraftCall = null;
+	generation2Call = null;
 	rawResponse = null;
 	metadata = null;
 }
@@ -487,11 +514,54 @@ async function verifyDraft(): Promise<void> {
 		secondDraftSubmitting = false;
 	}
 }
+
+async function generatePractice(): Promise<void> {
+	if (!evaluation?.cards.length || generation2Submitting) return;
+	const formData = new FormData();
+	formData.set(
+		"cards",
+		JSON.stringify(
+			evaluation.cards.map((card) => ({
+				ordinal: card.ordinal,
+				sourceText: card.sourceText,
+				originalAnswer: card.originalAnswer,
+				initialHint: card.initialHint,
+				deeperHint: card.deeperHint,
+				referenceAnswer: card.referenceAnswer,
+				minimalAnswer: card.minimalAnswer,
+				teacherNotes: card.teacherNotes,
+			})),
+		),
+	);
+	generation2Submitting = true;
+	try {
+		const response = await fetch("?/generatePractice", { method: "POST", body: formData });
+		const action = deserialize(await response.text()) as ActionResult<Generation2ActionData>;
+		const actionData = action.type === "success" || action.type === "failure" ? action.data : undefined;
+		generation2Call = {
+			promptMessages: actionData?.promptMessages ?? [],
+			rawResponse: actionData?.rawResponse ?? null,
+			metadata: actionData?.metadata ?? null,
+			result: action.type === "success" ? (actionData?.generation ?? null) : null,
+			error: action.type === "success" ? null : (actionData?.error ?? "Generation 2 did not return a usable result."),
+		};
+	} catch {
+		generation2Call = {
+			promptMessages: [],
+			rawResponse: null,
+			metadata: null,
+			result: null,
+			error: "The Generation 2 request was interrupted.",
+		};
+	} finally {
+		generation2Submitting = false;
+	}
+}
 </script>
 
 <svelte:head>
 	<title>Translation evaluation live review · Libiamo</title>
-	<meta name="description" content="Development-only live review of Generation 1, correction-verifier, and second-draft-verifier prompts.">
+	<meta name="description" content="Development-only live review of Generation 1, verifier, and Generation 2 prompts.">
 </svelte:head>
 
 <div class="mx-auto w-full max-w-5xl">
@@ -500,9 +570,16 @@ async function verifyDraft(): Promise<void> {
 			<ArrowLeft size={15} />
 			Static visual demo
 		</a>
-		<a href="#generation-1-prompt" class="text-sm font-medium underline decoration-border underline-offset-4 hover:decoration-foreground">
-			Inspect complete prompt
-		</a>
+		<div class="flex flex-wrap items-center gap-4">
+			{#if evaluation?.cards.length}
+				<a href="#generation-2-review" class="text-sm font-medium underline decoration-border underline-offset-4 hover:decoration-foreground">
+					Generation 2
+				</a>
+			{/if}
+			<a href="#generation-1-prompt" class="text-sm font-medium underline decoration-border underline-offset-4 hover:decoration-foreground">
+				Inspect complete prompt
+			</a>
+		</div>
 	</div>
 
 	{#if reviewView === "answer"}
@@ -781,6 +858,18 @@ async function verifyDraft(): Promise<void> {
 				</a>
 			</div>
 		{/if}
+	{/if}
+
+	{#if evaluation?.cards.length}
+		<Generation2Review
+			result={generation2Call?.result ?? null}
+			promptMessages={generation2Call?.promptMessages ?? []}
+			rawResponse={generation2Call?.rawResponse ?? null}
+			metadata={generation2Call?.metadata ?? null}
+			submitting={generation2Submitting}
+			error={generation2Call?.error ?? null}
+			onrun={() => void generatePractice()}
+		/>
 	{/if}
 
 	<Generation1Inspector

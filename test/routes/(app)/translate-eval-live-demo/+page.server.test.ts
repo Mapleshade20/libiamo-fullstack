@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGenerateTranslationEvaluation, mockVerifyCorrection, mockVerifySecondDraft } = vi.hoisted(() => ({
+const { mockGenerateTranslationEvaluation, mockGenerateTranslationPractice, mockVerifyCorrection, mockVerifySecondDraft } = vi.hoisted(() => ({
 	mockGenerateTranslationEvaluation: vi.fn(),
+	mockGenerateTranslationPractice: vi.fn(),
 	mockVerifyCorrection: vi.fn(),
 	mockVerifySecondDraft: vi.fn(),
 }));
 
 vi.mock("$app/environment", () => ({ dev: true }));
 vi.mock("$lib/server/translation-evaluation/generation", () => ({ generateTranslationEvaluation: mockGenerateTranslationEvaluation }));
+vi.mock("$lib/server/translation-evaluation/practice-generation", () => ({
+	GENERATION_2_TEMPERATURE: 0.6,
+	generateTranslationPractice: mockGenerateTranslationPractice,
+}));
 vi.mock("$lib/server/translation-evaluation/verifier", () => ({
 	verifyCorrection: mockVerifyCorrection,
 	verifySecondDraft: mockVerifySecondDraft,
@@ -48,6 +53,37 @@ const rejectedCorrectionChecks = {
 	noNewErrors: false,
 	fullyNatural: false,
 };
+
+const generation2 = {
+	notes: [
+		{
+			sourceCardOrdinals: [0],
+			vocab: "even",
+			targetDefinition: "used to emphasize something surprising or difficult to imagine",
+			nativeDefinition: "甚至；到底（用于强调惊讶或难以想象）",
+			examples: [
+				{ nativeText: "我该从何讲起？", targetText: "Where do I even begin?" },
+				{ nativeText: "我们到底该从哪里找？", targetText: "Where do we even look?" },
+				{ nativeText: "她到底该如何回答？", targetText: "How does she even answer?" },
+				{ nativeText: "他们究竟为什么在这里？", targetText: "Why are they even here?" },
+			],
+		},
+	],
+};
+
+function generation2Card() {
+	const card = evaluation.cards[0];
+	return {
+		ordinal: card.ordinal,
+		sourceText: card.sourceText,
+		originalAnswer: card.originalAnswer,
+		initialHint: card.initialHint,
+		deeperHint: card.deeperHint,
+		referenceAnswer: card.referenceAnswer,
+		minimalAnswer: card.minimalAnswer,
+		teacherNotes: card.teacherNotes,
+	};
+}
 
 function event(learnerParagraphs: unknown, user: Record<string, unknown> | null = { id: "user-1" }, temperature?: string) {
 	const formData = new FormData();
@@ -228,5 +264,35 @@ describe("Generation 1 live review demo server", () => {
 		)) as any;
 		expect(result.status).toBe(400);
 		expect(mockVerifySecondDraft).not.toHaveBeenCalled();
+	});
+
+	it("runs Generation 2 without database persistence and returns exact review artifacts", async () => {
+		const generation2Messages = [
+			{ role: "system", content: "Generation 2 contract" },
+			{ role: "user", content: JSON.stringify({ cards: [generation2Card()] }) },
+		];
+		mockGenerateTranslationPractice.mockResolvedValue(modelResponse(generation2, generation2Messages));
+
+		const result = (await actions.generatePractice(workflowEvent({ cards: JSON.stringify([generation2Card()]) }))) as any;
+		expect(result.success).toBe(true);
+		expect(result.generation).toEqual(generation2);
+		expect(result.promptMessages).toEqual(generation2Messages);
+		expect(result.rawResponse).toBe(JSON.stringify(generation2));
+		expect(result.metadata).toMatchObject({ temperature: 0.6, model: "test-model", finishReason: "stop", repairUsed: false });
+		expect(mockGenerateTranslationPractice).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: "user-1",
+				sourceLanguage: "zh",
+				targetLanguage: "en",
+				cards: [expect.objectContaining(generation2Card())],
+			}),
+		);
+	});
+
+	it("rejects empty Generation 2 card data before calling the provider", async () => {
+		const result = (await actions.generatePractice(workflowEvent({ cards: "[]" }))) as any;
+		expect(result.status).toBe(400);
+		expect(result.data.error).toBe("The Generation 2 card data was invalid.");
+		expect(mockGenerateTranslationPractice).not.toHaveBeenCalled();
 	});
 });

@@ -40,7 +40,7 @@ vi.mock("$lib/server/db/schema", () => ({
 		id: "attempt.id",
 		userId: "attempt.userId",
 		sourceSetId: "attempt.sourceSetId",
-		status: "attempt.status",
+		workflowPhase: "attempt.workflowPhase",
 	},
 	translationAnswer: {
 		attemptId: "answer.attemptId",
@@ -58,11 +58,9 @@ vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
 import {
 	chooseInitialCandidate,
-	evaluateTranslationAgainstReferences,
 	generateTranslationVariants,
 	getOrCreateTranslationAttempt,
 	getOrCreateTranslationSourceSet,
-	TranslationEvaluationSchema,
 	translationContentFingerprint,
 	validateTranslationCandidates,
 } from "$lib/server/translation";
@@ -124,39 +122,6 @@ describe("translation service", () => {
 		expect(() => validateTranslationCandidates([["one", "two"]], 1)).toThrow("exactly 3");
 	});
 
-	it("evaluates actual prompts against multiple references with feedback in K", async () => {
-		mockChatJson.mockResolvedValue({
-			value: {
-				overallScore: "A",
-				overallFeedback: "Very natural.",
-				paragraphs: [{ paragraphIndex: 0, feedback: "Good register.", rewriteSuggestion: "Bonjour a tous." }],
-			},
-		});
-		const result = await evaluateTranslationAgainstReferences({
-			promptParagraphs: ["Hello everyone."],
-			userTranslations: ["Salut tout le monde."],
-			referenceParagraphs: [["Bonjour a tous.", "Bonjour tout le monde."]],
-			promptLanguage: "en",
-			targetLanguage: "fr",
-			feedbackLanguage: "en",
-			context: "a speech opening",
-			userId: "u1",
-		});
-		expect(result.overallScore).toBe("A");
-		const request = mockChatJson.mock.calls[0][0];
-		expect(request.userId).toBe("u1");
-		expect(request.messages[0].content).toContain("feedback in English");
-		expect(request.messages[0].content).toContain("Every rewriteSuggestion must be a non-empty string written only in French");
-		expect(request.messages[0].content).toContain("Return ONLY one valid JSON object");
-		expect(request.messages[0].content).toContain('overallScore must be exactly one of "A", "B", or "C"');
-		expect(request.messages.at(-1).content).toContain("Bonjour tout le monde.");
-		expect(request.options.temperature).toBe(0.5);
-		const assistantExamples = request.messages.filter((message: { role: string }) => message.role === "assistant");
-		expect(assistantExamples).toHaveLength(2);
-		for (const example of assistantExamples) expect(TranslationEvaluationSchema.parse(JSON.parse(example.content))).toBeDefined();
-		expect(JSON.parse(assistantExamples[0].content).paragraphs).toHaveLength(2);
-	});
-
 	it("changes the fingerprint for source, context, language, or prompt version changes", () => {
 		const base = { referenceParagraphs: ["Bonjour"], context: "a greeting", sourceLanguage: "fr", promptLanguage: "en" };
 		const fingerprint = translationContentFingerprint(base);
@@ -214,7 +179,7 @@ describe("translation service", () => {
 			],
 		);
 		insertQueue.push([{ id: 7 }]);
-		vi.spyOn(Math, "random").mockReturnValue(0.9);
+		const random = vi.spyOn(Math, "random").mockReturnValue(0.9);
 
 		expect(await getOrCreateTranslationAttempt("u1", 4, 2)).toBe(7);
 		const answerInsert = mockDb.insert.mock.results[1].value;
@@ -223,8 +188,8 @@ describe("translation service", () => {
 			{ attemptId: 7, paragraphIndex: 1, candidateIndex: 2, translation: "" },
 		]);
 		const { inArray } = await import("drizzle-orm");
-		expect(inArray).toHaveBeenCalledWith("attempt.status", ["submitted", "evaluated"]);
-		vi.mocked(Math.random).mockRestore();
+		expect(inArray).toHaveBeenCalledWith("attempt.workflowPhase", ["submitted", "correction", "second_draft", "transfer", "completed"]);
+		random.mockRestore();
 	});
 
 	it("returns the winning attempt when concurrent creation loses the unique insert", async () => {

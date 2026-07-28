@@ -18,37 +18,12 @@ const VariantsSchema = z.object({
 	),
 });
 
-export const TranslationEvaluationSchema = z.object({
-	overallScore: z.enum(["A", "B", "C"]),
-	overallFeedback: z.string().trim().min(1),
-	paragraphs: z.array(
-		z.object({
-			paragraphIndex: z.number().int().nonnegative(),
-			feedback: z.string().trim().min(1),
-			rewriteSuggestion: z.string().trim().min(1),
-		}),
-	),
-});
-
-export type TranslationEvaluation = z.infer<typeof TranslationEvaluationSchema>;
-
 export type GenerateTranslationVariantsInput = {
 	paragraphs: string[];
 	sourceLanguage: string;
 	targetLanguage: string;
 	context: string;
 	candidateCount?: number;
-};
-
-export type EvaluateTranslationInput = {
-	promptParagraphs: string[];
-	userTranslations: string[];
-	referenceParagraphs: string[][];
-	promptLanguage: string;
-	targetLanguage: string;
-	context: string;
-	feedbackLanguage: string;
-	userId: string;
 };
 
 const SPANISH_GREETING_VARIANTS = [
@@ -115,75 +90,6 @@ function variantsFewShotMessages(candidateCount: number) {
 	];
 }
 
-function evaluationFewShotMessages() {
-	return [
-		{
-			role: "user" as const,
-			content: `FORMAT EXAMPLE 1
-Context: an informal message to a close friend.
-
-[Paragraph 0]
-Prompt (English): I cannot make it tonight, sorry.
-Learner translation (French): Je ne peux pas venir ce soir, desole.
-Authentic reference(s) (French):
-1. Desole, je ne pourrai pas venir ce soir.
-
-[Paragraph 1]
-Prompt (English): Let us catch up next week instead.
-Learner translation (French): On peut parler la semaine prochaine a la place.
-Authentic reference(s) (French):
-1. On se rattrape plutot la semaine prochaine.
-2. Retrouvons-nous plutot la semaine prochaine.`,
-		},
-		{
-			role: "assistant" as const,
-			content: JSON.stringify({
-				overallScore: "B",
-				overallFeedback: "The meaning is clear and the tone is mostly appropriate, with a few phrasing choices that could sound more natural.",
-				paragraphs: [
-					{
-						paragraphIndex: 0,
-						feedback: "This accurately conveys the apology and inability to attend. The wording is natural for an informal message.",
-						rewriteSuggestion: "Desole, je ne pourrai pas venir ce soir.",
-					},
-					{
-						paragraphIndex: 1,
-						feedback:
-							"The meaning is understandable, but 'parler' loses the sense of meeting or catching up, and 'a la place' is less idiomatic here than 'plutot'.",
-						rewriteSuggestion: "On se rattrape plutot la semaine prochaine.",
-					},
-				],
-			}),
-		},
-		{
-			role: "user" as const,
-			content: `FORMAT EXAMPLE 2
-Context: a polite workplace email.
-
-[Paragraph 0]
-Prompt (Japanese): ご確認いただけますでしょうか。
-Learner translation (English): Can you check it?
-Authentic reference(s) (English):
-1. Could you please review it?
-2. Would you mind checking it?`,
-		},
-		{
-			role: "assistant" as const,
-			content: JSON.stringify({
-				overallScore: "B",
-				overallFeedback: "意思准确，但语气比原文更直接，在职场邮件中可以更礼貌。",
-				paragraphs: [
-					{
-						paragraphIndex: 0,
-						feedback: "译文表达了请求确认的核心意思，但原文使用了较为委婉的敬语形式，'Can you' 显得稍直接。",
-						rewriteSuggestion: "Could you please review it?",
-					},
-				],
-			}),
-		},
-	];
-}
-
 export function validateTranslationCandidates(candidates: string[][], paragraphCount: number, candidateCount = TRANSLATION_CANDIDATE_COUNT) {
 	if (candidates.length !== paragraphCount) throw new Error("The AI response did not cover every paragraph.");
 	for (const paragraph of candidates) {
@@ -241,83 +147,6 @@ OUTPUT CONTRACT:
 	const candidates = ordered.map((paragraph) => paragraph.candidates.map((candidate) => candidate.trim()));
 	validateTranslationCandidates(candidates, paragraphs.length, candidateCount);
 	return candidates;
-}
-
-export async function evaluateTranslationAgainstReferences({
-	promptParagraphs,
-	userTranslations,
-	referenceParagraphs,
-	promptLanguage,
-	targetLanguage,
-	context,
-	feedbackLanguage,
-	userId,
-}: EvaluateTranslationInput): Promise<TranslationEvaluation> {
-	const paragraphCount = promptParagraphs.length;
-	if (
-		paragraphCount === 0 ||
-		promptParagraphs.some((paragraph) => !paragraph.trim()) ||
-		userTranslations.length !== paragraphCount ||
-		userTranslations.some((translation) => !translation.trim()) ||
-		referenceParagraphs.length !== paragraphCount ||
-		referenceParagraphs.some((references) => references.length === 0 || references.some((reference) => !reference.trim()))
-	) {
-		throw new Error("Evaluation input must cover every paragraph and include at least one reference for each.");
-	}
-	const outputShape = JSON.stringify({
-		overallScore: "A",
-		overallFeedback: `<overall feedback in ${getLanguageEnglishName(feedbackLanguage)}>`,
-		paragraphs: [
-			{
-				paragraphIndex: 0,
-				feedback: `<paragraph feedback in ${getLanguageEnglishName(feedbackLanguage)}>`,
-				rewriteSuggestion: `<suggested rewrite in ${getLanguageEnglishName(targetLanguage)}>`,
-			},
-		],
-	});
-
-	const { value: result } = await chatJson({
-		schema: TranslationEvaluationSchema,
-		messages: [
-			{
-				role: "system",
-				content: `You are an expert ${getLanguageEnglishName(targetLanguage)} translation tutor. Evaluate a learner translating from ${getLanguageEnglishName(promptLanguage)} into ${getLanguageEnglishName(targetLanguage)}. Accept natural synonyms and valid renderings that differ from the references. Grade A, B, or C for accuracy, naturalness, grammar, register, and contextual fit.
-
-OUTPUT CONTRACT:
-- Return ONLY one valid JSON object. Do not use Markdown fences, headings, bullet points, or add any explanation outside the JSON.
-- Use exactly this shape: ${outputShape}
-- overallScore must be exactly one of "A", "B", or "C". Do not use numbers, percentages, or longer labels.
-- overallFeedback and every feedback value must be non-empty strings written only in ${getLanguageEnglishName(feedbackLanguage)}.
-- Every rewriteSuggestion must be a non-empty string written only in ${getLanguageEnglishName(targetLanguage)}.
-- Return exactly one paragraphs item for every input paragraph, in the original order, using the same zero-based paragraphIndex.
-- Do not add, rename, or omit fields. Do not use paragraph indices as object keys.
-- The authentic references are examples of valid renderings, not the only acceptable answers. Accept accurate natural synonyms.
-- The following exchanges are format examples only. Follow their JSON structure, but follow the requested languages and content for the real task.`,
-			},
-			...evaluationFewShotMessages(),
-			{
-				role: "user",
-				content: `REAL TASK
-Write feedback in ${getLanguageEnglishName(feedbackLanguage)} and rewriteSuggestion values in ${getLanguageEnglishName(targetLanguage)}.
-Context: ${context}.
-
-${promptParagraphs
-	.map(
-		(prompt, index) =>
-			`[Paragraph ${index}]\nPrompt (${getLanguageEnglishName(promptLanguage)}): ${prompt}\nLearner translation (${getLanguageEnglishName(targetLanguage)}): ${userTranslations[index]}\nAuthentic reference(s) (${getLanguageEnglishName(targetLanguage)}):\n${referenceParagraphs[index].map((reference, referenceIndex) => `${referenceIndex + 1}. ${reference}`).join("\n")}`,
-	)
-	.join("\n\n")}`,
-			},
-		],
-		options: { temperature: 0.5, maxTokens: 8192 },
-		userId,
-	});
-
-	const ordered = [...result.paragraphs].sort((a, b) => a.paragraphIndex - b.paragraphIndex);
-	if (ordered.length !== paragraphCount || ordered.some((paragraph, index) => paragraph.paragraphIndex !== index)) {
-		throw new Error("The tutor response did not cover every paragraph.");
-	}
-	return { ...result, paragraphs: ordered };
 }
 
 export function translationContentFingerprint(input: {
@@ -400,7 +229,13 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 	const [existing] = await db
 		.select({ id: translationAttempt.id })
 		.from(translationAttempt)
-		.where(and(eq(translationAttempt.userId, userId), eq(translationAttempt.sourceSetId, sourceSetId)))
+		.where(
+			and(
+				eq(translationAttempt.userId, userId),
+				eq(translationAttempt.sourceSetId, sourceSetId),
+				inArray(translationAttempt.workflowPhase, ["draft", "submitted", "correction", "second_draft", "transfer"]),
+			),
+		)
 		.limit(1);
 	if (existing) return existing.id;
 
@@ -412,7 +247,12 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 		})
 		.from(translationAnswer)
 		.innerJoin(translationAttempt, eq(translationAnswer.attemptId, translationAttempt.id))
-		.where(and(eq(translationAttempt.sourceSetId, sourceSetId), inArray(translationAttempt.status, ["submitted", "evaluated"])))
+		.where(
+			and(
+				eq(translationAttempt.sourceSetId, sourceSetId),
+				inArray(translationAttempt.workflowPhase, ["submitted", "correction", "second_draft", "transfer", "completed"]),
+			),
+		)
 		.groupBy(translationAnswer.paragraphIndex, translationAnswer.candidateIndex);
 
 	const initialIndices = Array.from({ length: paragraphCount }, (_, paragraphIndex) => {
@@ -425,8 +265,8 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 	const insertedId = await db.transaction(async (tx) => {
 		const [inserted] = await tx
 			.insert(translationAttempt)
-			.values({ userId, sourceSetId, status: "draft" })
-			.onConflictDoNothing({ target: [translationAttempt.userId, translationAttempt.sourceSetId] })
+			.values({ userId, sourceSetId, workflowPhase: "draft" })
+			.onConflictDoNothing()
 			.returning({ id: translationAttempt.id });
 		if (!inserted) return null;
 		await tx.insert(translationAnswer).values(
@@ -444,7 +284,13 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 	const [winner] = await db
 		.select({ id: translationAttempt.id })
 		.from(translationAttempt)
-		.where(and(eq(translationAttempt.userId, userId), eq(translationAttempt.sourceSetId, sourceSetId)))
+		.where(
+			and(
+				eq(translationAttempt.userId, userId),
+				eq(translationAttempt.sourceSetId, sourceSetId),
+				inArray(translationAttempt.workflowPhase, ["draft", "submitted", "correction", "second_draft", "transfer"]),
+			),
+		)
 		.limit(1);
 	if (!winner) throw new Error("Translation attempt creation lost a race but no winning record was found.");
 	return winner.id;

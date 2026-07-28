@@ -300,27 +300,26 @@ export type Generation2Input = {
 	cards: ValidatedGeneration1Card[];
 	sourceLanguage: string;
 	targetLanguage: string;
-	feedbackLanguage: string;
 };
 
 export function buildGeneration2Messages(input: Generation2Input): ChatMessage[] {
 	const sourceLanguage = getLanguageEnglishName(input.sourceLanguage);
 	const targetLanguage = getLanguageEnglishName(input.targetLanguage);
-	const feedbackLanguage = getLanguageEnglishName(input.feedbackLanguage);
 	return [
 		{
 			role: "system",
-			content: `Turn correction cards into reusable ${targetLanguage} learning notes and transfer exercises.
+			content: `Turn correction cards into reusable ${targetLanguage} vocabulary notes for a learner whose native language is ${sourceLanguage}.
 
-Return JSON only: {"notes":[{"sourceCardOrdinals":[0],"targetPattern":"...","explanation":"...","exercises":[{"front":"...","back":"..."},{"front":"...","back":"..."},{"front":"...","back":"..."},{"front":"...","back":"..."}]}]}.
+Return JSON only: {"notes":[{"sourceCardOrdinals":[0],"vocab":"...","targetDefinition":"...","nativeDefinition":"...","examples":[{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."}]}]}.
 
 CONTRACT
 - Cover every supplied card ordinal exactly once across all notes. Never omit or duplicate an ordinal.
-- Merge cards only when they teach the same reusable underlying pattern; do not merge merely similar surface vocabulary.
-- targetPattern is a concise reusable ${targetLanguage} structure or expression.
-- explanation is a complete explanation written entirely in ${feedbackLanguage}.
-- Every note has exactly four distinct exercises in varied topics and situations, not copies with only names changed.
-- Every exercise front is a natural sentence in ${sourceLanguage}; every back is its natural ${targetLanguage} translation and practices the note's targetPattern.
+- Infer the concrete ${targetLanguage} vocabulary the learner failed to know or use correctly from referenceAnswer and minimalAnswer. Teacher notes are supporting context; never extract an incidental example that is not part of the correction.
+- vocab must be the exact reusable ${targetLanguage} expression: choose a single word when the learner needs that word itself, or a lexical chunk when this context requires a fixed or semi-fixed collocation, phrasal verb, fixed phrase, idiom, or functional formula. Never output an abstract grammar pattern, sentence structure, study instruction, slash-separated bundle, or the learner's incorrect wording.
+- Merge cards only when they teach the same vocab. If one card has unrelated issues, select its most transferable corrected word or lexical chunk. When uncertain, keep cards separate.
+- targetDefinition is a concise dictionary-style definition entirely in ${targetLanguage}. nativeDefinition is the equivalent concise dictionary-style definition entirely in ${sourceLanguage}. Neither field is a grammar lesson.
+- Every note has exactly four distinct examples in varied everyday situations. Each targetText is an independently natural ${targetLanguage} sentence that uses vocab, allowing grammatically required inflection. Each nativeText is an independently natural ${sourceLanguage} translation with exactly the same meaning.
+- Do not force every detail from the correction card into an example. Before returning, silently audit every pair for meaning preservation, word forms, grammar, register, and collocation; rewrite anything a native speaker would find awkward.
 - Do not add fields.`,
 		},
 		{

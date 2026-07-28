@@ -23,7 +23,6 @@ let expandedActivityKeys = $state(new Set<string>());
 let editingNoteId = $state<number | null>(null);
 let deletingNoteId = $state<number | null>(null);
 let deleteError = $state<string | null>(null);
-let creatingCardIds = $state(new Set<number>());
 
 $effect(() => {
 	groups = data.groups ?? [];
@@ -85,11 +84,12 @@ function handleCancel() {
 	deleteError = null;
 }
 
-async function saveNote(noteId: number, input: { tutorComment: string; keywords: string[] }) {
+async function saveNote(noteId: number, input: { vocab: string; targetDefinition: string; nativeDefinition: string }) {
 	const formData = new FormData();
 	formData.append("noteId", String(noteId));
-	formData.append("tutorComment", input.tutorComment);
-	formData.append("keywords", input.keywords.join(", "));
+	formData.append("vocab", input.vocab);
+	formData.append("targetDefinition", input.targetDefinition);
+	formData.append("nativeDefinition", input.nativeDefinition);
 
 	const response = await fetch("?/update", { method: "POST", body: formData });
 	const result = deserialize(await response.text());
@@ -142,36 +142,6 @@ function removeNote(noteId: number) {
 function formatDate(d: Date): string {
 	return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-
-async function createReviewCard(noteId: number) {
-	creatingCardIds = new Set(creatingCardIds).add(noteId);
-	try {
-		const res = await fetch("/api/review/create-card", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ noteId }),
-		});
-		if (res.ok) {
-			const data = await res.json();
-			if (data.created) markNoteHasCard(noteId);
-		}
-	} catch {
-		// silently ignore
-	} finally {
-		creatingCardIds.delete(noteId);
-		creatingCardIds = new Set(creatingCardIds);
-	}
-}
-
-function markNoteHasCard(noteId: number) {
-	groups = groups.map((group) => ({
-		...group,
-		activities: group.activities.map((activity) => ({
-			...activity,
-			notes: activity.notes.map((note) => (note.id === noteId ? { ...note, hasReviewCard: true } : note)),
-		})),
-	}));
-}
 </script>
 
 <svelte:head>
@@ -190,7 +160,6 @@ function markNoteHasCard(noteId: number) {
 
 		{#each rows as row (row.activity.activityKey)}
 			{@const { activity, dateStr, showDate } = row}
-			{@const allKeywords = activity.notes.flatMap((n) => n.keywords ?? []).filter((k, i, arr) => arr.indexOf(k) === i)}
 			{@const Icon = uiIcons[activity.ui] ?? MessageCircle}
 			{@const isExpanded = expandedActivityKeys.has(activity.activityKey)}
 			<div class="flex gap-0 pb-8">
@@ -230,12 +199,8 @@ function markNoteHasCard(noteId: number) {
 						<span>{activity.title}</span>
 					</button>
 
-					{#if !isExpanded && allKeywords.length > 0}
-						<div class="mt-1.5 flex flex-wrap gap-1">
-							{#each allKeywords as kw}
-								<span class="rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">{kw}</span>
-							{/each}
-						</div>
+					{#if !isExpanded && activity.notes.length > 0}
+						<p class="mt-1.5 line-clamp-1 text-sm text-muted-foreground">{activity.notes.map((note) => note.vocab).join(" · ")}</p>
 					{/if}
 
 					{#if isExpanded}
@@ -248,7 +213,7 @@ function markNoteHasCard(noteId: number) {
 									<NoteEditor {note} oncancel={handleCancel} onsave={(input) => saveNote(note.id, input)} />
 								{:else if deletingNoteId === note.id}
 									<div class="rounded-md border border-red-200 bg-red-50 p-4">
-										<p class="mb-3 text-sm text-red-800">Delete this note? Any associated review card will also be deleted. This cannot be undone.</p>
+										<p class="mb-3 text-sm text-red-800">Delete this note and its review history? This cannot be undone.</p>
 										{#if deleteError}
 											<p class="mb-3 text-xs font-medium text-red-700">{deleteError}</p>
 										{/if}
@@ -270,15 +235,7 @@ function markNoteHasCard(noteId: number) {
 										</div>
 									</div>
 								{:else}
-									<NoteCard
-										{note}
-										hasReviewCard={note.hasReviewCard}
-										creating={creatingCardIds.has(note.id)}
-										onedit={() => handleEdit(note.id)}
-										ondelete={() => handleDeleteRequest(note.id)}
-										oncreateCard={() => createReviewCard(note.id)}
-										t={askLabels}
-									/>
+									<NoteCard {note} onedit={() => handleEdit(note.id)} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
 								{/if}
 							{/each}
 						</div>

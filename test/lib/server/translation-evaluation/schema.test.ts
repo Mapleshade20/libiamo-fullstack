@@ -73,15 +73,16 @@ describe("translation evaluation schemas", () => {
 		expect(() => CorrectionVerifierSchema.parse({ verdict: "reject", acceptedDiff: "answer" })).toThrow();
 	});
 
-	it("requires complete second-draft and four-exercise Gen2 shapes", () => {
+	it("requires complete second-draft and vocabulary-note Gen2 shapes", () => {
 		expect(SecondDraftVerifierSchema.parse({ cards: [{ ordinal: 0, resolved: true }], commentary: "已经解决。" })).toBeDefined();
 		const note = {
 			sourceCardOrdinals: [0],
-			targetPattern: "agree without be",
-			explanation: "agree 本身是动词。",
-			exercises: Array.from({ length: 4 }, (_, index) => ({ front: `例句 ${index}`, back: `Example ${index}` })),
+			vocab: "disagree",
+			targetDefinition: "to have a different opinion",
+			nativeDefinition: "不同意；持不同意见",
+			examples: Array.from({ length: 4 }, (_, index) => ({ nativeText: `例句 ${index}`, targetText: `I disagree with example ${index}.` })),
 		};
 		expect(Generation2Schema.parse({ notes: [note] })).toBeDefined();
-		expect(() => Generation2Schema.parse({ notes: [{ ...note, exercises: note.exercises.slice(0, 3) }] })).toThrow();
+		expect(() => Generation2Schema.parse({ notes: [{ ...note, examples: note.examples.slice(0, 3) }] })).toThrow();
 	});
 });

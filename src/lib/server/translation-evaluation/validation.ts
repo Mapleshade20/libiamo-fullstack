@@ -135,8 +135,10 @@ export function validateGeneration2Result(result: Generation2Result, cardCount: 
 	);
 
 	for (const note of result.notes) {
-		const exercises = new Set(note.exercises.map((exercise) => `${exercise.front.trim()}\u0000${exercise.back.trim()}`));
-		if (exercises.size !== 4) throw new TranslationEvaluationContractError("Each generated note must contain four distinct exercises.");
+		const examples = new Set(note.examples.map((example) => `${example.targetText.trim()}\u0000${example.nativeText.trim()}`));
+		if (examples.size !== note.examples.length) {
+			throw new TranslationEvaluationContractError("Each generated note must contain four distinct examples.");
+		}
 	}
 	return result;
 }

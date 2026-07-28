@@ -7,7 +7,7 @@ related-issue: docs/issues/2026-07-15-redesign-translate-eval.md
 
 ## 计划目的
 
-实现 `docs/issues/2026-07-15-redesign-translate-eval.md`：主动学习翻译评估、`workflowPhase` 续做、路由拆分、全局 Note=FSRS+4 variants，以及翻译/传统 task 共用的反馈语言偏好。
+实现 `docs/issues/2026-07-15-redesign-translate-eval.md`：主动学习翻译评估、`workflowPhase` 续做、路由拆分、全局词汇 Note=FSRS+双语释义+JSON 例句，以及翻译/传统 task 共用的反馈语言偏好。
 
 阶段 1 视觉 demo **已通过**产品审查。可进入阶段 2+（LLM 协议 / DB / 业务路由）。实现时以 issue 中 grill 共识为准；下文是落地拆分。
 
@@ -72,19 +72,21 @@ draft → submitted → correction → second_draft → transfer → completed
 
 ### 6. 放弃与 retake
 
-- 未完成可放弃：物理删 attempt + cascade Notes/variants/相关 logs
+- 未完成可放弃：物理删 attempt + cascade Notes/相关 logs
 - completed 可多条；非 completed 每 user+source set 至多一条
 
 ### 7. Note
 
 - Note 持 FSRS；删 ReviewCard
-- **所有**来源一次 LLM：targetPattern + explanation + 恰好 4 exercises
+- **所有**来源一次 LLM：目标语 `vocab` + 目标语词典释义 + 用户母语词典释义 + 4 条自然日常 JSON 例句
+- `vocab` 是从正确 reference 中提取的 single word 或语境所需 lexical chunk，不是抽象句型；例句池不是四张卡
+- 删除 `note_exercise_variant` 与 Note cursor/order；transfer/review 每次展示普通随机例句
 - reviewLog → noteId
 
 ### 8. 迁移评分
 
 - Incorrect → Again；Pass → **Good**
-- 队列仅 snapshot；四次 Incorrect deferred
+- 队列和随机例句索引仅 versioned sessionStorage snapshot；Incorrect 无限入队尾，Pass 移除
 
 ### 9. 动画
 
@@ -109,7 +111,7 @@ draft → submitted → correction → second_draft → transfer → completed
 - Profile 使用 segmented control/radio group；`native` 无可用母语时生成端回退任务目标语言并在 Profile 提示
 - 翻译首稿提交时解析并冻结具体 `translationAttempt.feedbackLanguage`
 - 传统 task 首次生成反馈时解析并写入 `FeedbackResult.feedbackLanguage`
-- 翻译 Gen1/hints/teacherNotes/verifier/二稿 commentary/Note explanation，以及传统 task comments/objectives/summary/follow-up Q&A，均使用对应冻结语言
+- 翻译 Gen1/hints/teacherNotes/verifier/二稿 commentary，以及传统 task comments/objectives/summary/follow-up Q&A，均使用对应冻结反馈语言；Note 母语释义与例句翻译改用用户实际母语
 - 修改偏好只影响未来反馈；不重写已生成反馈或进行中的翻译 attempt
 
 ---
@@ -241,7 +243,7 @@ phase 不靠 snapshot 权威；snapshot 失效时停在 phase 起点。`correcti
 
 - Gen1：角色、选卡、防泄题提示、Diff 语法、contract、few-shot、任务数据、resolved feedbackLanguage
 - Verifier：history + 新轮；few-shot 含同义 accept、改意 reject、不泄题、accept Diff；输出语言锁定 attempt.feedbackLanguage
-- Gen2：合并模式、四 exercises、全覆盖 ordinals；explanation 使用 attempt.feedbackLanguage
+- Gen2：从 reference 正确表达提取 single word 或 lexical chunk、生成双语词典释义与四条 JSON 例句、全覆盖 ordinals；不再生成抽象模式/explanation
 - 非翻译 Note 路径：同一 schema 一次生成
 - 传统 task：comments/objectives/summary/follow-up 使用 FeedbackResult.feedbackLanguage；annotated learner text 保持目标语原文
 
@@ -308,33 +310,34 @@ phase 不靠 snapshot 权威；snapshot 失效时停在 phase 起点。`correcti
 
 退出：accept / 双 reject 路径可测；409 evaluatedAt 处理。
 
-## 阶段 6：全局 Note/FSRS
+## 阶段 6：全局 Note/FSRS（按词汇 Note 修订）
 
-- note schema + 4 variants；reviewLog→note
-- 全部写入路径一次 LLM 满 contract
-- Archive/Review/API/stats/删除
-- 删 ReviewCard 写入与表（dev wipe）
+- note schema 改为 `vocab`、`targetDefinition`、`nativeDefinition`、JSON `examples`、FSRS；reviewLog→note 保持
+- 删除 `note_exercise_variant`、`exerciseOrder`、`exerciseCursor`，pre-production migration wipe 无法无损转换的 attempt/Note/log
+- 全部写入路径一次 LLM 满 contract；传统 feedback 显式传用户母语；Gen2 从 reference 正确表达中提取词或 lexical chunk
+- Archive/Review/API/stats/删除同步切换新字段
 
-退出：`rg` 无生产 ReviewCard 写入；四 variants 约束测试。
+退出：`rg` 无生产 ReviewCard/variant/cursor/order 写入；JSON 例句与双语释义约束测试。
 
 ## 阶段 7：Gen2 + 二稿
 
-- generatePractice + 条件写；Gen2 成功不清 history
+- generatePractice + 条件写 vocab/释义/JSON 例句；Gen2 成功不清 history
 - 二稿 verifier + commentary UI + skip
 - phase→transfer 时清 history；胶囊状态
 
 退出：无 job/轮询；并发与版本竞争确定。
 
-## 阶段 8：transfer + Review rotation
+## 阶段 8：transfer queue + Review random example
 
-- snapshot 队列；typed-before-reveal
-- Incorrect=Again，Pass=Good
-- Review 四档 + variant bag
+- snapshot 队列保存 Note id 与本次随机 example index；typed-before-reveal
+- Incorrect=Again、移到队尾并为下次普通随机例句，不设次数上限；Pass=Good、移除
+- Review 四档；每次展示从 Note JSON examples 普通随机一条，不持久化 rotation 状态
 - 队列结束 → completed
 
 ## 阶段 9：整体验证与清理
 
 - reference 样例全流程 + 多种用户输入
+- CDP 分别实测 Generation 2 和传统 session feedback Save to Note，检查正面母语释义+例句翻译、背面 vocab+目标语例句
 - 删静态旧评价代码；四语；a11y；live 回归
 - 更新 `AGENTS.md` 架构事实
 - 申请是否移除 demo
@@ -342,6 +345,26 @@ phase 不靠 snapshot 权威；snapshot 失效时停在 phase 起点。`correcti
 ```sh
 pnpm check && pnpm test && pnpm build
 ```
+
+## 阶段 10：统一 Anki 风格抽认界面
+
+- 新建一个由 Transfer 和 `/review` 共同使用的受控抽认组件，统一题面、两段答案、键盘揭晓、评分控制区与三色队列计数；删除 3D 翻面和 Transfer 文本输入。
+- 暖白抽认区按最终答案内容提前参与布局：上半区 `nativeDefinition` + 预留 `vocab`，下半区 `nativeText` + 预留 `targetText`，中间使用细分隔线。揭晓只改变答案可见性和透明度，不挂载新布局节点。
+- 底部固定控制区统计剩余队列的 FSRS New / Learning+Relearning / Review。普通 Review 从服务端下发每张 Note 的队列类型；Transfer snapshot 队列持久化类型，Incorrect 后改为 Learning 并入队尾，Pass 后移除。
+- 揭晓前提供整行 Show Answer；点击、Space、Enter 等价。揭晓后 Review 显示四档 FSRS 按钮，Transfer 显示 Incorrect / Pass；保留 Review 的 1–4 快捷键并为 Transfer 提供 1–2 快捷键。
+- 组件 SSR 测试验证答案在未揭晓时不可访问但仍占位，队列纯函数测试验证类型计数与 Incorrect 转 Learning；CDP 分别测量揭晓前后卡片及两段题面 geometry，证明多行答案不会引起位置突变。
+
+退出：两处均使用共享组件；键盘、计数、评分和移动端底栏可用；`pnpm check && pnpm test && pnpm build` 通过。
+
+## 阶段 11：卡片排版与 Anki 学习步骤
+
+- 共享 `StudyCard` 内不使用衬线体。`nativeDefinition / vocab / nativeText / targetText` 的基础字号依次固定为 `xl / 2xl / xl / xl`，`sm` 起各增一级；双语例句使用同一内容宽度并左对齐。根据最终字号重新检查上下区间距和固定底栏遮挡。
+- Again、Hard、Good、Easy 以及 Transfer 对应操作使用语义色实心按钮，保留可读的白色标签、间隔预览和 hover 状态。
+- 以 Anki 官方手册的 [Deck Options](https://docs.ankiweb.net/deck-options) 与 [Studying](https://docs.ankiweb.net/studying.html) 为排期依据：Again 表示未回忆并回到首个学习步骤；Hard 是通过而非失败；Good 推进学习步骤；Easy 直接毕业。显式学习步骤完成前卡片保持 Learning，Review 卡 Again 后保持 Relearning。
+- 延续 `ts-fsrs` 默认显式步骤 `learning_steps=['1m','10m']`、`relearning_steps=['10m']`。API 评分后返回新 FSRS 类型、下一轮四档间隔和普通随机例句；客户端只移除已毕业卡，Learning/Relearning 卡更新后进入当前队尾。这样只按 Again 不会结束学习会话。
+- 单元测试覆盖 New → Again → Learning、重复 Again、Good 完成两步后毕业、Review → Again → Relearning，以及客户端队尾/移除行为；CDP 连续两次对同一卡按 Again，确认页面不进入总结且 Learning 计数保持。
+
+退出：四字段排版、对齐和按钮样式符合要求；Again 可无限重入队尾；官方排期规则、FSRS 状态和界面队列一致；全量验证通过。
 
 ---
 
@@ -418,11 +441,30 @@ pnpm check && pnpm test && pnpm build
 
 最新的 prompt 已调试好。严格 schema/payload 测试确认只保留四项评分且每项只接受 A/B/C/F、全部 Gen1 消息均不含 `referenceDiff`；CorrectionResult SSR 测试确认 referenceAnswer 直接以 `text-foreground` 纯文本渲染，结果区只有 primary DiffView；live-demo route/session tests 确认 temperature 透传、范围拒绝、已验证的同标签页持久化、唯一 card-only Correction Verifier、Second Draft Verifier 的 Gen1 history 追加和 canonical history prefix 拒绝。
 
-## Grill 共识同步
+## 阶段 3–8 实施记录
 
-- 已按 2026-07-21 grill 重写 issue 与本 plan 决策/阶段（phase 路由、history、Diff 不核验恒等、Pass=Good、全站 4 variants、可硬删放弃）。
-- 后续 grill 明确：history 在 transfer/no-card completed 清理；attempt 按当前母语下活动优先、否则最新 completed；所有模型采用提交前 40k token 预算预检。
-- 新增 Profile `native|target` 反馈语言偏好，并把传统 task feedback/follow-up 纳入同一冻结语言 contract。
-- 移除独立 `overview` phase；总览合并为 correction 首个 UI step，phase 级恢复回到总览。
-- 之后不应再把第一阶段叫做 card，而应该是 correction。
-- 阶段 1 demo 结论：仍然已通过。之后搭建的最终用户界面要严格遵照 demo。
+- 数据层已切换为六态 `workflowPhase`；attempt 保存冻结反馈语言、Gen1 history、评价版本、practice/completed 时间。活动 attempt 使用部分唯一索引，旧开发数据由 breaking migration 清除。
+- 正式路由已拆为详情、`/attempt` 和 `/feedback`。attempt ID 仅服务端解析；详情页负责确认放弃/retake，评估页按服务端 phase 与当前标签页 versioned snapshot 恢复。
+- 正式流程已接入 approved waiting、overview、correction、second draft、practice capsule 与 transfer 组件。Correction Verifier 只接收当前 card trusted context；二稿 verifier 从 DB 中成功 Gen1 history 追加新轮。
+- Gen2 由浏览器显式触发，在 `evaluatedAt` 条件保护下原子写入 `practiceGeneratedAt` 与完整词汇 Notes；只有进入 transfer 才清 Gen1 history。
+- Note 已直接承载 `vocab`、双语词典释义、JSON 例句与 FSRS。ReviewCard、`note_exercise_variant`、cursor/order、生成服务和 create-card API 已删除；Archive、普通 Review、transfer rating 与 review logs 都直接使用 Note。
+- Profile 已加入 `native | target` 反馈语言偏好。翻译 attempt 与传统 `FeedbackResult` 在首次生成时冻结具体语言，后续 verifier、Note 与追问读取冻结值。
+
+## 阶段 9 验收记录
+
+- Chrome CDP 以已登录用户完成桌面端真实全流程：详情 → 首稿与候选选择 → Gen1 → 总览 → 两次拒绝/揭示与通过 → 二稿 verifier → Gen2 → 迁移 → completed；并检查 Archive、Review、Profile 和翻译列表结果。
+- snapshot 经刷新验证首稿、改错和二稿恢复。迁移时发现切换 Note 后输入与揭示状态未重置，已修正为按 Note/variant 身份重置并在 HMR 后复测。
+- 以 390×844 viewport 验收移动端详情页；检查键盘 Escape、按钮可用性、网络请求和页面无失败响应。
+- 实际 BYOK 调用验证 Gen1、Correction Verifier、Second Draft Verifier 与 Generation 2。根据首次 Gen2 输出中不自然的搭配，收紧中心模式、合并条件、语义对齐及地道性自检 prompt；第二次实际调用通过 schema/ordinal 覆盖并生成 5 Notes、每 Note 4 个自然迁移句。
+- 原四 variants 验收记录已被本轮词汇 Note 结构取代。迁移 `0009_vocab_notes` 清空不可无损转换的开发 attempt/Note/log，删除 variant 表和 cursor/order，并建立 vocab/双语释义/examples JSON 非空约束。
+- Generation 2 live review 直接调用无数据库写入的正式 Gen2 service，展示每个 Note 的来源 card、`vocab`、双语词典释义和全部 JSON 例句，并暴露 exact prompt、raw response、provider metadata；验证后的结果和调用 artifacts 使用 versioned sessionStorage 在刷新后恢复，可反复重跑。
+- 最终 CDP 验收中，live demo 的正式 Generation 2 调用以首稿 `build`、参考答案 `buildup` 生成 1 个 `buildup` Note：英文/中文词典释义齐全，4 组自然双语例句通过结构校验，`finish_reason=stop` 且未触发 repair。
+- 传统 session feedback 的 `Save to Notes` 浏览器操作从 session 57 的 `whirlwind` 教师批注写入 Note 26：`vocab=whirlwind`、双语词典释义及 4 组双语例句均落库。随后 `/review` 的正面显示中文释义和中文例句，背面显示 `whirlwind` 和英文例句；连续 8 次重新加载实际抽到全部 4 条例句，确认不存在持久化轮换游标。
+- 阶段 10 已用共享 `StudyCard` 取代 Review 的 3D `Flashcard`/独立 `RatingButtons` 以及 Transfer 输入式界面。两处都使用暖白上下双区卡片、固定底部三色 FSRS 队列计数和原位切换的揭晓/评分控制区；旧组件已删除。
+- CDP 在 `/review` 分别用 Space、Enter 和宽按钮揭晓，均切换到四档评分；Transfer demo 使用同一组件切换到 Incorrect/Pass。揭晓前后抽认区和两段题面的 bounding rect 逐项相同；Transfer 的多行目标语答案底部为 646.875px，固定控制区顶部为 703px，无遮挡。
+- CDP 在 Transfer demo 以快捷键 1 选择 Incorrect 后，下一 Note 先展示，原 New Note 移到队尾并把计数从 `1 + 0 + 1` 更新为 `0 + 1 + 1`，证明 Learning 类型和队尾行为同步。
+- 阶段 11 按 Anki 官方手册核对短期步骤：默认首个 Again 为 `1m`（仅实际间隔不足一分钟时显示 `<1m`），而不是固定 `<1m`；显式 `1m 10m` 学习步骤下 Again 回到首步且不毕业，Review 卡 Again 进入 `10m` Relearning。共享卡片同步改为无衬线四档字号、左对齐例句和实心语义色按钮。
+- CDP 检查实际 computed style：桌面端四字段为 `24px / 30px / 24px / 24px`、全部为 sans-serif，两条例句均左对齐，四个评分按钮均为白字实心色。连续两次按 Again 后均回到未揭晓卡面，未出现 Session Complete，计数持续为 `0 New + 1 Learning + 0 Review`。
+- 目标语例句装饰按参考 Anki CSS 改为 `::before` 绝对定位开引号与 `currentColor` 左边线，引号不进入文档流；上 padding 调至 32px，拉开引号与正文。Demo 移除 390px 模拟开关，并与正式 feedback 一样直接使用 app layout 的页面 shell。
+- 短内容页伪滚动和双层 padding 的根因是 `(app)/+layout.svelte` 已渲染带 inset 的 `<main>`，feedback 与 demo 又各自嵌套了带 min-height/padding 的第二个 `<main>`。现删除两个 route-level main；Waiting/Completed 直接按 `100dvh - 8rem` 使用 shell 可用高度。CDP 验证 demo DOM 只有一个 main，evaluating 为 `scrollHeight=clientHeight=825`。
+- 最终验证：`pnpm check` 0 errors / 0 warnings；`pnpm test` 85 files / 939 tests passed

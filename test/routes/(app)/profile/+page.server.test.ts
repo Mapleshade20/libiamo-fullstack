@@ -3,16 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BYOK_API_BASE_URLS, BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
-import { createActionEvent, runSwitchLanguageActionSuite } from "../action-test-helpers";
+import { createActionEvent } from "../action-test-helpers";
 
-const { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+const { mockFindFirst, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
 	const mockFindFirst = vi.fn().mockResolvedValue(undefined);
-	const mockOnConflictDoNothing = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing, onConflictDoUpdate: vi.fn() }));
+	const mockValues = vi.fn(() => ({ onConflictDoUpdate: vi.fn() }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
 	const mockWhere = vi.fn();
 	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return { mockFindFirst, mockOnConflictDoNothing, mockValues, mockInsert, mockDelete, mockWhere };
+	return { mockFindFirst, mockInsert, mockDelete, mockWhere };
 });
 
 vi.mock("$lib/server/auth/auth", () => ({
@@ -33,7 +32,6 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	userLearningProfile: Symbol("userLearningProfile"),
 	userApiKey: { userId: Symbol("userApiKey.userId") },
 }));
 
@@ -143,6 +141,22 @@ describe("Profile +page.server", () => {
 			expect(result).toEqual({ success: true });
 		});
 
+		it.each([
+			{ field: "feedbackLanguagePreference", value: "target" },
+			{ field: "timezone", value: "Europe/Paris" },
+			{ field: "nativeLanguage", value: "fr" },
+		])("updateProfile saves only the changed $field setting", async ({ field, value }) => {
+			const event = createActionEvent({ [field]: value });
+
+			const result = await actions.updateProfile(event);
+
+			expect(auth.api.updateUser).toHaveBeenCalledWith({
+				body: { [field]: value },
+				headers: event.request.headers,
+			});
+			expect(result).toEqual({ success: true });
+		});
+
 		it("updateProfile normalizes blank timezone to undefined", async () => {
 			const event = createActionEvent({
 				name: "Alice",
@@ -158,15 +172,6 @@ describe("Profile +page.server", () => {
 				headers: event.request.headers,
 			});
 			expect(result).toEqual({ success: true });
-		});
-
-		runSwitchLanguageActionSuite({
-			action: actions.switchLanguage,
-			updateUser: auth.api.updateUser as any,
-			mockInsert,
-			mockValues,
-			mockOnConflictDoNothing,
-			successLanguage: "fr",
 		});
 
 		it("signOut calls auth api and redirects", async () => {

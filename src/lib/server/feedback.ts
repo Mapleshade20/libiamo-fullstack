@@ -168,7 +168,7 @@ export function parseFeedbackXml(xmlResponse: string): FeedbackResult {
 	// Parse summary
 	const summary = extractTagContent(feedbackContent, "summary")?.trim() ?? "";
 
-	return { annotations, objectives, summary };
+	return { feedbackLanguage: "", annotations, objectives, summary };
 }
 
 // ── Validation ───────────────────────────────────────────────────────
@@ -622,7 +622,7 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	];
 
 	const response = await chatText({ messages, userId: session.userId, options: { maxTokens: 32_768 } });
-	const result = parseFeedbackXml(response.content);
+	const result = { ...parseFeedbackXml(response.content), feedbackLanguage: input.feedbackLanguage };
 
 	if (!isFeedbackResultValid(result)) {
 		throw new Error("LLM returned invalid feedback format");

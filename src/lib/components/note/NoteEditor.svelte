@@ -1,11 +1,11 @@
 <script lang="ts">
-import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 type Note = {
 	id: number;
-	tutorComment: string;
-	keywords?: string[] | null;
-	sourceContext?: string | null;
+	vocab: string;
+	targetDefinition: string;
+	nativeDefinition: string;
 };
 
 let {
@@ -15,30 +15,28 @@ let {
 }: {
 	note: Note;
 	oncancel?: () => void;
-	onsave?: (data: { tutorComment: string; keywords: string[] }) => void | Promise<void>;
+	onsave?: (data: { vocab: string; targetDefinition: string; nativeDefinition: string }) => void | Promise<void>;
 } = $props();
 
 // svelte-ignore state_referenced_locally
-let editTutorComment = $state(note.tutorComment);
+let editVocab = $state(note.vocab);
 // svelte-ignore state_referenced_locally
-let editKeywords = $state((note.keywords ?? []).join(", "));
+let editTargetDefinition = $state(note.targetDefinition);
+// svelte-ignore state_referenced_locally
+let editNativeDefinition = $state(note.nativeDefinition);
 let isSaving = $state(false);
 let error = $state<string | null>(null);
 
 async function handleSubmit() {
-	const tutorComment = editTutorComment.trim();
-	if (!tutorComment || isSaving) return;
+	const vocab = editVocab.trim();
+	const targetDefinition = editTargetDefinition.trim();
+	const nativeDefinition = editNativeDefinition.trim();
+	if (!vocab || !targetDefinition || !nativeDefinition || isSaving) return;
 
 	isSaving = true;
 	error = null;
 	try {
-		await onsave({
-			tutorComment,
-			keywords: editKeywords
-				.split(",")
-				.map((k) => k.trim())
-				.filter(Boolean),
-		});
+		await onsave({ vocab, targetDefinition, nativeDefinition });
 	} catch (e) {
 		console.error("Failed to save note:", e);
 		error = e instanceof Error ? e.message : "Failed to save note";
@@ -48,8 +46,9 @@ async function handleSubmit() {
 }
 
 function handleCancel() {
-	editTutorComment = note.tutorComment;
-	editKeywords = (note.keywords ?? []).join(", ");
+	editVocab = note.vocab;
+	editTargetDefinition = note.targetDefinition;
+	editNativeDefinition = note.nativeDefinition;
 	oncancel();
 }
 </script>
@@ -63,10 +62,22 @@ function handleCancel() {
 >
 	<div class="space-y-3">
 		<div>
-			<label for="note-tutor-comment-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide">Note</label>
+			<label for="note-vocab-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vocabulary</label>
+			<input
+				id="note-vocab-{note.id}"
+				bind:value={editVocab}
+				maxlength={USER_TEXT_MAX_LENGTH}
+				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+				required
+			>
+		</div>
+		<div>
+			<label for="note-native-definition-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+				>Native-language definition</label
+			>
 			<textarea
-				id="note-tutor-comment-{note.id}"
-				bind:value={editTutorComment}
+				id="note-native-definition-{note.id}"
+				bind:value={editNativeDefinition}
 				maxlength={USER_TEXT_MAX_LENGTH}
 				rows={4}
 				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -74,26 +85,25 @@ function handleCancel() {
 			></textarea>
 		</div>
 		<div>
-			<label for="note-keywords-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
-				>Keywords (comma-separated)</label
+			<label for="note-target-definition-{note.id}" class="mb-1 block text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+				>Target-language definition</label
 			>
-			<input
-				id="note-keywords-{note.id}"
-				bind:value={editKeywords}
-				maxlength={USER_KEYWORDS_MAX_LENGTH}
+			<textarea
+				id="note-target-definition-{note.id}"
+				bind:value={editTargetDefinition}
+				maxlength={USER_TEXT_MAX_LENGTH}
+				rows={4}
 				class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-			>
+				required
+			></textarea>
 		</div>
-		{#if note.sourceContext}
-			<p class="text-sm italic text-muted-foreground/70">{note.sourceContext}</p>
-		{/if}
 		{#if error}
 			<p class="text-xs font-medium text-red-600">{error}</p>
 		{/if}
 		<div class="flex gap-2">
 			<button
 				type="submit"
-				disabled={isSaving || !editTutorComment.trim()}
+				disabled={isSaving || !editVocab.trim() || !editTargetDefinition.trim() || !editNativeDefinition.trim()}
 				class="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
 			>
 				{isSaving ? "Saving..." : "Save"}

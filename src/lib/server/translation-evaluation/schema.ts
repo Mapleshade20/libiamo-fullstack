@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NOTE_EXAMPLE_COUNT } from "$lib/note";
 import { TRANSLATION_GRADES } from "$lib/translation-evaluation/types";
 
 const NonEmptyTextSchema = z.string().trim().min(1);
@@ -72,9 +73,10 @@ export const Generation2Schema = z
 			z
 				.object({
 					sourceCardOrdinals: z.array(z.number().int().nonnegative()).min(1),
-					targetPattern: NonEmptyTextSchema,
-					explanation: NonEmptyTextSchema,
-					exercises: z.array(z.object({ front: NonEmptyTextSchema, back: NonEmptyTextSchema }).strict()).length(4),
+					vocab: NonEmptyTextSchema,
+					targetDefinition: NonEmptyTextSchema,
+					nativeDefinition: NonEmptyTextSchema,
+					examples: z.array(z.object({ targetText: NonEmptyTextSchema, nativeText: NonEmptyTextSchema }).strict()).length(NOTE_EXAMPLE_COUNT),
 				})
 				.strict(),
 		),

@@ -1,10 +1,8 @@
 import { error } from "@sveltejs/kit";
-import { eq, sql } from "drizzle-orm";
-import { type CardType, LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
+import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
+import type { StudyQueueKind } from "$lib/review";
 import { requireUser } from "$lib/server/auth/authz";
-import { db } from "$lib/server/db";
-import { reviewCard } from "$lib/server/db/schema";
-import { getDueCards } from "$lib/server/review-cards";
+import { getDueNotes } from "$lib/server/review";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -17,32 +15,27 @@ export const load: PageServerLoad = async (event) => {
 
 	let cards: Array<{
 		id: number;
-		front: string;
-		back: string;
-		cardType: CardType;
+		vocab: string;
+		nativeDefinition: string;
+		nativeText: string;
+		targetText: string;
+		queueKind: StudyQueueKind;
 		previewIntervals: Record<string, string>;
 	}> = [];
 
 	try {
-		cards = (await getDueCards(user.id, language, 20)).map((c) => ({
-			id: c.id,
-			front: c.front,
-			back: c.back,
-			cardType: c.cardType as CardType,
-			previewIntervals: c.previewIntervals,
+		cards = (await getDueNotes(user.id, language, 20)).map((item) => ({
+			id: item.id,
+			vocab: item.vocab,
+			nativeDefinition: item.nativeDefinition,
+			nativeText: item.nativeText,
+			targetText: item.targetText,
+			queueKind: item.queueKind,
+			previewIntervals: item.previewIntervals,
 		}));
 	} catch (err) {
 		console.error("Failed to load review data:", err);
 	}
 
-	let cardCount = 0;
-
-	try {
-		const [result] = await db.select({ count: sql<number>`count(*)::int` }).from(reviewCard).where(eq(reviewCard.userId, user.id));
-		cardCount = result?.count ?? 0;
-	} catch {
-		// table may not exist yet
-	}
-
-	return { cards, cardCount };
+	return { cards };
 };

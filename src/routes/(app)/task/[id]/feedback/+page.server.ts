@@ -1,6 +1,7 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import type { FeedbackResult } from "$lib/feedback/types";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
@@ -28,11 +29,13 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
+		columns: { tutorFeedback: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
 
 	return {
 		language: sessionData?.task?.language ?? "en",
+		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
 		maxTurns: sessionData?.task?.template?.maxTurns ?? 0,
 	};
 }
@@ -141,7 +144,11 @@ export const actions: Actions = {
 			if (!session.task) return fail(400, { error: "Task not found" });
 			const feedback = await generateFeedback({
 				sessionId: session.id,
-				feedbackLanguage: user.nativeLanguage ?? session.task.language,
+				feedbackLanguage: resolveFeedbackLanguage({
+					preference: user.feedbackLanguagePreference === "target" ? "target" : "native",
+					nativeLanguage: user.nativeLanguage,
+					targetLanguage: session.task.language,
+				}),
 			});
 
 			return {
@@ -187,7 +194,7 @@ export const actions: Actions = {
 			const result = await followUpOnFeedback({
 				sessionId,
 				userId: user.id,
-				feedbackLanguage: user.nativeLanguage ?? sessionContext.language,
+				feedbackLanguage: sessionContext.feedbackLanguage,
 				itemText,
 				category: category as "grammar" | "vocabulary" | "coherence",
 				question,
@@ -245,13 +252,14 @@ export const actions: Actions = {
 			]
 				.filter(Boolean)
 				.join("\n\n");
-			const notes = await createNotesBatch(
-				user.id,
-				{ type: "practice", sessionId },
-				sessionContext.language,
-				[{ tutorComment, category, sourceContext }],
-				user.id,
-			);
+			const notes = await createNotesBatch({
+				userId: user.id,
+				source: { type: "practice", sessionId },
+				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
+				feedbackItems: [{ tutorComment, category, sourceContext }],
+				sessionOwnerId: user.id,
+			});
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
@@ -289,6 +297,7 @@ export const actions: Actions = {
 				userId: user.id,
 				source: { type: "practice", sessionId },
 				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
 				selectedText,
 				currentContext,
 				previousContext,
@@ -327,6 +336,7 @@ export const actions: Actions = {
 				question,
 				answer,
 				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
 			});
 			return { success: true, note: result.note };
 		} catch (cause) {

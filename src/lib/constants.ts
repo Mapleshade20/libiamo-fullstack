@@ -10,7 +10,6 @@ export const AUTH_TOKEN_MAX_LENGTH = 2048;
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_TEXT_MAX_LENGTH = 10000;
 export const USER_LONG_TEXT_MAX_LENGTH = 50000;
-export const USER_KEYWORDS_MAX_LENGTH = 10000;
 export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
 export const BYOK_BASE_URL_MAX_LENGTH = 2048;
@@ -159,13 +158,16 @@ export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 export const CADENCES = ["weekly", "daily", "none"] as const;
 export type Cadence = (typeof CADENCES)[number];
 
-// ── Review Cards ──────────────────────────────────────────────────────
-export const CARD_TYPES = ["vocabulary", "expression", "grammar", "correction"] as const;
-export type CardType = (typeof CARD_TYPES)[number];
+export const FEEDBACK_LANGUAGE_MODES = ["native", "target"] as const;
+export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
 
-export const CARD_TYPE_LABELS: Record<CardType, string> = {
-	vocabulary: "Vocabulary",
-	expression: "Expression",
-	grammar: "Grammar",
-	correction: "Correction",
-};
+export const TRANSLATION_WORKFLOW_PHASES = ["draft", "submitted", "correction", "second_draft", "transfer", "completed"] as const;
+export type TranslationWorkflowPhase = (typeof TRANSLATION_WORKFLOW_PHASES)[number];
+
+export function resolveFeedbackLanguage(input: {
+	preference: FeedbackLanguageMode;
+	nativeLanguage?: string | null;
+	targetLanguage: LanguageCode;
+}): string {
+	return input.preference === "native" && input.nativeLanguage ? input.nativeLanguage : input.targetLanguage;
+}

@@ -43,6 +43,34 @@
       "when": 1783753652033,
       "tag": "0005_support_translation_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785074719876,
+      "tag": "0006_redesign_translation_evaluation",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785075196459,
+      "tag": "0007_note_variant_shuffle_bag",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785078014993,
+      "tag": "0008_workflow_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785250055915,
+      "tag": "0009_vocab_notes",
+      "breakpoints": true
     }
   ]
 }

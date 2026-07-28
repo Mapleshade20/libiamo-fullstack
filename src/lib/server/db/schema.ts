@@ -1,5 +1,9 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import type { TranslationWorkflowPhase } from "$lib/constants";
+import type { ChatMessage } from "$lib/server/llm";
+import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
+import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
 import { user } from "./auth.schema";
 import { cadenceEnum, interactionTypeEnum, languageCodeEnum, messageRoleEnum, scheduleOriginEnum, sessionStatusEnum, uiVariantEnum } from "./enums";
 
@@ -214,6 +218,10 @@ export const translationSourceSet = pgTable(
 );
 
 // ── translationAttempt ──────────────────────────────────────────────
+export type PersistedTranslationEvaluation = Omit<Generation1Evaluation, "cards"> & {
+	cards: Array<Generation1Evaluation["cards"][number] & { warnings: TranslationCardWarning[] }>;
+};
+
 export const translationAttempt = pgTable(
 	"translation_attempt",
 	{
@@ -224,21 +232,29 @@ export const translationAttempt = pgTable(
 		sourceSetId: integer("source_set_id")
 			.notNull()
 			.references(() => translationSourceSet.id),
-		status: text("status").$type<"draft" | "submitted" | "evaluated">().notNull().default("draft"),
-		evaluation: jsonb("evaluation").$type<{
-			overallScore: "A" | "B" | "C";
-			overallFeedback: string;
-			paragraphs: { paragraphIndex: number; feedback: string; rewriteSuggestion: string }[];
-		}>(),
+		workflowPhase: text("workflow_phase").$type<TranslationWorkflowPhase>().notNull().default("draft"),
+		evaluation: jsonb("evaluation").$type<PersistedTranslationEvaluation>(),
+		generation1Messages: jsonb("generation_1_messages").$type<{ messages: ChatMessage[] }>(),
+		feedbackLanguage: text("feedback_language"),
 		submittedAt: timestamp("submitted_at"),
 		evaluatedAt: timestamp("evaluated_at"),
+		practiceGeneratedAt: timestamp("practice_generated_at"),
+		completedAt: timestamp("completed_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(t) => [uniqueIndex("translation_attempt_user_source_set_idx").on(t.userId, t.sourceSetId), index("translation_attempt_user_idx").on(t.userId)],
+	(t) => [
+		uniqueIndex("translation_attempt_active_user_source_set_idx").on(t.userId, t.sourceSetId).where(sql`${t.workflowPhase} <> 'completed'`),
+		index("translation_attempt_user_idx").on(t.userId),
+		index("translation_attempt_source_phase_idx").on(t.sourceSetId, t.workflowPhase),
+		check(
+			"translation_attempt_workflow_phase_check",
+			sql`${t.workflowPhase} IN ('draft', 'submitted', 'correction', 'second_draft', 'transfer', 'completed')`,
+		),
+	],
 );
 
 // ── translationAnswer ───────────────────────────────────────────────
@@ -274,32 +290,10 @@ export const note = pgTable(
 		language: languageCodeEnum("language").notNull(),
 		sourceSessionId: integer("source_session_id").references(() => practiceSession.id, { onDelete: "cascade" }),
 		sourceTranslationAttemptId: integer("source_translation_attempt_id").references(() => translationAttempt.id, { onDelete: "cascade" }),
-		tutorComment: text("tutor_comment").notNull(),
-		keywords: text("keywords").array(),
-		sourceContext: text("source_context"),
-		reviewStatus: text("review_status").$type<"pending" | "generated" | "skipped">(),
-	},
-	(t) => [
-		index("note_user_id_idx").on(t.userId),
-		index("note_source_session_id_idx").on(t.sourceSessionId),
-		index("note_source_translation_attempt_id_idx").on(t.sourceTranslationAttemptId),
-		check("note_exactly_one_source_check", sql`num_nonnulls(${t.sourceSessionId}, ${t.sourceTranslationAttemptId}) = 1`),
-	],
-);
-
-// ── reviewCard ──────────────────────────────────────────────────────
-export const reviewCard = pgTable(
-	"review_card",
-	{
-		id: serial("id").primaryKey(),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		sourceNoteId: integer("source_note_id").references(() => note.id, { onDelete: "cascade" }),
-		language: languageCodeEnum("language").notNull(),
-		cardType: text("card_type").$type<"vocabulary" | "expression" | "grammar" | "correction">().notNull(),
-		front: text("front").notNull(),
-		back: text("back").notNull(),
+		vocab: text("vocab").notNull(),
+		targetDefinition: text("target_definition").notNull(),
+		nativeDefinition: text("native_definition").notNull(),
+		examples: jsonb("examples").$type<Array<{ targetText: string; nativeText: string }>>().notNull(),
 		fsrsCard: jsonb("fsrs_card").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -307,7 +301,17 @@ export const reviewCard = pgTable(
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(t) => [index("review_card_user_lang_idx").on(t.userId, t.language), uniqueIndex("review_card_source_note_unique").on(t.sourceNoteId)],
+	(t) => [
+		index("note_user_id_idx").on(t.userId),
+		index("note_source_session_id_idx").on(t.sourceSessionId),
+		index("note_source_translation_attempt_id_idx").on(t.sourceTranslationAttemptId),
+		check("note_exactly_one_source_check", sql`num_nonnulls(${t.sourceSessionId}, ${t.sourceTranslationAttemptId}) = 1`),
+		check(
+			"note_content_nonempty_check",
+			sql`length(btrim(${t.vocab})) > 0 AND length(btrim(${t.targetDefinition})) > 0 AND length(btrim(${t.nativeDefinition})) > 0`,
+		),
+		check("note_examples_nonempty_check", sql`jsonb_typeof(${t.examples}) = 'array' AND jsonb_array_length(${t.examples}) > 0`),
+	],
 );
 
 // ── reviewLog ───────────────────────────────────────────────────────
@@ -315,9 +319,9 @@ export const reviewLog = pgTable(
 	"review_log",
 	{
 		id: serial("id").primaryKey(),
-		cardId: integer("card_id")
+		noteId: integer("note_id")
 			.notNull()
-			.references(() => reviewCard.id, { onDelete: "cascade" }),
+			.references(() => note.id, { onDelete: "cascade" }),
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
@@ -329,7 +333,13 @@ export const reviewLog = pgTable(
 		log: jsonb("log").notNull(),
 		reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
 	},
-	(t) => [index("review_log_card_idx").on(t.cardId), index("review_log_user_reviewed_idx").on(t.userId, t.reviewedAt)],
+	(t) => [
+		index("review_log_note_idx").on(t.noteId),
+		index("review_log_user_reviewed_idx").on(t.userId, t.reviewedAt),
+		check("review_log_rating_check", sql`${t.rating} >= 1 AND ${t.rating} <= 4`),
+		check("review_log_elapsed_seconds_check", sql`${t.elapsedSeconds} >= 0`),
+		check("review_log_scheduled_days_check", sql`${t.scheduledDays} >= 0`),
+	],
 );
 
 // ── Relations ────────────────────────────────────────────────────────
@@ -437,17 +447,11 @@ export const noteRelations = relations(note, ({ one, many }) => ({
 		fields: [note.sourceTranslationAttemptId],
 		references: [translationAttempt.id],
 	}),
-	reviewCards: many(reviewCard),
-}));
-
-export const reviewCardRelations = relations(reviewCard, ({ one, many }) => ({
-	user: one(user, { fields: [reviewCard.userId], references: [user.id] }),
-	sourceNote: one(note, { fields: [reviewCard.sourceNoteId], references: [note.id] }),
 	reviewLogs: many(reviewLog),
 }));
 
 export const reviewLogRelations = relations(reviewLog, ({ one }) => ({
-	card: one(reviewCard, { fields: [reviewLog.cardId], references: [reviewCard.id] }),
+	note: one(note, { fields: [reviewLog.noteId], references: [note.id] }),
 	user: one(user, { fields: [reviewLog.userId], references: [user.id] }),
 }));
 

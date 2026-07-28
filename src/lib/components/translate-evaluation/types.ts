@@ -76,9 +76,11 @@ export type SecondDraftLocalState = {
 
 export type TransferNoteFixture = {
 	id: number;
-	targetPattern: string;
-	explanation: string;
-	exercises: Array<{ front: string; back: string }>;
+	vocab: string;
+	targetDefinition: string;
+	nativeDefinition: string;
+	queueKind: import("$lib/review").StudyQueueKind;
+	examples: Array<{ targetText: string; nativeText: string }>;
 };
 
 /** Demo / presentation phase keys used by the state switcher. */

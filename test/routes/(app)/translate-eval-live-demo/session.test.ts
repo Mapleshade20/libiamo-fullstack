@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { type PersistedReview, parseLiveDemoTemperature, parsePersistedReview } from "$routes/(app)/translate-eval-live-demo/session";
 
 const persistedReview = {
-	version: 5,
+	version: 7,
 	learnerParagraphs: ["First.", "Second.", "Third."],
 	promptMessages: [{ role: "system", content: "Complete Generation 1 prompt" }],
 	rawResponse: '{"cards":[]}',
@@ -42,6 +42,37 @@ const persistedReview = {
 	reviewView: "card",
 	cardIndex: 0,
 	revealGeneratedAnswers: true,
+	generation2Call: {
+		promptMessages: [
+			{ role: "system", content: "Generation 2 contract" },
+			{ role: "user", content: '{"cards":[{"ordinal":0}]}' },
+		],
+		rawResponse: '{"notes":[]}',
+		metadata: {
+			temperature: 0.6,
+			model: "test-model",
+			finishReason: "stop",
+			usage: { promptTokens: 30, completionTokens: 40, totalTokens: 70 },
+			durationMs: 2345,
+			repairUsed: false,
+		},
+		result: {
+			notes: [
+				{
+					sourceCardOrdinals: [0],
+					vocab: "even",
+					targetDefinition: "used for emphasis",
+					nativeDefinition: "甚至；到底",
+					examples: [
+						{ nativeText: "练习一。", targetText: "Even example one." },
+						{ nativeText: "练习二。", targetText: "Even example two." },
+						{ nativeText: "练习三。", targetText: "Even example three." },
+						{ nativeText: "练习四。", targetText: "Even example four." },
+					],
+				},
+			],
+		},
+	},
 } satisfies PersistedReview;
 
 describe("live translation review session", () => {
@@ -92,5 +123,25 @@ describe("live translation review session", () => {
 			),
 		).toBeNull();
 		expect(parsePersistedReview(JSON.stringify({ ...persistedReview, metadata: { ...persistedReview.metadata, temperature: 1.1 } }), 3)).toBeNull();
+		expect(
+			parsePersistedReview(
+				JSON.stringify({
+					...persistedReview,
+					generation2Call: {
+						...persistedReview.generation2Call,
+						result: {
+							notes: [
+								{
+									...persistedReview.generation2Call.result.notes[0],
+									examples: persistedReview.generation2Call.result.notes[0].examples.slice(0, 3),
+								},
+							],
+						},
+					},
+				}),
+				3,
+			),
+		).toBeNull();
+		expect(parsePersistedReview(JSON.stringify({ ...persistedReview, generation2Call: undefined }), 3)).toBeNull();
 	});
 });

@@ -5,9 +5,11 @@ import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { generateTranslationEvaluation } from "$lib/server/translation-evaluation/generation";
+import { GENERATION_2_TEMPERATURE, generateTranslationPractice } from "$lib/server/translation-evaluation/practice-generation";
 import {
 	buildCorrectionVerifierMessages,
 	buildGeneration1Messages,
+	buildGeneration2Messages,
 	buildSecondDraftVerifierMessages,
 	type Generation1Input,
 } from "$lib/server/translation-evaluation/prompt";
@@ -35,6 +37,7 @@ const CardContextSchema = z
 	})
 	.strict();
 const CardOutcomesSchema = z.array(z.object({ ordinal: z.number().int().nonnegative(), outcome: z.enum(["passed", "revealed"]) }).strict());
+const Generation2CardsSchema = z.array(CardContextSchema).min(1);
 const LIVE_ARTIFACT_MAX_LENGTH = 1_000_000;
 
 function requireDevelopmentRoute(): void {
@@ -244,6 +247,35 @@ export const actions: Actions = {
 				promptMessages: response.requestMessages,
 				rawResponse: response.content,
 				metadata: callMetadata(response, initialMessages.length, startedAt, 0.2),
+			};
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), {
+				error: llmErrorMessage(cause),
+				promptMessages: initialMessages,
+			});
+		}
+	},
+	generatePractice: async (event) => {
+		requireDevelopmentRoute();
+		const user = requireUser(event);
+		const formData = await event.request.formData();
+		const cards = parseJsonField(formData, "cards", Generation2CardsSchema);
+		if (!cards) return fail(400, { error: "The Generation 2 card data was invalid." });
+		const input = {
+			cards: cards.map(validatedCard),
+			sourceLanguage: TRANSLATION_EVALUATION_LIVE_DEMO_TASK.sourceLanguage,
+			targetLanguage: TRANSLATION_EVALUATION_LIVE_DEMO_TASK.targetLanguage,
+		};
+		const initialMessages = buildGeneration2Messages(input);
+		const startedAt = performance.now();
+		try {
+			const response = await generateTranslationPractice({ ...input, userId: user.id });
+			return {
+				success: true,
+				generation: response.value,
+				promptMessages: response.requestMessages,
+				rawResponse: response.content,
+				metadata: callMetadata(response, initialMessages.length, startedAt, GENERATION_2_TEMPERATURE),
 			};
 		} catch (cause) {
 			return fail(llmErrorStatus(cause), {

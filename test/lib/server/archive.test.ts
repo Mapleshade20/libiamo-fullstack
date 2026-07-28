@@ -7,7 +7,6 @@ const { mockDb } = vi.hoisted(() => ({
 		query: {
 			practiceSession: { findMany: vi.fn() },
 			translationAttempt: { findMany: vi.fn() },
-			reviewCard: { findMany: vi.fn(() => []) },
 		},
 	},
 }));
@@ -34,9 +33,9 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 function makeNote(overrides: Record<string, unknown> = {}) {
 	return {
 		id: overrides.id ?? 1,
-		tutorComment: overrides.tutorComment ?? "Use past tense",
-		keywords: overrides.keywords ?? ["past tense"],
-		sourceContext: overrides.sourceContext ?? "I go yesterday.",
+		vocab: overrides.vocab ?? "make a decision",
+		targetDefinition: overrides.targetDefinition ?? "to choose what to do",
+		nativeDefinition: overrides.nativeDefinition ?? "作出决定",
 	};
 }
 
@@ -122,13 +121,13 @@ describe("listCompletedActivities", () => {
 		expect(result.map((g) => g.label)).toEqual(["Today", "Yesterday", "This Week", "Earlier"]);
 	});
 
-	it("merges evaluated translation attempts with practice sessions", async () => {
+	it("merges completed translation attempts with practice sessions", async () => {
 		const now = new Date(2025, 5, 11, 12, 0, 0);
 		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, completedAt: new Date(2025, 5, 11, 10, 0, 0) })]);
 		mockDb.query.translationAttempt.findMany.mockResolvedValue([
 			{
 				id: 7,
-				evaluatedAt: new Date(2025, 5, 11, 11, 0, 0),
+				completedAt: new Date(2025, 5, 11, 11, 0, 0),
 				sourceSet: { templateId: 4, template: { titleBase: "Letter translation" } },
 				notes: [makeNote({ id: 8 })],
 			},

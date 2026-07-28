@@ -1,7 +1,7 @@
 ---
 title: 重设计翻译评估与主动学习流程
 type: feature
-status: implementing
+status: done
 link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4972196146
 ---
 
@@ -33,10 +33,10 @@ link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4
 | 阶段 | 单一 `workflowPhase`：`draft` → `submitted` → `correction` → `second_draft` → `transfer` → `completed`；总览是 correction 内首个 UI step，不是独立 phase |
 | 细进度 | correction 内总览 gate、卡片位置/尝试/输入/feedback/Diff，二稿正文、迁移队列 → `sessionStorage` only；无 snapshot 的 correction 恢复到总览 |
 | 路由 | `/translate/[id]` 详情；`/translate/[id]/attempt` 作答；`/translate/[id]/feedback` 评估；当前母语范围内优先唯一未完成 attempt，否则取最新 completed；不提供旧 completed 完整反馈入口 |
-| Retake | 未完成也可在**详情页**确认后放弃；物理删除 attempt 并 cascade Notes/variants；评估页刷新不弹选择 |
+| Retake | 未完成也可在**详情页**确认后放弃；物理删除 attempt 并 cascade Notes；评估页刷新不弹选择 |
 | 迁移评分 | Incorrect → `Rating.Again`；Pass → `Rating.Good` |
 | 改错 Skip | **禁止** Ignore/Skip，必须两次尝试或通过 |
-| Note | 本 issue 内**所有**来源统一 `targetPattern` + `explanation` + 恰好 4 variants |
+| Note | 本 issue 内**所有**来源统一 `vocab` + 目标语释义 + 母语释义 + JSON 例句；Note 本身是 FSRS 单元，不再存在 exercise variant 子表或轮换游标 |
 | 匹配 | `sourceText`/`originalAnswer` exact containment + 不重叠分配；失败 soft warning |
 | 长度 | 不设固定字符数或卡片数产品上限；所有模型统一使用 40k token 调用预算，提交事务前预检，超限保持 `draft`；completion 截断 = 整次失败可 Retry |
 | 反馈语言 | Profile 设置 `native` / `target`，默认 `native`；翻译评估与传统 task feedback 共用；每次反馈生成时解析并冻结具体语言 |
@@ -48,7 +48,7 @@ link: https://github.com/Mapleshade20/libiamo-fullstack/issues/72#issuecomment-4
 - 模型拒绝修改时，只评价用户刚刚提交的尝试，不泄露或暗示标准答案。
 - 使用 LLM 生成的受限类 XML 标记渲染 Diff；parser 保证安全渲染，不要求重建文本恒等。
 - 只保留有明确展示位置、校验用途或调度用途的模型字段。
-- 将 Note 直接作为 FSRS 调度单元；所有 Note 来源一次 LLM 写满统一 contract。
+- 将 Note 直接作为 FSRS 调度单元；所有 Note 来源一次 LLM 写满词汇、双语词典释义和自然例句。
 - 服务端 `workflowPhase` 支持从阶段起点恢复；改错细状态仅当前标签页 snapshot。
 - 详情页提供继续评估 / 放弃重做；评估子路由内刷新只按 phase 恢复。
 - 允许用户在 Profile 选择 LLM 教学反馈使用母语或任务目标语言，并统一应用于翻译评估、传统 task feedback 和对应追问。
@@ -388,7 +388,7 @@ unchanged text
 
 **不**新建 evaluation/card/second-draft/job 表。**不**持久化：卡内尝试次数与正文、二稿正文、迁移队列、verifier 多轮、usage。
 
-唯一性：同一 user+source set 最多一条 **非 completed** attempt；completed 可多条。放弃重做 = **物理删除**未完成 attempt（cascade answers；cascade 指向该 attempt 的 Notes/variants/相关 review logs）。
+唯一性：同一 user+source set 最多一条 **非 completed** attempt；completed 可多条。放弃重做 = **物理删除**未完成 attempt（cascade answers；cascade 指向该 attempt 的 Notes/相关 review logs）。
 
 ## 8.2 服务端 phase 恢复
 
@@ -460,9 +460,9 @@ versioned、attempt-scoped `sessionStorage`：
 
 ---
 
-# 10. Generation 2：统一 Note 与练习变体
+# 10. Generation 2：统一词汇 Note 与例句
 
-处理本 attempt 全部 correction cards（passed 与 revealed 均覆盖）。可合并同一可迁移模式，不得表面相似乱合并。
+处理本 attempt 全部 correction cards（passed 与 revealed 均覆盖）。每张 Note 学习的是从 `referenceAnswer` / `minimalAnswer` 的正确目标语表达中提取出的 `vocab`，而不是抽象句型或句子结构。`vocab` 可以是 single word，也可以是在当前语境中固定或半固定的 lexical chunk（包括 collocation、phrasal verb、fixed phrase、idiom、semi-fixed functional formula）。仅当多个 correction cards 指向同一个词或语块时才可合并。
 
 逻辑结果：
 
@@ -471,13 +471,14 @@ versioned、attempt-scoped `sessionStorage`：
   "notes": [
     {
       "sourceCardOrdinals": [0, 3],
-      "targetPattern": "可复用的目标语言结构或表达",
-      "explanation": "使用 attempt.feedbackLanguage 的完整解释",
-      "exercises": [
-        { "front": "母语例句 1", "back": "目标语译文 1" },
-        { "front": "母语例句 2", "back": "目标语译文 2" },
-        { "front": "母语例句 3", "back": "目标语译文 3" },
-        { "front": "母语例句 4", "back": "目标语译文 4" }
+      "vocab": "make a decision",
+      "targetDefinition": "to choose what to do after considering the possibilities",
+      "nativeDefinition": "作出决定；在考虑各种可能性后选择要做什么",
+      "examples": [
+        { "targetText": "We need to make a decision by Friday.", "nativeText": "我们需要在周五前作出决定。" },
+        { "targetText": "She made the decision to study abroad.", "nativeText": "她决定去国外学习。" },
+        { "targetText": "It took me a while to make that decision.", "nativeText": "我花了一段时间才作出那个决定。" },
+        { "targetText": "You should make your own decision.", "nativeText": "你应该自己作决定。" }
       ]
     }
   ]
@@ -487,11 +488,14 @@ versioned、attempt-scoped `sessionStorage`：
 | 字段 | 用途 |
 | --- | --- |
 | `sourceCardOrdinals` | 校验全覆盖恰好一次；不展示、不持久化 |
-| `targetPattern` | Archive/Note 标题 |
-| `explanation` | Note 正文 |
-| `exercises[].front/back` | 迁移与普通 Review |
+| `vocab` | 要学习的目标语单词或语块；Archive/Note 标题；抽认卡背面 |
+| `targetDefinition` | 使用目标语言书写的词典式释义；生成并持久化，当前抽认 UI 不展示 |
+| `nativeDefinition` | 使用用户母语书写的词典式释义；抽认卡正面 |
+| `examples[].targetText/nativeText` | 同义对齐的自然日常例句及其母语翻译；存入 Note JSON 列，每次展示普通随机抽一条 |
 
-不再生成 title/corePoint/summary/targetPatterns[]。每卡恰好覆盖一次；每 Note 恰好四道互不重复练习（换主题场景词汇，非只换人名）。
+不再生成 title/corePoint/summary/targetPatterns[]、`targetPattern` 或 `explanation`。每卡恰好覆盖一次。每 Note 生成四条互不重复、包含该 `vocab` 的自然日常目标语例句及准确母语翻译；四条是同一 Note 的例句池，不是四张持久化卡片，也没有顺序、游标或避免重复的 shuffle bag。
+
+目标语释义和母语释义都采用简洁的词典释义，而非语法课式解释。母语以用户实际 `nativeLanguage` 为准（缺失时回退目标语言），不受 Profile 的 feedback-language 偏好影响。
 
 ## 10.1 浏览器显式调用
 
@@ -499,7 +503,7 @@ versioned、attempt-scoped `sessionStorage`：
 
 进入 `second_draft` 时浏览器调 `generatePractice`；胶囊：generating / failed+Retry / ready。
 
-action 仅 attempt 身份：所有权；已有 `practiceGeneratedAt` 则返回已有 Notes；读 evaluation + 开始时 `evaluatedAt`；事务外 LLM + 校验；短事务条件更新 `practiceGeneratedAt IS NULL AND evaluatedAt 未变`，原子插 Notes/variants/来源；失败回滚；条件未命中则返回已有或 409。
+action 仅 attempt 身份：所有权；已有 `practiceGeneratedAt` 则返回已有 Notes；读 evaluation + 开始时 `evaluatedAt`；事务外 LLM + 校验；短事务条件更新 `practiceGeneratedAt IS NULL AND evaluatedAt 未变`，原子插 Notes/来源；失败回滚；条件未命中则返回已有或 409。
 
 成功写入 Notes 后只设置 `practiceGeneratedAt` 并写入 Note 数据，**不得**清空仍可能被二稿 verifier 使用的 `generation1Messages`。history 由进入 `transfer` 的 phase 更新清理。错误只在胶囊，不写 failure 表。模型调用不持 DB 事务。
 
@@ -509,19 +513,19 @@ action 仅 attempt 身份：所有权；已有 `practiceGeneratedAt` 则返回�
 
 Note 直接为 FSRS 单元，**删除**独立 ReviewCard。
 
-统一 Note：`targetPattern`、`explanation`、用户与目标语、唯一 source（session **或** translation attempt）、FSRS state、variant 轮换状态、时间戳。
+统一 Note：`vocab`、`targetDefinition`、`nativeDefinition`、JSON `examples`、用户与目标语、唯一 source（session **或** translation attempt）、FSRS state、时间戳。
 
-Exercise variant 子表：`front`/`back`/ordinal，`(note_id, ordinal)` 唯一；每 Note 恰好 4 条。
+删除 `note_exercise_variant`；同时删除 Note 上的 `exerciseOrder` / `exerciseCursor`。例句只存在 Note 的 JSON 列，由严格 LLM schema、应用写入校验和读取校验保证至少一条、字段非空、目标语例句包含对应 `vocab`。
 
 翻译来源：`note → translationAttempt → translationSourceSet → template`。
 
-**所有**新写入路径（沉浸式反馈、划词保存、tutor Q&A、翻译 Gen2）同一 contract：一次 LLM 出满字段 + 4 variants + source + 初始 FSRS；校验失败不写半成品。可判断「零 Note」；不得缺 variants 的半成品。调用与校验在事务外，写入短事务原子。
+**所有**新写入路径（沉浸式反馈、划词保存、tutor Q&A、翻译 Gen2）同一 contract：一次 LLM 出满 vocab + 双语释义 + JSON examples + source + 初始 FSRS；校验失败不写半成品。可判断「零 Note」；不得写入缺释义或例句的半成品。调用与校验在事务外，写入短事务原子。
 
-编辑 pattern/explanation 不重置 FSRS。重新生成 variants 为未来显式操作。
+编辑 vocab/双语释义不重置 FSRS。重新生成例句为未来显式操作。
 
 Review log 直接引用 Note；rating + log 同事务。
 
-旧 note/reviewCard/reviewLog **开发数据可删**；删表前先切换 Archive/Review/API/stats/来源删除与全部写入路径。**本 issue 不承诺生产数据迁移**（pre-production breaking）。
+旧 note/reviewCard/reviewLog **开发数据可删**；旧 `targetPattern` / `explanation` / variants 无法无损推导 vocab 与双语词典释义，本轮迁移清空开发环境 attempt/Note/log 后切换新结构。**本 issue 不承诺生产数据迁移**（pre-production breaking）。
 
 ---
 
@@ -531,7 +535,11 @@ Review log 直接引用 Note；rating + log 同事务。
 
 读取本 attempt Gen2 Notes。胶囊 generating/failed/ready；failed 仅 Retry。无 cards 不进本阶段；有 cards 则 coverage 至少一 Note。
 
-每 Note 抽一 variant。揭示前**不**展示 `targetPattern`；用户先输入目标语再揭示 back + pattern。不做模型评分。
+队列初始包含本 attempt 的每个 Note 一次；每次 Note 到达队首时从其 JSON 例句池普通随机抽一条例句。迁移练习改为与普通 Review 共用同一个 Anki 风格自评组件，不再要求用户先输入目标语，也不做模型评分。
+
+抽认区使用当前 Review 的暖白卡片背景，不照搬参考截图的深色主题。未揭晓时，上半区展示母语 `nativeDefinition`，并为其下方的 `vocab` 预留实际答案高度；分隔线下展示母语 `nativeText`，并为其下方的目标语 `targetText` 预留实际答案高度。揭晓后，两段答案在各自预留位置淡入，任何一段出现多行文本都不得推动既有题面或造成整卡位置突变。`targetDefinition` 暂不展示。
+
+屏幕底部固定一组克制的 Anki 风格控制区：蓝 / 红 / 绿分别显示当前剩余队列的 New / Learning（含 Relearning）/ Review 数量；下方为单个宽 `Show Answer` 按钮。点击按钮或按 Space / Enter 揭晓后，同一控制区原位切换为评分按钮。Transfer 的 Incorrect 会把该 Note 变为 Learning 类型并随机新例句入队尾；Pass 将其移出剩余计数。
 
 按钮：
 
@@ -540,13 +548,13 @@ Review log 直接引用 Note；rating + log 同事务。
 
 每次 rating 事务更新 FSRS + review log；请求中禁用；失败不前进。
 
-队列/已用 variant/Incorrect 次数仅 snapshot。Incorrect 入队尾优先未见 variant；同 Note 最多四次 Incorrect 后 deferred，提示普通 Review。
+队列与每次已随机选择的例句索引仅存 versioned `sessionStorage` snapshot。Incorrect 从队首移除后将同一 Note 以新一次普通随机例句加入队尾，学习者先完成其他剩余 Note；不设错误次数上限，未答对就持续回到队尾。Pass 从队首移除且不再入队。
 
 队列处理完毕（含 deferred 决议）→ phase=`completed`，写 `completedAt`。
 
 ## 12.2 普通 Review
 
-`/review`：Again / Hard / Good / Easy。每次从四 variants 中选一（避免立即重复的 shuffle bag）。
+`/review` 复用 §12.1 的同一抽认组件，揭晓后提供 Again / Hard / Good / Easy。底部三色数字按当前剩余复习队列中的 FSRS 类型统计。每次展示 Note 时直接从其 JSON 例句池普通随机一条；不持久化选择，不维护顺序、游标、去重或避免立即重复的 shuffle bag。
 
 ---
 
@@ -573,10 +581,10 @@ target  # 使用当前任务的目标学习语言
 
 - 数据库存储用户偏好 `feedbackLanguagePreference`，默认 `native`；Profile 使用本地化 segmented control 或 radio group，不使用自由文本；
 - 若偏好为 `native` 但用户没有设置 `nativeLanguage`，生成时回退到任务目标语言，Profile 同时提示先设置母语；
-- 翻译 attempt 在首稿提交前把偏好解析为具体 `feedbackLanguage` 并持久化；Gen1、两级 hint、`teacherNotes`、correction verifier、二稿 commentary 和 Note `explanation` 都使用该冻结语言；
+- 翻译 attempt 在首稿提交前把偏好解析为具体 `feedbackLanguage` 并持久化；Gen1、两级 hint、`teacherNotes`、correction verifier 和二稿 commentary 使用该冻结语言；Note 的 `nativeDefinition` / `examples[].nativeText` 则固定使用用户实际母语（缺失时回退目标语言），不受此偏好影响；
 - 传统 task 在首次生成 `tutorFeedback` 时解析并把具体 `feedbackLanguage` 写入 `FeedbackResult`；message comment、objective 文字、summary 及该反馈页的后续 tutor Q&A 使用同一语言；
 - 用户之后修改 Profile 只影响未来新生成的反馈，不重写已生成评价，也不改变进行中翻译 attempt / 已生成传统 task feedback；
-- 原始学习者消息、annotated text、用户作答、参考答案、`targetPattern` 和 exercise back 始终保持任务目标语言；翻译原文和 exercise front 继续使用题目规定的源语言，不随反馈语言偏好改变；
+- 原始学习者消息、annotated text、用户作答、参考答案、Note `vocab` / `targetDefinition` / `examples[].targetText` 始终保持任务目标语言；`nativeDefinition` / `examples[].nativeText` 使用用户母语，不随反馈语言偏好改变；
 - 静态 UI 继续使用 `t(lang, key)`，新 key 四种 UI 语言同步。
 
 全阶段：desktop/mobile、键盘与可见 focus、阶段后逻辑 focus、live status 不泄隐藏答案、Diff SR 文本、reduced-motion、非仅颜色状态、箭头 `aria-label`。
@@ -587,64 +595,73 @@ target  # 使用当前任务的目标学习语言
 
 ## LLM
 
-- [ ] Gen1 一次逻辑生成返回总评、四项评分、全部句级卡。
-- [ ] 无 token range/confidence/issue type/title/summary/model ref/diff_type。
-- [ ] 最小 contract + few-shot + Zod + 轻量领域校验 + 定向 repair。
-- [ ] 截断/非法评分/不可解析 → 不暴露部分结果。
-- [ ] 成功 Gen1 history 落库；进入 transfer 或无卡完成时清空，Gen2 先完成不得提前删除。
-- [ ] Profile `native|target` 偏好解析正确；翻译与传统 task 的反馈文本均使用冻结语言。
-- [ ] BYOK 无 structured output 仍可用。
-- [ ] live review demo 可用 reference 猫武士预填作答调用真实 Gen1，并完整展示实际 prompt、原始响应与解析后的反馈供人工审阅；成功结果通过校验后的 sessionStorage 在同一标签页刷新后恢复。
-- [ ] live review demo 提供 `0.0`–`1.0`、步长 `0.1`、默认 `0.4` 的 temperature 控件；服务端拒绝范围外值，选择值同标签页持久化并显示在实际调用 metadata 中。
-- [ ] live review demo 接通 Correction Verifier、二稿编辑和 Second Draft Verifier 的真实 LLM 调用。Correction Verifier 仅提供当前 card trusted context，不附带完整 Gen1 history；Second Draft Verifier 固定追加到完整成功 Gen1 history。每次调用均展示准确 prompt、raw response、provider metadata 和解析结果。
-- [ ] completion budget 统一为公共默认 `8,192`；Correction Verifier 与 Second Draft Verifier 使用该默认值。Generation 1、Generation 2 与场景练习完整会话反馈显式使用 `32,768`。
-- [ ] Correction Verifier 判断 learnerRevision 的意思、用法与自然度，使用 card issues 作为问题清单并检查修改是否引入退步。`referenceAnswer` 是主要语义基准，`sourceText` 只是较低优先级且可能不精确的原文语境；source/original/minimal 中未被 reference 要求的细节不得成为拒绝依据。不得因合理转述或语义强度差异而拒绝。输出固定 `allCardIssuesResolved`、`noNewErrors`、`fullyNatural` 三项 checks；仅三项全部通过时 schema 才允许 accept，reject 至少有一项失败。prompt 显式携带 `referenceAnswer` 与 `teacherNotes`，简要定义主要字段（尤其 `originalAnswer` 是用户首稿而非标准答案），且不包含 `attemptNumber`。
+- [x] Gen1 一次逻辑生成返回总评、四项评分、全部句级卡。
+- [x] 无 token range/confidence/issue type/title/summary/model ref/diff_type。
+- [x] 最小 contract + few-shot + Zod + 轻量领域校验 + 定向 repair。
+- [x] 截断/非法评分/不可解析 → 不暴露部分结果。
+- [x] 成功 Gen1 history 落库；进入 transfer 或无卡完成时清空，Gen2 先完成不得提前删除。
+- [x] Profile `native|target` 偏好解析正确；翻译与传统 task 的反馈文本均使用冻结语言。
+- [x] BYOK 无 structured output 仍可用。
+- [x] live review demo 可用 reference 猫武士预填作答调用真实 Gen1，并完整展示实际 prompt、原始响应与解析后的反馈供人工审阅；成功结果通过校验后的 sessionStorage 在同一标签页刷新后恢复。
+- [x] live review demo 提供 `0.0`–`1.0`、步长 `0.1`、默认 `0.4` 的 temperature 控件；服务端拒绝范围外值，选择值同标签页持久化并显示在实际调用 metadata 中。
+- [x] live review demo 接通 Correction Verifier、二稿编辑和 Second Draft Verifier 的真实 LLM 调用。Correction Verifier 仅提供当前 card trusted context，不附带完整 Gen1 history；Second Draft Verifier 固定追加到完整成功 Gen1 history。每次调用均展示准确 prompt、raw response、provider metadata 和解析结果。
+- [x] completion budget 统一为公共默认 `8,192`；Correction Verifier 与 Second Draft Verifier 使用该默认值。Generation 1、Generation 2 与场景练习完整会话反馈显式使用 `32,768`。
+- [x] Correction Verifier 判断 learnerRevision 的意思、用法与自然度，使用 card issues 作为问题清单并检查修改是否引入退步。`referenceAnswer` 是主要语义基准，`sourceText` 只是较低优先级且可能不精确的原文语境；source/original/minimal 中未被 reference 要求的细节不得成为拒绝依据。不得因合理转述或语义强度差异而拒绝。输出固定 `allCardIssuesResolved`、`noNewErrors`、`fullyNatural` 三项 checks；仅三项全部通过时 schema 才允许 accept，reject 至少有一项失败。prompt 显式携带 `referenceAnswer` 与 `teacherNotes`，简要定义主要字段（尤其 `originalAnswer` 是用户首稿而非标准答案），且不包含 `attemptNumber`。
 
 ## 路由与阶段
 
-- [ ] `/translate/[id]` 详情 CTA 按 phase 进 attempt/feedback。
-- [ ] attempt/feedback URL 无 attempt id；服务端推断并校验 phase，错误 redirect。
-- [ ] 当前母语范围内活动 attempt 优先，否则取最新 completed；retake 后旧 completed 不再从主流程打开。
-- [ ] 详情页未完成可确认硬删放弃；评估内刷新不弹 retake。
-- [ ] `workflowPhase` 六态推进符合 §1.2；不存在 overview phase；correction 的总览 gate 与卡片细进度仅 snapshot。
+- [x] `/translate/[id]` 详情 CTA 按 phase 进 attempt/feedback。
+- [x] attempt/feedback URL 无 attempt id；服务端推断并校验 phase，错误 redirect。
+- [x] 当前母语范围内活动 attempt 优先，否则取最新 completed；retake 后旧 completed 不再从主流程打开。
+- [x] 详情页未完成可确认硬删放弃；评估内刷新不弹 retake。
+- [x] `workflowPhase` 六态推进符合 §1.2；不存在 overview phase；correction 的总览 gate 与卡片细进度仅 snapshot。
 
 ## 总览与 regenerate
 
-- [ ] 左栏首稿 + exact 不重叠高亮；失败不高亮。
-- [ ] unverified 可整体 regenerate；成功前旧评价保留。
-- [ ] Gen1 成功直接写 phase=`correction`；总览 Continue 有卡时只写 snapshot，无卡时 → completed。
-- [ ] 无独立 issue summary。
+- [x] 左栏首稿 + exact 不重叠高亮；失败不高亮。
+- [x] unverified 可整体 regenerate；成功前旧评价保留。
+- [x] Gen1 成功直接写 phase=`correction`；总览 Continue 有卡时只写 snapshot，无卡时 → completed。
+- [x] 无独立 issue summary。
 
 ## 改错
 
-- [ ] 空输入 + initialHint；最多两次；无 Skip。
-- [ ] 拒绝保留输入 + deeperHint；二次拒绝展示 minimal Diff，再以安全解析的 referenceMarked 展示完整参考答案和可学习表达。
-- [ ] 通过仅双 Diff + 圆圈序号 teacherNotes；非法 Diff 纯文本降级，不撤销 accept。
-- [ ] Correction Verifier 只用当前 card context；verifier 对话不落库；provider 错误不计数。
+- [x] 空输入 + initialHint；最多两次；无 Skip。
+- [x] 拒绝保留输入 + deeperHint；二次拒绝展示 minimal Diff，再以安全解析的 referenceMarked 展示完整参考答案和可学习表达。
+- [x] 通过仅双 Diff + 圆圈序号 teacherNotes；非法 Diff 纯文本降级，不撤销 accept。
+- [x] Correction Verifier 只用当前 card context；verifier 对话不落库；provider 错误不计数。
 
 ## Diff
 
-- [ ] 仅 delete/add/replace 协议；parser→AST；无 `{@html}`。
-- [ ] 只要协议语法可解析即展示 AST；不因 Diff 内容与 originalAnswer/minimalAnswer 不匹配而隐藏。replace 单边可为空以表达删除或插入。
-- [ ] 无强制重建恒等；语块级 prompt/few-shot。
+- [x] 仅 delete/add/replace 协议；parser→AST；无 `{@html}`。
+- [x] 只要协议语法可解析即展示 AST；不因 Diff 内容与 originalAnswer/minimalAnswer 不匹配而隐藏。replace 单边可为空以表达删除或插入。
+- [x] 无强制重建恒等；语块级 prompt/few-shot。
 
 ## 二稿与 Gen2
 
-- [ ] 二稿自首稿初始化；检全部 passed+revealed。
-- [ ] commentary 在底栏上方，无固定文案，动画不顶按钮。
-- [ ] Gen2 浏览器 action；条件原子写 Notes；history 仅在进入 transfer 时清理。
-- [ ] 二稿结束 phase=transfer，Notes 未好则页内等。
+- [x] 二稿自首稿初始化；检全部 passed+revealed。
+- [x] commentary 在底栏上方，无固定文案，动画不顶按钮。
+- [x] Gen2 浏览器 action；条件原子写 vocab/双语释义/JSON 例句 Notes；history 仅在进入 transfer 时清理。
+- [x] 二稿结束 phase=transfer，Notes 未好则页内等。
 
 ## Note / 迁移 / Review
 
-- [ ] 全来源统一 contract + 4 variants；无 ReviewCard 新写入。
-- [ ] 迁移揭示前无 targetPattern；Incorrect=Again，Pass=Good。
-- [ ] 普通 Review 四档 + variant 轮换。
-- [ ] transfer 结束 → completed。
+- [x] 全来源统一 vocab + 双语词典释义 + JSON 例句 contract；无 `note_exercise_variant`、cursor/order 或 ReviewCard 新写入。
+- [x] 迁移正面为母语释义+母语例句翻译，背面为 vocab+目标语例句；Incorrect=Again 并无限入队尾，Pass=Good 并移除。
+- [x] 普通 Review 四档，每次展示普通随机例句。
+- [x] transfer 结束 → completed。
+- [x] CDP 实际检验 Generation 2 与传统 session feedback 的 Save to Note 均生成符合本节 contract 的卡片。
+- [x] Transfer 与 `/review` 使用同一个暖白 Anki 风格抽认组件；Transfer 不再要求输入答案。
+- [x] Space、Enter 或宽 Show Answer 按钮均可揭晓；揭晓后两段答案在预留位置出现，多行内容不导致题面位置突变。
+- [x] 屏幕底部显示剩余队列的 New / Learning（含 Relearning）/ Review 三色计数，并在揭晓后原位切换到各流程对应的评分按钮。
+- [x] 抽认卡四字段均使用无衬线体，移动端字号依次为 `xl / 2xl / xl / xl`，`sm` 起各增一级；双语例句左对齐，评分按钮使用对应语义色实心填充。
+- [x] 目标语例句使用同色左边线与绝对定位开引号，开引号不占布局且与正文保留明确垂直间距。
+- [x] `/translate-eval-demo` 不模拟固定 390px 容器；demo 与正式 feedback 都直接使用 app layout 的唯一 `<main>`，不再嵌套第二层语义 main 或重复页面 padding；响应式验收使用浏览器 viewport。
+- [x] feedback/demo 的短内容阶段不产生伪滚动：Waiting/Completed 的全高区域只扣除 app shell 的垂直 inset。
+- [x] 普通 Review 遵循 Anki 式短期学习队列：默认学习步骤 `1m 10m`、重新学习步骤 `10m`；Again 将卡片保留在 Learning/Relearning 并移到当前队尾，直到 Good 完成步骤或 Easy 直接毕业后才结束该卡。
 
 ## 视觉 a11y
 
-- [ ] 与已批准 demo 一致的 motion/视觉方向；keyboard/focus/live/reduced-motion。
+- [x] 与已批准 demo 一致的 motion/视觉方向；keyboard/focus/live/reduced-motion。
 
 ---
 
@@ -656,6 +673,6 @@ target  # 使用当前任务的目标学习语言
 - 持久化改错尝试正文、二稿正文、迁移队列、Gen2 错误表；
 - event-specific 等待页主题；
 - 通用 tokenization / 通用 diff engine；
-- Note variant 自动再生成或复杂编辑器；
+- Note 例句自动再生成或复杂编辑器；
 - Diff old/new 与原文的严格恒等核验；
 - 改错卡 Skip/Ignore。

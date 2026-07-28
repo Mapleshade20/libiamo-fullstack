@@ -38,6 +38,8 @@ export type ObjectiveGrade = {
 // ── Complete feedback result ─────────────────────────────────────────
 
 export type FeedbackResult = {
+	/** Concrete language resolved and frozen when this feedback was generated. */
+	feedbackLanguage: string;
 	annotations: MessageAnnotation[];
 	objectives: ObjectiveGrade[];
 	summary: string;

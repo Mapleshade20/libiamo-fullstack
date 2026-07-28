@@ -36,7 +36,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 	translationAttempt: {
 		sourceSetId: "sourceSetId",
-		status: "status",
+		workflowPhase: "workflowPhase",
 		userId: "userId",
 		updatedAt: "updatedAt",
 	},
@@ -97,7 +97,7 @@ describe("(app) translate +page.server", () => {
 		// Second query: attempts — includes duplicate templateId entries (older + newer)
 		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
 		mockOrderBy.mockResolvedValueOnce([
-			{ templateId: 1, status: "evaluated" },
+			{ templateId: 1, status: "correction" },
 			{ templateId: 1, status: "draft" }, // older, should be ignored
 			{ templateId: 2, status: "submitted" },
 		]);
@@ -105,7 +105,7 @@ describe("(app) translate +page.server", () => {
 		const user = { id: "u1", activeLanguage: "en", nativeLanguage: "fr" };
 		const result = (await load({ locals: { user } } as any)) as any;
 
-		expect(result.statusMap).toEqual({ 1: "evaluated", 2: "submitted" });
+		expect(result.statusMap).toEqual({ 1: "correction", 2: "submitted" });
 	});
 
 	it("does not reuse attempt statuses when native language is unset", async () => {

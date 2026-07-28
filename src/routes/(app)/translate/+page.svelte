@@ -64,7 +64,7 @@ function enterTask(event: MouseEvent, taskId: number) {
 			<div class="grid gap-5 md:grid-cols-3">
 				{#each data.templates as tpl}
 					{@const status = statusMap[String(tpl.id)]}
-					{@const isFinished = status === "submitted" || status === "evaluated"}
+					{@const isFinished = status === "completed"}
 					<TaskCard
 						id={tpl.id}
 						title={tpl.titleBase}
@@ -72,12 +72,8 @@ function enterTask(event: MouseEvent, taskId: number) {
 						icon={Languages}
 						shortObjective={tpl.shortObjectiveBase}
 						href="/translate/{tpl.id}"
-						buttonLabel={isFinished
-							? 'View Result'
-							: status === 'draft'
-								? 'Continue'
-								: t(lang, 'hall.enter')}
-						status={isFinished ? null : status}
+						buttonLabel={isFinished ? 'View Result' : status ? 'Continue' : t(lang, 'hall.enter')}
+						status={isFinished ? null : status === 'draft' ? 'draft' : status ? 'in_progress' : null}
 						{isFinished}
 						flipped={flippedId === tpl.id}
 						onflip={toggleFlip}
