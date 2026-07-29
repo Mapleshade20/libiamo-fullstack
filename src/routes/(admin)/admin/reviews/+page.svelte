@@ -17,7 +17,7 @@ function formatDate(date: Date | null): string {
 </svelte:head>
 
 <div class="space-y-6">
-	<h1>Review Pool</h1>
+	<h1 class="text-3xl">Review Pool</h1>
 
 	{#if data.pendingContributions.length === 0}
 		<p class="text-muted-foreground">No pending contributions to review.</p>

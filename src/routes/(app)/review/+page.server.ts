@@ -8,7 +8,7 @@ import type { PageServerLoad } from "./$types";
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 
-	const language = (user.activeLanguage ?? "en") as LanguageCode;
+	const language = (event.url?.searchParams.get("language") ?? user.activeLanguage ?? "en") as LanguageCode;
 	if (!(LANGUAGE_CODES as readonly string[]).includes(language)) {
 		throw error(400, "Invalid language");
 	}
@@ -39,5 +39,5 @@ export const load: PageServerLoad = async (event) => {
 		console.error("Failed to load review data:", err);
 	}
 
-	return { cards };
+	return { cards, reviewLanguage: language };
 };

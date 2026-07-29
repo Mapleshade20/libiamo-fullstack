@@ -5,7 +5,6 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 		listCompletedActivities: vi.fn(),
 	},
 	mockNoteService: {
-		updateNote: vi.fn(),
 		deleteNote: vi.fn(),
 		getNote: vi.fn(),
 	},
@@ -69,93 +68,6 @@ describe("archive page server", () => {
 
 		it("redirects when unauthenticated", async () => {
 			await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
-		});
-	});
-
-	describe("actions.update", () => {
-		it("returns success when note is updated", async () => {
-			const updated = { id: 1, vocab: "Updated vocab", targetDefinition: "Updated target definition", nativeDefinition: "Updated native definition" };
-			mockNoteService.updateNote.mockResolvedValue(updated);
-
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "42", vocab: updated.vocab, targetDefinition: updated.targetDefinition, nativeDefinition: updated.nativeDefinition },
-				}),
-			);
-
-			expect(result).toEqual({ success: true, note: updated });
-			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				vocab: updated.vocab,
-				targetDefinition: updated.targetDefinition,
-				nativeDefinition: updated.nativeDefinition,
-			});
-		});
-
-		it("trims all editable Note fields", async () => {
-			const updated = { id: 1, vocab: "Updated", targetDefinition: "Target definition", nativeDefinition: "Native definition" };
-			mockNoteService.updateNote.mockResolvedValue(updated);
-
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "42", vocab: "  Updated  ", targetDefinition: "  Target definition  ", nativeDefinition: "  Native definition  " },
-				}),
-			);
-
-			expect(result).toEqual({ success: true, note: updated });
-			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				vocab: "Updated",
-				targetDefinition: "Target definition",
-				nativeDefinition: "Native definition",
-			});
-		});
-
-		it("redirects before parsing form data when unauthenticated", async () => {
-			const event = createFormEvent({
-				user: null,
-				values: { noteId: "42", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" },
-			});
-
-			await expect(actions.update(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
-			expect(event.request.formData).not.toHaveBeenCalled();
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 400 when noteId is invalid", async () => {
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "not-a-number", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" },
-				}),
-			);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid note ID" } });
-		});
-
-		it("returns fail 400 when a Note field is missing", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", vocab: "Expression" } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Vocabulary and both definitions are required" } });
-		});
-
-		it("returns fail 400 when a Note field is whitespace only", async () => {
-			const result = await actions.update(
-				createFormEvent({ values: { noteId: "42", vocab: "   ", targetDefinition: "Target", nativeDefinition: "Native" } }),
-			);
-			expect(result).toMatchObject({ status: 400, data: { error: "Vocabulary and both definitions are required" } });
-		});
-
-		it("returns fail 400 when Note content is too long", async () => {
-			const result = await actions.update(
-				createFormEvent({ values: { noteId: "42", vocab: "x".repeat(10001), targetDefinition: "Target", nativeDefinition: "Native" } }),
-			);
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is too long" } });
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 404 when note not found", async () => {
-			mockNoteService.updateNote.mockResolvedValue(undefined);
-			const result = await actions.update(
-				createFormEvent({ values: { noteId: "42", vocab: "Updated", targetDefinition: "Target", nativeDefinition: "Native" } }),
-			);
-			expect(result).toMatchObject({ status: 404, data: { error: "Note not found" } });
 		});
 	});
 

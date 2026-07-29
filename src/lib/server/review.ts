@@ -1,7 +1,7 @@
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 import type { Card, Grade, ReviewLog, TLearningStepsStrategy } from "ts-fsrs";
 import { BasicLearningStepsStrategy, ConvertStepUnitToMinutes, createEmptyCard, fsrs, Rating, State, StrategyMode } from "ts-fsrs";
-import type { LanguageCode } from "$lib/constants";
+import { type LanguageCode, REVIEW_MAXIMUM_INTERVAL_DAYS } from "$lib/constants";
 import { parseNoteExamples, randomExampleIndex } from "$lib/note";
 import type { StudyQueueKind } from "$lib/review";
 import { db } from "./db";
@@ -10,7 +10,7 @@ import { note, reviewLog } from "./db/schema";
 let scheduler: ReturnType<typeof fsrs> | null = null;
 
 export const ANKI_LEARN_AHEAD_MINUTES = 20;
-export const ANKI_MAXIMUM_INTERVAL_DAYS = 36_500;
+export const ANKI_MAXIMUM_INTERVAL_DAYS = REVIEW_MAXIMUM_INTERVAL_DAYS;
 const ANKI_LEARNING_STEPS = ["1m", "10m"] as const;
 const ANKI_RELEARNING_STEPS = ["10m"] as const;
 
@@ -252,6 +252,51 @@ export async function rateNote(
 			nativeText: example.nativeText,
 			targetText: example.targetText,
 		};
+	});
+}
+
+async function getOwnedNoteForScheduling(transaction: Pick<typeof db, "select">, noteId: number, userId: string) {
+	const [row] = await transaction
+		.select()
+		.from(note)
+		.where(and(eq(note.id, noteId), eq(note.userId, userId)))
+		.limit(1)
+		.for("update");
+	return row;
+}
+
+export async function setNoteDueInDays(noteId: number, userId: string, days: number, now = new Date()) {
+	if (!Number.isInteger(days) || days < 0 || days > ANKI_MAXIMUM_INTERVAL_DAYS) throw new Error("Invalid due-day offset.");
+	return db.transaction(async (transaction) => {
+		const row = await getOwnedNoteForScheduling(transaction, noteId, userId);
+		if (!row) return undefined;
+		const card = deserializeCard(row.fsrsCard);
+		card.due = new Date(now.getTime() + days * 86_400_000);
+		const fsrsCard = serializeCard(card);
+		const [updated] = await transaction
+			.update(note)
+			.set({ fsrsCard, updatedAt: now })
+			.where(and(eq(note.id, noteId), eq(note.userId, userId)))
+			.returning();
+		return updated ? { due: card.due.toISOString(), queueKind: studyQueueKind(card) } : undefined;
+	});
+}
+
+export async function resetNoteScheduling(noteId: number, userId: string, now = new Date()) {
+	return db.transaction(async (transaction) => {
+		const row = await getOwnedNoteForScheduling(transaction, noteId, userId);
+		if (!row) return undefined;
+		const card = createNewCard();
+		card.due = now;
+		const fsrsCard = serializeCard(card);
+		const [updated] = await transaction
+			.update(note)
+			.set({ fsrsCard, updatedAt: now })
+			.where(and(eq(note.id, noteId), eq(note.userId, userId)))
+			.returning();
+		if (!updated) return undefined;
+		await transaction.delete(reviewLog).where(and(eq(reviewLog.noteId, noteId), eq(reviewLog.userId, userId)));
+		return { due: card.due.toISOString(), queueKind: studyQueueKind(card), reps: card.reps, lapses: card.lapses };
 	});
 }
 

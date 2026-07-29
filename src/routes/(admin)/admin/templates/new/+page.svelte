@@ -38,7 +38,7 @@ let templateData = $derived(
 </svelte:head>
 
 <div class="space-y-6">
-	<h1>
+	<h1 class="text-3xl">
 		{#if contributed}
 			Edit &amp; Approve Contribution
 		{:else}

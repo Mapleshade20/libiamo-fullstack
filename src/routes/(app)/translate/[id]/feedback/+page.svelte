@@ -513,7 +513,7 @@ function updateCardInput(index: number, value: string) {
 		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(lang, "eval.complete.eyebrow")}</p>
 		<h1 tabindex="-1" class="font-serif text-4xl tracking-tight focus:outline-none">{t(lang, "eval.complete.title")}</h1>
 		<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(lang, "eval.complete.body")}</p>
-		<Button href="/translate" size="icon" class="mt-8 size-12 rounded-full" aria-label={t(lang, "eval.complete.homeAria")}><Home /></Button>
+		<Button href="/" size="icon" class="mt-8 size-12 rounded-full" aria-label={t(lang, "eval.complete.homeAria")}><Home /></Button>
 	</section>
 {:else}
 	<EvaluationWaiting title="Preparing the next stage" />

@@ -14,6 +14,7 @@ export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
 export const BYOK_BASE_URL_MAX_LENGTH = 2048;
 export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;
+export const REVIEW_MAXIMUM_INTERVAL_DAYS = 36_500;
 
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",

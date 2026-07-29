@@ -11,6 +11,7 @@ interface NavItem {
 	href: string;
 	label: string;
 	exact?: boolean;
+	sectionPaths?: string[];
 }
 
 type TrialQuotaNavBalance = {
@@ -30,9 +31,8 @@ let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props 
 
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
-	{ href: "/translate", label: "Translate" },
 	{ href: "/review", label: "Review" },
-	{ href: "/", label: "Quests", exact: true },
+	{ href: "/", label: "Quests", exact: true, sectionPaths: ["/task", "/translate"] },
 	{ href: "/archive", label: "Archive" },
 	...(user.role !== "admin" ? [{ href: "/contribute", label: "Contribute" }] : []),
 	...(user.role === "admin" ? [{ href: "/admin/templates", label: "Admin" }] : []),
@@ -49,7 +49,10 @@ const navItems = $derived(mode === "app" ? appItems : adminItems);
 
 // --- Active index ---
 function matchIndex(items: NavItem[], pathname: string): number {
-	return items.findIndex((item) => (item.exact ? pathname === item.href : pathname.startsWith(item.href)));
+	return items.findIndex((item) => {
+		if (item.sectionPaths?.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
+		return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+	});
 }
 
 let activeIndex = $derived(matchIndex(navItems, page.url.pathname));

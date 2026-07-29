@@ -126,7 +126,7 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1>Edit Template #{data.template.id}</h1>
+		<h1 class="text-3xl">Edit Template #{data.template.id}</h1>
 	</div>
 
 	<ActionNotification notification={actionNotification} />

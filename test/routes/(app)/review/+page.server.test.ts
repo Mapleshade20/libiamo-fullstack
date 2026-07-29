@@ -24,7 +24,7 @@ describe("review page server", () => {
 		]);
 	});
 
-	const event = (user: unknown) => ({ locals: { user } }) as never;
+	const event = (user: unknown, query = "") => ({ locals: { user }, url: new URL(`https://example.com/review${query}`) }) as never;
 
 	it("redirects unauthenticated users", async () => {
 		await expect(load(event(null))).rejects.toMatchObject({ status: 302, location: "/sign-in" });
@@ -45,6 +45,13 @@ describe("review page server", () => {
 			},
 		]);
 		expect(mockGetDueNotes).toHaveBeenCalledWith("user-1", "es", 20);
+		expect(result.reviewLanguage).toBe("es");
+	});
+
+	it("loads a supported language selected in the review URL", async () => {
+		const result = (await load(event({ id: "user-1", activeLanguage: "es" }, "?language=ja"))) as any;
+		expect(result.reviewLanguage).toBe("ja");
+		expect(mockGetDueNotes).toHaveBeenCalledWith("user-1", "ja", 20);
 	});
 
 	it("defaults to English and recovers from a database failure", async () => {
@@ -56,5 +63,6 @@ describe("review page server", () => {
 
 	it("rejects invalid language codes", async () => {
 		await expect(load(event({ id: "user-1", activeLanguage: "zz" }))).rejects.toMatchObject({ status: 400 });
+		await expect(load(event({ id: "user-1", activeLanguage: "en" }, "?language=zz"))).rejects.toMatchObject({ status: 400 });
 	});
 });

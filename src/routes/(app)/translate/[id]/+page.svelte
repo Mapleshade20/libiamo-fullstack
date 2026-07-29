@@ -29,7 +29,7 @@ let primaryLabel = $derived(
 <svelte:head><title>{data.template.title} · Translation</title></svelte:head>
 
 <main class="mx-auto max-w-4xl px-5 py-9 sm:px-8 lg:py-14">
-	<a href="/translate" class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+	<a href="/" class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
 		><ArrowLeft size={15} />{t(lang, "translate.back")}</a
 	>
 

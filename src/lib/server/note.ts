@@ -220,7 +220,17 @@ export async function getNote(noteId: number, userId: string) {
 	});
 }
 
-export async function updateNote(noteId: number, userId: string, data: { vocab?: string; targetDefinition?: string; nativeDefinition?: string }) {
+export async function updateNote(
+	noteId: number,
+	userId: string,
+	data: {
+		language?: LanguageCode;
+		vocab?: string;
+		targetDefinition?: string;
+		nativeDefinition?: string;
+		examples?: NoteContent["examples"];
+	},
+) {
 	const [updated] = await db
 		.update(note)
 		.set({ ...data, updatedAt: new Date() })

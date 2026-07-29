@@ -64,7 +64,7 @@ function submitFilters(event: Event) {
 	<ActionNotification notification={actionNotification} />
 
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold">Schedule</h1>
+		<h1 class="text-3xl">Schedule</h1>
 
 		<div class="relative flex h-10 w-48 items-center rounded-md bg-muted p-1">
 			<div

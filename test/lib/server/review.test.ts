@@ -8,8 +8,10 @@ import {
 	Rating,
 	ReviewCardNotDueError,
 	rateNote,
+	resetNoteScheduling,
 	State,
 	serializeCard,
+	setNoteDueInDays,
 	studyQueueKind,
 } from "$lib/server/review";
 
@@ -20,6 +22,7 @@ const { mockDb } = vi.hoisted(() => {
 		select: vi.fn(),
 		update: vi.fn(),
 		insert: vi.fn(),
+		delete: vi.fn(),
 		transaction: vi.fn(),
 	};
 	db.transaction.mockImplementation(async (callback) => callback(db));
@@ -211,5 +214,50 @@ describe("rateNote", () => {
 		await expect(rateNote(42, USER_ID, 5 as never, 1)).rejects.toThrow("Invalid review rating");
 		await expect(rateNote(42, USER_ID, Rating.Good, -1)).rejects.toThrow("Invalid review duration");
 		expect(mockDb.transaction).not.toHaveBeenCalled();
+	});
+});
+
+describe("managed scheduling actions", () => {
+	it("moves due by whole days without changing the FSRS state", async () => {
+		const now = new Date("2025-06-11T12:00:00Z");
+		const card = createNewCard();
+		card.state = State.Review;
+		card.reps = 8;
+		card.stability = 4.5;
+		mockDb.select.mockReturnValue({
+			from: () => ({ where: () => ({ limit: () => ({ for: async () => [{ id: 42, fsrsCard: serializeCard(card) }] }) }) }),
+		});
+		const returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		const set = vi.fn(() => ({ where: () => ({ returning }) }));
+		mockDb.update.mockReturnValue({ set });
+
+		const result = await setNoteDueInDays(42, USER_ID, 3, now);
+
+		expect(result).toEqual({ due: "2025-06-14T12:00:00.000Z", queueKind: "review" });
+		expect(set).toHaveBeenCalledWith({
+			fsrsCard: expect.objectContaining({ due: "2025-06-14T12:00:00.000Z", state: State.Review, reps: 8, stability: 4.5 }),
+			updatedAt: now,
+		});
+	});
+
+	it("resets to New and deletes owned review logs in the same transaction", async () => {
+		const now = new Date("2025-06-11T12:00:00Z");
+		const card = createNewCard();
+		card.state = State.Review;
+		card.reps = 8;
+		mockDb.select.mockReturnValue({
+			from: () => ({ where: () => ({ limit: () => ({ for: async () => [{ id: 42, fsrsCard: serializeCard(card) }] }) }) }),
+		});
+		const returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		const set = vi.fn(() => ({ where: () => ({ returning }) }));
+		mockDb.update.mockReturnValue({ set });
+		const deleteWhere = vi.fn().mockResolvedValue(undefined);
+		mockDb.delete.mockReturnValue({ where: deleteWhere });
+
+		const result = await resetNoteScheduling(42, USER_ID, now);
+
+		expect(result).toEqual({ due: now.toISOString(), queueKind: "new", reps: 0, lapses: 0 });
+		expect(set).toHaveBeenCalledWith({ fsrsCard: expect.objectContaining({ state: State.New, reps: 0 }), updatedAt: now });
+		expect(deleteWhere).toHaveBeenCalledOnce();
 	});
 });

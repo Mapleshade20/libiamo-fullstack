@@ -8,19 +8,16 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { deserialize } from "$app/forms";
 import NoteCard from "$lib/components/note/NoteCard.svelte";
-import NoteEditor from "$lib/components/note/NoteEditor.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];
-type ArchiveNote = ArchiveGroups[number]["activities"][number]["notes"][number];
 
 let { data } = $props();
 
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 let groups = $state<ArchiveGroups>((() => data.groups ?? [])());
 let expandedActivityKeys = $state(new Set<string>());
-let editingNoteId = $state<number | null>(null);
 let deletingNoteId = $state<number | null>(null);
 let deleteError = $state<string | null>(null);
 
@@ -66,40 +63,14 @@ function toggleActivity(key: string) {
 	expandedActivityKeys = next;
 }
 
-function handleEdit(noteId: number) {
-	editingNoteId = noteId;
-	deletingNoteId = null;
-	deleteError = null;
-}
-
 function handleDeleteRequest(noteId: number) {
 	deletingNoteId = noteId;
-	editingNoteId = null;
 	deleteError = null;
 }
 
 function handleCancel() {
-	editingNoteId = null;
 	deletingNoteId = null;
 	deleteError = null;
-}
-
-async function saveNote(noteId: number, input: { vocab: string; targetDefinition: string; nativeDefinition: string }) {
-	const formData = new FormData();
-	formData.append("noteId", String(noteId));
-	formData.append("vocab", input.vocab);
-	formData.append("targetDefinition", input.targetDefinition);
-	formData.append("nativeDefinition", input.nativeDefinition);
-
-	const response = await fetch("?/update", { method: "POST", body: formData });
-	const result = deserialize(await response.text());
-
-	if (result.type !== "success" || !result.data?.note) {
-		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Failed to save note");
-	}
-
-	replaceNote(result.data.note as ArchiveNote);
-	editingNoteId = null;
 }
 
 async function deleteNote(noteId: number) {
@@ -117,16 +88,6 @@ async function deleteNote(noteId: number) {
 
 	removeNote(noteId);
 	deletingNoteId = null;
-}
-
-function replaceNote(updated: ArchiveNote) {
-	groups = groups.map((group) => ({
-		...group,
-		activities: group.activities.map((activity) => ({
-			...activity,
-			notes: activity.notes.map((note) => (note.id === updated.id ? updated : note)),
-		})),
-	}));
 }
 
 function removeNote(noteId: number) {
@@ -209,9 +170,7 @@ function formatDate(d: Date): string {
 								<p class="text-sm text-muted-foreground">No notes in this activity.</p>
 							{/if}
 							{#each activity.notes as note (note.id)}
-								{#if editingNoteId === note.id}
-									<NoteEditor {note} oncancel={handleCancel} onsave={(input) => saveNote(note.id, input)} />
-								{:else if deletingNoteId === note.id}
+								{#if deletingNoteId === note.id}
 									<div class="rounded-md border border-red-200 bg-red-50 p-4">
 										<p class="mb-3 text-sm text-red-800">Delete this note and its review history? This cannot be undone.</p>
 										{#if deleteError}
@@ -235,7 +194,7 @@ function formatDate(d: Date): string {
 										</div>
 									</div>
 								{:else}
-									<NoteCard {note} onedit={() => handleEdit(note.id)} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
+									<NoteCard {note} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
 								{/if}
 							{/each}
 						</div>

@@ -1,15 +1,18 @@
 <script lang="ts">
 import { untrack } from "svelte";
+import { goto } from "$app/navigation";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import { type LanguageCode, t } from "$lib/i18n";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review";
 
 let { data } = $props();
-let lang: LanguageCode = $derived(data.user.activeLanguage as LanguageCode);
+let lang: LanguageCode = $derived(data.reviewLanguage as LanguageCode);
 let queue = $state(untrack(() => [...data.cards]));
+let loadedLanguage = $state(untrack(() => data.reviewLanguage));
 let revealed = $state(false);
 let isSubmitting = $state(false);
 let cardsReviewed = $state(0);
@@ -17,6 +20,19 @@ let sessionStart = $state(0);
 let cardRevealedAt = $state(0);
 let sessionComplete = $state(false);
 let error = $state<string | null>(null);
+
+$effect(() => {
+	if (data.reviewLanguage === loadedLanguage) return;
+	loadedLanguage = data.reviewLanguage;
+	queue = [...data.cards];
+	revealed = false;
+	isSubmitting = false;
+	cardsReviewed = 0;
+	sessionStart = 0;
+	cardRevealedAt = 0;
+	sessionComplete = false;
+	error = null;
+});
 
 let currentCard = $derived(queue[0] ?? null);
 let counts = $derived(countStudyQueue(queue));
@@ -108,7 +124,38 @@ async function rate(rating: number) {
 </svelte:head>
 
 <div class="mx-auto max-w-4xl">
-	<h1 class="mb-6 text-center font-serif text-3xl sm:mb-8">{t(lang, "review.title")}</h1>
+	<header class="mb-6 flex flex-col items-center gap-4 sm:mb-8 sm:h-[1.875rem] sm:flex-row sm:items-stretch sm:justify-between">
+		<div class="flex h-[1.875rem] items-stretch gap-3">
+			<h1 class="font-serif text-3xl leading-none">{t(lang, "review.title")}</h1>
+			<label class="sr-only" for="review-language">Review language</label>
+			<select
+				id="review-language"
+				value={data.reviewLanguage}
+				class="h-[1.875rem] rounded-full border border-border bg-card px-3 text-xs font-semibold uppercase tracking-wider text-foreground shadow-sm"
+				onchange={(event) => {
+					const language = event.currentTarget.value;
+					void goto(`/review?language=${language}`);
+				}}
+			>
+				{#each LANGUAGE_CODES as code}
+					<option value={code}>{LANGUAGE_LABELS[code]}</option>
+				{/each}
+			</select>
+		</div>
+		<nav class="inline-flex h-[1.875rem] rounded-full border border-border bg-card p-0.5 text-sm shadow-sm" aria-label="Review pages">
+			<a
+				href="/review?language={data.reviewLanguage}"
+				aria-current="page"
+				class="inline-flex h-full items-center rounded-full bg-foreground px-4 font-medium text-background"
+				>Study</a
+			>
+			<a
+				href={currentCard ? `/review/manage?note=${currentCard.id}` : "/review/manage"}
+				class="inline-flex h-full items-center rounded-full px-4 text-muted-foreground transition-colors hover:text-foreground"
+				>Manage</a
+			>
+		</nav>
+	</header>
 
 	{#if error}
 		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700">
@@ -121,7 +168,6 @@ async function rate(rating: number) {
 		<div class="flex flex-col items-center gap-4 py-12">
 			<p class="text-xl text-muted-foreground">{t(lang, "review.empty")}</p>
 			<p class="text-base text-muted-foreground">{t(lang, "review.emptyHint")}</p>
-			<a href="/" class="text-base text-muted-foreground underline hover:text-foreground">{t(lang, "review.summary.backToHall")}</a>
 		</div>
 	{:else if currentCard}
 		<StudyCard
@@ -148,7 +194,9 @@ async function rate(rating: number) {
 		</div>
 	{/if}
 
-	<div class="border-t border-border pt-6 text-center">
-		<a href="/archive" class="text-muted-foreground underline hover:text-foreground">Manage learning notes</a>
-	</div>
+	{#if currentCard}
+		<div class="border-t border-border pt-6 text-center">
+			<a href="/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground">Edit current card</a>
+		</div>
+	{/if}
 </div>

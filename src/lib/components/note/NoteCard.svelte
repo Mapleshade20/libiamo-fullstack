@@ -1,7 +1,6 @@
 <script lang="ts">
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
-import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
 import { browser } from "$app/environment";
@@ -17,12 +16,10 @@ type Note = {
 
 let {
 	note,
-	onedit = () => {},
 	ondelete = () => {},
 	t = {} as Record<string, string>,
 }: {
 	note: Note;
-	onedit?: () => void;
 	ondelete?: () => void;
 	t?: Record<string, string>;
 } = $props();
@@ -73,9 +70,6 @@ async function submitAsk(q: string) {
 			<p class="mt-1 text-xs leading-relaxed text-muted-foreground">{note.targetDefinition}</p>
 		</div>
 		<div class="shrink-0 flex flex-row sm:flex-col items-center gap-0.5">
-			<button type="button" class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors" onclick={onedit} title="Edit">
-				<Pencil size={14} />
-			</button>
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-red-600 transition-colors" onclick={ondelete} title="Delete">
 				<Trash2 size={14} />
 			</button>

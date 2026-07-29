@@ -135,6 +135,12 @@
 		@apply bg-background text-foreground font-[350];
 	}
 
+	input,
+	textarea,
+	select {
+		@apply font-sans;
+	}
+
 	h1 {
 		@apply text-2xl font-medium font-serif;
 	}
