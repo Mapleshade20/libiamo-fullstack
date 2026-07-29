@@ -66,7 +66,7 @@ function actionClasses(tone: StudyCardActionTone) {
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="mx-auto w-full max-w-4xl pb-40 sm:pb-44">
+<div class="w-full pb-40 sm:pb-44">
 	<article
 		class="grid min-h-[27rem] overflow-hidden rounded-[1.75rem] border border-border/80 bg-card shadow-[0_18px_50px_-35px_rgba(55,45,35,0.45)] sm:min-h-[30rem]"
 		aria-label={showAnswerLabel}

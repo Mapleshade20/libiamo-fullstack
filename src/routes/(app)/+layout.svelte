@@ -133,12 +133,11 @@ $effect(() => {
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
 
-	<main
-		class={isSessionPage
-			? "w-full h-screen"
-			: "mx-auto max-w-5xl px-4 py-8 pt-24"}
-		style={isSessionPage ? "" : "view-transition-name: page-content"}
-	>
-		{@render children()}
-	</main>
+	{#if isSessionPage}
+		<main class="h-screen w-full">{@render children()}</main>
+	{:else}
+		<div class="min-h-screen" style="view-transition-name: page-content">
+			<main class="mx-auto max-w-5xl px-4 py-8 pt-24">{@render children()}</main>
+		</div>
+	{/if}
 </div>

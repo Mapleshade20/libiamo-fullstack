@@ -3,7 +3,6 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Search from "@lucide/svelte/icons/search";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
-import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 import type { ManagedNote } from "$lib/note-management";
 
 let { data } = $props();
@@ -78,20 +77,9 @@ function handleCardListKeydown(event: KeyboardEvent) {
 </svelte:head>
 
 <div class="space-y-7">
-	<header class="flex flex-col gap-5 sm:h-[1.875rem] sm:flex-row sm:items-stretch sm:justify-between">
-		<h1 class="font-serif text-3xl leading-none">Card Library</h1>
-		<nav class="inline-flex h-[1.875rem] w-fit rounded-full border border-border bg-card p-0.5 text-sm shadow-sm" aria-label="Review pages">
-			<a href="/review" class="inline-flex h-full items-center rounded-full px-4 text-muted-foreground transition-colors hover:text-foreground"
-				>Study</a
-			>
-			<a href="/review/manage" aria-current="page" class="inline-flex h-full items-center rounded-full bg-foreground px-4 font-medium text-background"
-				>Manage</a
-			>
-		</nav>
-	</header>
-
 	<form method="GET" class="rounded-2xl border border-border bg-card/70 p-4 shadow-sm">
-		<div class="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_repeat(3,auto)_auto] md:items-end">
+		<input type="hidden" name="language" value={data.filters.language === "all" ? undefined : data.filters.language}>
+		<div class="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_repeat(2,auto)_auto] md:items-end">
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				Search
 				<span class="relative mt-1.5 block">
@@ -104,19 +92,6 @@ function handleCardListKeydown(event: KeyboardEvent) {
 						class="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-foreground"
 					>
 				</span>
-			</label>
-			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Language
-				<select
-					name="language"
-					value={data.filters.language}
-					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground md:w-32"
-				>
-					<option value="all">All</option>
-					{#each LANGUAGE_CODES as code}
-						<option value={code}>{LANGUAGE_LABELS[code]}</option>
-					{/each}
-				</select>
 			</label>
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				State

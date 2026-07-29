@@ -2,16 +2,30 @@
 import { onNavigate } from "$app/navigation";
 import "./layout.css";
 import favicon from "$lib/assets/favicon.svg";
+import { resolvePageTransition } from "$lib/client/page-transition";
 
 let { children } = $props();
+let transitionSequence = 0;
 
 onNavigate((navigation) => {
+	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "fade";
+	if (transitionKind === "none") return;
 	if (!document.startViewTransition) return;
+
+	const sequence = ++transitionSequence;
+	document.documentElement.dataset.pageTransition = transitionKind;
+
 	return new Promise((resolve) => {
-		document.startViewTransition(async () => {
+		const transition = document.startViewTransition(async () => {
 			resolve();
 			await navigation.complete;
 		});
+
+		const clearTransitionKind = () => {
+			if (sequence !== transitionSequence) return;
+			delete document.documentElement.dataset.pageTransition;
+		};
+		void transition.finished.then(clearTransitionKind, clearTransitionKind);
 	});
 });
 </script>
