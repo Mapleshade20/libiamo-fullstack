@@ -4,7 +4,9 @@ import {
 	deserializeCard,
 	getDueNotes,
 	getScheduler,
+	isReviewCardAvailable,
 	Rating,
+	ReviewCardNotDueError,
 	rateNote,
 	State,
 	serializeCard,
@@ -76,6 +78,9 @@ describe("FSRS persistence", () => {
 		const firstGood = scheduler.next(newCard, now, Rating.Good).card;
 		expect(firstGood.state).toBe(State.Learning);
 		expect(firstGood.due.getTime() - now.getTime()).toBe(10 * 60_000);
+		const hardOnSecondStep = scheduler.next(firstGood, firstGood.due, Rating.Hard).card;
+		expect(hardOnSecondStep.state).toBe(State.Learning);
+		expect(hardOnSecondStep.due.getTime() - firstGood.due.getTime()).toBe(10 * 60_000);
 		expect(scheduler.next(firstGood, firstGood.due, Rating.Good).card.state).toBe(State.Review);
 
 		const graduated = scheduler.next(newCard, now, Rating.Easy).card;
@@ -83,6 +88,24 @@ describe("FSRS persistence", () => {
 		const lapsed = scheduler.next(graduated, graduated.due, Rating.Again).card;
 		expect(lapsed.state).toBe(State.Relearning);
 		expect(lapsed.due.getTime() - graduated.due.getTime()).toBe(10 * 60_000);
+		const relearningHard = scheduler.next(lapsed, lapsed.due, Rating.Hard).card;
+		expect(relearningHard.due.getTime() - lapsed.due.getTime()).toBe(15 * 60_000);
+		expect(scheduler.parameters.maximum_interval).toBe(36_500);
+	});
+
+	it("only makes future intraday learning cards available inside Anki's learn-ahead window", () => {
+		const now = new Date("2025-06-11T12:00:00Z");
+		const card = createNewCard();
+		card.state = State.Learning;
+		card.due = new Date("2025-06-11T12:20:00Z");
+		expect(isReviewCardAvailable(card, now)).toBe(true);
+
+		card.due = new Date("2025-06-11T12:20:00.001Z");
+		expect(isReviewCardAvailable(card, now)).toBe(false);
+
+		card.state = State.Review;
+		card.due = new Date("2025-06-11T12:01:00Z");
+		expect(isReviewCardAvailable(card, now)).toBe(false);
 	});
 });
 
@@ -103,14 +126,21 @@ describe("getDueNotes", () => {
 		const noteLimit = vi.fn().mockResolvedValue([row]);
 		mockDb.select.mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: () => ({ limit: noteLimit }) }) }) });
 
-		const result = await getDueNotes(USER_ID, "en", 5, () => 0.6);
+		const result = await getDueNotes(USER_ID, "en", 5, () => 0.6, new Date("2025-06-11T12:00:00Z"));
 
 		expect(result).toHaveLength(1);
-		expect(result[0]).toMatchObject({ id: 42, exampleIndex: 2, nativeText: "native 2", targetText: "target 2", queueKind: "new" });
+		expect(result[0]).toMatchObject({
+			id: 42,
+			due: "2025-06-10T12:00:00.000Z",
+			exampleIndex: 2,
+			nativeText: "native 2",
+			targetText: "target 2",
+			queueKind: "new",
+		});
 		expect(result[0].previewIntervals).toEqual({
-			again: "1m",
-			hard: "6m",
-			good: "10m",
+			again: "<1m",
+			hard: "<6m",
+			good: "<10m",
 			easy: expect.stringMatching(/^(\d+)(m|h|d|mo)$/),
 		});
 	});
@@ -154,8 +184,27 @@ describe("rateNote", () => {
 			queueKind: "learning",
 			nativeText: "native 2",
 			targetText: "target 2",
-			previewIntervals: { again: "1m" },
+			previewIntervals: { again: "<1m" },
 		});
+	});
+
+	it("rejects cards outside the due and learn-ahead window without writing", async () => {
+		const card = createNewCard();
+		card.state = State.Review;
+		card.due = new Date("2025-06-13T12:00:00Z");
+		const row = {
+			id: 42,
+			userId: USER_ID,
+			fsrsCard: serializeCard(card),
+			examples: [{ nativeText: "native", targetText: "target" }],
+		};
+		mockDb.select.mockReturnValue({
+			from: () => ({ where: () => ({ limit: () => ({ for: async () => [row] }) }) }),
+		});
+
+		await expect(rateNote(42, USER_ID, Rating.Good, 1, Math.random, new Date("2025-06-11T12:00:00Z"))).rejects.toBeInstanceOf(ReviewCardNotDueError);
+		expect(mockDb.update).not.toHaveBeenCalled();
+		expect(mockDb.insert).not.toHaveBeenCalled();
 	});
 
 	it("rejects invalid ratings before opening a transaction", async () => {

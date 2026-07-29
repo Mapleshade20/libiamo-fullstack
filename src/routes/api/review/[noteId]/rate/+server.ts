@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { reviewRatingSchema } from "$lib/schemas";
-import { rateNote } from "$lib/server/review";
+import { ReviewCardNotDueError, rateNote } from "$lib/server/review";
 import type { RequestHandler } from "./$types";
 
 export const POST: RequestHandler = async (event) => {
@@ -21,6 +21,7 @@ export const POST: RequestHandler = async (event) => {
 		return json(await rateNote(noteId, user.id, parsed.data.rating as 1 | 2 | 3 | 4, parsed.data.elapsedSeconds));
 	} catch (error) {
 		if (error instanceof Error && error.message === "Note not found") return json({ error: "Note not found" }, { status: 404 });
+		if (error instanceof ReviewCardNotDueError) return json({ error: error.message }, { status: 409 });
 		console.error("Failed to rate note:", error);
 		return json({ error: "Failed to submit rating" }, { status: 500 });
 	}

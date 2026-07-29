@@ -1,6 +1,6 @@
 import { and, asc, eq, lte, sql } from "drizzle-orm";
-import type { Card, Grade, ReviewLog } from "ts-fsrs";
-import { createEmptyCard, fsrs, Rating, State } from "ts-fsrs";
+import type { Card, Grade, ReviewLog, TLearningStepsStrategy } from "ts-fsrs";
+import { BasicLearningStepsStrategy, ConvertStepUnitToMinutes, createEmptyCard, fsrs, Rating, State, StrategyMode } from "ts-fsrs";
 import type { LanguageCode } from "$lib/constants";
 import { parseNoteExamples, randomExampleIndex } from "$lib/note";
 import type { StudyQueueKind } from "$lib/review";
@@ -9,9 +9,36 @@ import { note, reviewLog } from "./db/schema";
 
 let scheduler: ReturnType<typeof fsrs> | null = null;
 
+export const ANKI_LEARN_AHEAD_MINUTES = 20;
+export const ANKI_MAXIMUM_INTERVAL_DAYS = 36_500;
+const ANKI_LEARNING_STEPS = ["1m", "10m"] as const;
+const ANKI_RELEARNING_STEPS = ["10m"] as const;
+
+const ankiLearningStepsStrategy: TLearningStepsStrategy = (params, state, currentStep) => {
+	const result = BasicLearningStepsStrategy(params, state, currentStep);
+	if ((state === State.Learning || state === State.Relearning) && currentStep > 0) {
+		const steps = state === State.Relearning ? params.relearning_steps : params.learning_steps;
+		const current = steps[currentStep];
+		if (current && result[Rating.Hard]) {
+			result[Rating.Hard] = {
+				scheduled_minutes: ConvertStepUnitToMinutes(current),
+				next_step: currentStep,
+			};
+		}
+	}
+	return result;
+};
+
 export function getScheduler() {
 	if (!scheduler) {
-		scheduler = fsrs({ request_retention: 0.9, maximum_interval: 365, enable_fuzz: true, enable_short_term: true });
+		scheduler = fsrs({
+			request_retention: 0.9,
+			maximum_interval: ANKI_MAXIMUM_INTERVAL_DAYS,
+			enable_fuzz: true,
+			enable_short_term: true,
+			learning_steps: [...ANKI_LEARNING_STEPS],
+			relearning_steps: [...ANKI_RELEARNING_STEPS],
+		}).useStrategy(StrategyMode.LEARNING_STEPS, ankiLearningStepsStrategy);
 	}
 	return scheduler;
 }
@@ -83,15 +110,22 @@ export function studyQueueKind(cardData: unknown): StudyQueueKind {
 }
 
 function formatInterval(dueDate: Date, now: Date): string {
-	const exactMinutes = (dueDate.getTime() - now.getTime()) / 60_000;
-	if (exactMinutes < 1) return "<1m";
-	const minutes = Math.round(exactMinutes);
-	if (minutes < 60) return `${minutes}m`;
-	const hours = Math.round(minutes / 60);
-	if (hours < 24) return `${hours}h`;
-	const days = Math.round(hours / 24);
-	if (days < 30) return `${days}d`;
-	return `${Math.round(days / 30)}mo`;
+	const exactSeconds = Math.max(0, Math.round((dueDate.getTime() - now.getTime()) / 1000));
+	let formatted: string;
+	if (exactSeconds < 60) formatted = `${exactSeconds}s`;
+	else {
+		const minutes = Math.round(exactSeconds / 60);
+		if (minutes < 60) formatted = `${minutes}m`;
+		else {
+			const hours = Math.round(minutes / 60);
+			if (hours < 24) formatted = `${hours}h`;
+			else {
+				const days = Math.round(hours / 24);
+				formatted = days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
+			}
+		}
+	}
+	return exactSeconds > 0 && exactSeconds < ANKI_LEARN_AHEAD_MINUTES * 60 ? `<${formatted}` : formatted;
 }
 
 function previewIntervals(card: Card, now: Date) {
@@ -104,13 +138,52 @@ function previewIntervals(card: Card, now: Date) {
 	};
 }
 
-export async function getDueNotes(userId: string, language: LanguageCode, limit = 20, random = Math.random) {
-	const now = new Date();
+export function isReviewCardAvailable(cardData: unknown, now: Date): boolean {
+	const card = deserializeCard(cardData);
+	if (card.due <= now) return true;
+	if (card.state !== State.Learning && card.state !== State.Relearning) return false;
+	return card.due.getTime() <= now.getTime() + ANKI_LEARN_AHEAD_MINUTES * 60_000;
+}
+
+export class ReviewCardNotDueError extends Error {
+	constructor() {
+		super("Note is not due for review");
+		this.name = "ReviewCardNotDueError";
+	}
+}
+
+export async function getDueNotes(userId: string, language: LanguageCode, limit = 20, random = Math.random, now = new Date()) {
+	const nowIso = now.toISOString();
+	const learnAheadIso = new Date(now.getTime() + ANKI_LEARN_AHEAD_MINUTES * 60_000).toISOString();
 	const rows = await db
 		.select()
 		.from(note)
-		.where(and(eq(note.userId, userId), eq(note.language, language), sql`(${note.fsrsCard}->>'due')::timestamptz <= ${now.toISOString()}`))
-		.orderBy(asc(note.id))
+		.where(
+			and(
+				eq(note.userId, userId),
+				eq(note.language, language),
+				sql`(
+					(${note.fsrsCard}->>'due')::timestamptz <= ${nowIso}
+					OR (
+						(${note.fsrsCard}->>'state')::int IN (${State.Learning}, ${State.Relearning})
+						AND (${note.fsrsCard}->>'due')::timestamptz <= ${learnAheadIso}
+					)
+				)`,
+			),
+		)
+		.orderBy(
+			sql`CASE
+				WHEN (${note.fsrsCard}->>'state')::int IN (${State.Learning}, ${State.Relearning})
+					AND (${note.fsrsCard}->>'due')::timestamptz <= ${nowIso} THEN 0
+				WHEN (${note.fsrsCard}->>'due')::timestamptz <= ${nowIso} THEN 1
+				ELSE 2
+			END`,
+			sql`CASE
+				WHEN (${note.fsrsCard}->>'state')::int IN (${State.Learning}, ${State.Relearning})
+				THEN (${note.fsrsCard}->>'due')::timestamptz
+			END`,
+			asc(note.id),
+		)
 		.limit(limit);
 
 	return rows.map((row) => {
@@ -120,6 +193,7 @@ export async function getDueNotes(userId: string, language: LanguageCode, limit 
 		const card = deserializeCard(row.fsrsCard);
 		return {
 			...row,
+			due: card.due.toISOString(),
 			exampleIndex,
 			nativeText: example.nativeText,
 			targetText: example.targetText,
@@ -129,7 +203,14 @@ export async function getDueNotes(userId: string, language: LanguageCode, limit 
 	});
 }
 
-export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3 | 4, elapsedSeconds: number, random = Math.random) {
+export async function rateNote(
+	noteId: number,
+	userId: string,
+	rating: 1 | 2 | 3 | 4,
+	elapsedSeconds: number,
+	random = Math.random,
+	now = new Date(),
+) {
 	const ratingMap: Record<number, Grade> = {
 		1: Rating.Again as Grade,
 		2: Rating.Hard as Grade,
@@ -147,7 +228,7 @@ export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3
 			.for("update");
 		if (!row) throw new Error("Note not found");
 		const previous = deserializeCard(row.fsrsCard);
-		const now = new Date();
+		if (!isReviewCardAvailable(previous, now)) throw new ReviewCardNotDueError();
 		const result = getScheduler().next(previous, now, ratingMap[rating]);
 		const serialized = serializeCard(result.card);
 		await tx.update(note).set({ fsrsCard: serialized, updatedAt: now }).where(eq(note.id, noteId));
@@ -199,7 +280,7 @@ export async function getReviewStats(userId: string, language: LanguageCode) {
 		if (card.state === State.New) newCount++;
 		else if (card.state === State.Learning || card.state === State.Relearning) learningCount++;
 		else reviewCount++;
-		if (card.due <= now) dueToday++;
+		if (isReviewCardAvailable(card, now)) dueToday++;
 	}
 	return {
 		dueToday,

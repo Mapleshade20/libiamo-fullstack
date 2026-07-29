@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetDueNotes, mockGetReviewStats, mockRateNote } = vi.hoisted(() => ({
-	mockGetDueNotes: vi.fn(),
-	mockGetReviewStats: vi.fn(),
-	mockRateNote: vi.fn(),
-}));
+const { mockGetDueNotes, mockGetReviewStats, mockRateNote, MockReviewCardNotDueError } = vi.hoisted(() => {
+	class MockReviewCardNotDueError extends Error {}
+	return {
+		mockGetDueNotes: vi.fn(),
+		mockGetReviewStats: vi.fn(),
+		mockRateNote: vi.fn(),
+		MockReviewCardNotDueError,
+	};
+});
 
 vi.mock("$lib/server/review", () => ({
 	getDueNotes: mockGetDueNotes,
 	getReviewStats: mockGetReviewStats,
 	rateNote: mockRateNote,
+	ReviewCardNotDueError: MockReviewCardNotDueError,
 }));
 
 import { POST as rateNote } from "../../../src/routes/api/review/[noteId]/rate/+server";
@@ -75,5 +80,11 @@ describe("POST /api/review/[noteId]/rate", () => {
 		mockRateNote.mockRejectedValue(new Error("Note not found"));
 		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
 		expect(response.status).toBe(404);
+	});
+
+	it("maps a card outside the review window to 409", async () => {
+		mockRateNote.mockRejectedValue(new MockReviewCardNotDueError("Note is not due for review"));
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(409);
 	});
 });

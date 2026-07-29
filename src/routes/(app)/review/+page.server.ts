@@ -20,6 +20,7 @@ export const load: PageServerLoad = async (event) => {
 		nativeText: string;
 		targetText: string;
 		queueKind: StudyQueueKind;
+		due: string;
 		previewIntervals: Record<string, string>;
 	}> = [];
 
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async (event) => {
 			nativeText: item.nativeText,
 			targetText: item.targetText,
 			queueKind: item.queueKind,
+			due: item.due,
 			previewIntervals: item.previewIntervals,
 		}));
 	} catch (err) {

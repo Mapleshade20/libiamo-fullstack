@@ -45,6 +45,7 @@ function reveal() {
 
 type ReviewRateResult = {
 	queueKind: StudyQueueKind;
+	nextDue: string;
 	previewIntervals: { again: string; hard: string; good: string; easy: string };
 	nativeText: string;
 	targetText: string;
@@ -56,6 +57,8 @@ function isReviewRateResult(value: unknown): value is ReviewRateResult {
 	const intervals = result.previewIntervals as Record<string, unknown> | undefined;
 	return (
 		["new", "learning", "review"].includes(String(result.queueKind)) &&
+		typeof result.nextDue === "string" &&
+		Number.isFinite(new Date(result.nextDue).getTime()) &&
 		typeof result.nativeText === "string" &&
 		typeof result.targetText === "string" &&
 		!!intervals &&
@@ -83,6 +86,7 @@ async function rate(rating: number) {
 		queue = advanceReviewQueue(queue, {
 			...ratedCard,
 			queueKind: result.queueKind,
+			due: result.nextDue,
 			previewIntervals: result.previewIntervals,
 			nativeText: result.nativeText,
 			targetText: result.targetText,

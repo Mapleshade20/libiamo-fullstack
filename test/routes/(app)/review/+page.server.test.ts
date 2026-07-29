@@ -18,7 +18,8 @@ describe("review page server", () => {
 				nativeText: "你好。",
 				targetText: "Hola.",
 				queueKind: "new",
-				previewIntervals: { again: "1m", hard: "6m", good: "10m", easy: "4d" },
+				due: "2025-06-11T12:00:00.000Z",
+				previewIntervals: { again: "<1m", hard: "<6m", good: "<10m", easy: "4d" },
 			},
 		]);
 	});
@@ -39,7 +40,8 @@ describe("review page server", () => {
 				nativeText: "你好。",
 				targetText: "Hola.",
 				queueKind: "new",
-				previewIntervals: { again: "1m", hard: "6m", good: "10m", easy: "4d" },
+				due: "2025-06-11T12:00:00.000Z",
+				previewIntervals: { again: "<1m", hard: "<6m", good: "<10m", easy: "4d" },
 			},
 		]);
 		expect(mockGetDueNotes).toHaveBeenCalledWith("user-1", "es", 20);
