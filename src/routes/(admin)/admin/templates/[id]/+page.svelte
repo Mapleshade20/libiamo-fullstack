@@ -58,15 +58,19 @@ const templateExportJson = $derived(
 				pointReward: data.template.pointReward,
 				gemReward: data.template.gemReward,
 				isActive: data.template.isActive,
-				agentStartsFirst: data.template.agentStartsFirst,
 				titleBase: data.template.titleBase,
-				shortObjectiveBase: data.template.shortObjectiveBase,
 				descriptionBase: data.template.descriptionBase,
 				agentPromptBase: data.template.agentPromptBase,
-				materialsMd: data.template.materialsMd,
 				objectivesBase: data.template.objectivesBase,
 				translationReference: data.template.translationReference,
 				tags: data.template.tags,
+				...(data.template.interactionType === "translate"
+					? {}
+					: {
+							agentStartsFirst: data.template.agentStartsFirst,
+							shortObjectiveBase: data.template.shortObjectiveBase,
+							materialsMd: data.template.materialsMd,
+						}),
 			},
 			variants:
 				data.template.interactionType === "translate"

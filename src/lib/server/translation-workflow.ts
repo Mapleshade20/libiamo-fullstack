@@ -355,7 +355,6 @@ export async function getTranslationTemplate(templateId: number, activeLanguage:
 			title: template.titleBase,
 			description: template.descriptionBase,
 			language: template.language,
-			materialsMd: template.materialsMd,
 			translationReference: template.translationReference,
 			context: template.agentPromptBase,
 			difficulty: template.difficulty,

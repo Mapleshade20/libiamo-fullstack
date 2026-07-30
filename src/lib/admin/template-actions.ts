@@ -125,7 +125,10 @@ const importedTemplateSchema = z
 		if (!data.translationReference?.length) {
 			ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
 		}
-	});
+	})
+	.transform((data) =>
+		data.interactionType === "translate" ? { ...data, agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null } : data,
+	);
 
 const importedVariantSchema = z.object({
 	id: z.number().int().positive().optional(),

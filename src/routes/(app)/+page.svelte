@@ -12,14 +12,14 @@ import { fly } from "svelte/transition";
 import { goto } from "$app/navigation";
 import { captureTaskEnterTransition } from "$lib/client/task-transition";
 import TaskCard from "$lib/components/TaskCard.svelte";
+import { type HallTaskCardKey, type HallTaskKind, hallTaskCardKey, toggleHallTaskCard } from "$lib/hall-task-card";
 import { type LanguageCode, t } from "$lib/i18n";
 import { shiftCalendarMonth } from "$lib/month";
 
 let { data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 
-let flippedId = $state<number | null>(null);
-let flippedTranslationId = $state<number | null>(null);
+let flippedCardKey = $state<HallTaskCardKey | null>(null);
 let monthDirection = $state(1);
 let translationMonth = $state((() => data.translationMonth)());
 let loadedLanguage = $state((() => data.user.activeLanguage)());
@@ -57,15 +57,11 @@ $effect(() => {
 	if (data.user.activeLanguage === loadedLanguage) return;
 	loadedLanguage = data.user.activeLanguage;
 	translationMonth = data.translationMonth;
-	flippedTranslationId = null;
+	flippedCardKey = null;
 });
 
-function toggleFlip(id: number) {
-	flippedId = flippedId === id ? null : id;
-}
-
-function toggleTranslationFlip(id: number) {
-	flippedTranslationId = flippedTranslationId === id ? null : id;
+function toggleFlip(kind: HallTaskKind, id: number) {
+	flippedCardKey = toggleHallTaskCard(flippedCardKey, kind, id);
 }
 
 function translationMonthLabel(month: string) {
@@ -79,7 +75,7 @@ function translationMonthLabel(month: string) {
 function changeTranslationMonth(amount: -1 | 1) {
 	monthDirection = amount;
 	translationMonth = shiftCalendarMonth(translationMonth, amount);
-	flippedTranslationId = null;
+	flippedCardKey = null;
 }
 
 function enterTask(event: MouseEvent, taskId: number) {
@@ -152,12 +148,15 @@ const uiIcons: Record<string, Component> = {
 						title={task.title}
 						difficulty={task.templateDifficulty}
 						icon={uiIcons[task.templateUi] ?? MessageSquare}
-						shortObjective={task.shortObjective}
+						summary={task.shortObjective}
+						summaryTitle={t(lang, "hall.card.missionObjective")}
+						completedLabel={t(lang, "hall.card.completed")}
+						draftLabel={t(lang, "hall.card.draft")}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
 						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
-						flipped={flippedId === task.id}
-						onflip={toggleFlip}
+						flipped={flippedCardKey === hallTaskCardKey("task", task.id)}
+						onflip={(id) => toggleFlip("task", id)}
 						onenter={enterTask}
 					/>
 				{/each}
@@ -180,12 +179,15 @@ const uiIcons: Record<string, Component> = {
 						title={task.title}
 						difficulty={task.templateDifficulty}
 						icon={uiIcons[task.templateUi] ?? MessageSquare}
-						shortObjective={task.shortObjective}
+						summary={task.shortObjective}
+						summaryTitle={t(lang, "hall.card.missionObjective")}
+						completedLabel={t(lang, "hall.card.completed")}
+						draftLabel={t(lang, "hall.card.draft")}
 						href="/task/{task.id}"
 						buttonLabel={t(lang, "hall.enter")}
 						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
-						flipped={flippedId === task.id}
-						onflip={toggleFlip}
+						flipped={flippedCardKey === hallTaskCardKey("task", task.id)}
+						onflip={(id) => toggleFlip("task", id)}
 						onenter={enterTask}
 					/>
 				{/each}
@@ -236,13 +238,16 @@ const uiIcons: Record<string, Component> = {
 								title={task.titleBase}
 								difficulty={task.difficulty}
 								icon={Languages}
-								shortObjective={task.shortObjectiveBase}
+								summary={task.descriptionBase}
+								summaryTitle={t(lang, "hall.card.overview")}
+								completedLabel={t(lang, "hall.card.completed")}
+								draftLabel={t(lang, "hall.card.draft")}
 								href="/translate/{task.id}"
-								buttonLabel={isFinished ? "View Result" : status ? "Continue" : t(lang, "hall.enter")}
+								buttonLabel={isFinished ? t(lang, "hall.viewResult") : status ? t(lang, "hall.continue") : t(lang, "hall.enter")}
 								status={isFinished ? null : status === "draft" ? "draft" : status ? "in_progress" : null}
 								{isFinished}
-								flipped={flippedTranslationId === task.id}
-								onflip={toggleTranslationFlip}
+								flipped={flippedCardKey === hallTaskCardKey("translate", task.id)}
+								onflip={(id) => toggleFlip("translate", id)}
 								onenter={enterTask}
 							/>
 						{/each}

@@ -61,7 +61,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	template: {
 		id: "id",
 		titleBase: "titleBase",
-		shortObjectiveBase: "shortObjectiveBase",
+		descriptionBase: "descriptionBase",
 		interactionType: "interactionType",
 		ui: "ui",
 		difficulty: "difficulty",
@@ -113,7 +113,9 @@ describe("(app) home +page.server", () => {
 	it("loads weekly and daily tasks for active language", async () => {
 		const weeklyTasks = [{ id: 1, title: "Weekly" }];
 		const dailyTasks = [{ id: 2, title: "Daily" }];
-		const translationTasks = [{ id: 3, titleBase: "Translate a letter", createdAt: new Date("2026-04-08T12:00:00.000Z") }];
+		const translationTasks = [
+			{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdAt: new Date("2026-04-08T12:00:00.000Z") },
+		];
 		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
 		mockFindMany.mockResolvedValueOnce([
 			{ id: 1001, taskId: 1, status: "evaluated", startedAt: new Date("2026-04-17T10:00:00.000Z") },
@@ -129,7 +131,7 @@ describe("(app) home +page.server", () => {
 			expect.objectContaining({
 				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
 				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
-				translationTasks: [{ id: 3, titleBase: "Translate a letter", createdMonth: "2026-04" }],
+				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
 				translationMonth: "2026-04",
 			}),
 		);

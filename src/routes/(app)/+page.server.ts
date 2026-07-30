@@ -47,7 +47,7 @@ export const load: PageServerLoad = async (event) => {
 		.select({
 			id: template.id,
 			titleBase: template.titleBase,
-			shortObjectiveBase: template.shortObjectiveBase,
+			descriptionBase: template.descriptionBase,
 			difficulty: template.difficulty,
 			createdAt: template.createdAt,
 		})

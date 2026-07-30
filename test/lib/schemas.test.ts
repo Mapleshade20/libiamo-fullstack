@@ -107,6 +107,24 @@ describe("schemas", () => {
 		expect(result.tags).toEqual([]);
 	});
 
+	it("clears unsupported translation template fields", () => {
+		const result = templateSchema.parse({
+			...baseTemplate,
+			interactionType: "translate",
+			ui: "translator",
+			cadence: "none",
+			agentStartsFirst: "on",
+			shortObjectiveBase: "Translate this on the card.",
+			materialsMd: "# Background",
+			agentPromptBase: "a note to a close friend",
+			translationReference: "An authentic source paragraph.",
+		});
+
+		expect(result.shortObjectiveBase).toBeNull();
+		expect(result.materialsMd).toBeNull();
+		expect(result.agentStartsFirst).toBe(false);
+	});
+
 	it("returns error when required template fields are missing", () => {
 		const result = templateSchema.safeParse({
 			language: "en",
@@ -226,6 +244,22 @@ describe("schemas", () => {
 				translationReference: "Authentic source paragraph.",
 			}).success,
 		).toBe(true);
+	});
+
+	it("templateContributionSchema clears unsupported translation content", () => {
+		const result = templateContributionSchema.parse({
+			...baseContribution,
+			interactionType: "translate",
+			ui: "translator",
+			shortObjectiveBase: "Translate this on the card.",
+			materialsMd: "# Background",
+			agentPromptBase: "a message to a close friend",
+			translationReference: "Authentic source paragraph.",
+		});
+
+		expect(result.shortObjectiveBase).toBeNull();
+		expect(result.materialsMd).toBeNull();
+		expect(result).not.toHaveProperty("agentStartsFirst");
 	});
 
 	it("templateContributionSchema returns empty for optional fields when not provided", () => {

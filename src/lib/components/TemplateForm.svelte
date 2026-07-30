@@ -569,7 +569,7 @@ function confirmDeleteVariant() {
 					{/if}
 				</div>
 			{/if}
-			{#if !hideAdminFields}
+			{#if !isTranslate && !hideAdminFields}
 				<div class="flex items-center gap-2 pt-6">
 					<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" bind:checked={agentStartsFirstValue} class="rounded border-input">
 					<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
@@ -590,10 +590,12 @@ function confirmDeleteVariant() {
 			{/if}
 		</div>
 
-		<div class="space-y-2">
-			<Label for="shortObjectiveBase">Short Objective (1–2 sentences, shown on card)</Label>
-			<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} bind:value={shortObjectiveBase} />
-		</div>
+		{#if !isTranslate}
+			<div class="space-y-2">
+				<Label for="shortObjectiveBase">Short Objective (1–2 sentences, shown on card)</Label>
+				<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} bind:value={shortObjectiveBase} />
+			</div>
+		{/if}
 
 		<div class="space-y-2">
 			<Label for="descriptionBase">Description</Label>
@@ -605,7 +607,7 @@ function confirmDeleteVariant() {
 				<Label for="agentPromptBase">Translation Context</Label>
 				<div class="grid grid-cols-1 items-start gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
 					<span class="pt-2 text-muted-foreground">This is in the context of [</span>
-					<Textarea id="agentPromptBase" name="agentPromptBase" rows={3} bind:value={agentPromptBase} required />
+					<Input id="agentPromptBase" name="agentPromptBase" bind:value={agentPromptBase} required />
 					<span class="pt-2 text-muted-foreground">].</span>
 				</div>
 				{#if form?.errors?.agentPromptBase}
@@ -640,30 +642,34 @@ function confirmDeleteVariant() {
 			<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
 		</div>
 
-		<!-- materialsMd with preview -->
-		<div class="space-y-2">
-			<div class="flex items-center justify-between">
-				<Label for="materialsMd">Background Material (Markdown)</Label>
-				<button
-					type="button"
-					onclick={() => (showMdPreview = !showMdPreview)}
-					class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-				>
-					{showMdPreview ? "Edit" : "Preview"}
-				</button>
+		{#if !isTranslate}
+			<!-- materialsMd with preview -->
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<Label for="materialsMd">Background Material (Markdown)</Label>
+					<button
+						type="button"
+						onclick={() => (showMdPreview = !showMdPreview)}
+						class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					>
+						{showMdPreview ? "Edit" : "Preview"}
+					</button>
+				</div>
+				{#if showMdPreview}
+					<div class="prose prose-neutral min-h-[100px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm">
+						{@html mdHtml}
+					</div>
+				{:else}
+					<Textarea
+						id="materialsMd"
+						name="materialsMd"
+						rows={6}
+						bind:value={mdSource}
+						placeholder="## Background&#10;&#10;Write your learning material in Markdown..."
+					/>
+				{/if}
 			</div>
-			{#if showMdPreview}
-				<div class="prose prose-neutral min-h-[100px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm">{@html mdHtml}</div>
-			{:else}
-				<Textarea
-					id="materialsMd"
-					name="materialsMd"
-					rows={6}
-					bind:value={mdSource}
-					placeholder="## Background&#10;&#10;Write your learning material in Markdown..."
-				/>
-			{/if}
-		</div>
+		{/if}
 	</fieldset>
 
 	<!-- Passages (translate mode only) -->
@@ -749,7 +755,7 @@ function confirmDeleteVariant() {
 					<Label class="text-xs text-muted-foreground">Title</Label>
 					<p class="text-sm">{titleBase}</p>
 				</div>
-				{#if shortObjectiveBase}
+				{#if !isTranslate && shortObjectiveBase}
 					<div class="space-y-1">
 						<Label class="text-xs text-muted-foreground">Short Objective</Label>
 						<p class="text-sm">{shortObjectiveBase}</p>

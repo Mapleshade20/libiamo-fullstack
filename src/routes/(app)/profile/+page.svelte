@@ -172,7 +172,7 @@ function handleNameKeydown(event: KeyboardEvent) {
 	<ActionNotification notification={actionNotification} />
 
 	<Card.Root>
-		<Card.Content class="pt-6">
+		<Card.Content>
 			<div class="flex items-center gap-6">
 				<img src={data.avatarUrl} alt={t(lang, "profile.avatarAlt")} class="h-24 w-24 rounded-full border border-gray-200 object-cover shadow-sm">
 				<div class="min-w-0 flex-1 space-y-1">

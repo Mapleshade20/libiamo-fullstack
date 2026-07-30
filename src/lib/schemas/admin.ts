@@ -126,6 +126,12 @@ function validateTranslationContent(
 	}
 }
 
+function normalizeTranslationContent<T extends { interactionType: string; shortObjectiveBase?: string | null; materialsMd?: string | null }>(
+	data: T,
+) {
+	return data.interactionType === "translate" ? { ...data, shortObjectiveBase: null, materialsMd: null } : data;
+}
+
 export const templateSchema = z
 	.object({
 		...templateCore,
@@ -139,12 +145,15 @@ export const templateSchema = z
 		agentPromptBase: z.string().optional(),
 	})
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent);
+	.superRefine(validateTranslationContent)
+	.transform(normalizeTranslationContent)
+	.transform((data) => (data.interactionType === "translate" ? { ...data, agentStartsFirst: false } : data));
 
 export const templateContributionSchema = z
 	.object({ ...templateContributionCore })
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent);
+	.superRefine(validateTranslationContent)
+	.transform(normalizeTranslationContent);
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({
