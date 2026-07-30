@@ -51,7 +51,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 <svelte:head><title>{data.template.title} · Draft</title></svelte:head>
 <svelte:window onkeydown={(event) => { if (event.key === "Escape") candidatePickerIndex = null; }} />
 
-<main class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
+<div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
 	<a href="/translate/{data.template.id}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
 		><ArrowLeft size={15} />{t(lang, "common.back")}</a
 	>
@@ -122,7 +122,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 			>
 		</footer>
 	</form>
-</main>
+</div>
 
 {#if candidatePickerIndex !== null}
 	<div
