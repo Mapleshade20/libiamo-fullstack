@@ -26,6 +26,8 @@ export const load: PageServerLoad = async (event) => {
 			shortObjective: task.shortObjective,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
+			templateInteractionType: template.interactionType,
+			pointReward: template.pointReward,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -38,6 +40,8 @@ export const load: PageServerLoad = async (event) => {
 			shortObjective: task.shortObjective,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
+			templateInteractionType: template.interactionType,
+			pointReward: template.pointReward,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -111,6 +115,7 @@ export const load: PageServerLoad = async (event) => {
 		})),
 		translationStatusMap: Object.fromEntries(translationStatusByTemplateId),
 		translationMonth: userLocalDateStr.slice(0, 7),
+		editionDate: userLocalDateStr,
 		greeting: getGreeting(language, user.name),
 		subtitle: getRandomSubtitle(language),
 	};

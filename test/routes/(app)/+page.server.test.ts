@@ -65,6 +65,7 @@ vi.mock("$lib/server/db/schema", () => ({
 		interactionType: "interactionType",
 		ui: "ui",
 		difficulty: "difficulty",
+		pointReward: "pointReward",
 		cadence: "cadence",
 		language: "template.language",
 		isActive: "isActive",
@@ -133,6 +134,7 @@ describe("(app) home +page.server", () => {
 				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
 				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
 				translationMonth: "2026-04",
+				editionDate: "2026-04-17",
 			}),
 		);
 	});
