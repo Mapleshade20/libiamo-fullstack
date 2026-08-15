@@ -75,6 +75,7 @@ describe("translation detail page", () => {
 	it("starts by snapshotting candidates and redirects to the draft route", async () => {
 		await expect(actions.start(event())).rejects.toMatchObject({ status: 303, location: "/translate/1/attempt" });
 		expect(mockGetSourceSet).toHaveBeenCalledWith({
+			userId: "u1",
 			templateId: 1,
 			referenceParagraphs: template.translationReference,
 			context: template.context,

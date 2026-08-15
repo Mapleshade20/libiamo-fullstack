@@ -38,6 +38,7 @@ async function prepareAttempt(input: {
 	if (!input.template?.translationReference?.length || !input.template.context?.trim())
 		throw new TranslationWorkflowError(404, "Translation template is incomplete.");
 	const sourceSet = await getOrCreateTranslationSourceSet({
+		userId: input.userId,
 		templateId: input.templateId,
 		referenceParagraphs: input.template.translationReference,
 		context: input.template.context,

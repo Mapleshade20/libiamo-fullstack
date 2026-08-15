@@ -19,6 +19,7 @@ const VariantsSchema = z.object({
 });
 
 export type GenerateTranslationVariantsInput = {
+	userId: string;
 	paragraphs: string[];
 	sourceLanguage: string;
 	targetLanguage: string;
@@ -100,6 +101,7 @@ export function validateTranslationCandidates(candidates: string[][], paragraphC
 }
 
 export async function generateTranslationVariants({
+	userId,
 	paragraphs,
 	sourceLanguage,
 	targetLanguage,
@@ -120,6 +122,7 @@ export async function generateTranslationVariants({
 
 	const { value: result } = await chatJson({
 		schema: VariantsSchema,
+		userId,
 		messages: [
 			{
 				role: "system",
@@ -168,6 +171,7 @@ export function translationContentFingerprint(input: {
 }
 
 export async function getOrCreateTranslationSourceSet(input: {
+	userId: string;
 	templateId: number;
 	referenceParagraphs: string[];
 	context: string;
@@ -187,6 +191,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 	}
 
 	const candidates = await generateTranslationVariants({
+		userId: input.userId,
 		paragraphs: input.referenceParagraphs,
 		sourceLanguage: input.sourceLanguage,
 		targetLanguage: input.promptLanguage,

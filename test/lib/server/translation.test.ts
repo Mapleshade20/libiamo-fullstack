@@ -82,6 +82,7 @@ describe("translation service", () => {
 			},
 		});
 		const result = await generateTranslationVariants({
+			userId: "u1",
 			paragraphs: ["Un", "Deux"],
 			sourceLanguage: "fr",
 			targetLanguage: "en",
@@ -94,7 +95,7 @@ describe("translation service", () => {
 		]);
 		expect(mockChatJson).toHaveBeenCalledTimes(1);
 		const request = mockChatJson.mock.calls[0][0];
-		expect(request.userId).toBeUndefined();
+		expect(request.userId).toBe("u1");
 		expect(request.messages[0].content).toContain("French");
 		expect(request.messages[0].content).toContain("English");
 		expect(request.messages[0].content).toContain("Return ONLY one valid JSON object");
@@ -113,6 +114,7 @@ describe("translation service", () => {
 		mockChatJson.mockResolvedValue({ value: { paragraphs: [{ paragraphIndex: 0, candidates: ["One", "First", "Another"] }] } });
 		await expect(
 			generateTranslationVariants({
+				userId: "u1",
 				paragraphs: ["Un", "Deux"],
 				sourceLanguage: "fr",
 				targetLanguage: "en",
@@ -134,6 +136,7 @@ describe("translation service", () => {
 		const cached = { id: 4, candidates: [["Hello", "Hi", "Greetings"]] };
 		selectQueue.push([cached]);
 		const result = await getOrCreateTranslationSourceSet({
+			userId: "u1",
 			templateId: 1,
 			referenceParagraphs: ["Bonjour"],
 			context: "a greeting",
@@ -152,6 +155,7 @@ describe("translation service", () => {
 			value: { paragraphs: [{ paragraphIndex: 0, candidates: ["Mine 1", "Mine 2", "Mine 3"] }] },
 		});
 		const result = await getOrCreateTranslationSourceSet({
+			userId: "u1",
 			templateId: 1,
 			referenceParagraphs: ["Bonjour"],
 			context: "a greeting",
