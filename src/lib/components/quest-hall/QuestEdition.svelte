@@ -156,7 +156,7 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 .edition-heading h2 {
 	margin-top: 0.15rem;
 	font-size: 1.8rem;
-	line-height: 1;
+	line-height: 1.12;
 	letter-spacing: 0;
 }
 
@@ -203,8 +203,8 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	padding: 0.65rem 0.75rem;
 	background: color-mix(in oklab, var(--card) 90%, transparent);
 	box-shadow:
-		0 4px 0 color-mix(in oklab, var(--foreground) 25%, var(--border)),
-		0 8px 16px rgb(49 42 35 / 8%);
+		0 2px 0 color-mix(in oklab, var(--foreground) 18%, var(--border)),
+		0 5px 10px rgb(49 42 35 / 5%);
 	text-align: left;
 	transition:
 		border-color 180ms ease,
@@ -301,8 +301,9 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	font-family: var(--font-serif);
 	font-size: 1rem;
 	font-weight: 500;
-	line-height: 1.18;
+	line-height: 1.34;
 	letter-spacing: 0;
+	padding-block: 0.12rem;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
 	line-clamp: 2;

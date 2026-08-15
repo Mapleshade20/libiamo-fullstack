@@ -197,7 +197,7 @@ h3 {
 	font-family: var(--font-serif);
 	font-size: clamp(1.5rem, 3vw, 2rem);
 	font-weight: 500;
-	line-height: 1.08;
+	line-height: 1.18;
 	letter-spacing: 0;
 }
 
