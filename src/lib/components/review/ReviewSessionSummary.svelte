@@ -1,5 +1,4 @@
 <script lang="ts">
-import { Button } from "$lib/components/ui/button";
 import { type LanguageCode, t } from "$lib/i18n";
 
 interface Props {
@@ -30,6 +29,4 @@ let timeDisplay = $derived(() => {
 			<p class="text-sm text-muted-foreground">{t(lang, "review.summary.timeSpent")}</p>
 		</div>
 	</div>
-
-	<a href="/"> <Button variant="outline">{t(lang, "review.summary.backToHall")}</Button> </a>
 </div>

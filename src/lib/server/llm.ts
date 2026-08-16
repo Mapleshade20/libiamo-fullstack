@@ -62,14 +62,32 @@ export type ChatResponse = {
 	id?: string;
 	model?: string;
 	content: string;
+	finishReason: string | null;
+	usage?: ChatUsage;
 	raw: unknown;
 	quota?: TrialQuotaStatus;
+};
+
+export type ChatUsage = {
+	promptTokens?: number;
+	completionTokens?: number;
+	totalTokens?: number;
 };
 
 export type ChatRequest = {
 	messages: ChatMessage[];
 	options?: ChatOptions;
 	userId?: string;
+};
+
+export type JsonChatRequest<T extends z.ZodType> = ChatRequest & {
+	schema: T;
+};
+
+export type JsonChatResponse<T> = ChatResponse & {
+	value: T;
+	/** Exact request messages used by the successful completion. */
+	requestMessages: ChatMessage[];
 };
 
 export type ChatTool = ChatCompletionTool;
@@ -353,18 +371,47 @@ function repairMalformedJson(text: string) {
 	return extractJsonValue(text).replace(/"\s+([A-Za-z_$][\w$-]*)"\s*:/g, '"$1":');
 }
 
-function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
+type StructuredParseResult<T> = { success: true; value: T } | { success: false; errors: string[] };
+
+function formatZodIssue(issue: z.core.$ZodIssue): string {
+	const path = issue.path.length > 0 ? issue.path.map(String).join(".") : "root";
+	return `${path}: ${issue.message}`;
+}
+
+function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string): StructuredParseResult<z.infer<T>> {
 	const candidates = [...new Set([extractJsonValue(text), repairMalformedJson(text)])];
+	const errors = new Set<string>();
 
 	for (const candidate of candidates) {
+		let parsed: unknown;
 		try {
-			return schema.parse(JSON.parse(candidate)) as z.infer<T>;
-		} catch {
-			// Try the next recovery candidate.
+			parsed = JSON.parse(candidate);
+		} catch (error) {
+			errors.add(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+			continue;
 		}
+
+		const result = schema.safeParse(parsed);
+		if (result.success) return { success: true, value: result.data as z.infer<T> };
+		for (const issue of result.error.issues) errors.add(formatZodIssue(issue));
 	}
 
-	throw new LlmProviderError("The AI response was not in the expected format. Please try again.", 502);
+	return { success: false, errors: [...errors] };
+}
+
+function structuredOutputError(): LlmProviderError {
+	return new LlmProviderError("The AI response was not in the expected format. Please try again.", 502);
+}
+
+function buildRepairMessages(messages: ChatMessage[], rawContent: string, errors: string[]): ChatMessage[] {
+	return [
+		...messages,
+		{ role: "assistant", content: rawContent },
+		{
+			role: "user",
+			content: `Your previous response was invalid. Return the COMPLETE corrected JSON value only, with no Markdown fences or explanation.\n\nValidation errors:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+		},
+	];
 }
 
 // ── OpenAI call ───────────────────────────────────────────────────────
@@ -391,7 +438,7 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
 		messages: toOpenAIMessages(messages),
-		max_tokens: options.maxTokens ?? 4096,
+		max_tokens: options.maxTokens ?? 8192,
 		...(options.temperature === undefined ? {} : { temperature: options.temperature }),
 		...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto", parallel_tool_calls: false } : {}),
 	};
@@ -462,7 +509,18 @@ function completionResponse(completion: ChatCompletion): ChatResponse {
 		id: completion.id,
 		model: completion.model,
 		content: completionContent(completion),
+		finishReason: completion.choices[0]?.finish_reason ?? null,
+		usage: completionUsage(completion),
 		raw: completion,
+	};
+}
+
+function completionUsage(completion: ChatCompletion): ChatUsage | undefined {
+	if (!completion.usage) return undefined;
+	return {
+		promptTokens: completion.usage.prompt_tokens,
+		completionTokens: completion.usage.completion_tokens,
+		totalTokens: completion.usage.total_tokens,
 	};
 }
 
@@ -518,20 +576,25 @@ export async function chatText({ messages, options = {}, userId }: ChatRequest):
 	return { ...response, quota: result.quota };
 }
 
-export async function chatJson<T extends z.ZodType>(schema: T, { messages, options = {}, userId }: ChatRequest): Promise<z.infer<T>> {
+export async function chatJson<T extends z.ZodType>({
+	schema,
+	messages,
+	options = {},
+	userId,
+}: JsonChatRequest<T>): Promise<JsonChatResponse<z.infer<T>>> {
 	const first = await chatText({ messages, options, userId });
+	if (first.finishReason === "length") throw structuredOutputError();
 
-	try {
-		return parseStructuredOutputText(schema, first.content);
-	} catch (firstError) {
-		const retry = await chatText({ messages, options, userId });
+	const firstParse = parseStructuredOutputText(schema, first.content);
+	if (firstParse.success) return { ...first, value: firstParse.value, requestMessages: messages };
 
-		try {
-			return parseStructuredOutputText(schema, retry.content);
-		} catch {
-			throw firstError;
-		}
-	}
+	const repairMessages = buildRepairMessages(messages, first.content, firstParse.errors);
+	const repaired = await chatText({ messages: repairMessages, options, userId });
+	if (repaired.finishReason === "length") throw structuredOutputError();
+
+	const repairedParse = parseStructuredOutputText(schema, repaired.content);
+	if (!repairedParse.success) throw structuredOutputError();
+	return { ...repaired, value: repairedParse.value, requestMessages: repairMessages };
 }
 
 export async function chatTools({ messages, tools, options = {}, userId }: ToolChatRequest): Promise<ToolChatResponse> {

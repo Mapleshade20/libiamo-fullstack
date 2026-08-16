@@ -1,90 +1,12 @@
 <script lang="ts">
-import BookOpen from "@lucide/svelte/icons/book-open";
-import Hash from "@lucide/svelte/icons/hash";
-import Languages from "@lucide/svelte/icons/languages";
-import Mail from "@lucide/svelte/icons/mail";
-import MessageCircle from "@lucide/svelte/icons/message-circle";
-import MessageSquare from "@lucide/svelte/icons/message-square";
-import type { Component } from "svelte";
-import { goto } from "$app/navigation";
-import { captureTaskEnterTransition } from "$lib/client/task-transition";
-import TaskCard from "$lib/components/TaskCard.svelte";
+import QuestEdition from "$lib/components/quest-hall/QuestEdition.svelte";
+import TranslationIndex from "$lib/components/quest-hall/TranslationIndex.svelte";
+import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
+import { formatHallEditionDate } from "$lib/quest-hall";
 
 let { data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
-
-let flippedId = $state<number | null>(null);
-let typingTimer: ReturnType<typeof setInterval> | null = null;
-let displayedSubtitle = $state("");
-
-function startTypewriter(text: string, speed = 20) {
-	if (typingTimer !== null) clearInterval(typingTimer);
-	displayedSubtitle = "";
-	let i = 0;
-	const timer = setInterval(() => {
-		if (i < text.length) {
-			displayedSubtitle += text[i];
-			i++;
-		} else {
-			clearInterval(timer);
-			typingTimer = null;
-		}
-	}, speed);
-	typingTimer = timer;
-}
-
-$effect(() => {
-	startTypewriter(data.subtitle);
-	return () => {
-		if (typingTimer !== null) {
-			clearInterval(typingTimer);
-			typingTimer = null;
-		}
-	};
-});
-
-function toggleFlip(id: number) {
-	flippedId = flippedId === id ? null : id;
-}
-
-function enterTask(event: MouseEvent, taskId: number) {
-	event.preventDefault();
-	event.stopPropagation();
-
-	const link = event.currentTarget as HTMLAnchorElement;
-	const face = link.closest(".card-face") as HTMLElement | null;
-	const cardScene = link.closest(".card-scene") as HTMLElement | null;
-	const sourceEl = face ?? cardScene;
-
-	if (sourceEl) {
-		const rect = sourceEl.getBoundingClientRect();
-		const radius = Number.parseFloat(getComputedStyle(sourceEl).borderRadius) || 16;
-
-		captureTaskEnterTransition({
-			taskId,
-			href: link.href,
-			sourceRect: {
-				top: rect.top,
-				left: rect.left,
-				width: rect.width,
-				height: rect.height,
-			},
-			sourceRadius: radius,
-		});
-	}
-
-	goto(link.href);
-}
-
-const uiIcons: Record<string, Component> = {
-	reddit: MessageSquare,
-	apple_mail: Mail,
-	discord: Hash,
-	imessage: MessageCircle,
-	ao3: BookOpen,
-	translator: Languages,
-};
 </script>
 
 <svelte:head>
@@ -92,70 +14,194 @@ const uiIcons: Record<string, Component> = {
 	<meta name="description" content="Choose today's language practice quests and continue your learning routine.">
 </svelte:head>
 
-<div class="space-y-10">
-	<section>
-		<h1 class="text-3xl md:text-4xl text-gray-800 font-normal leading-tight">
-			{data.greeting}<br>
-			<span class="text-gray-500 italic relative inline-block">
-				<span class="invisible">{data.subtitle}</span>
-				<span class="absolute left-0 top-0">{displayedSubtitle}</span>
-			</span>
-		</h1>
-	</section>
-
-	<section>
-		<div class="flex items-center gap-4 mb-5">
-			<h2 class="text-2xl">{t(lang, "hall.today")}</h2>
-			<div class="h-px flex-1 bg-border"></div>
-		</div>
-		{#if data.dailyTasks.length === 0}
-			<p class="text-muted-foreground">{t(lang, "hall.noTasks")}</p>
-		{:else}
-			<div class="grid gap-5 md:grid-cols-3">
-				{#each data.dailyTasks as task}
-					<TaskCard
-						id={task.id}
-						title={task.title}
-						difficulty={task.templateDifficulty}
-						icon={uiIcons[task.templateUi] ?? MessageSquare}
-						shortObjective={task.shortObjective}
-						href="/task/{task.id}"
-						buttonLabel={t(lang, "hall.enter")}
-						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
-						flipped={flippedId === task.id}
-						onflip={toggleFlip}
-						onenter={enterTask}
-					/>
-				{/each}
+<div class="quest-hall">
+	<header class="hall-masthead">
+		<div class="masthead-copy">
+			<div class="masthead-kicker">
+				<span class="register-mark" aria-hidden="true"></span>
+				<span>{formatHallEditionDate(data.editionDate)} {t(lang, "hall.edition.label")}</span>
 			</div>
-		{/if}
-	</section>
-
-	<section>
-		<div class="flex items-center gap-4 mb-5">
-			<h2 class="text-2xl">{t(lang, "hall.thisWeek")}</h2>
-			<div class="h-px flex-1 bg-border"></div>
+			<h1>{data.greeting}</h1>
+			<p>{data.subtitle}</p>
 		</div>
-		{#if data.weeklyTasks.length === 0}
-			<p class="text-muted-foreground">{t(lang, "hall.noTasks")}</p>
-		{:else}
-			<div class="grid gap-5 md:grid-cols-3">
-				{#each data.weeklyTasks as task}
-					<TaskCard
-						id={task.id}
-						title={task.title}
-						difficulty={task.templateDifficulty}
-						icon={uiIcons[task.templateUi] ?? MessageSquare}
-						shortObjective={task.shortObjective}
-						href="/task/{task.id}"
-						buttonLabel={t(lang, "hall.enter")}
-						isFinished={task.sessionStatus === "completed" || task.sessionStatus === "evaluated"}
-						flipped={flippedId === task.id}
-						onflip={toggleFlip}
-						onenter={enterTask}
-					/>
-				{/each}
-			</div>
-		{/if}
-	</section>
+
+		<div class="edition-seal" aria-hidden="true">
+			<span>LIBIAMO</span>
+			<WineGlassIcon width={42} height={42} />
+			<span>DAILY</span>
+		</div>
+	</header>
+
+	{#key data.user.activeLanguage}
+		<div class="hall-sections">
+			<QuestEdition id="daily" title={t(lang, "hall.today")} tasks={data.dailyTasks} {lang} />
+
+			<QuestEdition id="weekly" title={t(lang, "hall.thisWeek")} tasks={data.weeklyTasks} {lang} />
+
+			<TranslationIndex tasks={data.translationTasks} statusMap={data.translationStatusMap} initialMonth={data.translationMonth} {lang} />
+		</div>
+	{/key}
 </div>
+
+<style>
+.quest-hall {
+	--hall-wine: #9a3943;
+	--hall-ink: #29282b;
+	padding-bottom: 3rem;
+}
+
+.hall-masthead {
+	position: relative;
+	display: grid;
+	min-height: 12rem;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 1.5rem;
+	border-top: 3px double color-mix(in oklab, var(--foreground) 46%, transparent);
+	border-bottom: 1px solid var(--border);
+	padding-block: 1.7rem 1.9rem;
+	animation: masthead-enter 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hall-masthead::after {
+	position: absolute;
+	right: 0;
+	bottom: -4px;
+	left: 0;
+	height: 1px;
+	background: var(--border);
+	content: "";
+}
+
+.masthead-copy {
+	min-width: 0;
+}
+
+.masthead-kicker {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-size: 0.64rem;
+	font-weight: 650;
+	text-transform: uppercase;
+	color: var(--muted-foreground);
+}
+
+.register-mark {
+	display: inline-block;
+	width: 0.5rem;
+	height: 0.5rem;
+	background: var(--hall-wine);
+	box-shadow: 3px 3px 0 color-mix(in oklab, var(--color-accent-blue) 72%, transparent);
+}
+
+.hall-masthead h1 {
+	max-width: 46rem;
+	margin-top: 0.8rem;
+	font-size: clamp(2rem, 5vw, 3.15rem);
+	font-weight: 500;
+	line-height: 1.02;
+	letter-spacing: 0;
+	animation: headline-ink 680ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hall-masthead p:not(.masthead-kicker) {
+	max-width: 44rem;
+	margin-top: 0.55rem;
+	font-family: var(--font-serif);
+	font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+	font-style: italic;
+	line-height: 1.3;
+	color: var(--muted-foreground);
+	animation: subtitle-ink 520ms 220ms ease-out both;
+}
+
+.edition-seal {
+	position: relative;
+	display: none;
+	width: 6.3rem;
+	aspect-ratio: 1;
+	place-items: center;
+	align-content: center;
+	border: 1px solid color-mix(in oklab, var(--hall-wine) 62%, var(--border));
+	color: var(--hall-wine);
+	transform: rotate(2deg);
+}
+
+.edition-seal::before,
+.edition-seal::after {
+	position: absolute;
+	inset: 0.35rem;
+	border: 1px solid color-mix(in oklab, var(--hall-wine) 38%, transparent);
+	content: "";
+}
+
+.edition-seal::after {
+	inset: 0.7rem;
+}
+
+.edition-seal span {
+	position: relative;
+	z-index: 1;
+}
+
+.edition-seal span {
+	font-size: 0.48rem;
+	font-weight: 700;
+	letter-spacing: 0.15em;
+}
+
+.hall-sections {
+	display: flex;
+	margin-top: 2rem;
+	flex-direction: column;
+	gap: 2.6rem;
+}
+
+@media (min-width: 640px) {
+	.edition-seal {
+		display: grid;
+	}
+}
+
+@keyframes masthead-enter {
+	from {
+		opacity: 0;
+		transform: translateY(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes headline-ink {
+	from {
+		clip-path: inset(0 100% 0 0);
+		transform: translateX(-10px);
+	}
+	to {
+		clip-path: inset(0);
+		transform: translateX(0);
+	}
+}
+
+@keyframes subtitle-ink {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hall-masthead,
+	.hall-masthead h1,
+	.hall-masthead p:not(.masthead-kicker) {
+		animation: none;
+	}
+}
+</style>

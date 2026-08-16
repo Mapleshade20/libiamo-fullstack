@@ -76,7 +76,7 @@ function fmtDate(d: Date | null): string {
 	</div>
 
 	<!-- Content -->
-	{#if c.shortObjectiveBase}
+	{#if !isTranslate && c.shortObjectiveBase}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Short Objective</Label>
 			<p class="text-sm">{c.shortObjectiveBase}</p>
@@ -119,23 +119,19 @@ function fmtDate(d: Date | null): string {
 		</div>
 	{/if}
 
-	{#if c.materialsMd}
+	{#if !isTranslate && c.materialsMd}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Background Material</Label>
 			<div class="prose prose-neutral max-w-none text-sm">{@html renderMarkdown(c.materialsMd)}</div>
 		</div>
 	{/if}
 
-	{#if isTranslate && c.translationBase}
+	{#if isTranslate && c.translationReference}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Source Text</Label>
 			<div class="space-y-2">
-				{#each c.translationBase as paragraph}
-					<p class="text-sm">
-						{#each paragraph as sentence}
-							{sentence}
-						{/each}
-					</p>
+				{#each c.translationReference as paragraph}
+					<p class="text-sm whitespace-pre-wrap">{paragraph}</p>
 				{/each}
 			</div>
 		</div>

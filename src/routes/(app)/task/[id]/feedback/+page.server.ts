@@ -1,12 +1,13 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
-import { PRACTICE_UI_TEXT_MAX_LENGTH, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import type { FeedbackResult } from "$lib/feedback/types";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
+import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -28,11 +29,13 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
+		columns: { tutorFeedback: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
 
 	return {
 		language: sessionData?.task?.language ?? "en",
+		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
 		maxTurns: sessionData?.task?.template?.maxTurns ?? 0,
 	};
 }
@@ -130,6 +133,7 @@ export const actions: Actions = {
 			const session = await db.query.practiceSession.findFirst({
 				where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
 				columns: { id: true, userId: true, status: true },
+				with: { task: { columns: { language: true } } },
 			});
 
 			if (!session) return fail(400, { error: "Session not completed" });
@@ -137,7 +141,15 @@ export const actions: Actions = {
 				return fail(400, { error: "Session not completed" });
 			}
 
-			const feedback = await generateFeedback(session.id);
+			if (!session.task) return fail(400, { error: "Task not found" });
+			const feedback = await generateFeedback({
+				sessionId: session.id,
+				feedbackLanguage: resolveFeedbackLanguage({
+					preference: user.feedbackLanguagePreference === "target" ? "target" : "native",
+					nativeLanguage: user.nativeLanguage,
+					targetLanguage: session.task.language,
+				}),
+			});
 
 			return {
 				success: true,
@@ -182,6 +194,7 @@ export const actions: Actions = {
 			const result = await followUpOnFeedback({
 				sessionId,
 				userId: user.id,
+				feedbackLanguage: sessionContext.feedbackLanguage,
 				itemText,
 				category: category as "grammar" | "vocabulary" | "coherence",
 				question,
@@ -239,7 +252,14 @@ export const actions: Actions = {
 			]
 				.filter(Boolean)
 				.join("\n\n");
-			const notes = await createNotesBatch(user.id, sessionId, sessionContext.language, [{ tutorComment, category, sourceContext }], user.id);
+			const notes = await createNotesBatch({
+				userId: user.id,
+				source: { type: "practice", sessionId },
+				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
+				feedbackItems: [{ tutorComment, category, sourceContext }],
+				sessionOwnerId: user.id,
+			});
 
 			return { success: true, note: notes[0] };
 		} catch (e) {
@@ -275,8 +295,9 @@ export const actions: Actions = {
 
 			const result = await createNotesFromSelectionBatch({
 				userId: user.id,
-				sessionId,
+				source: { type: "practice", sessionId },
 				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
 				selectedText,
 				currentContext,
 				previousContext,
@@ -286,6 +307,40 @@ export const actions: Actions = {
 			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
 		} catch (e) {
 			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
+		}
+	},
+
+	saveSelectionQaNote: async ({ request, params, locals }) => {
+		const user = requireUser({ locals });
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const selectedText = (formData.get("selectedText") as string | null)?.trim() ?? "";
+		const surroundingContext = (formData.get("surroundingContext") as string | null)?.trim() ?? "";
+		const question = (formData.get("question") as string | null)?.trim() ?? "";
+		const answer = (formData.get("answer") as string | null)?.trim() ?? "";
+		if (Number.isNaN(sessionId) || !selectedText || !question || !answer) return fail(400, { error: "Missing required fields" });
+		if (hasOversizedUserText([selectedText, question]) || answer.length > USER_LONG_TEXT_MAX_LENGTH) {
+			return fail(400, { error: "Text is too long" });
+		}
+		try {
+			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (hasOversizedConversationContext([surroundingContext], sessionContext.maxTurns)) return fail(400, { error: "Text is too long" });
+			const result = await createNoteFromSelectionQA({
+				userId: user.id,
+				source: { type: "practice", sessionId },
+				selectedText,
+				surroundingContext,
+				question,
+				answer,
+				language: sessionContext.language,
+				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
+			});
+			return { success: true, note: result.note };
+		} catch (cause) {
+			return fail(llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
 	},
 };

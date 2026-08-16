@@ -22,7 +22,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/db/schema", () => ({
 	task: { id: "task.id", templateId: "task.templateId", variantId: "task.variantId" },
 	template: { id: "template.id" },
-	translationAttempt: { id: "translationAttempt.id", templateId: "translationAttempt.templateId" },
+	translationSourceSet: { id: "translationSourceSet.id", templateId: "translationSourceSet.templateId" },
 }));
 vi.mock("drizzle-orm", () => ({
 	eq: vi.fn((column, value) => ({ column, value })),

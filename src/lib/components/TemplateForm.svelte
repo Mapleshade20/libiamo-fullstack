@@ -49,7 +49,7 @@ type TemplateData = {
 	agentPromptBase?: string | null;
 	materialsMd?: string | null;
 	objectivesBase?: string[] | null;
-	translationBase?: string[][] | null;
+	translationReference?: string[] | null;
 	tags?: string[] | null;
 };
 
@@ -143,7 +143,7 @@ const templateFieldOrder = [
 	"descriptionBase",
 	"agentPromptBase",
 	"objectivesBase",
-	"translationBase",
+	"translationReference",
 	"tags",
 ];
 
@@ -164,7 +164,7 @@ let descriptionBase = $state(untrack(() => template.descriptionBase ?? ""));
 let agentPromptBase = $state(untrack(() => template.agentPromptBase ?? ""));
 let objectivesText = $state(untrack(() => (template.objectivesBase ?? []).join("\n")));
 let tagsText = $state(untrack(() => (template.tags ?? []).join(", ")));
-let translationText = $state(untrack(() => (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n")));
+let translationText = $state(untrack(() => (template.translationReference ?? []).join("\n\n")));
 
 // Parse objectives text to array for slot extraction
 const objectivesArray = $derived(
@@ -239,7 +239,7 @@ function syncTemplateDraftFromProps() {
 	agentPromptBase = template.agentPromptBase ?? "";
 	objectivesText = (template.objectivesBase ?? []).join("\n");
 	tagsText = (template.tags ?? []).join(", ");
-	translationText = (template.translationBase ?? []).map((p) => p.join("\n")).join("\n\n");
+	translationText = (template.translationReference ?? []).join("\n\n");
 	mdSource = template.materialsMd ?? "";
 }
 
@@ -569,7 +569,7 @@ function confirmDeleteVariant() {
 					{/if}
 				</div>
 			{/if}
-			{#if !hideAdminFields}
+			{#if !isTranslate && !hideAdminFields}
 				<div class="flex items-center gap-2 pt-6">
 					<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" bind:checked={agentStartsFirstValue} class="rounded border-input">
 					<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
@@ -590,17 +590,31 @@ function confirmDeleteVariant() {
 			{/if}
 		</div>
 
-		<div class="space-y-2">
-			<Label for="shortObjectiveBase">Short Objective (1–2 sentences, shown on card)</Label>
-			<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} bind:value={shortObjectiveBase} />
-		</div>
+		{#if !isTranslate}
+			<div class="space-y-2">
+				<Label for="shortObjectiveBase">Short Objective (1–2 sentences, shown on card)</Label>
+				<Textarea id="shortObjectiveBase" name="shortObjectiveBase" rows={2} bind:value={shortObjectiveBase} />
+			</div>
+		{/if}
 
 		<div class="space-y-2">
 			<Label for="descriptionBase">Description</Label>
 			<Textarea id="descriptionBase" name="descriptionBase" rows={3} bind:value={descriptionBase} />
 		</div>
 
-		{#if !isTranslate && !hideAdminFields}
+		{#if isTranslate}
+			<div class="space-y-2">
+				<Label for="agentPromptBase">Translation Context</Label>
+				<div class="grid grid-cols-1 items-start gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+					<span class="pt-2 text-muted-foreground">This is in the context of [</span>
+					<Input id="agentPromptBase" name="agentPromptBase" bind:value={agentPromptBase} required />
+					<span class="pt-2 text-muted-foreground">].</span>
+				</div>
+				{#if form?.errors?.agentPromptBase}
+					<p class="text-sm text-red-600">{form.errors.agentPromptBase[0]}</p>
+				{/if}
+			</div>
+		{:else if !hideAdminFields}
 			<div class="space-y-2">
 				<Label for="agentPromptBase"> Agent Prompt (MBTI persona prefix injected automatically at session start) </Label>
 				<Textarea id="agentPromptBase" name="agentPromptBase" rows={4} bind:value={agentPromptBase} />
@@ -628,44 +642,52 @@ function confirmDeleteVariant() {
 			<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
 		</div>
 
-		<!-- materialsMd with preview -->
-		<div class="space-y-2">
-			<div class="flex items-center justify-between">
-				<Label for="materialsMd">Background Material (Markdown)</Label>
-				<button
-					type="button"
-					onclick={() => (showMdPreview = !showMdPreview)}
-					class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-				>
-					{showMdPreview ? "Edit" : "Preview"}
-				</button>
+		{#if !isTranslate}
+			<!-- materialsMd with preview -->
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<Label for="materialsMd">Background Material (Markdown)</Label>
+					<button
+						type="button"
+						onclick={() => (showMdPreview = !showMdPreview)}
+						class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					>
+						{showMdPreview ? "Edit" : "Preview"}
+					</button>
+				</div>
+				{#if showMdPreview}
+					<div class="prose prose-neutral min-h-[100px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm">
+						{@html mdHtml}
+					</div>
+				{:else}
+					<Textarea
+						id="materialsMd"
+						name="materialsMd"
+						rows={6}
+						bind:value={mdSource}
+						placeholder="## Background&#10;&#10;Write your learning material in Markdown..."
+					/>
+				{/if}
 			</div>
-			{#if showMdPreview}
-				<div class="prose prose-neutral min-h-[100px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm">{@html mdHtml}</div>
-			{:else}
-				<Textarea
-					id="materialsMd"
-					name="materialsMd"
-					rows={6}
-					bind:value={mdSource}
-					placeholder="## Background&#10;&#10;Write your learning material in Markdown..."
-				/>
-			{/if}
-		</div>
+		{/if}
 	</fieldset>
 
 	<!-- Passages (translate mode only) -->
 	{#if isTranslate}
 		<div class="space-y-2">
-			<Label for="translationBase">Source Text (one sentence per line, empty line = new paragraph)</Label>
+			<Label for="translationReference">Authentic Reference Text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})</Label>
 			<Textarea
-				id="translationBase"
-				name="translationBase"
+				id="translationReference"
+				name="translationReference"
 				rows={10}
 				bind:value={translationText}
-				placeholder="The sun was setting behind the mountains.&#10;The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank.&#10;The water reflected the fading light."
+				required
+				placeholder="The sun was setting behind the mountains. The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank. The water reflected the fading light."
 			/>
-			<p class="text-xs text-muted-foreground">Each line = one sentence. Blank line = paragraph break.</p>
+			<p class="text-xs text-muted-foreground">Separate paragraphs with a blank line. Store only authentic text in the template language.</p>
+			{#if form?.errors?.translationReference}
+				<p class="text-sm text-red-600">{form.errors.translationReference[0]}</p>
+			{/if}
 		</div>
 	{/if}
 
@@ -733,7 +755,7 @@ function confirmDeleteVariant() {
 					<Label class="text-xs text-muted-foreground">Title</Label>
 					<p class="text-sm">{titleBase}</p>
 				</div>
-				{#if shortObjectiveBase}
+				{#if !isTranslate && shortObjectiveBase}
 					<div class="space-y-1">
 						<Label class="text-xs text-muted-foreground">Short Objective</Label>
 						<p class="text-sm">{shortObjectiveBase}</p>

@@ -3,17 +3,18 @@ import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(app)/+page.server";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
-const { mockWhere, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
+const { mockWhere, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockOrderBy } = vi.hoisted(() => {
 	const mockWhere = vi.fn();
+	const mockOrderBy = vi.fn();
 	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
 	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
-	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin }));
+	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));
 	const mockFindMany = vi.fn();
 	const mockOnConflictDoNothing = vi.fn();
 	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockLeftJoin };
+	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockLeftJoin, mockOrderBy };
 });
 
 const { mockEnsureTasksForDate } = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const { mockEnsureTasksForDate } = vi.hoisted(() => ({
 
 const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => ({
 	mockGetMondayOfWeekForDate: vi.fn(() => "2026-04-13"),
-	mockGetLocalDateString: vi.fn(() => "2026-04-17"),
+	mockGetLocalDateString: vi.fn((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17"),
 }));
 
 vi.mock("$lib/server/auth/auth", () => ({
@@ -59,16 +60,33 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 	template: {
 		id: "id",
+		titleBase: "titleBase",
+		descriptionBase: "descriptionBase",
 		interactionType: "interactionType",
 		ui: "ui",
 		difficulty: "difficulty",
+		pointReward: "pointReward",
 		cadence: "cadence",
+		language: "template.language",
+		isActive: "isActive",
+		createdAt: "createdAt",
 	},
 	userLearningProfile: Symbol("userLearningProfile"),
 	practiceSession: {
 		status: "status",
 		taskId: "taskId",
 		userId: "userId",
+	},
+	translationAttempt: {
+		sourceSetId: "translationAttempt.sourceSetId",
+		workflowPhase: "workflowPhase",
+		userId: "translationAttempt.userId",
+		updatedAt: "translationAttempt.updatedAt",
+	},
+	translationSourceSet: {
+		id: "translationSourceSet.id",
+		templateId: "translationSourceSet.templateId",
+		promptLanguage: "translationSourceSet.promptLanguage",
 	},
 }));
 
@@ -84,6 +102,7 @@ vi.mock("$lib/server/scheduling/dates", () => ({
 describe("(app) home +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17");
 	});
 
 	it("redirects unauthenticated users", async () => {
@@ -96,7 +115,10 @@ describe("(app) home +page.server", () => {
 	it("loads weekly and daily tasks for active language", async () => {
 		const weeklyTasks = [{ id: 1, title: "Weekly" }];
 		const dailyTasks = [{ id: 2, title: "Daily" }];
-		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks);
+		const translationTasks = [
+			{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdAt: new Date("2026-04-08T12:00:00.000Z") },
+		];
+		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
 		mockFindMany.mockResolvedValueOnce([
 			{ id: 1001, taskId: 1, status: "evaluated", startedAt: new Date("2026-04-17T10:00:00.000Z") },
 			{ id: 1002, taskId: 2, status: "in_progress", startedAt: new Date("2026-04-17T11:00:00.000Z") },
@@ -111,8 +133,53 @@ describe("(app) home +page.server", () => {
 			expect.objectContaining({
 				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
 				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
+				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
+				translationMonth: "2026-04",
+				editionDate: "2026-04-17",
 			}),
 		);
+	});
+
+	it("loads translation tasks from every creation month and keeps the latest attempt status", async () => {
+		mockWhere
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ id: 7, titleBase: "A poem", createdAt: new Date("2025-12-04T12:00:00.000Z") }]);
+		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
+		mockOrderBy.mockResolvedValueOnce([
+			{ templateId: 7, status: "correction" },
+			{ templateId: 7, status: "draft" },
+		]);
+
+		const result = await load({
+			locals: { user: { id: "u1", activeLanguage: "en", nativeLanguage: "fr" } },
+		} as any);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				translationMonth: "2026-04",
+				translationTasks: [{ id: 7, titleBase: "A poem", createdMonth: "2025-12" }],
+				translationStatusMap: { 7: "correction" },
+			}),
+		);
+	});
+
+	it("buckets translation templates in the user's timezone", async () => {
+		const createdAt = new Date("2026-08-31T19:00:00.000Z");
+		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => (date ? "2026-09-01" : "2026-09-01"));
+		mockWhere
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ id: 8, titleBase: "A letter", createdAt }]);
+		mockFindMany.mockResolvedValue([]);
+
+		const result = (await load({
+			locals: { user: { id: "u1", activeLanguage: "en", timezone: "Pacific/Auckland" } },
+		} as any)) as any;
+
+		expect(mockGetLocalDateString).toHaveBeenCalledWith("Pacific/Auckland", createdAt);
+		expect(result.translationMonth).toBe("2026-09");
+		expect(result.translationTasks[0]?.createdMonth).toBe("2026-09");
 	});
 
 	describe("timezone logic", () => {

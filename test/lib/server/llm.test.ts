@@ -52,6 +52,7 @@ function createChatCompletionResponse(content: string | null, extraMessage: Reco
 			model: "test-model",
 			choices: [
 				{
+					finish_reason: "stop",
 					message: {
 						role: "assistant",
 						content,
@@ -145,6 +146,7 @@ describe("chatText", () => {
 		});
 
 		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		expect(payload.max_tokens).toBe(8192);
 		expect(payload.messages).toEqual([
 			{ role: "system", content: "Return text." },
 			{ role: "user", content: "Learner said hello." },
@@ -299,9 +301,11 @@ describe("chatJson", () => {
 		);
 
 		const { chatJson } = await import("$lib/server/llm");
-		const result = await chatJson(z.array(z.string()), { messages: [{ role: "system", content: "Return JSON." }] });
+		const result = await chatJson({ schema: z.array(z.string()), messages: [{ role: "system", content: "Return JSON." }] });
 
-		expect(result).toEqual(["one", "two"]);
+		expect(result.value).toEqual(["one", "two"]);
+		expect(result.content).toContain("one");
+		expect(result.finishReason).toBe("stop");
 	});
 
 	it("recovers provider output with a newline between opening quote and key name", async () => {
@@ -313,13 +317,12 @@ describe("chatJson", () => {
 		const { chatJson } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
-		await expect(chatJson(schema, { messages: [{ role: "system", content: "Return JSON." }] })).resolves.toEqual({
-			reply: "¡Hola!",
-			terminate: false,
+		await expect(chatJson({ schema, messages: [{ role: "system", content: "Return JSON." }] })).resolves.toMatchObject({
+			value: { reply: "¡Hola!", terminate: false },
 		});
 	});
 
-	it("retries once with the identical original request when the first JSON response is incomplete", async () => {
+	it("repairs invalid structured output with the raw response and validation errors", async () => {
 		const fetchMock = vi
 			.fn<FetchLike>()
 			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":": "}'))
@@ -328,16 +331,23 @@ describe("chatJson", () => {
 
 		const { chatJson } = await import("$lib/server/llm");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
-		const result = await chatJson(schema, { messages: [{ role: "system", content: "Return JSON." }] });
+		const result = await chatJson({ schema, messages: [{ role: "system", content: "Return JSON." }] });
 
-		expect(result).toEqual({ reply: "Recovered", terminate: false });
+		expect(result.value).toEqual({ reply: "Recovered", terminate: false });
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		const firstPayload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
 		const secondPayload = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
-		expect(secondPayload).toEqual(firstPayload);
-		expect(secondPayload.messages).toEqual([{ role: "system", content: "Return JSON." }]);
-		expect(JSON.stringify(secondPayload.messages)).not.toContain('{"reply":": "}');
-		expect(JSON.stringify(secondPayload.messages)).not.toContain("previous response");
+		expect(firstPayload.messages).toEqual([{ role: "system", content: "Return JSON." }]);
+		expect(secondPayload.messages).toEqual([
+			{ role: "system", content: "Return JSON." },
+			{ role: "assistant", content: '{"reply":": "}' },
+			expect.objectContaining({
+				role: "user",
+				content: expect.stringContaining("Validation errors"),
+			}),
+		]);
+		expect(secondPayload.messages[2].content).toContain("terminate: Invalid input");
+		expect(result.requestMessages).toEqual(secondPayload.messages);
 	});
 
 	it("rethrows the first structured-output error when retry cannot recover", async () => {
@@ -348,9 +358,30 @@ describe("chatJson", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatJson } = await import("$lib/server/llm");
-		await expect(chatJson(z.object({ reply: z.string() }), { messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
+		await expect(chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
 			"The AI response was not in the expected format. Please try again.",
 		);
+	});
+
+	it("does not repair a truncated structured completion", async () => {
+		const fetchMock = vi.fn<FetchLike>(
+			async () =>
+				new Response(
+					JSON.stringify({
+						id: "chatcmpl-truncated",
+						model: "test-model",
+						choices: [{ finish_reason: "length", message: { role: "assistant", content: '{"reply":"cut' } }],
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatJson } = await import("$lib/server/llm");
+		await expect(chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
+			"expected format",
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });
 

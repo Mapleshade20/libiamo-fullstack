@@ -7,7 +7,10 @@ interface Props {
 	title: string;
 	difficulty: number;
 	icon: Component;
-	shortObjective?: string | null;
+	summary?: string | null;
+	summaryTitle: string;
+	completedLabel: string;
+	draftLabel: string;
 	href: string;
 	buttonLabel: string;
 	status?: string | null;
@@ -22,7 +25,10 @@ let {
 	title,
 	difficulty,
 	icon: Icon,
-	shortObjective = null,
+	summary = null,
+	summaryTitle,
+	completedLabel,
+	draftLabel,
 	href,
 	buttonLabel,
 	status = null,
@@ -75,13 +81,13 @@ let {
 				{#if isFinished}
 					<span class="text-xs font-bold text-green-600 flex items-center gap-1 mb-1.5 uppercase tracking-wider">
 						<CheckCircle2 size={12} strokeWidth={2.5} />
-						Completed
+						{completedLabel}
 					</span>
 				{:else if status === "draft"}
 					<span
 						class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest"
 					>
-						Draft
+						{draftLabel}
 					</span>
 				{/if}
 				<h3
@@ -105,14 +111,14 @@ let {
 						? 'text-green-800'
 						: 'text-foreground'}"
 				>
-					Mission Objective
+					{summaryTitle}
 				</h4>
 				<p
 					class="text-base md:leading-6 {isFinished
 						? 'text-green-700/80'
 						: 'text-muted-foreground'} leading-5 line-clamp-4"
 				>
-					{shortObjective ?? "—"}
+					{summary ?? "—"}
 				</p>
 			</div>
 			<div class="space-y-2.5">

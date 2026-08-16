@@ -1,47 +1,20 @@
 import { fail } from "@sveltejs/kit";
-import { USER_KEYWORDS_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
-import { listCompletedSessions } from "$lib/server/archive";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
+import { listCompletedActivities } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
-import { followUpOnFeedback } from "$lib/server/feedback";
+import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { deleteNote, getNote, updateNote } from "$lib/server/note";
+import { deleteNote, getNote } from "$lib/server/note";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser({ locals });
 
-	const groups = await listCompletedSessions(user.id);
+	const groups = await listCompletedActivities(user.id);
 	return { groups };
 };
 
 export const actions: Actions = {
-	update: async ({ request, locals }) => {
-		const user = requireUser({ locals });
-
-		const formData = await request.formData();
-		const noteId = Number.parseInt(formData.get("noteId") as string, 10);
-		const tutorComment = (formData.get("tutorComment") as string)?.trim();
-		const keywordsRaw = (formData.get("keywords") as string)?.trim();
-
-		if (Number.isNaN(noteId)) return fail(400, { error: "Invalid note ID" });
-		if (!tutorComment) return fail(400, { error: "Content is required" });
-		if (tutorComment.length > USER_TEXT_MAX_LENGTH) return fail(400, { error: "Content is too long" });
-		if (keywordsRaw && keywordsRaw.length > USER_KEYWORDS_MAX_LENGTH) return fail(400, { error: "Keywords are too long" });
-
-		const updated = await updateNote(noteId, user.id, {
-			tutorComment,
-			keywords: keywordsRaw
-				? keywordsRaw
-						.split(",")
-						.map((k) => k.trim())
-						.filter(Boolean)
-				: [],
-		});
-		if (!updated) return fail(404, { error: "Note not found" });
-
-		return { success: true, note: updated };
-	},
-
 	delete: async ({ request, locals }) => {
 		const user = requireUser({ locals });
 
@@ -71,13 +44,25 @@ export const actions: Actions = {
 		if (!note) return fail(404, { error: "Note not found" });
 
 		try {
-			const result = await followUpOnFeedback({
-				sessionId: note.sourceSessionId,
-				userId: user.id,
-				itemText: note.tutorComment,
-				category: "grammar",
-				question,
-			});
+			const result = note.sourceSessionId
+				? await followUpOnFeedback({
+						sessionId: note.sourceSessionId,
+						userId: user.id,
+						feedbackLanguage: user.nativeLanguage ?? note.language,
+						itemText: `${note.vocab}\n${note.targetDefinition}\n${note.nativeDefinition}`,
+						category: "vocabulary",
+						question,
+						currentContext: `${note.targetDefinition}\n${note.nativeDefinition}`,
+					})
+				: await followUpOnLearningContent({
+						userId: user.id,
+						learningLanguage: note.language,
+						feedbackLanguage: user.nativeLanguage ?? note.language,
+						itemText: `${note.vocab}\n${note.targetDefinition}\n${note.nativeDefinition}`,
+						category: "vocabulary",
+						question,
+						currentContext: `${note.targetDefinition}\n${note.nativeDefinition}`,
+					});
 			return { success: true, answer: result.answer };
 		} catch (e) {
 			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });

@@ -267,7 +267,7 @@ function handleFinishCancel() {
 		<!-- Main content + right panel -->
 		<div class="flex flex-1 overflow-hidden">
 			<!-- Scrollable feed -->
-			<main class="flex flex-1 flex-col overflow-hidden">
+			<div class="flex flex-1 flex-col overflow-hidden">
 				<div bind:this={session.chatContainer} class="flex-1 overflow-y-auto">
 					<div class="mx-auto max-w-[740px] px-2 py-3 md:px-3">
 						<!-- Post card -->
@@ -339,7 +339,7 @@ function handleFinishCancel() {
 						<div class="h-2"></div>
 					</div>
 				</div>
-			</main>
+			</div>
 
 			<CommunityPanel subreddit={post.subreddit} {t} />
 		</div>

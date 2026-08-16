@@ -30,20 +30,15 @@ const templateContentFields = {
 				.map((s) => s.trim())
 				.filter(Boolean);
 		}),
-	translationBase: z
+	translationReference: z
 		.string()
 		.optional()
 		.transform((v) => {
 			if (!v) return null;
 			const paragraphs = v
 				.split(/\n\s*\n/)
-				.map((para) =>
-					para
-						.split("\n")
-						.map((s) => s.trim())
-						.filter(Boolean),
-				)
-				.filter((para) => para.length > 0);
+				.map((paragraph) => paragraph.trim())
+				.filter(Boolean);
 			return paragraphs.length > 0 ? paragraphs : null;
 		}),
 	tags: z
@@ -74,7 +69,8 @@ const contributionContentFields = {
 				.map((s) => s.trim())
 				.filter(Boolean);
 		}),
-	translationBase: z
+	agentPromptBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
+	translationReference: z
 		.string()
 		.max(USER_LONG_TEXT_MAX_LENGTH)
 		.optional()
@@ -82,13 +78,8 @@ const contributionContentFields = {
 			if (!v) return null;
 			const paragraphs = v
 				.split(/\n\s*\n/)
-				.map((para) =>
-					para
-						.split("\n")
-						.map((s) => s.trim())
-						.filter(Boolean),
-				)
-				.filter((para) => para.length > 0);
+				.map((paragraph) => paragraph.trim())
+				.filter(Boolean);
 			return paragraphs.length > 0 ? paragraphs : null;
 		}),
 	tags: z
@@ -122,6 +113,25 @@ const translateUiRefine = (data: { interactionType: string; ui: string }) => (da
 
 const translateUiMessage = 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise';
 
+function validateTranslationContent(
+	data: { interactionType: string; agentPromptBase?: string | null; translationReference?: string[] | null },
+	ctx: z.RefinementCtx,
+) {
+	if (data.interactionType !== "translate") return;
+	if (!data.agentPromptBase?.trim()) {
+		ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
+	}
+	if (!data.translationReference?.length) {
+		ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
+	}
+}
+
+function normalizeTranslationContent<T extends { interactionType: string; shortObjectiveBase?: string | null; materialsMd?: string | null }>(
+	data: T,
+) {
+	return data.interactionType === "translate" ? { ...data, shortObjectiveBase: null, materialsMd: null } : data;
+}
+
 export const templateSchema = z
 	.object({
 		...templateCore,
@@ -134,11 +144,16 @@ export const templateSchema = z
 		agentStartsFirst: z.any().transform((v) => v === "on"),
 		agentPromptBase: z.string().optional(),
 	})
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
+	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
+	.superRefine(validateTranslationContent)
+	.transform(normalizeTranslationContent)
+	.transform((data) => (data.interactionType === "translate" ? { ...data, agentStartsFirst: false } : data));
 
 export const templateContributionSchema = z
 	.object({ ...templateContributionCore })
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] });
+	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
+	.superRefine(validateTranslationContent)
+	.transform(normalizeTranslationContent);
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({

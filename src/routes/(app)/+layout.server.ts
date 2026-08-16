@@ -22,6 +22,7 @@ export const load: LayoutServerLoad = async (event) => {
 			activeLanguage: user.activeLanguage,
 			timezone: user.timezone,
 			nativeLanguage: user.nativeLanguage,
+			feedbackLanguagePreference: user.feedbackLanguagePreference,
 		},
 		avatarUrl,
 		hasApiKey,

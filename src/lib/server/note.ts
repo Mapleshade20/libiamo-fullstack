@@ -1,169 +1,162 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getLanguageEnglishName } from "$lib/constants";
+import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
+import { NOTE_EXAMPLE_COUNT, type NoteContent } from "$lib/note";
 import { db } from "./db";
-import { note, practiceSession } from "./db/schema";
+import { note, practiceSession, translationAttempt } from "./db/schema";
 import { chatJson } from "./llm";
+import { createNewCard, serializeCard } from "./review";
 import { sessionMessageChronologicalOrder } from "./session";
 
-// ── createNote ─────────────────────────────────────────────────────
+export type NoteSource = { type: "practice"; sessionId: number } | { type: "translation"; attemptId: number };
 
-interface CreateNoteInput {
+const ExampleSchema = z.object({ targetText: z.string().trim().min(1), nativeText: z.string().trim().min(1) }).strict();
+const GeneratedNoteSchema = z
+	.object({
+		sourceItemOrdinals: z.array(z.number().int().nonnegative()).min(1),
+		vocab: z.string().trim().min(1),
+		targetDefinition: z.string().trim().min(1),
+		nativeDefinition: z.string().trim().min(1),
+		examples: z.array(ExampleSchema).length(NOTE_EXAMPLE_COUNT),
+	})
+	.strict();
+const GeneratedNotesSchema = z.object({ notes: z.array(GeneratedNoteSchema) }).strict();
+
+export type GeneratedNote = z.infer<typeof GeneratedNoteSchema>;
+
+function validateGeneratedNotes(notes: GeneratedNote[], itemCount: number, maxNotes?: number) {
+	if (maxNotes !== undefined && notes.length > maxNotes) throw new Error(`The tutor returned more than ${maxNotes} notes.`);
+	for (const generated of notes) {
+		const examples = new Set(generated.examples.map((example) => `${example.targetText}\u0000${example.nativeText}`));
+		if (examples.size !== NOTE_EXAMPLE_COUNT) throw new Error(`Every note must contain ${NOTE_EXAMPLE_COUNT} distinct examples.`);
+		for (const ordinal of generated.sourceItemOrdinals) {
+			if (ordinal >= itemCount) throw new Error("Generated notes contain an invalid source item ordinal.");
+		}
+	}
+}
+
+export type CreateNotesInput = {
 	userId: string;
-	sourceSessionId: number;
-	sourceMessageId?: number;
-	tutorComment: string;
-	keywords?: string[];
-	sourceContext?: string;
-}
+	language: LanguageCode;
+	source: NoteSource;
+	notes: NoteContent[];
+};
 
-export async function createNote(input: CreateNoteInput) {
-	const [result] = await db
-		.insert(note)
-		.values({
-			userId: input.userId,
-			sourceSessionId: input.sourceSessionId,
-			sourceMessageId: input.sourceMessageId ?? null,
-			tutorComment: input.tutorComment,
-			keywords: input.keywords ?? null,
-			sourceContext: input.sourceContext ?? null,
-		})
-		.returning();
-
-	return result;
-}
-
-// ── shared note extraction guidelines ─────────────────────────────
-
-function getNoteFieldGuidelines(languageName: string) {
-	return {
-		knowledgePoint: `ONE concise sentence summarizing the core lesson (grammar rule, vocabulary nuance, or discourse principle). Be specific. Write in English but mention ${languageName} terms.`,
-		keywords: `1-2 very short core phrases that capture the essence. These MUST be in ${languageName} (or the learning language), shown as a concise label — e.g. grammar like "cualquier + n. (neutral)", "n. + cualquiera (implying indifference)", vocabulary like "resonate with someone", "no porque + subj.", "set ... on fire", "behind the scenes", "think of | come up with". Keep each under ~5 words.`,
-		sourceContext:
-			"1-3 sentences quoted or closely paraphrased that the feedback items come from. Extract this from the original conversation snippet provided, and make sure you replace the wrong or problematic language with the correct form if possible, to show the learner the right way to say it in context.",
-	};
-}
-
-function formatNoteFieldGuidelines(languageName: string) {
-	const guidelines = getNoteFieldGuidelines(languageName);
-	return [
-		`- knowledgePoint: ${guidelines.knowledgePoint}`,
-		`- keywords: ${guidelines.keywords}`,
-		`- sourceContext: ${guidelines.sourceContext}`,
-	].join("\n");
-}
-
-const schemaNoteFieldGuidelines = getNoteFieldGuidelines("the learning language");
-
-// ── createNotesBatch ───────────────────────────────────────────────
-
-const ExtractKnowledgeSchema = z.object({
-	items: z.array(
-		z.object({
-			knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
-			keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
-			sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
-		}),
-	),
-});
-
-export async function createNotesBatch(
-	userId: string,
-	sourceSessionId: number,
-	language: string,
-	feedbackItems: { tutorComment: string; category?: "grammar" | "vocabulary" | "coherence"; sourceContext?: string }[],
-	sessionOwnerId?: string,
-) {
-	if (feedbackItems.length === 0) return [];
-
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, sourceSessionId), sessionOwnerId ? eq(practiceSession.userId, sessionOwnerId) : undefined),
-		with: {
-			messages: {
-				orderBy: sessionMessageChronologicalOrder,
-				columns: { role: true, content: true },
-			},
-		},
-	});
-	if (sessionOwnerId && !session) throw new Error("Session not found");
-	const conversationSnippet =
-		session?.messages
-			.filter((m) => m.content && m.content.trim().length > 0)
-			.map((m) => `[${m.role}] ${m.content.slice(0, 300)}`)
-			.join("\n")
-			.slice(0, 3000) ?? "";
-
-	const knowledgeMap: Map<number, { knowledgePoint: string; keywords: string[]; sourceContext: string }> = new Map();
-	if (feedbackItems.length > 0) {
-		const languageName = getLanguageEnglishName(language);
-		const knowledgeResult = await chatJson(ExtractKnowledgeSchema, {
-			messages: [
-				{
-					role: "system" as const,
-					content: `You are an expert ${languageName} language tutor. For each feedback item below, distill the core lesson into a concise knowledge point and extract keywords + context.
-
-For each item, produce:
-${formatNoteFieldGuidelines(languageName)}
-
-CRITICAL RULES:
-- Do NOT repeat the error description verbatim in knowledgePoint. Distill the lesson.
-- Return JSON: { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
-				},
-				{
-					role: "user" as const,
-					content: [
-						`## Conversation (for source context extraction)\n${conversationSnippet || "(No conversation available)"}`,
-						`## Feedback Items to process\n${feedbackItems
-							.map((item, i) => {
-								const context = item.sourceContext ? `\nContext for this item:\n${item.sourceContext}` : "";
-								return `Item ${i + 1} [${item.category ?? "general"}]: ${item.tutorComment}${context}`;
-							})
-							.join("\n\n")}`,
-					].join("\n\n"),
-				},
-			],
-			userId,
-		});
-		knowledgeResult.items.forEach((item, i) => {
-			knowledgeMap.set(i, {
-				knowledgePoint: item.knowledgePoint,
-				keywords: item.keywords,
-				sourceContext: item.sourceContext,
-			});
-		});
+export async function insertNotes(writer: Pick<typeof db, "insert">, input: CreateNotesInput) {
+	if (input.notes.length === 0) return [];
+	for (const generated of input.notes) {
+		if (!generated.vocab.trim() || !generated.targetDefinition.trim() || !generated.nativeDefinition.trim()) {
+			throw new Error("Note content must not be empty.");
+		}
+		if (generated.examples.length !== NOTE_EXAMPLE_COUNT) throw new Error(`Every note must contain exactly ${NOTE_EXAMPLE_COUNT} examples.`);
+		if (
+			new Set(generated.examples.map((example) => `${example.targetText.trim()}\u0000${example.nativeText.trim()}`)).size !== NOTE_EXAMPLE_COUNT ||
+			generated.examples.some((example) => !example.targetText.trim() || !example.nativeText.trim())
+		) {
+			throw new Error(`Every note must contain ${NOTE_EXAMPLE_COUNT} distinct non-empty examples.`);
+		}
 	}
 
-	const referenceNotes = feedbackItems.map((item, i) => {
-		const extracted = knowledgeMap.get(i);
-		return {
-			userId,
-			sourceSessionId,
-			tutorComment: extracted?.knowledgePoint ?? item.tutorComment,
-			keywords: extracted?.keywords ?? null,
-			sourceContext: extracted?.sourceContext ?? null,
-		};
-	});
-
-	return db.insert(note).values(referenceNotes).returning();
+	return writer
+		.insert(note)
+		.values(
+			input.notes.map((generated) => ({
+				userId: input.userId,
+				language: input.language,
+				sourceSessionId: input.source.type === "practice" ? input.source.sessionId : null,
+				sourceTranslationAttemptId: input.source.type === "translation" ? input.source.attemptId : null,
+				vocab: generated.vocab.trim(),
+				targetDefinition: generated.targetDefinition.trim(),
+				nativeDefinition: generated.nativeDefinition.trim(),
+				examples: generated.examples.map((example) => ({
+					targetText: example.targetText.trim(),
+					nativeText: example.nativeText.trim(),
+				})),
+				fsrsCard: serializeCard(createNewCard()),
+			})),
+		)
+		.returning();
 }
 
-// ── createNotesFromSelectionBatch ──────────────────────────────────
+export async function createNotes(input: CreateNotesInput) {
+	return db.transaction((transaction) => insertNotes(transaction, input));
+}
 
-const SelectionNotesSchema = z.object({
-	reason: z.string().optional().describe("Short reason when no notes are created."),
-	items: z.array(
-		z.object({
-			knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
-			keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
-			sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
-		}),
-	),
-});
+function notesSystemPrompt(input: { targetLanguage: string; nativeLanguage: string; maximumNotes?: number }) {
+	const target = getLanguageEnglishName(input.targetLanguage);
+	const native = getLanguageEnglishName(input.nativeLanguage);
+	return `Turn selected tutor feedback into reusable ${target} vocabulary notes for a learner whose native language is ${native}. Return JSON only:
+{"notes":[{"sourceItemOrdinals":[0],"vocab":"...","targetDefinition":"...","nativeDefinition":"...","examples":[{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."}]}]}.
+
+CONTRACT
+- Return an empty notes array when none of the supplied items identifies a concrete reusable ${target} word or expression.
+- vocab is the exact ${target} item the learner needs to acquire: use a single word when that word is independently useful, or a lexical chunk when this context requires a fixed or semi-fixed collocation, phrasal verb, fixed phrase, idiom, or functional formula. Never return an abstract grammar pattern, sentence template, slash-separated alternatives, or the learner's incorrect form.
+- Derive vocab from the corrected or natural ${target} wording evidenced by the supplied feedback and context. Merge items only when they teach the same vocab. A source item may support more than one note only when it contains distinct vocabulary items.
+- targetDefinition is a concise dictionary-style definition written entirely in ${target}. nativeDefinition is its concise dictionary-style equivalent written entirely in ${native}. They define vocab; they are not grammar lessons or study advice.
+- Every note has exactly ${NOTE_EXAMPLE_COUNT} distinct examples from varied everyday contexts. targetText is a natural ${target} sentence that uses vocab (allowing grammatically required inflection); nativeText is an accurate, independently natural ${native} translation with the same meaning.
+- Do not turn examples into cloze prompts, definitions, fragments, or copies with only names changed.
+${input.maximumNotes ? `- Return at most ${input.maximumNotes} notes.` : ""}
+- Do not add fields.`;
+}
+
+async function generateNotes(input: { userId: string; targetLanguage: string; nativeLanguage: string; items: unknown[]; maximumNotes?: number }) {
+	const { value } = await chatJson({
+		schema: GeneratedNotesSchema,
+		messages: [
+			{ role: "system", content: notesSystemPrompt(input) },
+			{ role: "user", content: JSON.stringify({ items: input.items }) },
+		],
+		userId: input.userId,
+	});
+	validateGeneratedNotes(value.notes, input.items.length, input.maximumNotes);
+	return value.notes;
+}
+
+export async function createNotesBatch(input: {
+	userId: string;
+	source: NoteSource;
+	language: LanguageCode;
+	nativeLanguage: string;
+	feedbackItems: Array<{ tutorComment: string; category?: "grammar" | "vocabulary" | "coherence"; sourceContext?: string }>;
+	sessionOwnerId?: string;
+}) {
+	if (input.feedbackItems.length === 0) return [];
+
+	let conversationSnippet = "";
+	if (input.source.type === "practice") {
+		const session = await db.query.practiceSession.findFirst({
+			where: and(eq(practiceSession.id, input.source.sessionId), input.sessionOwnerId ? eq(practiceSession.userId, input.sessionOwnerId) : undefined),
+			with: { messages: { orderBy: sessionMessageChronologicalOrder, columns: { role: true, content: true } } },
+		});
+		if (input.sessionOwnerId && !session) throw new Error("Session not found");
+		conversationSnippet =
+			session?.messages
+				.filter((message) => message.content.trim())
+				.map((message) => `[${message.role}] ${message.content.slice(0, 300)}`)
+				.join("\n")
+				.slice(0, 3000) ?? "";
+	} else if (input.sessionOwnerId) {
+		const attempt = await db.query.translationAttempt.findFirst({
+			where: and(eq(translationAttempt.id, input.source.attemptId), eq(translationAttempt.userId, input.sessionOwnerId)),
+			columns: { id: true, workflowPhase: true },
+		});
+		if (!attempt || attempt.workflowPhase === "draft" || attempt.workflowPhase === "submitted") throw new Error("Translation attempt not found");
+	}
+
+	const generated = await generateNotes({
+		userId: input.userId,
+		targetLanguage: input.language,
+		nativeLanguage: input.nativeLanguage,
+		items: input.feedbackItems.map((item, ordinal) => ({ ordinal, ...item, conversationSnippet })),
+	});
+	return createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
+}
 
 export async function createNotesFromSelectionBatch(input: {
 	userId: string;
-	sessionId: number;
-	language: string;
+	source: NoteSource;
+	language: LanguageCode;
+	nativeLanguage: string;
 	selectedText: string;
 	currentContext: string;
 	previousContext?: string;
@@ -171,64 +164,51 @@ export async function createNotesFromSelectionBatch(input: {
 }) {
 	const selectedText = input.selectedText.trim();
 	if (!selectedText) return { success: true as const, notes: [], count: 0, reason: "Selection is empty." };
-
-	const languageName = getLanguageEnglishName(input.language);
-	const result = await chatJson(SelectionNotesSchema, {
-		messages: [
-			{
-				role: "system" as const,
-				content: `You are an expert ${languageName} language tutor. A learner selected text on their feedback review page and clicked “save to notes”.
-
-Create between 0 and 2 useful reference notes from the selection.
-
-Return 0 notes if the selection is too short, generic, broken, only UI text, or does not contain a worthwhile ${languageName} language-learning point. Long selections may contain several points; choose only the best 1-2.
-
-For each note:
-${formatNoteFieldGuidelines(languageName)}
-
-Return JSON: { "items": [], "reason": "..." } or { "items": [{ "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }] }`,
-			},
-			{
-				role: "user" as const,
-				content: [
-					`Selected text:\n${selectedText}`,
-					`Source area: ${input.sourceKind ?? "feedback review"}`,
-					`Previous visible message/context:\n${input.previousContext?.trim() || "(none)"}`,
-					`Current message/comment/context:\n${input.currentContext.trim() || "(none)"}`,
-				].join("\n\n"),
-			},
-		],
+	const generated = await generateNotes({
 		userId: input.userId,
+		targetLanguage: input.language,
+		nativeLanguage: input.nativeLanguage,
+		maximumNotes: 2,
+		items: [{ ordinal: 0, selectedText, currentContext: input.currentContext, previousContext: input.previousContext, sourceKind: input.sourceKind }],
 	});
-
-	const items = result.items.slice(0, 3);
-	if (items.length === 0) {
-		return { success: true as const, notes: [], count: 0, reason: result.reason ?? "No note-worthy point found." };
-	}
-
-	const created = await db
-		.insert(note)
-		.values(
-			items.map((item) => ({
-				userId: input.userId,
-				sourceSessionId: input.sessionId,
-				tutorComment: item.knowledgePoint,
-				keywords: item.keywords,
-				sourceContext: item.sourceContext,
-			})),
-		)
-		.returning();
-
+	if (generated.length === 0) return { success: true as const, notes: [], count: 0, reason: "No reusable language point found." };
+	const created = await createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
 	return { success: true as const, notes: created, count: created.length, reason: null };
 }
 
-// ── listNotes ──────────────────────────────────────────────────────
+export async function createNoteFromSelectionQA(input: {
+	userId: string;
+	source: NoteSource;
+	selectedText: string;
+	surroundingContext: string;
+	question: string;
+	answer: string;
+	language: LanguageCode;
+	nativeLanguage: string;
+}) {
+	const generated = await generateNotes({
+		userId: input.userId,
+		targetLanguage: input.language,
+		nativeLanguage: input.nativeLanguage,
+		maximumNotes: 1,
+		items: [
+			{
+				ordinal: 0,
+				selectedText: input.selectedText,
+				surroundingContext: input.surroundingContext,
+				question: input.question,
+				answer: input.answer,
+			},
+		],
+	});
+	if (generated.length === 0) return { success: true as const, note: null };
+	const [created] = await createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
+	return { success: true as const, note: created };
+}
 
 export async function listNotes(userId: string) {
 	return db.select().from(note).where(eq(note.userId, userId)).orderBy(desc(note.id));
 }
-
-// ── getNote ────────────────────────────────────────────────────────
 
 export async function getNote(noteId: number, userId: string) {
 	return db.query.note.findFirst({
@@ -236,81 +216,29 @@ export async function getNote(noteId: number, userId: string) {
 	});
 }
 
-// ── updateNote ─────────────────────────────────────────────────────
-
-export async function updateNote(noteId: number, userId: string, data: { tutorComment?: string; keywords?: string[] }) {
+export async function updateNote(
+	noteId: number,
+	userId: string,
+	data: {
+		language?: LanguageCode;
+		vocab?: string;
+		targetDefinition?: string;
+		nativeDefinition?: string;
+		examples?: NoteContent["examples"];
+	},
+) {
 	const [updated] = await db
 		.update(note)
-		.set(data)
+		.set({ ...data, updatedAt: new Date() })
 		.where(and(eq(note.id, noteId), eq(note.userId, userId)))
 		.returning();
-
 	return updated;
 }
-
-// ── deleteNote ─────────────────────────────────────────────────────
 
 export async function deleteNote(noteId: number, userId: string) {
 	const [deleted] = await db
 		.delete(note)
 		.where(and(eq(note.id, noteId), eq(note.userId, userId)))
 		.returning();
-
 	return deleted;
-}
-
-// ── createNoteFromSelectionQA ──────────────────────────────────────
-
-const DistillQASchema = z.object({
-	knowledgePoint: z.string().describe(schemaNoteFieldGuidelines.knowledgePoint),
-	keywords: z.array(z.string()).describe(schemaNoteFieldGuidelines.keywords),
-	sourceContext: z.string().describe(schemaNoteFieldGuidelines.sourceContext),
-});
-
-export async function createNoteFromSelectionQA(input: {
-	userId: string;
-	sessionId: number;
-	selectedText: string;
-	surroundingContext: string;
-	question: string;
-	answer: string;
-	language: string;
-}) {
-	const languageName = getLanguageEnglishName(input.language);
-
-	const result = await chatJson(DistillQASchema, {
-		messages: [
-			{
-				role: "system" as const,
-				content: `You are an expert ${languageName} language tutor. A learner selected text from a conversation, asked a follow-up question about it, and received an answer.
-
-Distill the key lesson from this Q&A into:
-${formatNoteFieldGuidelines(languageName)}
-
-Focus on the grammar rule, vocabulary building or nuance the learner should remember.
-
-Return JSON: { "knowledgePoint": "...", "keywords": ["..."], "sourceContext": "..." }`,
-			},
-			{
-				role: "user" as const,
-				content: [
-					`Selected text: "${input.selectedText}"`,
-					`Surrounding context: "${input.surroundingContext}"`,
-					`Question: "${input.question}"`,
-					`Answer: "${input.answer}"`,
-				].join("\n\n"),
-			},
-		],
-		userId: input.userId,
-	});
-
-	const created = await createNote({
-		userId: input.userId,
-		sourceSessionId: input.sessionId,
-		tutorComment: result.knowledgePoint,
-		keywords: result.keywords,
-		sourceContext: result.sourceContext,
-	});
-
-	return { success: true as const, note: created };
 }

@@ -1,8 +1,8 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { practiceSession, task, template } from "$lib/server/db/schema";
+import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
 import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/scheduling/dates";
 import { ensureTasksForDate } from "$lib/server/scheduling/tasks";
@@ -26,6 +26,8 @@ export const load: PageServerLoad = async (event) => {
 			shortObjective: task.shortObjective,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
+			templateInteractionType: template.interactionType,
+			pointReward: template.pointReward,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
@@ -38,10 +40,42 @@ export const load: PageServerLoad = async (event) => {
 			shortObjective: task.shortObjective,
 			templateUi: template.ui,
 			templateDifficulty: template.difficulty,
+			templateInteractionType: template.interactionType,
+			pointReward: template.pointReward,
 		})
 		.from(task)
 		.innerJoin(template, eq(task.templateId, template.id))
 		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
+
+	const translationTasks = await db
+		.select({
+			id: template.id,
+			titleBase: template.titleBase,
+			descriptionBase: template.descriptionBase,
+			difficulty: template.difficulty,
+			createdAt: template.createdAt,
+		})
+		.from(template)
+		.where(and(eq(template.language, language), eq(template.ui, "translator"), eq(template.isActive, true)));
+
+	const translationAttempts = user.nativeLanguage
+		? await db
+				.select({
+					templateId: translationSourceSet.templateId,
+					status: translationAttempt.workflowPhase,
+				})
+				.from(translationAttempt)
+				.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
+				.where(and(eq(translationAttempt.userId, user.id), eq(translationSourceSet.promptLanguage, user.nativeLanguage)))
+				.orderBy(desc(translationAttempt.updatedAt))
+		: [];
+
+	const translationStatusByTemplateId = new Map<number, string>();
+	for (const attempt of translationAttempts) {
+		if (!translationStatusByTemplateId.has(attempt.templateId)) {
+			translationStatusByTemplateId.set(attempt.templateId, attempt.status);
+		}
+	}
 
 	const allTaskIds = [...new Set([...weeklyTasks, ...dailyTasks].map((taskItem) => taskItem.id))];
 
@@ -75,6 +109,13 @@ export const load: PageServerLoad = async (event) => {
 			...taskItem,
 			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
 		})),
+		translationTasks: translationTasks.map(({ createdAt, ...taskItem }) => ({
+			...taskItem,
+			createdMonth: getLocalDateString(userTz, createdAt).slice(0, 7),
+		})),
+		translationStatusMap: Object.fromEntries(translationStatusByTemplateId),
+		translationMonth: userLocalDateStr.slice(0, 7),
+		editionDate: userLocalDateStr,
 		greeting: getGreeting(language, user.name),
 		subtitle: getRandomSubtitle(language),
 	};

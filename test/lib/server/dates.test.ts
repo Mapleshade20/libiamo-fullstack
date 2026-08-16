@@ -22,6 +22,10 @@ describe("getLocalDateString", () => {
 		const result = getLocalDateString("Not/A_Timezone");
 		expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
+
+	it("formats an explicit instant in the requested timezone", () => {
+		expect(getLocalDateString("Pacific/Auckland", new Date("2026-08-31T19:00:00.000Z"))).toBe("2026-09-01");
+	});
 });
 
 describe("toSafeUtcDate", () => {

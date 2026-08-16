@@ -2,24 +2,29 @@ import { relations, sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
-export const user = pgTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: boolean("email_verified").default(false).notNull(),
-	image: text("image"),
-	role: userRoleEnum("role").default("learner").notNull(),
-	timezone: text("timezone").default("UTC").notNull(),
-	nativeLanguage: text("native_language"),
-	gemsBalance: integer("gems_balance").default(0).notNull(),
-	activeLanguage: languageCodeEnum("active_language").notNull(),
-	deletedAt: timestamp("deleted_at"),
-	createdAt: timestamp("created_at").defaultNow().notNull(),
-	updatedAt: timestamp("updated_at")
-		.defaultNow()
-		.$onUpdate(() => /* @__PURE__ */ new Date())
-		.notNull(),
-});
+export const user = pgTable(
+	"user",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		email: text("email").notNull().unique(),
+		emailVerified: boolean("email_verified").default(false).notNull(),
+		image: text("image"),
+		role: userRoleEnum("role").default("learner").notNull(),
+		timezone: text("timezone").default("UTC").notNull(),
+		nativeLanguage: text("native_language"),
+		feedbackLanguagePreference: text("feedback_language_preference").$type<"native" | "target">().default("native").notNull(),
+		gemsBalance: integer("gems_balance").default(0).notNull(),
+		activeLanguage: languageCodeEnum("active_language").notNull(),
+		deletedAt: timestamp("deleted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(t) => [check("user_feedback_language_preference_check", sql`${t.feedbackLanguagePreference} IN ('native', 'target')`)],
+);
 
 export const session = pgTable(
 	"session",

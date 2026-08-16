@@ -35,7 +35,10 @@ function openTranslateModal() {
 }
 
 function difficultyLabel(level: number): string {
-	return ["Beginner", "Intermediate", "Advanced"][level - 1] ?? `Level ${level}`;
+	return (
+		[t(lang, "task.difficulty.beginner"), t(lang, "task.difficulty.intermediate"), t(lang, "task.difficulty.advanced")][level - 1] ??
+		`${t(lang, "hall.difficulty")} ${level}`
+	);
 }
 </script>
 
@@ -53,7 +56,7 @@ function difficultyLabel(level: number): string {
 <div class="task-stagger relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-2xl min-w-0 flex-col">
 	<a href="/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
 		<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-		<span class="text-sm font-medium uppercase tracking-wide">Return to Quest Hall</span>
+		<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "task.returnToHall")}</span>
 	</a>
 
 	<div class="mt-12 flex-1 flex flex-col">
@@ -61,7 +64,7 @@ function difficultyLabel(level: number): string {
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				{#if isFinished}
 					<Badge class="bg-green-500/10 text-green-600 hover:bg-green-500/10 border-green-500/20 text-[10px] font-bold uppercase tracking-widest">
-						Completed
+						{t(lang, "task.completed")}
 					</Badge>
 				{/if}
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
@@ -85,7 +88,7 @@ function difficultyLabel(level: number): string {
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
-				<h2 class="mb-2">Objectives</h2>
+				<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
 				<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
@@ -96,7 +99,7 @@ function difficultyLabel(level: number): string {
 
 		{#if task.materialsMd}
 			<div class="mt-10">
-				<h2 class="mb-2">Background Material</h2>
+				<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
 				<div class="task-background-material prose prose-neutral text-base leading-normal rounded-lg border border-border bg-card p-5 shadow-sm">
 					{@html renderMarkdown(task.materialsMd)}
 				</div>
@@ -117,7 +120,7 @@ function difficultyLabel(level: number): string {
 					<span class="flex items-center gap-1.5">
 						<Star size={14} strokeWidth={1.5} />
 						{task.pointReward}
-						pts
+						{t(lang, "task.points")}
 					</span>
 				</div>
 

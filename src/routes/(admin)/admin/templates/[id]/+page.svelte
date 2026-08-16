@@ -46,7 +46,7 @@ const canConfirmImport = $derived(importPreview?.ok === true);
 const templateExportJson = $derived(
 	JSON.stringify(
 		{
-			version: 1,
+			version: 2,
 			template: {
 				language: data.template.language,
 				interactionType: data.template.interactionType,
@@ -58,15 +58,19 @@ const templateExportJson = $derived(
 				pointReward: data.template.pointReward,
 				gemReward: data.template.gemReward,
 				isActive: data.template.isActive,
-				agentStartsFirst: data.template.agentStartsFirst,
 				titleBase: data.template.titleBase,
-				shortObjectiveBase: data.template.shortObjectiveBase,
 				descriptionBase: data.template.descriptionBase,
 				agentPromptBase: data.template.agentPromptBase,
-				materialsMd: data.template.materialsMd,
 				objectivesBase: data.template.objectivesBase,
-				translationBase: data.template.translationBase,
+				translationReference: data.template.translationReference,
 				tags: data.template.tags,
+				...(data.template.interactionType === "translate"
+					? {}
+					: {
+							agentStartsFirst: data.template.agentStartsFirst,
+							shortObjectiveBase: data.template.shortObjectiveBase,
+							materialsMd: data.template.materialsMd,
+						}),
 			},
 			variants:
 				data.template.interactionType === "translate"
@@ -126,7 +130,7 @@ function statusClass(status: "Edited" | "Created" | "Deactivated") {
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1>Edit Template #{data.template.id}</h1>
+		<h1 class="text-3xl">Edit Template #{data.template.id}</h1>
 	</div>
 
 	<ActionNotification notification={actionNotification} />

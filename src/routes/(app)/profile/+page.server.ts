@@ -10,7 +10,6 @@ import { db } from "$lib/server/db";
 import { userApiKey } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
-import { switchActiveLanguage } from "../user-language-action";
 import type { Actions, PageServerLoad } from "./$types";
 
 /**
@@ -91,6 +90,7 @@ export const actions: Actions = {
 			name: formData.get("name")?.toString() ?? undefined,
 			timezone: formData.get("timezone")?.toString() ?? undefined,
 			nativeLanguage: formData.get("nativeLanguage")?.toString() ?? undefined,
+			feedbackLanguagePreference: formData.get("feedbackLanguagePreference")?.toString() ?? undefined,
 			apiKey: formData.get("apiKey")?.toString() || undefined,
 			apiBaseUrl: formData.get("apiBaseUrl")?.toString() || undefined,
 			apiModel: formData.get("apiModel")?.toString() || undefined,
@@ -149,8 +149,6 @@ export const actions: Actions = {
 		await db.delete(userApiKey).where(eq(userApiKey.userId, user.id));
 		return { success: true };
 	},
-
-	switchLanguage: switchActiveLanguage,
 
 	signOut: async (event) => {
 		requireUser(event);

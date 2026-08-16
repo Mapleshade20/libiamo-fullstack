@@ -22,6 +22,55 @@
       "when": 1782304798471,
       "tag": "0002_trial_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783675740407,
+      "tag": "0003_translation_source_sets",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783680060724,
+      "tag": "0004_remove_translation_prompt_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783753652033,
+      "tag": "0005_support_translation_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785074719876,
+      "tag": "0006_redesign_translation_evaluation",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785075196459,
+      "tag": "0007_note_variant_shuffle_bag",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785078014993,
+      "tag": "0008_workflow_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785250055915,
+      "tag": "0009_vocab_notes",
+      "breakpoints": true
     }
   ]
 }

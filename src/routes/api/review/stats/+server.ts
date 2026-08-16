@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-import { getReviewStats } from "$lib/server/review-cards";
+import { getReviewStats } from "$lib/server/review";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async (event) => {

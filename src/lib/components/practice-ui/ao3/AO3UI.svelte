@@ -286,7 +286,7 @@ function handleFinishCancel() {
 		</nav>
 	</header>
 
-	<main class="mx-auto w-[92%] max-w-[1200px] pt-6 pb-12">
+	<div class="mx-auto w-[92%] max-w-[1200px] pt-6 pb-12">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<a href={`/task/${taskId}`} class="text-[#900] hover:border-b hover:border-dotted hover:border-[#900]">← {t.returnTask}</a>
 			{#if !session.isCompleted && session.sessionId}
@@ -425,7 +425,7 @@ function handleFinishCancel() {
 				{/each}
 			</ol>
 		</section>
-	</main>
+	</div>
 </div>
 
 <BottomSheet

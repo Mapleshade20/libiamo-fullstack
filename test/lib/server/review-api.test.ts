@@ -1,82 +1,90 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateCardFromNote } = vi.hoisted(() => ({
-	mockCreateCardFromNote: vi.fn(),
+const { mockGetDueNotes, mockGetReviewStats, mockRateNote, MockReviewCardNotDueError } = vi.hoisted(() => {
+	class MockReviewCardNotDueError extends Error {}
+	return {
+		mockGetDueNotes: vi.fn(),
+		mockGetReviewStats: vi.fn(),
+		mockRateNote: vi.fn(),
+		MockReviewCardNotDueError,
+	};
+});
+
+vi.mock("$lib/server/review", () => ({
+	getDueNotes: mockGetDueNotes,
+	getReviewStats: mockGetReviewStats,
+	rateNote: mockRateNote,
+	ReviewCardNotDueError: MockReviewCardNotDueError,
 }));
 
-vi.mock("$lib/server/review-cards", () => ({
-	createCardFromNote: mockCreateCardFromNote,
-	getDueCards: vi.fn(),
-	getReviewStats: vi.fn(),
-	rateCard: vi.fn(),
-	noteHasCard: vi.fn(),
-}));
-vi.mock("$lib/server/llm", () => ({
-	llmErrorStatus: () => 500,
-	llmErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "The AI request failed. Please try again."),
-}));
-
-import { POST as rateCard } from "../../../src/routes/api/review/[cardId]/rate/+server";
-import { POST as createCard } from "../../../src/routes/api/review/create-card/+server";
-import { GET as dueCards } from "../../../src/routes/api/review/due/+server";
+import { POST as rateNote } from "../../../src/routes/api/review/[noteId]/rate/+server";
+import { GET as dueNotes } from "../../../src/routes/api/review/due/+server";
 import { GET as stats } from "../../../src/routes/api/review/stats/+server";
 
-function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<string, string> }) {
+function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<string, string>; invalidJson?: boolean }) {
 	return {
 		locals: { user: overrides.user ?? null },
 		request: {
-			json: async () => overrides.body ?? {},
+			json: overrides.invalidJson ? async () => Promise.reject(new SyntaxError("invalid")) : async () => overrides.body ?? {},
 		},
 		params: overrides.params ?? {},
-	} as any;
+	} as never;
 }
 
 beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-describe("POST /api/review/create-card", () => {
-	it("returns 401 when unauthenticated", async () => {
-		const res = await createCard(mockEvent({ user: null }));
-		expect(res.status).toBe(401);
-	});
-
-	it("returns 400 for invalid body", async () => {
-		const res = await createCard(mockEvent({ user: { id: "u" }, body: { noteId: "abc" } }));
-		expect(res.status).toBe(400);
-	});
-
-	it("creates card successfully", async () => {
-		mockCreateCardFromNote.mockResolvedValueOnce({ created: true });
-		const res = await createCard(mockEvent({ user: { id: "u" }, body: { noteId: 1 } }));
-		expect(res.status).toBe(200);
-		const data = await res.json();
-		expect(data.created).toBe(true);
-	});
-});
-
 describe("GET /api/review/due", () => {
-	it("returns 401 when unauthenticated", async () => {
-		const res = await dueCards(mockEvent({ user: null }));
-		expect(res.status).toBe(401);
+	it("requires authentication", async () => {
+		expect((await dueNotes(mockEvent({ user: null }))).status).toBe(401);
+	});
+
+	it("returns due Notes and stats for the active language", async () => {
+		mockGetDueNotes.mockResolvedValue([{ id: 1, front: "Prompt", back: "Answer" }]);
+		mockGetReviewStats.mockResolvedValue({ dueToday: 1 });
+		const response = await dueNotes(mockEvent({ user: { id: "u", activeLanguage: "fr" } }));
+		expect(await response.json()).toEqual({
+			cards: [{ id: 1, front: "Prompt", back: "Answer" }],
+			stats: { dueToday: 1 },
+		});
+		expect(mockGetDueNotes).toHaveBeenCalledWith("u", "fr", 20);
 	});
 });
 
 describe("GET /api/review/stats", () => {
-	it("returns 401 when unauthenticated", async () => {
-		const res = await stats(mockEvent({ user: null }));
-		expect(res.status).toBe(401);
+	it("requires authentication", async () => {
+		expect((await stats(mockEvent({ user: null }))).status).toBe(401);
 	});
 });
 
-describe("POST /api/review/[cardId]/rate", () => {
-	it("returns 401 when unauthenticated", async () => {
-		const res = await rateCard(mockEvent({ user: null }));
-		expect(res.status).toBe(401);
+describe("POST /api/review/[noteId]/rate", () => {
+	it("requires authentication and validates the Note ID", async () => {
+		expect((await rateNote(mockEvent({ user: null }))).status).toBe(401);
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "xyz" } }))).status).toBe(400);
 	});
 
-	it("returns 400 for invalid cardId", async () => {
-		const res = await rateCard(mockEvent({ user: { id: "u" }, params: { cardId: "xyz" } }));
-		expect(res.status).toBe(400);
+	it("rejects invalid JSON and invalid rating data", async () => {
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "1" }, invalidJson: true }))).status).toBe(400);
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "1" }, body: { rating: 9, elapsedSeconds: -1 } }))).status).toBe(400);
+	});
+
+	it("rates an owned Note", async () => {
+		mockRateNote.mockResolvedValue({ nextDue: "2026-01-01T00:00:00.000Z" });
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(200);
+		expect(mockRateNote).toHaveBeenCalledWith(12, "u", 3, 14);
+	});
+
+	it("maps a missing Note to 404", async () => {
+		mockRateNote.mockRejectedValue(new Error("Note not found"));
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(404);
+	});
+
+	it("maps a card outside the review window to 409", async () => {
+		mockRateNote.mockRejectedValue(new MockReviewCardNotDueError("Note is not due for review"));
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(409);
 	});
 });

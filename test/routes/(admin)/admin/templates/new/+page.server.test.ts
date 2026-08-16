@@ -66,6 +66,20 @@ const validTemplateEntries: Record<string, string> = {
 	firstVariantOpeningState: JSON.stringify({ previousMessages: [] }),
 };
 
+const validTranslationEntries: Record<string, string> = {
+	language: "fr",
+	interactionType: "translate",
+	ui: "translator",
+	cadence: "none",
+	difficulty: "2",
+	pointReward: "10",
+	gemReward: "5",
+	titleBase: "A letter",
+	descriptionBase: "Translate a personal letter.",
+	agentPromptBase: "a letter to a close friend",
+	translationReference: "Bonjour.",
+};
+
 describe("Admin Templates New +page.server", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -166,6 +180,18 @@ describe("Admin Templates New +page.server", () => {
 			});
 
 			expect(mockTransaction).toHaveBeenCalled();
+		});
+
+		it("clears unsupported translation fields before insert", async () => {
+			const event = createEvent({
+				...validTranslationEntries,
+				agentStartsFirst: "on",
+				shortObjectiveBase: "Translate this letter.",
+				materialsMd: "# Background",
+			});
+
+			await expect(actions.create(event)).rejects.toMatchObject({ status: 302, location: "/admin/templates" });
+			expect(mockValues).toHaveBeenCalledWith(expect.objectContaining({ agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null }));
 		});
 
 		it("marks contribution as approved when fromContributionId is provided", async () => {

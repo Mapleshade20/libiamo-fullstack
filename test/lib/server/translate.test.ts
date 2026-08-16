@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LanguageCode } from "$lib/constants";
-import { LANGUAGE_LABELS } from "$lib/constants";
+import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
 import { buildEvaluationPrompt, buildExpressionsPrompt } from "$lib/server/translate";
 
 const { mockChatJson } = vi.hoisted(() => ({
@@ -28,8 +27,8 @@ const lang = (code: string): LanguageCode => code as LanguageCode;
 describe("buildExpressionsPrompt", () => {
 	it("includes native and target language names in the prompt", () => {
 		const prompt = buildExpressionsPrompt(lang("en"), lang("fr"));
-		expect(prompt).toContain(LANGUAGE_LABELS.en);
-		expect(prompt).toContain(LANGUAGE_LABELS.fr);
+		expect(prompt).toContain(getLanguageEnglishName("en"));
+		expect(prompt).toContain(getLanguageEnglishName("fr"));
 		expect(prompt).toContain("JSON array of strings");
 	});
 
@@ -43,8 +42,8 @@ describe("buildExpressionsPrompt", () => {
 describe("buildEvaluationPrompt", () => {
 	it("includes native and target language names", () => {
 		const prompt = buildEvaluationPrompt(lang("en"), lang("ja"));
-		expect(prompt).toContain(LANGUAGE_LABELS.en);
-		expect(prompt).toContain(LANGUAGE_LABELS.ja);
+		expect(prompt).toContain(getLanguageEnglishName("en"));
+		expect(prompt).toContain(getLanguageEnglishName("ja"));
 	});
 
 	it("includes evaluation criteria and JSON shape", () => {
@@ -60,16 +59,16 @@ describe("buildEvaluationPrompt", () => {
 
 describe("generateExpressions", () => {
 	it("returns structured expressions from chatJson", async () => {
-		mockChatJson.mockResolvedValueOnce(["Could I have the check, please?", "Is this seat taken?"]);
+		mockChatJson.mockResolvedValueOnce({ value: ["Could I have the check, please?", "Is this seat taken?"] });
 
 		const result = await generateExpressions({ title: "Ordering at a café" }, lang("en"), lang("fr"), "user-1");
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
 		expect(mockChatJson).toHaveBeenCalledWith(
-			expect.anything(),
 			expect.objectContaining({
+				schema: expect.anything(),
 				messages: [
-					expect.objectContaining({ role: "system", content: expect.stringContaining("expert Français language teacher") }),
+					expect.objectContaining({ role: "system", content: expect.stringContaining("expert French language teacher") }),
 					expect.objectContaining({ role: "user", content: expect.stringContaining("Ordering at a café") }),
 				],
 				options: { temperature: 0.7, maxTokens: 1024 },
@@ -79,7 +78,7 @@ describe("generateExpressions", () => {
 	});
 
 	it("passes task context details to the LLM", async () => {
-		mockChatJson.mockResolvedValueOnce(["One expression"]);
+		mockChatJson.mockResolvedValueOnce({ value: ["One expression"] });
 
 		await generateExpressions(
 			{
@@ -93,7 +92,7 @@ describe("generateExpressions", () => {
 			lang("fr"),
 		);
 
-		const userMessage = mockChatJson.mock.calls[0][1].messages[1].content as string;
+		const userMessage = mockChatJson.mock.calls[0][0].messages[1].content as string;
 		expect(userMessage).toContain("Writing an email");
 		expect(userMessage).toContain("formal email");
 		expect(userMessage).toContain("Use proper salutations");
@@ -106,8 +105,10 @@ describe("generateExpressions", () => {
 describe("evaluateUserTranslation", () => {
 	it("returns structured feedback and correction from chatJson", async () => {
 		mockChatJson.mockResolvedValueOnce({
-			feedback: "Good attempt! The word order needs adjustment.",
-			correction: "Je voudrais un café au lait, s'il vous plaît.",
+			value: {
+				feedback: "Good attempt! The word order needs adjustment.",
+				correction: "Je voudrais un café au lait, s'il vous plaît.",
+			},
 		});
 
 		const result = await evaluateUserTranslation(
@@ -121,8 +122,8 @@ describe("evaluateUserTranslation", () => {
 		expect(result.feedback).toContain("Good attempt");
 		expect(result.correction).toContain("café au lait");
 		expect(mockChatJson).toHaveBeenCalledWith(
-			expect.any(Object),
 			expect.objectContaining({
+				schema: expect.any(Object),
 				messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Je voudrais") })]),
 				userId: "user-1",
 			}),

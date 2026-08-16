@@ -24,7 +24,7 @@ export type MessageAnnotation = {
 	annotatedText: string;
 	/** Parsed annotation spans for interaction */
 	spans: AnnotationSpan[];
-	/** Tutor comment for this message (may contain <highlight> tags) */
+	/** Tutor comment for this message (may contain semantic <mark> tags) */
 	comment: string;
 };
 
@@ -38,6 +38,8 @@ export type ObjectiveGrade = {
 // ── Complete feedback result ─────────────────────────────────────────
 
 export type FeedbackResult = {
+	/** Concrete language resolved and frozen when this feedback was generated. */
+	feedbackLanguage: string;
 	annotations: MessageAnnotation[];
 	objectives: ObjectiveGrade[];
 	summary: string;

@@ -4,6 +4,7 @@ import X from "@lucide/svelte/icons/x";
 import { slide } from "svelte/transition";
 import { enhance } from "$app/forms";
 import { page } from "$app/state";
+import { type NavbarTransitionDirection, setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
 import WineGlassIcon from "./WineGlassIcon.svelte";
 
@@ -11,6 +12,8 @@ interface NavItem {
 	href: string;
 	label: string;
 	exact?: boolean;
+	sectionPaths?: string[];
+	transitionDirection?: NavbarTransitionDirection;
 }
 
 type TrialQuotaNavBalance = {
@@ -30,9 +33,8 @@ let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props 
 
 // --- Nav items ---
 const appItems: NavItem[] = $derived([
-	{ href: "/translate", label: "Translate" },
 	{ href: "/review", label: "Review" },
-	{ href: "/", label: "Quests", exact: true },
+	{ href: "/", label: "Quests", exact: true, sectionPaths: ["/task", "/translate"] },
 	{ href: "/archive", label: "Archive" },
 	...(user.role !== "admin" ? [{ href: "/contribute", label: "Contribute" }] : []),
 	...(user.role === "admin" ? [{ href: "/admin/templates", label: "Admin" }] : []),
@@ -42,14 +44,17 @@ const adminItems: NavItem[] = [
 	{ href: "/admin/templates", label: "Templates" },
 	{ href: "/admin/schedule", label: "Schedule" },
 	{ href: "/admin/reviews", label: "Reviews" },
-	{ href: "/", label: "\u2190 App", exact: true },
+	{ href: "/", label: "\u2190 App", exact: true, transitionDirection: "backward" },
 ];
 
 const navItems = $derived(mode === "app" ? appItems : adminItems);
 
 // --- Active index ---
 function matchIndex(items: NavItem[], pathname: string): number {
-	return items.findIndex((item) => (item.exact ? pathname === item.href : pathname.startsWith(item.href)));
+	return items.findIndex((item) => {
+		if (item.sectionPaths?.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
+		return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+	});
 }
 
 let activeIndex = $derived(matchIndex(navItems, page.url.pathname));
@@ -128,6 +133,14 @@ function closeMobile() {
 	mobileOpen = false;
 }
 
+function prepareNavbarTransition(event: MouseEvent, item: NavItem, targetIndex: number) {
+	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+	if (activeIndex < 0 || targetIndex === activeIndex) return;
+
+	const direction = item.transitionDirection ?? (targetIndex > activeIndex ? "forward" : "backward");
+	setNavbarTransitionIntent(new URL(item.href, page.url), direction);
+}
+
 function quotaPercentage(balance: TrialQuotaNavBalance) {
 	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
 }
@@ -162,6 +175,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 					class="py-1 transition-colors duration-200 {i === activeIndex
 						? 'text-foreground font-bold'
 						: 'text-muted-foreground hover:text-foreground'}"
+					onclick={(event) => prepareNavbarTransition(event, item, i)}
 					onmouseenter={() => (hoveredIndex = i)}
 					onmouseleave={() => (hoveredIndex = null)}
 				>
@@ -284,7 +298,10 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 				{#each navItems as item, i}
 					<a
 						href={item.href}
-						onclick={closeMobile}
+						onclick={(event) => {
+							prepareNavbarTransition(event, item, i);
+							closeMobile();
+						}}
 						class="rounded-md px-3 py-2.5 text-sm font-medium tracking-wide uppercase transition-colors {i === activeIndex
 							? 'text-foreground bg-foreground/5 font-bold'
 							: 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]'}"

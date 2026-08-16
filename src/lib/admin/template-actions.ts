@@ -110,13 +110,25 @@ const importedTemplateSchema = z
 		agentPromptBase: nullableString,
 		materialsMd: nullableString,
 		objectivesBase: nullableStringArray,
-		translationBase: z.array(z.array(z.string())).nullable().optional(),
+		translationReference: z.array(z.string().min(1)).nullable().optional(),
 		tags: nullableStringArray,
 	})
 	.refine((data) => (data.interactionType === "translate") === (data.ui === "translator"), {
 		message: 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise',
 		path: ["ui"],
-	});
+	})
+	.superRefine((data, ctx) => {
+		if (data.interactionType !== "translate") return;
+		if (!data.agentPromptBase?.trim()) {
+			ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
+		}
+		if (!data.translationReference?.length) {
+			ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
+		}
+	})
+	.transform((data) =>
+		data.interactionType === "translate" ? { ...data, agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null } : data,
+	);
 
 const importedVariantSchema = z.object({
 	id: z.number().int().positive().optional(),

@@ -15,15 +15,16 @@ vi.mock("$lib/server/llm", () => ({
 	chatText: vi.fn(),
 }));
 
-import { buildFeedbackConversation, followUpOnFeedback } from "$lib/server/feedback";
-import { chatJson } from "$lib/server/llm";
+import { buildAnnotationPrompt, buildFeedbackConversation, followUpOnFeedback, generateFeedback } from "$lib/server/feedback";
+import { chatJson, chatText } from "$lib/server/llm";
 
 const mockChatJson = chatJson as ReturnType<typeof vi.fn>;
+const mockChatText = chatText as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	vi.clearAllMocks();
 	mockDb.query.practiceSession.findFirst.mockResolvedValue({ task: { language: "es" } });
-	mockChatJson.mockResolvedValue({ answer: "Helpful explanation" });
+	mockChatJson.mockResolvedValue({ value: { answer: "Helpful explanation" } });
 });
 
 type SessionMessageRow = {
@@ -169,6 +170,7 @@ describe("followUpOnFeedback", () => {
 		await followUpOnFeedback({
 			sessionId: 42,
 			userId: "user-1",
+			feedbackLanguage: "zh",
 			itemText: "yo fue",
 			category: "grammar",
 			question: "Explain this issue in detail with examples.",
@@ -177,17 +179,19 @@ describe("followUpOnFeedback", () => {
 			currentContext: "[You] yo fue al mercado",
 		});
 
-		const systemPrompt = mockChatJson.mock.calls[0]?.[1]?.messages?.[0]?.content as string;
+		const systemPrompt = mockChatJson.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
 		expect(systemPrompt).toContain("Type: Feedback issue");
 		expect(systemPrompt).toContain("Previous visible message/context:\n[Agent] ¿Qué hiciste ayer?");
 		expect(systemPrompt).toContain("Original current message/comment context:\n[You] yo fue al mercado");
 		expect(systemPrompt).toContain("Treat the selected text as an issue");
+		expect(systemPrompt).toContain("entire answer in Chinese");
 	});
 
-	it("uses good-expression wording for Tutor Comment highlights", async () => {
+	it("uses good-expression wording for marked Tutor Comment phrases", async () => {
 		await followUpOnFeedback({
 			sessionId: 42,
 			userId: "user-1",
+			feedbackLanguage: "es",
 			itemText: "me parece que",
 			category: "vocabulary",
 			question: "Explain why this is a useful expression and give examples of how to use it.",
@@ -196,10 +200,91 @@ describe("followUpOnFeedback", () => {
 			currentContext: "Learner message: Me parece que es buena idea.\nTutor comment: me parece que is a useful opinion phrase.",
 		});
 
-		const systemPrompt = mockChatJson.mock.calls[0]?.[1]?.messages?.[0]?.content as string;
+		const systemPrompt = mockChatJson.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
 		expect(systemPrompt).toContain("Type: Good expression");
 		expect(systemPrompt).toContain("Treat the selected text as a good/natural expression worth learning, not as a mistake.");
 		expect(systemPrompt).toContain("Tutor comment: me parece que is a useful opinion phrase.");
 		expect(systemPrompt).not.toContain("Treat the selected text as an issue");
+		expect(systemPrompt).toContain("brief Spanish explanations");
+	});
+});
+
+describe("buildAnnotationPrompt", () => {
+	const conversation = {
+		chains: [],
+		allMessages: [{ seqId: 1, role: "user" as const, author: "You", text: "Yo fue ayer.", chainIndex: 0 }],
+	};
+
+	it.each([
+		["zh", "Chinese"],
+		["es", "Spanish"],
+	])("locks comments, objectives, and summary to %s", (feedbackLanguage, languageName) => {
+		const prompt = buildAnnotationPrompt({
+			conversation,
+			objectives: ["Use the past tense"],
+			learningLanguage: "es",
+			feedbackLanguage,
+			scenarioContext: "A conversation about yesterday",
+		});
+
+		expect(prompt).toContain(`brief ${languageName} comment`);
+		expect(prompt).toContain(`objective's learner-facing text in ${languageName}`);
+		expect(prompt).toContain(`overall summary in ${languageName}`);
+		expect(prompt).toContain("EXACT same words as the original learner message");
+		expect(prompt).toContain("<mark>word</mark>");
+		expect(prompt).not.toContain("<highlight>");
+	});
+});
+
+describe("generateFeedback", () => {
+	const existingFeedback = {
+		feedbackLanguage: "zh",
+		annotations: [{ messageId: 1, annotatedText: "你好", spans: [], comment: "很好" }],
+		objectives: [{ text: "流利表达", grade: "A" as const }],
+		summary: "完成得很好。",
+	};
+
+	it("returns persisted feedback without regenerating or changing its language", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			id: 42,
+			userId: "user-1",
+			status: "evaluated",
+			tutorFeedback: existingFeedback,
+			agentPromptSnapshot: {},
+			task: { language: "es", objectives: [], template: { ui: "discord" }, variant: { openingState: {} } },
+			messages: [],
+		});
+
+		await expect(generateFeedback({ sessionId: 42, feedbackLanguage: "es" })).resolves.toEqual(existingFeedback);
+		expect(mockChatText).not.toHaveBeenCalled();
+		expect(mockDb.update).not.toHaveBeenCalled();
+	});
+
+	it("persists only while feedback is still absent", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			id: 42,
+			userId: "user-1",
+			status: "completed",
+			tutorFeedback: null,
+			agentPromptSnapshot: {},
+			task: { language: "es", objectives: [], template: { ui: "discord" }, variant: { openingState: {} } },
+			messages: [{ id: 1, role: "user", content: "Hola", createdAt: new Date("2026-01-01T00:00:00Z"), llmMetadata: null }],
+		});
+		mockChatText.mockResolvedValue({
+			content:
+				'<feedback><message id="1"><annotated>Hola</annotated><comment>Bien.</comment></message><objectives><objective grade="A">Fluidez</objective></objectives><summary>Bien.</summary></feedback>',
+		});
+		const returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		const where = vi.fn(() => ({ returning }));
+		const set = vi.fn(() => ({ where }));
+		mockDb.update.mockReturnValue({ set });
+
+		const result = await generateFeedback({ sessionId: 42, feedbackLanguage: "es" });
+
+		expect(result.feedbackLanguage).toBe("es");
+		expect(set).toHaveBeenCalledWith(
+			expect.objectContaining({ status: "evaluated", tutorFeedback: expect.objectContaining({ feedbackLanguage: "es" }) }),
+		);
+		expect(where).toHaveBeenCalledOnce();
 	});
 });

@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted(() => ({
 	mockArchiveService: {
-		listCompletedSessions: vi.fn(),
+		listCompletedActivities: vi.fn(),
 	},
 	mockNoteService: {
-		updateNote: vi.fn(),
 		deleteNote: vi.fn(),
 		getNote: vi.fn(),
 	},
 	mockSessionService: {
 		followUpOnFeedback: vi.fn(),
+		followUpOnLearningContent: vi.fn(),
 	},
 }));
 
@@ -29,7 +29,7 @@ describe("archive page server", () => {
 		vi.resetAllMocks();
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", nativeLanguage: "en" };
 
 	const createFormEvent = ({ user = mockUser, values = {} }: { user?: typeof mockUser | null; values?: Record<string, string> } = {}) => {
 		const formData = new FormData();
@@ -47,110 +47,27 @@ describe("archive page server", () => {
 			const mockGroups = [
 				{
 					label: "Today",
-					sessions: [
+					activities: [
 						{
 							id: 1,
 							taskTitle: "Ordering coffee",
 							ui: "discord",
 							completedAt: new Date(),
-							notes: [{ id: 1, tutorComment: "Use past tense", keywords: ["past tense"], sourceContext: "I go yesterday." }],
+							notes: [{ id: 1, vocab: "decide", targetDefinition: "to make a choice", nativeDefinition: "决定" }],
 						},
 					],
 				},
 			];
-			mockArchiveService.listCompletedSessions.mockResolvedValue(mockGroups);
+			mockArchiveService.listCompletedActivities.mockResolvedValue(mockGroups);
 
 			const result = await load({ locals: { user: mockUser } } as any);
 
 			expect(result).toEqual({ groups: mockGroups });
-			expect(mockArchiveService.listCompletedSessions).toHaveBeenCalledWith("user_123");
+			expect(mockArchiveService.listCompletedActivities).toHaveBeenCalledWith("user_123");
 		});
 
 		it("redirects when unauthenticated", async () => {
 			await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
-		});
-	});
-
-	describe("actions.update", () => {
-		it("returns success when note is updated", async () => {
-			mockNoteService.updateNote.mockResolvedValue({ id: 1, tutorComment: "Updated content" });
-
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "42", tutorComment: "Updated content" },
-				}),
-			);
-
-			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated content" } });
-			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				tutorComment: "Updated content",
-				keywords: [],
-			});
-		});
-
-		it("parses keywords from form data", async () => {
-			mockNoteService.updateNote.mockResolvedValue({ id: 1, tutorComment: "Updated" });
-
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "42", tutorComment: "Updated", keywords: "past tense,  , yesterday" },
-				}),
-			);
-
-			expect(result).toEqual({ success: true, note: { id: 1, tutorComment: "Updated" } });
-			expect(mockNoteService.updateNote).toHaveBeenCalledWith(42, "user_123", {
-				tutorComment: "Updated",
-				keywords: ["past tense", "yesterday"],
-			});
-		});
-
-		it("redirects before parsing form data when unauthenticated", async () => {
-			const event = createFormEvent({
-				user: null,
-				values: { noteId: "42", tutorComment: "Updated" },
-			});
-
-			await expect(actions.update(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
-			expect(event.request.formData).not.toHaveBeenCalled();
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 400 when noteId is invalid", async () => {
-			const result = await actions.update(
-				createFormEvent({
-					values: { noteId: "not-a-number", tutorComment: "Updated" },
-				}),
-			);
-
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid note ID" } });
-		});
-
-		it("returns fail 400 when tutorComment is missing", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42" } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
-		});
-
-		it("returns fail 400 when tutorComment is whitespace only", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "   " } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is required" } });
-		});
-
-		it("returns fail 400 when tutorComment is too long", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "x".repeat(10001) } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Content is too long" } });
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 400 when keywords are too long", async () => {
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated", keywords: "x".repeat(10001) } }));
-			expect(result).toMatchObject({ status: 400, data: { error: "Keywords are too long" } });
-			expect(mockNoteService.updateNote).not.toHaveBeenCalled();
-		});
-
-		it("returns fail 404 when note not found", async () => {
-			mockNoteService.updateNote.mockResolvedValue(undefined);
-			const result = await actions.update(createFormEvent({ values: { noteId: "42", tutorComment: "Updated" } }));
-			expect(result).toMatchObject({ status: 404, data: { error: "Note not found" } });
 		});
 	});
 
@@ -201,7 +118,10 @@ describe("archive page server", () => {
 			id: 42,
 			sourceSessionId: 99,
 			userId: "user_123",
-			tutorComment: "Incorrect verb conjugation",
+			language: "es",
+			vocab: "tomar una decisión",
+			targetDefinition: "elegir qué hacer tras considerar las opciones",
+			nativeDefinition: "作出决定",
 		};
 
 		it("returns success with answer when called correctly", async () => {
@@ -219,10 +139,30 @@ describe("archive page server", () => {
 			expect(mockSessionService.followUpOnFeedback).toHaveBeenCalledWith({
 				sessionId: 99,
 				userId: "user_123",
-				itemText: "Incorrect verb conjugation",
-				category: "grammar",
+				feedbackLanguage: "en",
+				itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				category: "vocabulary",
 				question: "why",
+				currentContext: "elegir qué hacer tras considerar las opciones\n作出决定",
 			});
+		});
+
+		it("uses source-independent follow-up for a translation note", async () => {
+			mockNoteService.getNote.mockResolvedValue({
+				...mockNote,
+				sourceSessionId: null,
+				sourceTranslationAttemptId: 12,
+				language: "es",
+			});
+			mockSessionService.followUpOnLearningContent.mockResolvedValue({ answer: "Translation explanation" });
+			const result = await actions.followUp(createFormEvent({ values: { noteId: "42", question: "why" } }));
+			expect(result).toEqual({ success: true, answer: "Translation explanation" });
+			expect(mockSessionService.followUpOnLearningContent).toHaveBeenCalledWith(
+				expect.objectContaining({
+					learningLanguage: "es",
+					itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				}),
+			);
 		});
 
 		it.each([

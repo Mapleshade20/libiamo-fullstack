@@ -18,7 +18,7 @@ function submitFilters(event: Event) {
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1>Templates</h1>
+		<h1 class="text-3xl">Templates</h1>
 		<Button href="/admin/templates/new">New Template</Button>
 	</div>
 

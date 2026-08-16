@@ -11,11 +11,11 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 import { getPlainText, isFeedbackResultValid, parseAnnotationSpans, parseFeedbackXml, stripAllTags } from "$lib/server/feedback";
 
 describe("stripAllTags", () => {
-	it("removes annotation and highlight tags, leaving content", () => {
+	it("removes annotation and semantic mark tags, leaving content", () => {
 		expect(stripAllTags("hello <grammar>world</grammar>")).toBe("hello world");
 		expect(stripAllTags("<vocab>foo</vocab> bar")).toBe("foo bar");
 		expect(stripAllTags("a <delete>bad</delete> idea")).toBe("a bad idea");
-		expect(stripAllTags("use <highlight>this</highlight> word")).toBe("use this word");
+		expect(stripAllTags("use <mark>this</mark> word")).toBe("use this word");
 	});
 
 	it("handles text with no tags", () => {
@@ -71,11 +71,11 @@ describe("parseFeedbackXml", () => {
 	const validXml = `<feedback>
 <message id="1">
 <annotated>I <grammar>goed</grammar> to the <vocab>tienda</vocab> yesterday</annotated>
-<comment>Good attempt! Use <highlight>tienda</highlight> correctly.</comment>
+<comment>Good attempt! Use <mark>tienda</mark> correctly.</comment>
 </message>
 <message id="2">
 <annotated>I bought <grammar>manzanas y platanos</grammar></annotated>
-<comment>Wrong gender: <highlight>plátanos</highlight> is masculine.</comment>
+<comment>Wrong gender: <mark>plátanos</mark> is masculine.</comment>
 </message>
 <objectives>
 <objective grade="A">Greet the shopkeeper</objective>
@@ -192,6 +192,7 @@ describe("isFeedbackResultValid", () => {
 	it("returns true for result with annotations and summary", () => {
 		expect(
 			isFeedbackResultValid({
+				feedbackLanguage: "en",
 				annotations: [{ messageId: 1, annotatedText: "text", spans: [], comment: "good" }],
 				objectives: [],
 				summary: "Great!",
@@ -200,12 +201,13 @@ describe("isFeedbackResultValid", () => {
 	});
 
 	it("returns false when annotations empty", () => {
-		expect(isFeedbackResultValid({ annotations: [], objectives: [], summary: "Great!" })).toBe(false);
+		expect(isFeedbackResultValid({ feedbackLanguage: "en", annotations: [], objectives: [], summary: "Great!" })).toBe(false);
 	});
 
 	it("returns false when summary empty", () => {
 		expect(
 			isFeedbackResultValid({
+				feedbackLanguage: "en",
 				annotations: [{ messageId: 1, annotatedText: "text", spans: [], comment: "good" }],
 				objectives: [],
 				summary: "",

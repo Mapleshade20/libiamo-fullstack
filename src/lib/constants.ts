@@ -10,11 +10,11 @@ export const AUTH_TOKEN_MAX_LENGTH = 2048;
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_TEXT_MAX_LENGTH = 10000;
 export const USER_LONG_TEXT_MAX_LENGTH = 50000;
-export const USER_KEYWORDS_MAX_LENGTH = 10000;
 export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
 export const BYOK_BASE_URL_MAX_LENGTH = 2048;
 export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;
+export const REVIEW_MAXIMUM_INTERVAL_DAYS = 36_500;
 
 export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 	reddit: "Reddit",
@@ -132,15 +132,27 @@ export function getNativeLanguageOptions(locale = "en"): { value: NativeLanguage
 	}));
 }
 
-export const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
+const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Spanish",
 	fr: "French",
 	ja: "Japanese",
 };
 
+let englishLanguageDisplayNames: Intl.DisplayNames | undefined;
+try {
+	englishLanguageDisplayNames = new Intl.DisplayNames(["en"], { type: "language" });
+} catch {
+	englishLanguageDisplayNames = undefined;
+}
+
 export function getLanguageEnglishName(code: string): string {
-	return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+	const fallback = LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+	try {
+		return englishLanguageDisplayNames?.of(code) ?? fallback;
+	} catch {
+		return fallback;
+	}
 }
 
 export const INTERACTION_TYPES = ["chat", "slow", "translate"] as const;
@@ -155,13 +167,17 @@ export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 export const CADENCES = ["weekly", "daily", "none"] as const;
 export type Cadence = (typeof CADENCES)[number];
 
-// ── Review Cards ──────────────────────────────────────────────────────
-export const CARD_TYPES = ["vocabulary", "expression", "grammar", "correction"] as const;
-export type CardType = (typeof CARD_TYPES)[number];
+export const FEEDBACK_LANGUAGE_MODES = ["native", "target"] as const;
+export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
 
-export const CARD_TYPE_LABELS: Record<CardType, string> = {
-	vocabulary: "Vocabulary",
-	expression: "Expression",
-	grammar: "Grammar",
-	correction: "Correction",
-};
+export const TRANSLATION_WORKFLOW_PHASES = ["draft", "submitted", "correction", "second_draft", "transfer", "completed"] as const;
+export type TranslationWorkflowPhase = (typeof TRANSLATION_WORKFLOW_PHASES)[number];
+export const TRANSLATION_CANDIDATE_COUNT = 3;
+
+export function resolveFeedbackLanguage(input: {
+	preference: FeedbackLanguageMode;
+	nativeLanguage?: string | null;
+	targetLanguage: LanguageCode;
+}): string {
+	return input.preference === "native" && input.nativeLanguage ? input.nativeLanguage : input.targetLanguage;
+}

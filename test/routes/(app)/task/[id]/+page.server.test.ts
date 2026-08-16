@@ -204,7 +204,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("generates expressions with minimal task context", async () => {
-			mockChatJson.mockResolvedValueOnce(["Could I have the check?", "Where is the exit?"]);
+			mockChatJson.mockResolvedValueOnce({ value: ["Could I have the check?", "Where is the exit?"] });
 
 			const result = await actions.generateExpressions(
 				createActionEvent({
@@ -222,7 +222,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("generates expressions with full task context", async () => {
-			mockChatJson.mockResolvedValueOnce(["How do I address the professor?", "What is the formal greeting?"]);
+			mockChatJson.mockResolvedValueOnce({ value: ["How do I address the professor?", "What is the formal greeting?"] });
 
 			const result = await actions.generateExpressions(
 				createActionEvent({
@@ -243,7 +243,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("parses JSON inside markdown code fences", async () => {
-			mockChatJson.mockResolvedValueOnce(["One expression", "Two expressions"]);
+			mockChatJson.mockResolvedValueOnce({ value: ["One expression", "Two expressions"] });
 
 			const result = await actions.generateExpressions(createActionEvent({ title: "Test", nativeLanguage: "en", targetLanguage: "ja" }));
 
@@ -254,7 +254,7 @@ describe("Task detail +page.server", () => {
 		});
 
 		it("falls back to line extraction for non-JSON response", async () => {
-			mockChatJson.mockResolvedValueOnce(["Hello there", "How are you?", "Thank you"]);
+			mockChatJson.mockResolvedValueOnce({ value: ["Hello there", "How are you?", "Thank you"] });
 
 			const result = await actions.generateExpressions(createActionEvent({ title: "Greetings", nativeLanguage: "en", targetLanguage: "fr" }));
 
@@ -332,8 +332,10 @@ describe("Task detail +page.server", () => {
 
 		it("evaluates a perfect translation", async () => {
 			mockChatJson.mockResolvedValueOnce({
-				feedback: "Perfect! This is exactly how a native speaker would say it.",
-				correction: "Bonjour",
+				value: {
+					feedback: "Perfect! This is exactly how a native speaker would say it.",
+					correction: "Bonjour",
+				},
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -354,8 +356,10 @@ describe("Task detail +page.server", () => {
 
 		it("evaluates a translation with errors and provides correction", async () => {
 			mockChatJson.mockResolvedValueOnce({
-				feedback: "The word order is incorrect. In Spanish, adjectives usually come after nouns.",
-				correction: "El gato negro",
+				value: {
+					feedback: "The word order is incorrect. In Spanish, adjectives usually come after nouns.",
+					correction: "El gato negro",
+				},
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -376,8 +380,10 @@ describe("Task detail +page.server", () => {
 
 		it("parses JSON inside markdown code fences", async () => {
 			mockChatJson.mockResolvedValueOnce({
-				feedback: "Nice work!",
-				correction: "¿Cómo estás?",
+				value: {
+					feedback: "Nice work!",
+					correction: "¿Cómo estás?",
+				},
 			});
 
 			const result = await actions.evaluateTranslation(
@@ -398,8 +404,10 @@ describe("Task detail +page.server", () => {
 
 		it("handles non-JSON LLM response gracefully", async () => {
 			mockChatJson.mockResolvedValueOnce({
-				feedback: "This is a great translation attempt! Keep practicing.",
-				correction: "",
+				value: {
+					feedback: "This is a great translation attempt! Keep practicing.",
+					correction: "",
+				},
 			});
 
 			const result = await actions.evaluateTranslation(

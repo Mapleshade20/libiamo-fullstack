@@ -7,8 +7,10 @@ node_modules
 .netlify
 .wrangler
 /.svelte-kit
+/.pnpm-store
 /build
 /coverage
+/db
 
 # OS
 .DS_Store

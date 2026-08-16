@@ -44,7 +44,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	task: { id: "task.id", templateId: "task.templateId", variantId: "task.variantId" },
 	template: { id: "id", isActive: "isActive" },
 	templateVariant: { id: "id", templateId: "templateId", isActive: "isActive" },
-	translationAttempt: { id: "translationAttempt.id", templateId: "translationAttempt.templateId" },
+	translationSourceSet: { id: "translationSourceSet.id", templateId: "translationSourceSet.templateId" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -79,6 +79,20 @@ const validTemplateEntries: Record<string, string> = {
 	gemReward: "5",
 	titleBase: "Chat with {{friend}} about {{topic}}",
 	isActive: "on",
+};
+
+const validTranslationEntries: Record<string, string> = {
+	language: "fr",
+	interactionType: "translate",
+	ui: "translator",
+	cadence: "none",
+	difficulty: "2",
+	pointReward: "10",
+	gemReward: "5",
+	titleBase: "A letter",
+	descriptionBase: "Translate a personal letter.",
+	agentPromptBase: "a letter to a close friend",
+	translationReference: "Bonjour.",
 };
 
 const sampleTemplate = {
@@ -167,6 +181,22 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent(validTemplateEntries, "1");
 			const result = await actions.save(event);
 			expect(result).toEqual({ saved: true });
+		});
+
+		it("clears unsupported translation fields before update", async () => {
+			const event = createActionEvent(
+				{
+					...validTranslationEntries,
+					agentStartsFirst: "on",
+					shortObjectiveBase: "Translate this letter.",
+					materialsMd: "# Background",
+				},
+				"1",
+			);
+
+			expect(await actions.save(event)).toEqual({ saved: true });
+			const update = (db.update as any).mock.results[0].value;
+			expect(update.set).toHaveBeenCalledWith(expect.objectContaining({ agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null }));
 		});
 	});
 

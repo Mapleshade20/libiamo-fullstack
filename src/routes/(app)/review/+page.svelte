@@ -1,15 +1,18 @@
 <script lang="ts">
-import Flashcard from "$lib/components/review/Flashcard.svelte";
-import RatingButtons from "$lib/components/review/RatingButtons.svelte";
-import ReviewProgress from "$lib/components/review/ReviewProgress.svelte";
+import { untrack } from "svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
+import StudyCard from "$lib/components/review/StudyCard.svelte";
+import type { StudyCardAction } from "$lib/components/review/study-card";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
+import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review";
 
 let { data } = $props();
-let lang: LanguageCode = $derived(data.user.activeLanguage as LanguageCode);
-let currentIndex = $state(0);
-let flipped = $state(false);
+let lang: LanguageCode = $derived(data.reviewLanguage as LanguageCode);
+let queue = $state(untrack(() => [...data.cards]));
+let loadedLanguage = $state(untrack(() => data.reviewLanguage));
+let revealed = $state(false);
 let isSubmitting = $state(false);
 let cardsReviewed = $state(0);
 let sessionStart = $state(0);
@@ -17,17 +20,70 @@ let cardRevealedAt = $state(0);
 let sessionComplete = $state(false);
 let error = $state<string | null>(null);
 
-let currentCard = $derived(data.cards[currentIndex] ?? null);
+$effect(() => {
+	if (data.reviewLanguage === loadedLanguage) return;
+	loadedLanguage = data.reviewLanguage;
+	queue = [...data.cards];
+	revealed = false;
+	isSubmitting = false;
+	cardsReviewed = 0;
+	sessionStart = 0;
+	cardRevealedAt = 0;
+	sessionComplete = false;
+	error = null;
+});
 
-function flip() {
+let currentCard = $derived(queue[0] ?? null);
+let counts = $derived(countStudyQueue(queue));
+let countLabels = $derived({
+	new: t(lang, "review.count.new"),
+	learning: t(lang, "review.count.learning"),
+	review: t(lang, "review.count.review"),
+});
+let actions = $derived(
+	currentCard
+		? ([
+				{ id: "1", rating: 1, label: t(lang, "review.rating.again"), detail: currentCard.previewIntervals.again, shortcut: "1", tone: "again" },
+				{ id: "2", rating: 2, label: t(lang, "review.rating.hard"), detail: currentCard.previewIntervals.hard, shortcut: "2", tone: "hard" },
+				{ id: "3", rating: 3, label: t(lang, "review.rating.good"), detail: currentCard.previewIntervals.good, shortcut: "3", tone: "good" },
+				{ id: "4", rating: 4, label: t(lang, "review.rating.easy"), detail: currentCard.previewIntervals.easy, shortcut: "4", tone: "easy" },
+			] satisfies Array<StudyCardAction & { rating: number }>)
+		: [],
+);
+
+function reveal() {
 	if (isSubmitting) return;
 	if (sessionStart === 0) sessionStart = Date.now();
 	if (cardRevealedAt === 0) cardRevealedAt = Date.now();
-	flipped = true;
+	revealed = true;
+}
+
+type ReviewRateResult = {
+	queueKind: StudyQueueKind;
+	nextDue: string;
+	previewIntervals: { again: string; hard: string; good: string; easy: string };
+	nativeText: string;
+	targetText: string;
+};
+
+function isReviewRateResult(value: unknown): value is ReviewRateResult {
+	if (!value || typeof value !== "object") return false;
+	const result = value as Record<string, unknown>;
+	const intervals = result.previewIntervals as Record<string, unknown> | undefined;
+	return (
+		["new", "learning", "review"].includes(String(result.queueKind)) &&
+		typeof result.nextDue === "string" &&
+		Number.isFinite(new Date(result.nextDue).getTime()) &&
+		typeof result.nativeText === "string" &&
+		typeof result.targetText === "string" &&
+		!!intervals &&
+		["again", "hard", "good", "easy"].every((key) => typeof intervals[key] === "string")
+	);
 }
 
 async function rate(rating: number) {
 	if (isSubmitting || !currentCard) return;
+	const ratedCard = currentCard;
 	isSubmitting = true;
 
 	try {
@@ -38,51 +94,35 @@ async function rate(rating: number) {
 		});
 
 		if (!res.ok) throw new Error("Failed to submit rating");
+		const result: unknown = await res.json();
+		if (!isReviewRateResult(result)) throw new Error("Invalid review response");
 
 		cardsReviewed++;
-
-		if (currentIndex + 1 >= data.cards.length) {
-			sessionComplete = true;
-		} else {
-			currentIndex++;
-			flipped = false;
-			cardRevealedAt = Date.now();
-		}
+		queue = advanceReviewQueue(queue, {
+			...ratedCard,
+			queueKind: result.queueKind,
+			due: result.nextDue,
+			previewIntervals: result.previewIntervals,
+			nativeText: result.nativeText,
+			targetText: result.targetText,
+		});
+		sessionComplete = queue.length === 0;
+		revealed = false;
+		cardRevealedAt = 0;
 	} catch (e) {
-		error = e instanceof Error ? e.message : "Something went wrong";
+		error = e instanceof Error ? e.message : t(lang, "common.error");
 	} finally {
 		isSubmitting = false;
-	}
-}
-
-function handleKeydown(e: KeyboardEvent) {
-	if (sessionComplete) return;
-
-	if (!flipped && (e.key === " " || e.key === "Enter")) {
-		e.preventDefault();
-		flip();
-		return;
-	}
-
-	if (flipped && !isSubmitting) {
-		if (e.key === "1") rate(1);
-		else if (e.key === "2") rate(2);
-		else if (e.key === "3") rate(3);
-		else if (e.key === "4") rate(4);
 	}
 }
 </script>
 
 <svelte:head>
-	<title>Review · Libiamo</title>
-	<meta name="description" content="Review vocabulary, grammar, expressions, and corrections with spaced repetition.">
+	<title>{t(lang, "review.title")} · Libiamo</title>
+	<meta name="description" content={t(lang, "review.description")}>
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<div class="mx-auto max-w-xl pb-24 sm:pb-0">
-	<h1 class="mb-8 text-center text-3xl">{t(lang, "review.title")}</h1>
-
+<div>
 	{#if error}
 		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700">
 			{error}
@@ -94,18 +134,25 @@ function handleKeydown(e: KeyboardEvent) {
 		<div class="flex flex-col items-center gap-4 py-12">
 			<p class="text-xl text-muted-foreground">{t(lang, "review.empty")}</p>
 			<p class="text-base text-muted-foreground">{t(lang, "review.emptyHint")}</p>
-			<a href="/" class="text-base text-muted-foreground underline hover:text-foreground">{t(lang, "review.summary.backToHall")}</a>
 		</div>
 	{:else if currentCard}
-		<ReviewProgress current={currentIndex + 1} total={data.cards.length} {lang} />
-
-		<div onclick={flip} onkeydown={(e) => { if (e.key === "Enter") flip(); }} role="button" tabindex="0">
-			<Flashcard front={currentCard.front} back={currentCard.back} cardType={currentCard.cardType} {flipped} />
-		</div>
-
-		{#if flipped}
-			<RatingButtons preview={currentCard.previewIntervals} {lang} disabled={isSubmitting} onrate={rate} />
-		{/if}
+		<StudyCard
+			vocab={currentCard.vocab}
+			nativeDefinition={currentCard.nativeDefinition}
+			nativeText={currentCard.nativeText}
+			targetText={currentCard.targetText}
+			{revealed}
+			showAnswerLabel={t(lang, "review.showAnswer")}
+			{counts}
+			{countLabels}
+			{actions}
+			disabled={isSubmitting}
+			onreveal={reveal}
+			onaction={(id) => {
+				const action = actions.find((item) => item.id === id);
+				if (action) void rate(action.rating);
+			}}
+		/>
 	{:else}
 		<div class="space-y-4">
 			<Skeleton class="mx-auto h-80 w-full max-w-md rounded-2xl" />
@@ -113,9 +160,9 @@ function handleKeydown(e: KeyboardEvent) {
 		</div>
 	{/if}
 
-	{#if data.cardCount > 0}
-		<div class="mt-12 border-t border-border pt-6 text-center">
-			<a href="/review/cards" class="text-muted-foreground underline hover:text-foreground"> Manage cards ({data.cardCount}) </a>
+	{#if currentCard}
+		<div class="border-t border-border pt-6 text-center">
+			<a href="/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground">{t(lang, "review.editCurrent")}</a>
 		</div>
 	{/if}
 </div>

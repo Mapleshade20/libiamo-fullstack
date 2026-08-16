@@ -135,6 +135,12 @@
 		@apply bg-background text-foreground font-[350];
 	}
 
+	input,
+	textarea,
+	select {
+		@apply font-sans;
+	}
+
 	h1 {
 		@apply text-2xl font-medium font-serif;
 	}
@@ -319,27 +325,129 @@
 	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
 }
 
-/* View Transitions: page content crossfade with blur & scale */
-::view-transition-old(page-content) {
-	animation: 600ms cubic-bezier(0.22, 1, 0.36, 1) both vt-page-exit;
+/* View Transitions: quick crossfade for ordinary in-section navigation */
+html[data-page-transition$="fade"]::view-transition-group(root),
+html[data-page-transition$="fade"]::view-transition-group(page-content) {
+	animation-duration: 170ms;
+	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::view-transition-new(page-content) {
-	animation: 600ms cubic-bezier(0.22, 1, 0.36, 1) both vt-page-enter;
+html[data-page-transition$="fade"]::view-transition-old(root),
+html[data-page-transition$="fade"]::view-transition-old(page-content) {
+	animation: 170ms cubic-bezier(0.4, 0, 1, 1) both vt-page-fade-out;
 }
 
-@keyframes vt-page-exit {
+html[data-page-transition$="fade"]::view-transition-new(root),
+html[data-page-transition$="fade"]::view-transition-new(page-content) {
+	animation: 170ms cubic-bezier(0, 0, 0.2, 1) both vt-page-fade-in;
+}
+
+html[data-page-transition="section-fade"] .review-route-header {
+	view-transition-name: review-route-header;
+}
+
+html[data-page-transition="section-fade"]::view-transition-group(review-route-header),
+html[data-page-transition="section-fade"]::view-transition-new(review-route-header) {
+	animation: none;
+}
+
+html[data-page-transition="section-fade"]::view-transition-old(review-route-header) {
+	display: none;
+}
+
+/* View Transitions: directional editorial sweep between navbar sections */
+html[data-page-transition^="navbar-"] {
+	--page-slide-distance: clamp(8rem, 24vw, 24rem);
+}
+
+html[data-page-transition^="navbar-"]::view-transition-old(root),
+html[data-page-transition^="navbar-"]::view-transition-new(root) {
+	animation: none;
+}
+
+html[data-page-transition^="navbar-"]::view-transition-group(page-content) {
+	animation-duration: 520ms;
+	animation-timing-function: cubic-bezier(0.65, 0, 0.15, 1);
+}
+
+html[data-page-transition="navbar-forward"]::view-transition-old(page-content) {
+	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-left;
+}
+
+html[data-page-transition="navbar-forward"]::view-transition-new(page-content) {
+	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-right;
+}
+
+html[data-page-transition="navbar-backward"]::view-transition-old(page-content) {
+	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-right;
+}
+
+html[data-page-transition="navbar-backward"]::view-transition-new(page-content) {
+	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-left;
+}
+
+@keyframes vt-page-fade-out {
 	to {
 		opacity: 0;
-		transform: scale(1.06);
-		filter: blur(10px);
 	}
 }
 
-@keyframes vt-page-enter {
+@keyframes vt-page-fade-in {
 	from {
 		opacity: 0;
-		filter: blur(8px);
+	}
+}
+
+@keyframes vt-page-exit-left {
+	to {
+		opacity: 0;
+		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
+	}
+}
+
+@keyframes vt-page-enter-right {
+	from {
+		opacity: 0;
+		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
+	}
+}
+
+@keyframes vt-page-exit-right {
+	to {
+		opacity: 0;
+		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
+	}
+}
+
+@keyframes vt-page-enter-left {
+	from {
+		opacity: 0;
+		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
+	}
+}
+
+@media (max-width: 767px) {
+	html[data-page-transition^="navbar-"] {
+		--page-slide-distance: 42vw;
+	}
+
+	html[data-page-transition^="navbar-"]::view-transition-group(page-content),
+	html[data-page-transition^="navbar-"]::view-transition-old(page-content),
+	html[data-page-transition^="navbar-"]::view-transition-new(page-content) {
+		animation-duration: 420ms;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html[data-page-transition]::view-transition-group(main-nav),
+	html[data-page-transition]::view-transition-old(main-nav),
+	html[data-page-transition]::view-transition-new(main-nav),
+	html[data-page-transition]::view-transition-group(page-content),
+	html[data-page-transition]::view-transition-old(page-content),
+	html[data-page-transition]::view-transition-new(page-content),
+	html[data-page-transition]::view-transition-old(root),
+	html[data-page-transition]::view-transition-new(root) {
+		animation-duration: 1ms;
 	}
 }
 

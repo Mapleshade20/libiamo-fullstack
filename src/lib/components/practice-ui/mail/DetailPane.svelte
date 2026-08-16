@@ -78,7 +78,7 @@ const displayBodyHtml = $derived(detailEmail?.bodyHtml ?? "");
 const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft || "Up to {count} more").replace("{count}", String(remainingTurns)));
 </script>
 
-<main class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
+<div class="mail-detail flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
 	<header class="toolbar flex h-13 shrink-0 items-center gap-2 border-b border-black/10 bg-[#F7F7F9]/90 px-3 backdrop-blur-xl">
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.archive}><Archive size={18} /></button>
 		<button type="button" class="icon-button" onclick={onMockAction} title={t.trash}><Trash2 size={18} /></button>
@@ -171,7 +171,7 @@ const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft
 			<div class="h-full bg-white" aria-label={t.inbox}></div>
 		{/if}
 	</div>
-</main>
+</div>
 
 <style>
 .mail-body :global(div),

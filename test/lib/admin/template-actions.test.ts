@@ -202,4 +202,35 @@ describe("parseTemplateJson", () => {
 		expect(result.success).toBe(false);
 		if (!result.success) expect(result.error).toContain("friend");
 	});
+
+	it("clears unsupported fields imported for translation templates", () => {
+		const result = parseTemplateJson(
+			JSON.stringify({
+				version: 2,
+				template: {
+					language: "fr",
+					interactionType: "translate",
+					ui: "translator",
+					cadence: "none",
+					difficulty: 2,
+					pointReward: 10,
+					gemReward: 5,
+					agentStartsFirst: true,
+					titleBase: "A letter",
+					shortObjectiveBase: "Translate this letter.",
+					materialsMd: "# Background",
+					agentPromptBase: "a letter to a friend",
+					translationReference: ["Bonjour."],
+				},
+				variants: [],
+			}),
+		);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.template.shortObjectiveBase).toBeNull();
+			expect(result.data.template.materialsMd).toBeNull();
+			expect(result.data.template.agentStartsFirst).toBe(false);
+		}
+	});
 });

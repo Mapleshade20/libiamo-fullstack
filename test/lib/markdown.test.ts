@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { renderMarkdown } from "$lib/markdown";
 
 describe("renderMarkdown", () => {
+	it("preserves model line breaks and numbered-list structure", () => {
+		const html = renderMarkdown("这句话有两个问题：\n1. 第一项\n2. 第二项");
+
+		expect(html).toContain("<p>这句话有两个问题：</p>");
+		expect(html).toContain("<ol>");
+		expect(html).toContain("<li>第一项</li>");
+		expect(html).toContain("<li>第二项</li>");
+	});
+
 	it("preserves safe HTML while stripping dangerous elements", () => {
 		const html = renderMarkdown("# Heading\n\n<style>.x{color:red}</style>\n\n**bold**\n\n<script>alert('xss')</script>");
 

@@ -48,11 +48,11 @@ export function getCurrentWeekString(): string {
  * Get the local date string (YYYY-MM-DD) for a given timezone.
  * Falls back to UTC date on invalid timezone.
  */
-export function getLocalDateString(tz: string): string {
+export function getLocalDateString(tz: string, date = new Date()): string {
 	try {
-		return dayjs().tz(tz).format("YYYY-MM-DD");
+		return dayjs(date).tz(tz).format("YYYY-MM-DD");
 	} catch {
-		return dayjs().utc().format("YYYY-MM-DD");
+		return dayjs(date).utc().format("YYYY-MM-DD");
 	}
 }
 
