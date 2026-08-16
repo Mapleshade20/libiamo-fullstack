@@ -24,12 +24,14 @@ interface Props {
 }
 
 let { tasks, statusMap, initialMonth, lang }: Props = $props();
-let month = $state((() => initialMonth)());
+// The month intentionally starts from the server-provided month and then stays client-controlled.
+// svelte-ignore state_referenced_locally
+let month = $state(initialMonth);
 let monthDirection = $state(1);
 let visibleTasks = $derived(tasks.filter((task) => task.createdMonth === month));
 
 function monthLabel(value: string) {
-	return new Date(`${value}-01T12:00:00.000Z`).toLocaleDateString(undefined, {
+	return new Date(`${value}-01T12:00:00.000Z`).toLocaleDateString(lang, {
 		month: "long",
 		year: "numeric",
 		timeZone: "UTC",
@@ -48,10 +50,19 @@ function changeMonth(amount: -1 | 1) {
 			<h2 id="translation-index-title">{t(lang, "translate.title")}</h2>
 		</div>
 
-		<div class="month-press" aria-label="Translation task month">
-			<button type="button" aria-label="Previous month" title="Previous month" onclick={() => changeMonth(-1)}><ArrowLeft size={17} /></button>
+		<div class="month-press" aria-label={t(lang, "translate.month")}>
+			<button
+				type="button"
+				aria-label={t(lang, "translate.previousMonth")}
+				title={t(lang, "translate.previousMonth")}
+				onclick={() => changeMonth(-1)}
+			>
+				<ArrowLeft size={17} />
+			</button>
 			<span>{monthLabel(month)}</span>
-			<button type="button" aria-label="Next month" title="Next month" onclick={() => changeMonth(1)}><ArrowRight size={17} /></button>
+			<button type="button" aria-label={t(lang, "translate.nextMonth")} title={t(lang, "translate.nextMonth")} onclick={() => changeMonth(1)}>
+				<ArrowRight size={17} />
+			</button>
 		</div>
 	</header>
 

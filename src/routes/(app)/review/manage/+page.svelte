@@ -3,33 +3,41 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Search from "@lucide/svelte/icons/search";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
+import { type LanguageCode, t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
 
 let { data } = $props();
+let lang = $derived(data.user.activeLanguage as LanguageCode);
 let notes = $state<ManagedNote[]>((() => data.notes)());
 let selectedNoteId = $state<number | null>((() => data.filters.selectedNoteId ?? data.notes[0]?.id ?? null)());
+let selectedNoteFromLink = $state<ManagedNote | null>((() => data.selectedNote)());
 let loadedFilterKey = $state("");
 let total = $state((() => data.total)());
 
 let filterKey = $derived(JSON.stringify(data.filters));
-let selectedNote = $derived(notes.find((note) => note.id === selectedNoteId) ?? null);
+let selectedNote = $derived(
+	notes.find((note) => note.id === selectedNoteId) ?? (selectedNoteFromLink?.id === selectedNoteId ? selectedNoteFromLink : null),
+);
 
 $effect(() => {
 	if (filterKey === loadedFilterKey) return;
 	loadedFilterKey = filterKey;
 	notes = data.notes;
+	selectedNoteFromLink = data.selectedNote;
 	total = data.total;
-	if (data.filters.selectedNoteId && notes.some((note) => note.id === data.filters.selectedNoteId)) selectedNoteId = data.filters.selectedNoteId;
+	if (data.filters.selectedNoteId && data.selectedNote?.id === data.filters.selectedNoteId) selectedNoteId = data.filters.selectedNoteId;
 	else if (!notes.some((note) => note.id === selectedNoteId)) selectedNoteId = notes[0]?.id ?? null;
 });
 
 function replaceNote(updated: ManagedNote) {
 	notes = notes.map((note) => (note.id === updated.id ? updated : note));
+	if (selectedNoteFromLink?.id === updated.id) selectedNoteFromLink = updated;
 }
 
 function removeNote(noteId: number) {
 	const deletedIndex = notes.findIndex((note) => note.id === noteId);
 	notes = notes.filter((note) => note.id !== noteId);
+	if (selectedNoteFromLink?.id === noteId) selectedNoteFromLink = null;
 	total = Math.max(0, total - 1);
 	selectedNoteId = notes[Math.min(Math.max(0, deletedIndex), notes.length - 1)]?.id ?? null;
 }
@@ -53,8 +61,8 @@ function isToday(value: string) {
 
 function formatDue(value: string) {
 	const date = new Date(value);
-	if (isToday(value)) return "Due: Today";
-	return `Due: ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+	if (isToday(value)) return t(lang, "review.manage.dueToday");
+	return `${t(lang, "review.manage.duePrefix")} ${date.toLocaleDateString(lang, { month: "short", day: "numeric" })}`;
 }
 
 function handleCardListKeydown(event: KeyboardEvent) {
@@ -72,8 +80,8 @@ function handleCardListKeydown(event: KeyboardEvent) {
 </script>
 
 <svelte:head>
-	<title>Manage Cards · Libiamo</title>
-	<meta name="description" content="Search, edit, reschedule, reset, and delete your language review cards.">
+	<title>{t(lang, "review.manage.title")} · Libiamo</title>
+	<meta name="description" content={t(lang, "review.manage.description")}>
 </svelte:head>
 
 <div class="space-y-7">
@@ -81,66 +89,70 @@ function handleCardListKeydown(event: KeyboardEvent) {
 		<input type="hidden" name="language" value={data.filters.language === "all" ? undefined : data.filters.language}>
 		<div class="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_repeat(2,auto)_auto] md:items-end">
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Search
+				{t(lang, "review.manage.search")}
 				<span class="relative mt-1.5 block">
 					<Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
 					<input
 						name="q"
 						value={data.filters.search}
 						maxlength="200"
-						placeholder="Vocabulary, definitions, examples…"
+						placeholder={t(lang, "review.manage.searchPlaceholder")}
 						class="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-foreground"
 					>
 				</span>
 			</label>
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				State
+				{t(lang, "review.manage.state")}
 				<select
 					name="queue"
 					value={data.filters.queue}
 					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground md:w-28"
 				>
-					<option value="all">All</option>
-					<option value="new">New</option>
-					<option value="learning">Learning</option>
-					<option value="review">Review</option>
+					<option value="all">{t(lang, "review.manage.all")}</option>
+					<option value="new">{t(lang, "review.count.new")}</option>
+					<option value="learning">{t(lang, "review.count.learning")}</option>
+					<option value="review">{t(lang, "review.count.review")}</option>
 				</select>
 			</label>
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				Source
+				{t(lang, "review.manage.source")}
 				<select
 					name="source"
 					value={data.filters.source}
 					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground md:w-32"
 				>
-					<option value="all">All</option>
-					<option value="practice">Quests</option>
-					<option value="translation">Translation</option>
+					<option value="all">{t(lang, "review.manage.all")}</option>
+					<option value="practice">{t(lang, "review.manage.quests")}</option>
+					<option value="translation">{t(lang, "translate.title")}</option>
 				</select>
 			</label>
 			<div class="flex gap-2">
-				<button type="submit" class="h-10 rounded-lg bg-foreground px-4 text-sm font-medium text-background hover:opacity-85">Filter</button>
+				<button type="submit" class="h-10 rounded-lg bg-foreground px-4 text-sm font-medium text-background hover:opacity-85">
+					{t(lang, "review.manage.filter")}
+				</button>
 				<a
 					href="/review/manage"
 					class="flex h-10 items-center rounded-lg border border-border px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
-					>Clear</a
+					>{t(lang, "review.manage.clear")}</a
 				>
 			</div>
 		</div>
 	</form>
 
 	<div class="grid min-h-[34rem] gap-5 lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.6fr)]">
-		<aside class="overflow-hidden rounded-2xl border border-border bg-card" aria-label="Cards">
-			<div class="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{notes.length} shown</div>
+		<aside class="overflow-hidden rounded-2xl border border-border bg-card" aria-label={t(lang, "review.manage.cards")}>
+			<div class="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+				{notes.length} {t(lang, "review.manage.shown")}
+			</div>
 			{#if notes.length === 0}
 				<div class="px-6 py-16 text-center">
-					<p class="font-serif text-xl">No cards found</p>
-					<p class="mt-2 text-sm text-muted-foreground">Try clearing one or more filters.</p>
+					<p class="font-serif text-xl">{t(lang, "review.manage.noCards")}</p>
+					<p class="mt-2 text-sm text-muted-foreground">{t(lang, "review.manage.tryClearing")}</p>
 				</div>
 			{:else}
 				<div
 					class="max-h-[42rem] divide-y divide-border overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
-					aria-label="Shown cards"
+					aria-label={t(lang, "review.manage.shownCards")}
 					aria-activedescendant={selectedNoteId === null ? undefined : `managed-note-${selectedNoteId}`}
 					role="listbox"
 					tabindex="0"
@@ -184,14 +196,14 @@ function handleCardListKeydown(event: KeyboardEvent) {
 						href={pageHref(data.filters.page - 1)}
 						aria-disabled={data.filters.page <= 1}
 						class="inline-flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-secondary aria-disabled:pointer-events-none aria-disabled:opacity-35"
-						><ChevronLeft size={14} />Previous</a
+						><ChevronLeft size={14} />{t(lang, "review.manage.previous")}</a
 					>
-					<span>Page {data.filters.page} of {data.totalPages}</span>
+					<span>{t(lang, "review.manage.page")} {data.filters.page} {t(lang, "review.manage.of")} {data.totalPages}</span>
 					<a
 						href={pageHref(data.filters.page + 1)}
 						aria-disabled={data.filters.page >= data.totalPages}
 						class="inline-flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-secondary aria-disabled:pointer-events-none aria-disabled:opacity-35"
-						>Next<ChevronRight size={14} /></a
+						>{t(lang, "review.manage.next")}<ChevronRight size={14} /></a
 					>
 				</div>
 			{/if}
@@ -200,13 +212,13 @@ function handleCardListKeydown(event: KeyboardEvent) {
 		<section class="min-w-0 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
 			{#if selectedNote}
 				{#key selectedNote.id}
-					<ManageNoteEditor note={selectedNote} onupdate={replaceNote} ondelete={removeNote} />
+					<ManageNoteEditor note={selectedNote} {lang} onupdate={replaceNote} ondelete={removeNote} />
 				{/key}
 			{:else}
 				<div
 					class="flex min-h-80 items-center justify-center rounded-2xl border border-dashed border-border bg-card/35 px-6 text-center text-muted-foreground"
 				>
-					Select a card to inspect and edit it.
+					{t(lang, "review.manage.selectCard")}
 				</div>
 			{/if}
 		</section>

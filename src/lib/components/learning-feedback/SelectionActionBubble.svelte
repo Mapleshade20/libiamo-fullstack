@@ -4,6 +4,7 @@ import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
+import { type LanguageCode, t } from "$lib/i18n";
 import type { LearningSelection, SaveSelectionResult } from "./types";
 
 type CapturedSelection = LearningSelection & {
@@ -21,10 +22,12 @@ type SaveStatus = {
 
 let {
 	sourceKey,
+	lang,
 	onAskSelection,
 	onSaveSelection,
 }: {
 	sourceKey: string;
+	lang: LanguageCode;
 	onAskSelection: (selection: LearningSelection) => void;
 	onSaveSelection: (selection: LearningSelection) => Promise<SaveSelectionResult>;
 } = $props();
@@ -119,10 +122,10 @@ async function handleSave() {
 		saveStatus = {
 			message:
 				result.count === 1
-					? "Saved 1 note"
+					? t(lang, "feedback.selection.savedOne")
 					: result.count > 1
-						? `Saved ${result.count} notes`
-						: `No note created - ${result.reason ?? "No note-worthy point found."}`,
+						? `${t(lang, "feedback.selection.savedMany")} ${result.count}`
+						: t(lang, "feedback.selection.none"),
 			kind: result.count > 0 ? "success" : "empty",
 			top: selection.top,
 			left: selection.left,
@@ -130,7 +133,7 @@ async function handleSave() {
 		dismissSelection();
 	} catch (error) {
 		saveStatus = {
-			message: error instanceof Error ? error.message : "Failed to save notes",
+			message: error instanceof Error ? error.message : t(lang, "feedback.selection.saveFailed"),
 			kind: "error",
 			top: selection.top,
 			left: selection.left,
@@ -179,8 +182,8 @@ onMount(() => {
 			class="rounded-full p-2 text-foreground hover:bg-muted disabled:opacity-40"
 			onclick={handleAsk}
 			disabled={isSaving}
-			title="Ask about selection"
-			aria-label="Ask about selection"
+			title={t(lang, "feedback.selection.ask")}
+			aria-label={t(lang, "feedback.selection.ask")}
 		>
 			<MessageCircleQuestion size={16} />
 		</button>
@@ -189,8 +192,8 @@ onMount(() => {
 			class="rounded-full p-2 text-muted-foreground hover:bg-muted disabled:opacity-40"
 			onclick={handleSave}
 			disabled={isSaving || savedKeys.has(captured.key)}
-			title="Save selection to notes"
-			aria-label="Save selection to notes"
+			title={t(lang, "feedback.selection.save")}
+			aria-label={t(lang, "feedback.selection.save")}
 		>
 			{#if isSaving}
 				<LoaderCircle size={16} class="animate-spin" />

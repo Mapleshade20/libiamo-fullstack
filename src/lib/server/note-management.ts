@@ -52,22 +52,21 @@ export async function browseManagedNotes(userId: string, filters: ManagedNoteFil
 
 	const where = and(...conditions);
 	const offset = (filters.page - 1) * MANAGED_NOTES_PAGE_SIZE;
-	const orderBy = filters.selectedNoteId
-		? [sql`CASE WHEN ${note.id} = ${filters.selectedNoteId} THEN 0 ELSE 1 END`, desc(note.updatedAt), desc(note.id)]
-		: [desc(note.updatedAt), desc(note.id)];
-	const [rows, totalRows] = await Promise.all([
-		db
-			.select()
-			.from(note)
-			.where(where)
-			.orderBy(...orderBy)
-			.limit(MANAGED_NOTES_PAGE_SIZE)
-			.offset(offset),
+	const [rows, totalRows, selectedRows] = await Promise.all([
+		db.select().from(note).where(where).orderBy(desc(note.updatedAt), desc(note.id)).limit(MANAGED_NOTES_PAGE_SIZE).offset(offset),
 		db.select({ count: count() }).from(note).where(where),
+		filters.selectedNoteId
+			? db
+					.select()
+					.from(note)
+					.where(and(where, eq(note.id, filters.selectedNoteId)))
+					.limit(1)
+			: Promise.resolve([]),
 	]);
 
 	return {
 		notes: rows.map(toManagedNote),
+		selectedNote: selectedRows[0] ? toManagedNote(selectedRows[0]) : null,
 		total: totalRows[0]?.count ?? 0,
 	};
 }

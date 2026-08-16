@@ -92,4 +92,11 @@ describe("translation detail page", () => {
 		expect(mockAbandon).toHaveBeenCalledWith(existing);
 		expect(mockAbandon.mock.invocationCallOrder[0]).toBeLessThan(mockGetSourceSet.mock.invocationCallOrder[0]);
 	});
+
+	it("rejects a retake when native and learning languages match", async () => {
+		const result = await actions.retake(event({ id: "u1", activeLanguage: "fr", nativeLanguage: "fr" }));
+		expect(result).toMatchObject({ status: 400, data: { error: "Your native and learning languages must be different." } });
+		expect(mockFindAttempt).not.toHaveBeenCalled();
+		expect(mockGetSourceSet).not.toHaveBeenCalled();
+	});
 });

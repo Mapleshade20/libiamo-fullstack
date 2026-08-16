@@ -170,7 +170,7 @@ $effect(() => {
 					<textarea
 						id="second-draft-{i}"
 						data-second-draft
-						class="min-h-[6.5rem] w-full resize-none overflow-hidden rounded-xl border bg-card min-h-[7rem] px-4 py-3 font-inter-stack text-[0.95rem] leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40
+						class="w-full min-h-[7rem] resize-none overflow-hidden rounded-xl border bg-card px-4 py-3 font-inter-stack text-[0.95rem] leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40
 							{flagged ? 'border-amber-400 ring-2 ring-amber-300/40' : 'border-border'}"
 						value={draft.paragraphs[i] ?? ""}
 						readonly={finished || submitting}

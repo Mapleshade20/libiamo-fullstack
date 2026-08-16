@@ -1,12 +1,11 @@
 import { createHash } from "node:crypto";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { getLanguageEnglishName } from "$lib/constants";
+import { getLanguageEnglishName, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { chatJson } from "$lib/server/llm";
 
-export const TRANSLATION_CANDIDATE_COUNT = 3;
 export const TRANSLATION_VOTE_THRESHOLD = 30;
 
 const VariantsSchema = z.object({
@@ -221,7 +220,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 }
 
 export function chooseInitialCandidate(votes: number[], random = Math.random) {
-	if (votes.length !== TRANSLATION_CANDIDATE_COUNT) throw new Error("Expected three candidate vote totals.");
+	if (votes.length !== TRANSLATION_CANDIDATE_COUNT) throw new Error(`Expected ${TRANSLATION_CANDIDATE_COUNT} candidate vote totals.`);
 	const total = votes.reduce((sum, value) => sum + value, 0);
 	if (total < TRANSLATION_VOTE_THRESHOLD) return Math.min(TRANSLATION_CANDIDATE_COUNT - 1, Math.floor(random() * TRANSLATION_CANDIDATE_COUNT));
 	const maximum = Math.max(...votes);
@@ -261,8 +260,9 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 		.groupBy(translationAnswer.paragraphIndex, translationAnswer.candidateIndex);
 
 	const initialIndices = Array.from({ length: paragraphCount }, (_, paragraphIndex) => {
-		const votes = [0, 1, 2].map(
-			(candidateIndex) => voteRows.find((row) => row.paragraphIndex === paragraphIndex && row.candidateIndex === candidateIndex)?.votes ?? 0,
+		const votes = Array.from(
+			{ length: TRANSLATION_CANDIDATE_COUNT },
+			(_, candidateIndex) => voteRows.find((row) => row.paragraphIndex === paragraphIndex && row.candidateIndex === candidateIndex)?.votes ?? 0,
 		);
 		return chooseInitialCandidate(votes);
 	});

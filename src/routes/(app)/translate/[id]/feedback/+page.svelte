@@ -32,6 +32,7 @@ let snapshot = $state<TranslationFeedbackSnapshot | null>(null);
 let initializedVersion = $state<string | null>(null);
 let practiceStatus = $state<PracticeGenStatus>("idle");
 let practiceError = $state<string | null>(null);
+let workflowError = $state<string | null>(null);
 let transferStartedAt = $state(0);
 let completingTransfer = $state(false);
 let lastFocusKey = $state("");
@@ -127,6 +128,10 @@ async function postAction(name: string, form = new FormData()) {
 	return deserialize(await response.text()) as { type: string; status?: number; data?: Record<string, any> };
 }
 
+function resultError(result: { data?: Record<string, any> }, fallback = t(lang, "common.error")) {
+	return typeof result.data?.error === "string" ? result.data.error : fallback;
+}
+
 async function runEvaluation() {
 	evaluationRunning = true;
 	evaluationFailed = false;
@@ -147,12 +152,18 @@ async function runEvaluation() {
 async function regenerate() {
 	if (regenerating) return;
 	regenerating = true;
+	workflowError = null;
 	try {
 		const result = await postAction("regenerate");
-		if (result.type !== "success") return;
+		if (result.type !== "success") {
+			workflowError = resultError(result);
+			return;
+		}
 		clearTranslationFeedbackSnapshot(data.attempt.id);
 		initializedVersion = null;
 		await invalidateAll();
+	} catch {
+		workflowError = t(lang, "common.error");
 	} finally {
 		regenerating = false;
 	}
@@ -190,12 +201,20 @@ async function continueOverview() {
 
 async function finishCorrections() {
 	if (!data.attempt.evaluatedAt) return;
+	workflowError = null;
 	const form = new FormData();
 	form.set("evaluatedAt", data.attempt.evaluatedAt);
-	const result = await postAction("finishCorrections", form);
-	if (result.type !== "success") return;
-	if (result.data?.workflowPhase === "completed") clearTranslationFeedbackSnapshot(data.attempt.id);
-	await invalidateAll();
+	try {
+		const result = await postAction("finishCorrections", form);
+		if (result.type !== "success") {
+			workflowError = resultError(result);
+			return;
+		}
+		if (result.data?.workflowPhase === "completed") clearTranslationFeedbackSnapshot(data.attempt.id);
+		await invalidateAll();
+	} catch {
+		workflowError = t(lang, "common.error");
+	}
 }
 
 async function verifyCard(input: string) {
@@ -232,6 +251,10 @@ async function verifyCard(input: string) {
 		} else {
 			cards[index] = { ...local, phase: "second_reject", attemptCount: 2, input, feedback: verification.feedback };
 		}
+		persist({ ...snapshot, cards });
+	} catch {
+		const cards = [...snapshot.cards];
+		cards[index] = { ...local, input, phase: "provider_error" };
 		persist({ ...snapshot, cards });
 	} finally {
 		submitting = false;
@@ -299,6 +322,11 @@ async function submitSecondDraft() {
 				providerError: null,
 			},
 		});
+	} catch {
+		persist({
+			...snapshot,
+			secondDraft: { ...previous, commentary: null, providerError: t(lang, "common.error") },
+		});
 	} finally {
 		submitting = false;
 	}
@@ -313,8 +341,16 @@ async function enterTransfer() {
 	if (!snapshot || !data.attempt.evaluatedAt) return;
 	const form = new FormData();
 	form.set("evaluatedAt", data.attempt.evaluatedAt);
-	const result = await postAction("enterTransfer", form);
-	if (result.type === "success") await invalidateAll();
+	try {
+		const result = await postAction("enterTransfer", form);
+		if (result.type !== "success") {
+			persist({ ...snapshot, secondDraft: { ...snapshot.secondDraft, providerError: resultError(result) } });
+			return;
+		}
+		await invalidateAll();
+	} catch {
+		persist({ ...snapshot, secondDraft: { ...snapshot.secondDraft, providerError: t(lang, "common.error") } });
+	}
 }
 
 function transferFixtures(): TransferNoteFixture[] {
@@ -350,9 +386,15 @@ async function rateTransfer(rating: 1 | 3) {
 	form.set("noteId", String(active.noteId));
 	form.set("rating", String(rating));
 	form.set("elapsedSeconds", String(Math.max(0, Math.round((Date.now() - transferStartedAt) / 1000))));
-	const result = await postAction("rateTransfer", form);
+	let result: Awaited<ReturnType<typeof postAction>>;
+	try {
+		result = await postAction("rateTransfer", form);
+	} catch {
+		practiceError = t(lang, "common.error");
+		return false;
+	}
 	if (result.type !== "success") {
-		practiceError = typeof result.data?.error === "string" ? result.data.error : "Rating failed.";
+		practiceError = resultError(result);
 		return false;
 	}
 
@@ -373,9 +415,16 @@ async function completeTransfer() {
 	completingTransfer = true;
 	try {
 		const result = await postAction("completeTransfer");
-		if (result.type !== "success") return;
+		if (result.type !== "success") {
+			practiceStatus = "failed";
+			practiceError = resultError(result);
+			return;
+		}
 		clearTranslationFeedbackSnapshot(data.attempt.id);
 		await invalidateAll();
+	} catch {
+		practiceStatus = "failed";
+		practiceError = t(lang, "common.error");
 	} finally {
 		completingTransfer = false;
 	}
@@ -390,6 +439,10 @@ function updateCardInput(index: number, value: string) {
 </script>
 
 <svelte:head><title>{data.template.title} · Evaluation</title></svelte:head>
+
+{#if workflowError}
+	<p class="mx-auto mb-5 max-w-3xl text-sm text-destructive" role="alert">{workflowError}</p>
+{/if}
 
 {#if data.attempt.workflowPhase === "submitted"}
 	<EvaluationWaiting

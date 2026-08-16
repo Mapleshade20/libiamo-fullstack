@@ -334,6 +334,5 @@ export async function getReviewStats(userId: string, language: LanguageCode) {
 		learningCount,
 		reviewCount,
 		reviewedToday: reviewedToday?.count ?? 0,
-		pendingNotes: 0,
 	};
 }

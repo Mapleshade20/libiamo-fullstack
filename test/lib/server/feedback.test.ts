@@ -15,10 +15,11 @@ vi.mock("$lib/server/llm", () => ({
 	chatText: vi.fn(),
 }));
 
-import { buildAnnotationPrompt, buildFeedbackConversation, followUpOnFeedback } from "$lib/server/feedback";
-import { chatJson } from "$lib/server/llm";
+import { buildAnnotationPrompt, buildFeedbackConversation, followUpOnFeedback, generateFeedback } from "$lib/server/feedback";
+import { chatJson, chatText } from "$lib/server/llm";
 
 const mockChatJson = chatJson as ReturnType<typeof vi.fn>;
+const mockChatText = chatText as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -232,5 +233,58 @@ describe("buildAnnotationPrompt", () => {
 		expect(prompt).toContain("EXACT same words as the original learner message");
 		expect(prompt).toContain("<mark>word</mark>");
 		expect(prompt).not.toContain("<highlight>");
+	});
+});
+
+describe("generateFeedback", () => {
+	const existingFeedback = {
+		feedbackLanguage: "zh",
+		annotations: [{ messageId: 1, annotatedText: "你好", spans: [], comment: "很好" }],
+		objectives: [{ text: "流利表达", grade: "A" as const }],
+		summary: "完成得很好。",
+	};
+
+	it("returns persisted feedback without regenerating or changing its language", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			id: 42,
+			userId: "user-1",
+			status: "evaluated",
+			tutorFeedback: existingFeedback,
+			agentPromptSnapshot: {},
+			task: { language: "es", objectives: [], template: { ui: "discord" }, variant: { openingState: {} } },
+			messages: [],
+		});
+
+		await expect(generateFeedback({ sessionId: 42, feedbackLanguage: "es" })).resolves.toEqual(existingFeedback);
+		expect(mockChatText).not.toHaveBeenCalled();
+		expect(mockDb.update).not.toHaveBeenCalled();
+	});
+
+	it("persists only while feedback is still absent", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			id: 42,
+			userId: "user-1",
+			status: "completed",
+			tutorFeedback: null,
+			agentPromptSnapshot: {},
+			task: { language: "es", objectives: [], template: { ui: "discord" }, variant: { openingState: {} } },
+			messages: [{ id: 1, role: "user", content: "Hola", createdAt: new Date("2026-01-01T00:00:00Z"), llmMetadata: null }],
+		});
+		mockChatText.mockResolvedValue({
+			content:
+				'<feedback><message id="1"><annotated>Hola</annotated><comment>Bien.</comment></message><objectives><objective grade="A">Fluidez</objective></objectives><summary>Bien.</summary></feedback>',
+		});
+		const returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		const where = vi.fn(() => ({ returning }));
+		const set = vi.fn(() => ({ where }));
+		mockDb.update.mockReturnValue({ set });
+
+		const result = await generateFeedback({ sessionId: 42, feedbackLanguage: "es" });
+
+		expect(result.feedbackLanguage).toBe("es");
+		expect(set).toHaveBeenCalledWith(
+			expect.objectContaining({ status: "evaluated", tutorFeedback: expect.objectContaining({ feedbackLanguage: "es" }) }),
+		);
+		expect(where).toHaveBeenCalledOnce();
 	});
 });

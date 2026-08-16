@@ -9,6 +9,7 @@ import { browseManagedNotes, toManagedNote } from "$lib/server/note-management";
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockSelect.mockReset();
 });
 
 describe("toManagedNote", () => {
@@ -48,13 +49,15 @@ describe("toManagedNote", () => {
 });
 
 describe("browseManagedNotes", () => {
-	function mockBrowseQueries() {
+	function mockBrowseQueries(selectedRows: unknown[] = []) {
 		const offset = vi.fn().mockResolvedValue([]);
 		const limit = vi.fn(() => ({ offset }));
 		const orderBy = vi.fn(() => ({ limit }));
+		const selectedLimit = vi.fn().mockResolvedValue(selectedRows);
 		mockSelect
 			.mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy }) }) })
-			.mockReturnValueOnce({ from: () => ({ where: vi.fn().mockResolvedValue([{ count: 0 }]) }) });
+			.mockReturnValueOnce({ from: () => ({ where: vi.fn().mockResolvedValue([{ count: 0 }]) }) })
+			.mockReturnValueOnce({ from: () => ({ where: () => ({ limit: selectedLimit }) }) });
 		return orderBy;
 	}
 
@@ -65,9 +68,10 @@ describe("browseManagedNotes", () => {
 		expect(orderBy.mock.calls[0]).toHaveLength(2);
 	});
 
-	it("prepends a selected-Note ordering expression when requested", async () => {
+	it("loads a selected Note separately without changing page ordering", async () => {
 		const orderBy = mockBrowseQueries();
 		await browseManagedNotes("u1", { search: "", language: "all", queue: "all", source: "all", page: 1, selectedNoteId: 27 });
-		expect(orderBy.mock.calls[0]).toHaveLength(3);
+		expect(orderBy.mock.calls[0]).toHaveLength(2);
+		expect(mockSelect).toHaveBeenCalledTimes(3);
 	});
 });

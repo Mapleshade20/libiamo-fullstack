@@ -1,6 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { PRACTICE_UI_TEXT_MAX_LENGTH, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import {
@@ -16,7 +16,11 @@ const AnswersSchema = z.array(
 	z.object({
 		paragraphIndex: z.number().int().nonnegative(),
 		translation: z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH),
-		candidateIndex: z.number().int().min(0).max(2),
+		candidateIndex: z
+			.number()
+			.int()
+			.min(0)
+			.max(TRANSLATION_CANDIDATE_COUNT - 1),
 	}),
 );
 

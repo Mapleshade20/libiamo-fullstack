@@ -57,11 +57,10 @@ export async function insertNotes(writer: Pick<typeof db, "insert">, input: Crea
 		}
 	}
 
-	const created = [];
-	for (const generated of input.notes) {
-		const [inserted] = await writer
-			.insert(note)
-			.values({
+	return writer
+		.insert(note)
+		.values(
+			input.notes.map((generated) => ({
 				userId: input.userId,
 				language: input.language,
 				sourceSessionId: input.source.type === "practice" ? input.source.sessionId : null,
@@ -74,12 +73,9 @@ export async function insertNotes(writer: Pick<typeof db, "insert">, input: Crea
 					nativeText: example.nativeText.trim(),
 				})),
 				fsrsCard: serializeCard(createNewCard()),
-			})
-			.returning();
-		if (!inserted) throw new Error("Failed to create note.");
-		created.push(inserted);
-	}
-	return created;
+			})),
+		)
+		.returning();
 }
 
 export async function createNotes(input: CreateNotesInput) {

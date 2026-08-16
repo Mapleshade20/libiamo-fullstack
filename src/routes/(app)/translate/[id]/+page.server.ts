@@ -78,6 +78,7 @@ export const actions: Actions = {
 	retake: async (event) => {
 		const { user, templateId, template } = await context(event);
 		if (!validPromptLanguage(user.nativeLanguage)) return fail(400, { error: "Set your native language before starting." });
+		if (user.nativeLanguage === template.language) return fail(400, { error: "Your native and learning languages must be different." });
 		const existing = await findTranslationAttempt({ userId: user.id, templateId, promptLanguage: user.nativeLanguage });
 		try {
 			if (existing && existing.workflowPhase !== "completed") await abandonTranslationAttempt(existing);

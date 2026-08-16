@@ -77,7 +77,7 @@ describe("createNotes", () => {
 
 		expect(result).toEqual([{ id: 7 }]);
 		expect(mockDb.transaction).toHaveBeenCalledOnce();
-		expect(noteValues).toHaveBeenCalledWith(
+		expect(noteValues).toHaveBeenCalledWith([
 			expect.objectContaining({
 				userId: USER_ID,
 				sourceSessionId: null,
@@ -88,7 +88,7 @@ describe("createNotes", () => {
 				examples: note.examples,
 				fsrsCard: expect.objectContaining({ state: expect.any(Number) }),
 			}),
-		);
+		]);
 	});
 
 	it("rejects duplicate or incomplete example sets before writing", async () => {

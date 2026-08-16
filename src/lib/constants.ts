@@ -139,11 +139,19 @@ const LANGUAGE_ENGLISH_NAMES: Record<LanguageCode, string> = {
 	ja: "Japanese",
 };
 
+let englishLanguageDisplayNames: Intl.DisplayNames | undefined;
+try {
+	englishLanguageDisplayNames = new Intl.DisplayNames(["en"], { type: "language" });
+} catch {
+	englishLanguageDisplayNames = undefined;
+}
+
 export function getLanguageEnglishName(code: string): string {
+	const fallback = LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
 	try {
-		return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
+		return englishLanguageDisplayNames?.of(code) ?? fallback;
 	} catch {
-		return LANGUAGE_CODES.includes(code as LanguageCode) ? LANGUAGE_ENGLISH_NAMES[code as LanguageCode] : code;
+		return fallback;
 	}
 }
 
@@ -164,6 +172,7 @@ export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
 
 export const TRANSLATION_WORKFLOW_PHASES = ["draft", "submitted", "correction", "second_draft", "transfer", "completed"] as const;
 export type TranslationWorkflowPhase = (typeof TRANSLATION_WORKFLOW_PHASES)[number];
+export const TRANSLATION_CANDIDATE_COUNT = 3;
 
 export function resolveFeedbackLanguage(input: {
 	preference: FeedbackLanguageMode;

@@ -36,7 +36,7 @@ const examples = Array.from({ length: 4 }, (_, index) => ({ targetText: `target 
 describe("review/manage page server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockBrowse.mockResolvedValue({ notes: [{ id: 1 }], total: 51 });
+		mockBrowse.mockResolvedValue({ notes: [{ id: 1 }], selectedNote: null, total: 51 });
 	});
 
 	it("loads mixed-language cards with normalized search filters", async () => {

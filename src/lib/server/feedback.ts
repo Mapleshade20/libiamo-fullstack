@@ -3,7 +3,7 @@
  * Builds the annotation prompt, calls LLM, parses XML, persists result.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import type {
@@ -585,6 +585,7 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	if (!input.feedbackLanguage.trim()) throw new Error("Feedback language is required");
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, input.sessionId),
+		columns: { id: true, userId: true, status: true, tutorFeedback: true, agentPromptSnapshot: true },
 		with: {
 			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: {
@@ -598,6 +599,11 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 
 	if (!session) throw new Error("Session not found");
 	if (!session.task) throw new Error("Task not found");
+	if (session.status === "evaluated" && session.tutorFeedback) {
+		const existing = session.tutorFeedback as unknown;
+		if (existing && typeof existing === "object" && "annotations" in existing) return existing as FeedbackResult;
+	}
+	if (session.status !== "completed") throw new Error("Session is not ready for feedback");
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; scenarioContext?: string; ui?: string };
 	const ui = (snapshot.ui ?? session.task.template?.ui ?? "discord") as UiVariant;
@@ -629,13 +635,20 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	}
 
 	// Persist to DB
-	await db
+	const [updated] = await db
 		.update(practiceSession)
 		.set({
 			status: "evaluated",
 			tutorFeedback: result,
 		})
-		.where(eq(practiceSession.id, input.sessionId));
+		.where(and(eq(practiceSession.id, input.sessionId), eq(practiceSession.status, "completed"), isNull(practiceSession.tutorFeedback)))
+		.returning({ id: practiceSession.id });
+
+	if (!updated) {
+		const winner = await getExistingFeedback(input.sessionId);
+		if (winner) return winner;
+		throw new Error("Feedback generation changed in another request. Reload and try again.");
+	}
 
 	return result;
 }

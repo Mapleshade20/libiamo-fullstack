@@ -110,7 +110,7 @@ async function rate(rating: number) {
 		revealed = false;
 		cardRevealedAt = 0;
 	} catch (e) {
-		error = e instanceof Error ? e.message : "Something went wrong";
+		error = e instanceof Error ? e.message : t(lang, "common.error");
 	} finally {
 		isSubmitting = false;
 	}
@@ -118,8 +118,8 @@ async function rate(rating: number) {
 </script>
 
 <svelte:head>
-	<title>Review · Libiamo</title>
-	<meta name="description" content="Review vocabulary, grammar, expressions, and corrections with spaced repetition.">
+	<title>{t(lang, "review.title")} · Libiamo</title>
+	<meta name="description" content={t(lang, "review.description")}>
 </svelte:head>
 
 <div>
@@ -162,7 +162,7 @@ async function rate(rating: number) {
 
 	{#if currentCard}
 		<div class="border-t border-border pt-6 text-center">
-			<a href="/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground">Edit current card</a>
+			<a href="/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground">{t(lang, "review.editCurrent")}</a>
 		</div>
 	{/if}
 </div>

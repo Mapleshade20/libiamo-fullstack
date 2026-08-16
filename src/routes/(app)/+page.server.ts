@@ -111,7 +111,7 @@ export const load: PageServerLoad = async (event) => {
 		})),
 		translationTasks: translationTasks.map(({ createdAt, ...taskItem }) => ({
 			...taskItem,
-			createdMonth: createdAt.toISOString().slice(0, 7),
+			createdMonth: getLocalDateString(userTz, createdAt).slice(0, 7),
 		})),
 		translationStatusMap: Object.fromEntries(translationStatusByTemplateId),
 		translationMonth: userLocalDateStr.slice(0, 7),

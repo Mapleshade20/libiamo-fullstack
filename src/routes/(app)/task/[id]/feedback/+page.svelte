@@ -11,6 +11,7 @@ import type { LearningSelection, SelectionAppendRequest } from "$lib/components/
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
+import type { LanguageCode } from "$lib/i18n";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -407,7 +408,12 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	{/if}
 
 	<!-- Selection actions -->
-	<SelectionActionBubble sourceKey={`practice:${data.sessionId}`} onAskSelection={handleAskSelection} onSaveSelection={saveSelection} />
+	<SelectionActionBubble
+		lang={(data.user.activeLanguage ?? data.language) as LanguageCode}
+		sourceKey={`practice:${data.sessionId}`}
+		onAskSelection={handleAskSelection}
+		onSaveSelection={saveSelection}
+	/>
 
 	<!-- Floating question FAB -->
 	<TutorQuestionPanel

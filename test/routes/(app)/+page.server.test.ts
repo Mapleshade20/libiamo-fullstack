@@ -23,7 +23,7 @@ const { mockEnsureTasksForDate } = vi.hoisted(() => ({
 
 const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => ({
 	mockGetMondayOfWeekForDate: vi.fn(() => "2026-04-13"),
-	mockGetLocalDateString: vi.fn(() => "2026-04-17"),
+	mockGetLocalDateString: vi.fn((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17"),
 }));
 
 vi.mock("$lib/server/auth/auth", () => ({
@@ -102,6 +102,7 @@ vi.mock("$lib/server/scheduling/dates", () => ({
 describe("(app) home +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17");
 	});
 
 	it("redirects unauthenticated users", async () => {
@@ -161,6 +162,24 @@ describe("(app) home +page.server", () => {
 				translationStatusMap: { 7: "correction" },
 			}),
 		);
+	});
+
+	it("buckets translation templates in the user's timezone", async () => {
+		const createdAt = new Date("2026-08-31T19:00:00.000Z");
+		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => (date ? "2026-09-01" : "2026-09-01"));
+		mockWhere
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ id: 8, titleBase: "A letter", createdAt }]);
+		mockFindMany.mockResolvedValue([]);
+
+		const result = (await load({
+			locals: { user: { id: "u1", activeLanguage: "en", timezone: "Pacific/Auckland" } },
+		} as any)) as any;
+
+		expect(mockGetLocalDateString).toHaveBeenCalledWith("Pacific/Auckland", createdAt);
+		expect(result.translationMonth).toBe("2026-09");
+		expect(result.translationTasks[0]?.createdMonth).toBe("2026-09");
 	});
 
 	describe("timezone logic", () => {
