@@ -234,6 +234,16 @@ export class AsyncReplyWorker {
 			return;
 		}
 
+		// The claim is the moment the agent "notices" the learner's message: advance the
+		// read receipt watermark before generating. GREATEST keeps it monotonic when a
+		// re-targeted or reclaimed batch references an older input message.
+		if (batch.inputMessageId !== null) {
+			await db
+				.update(practiceSession)
+				.set({ agentReadUpToMessageId: drizzleSql`greatest(coalesce(${practiceSession.agentReadUpToMessageId}, 0), ${batch.inputMessageId})` })
+				.where(eq(practiceSession.id, batch.sessionId));
+		}
+
 		const history = session.messages.filter((message) => message.role === "user" || message.role === "assistant");
 		const latestUserMessageId = [...history].reverse().find((message) => message.role === "user")?.id ?? null;
 		const expectedInputMessageId = batch.inputMessageId ?? latestUserMessageId;

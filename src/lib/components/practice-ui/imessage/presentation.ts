@@ -31,3 +31,26 @@ export function getLastOutgoingMessageId(messages: ChatMessage[]): string | null
 	}
 	return null;
 }
+
+/**
+ * Whether the contact has read the learner's last outgoing message. Read becomes
+ * visible once the worker claims the reply batch (advancing the persisted read
+ * watermark) or once any agent message follows it (restored sessions, retries).
+ */
+export function isLastOutgoingMessageRead(messages: ChatMessage[], agentReadUpToMessageId: number | null): boolean {
+	let lastIndex = -1;
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		if (messages[index]?.role === "user") {
+			lastIndex = index;
+			break;
+		}
+	}
+	if (lastIndex === -1) return false;
+
+	const lastId = messages[lastIndex].id;
+	// Persisted messages use numeric db ids; fresh client-side messages use uuids,
+	// which must never satisfy the watermark comparison (even digit-prefixed ones).
+	if (/^\d+$/.test(lastId) && Number.parseInt(lastId, 10) <= (agentReadUpToMessageId ?? 0)) return true;
+
+	return messages.slice(lastIndex + 1).some((message) => message.role === "agent");
+}

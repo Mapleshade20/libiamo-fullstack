@@ -16,7 +16,7 @@ import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
-import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
+import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
 interface Props {
 	taskId?: string | number;
@@ -73,6 +73,7 @@ const contactName = $derived(session.agentName);
 const contactInitial = $derived(contactName.charAt(0).toUpperCase());
 const renderableMessages = $derived(getRenderableMessages(session.messages));
 const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessages));
+const lastOutgoingRead = $derived(isLastOutgoingMessageRead(renderableMessages, session.agentReadUpToMessageId));
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 
 let showHintMenu = $state(false);
@@ -320,7 +321,7 @@ function showIncomingSender(index: number) {
 								</button>
 							{/if}
 							{#if msg.role === "user" && msg.id === lastOutgoingMessageId}
-								<span class="mt-1 mr-1 text-[11px] text-[#8E8E93]">{t.read}</span>
+								<span class="mt-1 mr-1 text-[11px] text-[#8E8E93]">{lastOutgoingRead ? t.read : t.delivered}</span>
 							{/if}
 						</div>
 					{/each}

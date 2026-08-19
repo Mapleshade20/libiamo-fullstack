@@ -129,6 +129,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			id: true,
 			status: true,
 			tutorFeedback: true,
+			agentReadUpToMessageId: true,
 		},
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		with: {

@@ -73,6 +73,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let isInitializing = $state(false);
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
+	let agentReadUpToMessageId = $state<number | null>(null);
 	let agentUser = $state<ChatUser>({
 		id: "agent",
 		name: "Agent",
@@ -383,6 +384,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	$effect(() => {
 		if (existingSession) {
+			// Read-receipt watermark updates on every poll; unlike hydrateFromExistingSession
+			// it must not be gated by the message snapshot (claiming a batch changes no messages).
+			agentReadUpToMessageId =
+				typeof (existingSession as { agentReadUpToMessageId?: unknown }).agentReadUpToMessageId === "number"
+					? (existingSession as { agentReadUpToMessageId: number }).agentReadUpToMessageId
+					: null;
 			hydrateFromExistingSession(existingSession);
 		}
 	});
@@ -458,6 +465,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		},
 		get isAnyMessagePending() {
 			return isAnyMessagePending;
+		},
+		get agentReadUpToMessageId() {
+			return agentReadUpToMessageId;
 		},
 		get isTyping() {
 			return isTyping;
