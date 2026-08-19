@@ -606,6 +606,80 @@ describe("session service", () => {
 			expect(mockDb.update).toHaveBeenCalledWith(sessionMessage);
 			expect(mockDb.insert).toHaveBeenCalledWith(agentResponseBatch);
 		});
+
+		it("keeps the anchored due time when burst messages retarget a pending batch", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+				id: 11,
+				sessionId: 123,
+				status: "pending",
+				dueAt: new Date("2026-08-19T12:00:30.000Z"),
+				inputMessageId: 12,
+				inputVersion: 1,
+			});
+			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
+			mockDb.update.mockImplementation(
+				() =>
+					({
+						set: setMock,
+						where: vi.fn(),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
+			try {
+				await submitAsyncMessage(123, "second burst message", USER_ID);
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ status: "pending", inputMessageId: 999, inputVersion: 2 }));
+			expect(setMock).not.toHaveBeenCalledWith(expect.objectContaining({ dueAt: expect.any(Date) }));
+		});
+
+		it("re-engages quickly instead of resampling when a message interrupts a pending delivery", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+				id: 11,
+				sessionId: 123,
+				status: "delivery_pending",
+				inputVersion: 4,
+			});
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
+			try {
+				await submitAsyncMessage(123, "too late", USER_ID);
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(valuesMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					status: "pending",
+					dueAt: new Date("2026-08-19T12:00:12.000Z"),
+					inputVersion: 5,
+				}),
+			);
+		});
 	});
 
 	describe("completeSession", () => {

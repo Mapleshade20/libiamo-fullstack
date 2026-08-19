@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { getSessionExpiry, sampleReplyDelayMs } from "$lib/async-replies/timing";
+import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/async-replies/timing";
 import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
 import { type AgentHistoryMessage, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "./db";
@@ -533,6 +533,9 @@ export async function submitAsyncMessage(
 			),
 		});
 		if (activeBatch?.status === "delivery_pending") {
+			// The agent had already composed a reply when the new message landed: it is
+			// engaged, so re-engage quickly instead of restarting the full MTTH clock.
+			const reEngageAt = new Date(now.getTime() + RE_ENGAGE_DELAY_MS);
 			await tx
 				.update(agentDelivery)
 				.set({ status: "cancelled" })
@@ -542,15 +545,18 @@ export async function submitAsyncMessage(
 				sessionId,
 				kind: "reply",
 				status: "pending",
-				dueAt,
+				dueAt: reEngageAt,
 				inputMessageId,
 				inputVersion: activeBatch.inputVersion + 1,
 			});
 		} else if (activeBatch) {
+			// Additional messages in the same burst fold into the scheduled batch without
+			// pushing its due time: the clock is anchored to the first message, so rapid
+			// typing can never postpone the reply indefinitely.
 			await tx
 				.update(agentResponseBatch)
 				.set({
-					...(activeBatch.status === "processing" ? {} : { status: "pending" as const, dueAt }),
+					...(activeBatch.status === "processing" ? {} : { status: "pending" as const }),
 					inputMessageId,
 					inputVersion: activeBatch.inputVersion + 1,
 				})

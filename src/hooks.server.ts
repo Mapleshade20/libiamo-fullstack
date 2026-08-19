@@ -10,7 +10,7 @@ ensureAsyncReplyWorker();
 process.on("sveltekit:shutdown", async (reason) => {
 	console.log(`SvelteKit shutdown: ${reason}`);
 
-	await globalThis.__asyncReplyWorker?.stop();
+	await globalThis.__asyncReplyWorker?.worker.stop();
 	await sql.end({
 		timeout: 5,
 	});

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
-import { getDeliveryDelayMs } from "$lib/async-replies/timing";
+import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/async-replies/timing";
 import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
 import { AgentGenerationError, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "$lib/server/db";
@@ -280,7 +280,7 @@ export class AsyncReplyWorker {
 					.update(agentResponseBatch)
 					.set({
 						status: sessionEnded ? "cancelled" : "pending",
-						dueAt: new Date(now.getTime() + 2_000),
+						dueAt: new Date(now.getTime() + RE_ENGAGE_DELAY_MS),
 						staleCount: batch.staleCount + 1,
 						workerId: null,
 						claimToken: null,

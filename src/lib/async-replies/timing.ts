@@ -1,6 +1,13 @@
 import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
 
 /**
+ * Delay before an already-engaged agent re-engages after an interrupt (stale
+ * generation or a delivery cancelled by a newer user message). The agent is
+ * mid-conversation, so this replaces the full MTTH sample instead of resetting it.
+ */
+export const RE_ENGAGE_DELAY_MS = 2_000;
+
+/**
  * Samples the reply delay from an exponential distribution with the urgency's MTTH,
  * hard-capped at the preset's cap so the tail can never exceed a bounded worst case.
  * P(cap) = exp(-cap / MTTH).
