@@ -49,6 +49,8 @@ describe("session service", () => {
 		id: 1,
 		agentPrompt: "You are a helpful assistant.",
 		language: "en",
+		urgency: "high" as const,
+		maxSessionAgeSeconds: 43_200,
 		template: {
 			ui: "discord" as const,
 		},
@@ -61,6 +63,28 @@ describe("session service", () => {
 	};
 
 	describe("startSession", () => {
+		it("freezes task urgency and expiry when creating a session", async () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2025-06-11T12:00:00.000Z"));
+			try {
+				mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, urgency: "low", maxSessionAgeSeconds: 604_800 });
+				const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 123 }]) });
+				mockDb.insert.mockReturnValue({ values: valuesMock });
+
+				await startSession(1, "user_456", "English");
+
+				expect(valuesMock).toHaveBeenCalledWith(
+					expect.objectContaining({
+						urgency: "low",
+						startedAt: new Date("2025-06-11T12:00:00.000Z"),
+						expiresAt: new Date("2025-06-18T12:00:00.000Z"),
+					}),
+				);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
 		it("creates session and persists language-constrained prompt", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);

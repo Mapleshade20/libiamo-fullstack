@@ -67,6 +67,7 @@ describe("schemas", () => {
 	const baseTemplate = {
 		language: "en",
 		interactionType: "chat",
+		urgency: "high",
 		ui: "discord",
 		cadence: "daily",
 		difficulty: 2,
@@ -173,6 +174,7 @@ describe("schemas", () => {
 	const baseContribution = {
 		language: "en",
 		interactionType: "chat",
+		urgency: "high",
 		ui: "discord",
 		titleBase: "Chat with {{friend}}",
 	};
@@ -181,6 +183,20 @@ describe("schemas", () => {
 		const result = templateContributionSchema.parse(baseContribution);
 		expect(result.titleBase).toBe("Chat with {{friend}}");
 		expect(result.interactionType).toBe("chat");
+	});
+
+	it("requires urgency for non-translation templates and clears it for translation", () => {
+		expect(templateSchema.safeParse({ ...baseTemplate, urgency: undefined }).success).toBe(false);
+		const translation = templateSchema.parse({
+			...baseTemplate,
+			interactionType: "translate",
+			ui: "translator",
+			cadence: "none",
+			urgency: "low",
+			agentPromptBase: "a letter to a friend",
+			translationReference: "Bonjour.",
+		});
+		expect(translation.urgency).toBeNull();
 	});
 
 	it("templateContributionSchema rejects missing required fields", () => {

@@ -109,6 +109,7 @@ function buildTemplate(id: number, cadence: Cadence, overrides: Record<string, u
 		id,
 		language: "en",
 		cadence,
+		urgency: "high",
 		isActive: true,
 		titleBase: "Hello {{name}}",
 		shortObjectiveBase: "Short {{topic}}",
@@ -215,6 +216,8 @@ describe("tasks helpers", () => {
 				templateId: 1,
 				variantId: 1,
 				origin: "auto",
+				urgency: "high",
+				maxSessionAgeSeconds: 43_200,
 			}),
 		);
 		randomSpy.mockRestore();

@@ -72,6 +72,7 @@ function createActionEvent(entries: Record<string, string>, paramsId = "1") {
 const validTemplateEntries: Record<string, string> = {
 	language: "en",
 	interactionType: "chat",
+	urgency: "high",
 	ui: "imessage",
 	cadence: "daily",
 	difficulty: "1",

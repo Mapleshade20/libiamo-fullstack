@@ -55,6 +55,7 @@ function createEvent(entries: Record<string, string>, userId = "admin-1", role =
 const validTemplateEntries: Record<string, string> = {
 	language: "en",
 	interactionType: "chat",
+	urgency: "high",
 	ui: "imessage",
 	cadence: "daily",
 	difficulty: "1",

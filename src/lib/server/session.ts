@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
 import { type AnyColumn, and, asc, eq, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
+import { getSessionExpiry } from "$lib/async-replies/timing";
+import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
 import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
@@ -273,6 +274,9 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
+	const urgency = taskData.urgency ?? "high";
+	const maxSessionAgeSeconds = taskData.maxSessionAgeSeconds ?? URGENCY_PRESETS[urgency].maxSessionAgeSeconds;
+	const startedAt = new Date();
 
 	try {
 		const [session] = await db
@@ -281,6 +285,9 @@ export async function startSession(taskId: number, userId: string, _learningLang
 				userId,
 				taskId,
 				agentPromptSnapshot: snapshot,
+				urgency,
+				startedAt,
+				expiresAt: getSessionExpiry(startedAt, maxSessionAgeSeconds),
 				status: "in_progress",
 			})
 			.returning();

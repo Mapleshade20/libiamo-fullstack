@@ -9,6 +9,7 @@ import {
 	PRACTICE_UI_TEXT_MAX_LENGTH,
 	UI_VARIANTS,
 	type UiVariant,
+	URGENCIES,
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
@@ -99,6 +100,7 @@ const templateCore = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
 	ui: z.enum(UI_VARIANTS),
+	urgency: z.enum(URGENCIES).nullable().optional(),
 	...templateContentFields,
 };
 
@@ -106,6 +108,7 @@ const templateContributionCore = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
 	ui: z.enum(UI_VARIANTS),
+	urgency: z.enum(URGENCIES).nullable().optional(),
 	...contributionContentFields,
 };
 
@@ -114,10 +117,13 @@ const translateUiRefine = (data: { interactionType: string; ui: string }) => (da
 const translateUiMessage = 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise';
 
 function validateTranslationContent(
-	data: { interactionType: string; agentPromptBase?: string | null; translationReference?: string[] | null },
+	data: { interactionType: string; urgency?: string | null; agentPromptBase?: string | null; translationReference?: string[] | null },
 	ctx: z.RefinementCtx,
 ) {
-	if (data.interactionType !== "translate") return;
+	if (data.interactionType !== "translate") {
+		if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+		return;
+	}
 	if (!data.agentPromptBase?.trim()) {
 		ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
 	}
@@ -147,13 +153,14 @@ export const templateSchema = z
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
 	.superRefine(validateTranslationContent)
 	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, agentStartsFirst: false } : data));
+	.transform((data) => (data.interactionType === "translate" ? { ...data, agentStartsFirst: false, urgency: null } : data));
 
 export const templateContributionSchema = z
 	.object({ ...templateContributionCore })
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
 	.superRefine(validateTranslationContent)
-	.transform(normalizeTranslationContent);
+	.transform(normalizeTranslationContent)
+	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
 
 // ── Variant ───────────────────────────────────────────────────────────
 export const variantSchema = z.object({

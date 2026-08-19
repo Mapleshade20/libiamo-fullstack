@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { extractSlotNames, getMissingSlots, parseJsonField, parseSlotValues } from "$lib/admin/variant-helpers";
-import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant } from "$lib/constants";
+import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, type UiVariant, URGENCIES } from "$lib/constants";
 import { validateOpeningState } from "$lib/schemas";
 
 // ── Form data parsing ──────────────────────────────────────────────────
@@ -95,6 +95,7 @@ const importedTemplateSchema = z
 	.object({
 		language: z.enum(LANGUAGE_CODES),
 		interactionType: z.enum(INTERACTION_TYPES),
+		urgency: z.enum(URGENCIES).nullable().optional(),
 		ui: z.enum(UI_VARIANTS),
 		cadence: z.enum(CADENCES),
 		difficulty: z.number().int().min(1).max(3),
@@ -118,7 +119,10 @@ const importedTemplateSchema = z
 		path: ["ui"],
 	})
 	.superRefine((data, ctx) => {
-		if (data.interactionType !== "translate") return;
+		if (data.interactionType !== "translate") {
+			if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+			return;
+		}
 		if (!data.agentPromptBase?.trim()) {
 			ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
 		}
@@ -127,7 +131,7 @@ const importedTemplateSchema = z
 		}
 	})
 	.transform((data) =>
-		data.interactionType === "translate" ? { ...data, agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null } : data,
+		data.interactionType === "translate" ? { ...data, urgency: null, agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null } : data,
 	);
 
 const importedVariantSchema = z.object({
@@ -153,6 +157,19 @@ export function parseTemplateJson(rawJson: string): TemplateJsonParseResult {
 		raw = JSON.parse(rawJson);
 	} catch {
 		return { success: false, error: "Invalid JSON." };
+	}
+
+	if (typeof raw === "object" && raw !== null && "template" in raw) {
+		const imported = (raw as { template?: unknown }).template;
+		if (typeof imported === "object" && imported !== null) {
+			const legacy = imported as { interactionType?: unknown; urgency?: unknown };
+			if (legacy.interactionType === "slow") {
+				legacy.interactionType = "chat";
+				legacy.urgency = "low";
+			} else if (legacy.interactionType === "chat" && legacy.urgency === undefined) {
+				legacy.urgency = "high";
+			}
+		}
 	}
 
 	const parsed = templateJsonSchema.safeParse(raw);

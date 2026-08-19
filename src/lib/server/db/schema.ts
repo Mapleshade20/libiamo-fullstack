@@ -5,7 +5,20 @@ import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
 import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
 import { user } from "./auth.schema";
-import { cadenceEnum, interactionTypeEnum, languageCodeEnum, messageRoleEnum, scheduleOriginEnum, sessionStatusEnum, uiVariantEnum } from "./enums";
+import {
+	agentDeliveryStatusEnum,
+	agentResponseBatchKindEnum,
+	agentResponseBatchStatusEnum,
+	cadenceEnum,
+	interactionTypeEnum,
+	languageCodeEnum,
+	messageRoleEnum,
+	scheduleOriginEnum,
+	sessionCompletionReasonEnum,
+	sessionStatusEnum,
+	uiVariantEnum,
+	urgencyEnum,
+} from "./enums";
 
 // ── userLearningProfile ──────────────────────────────────────────────
 export const userLearningProfile = pgTable(
@@ -32,6 +45,7 @@ export const template = pgTable(
 		id: serial("id").primaryKey(),
 		isActive: boolean("is_active").default(true).notNull(),
 		agentStartsFirst: boolean("agent_starts_first").default(true).notNull(),
+		urgency: urgencyEnum("urgency"),
 		language: languageCodeEnum("language").notNull(),
 		interactionType: interactionTypeEnum("interaction_type").notNull(),
 		ui: uiVariantEnum("ui").notNull(),
@@ -62,6 +76,10 @@ export const template = pgTable(
 	(t) => [
 		uniqueIndex("template_id_language_idx").on(t.id, t.language),
 		check("difficulty_check", sql`${t.difficulty} >= 1 AND ${t.difficulty} <= 3`),
+		check(
+			"template_urgency_check",
+			sql`(${t.interactionType} = 'translate' AND ${t.urgency} IS NULL) OR (${t.interactionType} = 'chat' AND ${t.urgency} IS NOT NULL)`,
+		),
 	],
 );
 
@@ -73,6 +91,7 @@ export const templateContribution = pgTable("template_contribution", {
 	ui: uiVariantEnum("ui").notNull(),
 	cadence: cadenceEnum("cadence"),
 	agentStartsFirst: boolean("agent_starts_first"),
+	urgency: urgencyEnum("urgency"),
 
 	titleBase: text("title_base").notNull(),
 	shortObjectiveBase: text("short_objective_base"),
@@ -140,6 +159,8 @@ export const task = pgTable(
 		cadence: cadenceEnum("cadence").notNull(),
 		date: date("date").notNull(),
 		origin: scheduleOriginEnum("origin").notNull(),
+		urgency: urgencyEnum("urgency").notNull(),
+		maxSessionAgeSeconds: integer("max_session_age_seconds").notNull(),
 
 		title: text("title").notNull(),
 		shortObjective: text("short_objective"),
@@ -168,7 +189,13 @@ export const practiceSession = pgTable(
 			.notNull()
 			.references(() => task.id, { onDelete: "cascade" }),
 		agentPromptSnapshot: jsonb("agent_prompt_snapshot").notNull(),
+		urgency: urgencyEnum("urgency").notNull(),
+		expiresAt: timestamp("expires_at").notNull(),
 		status: sessionStatusEnum("status").default("in_progress").notNull(),
+		completionReason: sessionCompletionReasonEnum("completion_reason"),
+		lastProcessedUserMessageId: integer("last_processed_user_message_id"),
+		lastSeenAssistantMessageId: integer("last_seen_assistant_message_id"),
+		followUpCount: integer("follow_up_count").default(0).notNull(),
 		tutorFeedback: jsonb("tutor_feedback"),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
@@ -176,6 +203,69 @@ export const practiceSession = pgTable(
 	(t) => [
 		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),
 		index("practice_session_archive_idx").on(t.userId, t.status, t.completedAt),
+		index("practice_session_expiry_idx").on(t.status, t.expiresAt),
+		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 2`),
+	],
+);
+
+// ── agentResponseBatch ───────────────────────────────────────────────
+export const agentResponseBatch = pgTable(
+	"agent_response_batch",
+	{
+		id: serial("id").primaryKey(),
+		sessionId: integer("session_id")
+			.notNull()
+			.references(() => practiceSession.id, { onDelete: "cascade" }),
+		kind: agentResponseBatchKindEnum("kind").notNull(),
+		status: agentResponseBatchStatusEnum("status").default("pending").notNull(),
+		dueAt: timestamp("due_at").notNull(),
+		inputMessageId: integer("input_message_id"),
+		inputVersion: integer("input_version").default(0).notNull(),
+		workerId: text("worker_id"),
+		claimToken: text("claim_token"),
+		claimedAt: timestamp("claimed_at"),
+		leaseExpiresAt: timestamp("lease_expires_at"),
+		generationCount: integer("generation_count").default(0).notNull(),
+		staleCount: integer("stale_count").default(0).notNull(),
+		requestMessages: jsonb("request_messages").$type<ChatMessage[]>(),
+		rawResponse: text("raw_response"),
+		parsedResult: jsonb("parsed_result"),
+		providerMetadata: jsonb("provider_metadata"),
+		error: text("error"),
+		allowIdleFollowUp: boolean("allow_idle_follow_up"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		completedAt: timestamp("completed_at"),
+	},
+	(t) => [
+		index("agent_response_batch_status_due_idx").on(t.status, t.dueAt),
+		index("agent_response_batch_session_status_idx").on(t.sessionId, t.status),
+		check("agent_response_batch_input_version_check", sql`${t.inputVersion} >= 0`),
+		check("agent_response_batch_generation_count_check", sql`${t.generationCount} >= 0`),
+		check("agent_response_batch_stale_count_check", sql`${t.staleCount} >= 0`),
+	],
+);
+
+// ── agentDelivery ────────────────────────────────────────────────────
+export const agentDelivery = pgTable(
+	"agent_delivery",
+	{
+		id: serial("id").primaryKey(),
+		batchId: integer("batch_id")
+			.notNull()
+			.references(() => agentResponseBatch.id, { onDelete: "cascade" }),
+		sequence: integer("sequence").notNull(),
+		content: text("content").notNull(),
+		replyToMessageId: integer("reply_to_message_id"),
+		threadMetadata: jsonb("thread_metadata"),
+		status: agentDeliveryStatusEnum("status").default("pending").notNull(),
+		dueAt: timestamp("due_at").notNull(),
+		deliveredAt: timestamp("delivered_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [
+		uniqueIndex("agent_delivery_batch_sequence_idx").on(t.batchId, t.sequence),
+		index("agent_delivery_status_due_idx").on(t.status, t.dueAt),
+		check("agent_delivery_sequence_check", sql`${t.sequence} >= 0`),
 	],
 );
 
@@ -190,9 +280,11 @@ export const sessionMessage = pgTable(
 		role: messageRoleEnum("role").notNull(),
 		content: text("content").notNull(),
 		llmMetadata: jsonb("llm_metadata"),
+		responseBatchId: integer("response_batch_id").references(() => agentResponseBatch.id, { onDelete: "set null" }),
+		deliveryId: integer("delivery_id").references(() => agentDelivery.id, { onDelete: "set null" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
-	(t) => [index("session_message_session_idx").on(t.sessionId)],
+	(t) => [index("session_message_session_idx").on(t.sessionId), uniqueIndex("session_message_delivery_idx").on(t.deliveryId)],
 );
 
 // ── translationSourceSet ────────────────────────────────────────────
@@ -430,6 +522,7 @@ export const practiceSessionRelations = relations(practiceSession, ({ one, many 
 		references: [task.id],
 	}),
 	messages: many(sessionMessage),
+	responseBatches: many(agentResponseBatch),
 	notes: many(note),
 }));
 
@@ -438,6 +531,31 @@ export const sessionMessageRelations = relations(sessionMessage, ({ one }) => ({
 		fields: [sessionMessage.sessionId],
 		references: [practiceSession.id],
 	}),
+	responseBatch: one(agentResponseBatch, {
+		fields: [sessionMessage.responseBatchId],
+		references: [agentResponseBatch.id],
+	}),
+	delivery: one(agentDelivery, {
+		fields: [sessionMessage.deliveryId],
+		references: [agentDelivery.id],
+	}),
+}));
+
+export const agentResponseBatchRelations = relations(agentResponseBatch, ({ one, many }) => ({
+	session: one(practiceSession, {
+		fields: [agentResponseBatch.sessionId],
+		references: [practiceSession.id],
+	}),
+	deliveries: many(agentDelivery),
+	messages: many(sessionMessage),
+}));
+
+export const agentDeliveryRelations = relations(agentDelivery, ({ one }) => ({
+	batch: one(agentResponseBatch, {
+		fields: [agentDelivery.batchId],
+		references: [agentResponseBatch.id],
+	}),
+	message: one(sessionMessage),
 }));
 
 export const noteRelations = relations(note, ({ one, many }) => ({

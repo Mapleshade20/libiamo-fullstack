@@ -155,13 +155,49 @@ export function getLanguageEnglishName(code: string): string {
 	}
 }
 
-export const INTERACTION_TYPES = ["chat", "slow", "translate"] as const;
+export const INTERACTION_TYPES = ["chat", "translate"] as const;
 export type InteractionType = (typeof INTERACTION_TYPES)[number];
 
 export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 	chat: "Chat",
-	slow: "Slow Reply",
 	translate: "Translate",
+};
+
+export const URGENCIES = ["high", "medium", "low"] as const;
+export type Urgency = (typeof URGENCIES)[number];
+
+export type UrgencyPreset = {
+	replyDelayMinMs: number;
+	replyDelayMaxMs: number;
+	maxSessionAgeSeconds: number;
+	idleFollowUpDelayMs: number;
+};
+
+export const URGENCY_PRESETS: Record<Urgency, UrgencyPreset> = {
+	high: {
+		replyDelayMinMs: 30_000,
+		replyDelayMaxMs: 2 * 60_000,
+		maxSessionAgeSeconds: 12 * 60 * 60,
+		idleFollowUpDelayMs: 2 * 60 * 60_000,
+	},
+	medium: {
+		replyDelayMinMs: 10 * 60_000,
+		replyDelayMaxMs: 30 * 60_000,
+		maxSessionAgeSeconds: 3 * 24 * 60 * 60,
+		idleFollowUpDelayMs: 12 * 60 * 60_000,
+	},
+	low: {
+		replyDelayMinMs: 60 * 60_000,
+		replyDelayMaxMs: 4 * 60 * 60_000,
+		maxSessionAgeSeconds: 7 * 24 * 60 * 60,
+		idleFollowUpDelayMs: 24 * 60 * 60_000,
+	},
+};
+
+export const URGENCY_LABELS: Record<Urgency, string> = {
+	high: "High — 30 sec to 2 min",
+	medium: "Medium — 10 to 30 min",
+	low: "Low — 1 to 4 hours",
 };
 
 export const CADENCES = ["weekly", "daily", "none"] as const;

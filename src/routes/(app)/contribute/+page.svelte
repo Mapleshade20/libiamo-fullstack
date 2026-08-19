@@ -12,6 +12,7 @@ let { data, form } = $props();
 type ImportedTemplateData = {
 	language?: string;
 	interactionType?: string;
+	urgency?: string | null;
 	ui?: string;
 	cadence?: string;
 	difficulty?: number;

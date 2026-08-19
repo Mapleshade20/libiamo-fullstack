@@ -57,6 +57,12 @@ function fmtDate(d: Date | null): string {
 			<Label class="text-xs text-muted-foreground">Interaction Type</Label>
 			<p class="text-sm">{c.interactionType}</p>
 		</div>
+		{#if c.urgency}
+			<div class="space-y-1">
+				<Label class="text-xs text-muted-foreground">Reply urgency</Label>
+				<p class="text-sm capitalize">{c.urgency}</p>
+			</div>
+		{/if}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">UI</Label>
 			<p class="text-sm">{c.ui}</p>

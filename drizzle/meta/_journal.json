@@ -71,6 +71,13 @@
       "when": 1785250055915,
       "tag": "0009_vocab_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787108534123,
+      "tag": "0010_async_agent_replies",
+      "breakpoints": true
     }
   ]
 }

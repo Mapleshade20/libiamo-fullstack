@@ -16,6 +16,7 @@ export const load: PageServerLoad = async (event) => {
 			id: templateContribution.id,
 			language: templateContribution.language,
 			interactionType: templateContribution.interactionType,
+			urgency: templateContribution.urgency,
 			ui: templateContribution.ui,
 			titleBase: templateContribution.titleBase,
 			shortObjectiveBase: templateContribution.shortObjectiveBase,

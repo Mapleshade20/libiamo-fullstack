@@ -1,5 +1,6 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, ne, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
+import { URGENCY_PRESETS } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "./dates";
@@ -22,6 +23,10 @@ function resolveObjectives(objectives: string[] | null | undefined, slots: Recor
 }
 
 async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, origin: "manual" | "auto") {
+	if (!tpl.urgency) {
+		throw new Error(`Cannot schedule template ${tpl.id}: non-translation templates require urgency`);
+	}
+
 	// Query active variants for this template
 	const variants = await db
 		.select()
@@ -48,6 +53,8 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 			cadence: tpl.cadence,
 			date: dateStr,
 			origin,
+			urgency: tpl.urgency,
+			maxSessionAgeSeconds: URGENCY_PRESETS[tpl.urgency].maxSessionAgeSeconds,
 			title: resolveSlots(tpl.titleBase, slots),
 			shortObjective: tpl.shortObjectiveBase ? resolveSlots(tpl.shortObjectiveBase, slots) : null,
 			description: tpl.descriptionBase ? resolveSlots(tpl.descriptionBase, slots) : null,

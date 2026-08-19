@@ -172,8 +172,21 @@ describe("parseTemplateJson", () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
+			expect(result.data.template.urgency).toBe("high");
 			expect(result.data.template.titleBase).toBe("Chat with {{friend}}");
 			expect(result.data.variants[0].slotValues).toEqual({ friend: "Alice" });
+		}
+	});
+
+	it("maps legacy slow JSON to chat with low urgency", () => {
+		const legacy = structuredClone(validPayload);
+		legacy.template.interactionType = "slow";
+		const result = parseTemplateJson(JSON.stringify(legacy));
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.template.interactionType).toBe("chat");
+			expect(result.data.template.urgency).toBe("low");
 		}
 	});
 
