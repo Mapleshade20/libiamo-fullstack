@@ -45,7 +45,6 @@ type TemplateData = {
 	estimatedWords?: number | null;
 	pointReward?: number;
 	gemReward?: number;
-	agentStartsFirst?: boolean;
 	titleBase?: string;
 	shortObjectiveBase?: string | null;
 	descriptionBase?: string | null;
@@ -205,7 +204,6 @@ let maxTurnsValue = $state(untrack(() => numberFieldValue(template.maxTurns)));
 let estimatedWordsValue = $state(untrack(() => numberFieldValue(template.estimatedWords)));
 let pointRewardValue = $state(untrack(() => numberFieldValue(template.pointReward, "3")));
 let gemRewardValue = $state(untrack(() => numberFieldValue(template.gemReward, "30")));
-let agentStartsFirstValue = $state(untrack(() => template.agentStartsFirst ?? true));
 
 // Auto-set UI variant and lock when interactionType is translate.
 // When switching away, reset to a valid non-translator default so the
@@ -237,7 +235,6 @@ function syncTemplateDraftFromProps() {
 	estimatedWordsValue = numberFieldValue(template.estimatedWords);
 	pointRewardValue = numberFieldValue(template.pointReward, "3");
 	gemRewardValue = numberFieldValue(template.gemReward, "30");
-	agentStartsFirstValue = template.agentStartsFirst ?? true;
 	titleBase = template.titleBase ?? "";
 	shortObjectiveBase = template.shortObjectiveBase ?? "";
 	descriptionBase = template.descriptionBase ?? "";
@@ -592,12 +589,6 @@ function confirmDeleteVariant() {
 					{#if form?.errors?.gemReward}
 						<p class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
 					{/if}
-				</div>
-			{/if}
-			{#if !isTranslate && !hideAdminFields}
-				<div class="flex items-center gap-2 pt-6">
-					<input id="agentStartsFirst" name="agentStartsFirst" type="checkbox" bind:checked={agentStartsFirstValue} class="rounded border-input">
-					<Label for="agentStartsFirst" class="cursor-pointer">Agent Starts First (Auto-Greeting)</Label>
 				</div>
 			{/if}
 		</div>

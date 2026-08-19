@@ -9,9 +9,8 @@ describe("sessionUtils", () => {
 		{ role: "user", isHidden: false },
 	] as any[];
 
-	it("counts visible user turns regardless of agentStartsFirst", () => {
-		expect(calculateCurrentTurns(mockMessages, true)).toBe(2);
-		expect(calculateCurrentTurns(mockMessages, false)).toBe(2);
+	it("counts visible user turns", () => {
+		expect(calculateCurrentTurns(mockMessages)).toBe(2);
 	});
 
 	it("never counts pending or failed agent placeholders as turns", () => {
@@ -20,8 +19,7 @@ describe("sessionUtils", () => {
 			{ role: "agent", isHidden: false, deliveryState: "pending" },
 			{ role: "agent", isHidden: false, deliveryState: "failed" },
 		] as any[];
-		expect(calculateCurrentTurns(withPlaceholders, false)).toBe(1);
-		expect(calculateCurrentTurns(withPlaceholders, true)).toBe(1);
+		expect(calculateCurrentTurns(withPlaceholders)).toBe(1);
 	});
 
 	it("checks turn limits correctly", () => {

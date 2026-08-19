@@ -7,11 +7,10 @@ import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
-import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
+import { completeAction, postAction } from "../apiService";
 import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
 import ComposeWindow from "./ComposeWindow.svelte";
-import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
@@ -38,7 +37,6 @@ interface Props {
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
-	agentStartsFirst?: boolean;
 }
 
 let {
@@ -50,7 +48,6 @@ let {
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
-	agentStartsFirst = true,
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -463,40 +460,17 @@ onMount(async () => {
 	const hasSavedDraft = hasDraftContent(savedDraft);
 	if (!isCompleted && hasSavedDraft) draft = savedDraft;
 
-	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails && !agentStartsFirst) {
+	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails) {
 		openComposer(true);
 	}
 
-	if (!hasTemplateOpeningEmails && existingSession?.id && !hasExistingMessages && agentStartsFirst) {
-		isInitializing = true;
-		try {
-			const result = await requestAgentOpeningAction(existingSession.id, MAIL_AGENT_OPENING_MESSAGE);
-			if (result.type === "success" && result.data) {
-				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
-			} else {
-				openComposer(true);
-			}
-		} catch (error) {
-			console.error("Mail opening message failed:", error);
-			openComposer(true);
-		} finally {
-			isInitializing = false;
-		}
-	} else if (!existingSession) {
+	if (!existingSession) {
 		isInitializing = true;
 		try {
 			const startResult = await postAction("start", null);
 			if (startResult.type === "success" && startResult.data) {
 				sessionId = startResult.data.sessionId as number;
 				lastLoadedSessionId = sessionId;
-				if (agentStartsFirst) {
-					if (!hasTemplateOpeningEmails) {
-						const openingResult = await requestAgentOpeningAction(sessionId, MAIL_AGENT_OPENING_MESSAGE);
-						if (openingResult.type !== "success") openComposer(true);
-					}
-				} else {
-					openComposer(true);
-				}
 				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 			} else {
 				console.error("Mail session initialization was rejected:", startResult);

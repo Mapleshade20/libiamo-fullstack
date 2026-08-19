@@ -39,7 +39,6 @@ vi.mock("$lib/server/feedback", () => ({
 }));
 vi.mock("$lib/server/note", () => mockNoteService);
 
-import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -213,7 +212,7 @@ describe("session page server", () => {
 		it.each(["apple_mail", "reddit"] as const)("allows %s tasks", async (ui) => {
 			const implementedTask = {
 				...mockTask,
-				template: { ui, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
+				template: { ui, maxTurns: 99, interactionType: "chat" },
 			};
 			mockDb.query.task.findFirst.mockResolvedValue(implementedTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
@@ -337,7 +336,7 @@ describe("session page server", () => {
 				reply: "Hello back",
 				turnCount: 2,
 			});
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { maxTurns: 0 });
 		});
 
 		it("passes clientMessageId through to sendMessage", async () => {
@@ -354,7 +353,7 @@ describe("session page server", () => {
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { maxTurns: 0 });
 		});
 
 		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
@@ -384,7 +383,6 @@ describe("session page server", () => {
 				"user_123",
 				"mail-1",
 				expect.objectContaining({
-					hiddenUserMessage: false,
 					maxTurns: 3,
 					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
 					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
@@ -392,48 +390,6 @@ describe("session page server", () => {
 				}),
 			);
 		});
-
-		it("passes learner display name to Apple Mail agent-first opening prompts", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
-			});
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Test User,", turnCount: 0 });
-
-			await actions.send(
-				createFormEvent({
-					values: {
-						sessionId: "789",
-						message: MAIL_AGENT_OPENING_MESSAGE,
-						clientMessageId: "join-789",
-					},
-				}),
-			);
-
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
-				789,
-				MAIL_AGENT_OPENING_MESSAGE,
-				"user_123",
-				"join-789",
-				expect.objectContaining({
-					hiddenUserMessage: true,
-					maxTurns: 3,
-					promptContent: expect.stringContaining("Learner profile display name: Test User."),
-				}),
-			);
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
-				expect.any(Number),
-				expect.any(String),
-				expect.any(String),
-				expect.any(String),
-				expect.objectContaining({
-					promptContent: expect.stringContaining("Use the task template, agent prompt, and scenario/opening-state context"),
-				}),
-			);
-		});
-
 		it("uses the latest profile name in Apple Mail prompt context", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
@@ -492,7 +448,6 @@ describe("session page server", () => {
 				"user_123",
 				"ao3-msg",
 				expect.objectContaining({
-					hiddenUserMessage: false,
 					maxTurns: 4,
 					promptContent: expect.stringContaining("Comment author you must roleplay as: ReaderA"),
 					userDisplayContent: "What did you like?",
@@ -579,7 +534,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toMatchObject({ success: true, reply: "Hola" });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {

@@ -23,7 +23,6 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
-		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<IMessageUI
@@ -35,7 +34,6 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
-		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else if data.task.template.ui === "apple_mail"}
 	<MailUI
@@ -47,7 +45,6 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
-		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else if data.task.template.ui === "ao3"}
 	<AO3UI
@@ -58,7 +55,6 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
-		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else if data.task.template.ui === "reddit"}
 	<RedditUI
@@ -69,7 +65,6 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.task.template.maxTurns ?? 0}
-		agentStartsFirst={data.agentStartsFirst}
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">

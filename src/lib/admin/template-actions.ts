@@ -104,7 +104,6 @@ const importedTemplateSchema = z
 		pointReward: z.number().int().min(0),
 		gemReward: z.number().int().min(0),
 		isActive: z.boolean().default(true),
-		agentStartsFirst: z.boolean().default(true),
 		titleBase: z.string().min(1, "Title is required"),
 		shortObjectiveBase: nullableString,
 		descriptionBase: nullableString,
@@ -130,9 +129,7 @@ const importedTemplateSchema = z
 			ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
 		}
 	})
-	.transform((data) =>
-		data.interactionType === "translate" ? { ...data, urgency: null, agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null } : data,
-	);
+	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null, shortObjectiveBase: null, materialsMd: null } : data));
 
 const importedVariantSchema = z.object({
 	id: z.number().int().positive().optional(),

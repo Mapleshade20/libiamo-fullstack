@@ -147,13 +147,12 @@ export const templateSchema = z
 		estimatedWords: z.coerce.number().int().min(0).optional(),
 		pointReward: z.coerce.number().int().min(0),
 		gemReward: z.coerce.number().int().min(0),
-		agentStartsFirst: z.any().transform((v) => v === "on"),
 		agentPromptBase: z.string().optional(),
 	})
 	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
 	.superRefine(validateTranslationContent)
 	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, agentStartsFirst: false, urgency: null } : data));
+	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
 
 export const templateContributionSchema = z
 	.object({ ...templateContributionCore })

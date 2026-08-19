@@ -26,7 +26,6 @@ let templateData = $derived(
 				tags: contributed.tags,
 				cadence: contributed.cadence ?? undefined,
 				difficulty: contributed.difficulty ?? undefined,
-				agentStartsFirst: contributed.agentStartsFirst ?? undefined,
 			}
 		: undefined,
 );

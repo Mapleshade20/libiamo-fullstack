@@ -28,7 +28,6 @@ describe("TemplateForm", () => {
 
 		expect(body).not.toContain('name="shortObjectiveBase"');
 		expect(body).not.toContain('name="materialsMd"');
-		expect(body).not.toContain('name="agentStartsFirst"');
 	});
 
 	it("keeps the controls available for ordinary templates", () => {
@@ -44,6 +43,5 @@ describe("TemplateForm", () => {
 
 		expect(body).toContain('name="shortObjectiveBase"');
 		expect(body).toContain('name="materialsMd"');
-		expect(body).toContain('name="agentStartsFirst"');
 	});
 });

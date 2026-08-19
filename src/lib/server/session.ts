@@ -421,7 +421,6 @@ async function generateAssistantOutput(
 }
 
 export type SendMessageOptions = {
-	hiddenUserMessage?: boolean;
 	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
@@ -478,11 +477,10 @@ export async function submitAsyncMessage(
 					role: "user",
 					content: promptContent,
 					llmMetadata:
-						clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
+						clientMessageId || displayContent || options.userMetadata
 							? {
 									...options.userMetadata,
 									clientMessageId,
-									hidden: options.hiddenUserMessage === true,
 									displayContent,
 								}
 							: undefined,
@@ -492,9 +490,9 @@ export async function submitAsyncMessage(
 			if (!inputMessageId) throw new Error("Failed to persist message");
 		}
 
-		const turnCount = countVisibleUserTurns(session.messages) + (revivedMessageId !== null || options.hiddenUserMessage ? 0 : 1);
+		const turnCount = countVisibleUserTurns(session.messages) + (revivedMessageId !== null ? 0 : 1);
 		const maxTurns = options.maxTurns ?? 0;
-		if (!options.hiddenUserMessage && maxTurns > 0 && turnCount >= maxTurns) {
+		if (maxTurns > 0 && turnCount >= maxTurns) {
 			await tx
 				.update(practiceSession)
 				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
@@ -559,7 +557,7 @@ export async function submitAsyncMessage(
 		} else {
 			await tx.insert(agentResponseBatch).values({
 				sessionId,
-				kind: options.hiddenUserMessage ? "opening" : "reply",
+				kind: "reply",
 				status: "pending",
 				dueAt,
 				inputMessageId,
@@ -628,7 +626,7 @@ export async function sendMessage(
 	}
 
 	const maxTurns = options.maxTurns ?? 0;
-	if (!existingUserMessage && !options.hiddenUserMessage && maxTurns > 0 && countVisibleUserTurns(activeMessages) >= maxTurns) {
+	if (!existingUserMessage && maxTurns > 0 && countVisibleUserTurns(activeMessages) >= maxTurns) {
 		throw new Error("Maximum conversation turns reached");
 	}
 
@@ -643,12 +641,11 @@ export async function sendMessage(
 				role: "user",
 				content: trimmedPromptContent,
 				llmMetadata:
-					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
+					clientMessageId || displayContent || options.userMetadata
 						? {
 								...options.userMetadata,
 								clientMessageId,
 								failed: false,
-								hidden: options.hiddenUserMessage === true,
 								displayContent,
 							}
 						: undefined,
@@ -675,7 +672,7 @@ export async function sendMessage(
 					clientMessageId,
 					failed: false,
 					failureError: null,
-					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true,
 					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
 				},
 			})
@@ -691,7 +688,7 @@ export async function sendMessage(
 							clientMessageId,
 							failed: false,
 							failureError: null,
-							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+							hidden: getMessageMetadata(message.llmMetadata).hidden === true,
 							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
 						},
 					}
@@ -713,7 +710,7 @@ export async function sendMessage(
 						clientMessageId,
 						failed: true,
 						failureError: error instanceof Error && error.message.trim() ? error.message : null,
-						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
+						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true,
 						displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
 					},
 				})
@@ -744,7 +741,7 @@ export async function sendMessage(
 		});
 	}
 
-	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
+	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage ? 0 : 1);
 
 	return {
 		reply: output.parsedResult.deliveries[0]?.content ?? "",

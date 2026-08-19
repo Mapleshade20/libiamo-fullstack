@@ -4,7 +4,7 @@ import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-d
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import { completeAction, postAction, requestAgentFirstReplyAction } from "./apiService";
+import { completeAction, postAction } from "./apiService";
 import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
@@ -25,7 +25,6 @@ export interface PracticeSessionOptions {
 	existingSession: any;
 	openingState: unknown;
 	maxTurns: number;
-	agentStartsFirst: boolean;
 	timeZone?: string;
 	labels: PracticeSessionLabels;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
@@ -53,7 +52,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const existingSession = $derived(getOptions().existingSession);
 	const openingState = $derived(getOptions().openingState);
 	const maxTurns = $derived(getOptions().maxTurns);
-	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
 	const timeZone = $derived(getOptions().timeZone);
 	const labels = $derived(getOptions().labels);
 	const onPoolInit = $derived(getOptions().onPoolInit);
@@ -92,7 +90,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
 	const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
 	const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
-	const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst));
+	const currentTurns = $derived(calculateCurrentTurns(messages));
 	const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 	const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
@@ -151,24 +149,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (!data || typeof data !== "object") return undefined;
 		const error = (data as { error?: unknown }).error;
 		return typeof error === "string" && error.trim() ? error : undefined;
-	}
-
-	function mapOpeningActionResult(result: any): SendAttemptResult {
-		if (result?.type === "failure") {
-			const error = actionErrorMessage(result);
-			if (error) return { status: "failed", error };
-			if (result.status >= 400 && result.status < 500) return { status: "rejected" };
-			return { status: "failed" };
-		}
-		if (result?.type === "success" && result.data) {
-			if ((result.data as any).pending) return { status: "pending" };
-			return {
-				status: "reply",
-				text: result.data.reply as string,
-				terminated: (result.data as any).terminated ?? false,
-			};
-		}
-		return { status: "failed" };
 	}
 
 	// ── Actions ────────────────────────────────────────────────────
@@ -384,12 +364,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				});
 
 				messages = [...openingMessages];
-
-				if (agentStartsFirst) {
-					await scrollToBottom();
-					const openingResult = await requestAgentFirstReplyAction(currentId);
-					applySendResult(mapOpeningActionResult(openingResult), `join-${currentId}`);
-				}
 
 				await scrollToBottom();
 				await refreshTrialQuota();

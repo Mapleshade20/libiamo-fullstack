@@ -22,18 +22,3 @@ export async function sendFormAction(action: string, formData: FormData, signal?
 	});
 	return deserialize(await res.text());
 }
-
-export function requestAgentFirstReplyAction(sessionId: number | string) {
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	formData.append("clientMessageId", `join-${sessionId}`);
-	return sendFormAction("agentOpening", formData);
-}
-
-export function requestAgentOpeningAction(sessionId: number | string, message: string) {
-	const formData = new FormData();
-	formData.append("sessionId", String(sessionId));
-	formData.append("message", message);
-	formData.append("clientMessageId", `join-${sessionId}`);
-	return sendFormAction("send", formData);
-}

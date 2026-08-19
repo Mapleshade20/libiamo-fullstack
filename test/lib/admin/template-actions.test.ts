@@ -228,7 +228,6 @@ describe("parseTemplateJson", () => {
 					difficulty: 2,
 					pointReward: 10,
 					gemReward: 5,
-					agentStartsFirst: true,
 					titleBase: "A letter",
 					shortObjectiveBase: "Translate this letter.",
 					materialsMd: "# Background",
@@ -243,7 +242,6 @@ describe("parseTemplateJson", () => {
 		if (result.success) {
 			expect(result.data.template.shortObjectiveBase).toBeNull();
 			expect(result.data.template.materialsMd).toBeNull();
-			expect(result.data.template.agentStartsFirst).toBe(false);
 		}
 	});
 });

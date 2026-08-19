@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
 	invalidate: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
-	requestAgentFirstReplyAction: vi.fn(),
 	attemptAgentReply: vi.fn(),
 	initUserPool: vi.fn(),
 }));
@@ -25,7 +24,6 @@ vi.mock("$app/navigation", () => ({
 vi.mock("$lib/components/practice-ui/apiService", () => ({
 	postAction: mocks.postAction,
 	completeAction: mocks.completeAction,
-	requestAgentFirstReplyAction: mocks.requestAgentFirstReplyAction,
 }));
 
 vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
@@ -44,7 +42,6 @@ function createOptions(overrides: Partial<PracticeSessionOptions> = {}): Practic
 		existingSession: null,
 		openingState: {},
 		maxTurns: 0,
-		agentStartsFirst: true,
 		labels: {
 			stillProcessingMessage: "Still processing...",
 			retryFailedMessage: "Reply failed. Retry.",
@@ -450,32 +447,6 @@ describe("createPracticeSession", () => {
 
 		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
 	});
-
-	it("starts a fresh session and requests first agent reply when agent starts first", async () => {
-		mocks.postAction.mockResolvedValue({
-			type: "success",
-			data: { sessionId: 404 },
-		});
-		mocks.requestAgentFirstReplyAction.mockResolvedValue({
-			type: "success",
-			data: { pending: true },
-		});
-		const session = createSession(
-			createOptions({
-				existingSession: null,
-				agentStartsFirst: true,
-			}),
-		);
-
-		await session.initializeFreshSession();
-		await waitForPromises();
-
-		expect(mocks.postAction).toHaveBeenCalledWith("start", null);
-		expect(mocks.requestAgentFirstReplyAction).toHaveBeenCalledWith(404);
-		expect(session.messages.some((message) => message.role === "user" && message.isHidden)).toBe(false);
-		expect(session.messages.some((message) => message.deliveryState === "pending")).toBe(true);
-	});
-
 	it("adds failed placeholder and retry text when send attempt fails", async () => {
 		mocks.attemptAgentReply.mockResolvedValue({
 			status: "failed",
@@ -536,7 +507,6 @@ describe("createPracticeSession", () => {
 			createOptions({
 				existingSession,
 				maxTurns: 1,
-				agentStartsFirst: true,
 			}),
 		);
 
@@ -620,8 +590,7 @@ describe("createPracticeSession", () => {
 		expect(mapped[0]?.isHidden).toBe(true);
 		expect(mapped[1]?.text).toBe("new");
 	});
-
-	it("initializes without agent-first reply when agentStartsFirst is false", async () => {
+	it("initializes a fresh session without requesting any agent opening", async () => {
 		mocks.postAction.mockResolvedValue({
 			type: "success",
 			data: { sessionId: 703 },
@@ -629,14 +598,13 @@ describe("createPracticeSession", () => {
 		const session = createSession(
 			createOptions({
 				existingSession: null,
-				agentStartsFirst: false,
 			}),
 		);
 
 		await session.initializeFreshSession();
 
-		expect(mocks.requestAgentFirstReplyAction).not.toHaveBeenCalled();
 		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(session.sessionId).toBe(703);
 		expect(session.messages.some((message) => message.isHidden)).toBe(false);
 	});
 

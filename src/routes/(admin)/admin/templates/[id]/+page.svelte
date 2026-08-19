@@ -68,7 +68,6 @@ const templateExportJson = $derived(
 				...(data.template.interactionType === "translate"
 					? {}
 					: {
-							agentStartsFirst: data.template.agentStartsFirst,
 							shortObjectiveBase: data.template.shortObjectiveBase,
 							materialsMd: data.template.materialsMd,
 						}),

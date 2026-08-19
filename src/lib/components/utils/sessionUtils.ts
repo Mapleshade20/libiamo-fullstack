@@ -4,7 +4,7 @@ export interface SessionTemplateLike {
 	maxTurns?: number | null;
 }
 
-export function calculateCurrentTurns(messages: ChatMessage[], _agentStartsFirst: boolean): number {
+export function calculateCurrentTurns(messages: ChatMessage[]): number {
 	// Turns are visible user messages, matching the server's maxTurns accounting for every layout.
 	// Agent-side placeholders (pending/failed async deliveries) must never count as completed turns.
 	return messages.filter((m) => m.role === "user" && !m.isHidden).length;

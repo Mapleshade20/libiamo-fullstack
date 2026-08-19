@@ -44,7 +44,6 @@ export const template = pgTable(
 	{
 		id: serial("id").primaryKey(),
 		isActive: boolean("is_active").default(true).notNull(),
-		agentStartsFirst: boolean("agent_starts_first").default(true).notNull(),
 		urgency: urgencyEnum("urgency"),
 		language: languageCodeEnum("language").notNull(),
 		interactionType: interactionTypeEnum("interaction_type").notNull(),
@@ -90,7 +89,6 @@ export const templateContribution = pgTable("template_contribution", {
 	interactionType: interactionTypeEnum("interaction_type").notNull(),
 	ui: uiVariantEnum("ui").notNull(),
 	cadence: cadenceEnum("cadence"),
-	agentStartsFirst: boolean("agent_starts_first"),
 	urgency: urgencyEnum("urgency"),
 
 	titleBase: text("title_base").notNull(),

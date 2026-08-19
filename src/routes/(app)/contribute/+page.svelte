@@ -21,7 +21,6 @@ type ImportedTemplateData = {
 	pointReward?: number;
 	gemReward?: number;
 	isActive?: boolean;
-	agentStartsFirst?: boolean;
 	titleBase?: string;
 	shortObjectiveBase?: string | null;
 	descriptionBase?: string | null;

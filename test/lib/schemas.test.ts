@@ -114,7 +114,6 @@ describe("schemas", () => {
 			interactionType: "translate",
 			ui: "translator",
 			cadence: "none",
-			agentStartsFirst: "on",
 			shortObjectiveBase: "Translate this on the card.",
 			materialsMd: "# Background",
 			agentPromptBase: "a note to a close friend",
@@ -123,7 +122,6 @@ describe("schemas", () => {
 
 		expect(result.shortObjectiveBase).toBeNull();
 		expect(result.materialsMd).toBeNull();
-		expect(result.agentStartsFirst).toBe(false);
 	});
 
 	it("returns error when required template fields are missing", () => {
@@ -213,7 +211,6 @@ describe("schemas", () => {
 		expect(result).not.toHaveProperty("pointReward");
 		expect(result).not.toHaveProperty("gemReward");
 		expect(result).not.toHaveProperty("isActive");
-		expect(result).not.toHaveProperty("agentStartsFirst");
 	});
 
 	it("templateContributionSchema transforms objectivesBase newline to array", () => {
@@ -275,7 +272,6 @@ describe("schemas", () => {
 
 		expect(result.shortObjectiveBase).toBeNull();
 		expect(result.materialsMd).toBeNull();
-		expect(result).not.toHaveProperty("agentStartsFirst");
 	});
 
 	it("templateContributionSchema returns empty for optional fields when not provided", () => {
