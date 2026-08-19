@@ -135,10 +135,10 @@ export class AsyncReplyWorker {
 		const leaseExpiresAt = new Date(now.getTime() + this.leaseMs);
 		const result = await db.execute(drizzleSql`
 			UPDATE agent_response_batch
-			SET status = 'processing', worker_id = ${this.workerId}, claim_token = ${claimToken}, claimed_at = ${now}, lease_expires_at = ${leaseExpiresAt}, generation_count = generation_count + 1
+			SET status = 'processing', worker_id = ${this.workerId}, claim_token = ${claimToken}, claimed_at = ${now.toISOString()}::timestamp, lease_expires_at = ${leaseExpiresAt.toISOString()}::timestamp, generation_count = generation_count + 1
 			WHERE id = (
 				SELECT id FROM agent_response_batch
-				WHERE status = 'pending' AND due_at <= ${now}
+				WHERE status = 'pending' AND due_at <= ${now.toISOString()}::timestamp
 				ORDER BY due_at ASC, id ASC
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
@@ -180,22 +180,23 @@ export class AsyncReplyWorker {
 				orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)],
 			});
 			const freshLatestUserMessageId = freshMessages.at(-1)?.id ?? null;
-			if (
-				isStaleGeneration({
-					expectedInputMessageId,
-					latestUserMessageId: freshLatestUserMessageId,
-					sessionStatus: freshSession?.status ?? "completed",
-				})
-			) {
+			const staleGeneration = isStaleGeneration({
+				expectedInputMessageId,
+				latestUserMessageId: freshLatestUserMessageId,
+				sessionStatus: freshSession?.status ?? "completed",
+			});
+			if (staleGeneration) {
+				const sessionEnded = freshSession?.status !== "in_progress";
 				await db
 					.update(agentResponseBatch)
 					.set({
-						status: "pending",
+						status: sessionEnded ? "cancelled" : "pending",
 						dueAt: new Date(now.getTime() + 2_000),
 						staleCount: batch.staleCount + 1,
 						workerId: null,
 						claimToken: null,
 						leaseExpiresAt: null,
+						completedAt: sessionEnded ? now : null,
 					})
 					.where(eq(agentResponseBatch.id, batch.id));
 				return;
@@ -219,7 +220,7 @@ export class AsyncReplyWorker {
 						leaseExpiresAt: null,
 					})
 					.where(eq(agentResponseBatch.id, batch.id));
-				if (terminated) {
+				if (terminated && deliveries.length === 0) {
 					await tx
 						.update(practiceSession)
 						.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
@@ -294,14 +295,20 @@ export class AsyncReplyWorker {
 				where: and(eq(agentDelivery.batchId, batch.id), eq(agentDelivery.status, "pending")),
 			});
 			if (!remaining) {
+				const terminated = batch.parsedResult && (batch.parsedResult as { decision?: string }).decision === "terminate_abuse";
 				await db
 					.update(agentResponseBatch)
 					.set({
-						status: batch.parsedResult && (batch.parsedResult as { decision?: string }).decision === "terminate_abuse" ? "terminated" : "completed",
+						status: terminated ? "terminated" : "completed",
 						completedAt: now,
 					})
 					.where(eq(agentResponseBatch.id, batch.id));
-				if (batch.allowIdleFollowUp) {
+				if (terminated) {
+					await db
+						.update(practiceSession)
+						.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
+						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
+				} else if (batch.allowIdleFollowUp) {
 					await this.scheduleFollowUp(db, batch.sessionId, now, session.urgency);
 				}
 			}
@@ -315,10 +322,12 @@ export class AsyncReplyWorker {
 			where: and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "processing", "delivery_pending"])),
 		});
 		if (existing) return;
-		await executor
+		const claimed = await executor
 			.update(practiceSession)
 			.set({ followUpCount: session.followUpCount + 1 })
-			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.followUpCount, session.followUpCount)));
+			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.followUpCount, session.followUpCount)))
+			.returning({ id: practiceSession.id });
+		if (claimed.length === 0) return;
 		await executor.insert(agentResponseBatch).values({
 			sessionId,
 			kind: "follow_up",

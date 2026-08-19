@@ -1,6 +1,13 @@
 <script lang="ts">
+import { untrack } from "svelte";
 import { deserialize } from "$app/forms";
-import { ASYNC_REPLY_DEMO_TASKS, type AsyncReplyDemoTask, wouldReachDemoMaxTurns } from "$lib/async-replies/live-demo";
+import {
+	ASYNC_REPLY_DEMO_TASKS,
+	type AsyncReplyDemoScenario,
+	type AsyncReplyDemoTask,
+	simulatedDemoDecision,
+	wouldReachDemoMaxTurns,
+} from "$lib/async-replies/live-demo";
 
 let { data } = $props();
 let taskId = $state(ASYNC_REPLY_DEMO_TASKS[0].id);
@@ -67,9 +74,44 @@ async function runGeneration(instruction = "Respond to the latest conversation s
 	running = false;
 }
 
+function simulateScenario(scenario: AsyncReplyDemoScenario) {
+	const parsedResult = simulatedDemoDecision(scenario);
+	artifacts = [
+		{
+			atMinutes: nowMinutes,
+			stale: false,
+			cancelled,
+			simulated: true,
+			parsedResult,
+			requestMessages: [],
+			rawResponse: JSON.stringify(parsedResult),
+			providerMetadata: { simulated: true },
+		},
+		...artifacts,
+	];
+	if (scenario === "terminate_abuse") cancelled = true;
+}
+
+function simulateStale() {
+	addInterjection();
+	artifacts = [
+		{
+			atMinutes: nowMinutes,
+			stale: true,
+			cancelled,
+			simulated: true,
+			parsedResult: null,
+			requestMessages: [],
+			rawResponse: "Generation completed after a newer user message.",
+			providerMetadata: { simulated: true },
+		},
+		...artifacts,
+	];
+}
+
 $effect(() => {
 	taskId;
-	reset();
+	untrack(reset);
 });
 </script>
 
@@ -97,6 +139,10 @@ $effect(() => {
 		>
 			{running ? "Generating… interject now to make it stale" : "Run / repeat generation"}
 		</button>
+		<button type="button" class="rounded border px-3 py-2" onclick={() => simulateScenario("no_reply")}>Simulate no-reply</button>
+		<button type="button" class="rounded border px-3 py-2" onclick={() => simulateScenario("follow_up")}>Simulate follow-up</button>
+		<button type="button" class="rounded border px-3 py-2" onclick={() => simulateScenario("terminate_abuse")}>Simulate abuse termination</button>
+		<button type="button" class="rounded border px-3 py-2" onclick={simulateStale}>Simulate stale generation</button>
 	</div>
 
 	<div class="grid gap-6 lg:grid-cols-2">

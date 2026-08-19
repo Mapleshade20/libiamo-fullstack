@@ -512,14 +512,35 @@ export async function submitAsyncMessage(
 		}
 
 		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));
-		const pendingBatch = await tx.query.agentResponseBatch.findFirst({
-			where: and(eq(agentResponseBatch.sessionId, sessionId), eq(agentResponseBatch.status, "pending")),
+		const activeBatch = await tx.query.agentResponseBatch.findFirst({
+			where: and(
+				eq(agentResponseBatch.sessionId, sessionId),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
 		});
-		if (pendingBatch) {
+		if (activeBatch?.status === "delivery_pending") {
+			await tx
+				.update(agentDelivery)
+				.set({ status: "cancelled" })
+				.where(and(eq(agentDelivery.batchId, activeBatch.id), eq(agentDelivery.status, "pending")));
+			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: "reply",
+				status: "pending",
+				dueAt,
+				inputMessageId,
+				inputVersion: activeBatch.inputVersion + 1,
+			});
+		} else if (activeBatch) {
 			await tx
 				.update(agentResponseBatch)
-				.set({ dueAt, inputMessageId, inputVersion: pendingBatch.inputVersion + 1 })
-				.where(eq(agentResponseBatch.id, pendingBatch.id));
+				.set({
+					...(activeBatch.status === "processing" ? {} : { status: "pending" as const, dueAt }),
+					inputMessageId,
+					inputVersion: activeBatch.inputVersion + 1,
+				})
+				.where(eq(agentResponseBatch.id, activeBatch.id));
 		} else {
 			await tx.insert(agentResponseBatch).values({
 				sessionId,

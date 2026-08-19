@@ -10,6 +10,19 @@ export type AsyncReplyDemoTask = {
 	seedMessages: Array<{ id: number; role: "user" | "assistant"; content: string }>;
 };
 
+export type AsyncReplyDemoScenario = "no_reply" | "follow_up" | "terminate_abuse";
+
+export function simulatedDemoDecision(scenario: AsyncReplyDemoScenario) {
+	if (scenario === "no_reply") return { decision: "no_reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null } as const;
+	if (scenario === "follow_up") return { decision: "no_reply", deliveries: [], allowIdleFollowUp: true, terminationReason: null } as const;
+	return {
+		decision: "terminate_abuse",
+		deliveries: [{ content: "I am going to end this conversation now.", replyToMessageId: null }],
+		allowIdleFollowUp: false,
+		terminationReason: "Severe personal attack",
+	} as const;
+}
+
 export const ASYNC_REPLY_DEMO_TASKS: AsyncReplyDemoTask[] = [
 	{
 		id: "discord-planning",

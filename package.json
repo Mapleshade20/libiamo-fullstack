@@ -10,7 +10,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"build:worker": "vite build --config vite.worker.config.ts",
-		"worker:async-replies": "pnpm build:worker && node build/worker/async-replies.js",
+		"worker:async-replies": "pnpm build:worker && node --env-file-if-exists=.env build/worker/async-replies.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && biome check --write",

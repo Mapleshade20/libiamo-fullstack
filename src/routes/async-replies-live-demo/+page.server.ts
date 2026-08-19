@@ -3,7 +3,6 @@ import { z } from "zod";
 import { dev } from "$app/environment";
 import { ASYNC_REPLY_DEMO_TASKS } from "$lib/async-replies/live-demo";
 import { generateAgentResponse } from "$lib/server/async-replies/generator";
-import { requireUser } from "$lib/server/auth/authz";
 import type { Actions, PageServerLoad } from "./$types";
 
 const historySchema = z.array(
@@ -14,16 +13,14 @@ const historySchema = z.array(
 	}),
 );
 
-export const load: PageServerLoad = async (event) => {
+export const load: PageServerLoad = async (_event) => {
 	if (!dev) throw error(404, "Not found");
-	requireUser(event);
 	return { tasks: ASYNC_REPLY_DEMO_TASKS };
 };
 
 export const actions: Actions = {
 	run: async (event) => {
 		if (!dev) throw error(404, "Not found");
-		const user = requireUser(event);
 		const data = await event.request.formData();
 		const task = ASYNC_REPLY_DEMO_TASKS.find((candidate) => candidate.id === data.get("taskId"));
 		if (!task) return fail(400, { error: "Unknown demo task" });
@@ -35,7 +32,7 @@ export const actions: Actions = {
 				baseSystemPrompt: task.systemPrompt,
 				ui: task.ui,
 				history: parsedHistory.data,
-				userId: user.id,
+				userId: event.locals.user?.id,
 				additionalInstruction: String(data.get("instruction") ?? "") || undefined,
 			});
 			return { success: true, result };

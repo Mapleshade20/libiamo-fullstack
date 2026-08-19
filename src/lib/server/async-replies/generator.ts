@@ -60,7 +60,7 @@ export type GenerateAgentResponseInput = {
 	baseSystemPrompt: string;
 	ui: UiVariant;
 	history: AgentHistoryMessage[];
-	userId: string;
+	userId?: string;
 	additionalInstruction?: string;
 };
 
