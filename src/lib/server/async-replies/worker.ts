@@ -32,6 +32,19 @@ export function shouldRetryGeneration(generationCount: number): boolean {
 	return generationCount < MAX_GENERATION_ATTEMPTS;
 }
 
+/**
+ * A reply the agent already composed when the turn-limit message landed is still
+ * delivered into the completed session; every other ended session (user
+ * requested, expired, abuse) cancels outstanding deliveries.
+ */
+export function shouldDeliverIntoEndedSession(
+	session: { status: string; completionReason: string | null } | null | undefined,
+	batchStatus: string,
+): boolean {
+	if (session?.status === "in_progress") return true;
+	return session?.status === "completed" && session.completionReason === "max_turns" && batchStatus === "delivery_pending";
+}
+
 function safeError(error: unknown): string {
 	return error instanceof Error && error.message.trim() ? error.message.slice(0, 500) : "The AI reply could not be generated.";
 }
@@ -263,17 +276,26 @@ export class AsyncReplyWorker {
 				history,
 				userId: session.userId,
 			});
-			const freshSession = await db.query.practiceSession.findFirst({ where: eq(practiceSession.id, session.id), columns: { status: true } });
+			const freshSession = await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, session.id),
+				columns: { status: true, completionReason: true },
+			});
 			const freshMessages = await db.query.sessionMessage.findMany({
 				where: and(eq(sessionMessage.sessionId, session.id), eq(sessionMessage.role, "user")),
 				orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)],
 			});
 			const freshLatestUserMessageId = freshMessages.at(-1)?.id ?? null;
-			const staleGeneration = isStaleGeneration({
-				expectedInputMessageId,
-				latestUserMessageId: freshLatestUserMessageId,
-				sessionStatus: freshSession?.status ?? "completed",
-			});
+			// When the turn-limit message ends the session mid-generation, the reply
+			// being composed is still delivered instead of being discarded as stale:
+			// there is nothing left to fold in (no further turn can happen).
+			const endedByMaxTurns = freshSession?.status === "completed" && freshSession.completionReason === "max_turns";
+			const staleGeneration =
+				!endedByMaxTurns &&
+				isStaleGeneration({
+					expectedInputMessageId,
+					latestUserMessageId: freshLatestUserMessageId,
+					sessionStatus: freshSession?.status ?? "completed",
+				});
 			if (staleGeneration) {
 				const sessionEnded = freshSession?.status !== "in_progress";
 				await db
@@ -395,9 +417,9 @@ export class AsyncReplyWorker {
 			if (!batch) continue;
 			const session = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, batch.sessionId),
-				columns: { status: true, urgency: true },
+				columns: { status: true, completionReason: true, urgency: true },
 			});
-			if (!session || session.status !== "in_progress") {
+			if (!session || !shouldDeliverIntoEndedSession(session, batch.status)) {
 				await db
 					.update(agentDelivery)
 					.set({ status: "cancelled" })

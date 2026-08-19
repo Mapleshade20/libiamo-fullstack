@@ -501,13 +501,12 @@ export async function submitAsyncMessage(
 			const cancelled = await tx
 				.update(agentResponseBatch)
 				.set({ status: "cancelled", completedAt: now })
-				.where(
-					and(
-						eq(agentResponseBatch.sessionId, sessionId),
-						inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
-					),
-				)
+				.where(and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "stale"])))
 				.returning({ id: agentResponseBatch.id });
+			// Replies the agent already composed (delivery_pending) or is still composing
+			// (processing, held by a worker's claim fence) are left alive on purpose: the
+			// turn limit ends the session, but the in-flight reply is still delivered
+			// into it. Orphaned processing batches are cancelled later via lease reclaim.
 			if (cancelled.length > 0) {
 				await tx
 					.update(agentDelivery)

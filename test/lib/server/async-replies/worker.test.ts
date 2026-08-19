@@ -5,6 +5,7 @@ import {
 	getUrgencyFollowUpAt,
 	isStaleGeneration,
 	MAX_GENERATION_ATTEMPTS,
+	shouldDeliverIntoEndedSession,
 	shouldRetryGeneration,
 } from "$lib/server/async-replies/worker";
 
@@ -28,6 +29,15 @@ describe("async reply worker scheduling", () => {
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 5, sessionStatus: "in_progress" })).toBe(true);
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 4, sessionStatus: "completed" })).toBe(true);
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 4, sessionStatus: "in_progress" })).toBe(false);
+	});
+
+	it("only delivers into ended sessions when a max_turns reply is already composed", () => {
+		expect(shouldDeliverIntoEndedSession({ status: "in_progress", completionReason: null }, "delivery_pending")).toBe(true);
+		expect(shouldDeliverIntoEndedSession(null, "delivery_pending")).toBe(false);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "delivery_pending")).toBe(true);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_session_age" }, "delivery_pending")).toBe(false);
 	});
 
 	it("bounds generation retries per batch", () => {

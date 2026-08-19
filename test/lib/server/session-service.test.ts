@@ -589,6 +589,77 @@ describe("session service", () => {
 			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
 		});
 
+		it("keeps already-composed replies deliverable when the maxTurns message completes the session", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [{ id: 1, role: "user", content: "First", llmMetadata: null }],
+			});
+			const updates: { setArgs: unknown[][]; whereArgs: unknown[][] }[] = [];
+			const strings: string[] = [];
+			const stringLists: string[][] = [];
+			const seen = new Set<unknown>();
+			const collect = (value: unknown): void => {
+				if (typeof value === "string") {
+					strings.push(value);
+					return;
+				}
+				if (Array.isArray(value)) {
+					if (value.length > 0 && value.every((item) => typeof item === "string")) {
+						stringLists.push(value as string[]);
+						return;
+					}
+					value.forEach(collect);
+					return;
+				}
+				if (value && typeof value === "object") {
+					if (seen.has(value)) return;
+					seen.add(value);
+					Object.values(value).forEach(collect);
+				}
+			};
+			mockDb.update.mockImplementation(
+				() =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ setArgs: [setArgs], whereArgs: [whereArgs] });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+
+			await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+
+			const batchCancel = updates.find(({ setArgs, whereArgs }) => {
+				strings.length = 0;
+				stringLists.length = 0;
+				seen.clear();
+				collect(setArgs);
+				if (!strings.includes("cancelled")) return false;
+				strings.length = 0;
+				stringLists.length = 0;
+				seen.clear();
+				collect(whereArgs);
+				// the cancel list covers batches still waiting or generating, but not a
+				// reply the agent already composed (delivery_pending stays deliverable)
+				return stringLists.some((list) => list.includes("pending"));
+			});
+			expect(batchCancel).toBeDefined();
+			strings.length = 0;
+			stringLists.length = 0;
+			seen.clear();
+			collect(batchCancel?.whereArgs ?? []);
+			// bare strings = the inArray params (pgEnum value arrays are collected
+			// separately as stringLists, so they cannot mask this assertion)
+			expect(strings).toEqual(expect.arrayContaining(["pending", "stale"]));
+			expect(strings).not.toContain("delivery_pending");
+			expect(strings).not.toContain("processing");
+		});
+
 		it("revives a failed user message on manual retry instead of returning pending", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,
