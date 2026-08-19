@@ -65,10 +65,10 @@ related-issue: docs/issues/2026-08-16-async-agent-replies.md
 - 退出条件：协议 schema、解析错误、provider metadata 和安全终止行为均有测试证据。
 - Commit：`feat: add structured agent reply generation`
 
-## 阶段 4：response batch 与独立 worker
+## 阶段 4：response batch 与 worker
 
 - 实现消息水位、dueAt、原子 claim、lease、租约恢复、stale generation 和 delivery 调度。
-- 增加独立 worker 构建、启动命令和优雅关闭。
+- worker 以后在 Web 服务进程内运行（`hooks.server.ts` 启动，`sveltekit:shutdown` 优雅停止；曾短暂为独立进程，后按决策内联，部署只有单个服务）。
 - 实现 maxSessionAge、idle follow-up、provider failure、重试边界和迟到结果保护。
 - 确保 worker 使用正确 userId 解析 BYOK 和 trial quota。
 - 添加 worker、并发、幂等、取消、重启恢复和 lease 测试。
@@ -111,7 +111,7 @@ related-issue: docs/issues/2026-08-16-async-agent-replies.md
 
 - 补充缺失的集成和回归测试。
 - 运行 `pnpm check`、`pnpm test`、`pnpm build`。
-- 启动 Web 和独立 worker，执行双进程 smoke test。
+- 启动 Web 服务（worker 内联同进程），执行 smoke test。
 - 使用 CDP 控制 ungoogled-chromium，验证 worker 重启、lease 恢复、关闭页面后的真实回复、刷新持久化、Quest Hall 未读，以及两个固定任务中的连续消息、插话、no-reply、follow-up、abuse termination、maxTurns 立即完成、stale generation 和 cancelled delivery。
 - 记录浏览器版本、CDP endpoint、实际 URL、关键交互、可见结果、控制台/网络错误和清理结果。
 - 不修改前面 commit；发现问题时在本步骤直接修复。
