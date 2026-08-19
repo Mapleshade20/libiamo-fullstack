@@ -322,6 +322,9 @@ type SendMessageResult = {
 	turnCount: number;
 	terminated?: boolean;
 	pending?: boolean;
+	/** The send itself completed the session (e.g. the maxTurns message); clients must navigate instead of calling complete. */
+	sessionCompleted?: boolean;
+	completionReason?: "max_turns";
 };
 
 type SessionMessageMetadata = {
@@ -448,36 +451,48 @@ export async function submitAsyncMessage(
 		if (!session) throw new Error("Session not found");
 		if (session.status !== "in_progress") throw new Error("Session not in progress");
 
+		let revivedMessageId: number | null = null;
 		if (clientMessageId) {
 			const existing = session.messages.find(
 				(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
 			);
 			if (existing) {
-				return { reply: "", turnCount: countVisibleUserTurns(session.messages), pending: true };
+				if (getMessageMetadata(existing.llmMetadata).failed !== true) {
+					return { reply: "", turnCount: countVisibleUserTurns(session.messages), pending: true };
+				}
+				// A failed generation is terminal; a manual retry clears the failure and schedules a fresh batch.
+				await tx
+					.update(sessionMessage)
+					.set({ llmMetadata: { ...getMessageMetadata(existing.llmMetadata), failed: false, failureError: null } })
+					.where(eq(sessionMessage.id, existing.id));
+				revivedMessageId = existing.id;
 			}
 		}
 
-		const inserted = await tx
-			.insert(sessionMessage)
-			.values({
-				sessionId,
-				role: "user",
-				content: promptContent,
-				llmMetadata:
-					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
-						? {
-								...options.userMetadata,
-								clientMessageId,
-								hidden: options.hiddenUserMessage === true,
-								displayContent,
-							}
-						: undefined,
-			})
-			.returning({ id: sessionMessage.id });
-		const inputMessageId = inserted[0]?.id;
-		if (!inputMessageId) throw new Error("Failed to persist message");
+		let inputMessageId = revivedMessageId;
+		if (!inputMessageId) {
+			const inserted = await tx
+				.insert(sessionMessage)
+				.values({
+					sessionId,
+					role: "user",
+					content: promptContent,
+					llmMetadata:
+						clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
+							? {
+									...options.userMetadata,
+									clientMessageId,
+									hidden: options.hiddenUserMessage === true,
+									displayContent,
+								}
+							: undefined,
+				})
+				.returning({ id: sessionMessage.id });
+			inputMessageId = inserted[0]?.id ?? null;
+			if (!inputMessageId) throw new Error("Failed to persist message");
+		}
 
-		const turnCount = countVisibleUserTurns(session.messages) + (options.hiddenUserMessage ? 0 : 1);
+		const turnCount = countVisibleUserTurns(session.messages) + (revivedMessageId !== null || options.hiddenUserMessage ? 0 : 1);
 		const maxTurns = options.maxTurns ?? 0;
 		if (!options.hiddenUserMessage && maxTurns > 0 && turnCount >= maxTurns) {
 			await tx
@@ -508,7 +523,7 @@ export async function submitAsyncMessage(
 						),
 					);
 			}
-			return { reply: "", turnCount, pending: false, terminated: true };
+			return { reply: "", turnCount, pending: false, sessionCompleted: true, completionReason: "max_turns" };
 		}
 
 		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));

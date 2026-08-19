@@ -71,7 +71,7 @@ function mapCompleteSessionError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "Session not found") return fail(404, { error: e.message });
 	if (e.message === "Task not found") return fail(404, { error: e.message });
-	if (e.message === "Session not in progress or completed") return fail(409, { error: e.message });
+	if (e.message === "Session not in progress or completed" || e.message === "Session not in progress") return fail(409, { error: e.message });
 	return null;
 }
 

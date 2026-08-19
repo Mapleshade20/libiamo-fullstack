@@ -23,7 +23,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { agentResponseBatch, practiceSession } from "$lib/server/db/schema";
+import { agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession, submitAsyncMessage } from "$lib/server/session";
 
 function mockAgentReply(reply: string, terminated = false) {
@@ -574,9 +574,27 @@ describe("session service", () => {
 
 			const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
 
-			expect(result).toEqual({ reply: "", turnCount: 2, pending: false, terminated: true });
+			expect(result).toEqual({ reply: "", turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
 			expect(mockDb.insert).not.toHaveBeenCalledWith(agentResponseBatch);
 			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
+		});
+
+		it("revives a failed user message on manual retry instead of returning pending", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [{ id: 9, role: "user", content: "Hello", llmMetadata: { clientMessageId: "client-1", failed: true, failureError: "boom" } }],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
+
+			const result = await submitAsyncMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
+
+			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
+			// the failure flag was cleared and a fresh batch was scheduled for the same message
+			expect(mockDb.update).toHaveBeenCalledWith(sessionMessage);
+			expect(mockDb.insert).toHaveBeenCalledWith(agentResponseBatch);
 		});
 	});
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
-import { type ChatMessage, chatJson } from "$lib/server/llm";
+import { type ChatMessage, chatJson, type StructuredOutputErrorDetails } from "$lib/server/llm";
 
 const deliverySchema = z.object({
 	content: z.string().trim().min(1).max(50_000),
@@ -53,8 +53,34 @@ export type AgentGenerationArtifacts = {
 		quota?: unknown;
 		raw: unknown;
 		repair: null | { initialContent: string; initialRaw: unknown; errors: string[] };
+		contractWarnings?: string[];
 	};
 };
+
+/** Failure evidence available even when generation does not produce a parsed result. */
+export type AgentGenerationFailureArtifacts = {
+	requestMessages: ChatMessage[];
+	rawResponse: string | null;
+	providerMetadata: {
+		id?: string;
+		model?: string;
+		finishReason: string | null;
+		usage?: unknown;
+		raw: unknown;
+		validationErrors?: string[];
+		failureStage: "provider" | "parse";
+	};
+};
+
+export class AgentGenerationError extends Error {
+	readonly failureArtifacts: AgentGenerationFailureArtifacts;
+
+	constructor(message: string, failureArtifacts: AgentGenerationFailureArtifacts, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "AgentGenerationError";
+		this.failureArtifacts = failureArtifacts;
+	}
+}
 
 export type GenerateAgentResponseInput = {
 	baseSystemPrompt: string;
@@ -66,11 +92,18 @@ export type GenerateAgentResponseInput = {
 
 const THREADED_UIS = new Set<UiVariant>(["reddit", "ao3"]);
 
+const AGENT_RESPONSE_JSON_SHAPE = {
+	decision: "reply | no_reply | terminate_abuse",
+	deliveries: [{ content: "complete message text", replyToMessageId: 12345 }],
+	allowIdleFollowUp: true,
+	terminationReason: null,
+};
+
 export function buildAgentResponseMessages(input: Omit<GenerateAgentResponseInput, "userId">): ChatMessage[] {
 	const targetRule = THREADED_UIS.has(input.ui)
 		? "For Reddit/AO3, replyToMessageId may reference a message_id from the supplied history when threading matters. Otherwise use null."
 		: "This is a linear interface. Every replyToMessageId must be null.";
-	const system = `${input.baseSystemPrompt}\n\nASYNC RESPONSE CONTRACT:\n- Return JSON matching the supplied schema.\n- decision=reply requires one or more complete, natural messages. Never emit sentence fragments, drafts, narration, sender labels, or mechanical punctuation splits.\n- decision=no_reply means a real person would reasonably send nothing now. It must contain no deliveries.\n- decision=terminate_abuse is reserved only for severe insults or attacks. Ordinary disagreement, thanks, farewells, or a conversation that feels complete are never abuse termination.\n- allowIdleFollowUp only controls whether a later idle follow-up may be scheduled. Setting it false never completes the session.\n- terminationReason is null unless decision=terminate_abuse.\n- ${targetRule}`;
+	const system = `${input.baseSystemPrompt}\n\nASYNC RESPONSE CONTRACT:\n- Return ONLY a single JSON object with exactly this shape: ${JSON.stringify(AGENT_RESPONSE_JSON_SHAPE)}\n- No Markdown fences, no commentary, no extra keys. Replace the example values with real ones; replyToMessageId is null when the target rule below says so.\n- decision=reply requires one or more complete, natural messages. Never emit sentence fragments, drafts, narration, sender labels, or mechanical punctuation splits.\n- decision=no_reply means a real person would reasonably send nothing now. It must contain no deliveries.\n- decision=terminate_abuse is reserved only for severe insults or attacks. Ordinary disagreement, thanks, farewells, or a conversation that feels complete are never abuse termination.\n- allowIdleFollowUp only controls whether a later idle follow-up may be scheduled. Setting it false never completes the session.\n- terminationReason is null unless decision=terminate_abuse.\n- ${targetRule}`;
 
 	const history = input.history.map((message) => ({
 		message_id: message.id,
@@ -88,28 +121,63 @@ export function buildAgentResponseMessages(input: Omit<GenerateAgentResponseInpu
 	];
 }
 
-export function validateReplyTargets(decision: AgentResponseDecision, ui: UiVariant, history: AgentHistoryMessage[]): AgentResponseDecision {
+export function normalizeReplyTargets(
+	decision: AgentResponseDecision,
+	ui: UiVariant,
+	history: AgentHistoryMessage[],
+): { decision: AgentResponseDecision; warnings: string[] } {
 	const validIds = new Set(history.flatMap((message) => (typeof message.id === "number" ? [message.id] : [])));
-	for (const delivery of decision.deliveries) {
-		if (!THREADED_UIS.has(ui) && delivery.replyToMessageId !== null) {
-			throw new Error(`replyToMessageId is not allowed for ${ui}`);
+	const warnings: string[] = [];
+	const deliveries = decision.deliveries.map((delivery) => {
+		if (delivery.replyToMessageId === null) return delivery;
+		if (!THREADED_UIS.has(ui)) {
+			warnings.push(`Coerced non-null replyToMessageId ${delivery.replyToMessageId} to null for linear interface ${ui}`);
+			return { ...delivery, replyToMessageId: null };
 		}
-		if (delivery.replyToMessageId !== null && !validIds.has(delivery.replyToMessageId)) {
+		if (!validIds.has(delivery.replyToMessageId)) {
 			throw new Error(`Invalid replyToMessageId: ${delivery.replyToMessageId}`);
 		}
-	}
-	return decision;
+		return delivery;
+	});
+	return { decision: { ...decision, deliveries }, warnings };
+}
+
+export function validateReplyTargets(decision: AgentResponseDecision, ui: UiVariant, history: AgentHistoryMessage[]): AgentResponseDecision {
+	return normalizeReplyTargets(decision, ui, history).decision;
+}
+
+function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentGenerationFailureArtifacts {
+	const details = (error as { details?: StructuredOutputErrorDetails } | null)?.details;
+	return {
+		requestMessages: messages,
+		rawResponse: details?.initialContent ?? null,
+		providerMetadata: {
+			id: details?.id,
+			model: details?.model,
+			finishReason: details?.finishReason ?? null,
+			usage: details?.usage,
+			raw: details?.initialRaw ?? null,
+			validationErrors: details?.errors,
+			failureStage: details ? "parse" : "provider",
+		},
+	};
 }
 
 export async function generateAgentResponse(input: GenerateAgentResponseInput): Promise<AgentGenerationArtifacts> {
 	const messages = buildAgentResponseMessages(input);
-	const response = await chatJson({ schema: agentResponseDecisionSchema, messages, userId: input.userId });
-	const parsedResult = validateReplyTargets(response.value, input.ui, input.history);
+	let response: Awaited<ReturnType<typeof chatJson<typeof agentResponseDecisionSchema>>>;
+	try {
+		response = await chatJson({ schema: agentResponseDecisionSchema, messages, userId: input.userId });
+	} catch (error) {
+		const message = error instanceof Error && error.message ? error.message : "Agent generation failed";
+		throw new AgentGenerationError(message, providerErrorArtifacts(messages, error), { cause: error });
+	}
+	const { decision, warnings } = normalizeReplyTargets(response.value, input.ui, input.history);
 
 	return {
 		requestMessages: response.requestMessages,
 		rawResponse: response.content,
-		parsedResult,
+		parsedResult: decision,
 		providerMetadata: {
 			id: response.id,
 			model: response.model,
@@ -118,6 +186,7 @@ export async function generateAgentResponse(input: GenerateAgentResponseInput): 
 			quota: response.quota,
 			raw: response.raw,
 			repair: response.repair,
+			...(warnings.length > 0 ? { contractWarnings: warnings } : {}),
 		},
 	};
 }

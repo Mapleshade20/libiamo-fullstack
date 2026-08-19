@@ -4,10 +4,11 @@ const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
 vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
 import {
+	AgentGenerationError,
 	agentResponseDecisionSchema,
 	buildAgentResponseMessages,
 	generateAgentResponse,
-	validateReplyTargets,
+	normalizeReplyTargets,
 } from "$lib/server/async-replies/generator";
 
 const reply = {
@@ -49,20 +50,21 @@ describe("structured agent response", () => {
 		expect(messages[1].content).toContain("Gracias, adiós.");
 	});
 
-	it("rejects illegal thread targets and targets on linear interfaces", () => {
-		expect(() => validateReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 7 }] }, "imessage", [])).toThrow(
-			"not allowed",
-		);
+	it("coerces linear-interface targets to null and rejects unknown threaded targets", () => {
+		expect(normalizeReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 7 }] }, "imessage", [])).toMatchObject({
+			decision: { deliveries: [{ replyToMessageId: null }] },
+			warnings: [expect.stringContaining("replyToMessageId 7")],
+		});
 		expect(() =>
-			validateReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 99 }] }, "reddit", [
+			normalizeReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 99 }] }, "reddit", [
 				{ id: 7, role: "user", content: "Parent" },
 			]),
 		).toThrow("Invalid replyToMessageId");
 		expect(
-			validateReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 7 }] }, "ao3", [
+			normalizeReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 7 }] }, "ao3", [
 				{ id: 7, role: "user", content: "Parent" },
 			]),
-		).toMatchObject({ deliveries: [{ replyToMessageId: 7 }] });
+		).toMatchObject({ decision: { deliveries: [{ replyToMessageId: 7 }] }, warnings: [] });
 	});
 
 	it("returns exact prompts, raw response, parsed result, metadata, and repair artifacts", async () => {
@@ -99,5 +101,58 @@ describe("structured agent response", () => {
 			finishReason: "stop",
 			repair: { initialContent: "bad" },
 		});
+	});
+
+	it("inlines the exact JSON response shape into the system prompt", () => {
+		const [system] = buildAgentResponseMessages({ baseSystemPrompt: "Context", ui: "discord", history: [] });
+		expect(system.role).toBe("system");
+		expect(system.content).toContain('"decision":"reply | no_reply | terminate_abuse"');
+		expect(system.content).toContain('"deliveries":[{"content":"complete message text","replyToMessageId":12345}]');
+		expect(system.content).toContain('"allowIdleFollowUp":true');
+		expect(system.content).toContain('"terminationReason":null');
+	});
+
+	it("wraps provider failures with request evidence for later inspection", async () => {
+		const providerError = Object.assign(new Error("provider exploded"), {
+			details: {
+				initialContent: "not json",
+				initialRaw: { id: "raw-x" },
+				errors: ["Invalid JSON: boom"],
+				finishReason: "stop",
+				usage: { totalTokens: 7 },
+				id: "completion-x",
+				model: "test-model",
+			},
+		});
+		mockChatJson.mockRejectedValue(providerError);
+
+		const failure = await generateAgentResponse({
+			baseSystemPrompt: "Context",
+			ui: "discord",
+			history: [{ id: 1, role: "user", content: "Hi" }],
+		}).catch((error) => error);
+
+		expect(failure).toBeInstanceOf(AgentGenerationError);
+		expect(failure.failureArtifacts.rawResponse).toBe("not json");
+		expect(failure.failureArtifacts.requestMessages).toHaveLength(2);
+		expect(failure.failureArtifacts.providerMetadata).toMatchObject({
+			id: "completion-x",
+			finishReason: "stop",
+			failureStage: "parse",
+			validationErrors: ["Invalid JSON: boom"],
+		});
+	});
+
+	it("attributes failures without details to the provider stage", async () => {
+		mockChatJson.mockRejectedValue(new Error("network down"));
+
+		const failure = await generateAgentResponse({
+			baseSystemPrompt: "Context",
+			ui: "discord",
+			history: [],
+		}).catch((error) => error);
+
+		expect(failure.failureArtifacts.providerMetadata.failureStage).toBe("provider");
+		expect(failure.failureArtifacts.rawResponse).toBeNull();
 	});
 });

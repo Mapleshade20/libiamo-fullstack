@@ -344,6 +344,11 @@ async function handleRetry(messageId: string) {
 		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
 		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
 
+		if (result.status === "session_completed") {
+			isCompleted = true;
+			window.location.href = `/task/${taskId}/feedback`;
+			return;
+		}
 		appendAgentMessageFromSendResult(result, message.clientMessageId, retryText);
 		await refreshAfterSendResult(result);
 	} finally {
@@ -359,7 +364,6 @@ async function handleSendEmail() {
 	const currentText = formatDraftMessage(draft, t.noSubject);
 	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
 	const clientMessageId = crypto.randomUUID();
-	const expectedTurnCount = currentTurns + 1;
 	isSubmitting = true;
 
 	const sentMessage: ChatMessage = {
@@ -381,15 +385,16 @@ async function handleSendEmail() {
 
 	try {
 		const result = await attemptAgentReply(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
-		if (result.status === "reply" || result.status === "pending" || result.status === "failed") {
+		if (result.status === "session_completed") {
+			// The server completed the session in the send transaction; navigate straight to feedback.
+			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
+			draft = getDefaultDraft();
+			isCompleted = true;
+			window.location.href = `/task/${taskId}/feedback`;
+		} else if (result.status === "reply" || result.status === "pending" || result.status === "failed") {
 			appendAgentMessageFromSendResult(result, clientMessageId, currentText);
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
-			if (maxTurns > 0 && expectedTurnCount >= maxTurns && result.status === "reply") {
-				await handleComplete(true);
-			} else if (result.status === "reply" && result.terminated === true) {
-				await handleComplete(true);
-			}
 			await refreshAfterSendResult(result);
 		} else {
 			console.error("Mail submission was rejected:", result);

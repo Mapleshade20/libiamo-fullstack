@@ -6,7 +6,8 @@ export type SendAttemptResult =
 	| { status: "reply"; text: string; terminated: boolean }
 	| { status: "pending" }
 	| { status: "failed"; error?: string }
-	| { status: "rejected" };
+	| { status: "rejected" }
+	| { status: "session_completed"; completionReason?: string };
 
 function actionErrorMessage(result: unknown): string | undefined {
 	if (!result || typeof result !== "object") return undefined;
@@ -50,6 +51,9 @@ export async function attemptAgentReply(
 		}
 
 		if (result?.type === "success" && result.data) {
+			if ((result.data as any).sessionCompleted) {
+				return { status: "session_completed", completionReason: (result.data as any).completionReason };
+			}
 			if ((result.data as any).pending) {
 				return { status: "pending" };
 			}

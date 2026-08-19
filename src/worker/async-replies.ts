@@ -4,6 +4,7 @@ const worker = new AsyncReplyWorker({
 	scanIntervalMs: Number(process.env.ASYNC_REPLY_WORKER_SCAN_MS ?? 1_000),
 	leaseMs: Number(process.env.ASYNC_REPLY_WORKER_LEASE_MS ?? 30_000),
 	concurrency: Number(process.env.ASYNC_REPLY_WORKER_CONCURRENCY ?? 2),
+	retryBackoffMs: Number(process.env.ASYNC_REPLY_WORKER_RETRY_MS ?? 60_000),
 });
 
 worker.start();

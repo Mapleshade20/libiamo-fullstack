@@ -127,6 +127,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (result.status === "reply") {
 			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
 			if (result.terminated) handleCompleteAndNavigate(String(taskId ?? ""));
+		} else if (result.status === "session_completed") {
+			// The server already finished the session in the send transaction; navigate without calling complete.
+			finishAndNavigateToFeedback(String(taskId ?? ""));
 		} else if (result.status === "pending") {
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
@@ -226,15 +229,26 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			const result = await completeAction(sessionId);
 
 			if (result.type === "success") {
-				isCompleted = true;
-				// Navigate to feedback page
-				window.location.href = `/task/${taskId}/feedback`;
+				finishAndNavigateToFeedback(taskId);
+			} else {
+				// A completed session (e.g. finished by the send itself) is still a success for navigation purposes.
+				const error = actionErrorMessage(result) ?? "";
+				if (error.includes("Session not in progress")) {
+					finishAndNavigateToFeedback(taskId);
+				} else {
+					console.error("Completion failed:", error || result);
+				}
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
 		} finally {
 			isCompleting = false;
 		}
+	}
+
+	function finishAndNavigateToFeedback(taskId: string) {
+		isCompleted = true;
+		window.location.href = `/task/${taskId}/feedback`;
 	}
 
 	async function handleSend(
@@ -401,7 +415,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	$effect(() => {
 		const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
-		if (needsPolling && !isSubmitting && sessionId) {
+		if (needsPolling && !isSubmitting && sessionId && !isCompleted) {
 			const interval = setInterval(() => {
 				void refreshPracticeSession();
 				void refreshTrialQuota();

@@ -358,9 +358,12 @@ describe("chatJson", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatJson } = await import("$lib/server/llm");
-		await expect(chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
-			"The AI response was not in the expected format. Please try again.",
+		const failure = await chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] }).catch(
+			(error) => error,
 		);
+		expect(failure.message).toBe("The AI response was not in the expected format. Please try again.");
+		expect(failure.details).toMatchObject({ initialContent: "not json" });
+		expect(failure.details.errors).toEqual([expect.stringContaining("not json"), expect.stringContaining("still not json")]);
 	});
 
 	it("does not repair a truncated structured completion", async () => {

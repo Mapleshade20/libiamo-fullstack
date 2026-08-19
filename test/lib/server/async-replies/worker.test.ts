@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getDeliveryDueAt, getUrgencyFollowUpAt, isStaleGeneration } from "$lib/server/async-replies/worker";
+import {
+	getDeliveryDueAt,
+	getUrgencyFollowUpAt,
+	isStaleGeneration,
+	MAX_GENERATION_ATTEMPTS,
+	shouldRetryGeneration,
+} from "$lib/server/async-replies/worker";
 
 describe("async reply worker scheduling", () => {
 	it("spaces multiple deliveries using content length", () => {
@@ -19,5 +25,13 @@ describe("async reply worker scheduling", () => {
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 5, sessionStatus: "in_progress" })).toBe(true);
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 4, sessionStatus: "completed" })).toBe(true);
 		expect(isStaleGeneration({ expectedInputMessageId: 4, latestUserMessageId: 4, sessionStatus: "in_progress" })).toBe(false);
+	});
+
+	it("bounds generation retries per batch", () => {
+		expect(MAX_GENERATION_ATTEMPTS).toBe(3);
+		expect(shouldRetryGeneration(1)).toBe(true);
+		expect(shouldRetryGeneration(2)).toBe(true);
+		expect(shouldRetryGeneration(3)).toBe(false);
+		expect(shouldRetryGeneration(99)).toBe(false);
 	});
 });
