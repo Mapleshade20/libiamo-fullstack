@@ -1,11 +1,11 @@
 import { randomInt } from "node:crypto";
-import { type AnyColumn, and, asc, eq, type SQL } from "drizzle-orm";
+import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { getSessionExpiry } from "$lib/async-replies/timing";
+import { getSessionExpiry, sampleReplyDelayMs } from "$lib/async-replies/timing";
 import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
 import { type AgentHistoryMessage, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "./db";
-import { practiceSession, sessionMessage, task } from "./db/schema";
+import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
 import { chatJson } from "./llm";
 
 export const sessionMessageChronologicalOrder = [asc(sessionMessage.createdAt), asc(sessionMessage.id)];
@@ -427,6 +427,113 @@ export type SendMessageOptions = {
 	assistantMetadata?: Record<string, unknown>;
 };
 
+export async function submitAsyncMessage(
+	sessionId: number,
+	userMessage: string,
+	userId: string,
+	clientMessageId?: string,
+	options: SendMessageOptions = {},
+): Promise<SendMessageResult> {
+	const trimmedUserMessage = userMessage.trim();
+	if (!trimmedUserMessage) throw new Error("userMessage is required");
+	const promptContent = options.promptContent?.trim() || trimmedUserMessage;
+	const displayContent = options.userDisplayContent?.trim();
+	const now = new Date();
+
+	return db.transaction(async (tx) => {
+		const session = await tx.query.practiceSession.findFirst({
+			where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)),
+			with: { messages: { orderBy: sessionMessageChronologicalOrder } },
+		});
+		if (!session) throw new Error("Session not found");
+		if (session.status !== "in_progress") throw new Error("Session not in progress");
+
+		if (clientMessageId) {
+			const existing = session.messages.find(
+				(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+			);
+			if (existing) {
+				return { reply: "", turnCount: countVisibleUserTurns(session.messages), pending: true };
+			}
+		}
+
+		const inserted = await tx
+			.insert(sessionMessage)
+			.values({
+				sessionId,
+				role: "user",
+				content: promptContent,
+				llmMetadata:
+					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
+						? {
+								...options.userMetadata,
+								clientMessageId,
+								hidden: options.hiddenUserMessage === true,
+								displayContent,
+							}
+						: undefined,
+			})
+			.returning({ id: sessionMessage.id });
+		const inputMessageId = inserted[0]?.id;
+		if (!inputMessageId) throw new Error("Failed to persist message");
+
+		const turnCount = countVisibleUserTurns(session.messages) + (options.hiddenUserMessage ? 0 : 1);
+		const maxTurns = options.maxTurns ?? 0;
+		if (!options.hiddenUserMessage && maxTurns > 0 && turnCount >= maxTurns) {
+			await tx
+				.update(practiceSession)
+				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
+				.where(eq(practiceSession.id, sessionId));
+			const cancelled = await tx
+				.update(agentResponseBatch)
+				.set({ status: "cancelled", completedAt: now })
+				.where(
+					and(
+						eq(agentResponseBatch.sessionId, sessionId),
+						inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+					),
+				)
+				.returning({ id: agentResponseBatch.id });
+			if (cancelled.length > 0) {
+				await tx
+					.update(agentDelivery)
+					.set({ status: "cancelled" })
+					.where(
+						and(
+							inArray(
+								agentDelivery.batchId,
+								cancelled.map((batch) => batch.id),
+							),
+							eq(agentDelivery.status, "pending"),
+						),
+					);
+			}
+			return { reply: "", turnCount, pending: false, terminated: true };
+		}
+
+		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));
+		const pendingBatch = await tx.query.agentResponseBatch.findFirst({
+			where: and(eq(agentResponseBatch.sessionId, sessionId), eq(agentResponseBatch.status, "pending")),
+		});
+		if (pendingBatch) {
+			await tx
+				.update(agentResponseBatch)
+				.set({ dueAt, inputMessageId, inputVersion: pendingBatch.inputVersion + 1 })
+				.where(eq(agentResponseBatch.id, pendingBatch.id));
+		} else {
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: options.hiddenUserMessage ? "opening" : "reply",
+				status: "pending",
+				dueAt,
+				inputMessageId,
+				inputVersion: 1,
+			});
+		}
+		return { reply: "", turnCount, pending: true };
+	});
+}
+
 type RequestAgentOpeningOptions = {
 	maxTurns?: number | null;
 	promptContent?: string;
@@ -694,7 +801,40 @@ export async function completeSession(sessionId: number): Promise<void> {
 		throw new Error("Session not in progress");
 	}
 
-	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
+	const now = new Date();
+	await db.transaction(async (tx) => {
+		const cancellable = await tx.query.agentResponseBatch.findMany({
+			where: and(
+				eq(agentResponseBatch.sessionId, sessionId),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
+			columns: { id: true },
+		});
+		await tx
+			.update(practiceSession)
+			.set({ status: "completed", completionReason: "user_requested", completedAt: now })
+			.where(eq(practiceSession.id, sessionId));
+		await tx
+			.update(agentResponseBatch)
+			.set({ status: "cancelled", completedAt: now })
+			.where(
+				and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"])),
+			);
+		if (cancellable.length > 0) {
+			await tx
+				.update(agentDelivery)
+				.set({ status: "cancelled" })
+				.where(
+					and(
+						inArray(
+							agentDelivery.batchId,
+							cancellable.map((batch) => batch.id),
+						),
+						eq(agentDelivery.status, "pending"),
+					),
+				);
+		}
+	});
 }
 
 export type HintRequest = {

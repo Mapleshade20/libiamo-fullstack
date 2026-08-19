@@ -143,10 +143,11 @@ export class AsyncReplyWorker {
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
 			)
-			RETURNING *
+			RETURNING id
 		`);
-		const row = (result as unknown as Array<typeof agentResponseBatch.$inferSelect>)[0];
-		return row ?? null;
+		const id = (result as unknown as Array<{ id: number }>)[0]?.id;
+		if (!id) return null;
+		return (await db.query.agentResponseBatch.findFirst({ where: eq(agentResponseBatch.id, id) })) ?? null;
 	}
 
 	private async processBatch(batch: typeof agentResponseBatch.$inferSelect, now: Date): Promise<void> {

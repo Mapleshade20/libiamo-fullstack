@@ -1,32 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => ({
-	mockDb: {
-		query: {
-			practiceSession: { findFirst: vi.fn() },
-			task: { findFirst: vi.fn() },
-			user: { findFirst: vi.fn() },
-		},
-		select: vi.fn(() => ({
-			from: vi.fn(() => ({
-				where: vi.fn(() => []),
+const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
+	const sendMessage = vi.fn();
+	return {
+		mockDb: {
+			query: {
+				practiceSession: { findFirst: vi.fn() },
+				task: { findFirst: vi.fn() },
+				user: { findFirst: vi.fn() },
+			},
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() => []),
+				})),
 			})),
-		})),
-	},
-	mockSessionService: {
-		startSession: vi.fn(),
-		sendMessage: vi.fn(),
-		completeSession: vi.fn(),
-		generateHint: vi.fn(),
-		getSessionOrFail: vi.fn(),
-		followUpOnFeedback: vi.fn(),
-		orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
-	},
-	mockNoteService: {
-		createNotesBatch: vi.fn(),
-		validateAndCreateNoteFromSelection: vi.fn(),
-	},
-}));
+		},
+		mockSessionService: {
+			startSession: vi.fn(),
+			sendMessage,
+			submitAsyncMessage: sendMessage,
+			completeSession: vi.fn(),
+			generateHint: vi.fn(),
+			getSessionOrFail: vi.fn(),
+			followUpOnFeedback: vi.fn(),
+			orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
+		},
+		mockNoteService: {
+			createNotesBatch: vi.fn(),
+			validateAndCreateNoteFromSelection: vi.fn(),
+		},
+	};
+});
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);

@@ -23,10 +23,9 @@ import {
 	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
-	requestAgentOpening,
 	type SendMessageOptions,
-	sendMessage,
 	startSession,
+	submitAsyncMessage,
 } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -266,7 +265,7 @@ export const actions: Actions = {
 				}
 			}
 
-			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
+			const result = await submitAsyncMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);
@@ -302,8 +301,10 @@ export const actions: Actions = {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const result = await requestAgentOpening(sessionId, user.id, clientMessageId || undefined, {
+			const result = await submitAsyncMessage(sessionId, "[Agent opening requested]", user.id, clientMessageId || undefined, {
+				hiddenUserMessage: true,
 				maxTurns: taskData.template.maxTurns,
+				promptContent: "Start the conversation naturally using the scenario context.",
 			});
 			return { success: true, ...result };
 		} catch (e) {

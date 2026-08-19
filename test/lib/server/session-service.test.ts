@@ -7,9 +7,11 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 		query: {
 			task: { findFirst: vi.fn() },
 			practiceSession: { findFirst: vi.fn() },
+			agentResponseBatch: { findFirst: vi.fn(), findMany: vi.fn() },
 		},
 		insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => []) })) })),
 		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
+		transaction: vi.fn(),
 	},
 	mockClient: {
 		chatText: vi.fn(),
@@ -21,8 +23,8 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { practiceSession } from "$lib/server/db/schema";
-import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
+import { agentResponseBatch, practiceSession } from "$lib/server/db/schema";
+import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession, submitAsyncMessage } from "$lib/server/session";
 
 function mockAgentReply(reply: string, terminated = false) {
 	mockClient.chatJson.mockImplementation(async ({ messages }: { messages: unknown[] }) => {
@@ -48,6 +50,8 @@ function mockAgentReply(reply: string, terminated = false) {
 describe("session service", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
+		mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb));
+		mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
 		mockDb.insert.mockImplementation(() => ({
 			values: vi.fn(() => ({
 				returning: vi.fn().mockResolvedValue([{ id: 999 }]),
@@ -536,6 +540,43 @@ describe("session service", () => {
 
 			expect(result).toEqual({ reply: "", turnCount: 1, terminated: true });
 			expect(mockClient.chatText).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("submitAsyncMessage", () => {
+		it("persists the user message and schedules a batch without calling the provider", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
+
+			const result = await submitAsyncMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
+
+			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
+			expect(mockDb.insert).toHaveBeenCalledWith(agentResponseBatch);
+			expect(mockClient.chatJson).not.toHaveBeenCalled();
+		});
+
+		it("persists the maxTurns message, completes immediately, and does not create a batch", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [{ id: 1, role: "user", content: "First", llmMetadata: null }],
+			});
+			const returning = vi.fn().mockResolvedValue([]);
+			mockDb.update.mockImplementation(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning })) })) }));
+
+			const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+
+			expect(result).toEqual({ reply: "", turnCount: 2, pending: false, terminated: true });
+			expect(mockDb.insert).not.toHaveBeenCalledWith(agentResponseBatch);
+			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
 		});
 	});
 
