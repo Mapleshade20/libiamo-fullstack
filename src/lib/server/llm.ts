@@ -406,6 +406,7 @@ function parseStructuredOutputText<T extends z.ZodType>(schema: T, text: string)
 }
 
 export interface StructuredOutputErrorDetails {
+	requestMessages: ChatMessage[];
 	initialContent: string | null;
 	initialRaw: unknown;
 	errors: string[];
@@ -413,12 +414,31 @@ export interface StructuredOutputErrorDetails {
 	usage?: unknown;
 	id?: string;
 	model?: string;
+	repair?: {
+		requestMessages: ChatMessage[];
+		content: string | null;
+		raw: unknown;
+		errors: string[];
+		finishReason: string | null;
+		usage?: unknown;
+		id?: string;
+		model?: string;
+	};
 }
 
 function structuredOutputError(details?: StructuredOutputErrorDetails): LlmProviderError {
 	const error = new LlmProviderError("The AI response was not in the expected format. Please try again.", 502);
 	if (details) (error as LlmProviderError & { details?: StructuredOutputErrorDetails }).details = details;
 	return error;
+}
+
+function attachStructuredOutputDetails(error: unknown, details: StructuredOutputErrorDetails): void {
+	if (!error || (typeof error !== "object" && typeof error !== "function")) return;
+	try {
+		(error as { details?: StructuredOutputErrorDetails }).details = details;
+	} catch {
+		// Some provider errors may be frozen. The original provider error remains authoritative.
+	}
 }
 
 function buildRepairMessages(messages: ChatMessage[], rawContent: string, errors: string[]): ChatMessage[] {
@@ -603,6 +623,7 @@ export async function chatJson<T extends z.ZodType>({
 	const first = await chatText({ messages, options, userId });
 	if (first.finishReason === "length")
 		throw structuredOutputError({
+			requestMessages: messages,
 			initialContent: first.content,
 			initialRaw: first.raw,
 			errors: ["Response was truncated (finish_reason: length)"],
@@ -616,6 +637,7 @@ export async function chatJson<T extends z.ZodType>({
 	if (firstParse.success) return { ...first, value: firstParse.value, requestMessages: messages, repair: null };
 
 	const failureDetails = {
+		requestMessages: messages,
 		initialContent: first.content,
 		initialRaw: first.raw,
 		errors: firstParse.errors,
@@ -625,11 +647,47 @@ export async function chatJson<T extends z.ZodType>({
 		model: first.model,
 	};
 	const repairMessages = buildRepairMessages(messages, first.content, firstParse.errors);
-	const repaired = await chatText({ messages: repairMessages, options, userId });
-	if (repaired.finishReason === "length") throw structuredOutputError(failureDetails);
+	let repaired: ChatResponse;
+	try {
+		repaired = await chatText({ messages: repairMessages, options, userId });
+	} catch (error) {
+		attachStructuredOutputDetails(error, {
+			...failureDetails,
+			repair: {
+				requestMessages: repairMessages,
+				content: null,
+				raw: null,
+				errors: [error instanceof Error ? error.message : String(error)],
+				finishReason: null,
+			},
+		});
+		throw error;
+	}
+	const repairDetails = {
+		requestMessages: repairMessages,
+		content: repaired.content,
+		raw: repaired.raw,
+		errors: [] as string[],
+		finishReason: repaired.finishReason,
+		usage: repaired.usage,
+		id: repaired.id,
+		model: repaired.model,
+	};
+	if (repaired.finishReason === "length") {
+		throw structuredOutputError({
+			...failureDetails,
+			errors: [...failureDetails.errors, "Repair response was truncated (finish_reason: length)"],
+			repair: { ...repairDetails, errors: ["Response was truncated (finish_reason: length)"] },
+		});
+	}
 
 	const repairedParse = parseStructuredOutputText(schema, repaired.content);
-	if (!repairedParse.success) throw structuredOutputError({ ...failureDetails, errors: [...failureDetails.errors, ...repairedParse.errors] });
+	if (!repairedParse.success)
+		throw structuredOutputError({
+			...failureDetails,
+			errors: [...failureDetails.errors, ...repairedParse.errors],
+			repair: { ...repairDetails, errors: repairedParse.errors },
+		});
 	return {
 		...repaired,
 		value: repairedParse.value,

@@ -68,7 +68,15 @@ export type AgentGenerationFailureArtifacts = {
 		usage?: unknown;
 		raw: unknown;
 		validationErrors?: string[];
-		failureStage: "provider" | "parse";
+		failureStage: "provider" | "parse" | "validation";
+		attempts?: Array<{
+			stage: "initial" | "repair";
+			requestMessages: ChatMessage[];
+			content: string | null;
+			raw: unknown;
+			errors: string[];
+			finishReason: string | null;
+		}>;
 	};
 };
 
@@ -94,7 +102,7 @@ const THREADED_UIS = new Set<UiVariant>(["reddit", "ao3"]);
 
 const AGENT_RESPONSE_JSON_SHAPE = {
 	decision: "reply | no_reply | terminate_abuse",
-	deliveries: [{ content: "complete message text", replyToMessageId: 12345 }],
+	deliveries: [{ content: "complete message text", replyToMessageId: null }],
 	allowIdleFollowUp: true,
 	terminationReason: null,
 };
@@ -148,17 +156,68 @@ export function validateReplyTargets(decision: AgentResponseDecision, ui: UiVari
 
 function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentGenerationFailureArtifacts {
 	const details = (error as { details?: StructuredOutputErrorDetails } | null)?.details;
+	const attempts = details
+		? [
+				{
+					stage: "initial" as const,
+					requestMessages: details.requestMessages,
+					content: details.initialContent,
+					raw: details.initialRaw,
+					errors: details.errors,
+					finishReason: details.finishReason,
+				},
+				...(details.repair
+					? [
+							{
+								stage: "repair" as const,
+								requestMessages: details.repair.requestMessages,
+								content: details.repair.content,
+								raw: details.repair.raw,
+								errors: details.repair.errors,
+								finishReason: details.repair.finishReason,
+							},
+						]
+					: []),
+			]
+		: undefined;
 	return {
-		requestMessages: messages,
-		rawResponse: details?.initialContent ?? null,
+		requestMessages: details?.repair?.requestMessages ?? details?.requestMessages ?? messages,
+		rawResponse: details?.repair?.content ?? details?.initialContent ?? null,
 		providerMetadata: {
-			id: details?.id,
-			model: details?.model,
-			finishReason: details?.finishReason ?? null,
-			usage: details?.usage,
-			raw: details?.initialRaw ?? null,
-			validationErrors: details?.errors,
+			id: details?.repair?.id ?? details?.id,
+			model: details?.repair?.model ?? details?.model,
+			finishReason: details?.repair?.finishReason ?? details?.finishReason ?? null,
+			usage: details?.repair?.usage ?? details?.usage,
+			raw: details?.repair?.raw ?? details?.initialRaw ?? null,
+			validationErrors: details ? [...details.errors, ...(details.repair?.errors ?? [])] : undefined,
 			failureStage: details ? "parse" : "provider",
+			attempts,
+		},
+	};
+}
+
+function validationErrorArtifacts(response: Awaited<ReturnType<typeof chatJson>>, error: unknown): AgentGenerationFailureArtifacts {
+	return {
+		requestMessages: response.requestMessages,
+		rawResponse: response.content,
+		providerMetadata: {
+			id: response.id,
+			model: response.model,
+			finishReason: response.finishReason,
+			usage: response.usage,
+			raw: response.raw,
+			validationErrors: [error instanceof Error ? error.message : String(error)],
+			failureStage: "validation",
+			attempts: [
+				{
+					stage: response.repair ? "repair" : "initial",
+					requestMessages: response.requestMessages,
+					content: response.content,
+					raw: response.raw,
+					errors: [error instanceof Error ? error.message : String(error)],
+					finishReason: response.finishReason,
+				},
+			],
 		},
 	};
 }
@@ -172,7 +231,14 @@ export async function generateAgentResponse(input: GenerateAgentResponseInput): 
 		const message = error instanceof Error && error.message ? error.message : "Agent generation failed";
 		throw new AgentGenerationError(message, providerErrorArtifacts(messages, error), { cause: error });
 	}
-	const { decision, warnings } = normalizeReplyTargets(response.value, input.ui, input.history);
+	let normalized: ReturnType<typeof normalizeReplyTargets>;
+	try {
+		normalized = normalizeReplyTargets(response.value, input.ui, input.history);
+	} catch (error) {
+		const message = error instanceof Error && error.message ? error.message : "Agent response target validation failed";
+		throw new AgentGenerationError(message, validationErrorArtifacts(response, error), { cause: error });
+	}
+	const { decision, warnings } = normalized;
 
 	return {
 		requestMessages: response.requestMessages,

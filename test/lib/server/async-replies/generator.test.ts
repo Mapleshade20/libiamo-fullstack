@@ -107,7 +107,7 @@ describe("structured agent response", () => {
 		const [system] = buildAgentResponseMessages({ baseSystemPrompt: "Context", ui: "discord", history: [] });
 		expect(system.role).toBe("system");
 		expect(system.content).toContain('"decision":"reply | no_reply | terminate_abuse"');
-		expect(system.content).toContain('"deliveries":[{"content":"complete message text","replyToMessageId":12345}]');
+		expect(system.content).toContain('"deliveries":[{"content":"complete message text","replyToMessageId":null}]');
 		expect(system.content).toContain('"allowIdleFollowUp":true');
 		expect(system.content).toContain('"terminationReason":null');
 	});
@@ -115,6 +115,10 @@ describe("structured agent response", () => {
 	it("wraps provider failures with request evidence for later inspection", async () => {
 		const providerError = Object.assign(new Error("provider exploded"), {
 			details: {
+				requestMessages: [
+					{ role: "system", content: "exact failed prompt" },
+					{ role: "user", content: "history" },
+				],
 				initialContent: "not json",
 				initialRaw: { id: "raw-x" },
 				errors: ["Invalid JSON: boom"],
@@ -140,6 +144,37 @@ describe("structured agent response", () => {
 			finishReason: "stop",
 			failureStage: "parse",
 			validationErrors: ["Invalid JSON: boom"],
+		});
+	});
+
+	it("keeps the successful provider response when threaded target validation fails", async () => {
+		mockChatJson.mockResolvedValue({
+			value: { ...reply, deliveries: [{ content: "Reply", replyToMessageId: 999 }] },
+			content: '{"decision":"reply","deliveries":[{"content":"Reply","replyToMessageId":999}]}',
+			requestMessages: [{ role: "system", content: "exact target prompt" }],
+			id: "completion-target",
+			model: "test-model",
+			finishReason: "stop",
+			usage: { totalTokens: 12 },
+			raw: { id: "raw-target" },
+			repair: null,
+		});
+
+		const failure = await generateAgentResponse({
+			baseSystemPrompt: "Context",
+			ui: "reddit",
+			history: [{ id: 7, role: "user", content: "Parent" }],
+		}).catch((error) => error);
+
+		expect(failure).toBeInstanceOf(AgentGenerationError);
+		expect(failure.failureArtifacts).toMatchObject({
+			requestMessages: [{ role: "system", content: "exact target prompt" }],
+			rawResponse: expect.stringContaining('"replyToMessageId":999'),
+			providerMetadata: {
+				id: "completion-target",
+				failureStage: "validation",
+				validationErrors: ["Invalid replyToMessageId: 999"],
+			},
 		});
 	});
 

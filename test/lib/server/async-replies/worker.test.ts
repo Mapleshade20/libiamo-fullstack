@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	AsyncReplyWorker,
 	getDeliveryDueAt,
 	getUrgencyFollowUpAt,
 	isStaleGeneration,
 	MAX_GENERATION_ATTEMPTS,
 	shouldRetryGeneration,
 } from "$lib/server/async-replies/worker";
+
+afterEach(() => vi.useRealTimers());
 
 describe("async reply worker scheduling", () => {
 	it("spaces multiple deliveries using content length", () => {
@@ -33,5 +36,44 @@ describe("async reply worker scheduling", () => {
 		expect(shouldRetryGeneration(2)).toBe(true);
 		expect(shouldRetryGeneration(3)).toBe(false);
 		expect(shouldRetryGeneration(99)).toBe(false);
+	});
+
+	it("enforces configured concurrency across scheduler ticks and waits for active work on stop", async () => {
+		vi.useFakeTimers();
+		const worker = new AsyncReplyWorker({ scanIntervalMs: 10, concurrency: 2 });
+		const internals = worker as unknown as {
+			expireSessions: ReturnType<typeof vi.fn>;
+			reclaimExpiredLeases: ReturnType<typeof vi.fn>;
+			deliverDueMessages: ReturnType<typeof vi.fn>;
+			claimDueBatch: ReturnType<typeof vi.fn>;
+			processBatch: ReturnType<typeof vi.fn>;
+		};
+		internals.expireSessions = vi.fn().mockResolvedValue(undefined);
+		internals.reclaimExpiredLeases = vi.fn().mockResolvedValue(undefined);
+		internals.deliverDueMessages = vi.fn().mockResolvedValue(undefined);
+		const batches = [{ id: 1 }, { id: 2 }, { id: 3 }];
+		internals.claimDueBatch = vi.fn().mockImplementation(async () => batches.shift() ?? null);
+		const releases: Array<() => void> = [];
+		internals.processBatch = vi.fn().mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					releases.push(resolve);
+				}),
+		);
+
+		worker.start();
+		await vi.advanceTimersByTimeAsync(50);
+		expect(internals.processBatch).toHaveBeenCalledTimes(2);
+		expect(internals.claimDueBatch).toHaveBeenCalledTimes(2);
+
+		let stopped = false;
+		const stopping = worker.stop().then(() => {
+			stopped = true;
+		});
+		await Promise.resolve();
+		expect(stopped).toBe(false);
+		for (const release of releases) release();
+		await stopping;
+		expect(stopped).toBe(true);
 	});
 });

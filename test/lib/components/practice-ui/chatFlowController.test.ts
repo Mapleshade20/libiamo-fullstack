@@ -59,6 +59,17 @@ describe("attemptAgentReply", () => {
 		expect(result).toEqual({ status: "pending" } satisfies SendAttemptResult);
 	});
 
+	it("returns an already-completed session result without requesting completion again", async () => {
+		(global.fetch as any).mockResolvedValue({
+			text: () =>
+				Promise.resolve(JSON.stringify({ type: "success", data: { sessionCompleted: true, completionReason: "max_turns", pending: false } })),
+		});
+
+		const result = await attemptAgentReply(1, "Final turn", "client-final");
+
+		expect(result).toEqual({ status: "session_completed", completionReason: "max_turns" } satisfies SendAttemptResult);
+	});
+
 	it("returns server error message on 4xx client error", async () => {
 		mockFailure(400);
 

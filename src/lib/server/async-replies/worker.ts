@@ -15,6 +15,7 @@ export const MAX_GENERATION_ATTEMPTS = 3;
 type WorkerNow = Date;
 
 type ClaimedBatch = typeof agentResponseBatch.$inferSelect;
+type AsyncReplyExecutor = Pick<typeof db, "query" | "update" | "insert">;
 
 export function getDeliveryDueAt(firstDueAt: Date, previousContent: string | undefined): Date {
 	return new Date(firstDueAt.getTime() + (previousContent === undefined ? 0 : getDeliveryDelayMs(previousContent)));
@@ -54,6 +55,8 @@ export class AsyncReplyWorker {
 	private readonly concurrency: number;
 	private readonly retryBackoffMs: number;
 	private timer: ReturnType<typeof setInterval> | undefined;
+	private schedulerTick: Promise<void> | undefined;
+	private readonly activeGenerations = new Set<Promise<void>>();
 	private stopping = false;
 
 	constructor(options: AsyncReplyWorkerOptions = {}) {
@@ -87,16 +90,44 @@ export class AsyncReplyWorker {
 		if (this.timer) return;
 		this.stopping = false;
 		this.timer = setInterval(() => {
-			if (this.stopping) return;
-			void this.runOnce().catch((error) => console.error("async reply worker tick failed", error));
+			this.scheduleTick();
 		}, this.scanIntervalMs);
-		void this.runOnce().catch((error) => console.error("async reply worker initial tick failed", error));
+		this.scheduleTick();
 	}
 
 	async stop(): Promise<void> {
 		this.stopping = true;
 		if (this.timer) clearInterval(this.timer);
 		this.timer = undefined;
+		await this.schedulerTick;
+		await Promise.allSettled([...this.activeGenerations]);
+	}
+
+	/** Runs short scheduler scans without letting slow generations overlap the configured global concurrency. */
+	private scheduleTick(): void {
+		if (this.stopping || this.schedulerTick) return;
+		const settled = this.runScheduledTick()
+			.catch((error) => console.error("async reply worker tick failed", error))
+			.finally(() => {
+				if (this.schedulerTick === settled) this.schedulerTick = undefined;
+			});
+		this.schedulerTick = settled;
+	}
+
+	private async runScheduledTick(now: WorkerNow = new Date()): Promise<void> {
+		await this.expireSessions(now);
+		await this.reclaimExpiredLeases(now);
+		await this.deliverDueMessages(now);
+
+		while (!this.stopping && this.activeGenerations.size < this.concurrency) {
+			const batch = await this.claimDueBatch(now);
+			if (!batch) break;
+			let generation!: Promise<void>;
+			generation = this.processBatch(batch, now)
+				.catch((error) => console.error("async reply worker generation failed", error))
+				.finally(() => this.activeGenerations.delete(generation));
+			this.activeGenerations.add(generation);
+		}
 	}
 
 	/** Only the worker that currently holds the claim may write batch results. */
@@ -199,10 +230,7 @@ export class AsyncReplyWorker {
 			with: { task: true, messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] } },
 		});
 		if (!session || session.status !== "in_progress") {
-			await db
-				.update(agentResponseBatch)
-				.set({ status: "cancelled", completedAt: now })
-				.where(and(eq(agentResponseBatch.id, batch.id), eq(agentResponseBatch.status, "processing")));
+			await db.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(this.batchClaimFence(batch));
 			return;
 		}
 
@@ -210,7 +238,12 @@ export class AsyncReplyWorker {
 		const latestUserMessageId = [...history].reverse().find((message) => message.role === "user")?.id ?? null;
 		const expectedInputMessageId = batch.inputMessageId ?? latestUserMessageId;
 		if (expectedInputMessageId !== batch.inputMessageId) {
-			await db.update(agentResponseBatch).set({ inputMessageId: expectedInputMessageId }).where(eq(agentResponseBatch.id, batch.id));
+			const updated = await db
+				.update(agentResponseBatch)
+				.set({ inputMessageId: expectedInputMessageId })
+				.where(this.batchClaimFence(batch))
+				.returning({ id: agentResponseBatch.id });
+			if (updated.length === 0) return;
 		}
 
 		try {
@@ -293,10 +326,10 @@ export class AsyncReplyWorker {
 						.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
 					dueAt = getDeliveryDueAt(dueAt, delivery.content);
 				}
+				if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
+					await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
+				}
 			});
-			if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
-				await this.scheduleFollowUp(db, batch.sessionId, now, session.urgency);
-			}
 		} catch (error) {
 			await this.handleGenerationFailure(batch, now, error);
 		}
@@ -362,13 +395,13 @@ export class AsyncReplyWorker {
 				continue;
 			}
 
-			const outcome: { batchCompleted: boolean; terminated: boolean } = await db.transaction(async (tx) => {
+			await db.transaction(async (tx) => {
 				const claimed = await tx
 					.update(agentDelivery)
 					.set({ status: "delivered", deliveredAt: now })
 					.where(and(eq(agentDelivery.id, delivery.id), eq(agentDelivery.status, "pending")))
 					.returning({ id: agentDelivery.id });
-				if (claimed.length === 0) return { batchCompleted: false, terminated: false };
+				if (claimed.length === 0) return;
 
 				await tx
 					.insert(sessionMessage)
@@ -385,7 +418,7 @@ export class AsyncReplyWorker {
 				const remaining = await tx.query.agentDelivery.findFirst({
 					where: and(eq(agentDelivery.batchId, batch.id), eq(agentDelivery.status, "pending")),
 				});
-				if (remaining) return { batchCompleted: false, terminated: false };
+				if (remaining) return;
 
 				const terminated = batch.parsedResult && (batch.parsedResult as { decision?: string }).decision === "terminate_abuse";
 				const finalized = await tx
@@ -396,27 +429,27 @@ export class AsyncReplyWorker {
 					})
 					.where(and(eq(agentResponseBatch.id, batch.id), eq(agentResponseBatch.status, "delivery_pending")))
 					.returning({ id: agentResponseBatch.id });
-				if (finalized.length === 0) return { batchCompleted: false, terminated: false };
+				if (finalized.length === 0) return;
 				if (terminated) {
 					await tx
 						.update(practiceSession)
 						.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
 						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
+				} else if (batch.allowIdleFollowUp) {
+					await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
 				}
-				return { batchCompleted: true, terminated: terminated === true };
 			});
-
-			if (outcome.batchCompleted && !outcome.terminated && batch.allowIdleFollowUp) {
-				await this.scheduleFollowUp(db, batch.sessionId, now, session.urgency);
-			}
 		}
 	}
 
-	private async scheduleFollowUp(executor: typeof db, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
+	private async scheduleFollowUp(executor: AsyncReplyExecutor, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
 		const session = await executor.query.practiceSession.findFirst({ where: eq(practiceSession.id, sessionId) });
 		if (!session || session.status !== "in_progress" || session.followUpCount >= 2 || session.expiresAt <= now) return;
 		const existing = await executor.query.agentResponseBatch.findFirst({
-			where: and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "processing", "delivery_pending"])),
+			where: and(
+				eq(agentResponseBatch.sessionId, sessionId),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
 		});
 		if (existing) return;
 		const claimed = await executor
