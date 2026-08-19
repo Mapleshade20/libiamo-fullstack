@@ -102,6 +102,16 @@ describe("session service", () => {
 			}
 		});
 
+		it("snapshots the template turn limit at session start", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ...mockTask.template, maxTurns: 5 } });
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 123 }]) });
+			mockDb.insert.mockReturnValue({ values: valuesMock });
+
+			await startSession(1, "user_456", "English");
+
+			expect(valuesMock).toHaveBeenCalledWith(expect.objectContaining({ maxTurnsSnapshot: 5 }));
+		});
+
 		it("creates session and persists language-constrained prompt", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);

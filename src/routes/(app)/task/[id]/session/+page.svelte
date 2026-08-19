@@ -22,7 +22,7 @@ let { data } = $props();
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
-		maxTurns={data.task.template.maxTurns ?? 0}
+		maxTurns={data.maxTurns}
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<IMessageUI
@@ -33,7 +33,7 @@ let { data } = $props();
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
-		maxTurns={data.task.template.maxTurns ?? 0}
+		maxTurns={data.maxTurns}
 	/>
 {:else if data.task.template.ui === "apple_mail"}
 	<MailUI
@@ -44,7 +44,7 @@ let { data } = $props();
 		timeZone={data.user.timezone}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
-		maxTurns={data.task.template.maxTurns ?? 0}
+		maxTurns={data.maxTurns}
 	/>
 {:else if data.task.template.ui === "ao3"}
 	<AO3UI
@@ -54,7 +54,7 @@ let { data } = $props();
 		language={data.task.language}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
-		maxTurns={data.task.template.maxTurns ?? 0}
+		maxTurns={data.maxTurns}
 	/>
 {:else if data.task.template.ui === "reddit"}
 	<RedditUI
@@ -64,7 +64,7 @@ let { data } = $props();
 		language={data.task.language}
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
-		maxTurns={data.task.template.maxTurns ?? 0}
+		maxTurns={data.maxTurns}
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">

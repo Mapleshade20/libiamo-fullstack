@@ -286,6 +286,7 @@ export async function startSession(taskId: number, userId: string, _learningLang
 				userId,
 				taskId,
 				agentPromptSnapshot: snapshot,
+				maxTurnsSnapshot: taskData.template.maxTurns ?? 0,
 				urgency,
 				startedAt,
 				expiresAt: getSessionExpiry(startedAt, maxSessionAgeSeconds),

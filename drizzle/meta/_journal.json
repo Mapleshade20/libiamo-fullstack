@@ -92,6 +92,13 @@
       "when": 1787145680232,
       "tag": "0012_agent_read_up_to_message_id",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787147217717,
+      "tag": "0013_max_turns_snapshot",
+      "breakpoints": true
     }
   ]
 }
