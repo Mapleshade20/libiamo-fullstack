@@ -25,10 +25,23 @@ import { practiceSession } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession } from "$lib/server/session";
 
 function mockAgentReply(reply: string, terminated = false) {
-	mockClient.chatTools.mockResolvedValue({
-		content: reply,
-		toolCalls: terminated ? [{ id: "call-1", name: "terminate_conversation", argumentsText: "{}", arguments: {}, raw: {} }] : [],
-		raw: { id: "chatcmpl-test" },
+	mockClient.chatJson.mockImplementation(async ({ messages }: { messages: unknown[] }) => {
+		const value = {
+			decision: terminated ? "terminate_abuse" : "reply",
+			deliveries: reply ? [{ content: reply, replyToMessageId: null }] : [],
+			allowIdleFollowUp: !terminated,
+			terminationReason: terminated ? "Severe abuse" : null,
+		};
+		return {
+			value,
+			content: JSON.stringify(value),
+			requestMessages: messages,
+			id: "chatcmpl-test",
+			model: "test-model",
+			finishReason: "stop",
+			raw: { id: "chatcmpl-test" },
+			repair: null,
+		};
 	});
 }
 
@@ -358,13 +371,13 @@ describe("session service", () => {
 			expect(result.turnCount).toBe(1);
 			expect(result.terminated).toBe(false);
 
-			expect(mockClient.chatTools).toHaveBeenCalledWith(
+			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.objectContaining({
 					messages: expect.arrayContaining([
-						expect.objectContaining({ role: "system", content: expect.stringContaining("Reply in natural plain text only") }),
-						expect.objectContaining({ role: "user", content: "Hello!" }),
+						expect.objectContaining({ role: "system", content: expect.stringContaining("ASYNC RESPONSE CONTRACT") }),
+						expect.objectContaining({ role: "user", content: expect.stringContaining("Hello!") }),
 					]),
-					tools: expect.arrayContaining([expect.objectContaining({ type: "function" })]),
+					schema: expect.anything(),
 					userId: USER_ID,
 				}),
 			);
@@ -382,15 +395,15 @@ describe("session service", () => {
 			mockAgentReply("Second reply");
 			await sendMessage(123, "Second message", USER_ID);
 
-			expect(mockClient.chatTools).toHaveBeenCalledWith(
+			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.objectContaining({
 					messages: expect.arrayContaining([
 						expect.objectContaining({ role: "system" }),
-						expect.objectContaining({ role: "user", content: "First message" }),
-						expect.objectContaining({ role: "assistant", content: "First reply" }),
-						expect.objectContaining({ role: "user", content: "Second message" }),
+						expect.objectContaining({ role: "user", content: expect.stringContaining("First message") }),
+						expect.objectContaining({ role: "user", content: expect.stringContaining("First reply") }),
+						expect.objectContaining({ role: "user", content: expect.stringContaining("Second message") }),
 					]),
-					tools: expect.any(Array),
+					schema: expect.anything(),
 					userId: USER_ID,
 				}),
 			);
@@ -445,7 +458,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "Hello back!", turnCount: 1, terminated: true });
-			expect(mockClient.chatTools).not.toHaveBeenCalled();
+			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
 
 		it("does not treat a later turn's assistant reply as the duplicate clientMessageId reply", async () => {
@@ -461,7 +474,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
-			expect(mockClient.chatTools).not.toHaveBeenCalled();
+			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
 
 		it("returns pending for duplicate clientMessageId while assistant reply is still processing", async () => {
@@ -473,7 +486,7 @@ describe("session service", () => {
 			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
 
 			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
-			expect(mockClient.chatTools).not.toHaveBeenCalled();
+			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
 
 		it("retries failed generation without inserting a duplicate user message", async () => {
@@ -497,10 +510,10 @@ describe("session service", () => {
 			const result = await sendMessage(123, "bye", USER_ID);
 
 			expect(result).toEqual({ reply: "Goodbye!", turnCount: 1, terminated: true });
-			expect(mockClient.chatTools).toHaveBeenCalledWith(
+			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.objectContaining({
-					messages: expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.not.stringContaining("valid JSON") })]),
-					tools: expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: "terminate_conversation" }) })]),
+					messages: expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.stringContaining("terminate_abuse") })]),
+					schema: expect.anything(),
 					userId: USER_ID,
 				}),
 			);
@@ -508,15 +521,20 @@ describe("session service", () => {
 
 		it("does not make a second LLM request when the termination tool call has no content", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatTools.mockResolvedValue({
-				content: "",
-				toolCalls: [{ id: "call-1", name: "terminate_conversation", argumentsText: "{}", arguments: {}, raw: {} }],
+			mockClient.chatJson.mockImplementation(async ({ messages }: { messages: unknown[] }) => ({
+				value: { decision: "terminate_abuse", deliveries: [], allowIdleFollowUp: false, terminationReason: "Severe abuse" },
+				content: JSON.stringify({ decision: "terminate_abuse", deliveries: [], allowIdleFollowUp: false, terminationReason: "Severe abuse" }),
+				requestMessages: messages,
+				id: "tool-only",
+				model: "test-model",
+				finishReason: "stop",
 				raw: { id: "tool-only" },
-			});
+				repair: null,
+			}));
 
 			const result = await sendMessage(123, "bye", USER_ID);
 
-			expect(result).toEqual({ reply: "I’m going to end this conversation here.", turnCount: 1, terminated: true });
+			expect(result).toEqual({ reply: "", turnCount: 1, terminated: true });
 			expect(mockClient.chatText).not.toHaveBeenCalled();
 		});
 	});
@@ -682,8 +700,9 @@ describe("session service", () => {
 				role: "assistant",
 				content: "AI reply",
 				llmMetadata: {
-					model: "tool-calling",
-					raw: expect.objectContaining({ terminated: false, toolCalls: [] }),
+					model: "test-model",
+					replyToMessageId: null,
+					raw: expect.objectContaining({ terminated: false, parsedResult: expect.objectContaining({ decision: "reply" }) }),
 				},
 			});
 		});
@@ -705,7 +724,7 @@ describe("session service", () => {
 				content: "Ordering check",
 				llmMetadata: undefined,
 			});
-			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.chatTools.mock.invocationCallOrder[0]);
+			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.chatJson.mock.invocationCallOrder[0]);
 		});
 
 		it("trims user message before saving", async () => {
@@ -760,10 +779,12 @@ describe("session service", () => {
 					}),
 				}),
 			);
-			expect(mockClient.chatTools).toHaveBeenCalledWith(
+			expect(mockClient.chatJson).toHaveBeenCalledWith(
 				expect.objectContaining({
-					messages: expect.arrayContaining([expect.objectContaining({ role: "user", content: "Prompt context plus visible comment" })]),
-					tools: expect.any(Array),
+					messages: expect.arrayContaining([
+						expect.objectContaining({ role: "user", content: expect.stringContaining("Prompt context plus visible comment") }),
+					]),
+					schema: expect.anything(),
 					userId: USER_ID,
 				}),
 			);
@@ -771,7 +792,7 @@ describe("session service", () => {
 
 		it("persists user message even when LLM generation fails", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatTools.mockRejectedValue(new Error("LLM timeout"));
+			mockClient.chatJson.mockRejectedValue(new Error("LLM timeout"));
 			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 			mockDb.insert.mockReturnValue({ values: valuesMock });
 
@@ -788,7 +809,7 @@ describe("session service", () => {
 
 		it("marks failed clientMessageId metadata when LLM generation fails", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatTools.mockRejectedValue(new Error("LLM timeout"));
+			mockClient.chatJson.mockRejectedValue(new Error("LLM timeout"));
 			const valuesMock = vi
 				.fn()
 				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-1", failed: false } }]) });
@@ -995,13 +1016,12 @@ describe("session service", () => {
 
 			await sendMessage(123, "New msg", USER_ID);
 
-			const historyArg = mockClient.chatTools.mock.calls[0][0].messages;
+			const historyArg = mockClient.chatJson.mock.calls[0][0].messages;
 			expect(historyArg).toEqual([
 				expect.objectContaining({ role: "system" }),
-				expect.objectContaining({ content: "Msg 1" }),
-				expect.objectContaining({ content: "Reply 1" }),
-				expect.objectContaining({ content: "New msg" }),
+				expect.objectContaining({ role: "user", content: expect.stringContaining("Msg 1") }),
 			]);
+			expect(historyArg[1].content).toContain("New msg");
 		});
 	});
 

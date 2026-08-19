@@ -3,9 +3,10 @@ import { type AnyColumn, and, asc, eq, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getSessionExpiry } from "$lib/async-replies/timing";
 import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
+import { type AgentHistoryMessage, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "./db";
 import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
+import { chatJson } from "./llm";
 
 export const sessionMessageChronologicalOrder = [asc(sessionMessage.createdAt), asc(sessionMessage.id)];
 
@@ -385,25 +386,6 @@ function getExistingUserMessageState<T extends { id?: number; role: string; cont
 	};
 }
 
-const TERMINATE_CONVERSATION_TOOL: ChatTool = {
-	type: "function",
-	function: {
-		name: "terminate_conversation",
-		description: "Call this only when the learner severely insults or abuses you.",
-		parameters: {
-			type: "object",
-			additionalProperties: false,
-			properties: {
-				reason: {
-					type: "string",
-					description: "Short reason why the conversation should end.",
-				},
-			},
-			required: ["reason"],
-		},
-	},
-};
-
 function getStoredTermination(metadata: unknown) {
 	const raw = getMessageMetadata(metadata).raw;
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
@@ -411,25 +393,28 @@ function getStoredTermination(metadata: unknown) {
 	return value.terminate === true || value.terminated === true;
 }
 
-function buildSystemPromptWithPlainText(systemPrompt: string) {
-	return `${systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
+function toAgentHistory(messages: Array<{ id?: number; role: string; content: string; llmMetadata?: unknown }>): AgentHistoryMessage[] {
+	return messages.flatMap((message, index) => {
+		if (message.role !== "user" && message.role !== "assistant") return [];
+		return [
+			{
+				id: message.id ?? `unsaved-${index}`,
+				role: message.role,
+				content: message.content,
+				metadata: message.llmMetadata,
+			} satisfies AgentHistoryMessage,
+		];
+	});
 }
 
-async function generateAssistantOutput(history: ChatMessage[], userId: string): Promise<{ reply: string; terminated: boolean; raw: unknown }> {
-	const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
-	const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
-	let reply = response.content;
-	const raw: Record<string, unknown> = {
-		terminated: terminationCall !== undefined,
-		toolCalls: response.toolCalls,
-		completion: response.raw,
-	};
-
-	if (!reply && terminationCall) {
-		reply = "I’m going to end this conversation here.";
-	}
-
-	return { reply, terminated: terminationCall !== undefined, raw };
+async function generateAssistantOutput(
+	baseSystemPrompt: string,
+	ui: UiVariant,
+	history: Array<{ id?: number; role: string; content: string; llmMetadata?: unknown }>,
+	userId: string,
+	additionalInstruction?: string,
+) {
+	return generateAgentResponse({ baseSystemPrompt, ui, history: toAgentHistory(history), userId, additionalInstruction });
 }
 
 export type SendMessageOptions = {
@@ -506,18 +491,6 @@ export async function sendMessage(
 
 	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
 
-	const systemPromptWithPlainText = buildSystemPromptWithPlainText(snapshot.systemPrompt);
-
-	// Build LLM history. Threaded UIs provide precise target context through promptContent
-	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
-	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithPlainText }];
-	for (const m of activeMessages) {
-		history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-	}
-	if (!existingUserMessage) {
-		history.push({ role: "user", content: trimmedPromptContent });
-	}
-
 	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
 	if (!existingUserMessage) {
 		const insertedMessages = await db
@@ -540,8 +513,14 @@ export async function sendMessage(
 			.returning();
 		const insertedUserMessage = insertedMessages[0];
 		if (insertedUserMessage) {
-			existingUserMessage = insertedUserMessage;
-			activeMessages = [...activeMessages, insertedUserMessage];
+			const persistedUserMessage = {
+				...insertedUserMessage,
+				role: insertedUserMessage.role ?? "user",
+				content: insertedUserMessage.content ?? trimmedPromptContent,
+				llmMetadata: insertedUserMessage.llmMetadata ?? options.userMetadata,
+			};
+			existingUserMessage = persistedUserMessage;
+			activeMessages = [...activeMessages, persistedUserMessage];
 		}
 	} else if (existingUserMessage.id) {
 		await db
@@ -577,9 +556,9 @@ export async function sendMessage(
 		);
 	}
 
-	let output: { reply: string; terminated: boolean; raw: unknown };
+	let output: Awaited<ReturnType<typeof generateAssistantOutput>>;
 	try {
-		output = await generateAssistantOutput(history, userId);
+		output = await generateAssistantOutput(snapshot.systemPrompt, (snapshot.ui as UiVariant | undefined) ?? "discord", activeMessages, userId);
 	} catch (error) {
 		if (existingUserMessage?.id) {
 			await db
@@ -600,22 +579,35 @@ export async function sendMessage(
 		throw error;
 	}
 
-	await db.insert(sessionMessage).values({
-		sessionId,
-		role: "assistant",
-		content: output.reply,
-		llmMetadata: {
-			...options.assistantMetadata,
-			...(clientMessageId ? { clientMessageId } : {}),
-			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-			model: "tool-calling",
-			raw: output.raw,
-		},
-	});
+	for (const delivery of output.parsedResult.deliveries) {
+		await db.insert(sessionMessage).values({
+			sessionId,
+			role: "assistant",
+			content: delivery.content,
+			llmMetadata: {
+				...options.assistantMetadata,
+				...(clientMessageId ? { clientMessageId } : {}),
+				...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
+				replyToMessageId: delivery.replyToMessageId,
+				model: output.providerMetadata.model,
+				raw: {
+					terminated: output.parsedResult.decision === "terminate_abuse",
+					requestMessages: output.requestMessages,
+					rawResponse: output.rawResponse,
+					parsedResult: output.parsedResult,
+					providerMetadata: output.providerMetadata,
+				},
+			},
+		});
+	}
 
 	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
 
-	return { reply: output.reply, turnCount, terminated: output.terminated };
+	return {
+		reply: output.parsedResult.deliveries[0]?.content ?? "",
+		turnCount,
+		terminated: output.parsedResult.decision === "terminate_abuse",
+	};
 }
 
 export async function requestAgentOpening(
@@ -653,34 +645,41 @@ export async function requestAgentOpening(
 		throw new Error("Maximum conversation turns reached");
 	}
 
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
-	const history: ChatMessage[] = [{ role: "system", content: buildSystemPromptWithPlainText(snapshot.systemPrompt) }];
-	for (const message of session.messages) {
-		history.push({ role: message.role as "user" | "assistant" | "system", content: message.content });
-	}
-	if (options.promptContent?.trim()) {
-		history.push({ role: "user", content: options.promptContent.trim() });
-	}
+	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: UiVariant };
+	const output = await generateAssistantOutput(
+		snapshot.systemPrompt,
+		snapshot.ui ?? "discord",
+		session.messages,
+		userId,
+		options.promptContent?.trim(),
+	);
 
-	const output = await generateAssistantOutput(history, userId);
-
-	await db.insert(sessionMessage).values({
-		sessionId,
-		role: "assistant",
-		content: output.reply,
-		llmMetadata: {
-			...options.assistantMetadata,
-			...(clientMessageId ? { clientMessageId } : {}),
-			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-			model: "tool-calling",
-			raw: output.raw,
-		},
-	});
+	for (const delivery of output.parsedResult.deliveries) {
+		await db.insert(sessionMessage).values({
+			sessionId,
+			role: "assistant",
+			content: delivery.content,
+			llmMetadata: {
+				...options.assistantMetadata,
+				...(clientMessageId ? { clientMessageId } : {}),
+				...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
+				replyToMessageId: delivery.replyToMessageId,
+				model: output.providerMetadata.model,
+				raw: {
+					terminated: output.parsedResult.decision === "terminate_abuse",
+					requestMessages: output.requestMessages,
+					rawResponse: output.rawResponse,
+					parsedResult: output.parsedResult,
+					providerMetadata: output.providerMetadata,
+				},
+			},
+		});
+	}
 
 	return {
-		reply: output.reply,
+		reply: output.parsedResult.deliveries[0]?.content ?? "",
 		turnCount: countVisibleUserTurns(session.messages),
-		terminated: output.terminated,
+		terminated: output.parsedResult.decision === "terminate_abuse",
 	};
 }
 

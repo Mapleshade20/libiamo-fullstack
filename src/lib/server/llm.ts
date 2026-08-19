@@ -88,6 +88,12 @@ export type JsonChatResponse<T> = ChatResponse & {
 	value: T;
 	/** Exact request messages used by the successful completion. */
 	requestMessages: ChatMessage[];
+	/** Present when the first completion failed schema validation and a targeted repair succeeded. */
+	repair: null | {
+		initialContent: string;
+		initialRaw: unknown;
+		errors: string[];
+	};
 };
 
 export type ChatTool = ChatCompletionTool;
@@ -586,7 +592,7 @@ export async function chatJson<T extends z.ZodType>({
 	if (first.finishReason === "length") throw structuredOutputError();
 
 	const firstParse = parseStructuredOutputText(schema, first.content);
-	if (firstParse.success) return { ...first, value: firstParse.value, requestMessages: messages };
+	if (firstParse.success) return { ...first, value: firstParse.value, requestMessages: messages, repair: null };
 
 	const repairMessages = buildRepairMessages(messages, first.content, firstParse.errors);
 	const repaired = await chatText({ messages: repairMessages, options, userId });
@@ -594,7 +600,12 @@ export async function chatJson<T extends z.ZodType>({
 
 	const repairedParse = parseStructuredOutputText(schema, repaired.content);
 	if (!repairedParse.success) throw structuredOutputError();
-	return { ...repaired, value: repairedParse.value, requestMessages: repairMessages };
+	return {
+		...repaired,
+		value: repairedParse.value,
+		requestMessages: repairMessages,
+		repair: { initialContent: first.content, initialRaw: first.raw, errors: firstParse.errors },
+	};
 }
 
 export async function chatTools({ messages, tools, options = {}, userId }: ToolChatRequest): Promise<ToolChatResponse> {
