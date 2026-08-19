@@ -167,37 +167,39 @@ export const URGENCIES = ["high", "medium", "low"] as const;
 export type Urgency = (typeof URGENCIES)[number];
 
 export type UrgencyPreset = {
-	replyDelayMinMs: number;
-	replyDelayMaxMs: number;
+	/** Mean of the exponential reply delay distribution (true MTTH). */
+	replyMtthMs: number;
+	/** Hard cap: a reply is force-delivered at this delay even if the sampled tail exceeds it. */
+	replyCapMs: number;
 	maxSessionAgeSeconds: number;
 	idleFollowUpDelayMs: number;
 };
 
 export const URGENCY_PRESETS: Record<Urgency, UrgencyPreset> = {
 	high: {
-		replyDelayMinMs: 30_000,
-		replyDelayMaxMs: 2 * 60_000,
-		maxSessionAgeSeconds: 12 * 60 * 60,
-		idleFollowUpDelayMs: 2 * 60 * 60_000,
+		replyMtthMs: 30_000,
+		replyCapMs: 2 * 60_000,
+		maxSessionAgeSeconds: 3 * 60 * 60,
+		idleFollowUpDelayMs: 60 * 60_000,
 	},
 	medium: {
-		replyDelayMinMs: 10 * 60_000,
-		replyDelayMaxMs: 30 * 60_000,
-		maxSessionAgeSeconds: 3 * 24 * 60 * 60,
+		replyMtthMs: 3 * 60_000,
+		replyCapMs: 2 * 60 * 60_000,
+		maxSessionAgeSeconds: 24 * 60 * 60,
 		idleFollowUpDelayMs: 12 * 60 * 60_000,
 	},
 	low: {
-		replyDelayMinMs: 60 * 60_000,
-		replyDelayMaxMs: 4 * 60 * 60_000,
-		maxSessionAgeSeconds: 7 * 24 * 60 * 60,
+		replyMtthMs: 30 * 60_000,
+		replyCapMs: 6 * 60 * 60_000,
+		maxSessionAgeSeconds: 48 * 60 * 60,
 		idleFollowUpDelayMs: 24 * 60 * 60_000,
 	},
 };
 
 export const URGENCY_LABELS: Record<Urgency, string> = {
-	high: "High — 30 sec to 2 min",
-	medium: "Medium — 10 to 30 min",
-	low: "Low — 1 to 4 hours",
+	high: "High — ~30 s (max 2 min)",
+	medium: "Medium — ~3 min (max 2 h)",
+	low: "Low — ~30 min (max 6 h)",
 };
 
 export const CADENCES = ["weekly", "daily", "none"] as const;

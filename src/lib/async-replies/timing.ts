@@ -1,9 +1,15 @@
 import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
 
+/**
+ * Samples the reply delay from an exponential distribution with the urgency's MTTH,
+ * hard-capped at the preset's cap so the tail can never exceed a bounded worst case.
+ * P(cap) = exp(-cap / MTTH).
+ */
 export function sampleReplyDelayMs(urgency: Urgency, random: () => number = Math.random): number {
 	const preset = URGENCY_PRESETS[urgency];
-	const sample = Math.min(1, Math.max(0, random()));
-	return Math.floor(preset.replyDelayMinMs + sample * (preset.replyDelayMaxMs - preset.replyDelayMinMs));
+	const u = random();
+	const sample = -Math.log(1 - u);
+	return Math.max(0, Math.floor(Math.min(preset.replyCapMs, sample * preset.replyMtthMs)));
 }
 
 export function getSessionExpiry(startedAt: Date, maxSessionAgeSeconds: number): Date {

@@ -17,7 +17,7 @@ describe("async reply worker scheduling", () => {
 
 	it("uses urgency-specific idle follow-up windows", () => {
 		const now = new Date("2026-08-19T12:00:00.000Z");
-		expect(getUrgencyFollowUpAt(now, "high", 1).getTime()).toBe(now.getTime() + 2 * 60 * 60 * 1000);
+		expect(getUrgencyFollowUpAt(now, "high", 1).getTime()).toBe(now.getTime() + 60 * 60 * 1000);
 		expect(getUrgencyFollowUpAt(now, "low", 2).getTime()).toBe(now.getTime() + 48 * 60 * 60 * 1000);
 	});
 
