@@ -155,6 +155,17 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
+	const latestAssistantMessageId = existingSession?.messages.reduce(
+		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
+		0,
+	);
+	if (existingSession && latestAssistantMessageId) {
+		await db
+			.update(practiceSession)
+			.set({ lastSeenAssistantMessageId: latestAssistantMessageId })
+			.where(and(eq(practiceSession.id, existingSession.id), eq(practiceSession.userId, user.id)));
+	}
+
 	return {
 		task: taskData,
 		existingSession,

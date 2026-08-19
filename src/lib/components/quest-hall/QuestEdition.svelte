@@ -108,6 +108,9 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 								<span class="key-meta"> {UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.templateUi} </span>
 								<span class="key-title">{task.title}</span>
 							</span>
+							{#if task.hasUnreadReply}
+								<span class="unread-reply">{t(lang, "hall.unreadReply")}</span>
+							{/if}
 							<span class="difficulty-strokes" aria-label="{t(lang, 'hall.difficulty')} {task.templateDifficulty} / 3">
 								{#each [1, 2, 3] as level}
 									<span class:is-filled={level <= task.templateDifficulty}></span>
@@ -145,6 +148,16 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	border-bottom: 1px solid var(--border);
 	padding: 1.15rem 0 1.4rem;
 	animation: edition-settle 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.unread-reply {
+	border-radius: 999px;
+	background: var(--hall-wine);
+	padding: 0.2rem 0.45rem;
+	font-size: 0.62rem;
+	font-weight: 700;
+	color: white;
+	white-space: nowrap;
 }
 
 .edition-header {

@@ -120,7 +120,14 @@ describe("(app) home +page.server", () => {
 		];
 		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
 		mockFindMany.mockResolvedValueOnce([
-			{ id: 1001, taskId: 1, status: "evaluated", startedAt: new Date("2026-04-17T10:00:00.000Z") },
+			{
+				id: 1001,
+				taskId: 1,
+				status: "evaluated",
+				startedAt: new Date("2026-04-17T10:00:00.000Z"),
+				lastSeenAssistantMessageId: 6,
+				messages: [{ id: 7, role: "assistant" }],
+			},
 			{ id: 1002, taskId: 2, status: "in_progress", startedAt: new Date("2026-04-17T11:00:00.000Z") },
 		]);
 
@@ -131,8 +138,8 @@ describe("(app) home +page.server", () => {
 		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
 		expect(result).toEqual(
 			expect.objectContaining({
-				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
-				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
+				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", hasUnreadReply: true }],
+				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", hasUnreadReply: false }],
 				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
 				translationMonth: "2026-04",
 				editionDate: "2026-04-17",

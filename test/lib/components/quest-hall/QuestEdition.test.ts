@@ -13,11 +13,20 @@ function quest(overrides: Partial<HallQuest> = {}): HallQuest {
 		templateInteractionType: "chat",
 		pointReward: 20,
 		sessionStatus: null,
+		hasUnreadReply: false,
 		...overrides,
 	};
 }
 
 describe("QuestEdition", () => {
+	it("renders a new-reply marker for asynchronous conversations", () => {
+		const { body } = render(QuestEdition, {
+			props: { id: "daily", title: "Today", lang: "en", tasks: [quest({ hasUnreadReply: true })] },
+		});
+
+		expect(body).toContain("New reply");
+	});
+
 	it("server-renders the in-progress quest as the selected edition", () => {
 		const { body } = render(QuestEdition, {
 			props: {

@@ -11,6 +11,7 @@ export interface HallQuest {
 	templateInteractionType: string;
 	pointReward: number;
 	sessionStatus: HallQuestSessionStatus;
+	hasUnreadReply: boolean;
 }
 
 export function isHallQuestFinished(status: HallQuestSessionStatus): boolean {
