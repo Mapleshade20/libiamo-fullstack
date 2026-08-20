@@ -2,6 +2,7 @@
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import FileText from "@lucide/svelte/icons/file-text";
 import Gauge from "@lucide/svelte/icons/gauge";
+import Mail from "@lucide/svelte/icons/mail";
 import Play from "@lucide/svelte/icons/play";
 import Star from "@lucide/svelte/icons/star";
 import type { Component } from "svelte";
@@ -39,7 +40,10 @@ let uiLabel = $derived(UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.t
 
 	<div class="brief-copy">
 		{#if task.hasUnreadReply}
-			<p class="unread-note">{t(lang, "hall.unreadReply")}</p>
+			<p class="unread-note">
+				<Mail size={13} strokeWidth={2} />
+				{t(lang, "hall.unreadReply")}{(task.unreadCount ?? 1) > 1 ? ` ×${task.unreadCount}` : ""}
+			</p>
 		{/if}
 		{#if isFinished}
 			<div class="brief-status">
@@ -89,6 +93,9 @@ let uiLabel = $derived(UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.t
 }
 
 .unread-note {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
 	width: fit-content;
 	border-bottom: 1px solid currentColor;
 	font-size: 0.68rem;

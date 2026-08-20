@@ -138,8 +138,8 @@ describe("(app) home +page.server", () => {
 		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
 		expect(result).toEqual(
 			expect.objectContaining({
-				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", hasUnreadReply: true }],
-				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", hasUnreadReply: false }],
+				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", unreadCount: 1, hasUnreadReply: true }],
+				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", unreadCount: 0, hasUnreadReply: false }],
 				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
 				translationMonth: "2026-04",
 				editionDate: "2026-04-17",

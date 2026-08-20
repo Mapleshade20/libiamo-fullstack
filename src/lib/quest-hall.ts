@@ -11,6 +11,7 @@ export interface HallQuest {
 	templateInteractionType: string;
 	pointReward: number;
 	sessionStatus: HallQuestSessionStatus;
+	unreadCount: number | null;
 	hasUnreadReply: boolean;
 }
 

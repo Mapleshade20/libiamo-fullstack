@@ -109,7 +109,12 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 								<span class="key-title">{task.title}</span>
 							</span>
 							{#if task.hasUnreadReply}
-								<span class="unread-reply">{t(lang, "hall.unreadReply")}</span>
+								<span class="unread-reply" aria-label={t(lang, "hall.unreadReply")}>
+									<Mail size={12} strokeWidth={2} />
+									{#if (task.unreadCount ?? 0) > 1}
+										<span>×{task.unreadCount}</span>
+									{/if}
+								</span>
 							{/if}
 							<span class="difficulty-strokes" aria-label="{t(lang, 'hall.difficulty')} {task.templateDifficulty} / 3">
 								{#each [1, 2, 3] as level}
@@ -151,9 +156,12 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 }
 
 .unread-reply {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.15rem;
 	border-radius: 999px;
 	background: var(--hall-wine);
-	padding: 0.2rem 0.45rem;
+	padding: 0.25rem 0.4rem;
 	font-size: 0.62rem;
 	font-weight: 700;
 	color: white;

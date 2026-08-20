@@ -107,12 +107,13 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const addSessionState = <T extends { id: number }>(taskItem: T) => {
 		const session = latestSessionByTaskId.get(taskItem.id);
-		const latestAssistantId =
-			session?.messages?.reduce((latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest), 0) ?? 0;
+		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
+		const unreadCount = session?.messages?.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
 		return {
 			...taskItem,
 			sessionStatus: session?.status ?? null,
-			hasUnreadReply: latestAssistantId > (session?.lastSeenAssistantMessageId ?? 0),
+			unreadCount,
+			hasUnreadReply: unreadCount > 0,
 		};
 	};
 

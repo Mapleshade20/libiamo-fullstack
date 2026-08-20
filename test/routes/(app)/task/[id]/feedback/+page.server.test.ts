@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
 		query: { practiceSession: { findFirst: vi.fn() } },
+		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
 	},
 }));
 

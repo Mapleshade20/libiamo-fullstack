@@ -82,6 +82,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw redirect(303, `/task/${taskId}/session`);
 	}
 
+	// Visiting the feedback page reads the conversation: advance the seen-watermark
+	// so late-delivered replies stop counting as unread on the home page.
+	const latestAssistantMessageId = session.messages.reduce(
+		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
+		0,
+	);
+	if (latestAssistantMessageId) {
+		await db
+			.update(practiceSession)
+			.set({ lastSeenAssistantMessageId: latestAssistantMessageId })
+			.where(and(eq(practiceSession.id, session.id), eq(practiceSession.userId, user.id)));
+	}
+
 	// Get task data
 	const taskData = session.task;
 	if (!taskData) throw error(404, "Task not found");

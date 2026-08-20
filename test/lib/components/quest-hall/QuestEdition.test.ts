@@ -13,6 +13,7 @@ function quest(overrides: Partial<HallQuest> = {}): HallQuest {
 		templateInteractionType: "chat",
 		pointReward: 20,
 		sessionStatus: null,
+		unreadCount: null,
 		hasUnreadReply: false,
 		...overrides,
 	};
