@@ -111,9 +111,14 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 		if (exactAssistant) return true;
 	}
 
+	// A failed turn keeps its own retry affordance until retried: a later reply to
+	// another turn must not clear it. Pending turns are async: the agent generates
+	// from the full history, so one later reply answers every preceding unanswered
+	// user message in the burst (fold), clearing all their placeholders at once.
+	const failed = getMessageMetadata(userMessage.llmMetadata).failed === true;
 	for (let index = userMessageIndex + 1; index < rawMessages.length; index += 1) {
 		const message = rawMessages[index];
-		if (message.role === "user") return false;
+		if (message.role === "user" && failed) return false;
 		if (isAgentRole(message.role)) {
 			const assistantClientMessageId = getClientMessageId(message);
 			if (clientMessageId && assistantClientMessageId && assistantClientMessageId !== clientMessageId) continue;

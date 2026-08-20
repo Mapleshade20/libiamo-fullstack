@@ -225,6 +225,66 @@ describe("buildChatMessages", () => {
 		expect(result.map((message) => message.id)).toEqual(["1", "retry-1", "2", "3"]);
 	});
 
+	it("clears every pending burst placeholder when a later folded reply lands", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "First",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:00:02Z"),
+					llmMetadata: { clientMessageId: "msg-2" },
+				},
+				{
+					id: 3,
+					role: "user",
+					content: "Third",
+					createdAt: new Date("2026-01-01T10:00:04Z"),
+					llmMetadata: { clientMessageId: "msg-3" },
+				},
+				{ id: 4, role: "assistant", content: "Folded reply covering all three", createdAt: new Date("2026-01-01T10:00:40Z") },
+			],
+		});
+
+		// one folded reply answers the whole burst: no pending placeholder survives,
+		// so the typing indicator clears when the reply becomes visible
+		expect(result.map((message) => message.id)).toEqual(["1", "2", "3", "4"]);
+	});
+
+	it("keeps a failed turn's retry placeholder even when a later reply lands", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Failed turn",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: true },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Follow-up",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-2" },
+				},
+				{ id: 3, role: "assistant", content: "Reply", createdAt: new Date("2026-01-01T10:02:00Z") },
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "retry-1", "2", "3"]);
+		expect(result[1]?.deliveryState).toBe("failed");
+	});
+
 	it("respects custom isHidden callback", () => {
 		const result = buildChatMessages({
 			...baseOptions,
