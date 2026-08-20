@@ -79,7 +79,7 @@ related-issue: docs/issues/2026-08-16-async-agent-replies.md
 
 - 用户发送只持久化消息、创建或扩展 batch，并快速返回。
 - 普通异步等待期间不锁输入；新用户消息更新水位并使旧 generation 按规则失效。
-- 第 maxTurns 条用户消息在同一原子流程中保存、完成 session、取消任务且不创建新 batch。
+- 第 maxTurns 条用户消息在同一原子流程中保存、完成 session；未认领的 pending/stale batch 被取消，但已写好或在写（delivery_pending/processing）的回复保留并送达已完成的 session，保证快速连发不会以零 agent 回复收场。零回复且无可投递批次时补排一次告别回复；若仍有未认领 batch 则不取消，让它在采样时刻自然投递。
 - 用户主动结束和硬截止取消所有未投递工作。
 - Feedback 支持以用户消息结尾的 conversation。
 - 添加 route、service、并发和 maxTurns 回归测试。

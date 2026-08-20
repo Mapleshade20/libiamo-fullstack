@@ -33,6 +33,15 @@ export function shouldRetryGeneration(generationCount: number): boolean {
 }
 
 /**
+ * True when the turn limit (not the user, an expiry, or abuse termination) ended
+ * the session. Replies still flow into such sessions: the agent had every
+ * intention of answering the burst when the limit cut things off.
+ */
+export function hasEndedByMaxTurns(session: { status: string; completionReason: string | null } | null | undefined): boolean {
+	return session?.status === "completed" && session.completionReason === "max_turns";
+}
+
+/**
  * A reply the agent already composed when the turn-limit message landed is still
  * delivered into the completed session; every other ended session (user
  * requested, expired, abuse) cancels outstanding deliveries.
@@ -42,7 +51,7 @@ export function shouldDeliverIntoEndedSession(
 	batchStatus: string,
 ): boolean {
 	if (session?.status === "in_progress") return true;
-	return session?.status === "completed" && session.completionReason === "max_turns" && batchStatus === "delivery_pending";
+	return hasEndedByMaxTurns(session) && batchStatus === "delivery_pending";
 }
 
 function safeError(error: unknown): string {
@@ -242,7 +251,9 @@ export class AsyncReplyWorker {
 			where: eq(practiceSession.id, batch.sessionId),
 			with: { task: true, messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] } },
 		});
-		if (!session || session.status !== "in_progress") {
+		// max_turns-completed sessions keep generating: their pending batches are
+		// spared unclaimed batches and farewell batches whose reply must still land.
+		if (!session || (session.status !== "in_progress" && !hasEndedByMaxTurns(session))) {
 			await db.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(this.batchClaimFence(batch));
 			return;
 		}
@@ -288,7 +299,7 @@ export class AsyncReplyWorker {
 			// When the turn-limit message ends the session mid-generation, the reply
 			// being composed is still delivered instead of being discarded as stale:
 			// there is nothing left to fold in (no further turn can happen).
-			const endedByMaxTurns = freshSession?.status === "completed" && freshSession.completionReason === "max_turns";
+			const endedByMaxTurns = hasEndedByMaxTurns(freshSession);
 			const staleGeneration =
 				!endedByMaxTurns &&
 				isStaleGeneration({

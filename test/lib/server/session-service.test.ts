@@ -47,6 +47,33 @@ function mockAgentReply(reply: string, terminated = false) {
 	});
 }
 
+/** Walks mock drizzle args, collecting bare strings while skipping plain string arrays
+ * (SQL chunks, enum value lists) so inArray params can be asserted precisely. */
+function collectBareStrings(value: unknown, out: string[], seen: Set<object>): void {
+	if (typeof value === "string") {
+		out.push(value);
+		return;
+	}
+	if (Array.isArray(value)) {
+		if (value.length > 0 && value.every((item) => typeof item === "string")) return;
+		for (const item of value) collectBareStrings(item, out, seen);
+		return;
+	}
+	if (value && typeof value === "object") {
+		if (seen.has(value)) return;
+		seen.add(value);
+		// skip drizzle column/table internals: column `default` values leak enum names
+		if ("columnType" in value || "columns" in value) return;
+		for (const item of Object.values(value)) collectBareStrings(item, out, seen);
+	}
+}
+
+const bareStrings = (args: unknown[]): string[] => {
+	const out: string[] = [];
+	collectBareStrings(args, out, new Set());
+	return out;
+};
+
 describe("session service", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -571,7 +598,7 @@ describe("session service", () => {
 			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
 
-		it("persists the maxTurns message, completes immediately, and does not create a batch", async () => {
+		it("persists the maxTurns message, completes immediately, and queues a farewell reply when nothing is scheduled", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,
 				userId: USER_ID,
@@ -581,12 +608,115 @@ describe("session service", () => {
 			});
 			const returning = vi.fn().mockResolvedValue([]);
 			mockDb.update.mockImplementation(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning })) })) }));
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
+			try {
+				const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+				expect(result).toEqual({ reply: "", turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(valuesMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					kind: "reply",
+					status: "pending",
+					dueAt: new Date("2026-08-19T12:00:12.000Z"),
+					inputMessageId: 999,
+					inputVersion: 1,
+				}),
+			);
+			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
+		});
+
+		it("keeps an unclaimed batch alive at its sampled time when the turn limit ends a reply-less session", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [{ id: 1, role: "user", content: "First", llmMetadata: null }],
+			});
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([{ id: 11, status: "pending" }]);
+			const updates: { setArgs: unknown[]; whereArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				() =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ setArgs, whereArgs });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
 
 			const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
 
 			expect(result).toEqual({ reply: "", turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
-			expect(mockDb.insert).not.toHaveBeenCalledWith(agentResponseBatch);
-			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
+			// the unclaimed batch itself is spared, so no farewell batch is queued either
+			expect(valuesMock).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "reply" }));
+			const cancelUpdate = updates.find(({ setArgs }) => bareStrings(setArgs).includes("cancelled"));
+			expect(cancelUpdate).toBeDefined();
+			const whereStrings = bareStrings(cancelUpdate?.whereArgs ?? []);
+			expect(whereStrings).toContain("stale");
+			expect(whereStrings).not.toContain("pending");
+		});
+
+		it("cancels the unclaimed batch when the agent already replied in the session", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [
+					{ id: 1, role: "user", content: "First", llmMetadata: null },
+					{ id: 2, role: "assistant", content: "Salut !", llmMetadata: null },
+				],
+			});
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([{ id: 11, status: "pending" }]);
+			const updates: { setArgs: unknown[]; whereArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				() =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ setArgs, whereArgs });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+
+			const cancelUpdate = updates.find(({ setArgs }) => bareStrings(setArgs).includes("cancelled"));
+			expect(cancelUpdate).toBeDefined();
+			const whereStrings = bareStrings(cancelUpdate?.whereArgs ?? []);
+			expect(whereStrings).toEqual(expect.arrayContaining(["pending", "stale"]));
+			expect(valuesMock).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "reply" }));
 		});
 
 		it("keeps already-composed replies deliverable when the maxTurns message completes the session", async () => {

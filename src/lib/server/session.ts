@@ -498,15 +498,45 @@ export async function submitAsyncMessage(
 				.update(practiceSession)
 				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
 				.where(eq(practiceSession.id, sessionId));
+			const activeBatches = await tx.query.agentResponseBatch.findMany({
+				where: and(
+					eq(agentResponseBatch.sessionId, sessionId),
+					inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+				),
+				columns: { id: true, status: true },
+			});
+			const nothingWillDeliver = !activeBatches.some((batch) => batch.status === "processing" || batch.status === "delivery_pending");
+			// A session that never saw a single agent reply still gets one: its unclaimed
+			// batch is spared so the reply arrives on the natural sampled clock, and when
+			// nothing is scheduled at all (every batch failed or chose silence) a farewell
+			// batch is queued right away.
+			const neverReplied = !session.messages.some((message) => message.role === "assistant");
+			const spareUnclaimed = neverReplied && nothingWillDeliver;
+			const hasPending = activeBatches.some((batch) => batch.status === "pending");
 			const cancelled = await tx
 				.update(agentResponseBatch)
 				.set({ status: "cancelled", completedAt: now })
-				.where(and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "stale"])))
+				.where(
+					and(
+						eq(agentResponseBatch.sessionId, sessionId),
+						inArray(agentResponseBatch.status, spareUnclaimed && hasPending ? ["stale"] : ["pending", "stale"]),
+					),
+				)
 				.returning({ id: agentResponseBatch.id });
 			// Replies the agent already composed (delivery_pending) or is still composing
 			// (processing, held by a worker's claim fence) are left alive on purpose: the
 			// turn limit ends the session, but the in-flight reply is still delivered
 			// into it. Orphaned processing batches are cancelled later via lease reclaim.
+			if (spareUnclaimed && !hasPending) {
+				await tx.insert(agentResponseBatch).values({
+					sessionId,
+					kind: "reply",
+					status: "pending",
+					dueAt: new Date(now.getTime() + RE_ENGAGE_DELAY_MS),
+					inputMessageId,
+					inputVersion: 1,
+				});
+			}
 			if (cancelled.length > 0) {
 				await tx
 					.update(agentDelivery)
