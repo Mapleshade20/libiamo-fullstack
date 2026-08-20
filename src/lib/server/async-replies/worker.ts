@@ -38,7 +38,9 @@ export function shouldRetryGeneration(generationCount: number): boolean {
  * intention of answering the burst when the limit cut things off.
  */
 export function hasEndedByMaxTurns(session: { status: string; completionReason: string | null } | null | undefined): boolean {
-	return session?.status === "completed" && session.completionReason === "max_turns";
+	// "evaluated" is the same lifecycle one step on: the feedback page can flip the
+	// status while a spared batch is still generating, and the reply must land anyway.
+	return (session?.status === "completed" || session?.status === "evaluated") && session.completionReason === "max_turns";
 }
 
 /**

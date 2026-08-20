@@ -4,6 +4,7 @@ import {
 	getBatchGenerationInstruction,
 	getDeliveryDueAt,
 	getUrgencyFollowUpAt,
+	hasEndedByMaxTurns,
 	isStaleGeneration,
 	MAX_GENERATION_ATTEMPTS,
 	shouldDeliverIntoEndedSession,
@@ -46,6 +47,10 @@ describe("async reply worker scheduling", () => {
 		expect(shouldDeliverIntoEndedSession({ status: "in_progress", completionReason: null }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession(null, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "delivery_pending")).toBe(true);
+		// the feedback page can flip a max_turns session to "evaluated" while a spared
+		// batch is still generating; the reply must still be delivered (QA race)
+		expect(shouldDeliverIntoEndedSession({ status: "evaluated", completionReason: "max_turns" }, "delivery_pending")).toBe(true);
+		expect(hasEndedByMaxTurns({ status: "evaluated", completionReason: "user_requested" })).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_session_age" }, "delivery_pending")).toBe(false);
