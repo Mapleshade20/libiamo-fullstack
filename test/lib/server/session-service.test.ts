@@ -598,6 +598,45 @@ describe("session service", () => {
 			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
 
+		it("cancels a pending idle follow-up and answers the returning user on a fresh clock", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [
+					{ id: 1, role: "user", content: "First", llmMetadata: null },
+					{ id: 2, role: "assistant", content: "Salut !", llmMetadata: null },
+				],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({ id: 11, kind: "follow_up", status: "pending", inputVersion: 1 });
+			const updates: { setArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				() =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => {
+							updates.push({ setArgs });
+							return { where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			const result = await submitAsyncMessage(123, "Me revoilà", USER_ID);
+
+			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
+			// the idle nudge is cancelled, not folded into
+			expect(updates.some(({ setArgs }) => bareStrings(setArgs).includes("cancelled"))).toBe(true);
+			// the new message gets a fresh reply batch at inputVersion 1
+			expect(valuesMock).toHaveBeenCalledWith(expect.objectContaining({ kind: "reply", status: "pending", inputVersion: 1, inputMessageId: 999 }));
+		});
+
 		it("persists the maxTurns message, completes immediately, and queues a farewell reply when nothing is scheduled", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,

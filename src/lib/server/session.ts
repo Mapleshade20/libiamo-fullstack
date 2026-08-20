@@ -578,6 +578,19 @@ export async function submitAsyncMessage(
 				inputMessageId,
 				inputVersion: activeBatch.inputVersion + 1,
 			});
+		} else if (activeBatch && activeBatch.kind === "follow_up" && activeBatch.status !== "processing") {
+			// The user came back before the idle nudge fired, so the silence condition
+			// is gone: cancel the nudge and answer the new message on a fresh sampled
+			// clock instead of folding into the idle batch's far-future due time.
+			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: "reply",
+				status: "pending",
+				dueAt,
+				inputMessageId,
+				inputVersion: 1,
+			});
 		} else if (activeBatch) {
 			// Additional messages in the same burst fold into the scheduled batch without
 			// pushing its due time: the clock is anchored to the first message, so rapid
