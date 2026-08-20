@@ -62,6 +62,15 @@ export function getUrgencyFollowUpAt(now: Date, urgency: Urgency, followUpCount:
 	return new Date(now.getTime() + URGENCY_PRESETS[urgency].idleFollowUpDelayMs * Math.max(1, followUpCount));
 }
 
+/** Instruction injected only into idle follow-up generations so the agent knows
+ * the user has gone quiet and how many nudges remain. Reply batches get none. */
+export function getBatchGenerationInstruction(kind: string, followUpCount: number): string | undefined {
+	if (kind !== "follow_up") return undefined;
+	const ordinal =
+		followUpCount >= 2 ? "This is your final follow-up; afterwards you stay silent." : "At most one more follow-up may ever be sent after this one.";
+	return `The user has gone quiet since your last message. If you are genuinely still waiting on an answer (for example you asked a question or proposed a plan), send one short, natural follow-up that fits your persona; do not repeat your previous wording and do not pressure them. If the conversation has naturally wound down, choose no_reply. ${ordinal}`;
+}
+
 export type AsyncReplyWorkerOptions = {
 	workerId?: string;
 	leaseMs?: number;
@@ -286,6 +295,7 @@ export class AsyncReplyWorker {
 				ui: (session.agentPromptSnapshot as { ui?: Parameters<typeof generateAgentResponse>[0]["ui"] }).ui ?? "discord",
 				history,
 				userId: session.userId,
+				additionalInstruction: getBatchGenerationInstruction(batch.kind, session.followUpCount),
 			});
 			const freshSession = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, session.id),

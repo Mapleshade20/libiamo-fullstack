@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	AsyncReplyWorker,
+	getBatchGenerationInstruction,
 	getDeliveryDueAt,
 	getUrgencyFollowUpAt,
 	isStaleGeneration,
@@ -17,6 +18,16 @@ describe("async reply worker scheduling", () => {
 		const next = getDeliveryDueAt(first, "A short reply.");
 		expect(next.getTime()).toBeGreaterThan(first.getTime());
 		expect(getDeliveryDueAt(first, undefined)).toEqual(first);
+	});
+
+	it("injects an idle nudge instruction only into follow_up generations", () => {
+		expect(getBatchGenerationInstruction("reply", 1)).toBeUndefined();
+		const first = getBatchGenerationInstruction("follow_up", 1);
+		expect(first).toContain("gone quiet");
+		expect(first).toContain("no_reply");
+		expect(first).not.toContain("final follow-up");
+		const last = getBatchGenerationInstruction("follow_up", 2);
+		expect(last).toContain("final follow-up");
 	});
 
 	it("uses urgency-specific idle follow-up windows", () => {
