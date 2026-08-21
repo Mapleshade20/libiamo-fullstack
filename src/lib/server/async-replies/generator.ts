@@ -134,7 +134,9 @@ export function normalizeReplyTargets(
 	ui: UiVariant,
 	history: AgentHistoryMessage[],
 ): { decision: AgentResponseDecision; warnings: string[] } {
-	const validIds = new Set(history.flatMap((message) => (typeof message.id === "number" ? [message.id] : [])));
+	// Threaded replies must point at a learner comment: agent messages are the
+	// model's own output and would nest its reply under itself.
+	const validIds = new Set(history.flatMap((message) => (message.role === "user" && typeof message.id === "number" ? [message.id] : [])));
 	const warnings: string[] = [];
 	const deliveries = decision.deliveries.map((delivery) => {
 		if (delivery.replyToMessageId === null) return delivery;

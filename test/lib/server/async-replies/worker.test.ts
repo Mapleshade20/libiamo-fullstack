@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockDb } = vi.hoisted(() => ({
+	mockDb: { transaction: vi.fn() },
+}));
+
+vi.mock("$lib/server/db", () => ({ db: mockDb }));
+
+import type { AgentGenerationArtifacts } from "$lib/server/async-replies/generator";
 import {
 	AsyncReplyWorker,
 	buildDeliveredReplyMetadata,
@@ -12,10 +20,71 @@ import {
 	shouldDeliverIntoEndedSession,
 	shouldRetryGeneration,
 } from "$lib/server/async-replies/worker";
+import { agentDelivery, agentResponseBatch, practiceSession } from "$lib/server/db/schema";
 
 afterEach(() => vi.useRealTimers());
 
+/** Collects bare strings from drizzle query args (skipping SQL chunks and enum lists)
+ * so where-clause payloads can be asserted precisely. */
+function collectBareStrings(value: unknown, out: Array<string | number>): void {
+	if (typeof value === "string") {
+		out.push(value);
+		return;
+	}
+	if (typeof value === "number") {
+		out.push(value);
+		return;
+	}
+	if (Array.isArray(value)) {
+		if (value.length > 0 && value.every((item) => typeof item === "string")) return;
+		for (const item of value) collectBareStrings(item, out);
+		return;
+	}
+	if (value && typeof value === "object") {
+		if ("columnType" in value || "columns" in value) return;
+		for (const item of Object.values(value)) collectBareStrings(item, out);
+	}
+}
+
+const bareStrings = (value: unknown): Array<string | number> => {
+	const out: Array<string | number> = [];
+	collectBareStrings(value, out);
+	return out;
+};
+
+type RecordedUpdate = { table: unknown; set: Record<string, unknown>; clause: unknown };
+type RecordedInsert = { table: unknown; values: Record<string, unknown> };
+
+function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
+	const updates: RecordedUpdate[] = [];
+	const inserts: RecordedInsert[] = [];
+	const tx = {
+		update: (table: unknown) => ({
+			set: (values: Record<string, unknown>) => ({
+				where: (clause: unknown) => {
+					updates.push({ table, set: values, clause });
+					// a real promise (awaitable without .returning) carrying the
+					// returning() continuation drizzle chains on the same query
+					return Object.assign(Promise.resolve(undefined), {
+						returning: async () => [{ id: batchId }],
+					});
+				},
+			}),
+		}),
+		select: () => ({ from: () => ({ where: async () => siblingBatchIds.map((id) => ({ id })) }) }),
+		insert: (table: unknown) => ({
+			values: async (values: Record<string, unknown>) => {
+				inserts.push({ table, values });
+			},
+		}),
+	};
+	return { tx, updates, inserts };
+}
+
 describe("async reply worker scheduling", () => {
+	beforeEach(() => {
+		mockDb.transaction.mockReset();
+	});
 	it("spaces multiple deliveries using content length", () => {
 		const first = new Date("2026-08-19T12:00:00.000Z");
 		const next = getDeliveryDueAt(first, "A short reply.");
@@ -56,6 +125,11 @@ describe("async reply worker scheduling", () => {
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_session_age" }, "delivery_pending")).toBe(false);
+		// the abuse-terminating batch keeps its parting reply after the session ends,
+		// including when the feedback page has already flipped it to evaluated
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
+		expect(shouldDeliverIntoEndedSession({ status: "evaluated", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
+		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "pending")).toBe(false);
 	});
 
 	it("carries comment-thread metadata from the answered message onto delivered replies", () => {
@@ -85,6 +159,60 @@ describe("async reply worker scheduling", () => {
 		expect(shouldRetryGeneration(2)).toBe(true);
 		expect(shouldRetryGeneration(3)).toBe(false);
 		expect(shouldRetryGeneration(99)).toBe(false);
+	});
+
+	it("ends the session and cancels sibling batches immediately when termination carries a final reply", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		const batch = {
+			id: 31,
+			sessionId: 5,
+			claimToken: "token-31",
+			status: "processing",
+			generationCount: 1,
+			inputMessageId: 501,
+		} as Parameters<AsyncReplyWorker["persistGenerationOutcome"]>[0];
+		const result = {
+			requestMessages: [],
+			rawResponse: "",
+			parsedResult: {
+				decision: "terminate_abuse",
+				deliveries: [{ content: "Je dois couper court à cette conversation.", replyToMessageId: null }],
+				allowIdleFollowUp: false,
+				terminationReason: "Severe abuse",
+			},
+			providerMetadata: { finishReason: "stop" },
+		} as unknown as AgentGenerationArtifacts;
+
+		const { tx, updates, inserts } = makeRecordingTx(31, [29, 30]);
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AsyncReplyWorker({});
+		await (
+			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
+		).persistGenerationOutcome(batch, { urgency: "high" }, result, now);
+
+		// the terminating batch itself is queued for delivery, never cancelled
+		const fenceUpdate = updates.find((update) => update.table === agentResponseBatch && update.set.status === "delivery_pending");
+		expect(fenceUpdate).toBeDefined();
+		expect(inserts).toEqual([
+			{
+				table: agentDelivery,
+				values: { batchId: 31, sequence: 0, content: "Je dois couper court à cette conversation.", replyToMessageId: null, dueAt: now },
+			},
+		]);
+
+		// the session ends at decision time, not when the final reply lands
+		const sessionUpdate = updates.find((update) => update.table === practiceSession);
+		expect(sessionUpdate?.set).toMatchObject({ status: "completed", completionReason: "terminated_abuse" });
+
+		// sibling batches — including ones already mid-delivery — are cancelled now
+		const cancelUpdate = updates.find((update) => update.table === agentResponseBatch && update.set.status === "cancelled");
+		const cancelStrings = bareStrings(cancelUpdate?.clause);
+		expect(cancelStrings).toEqual(expect.arrayContaining(["pending", "processing", "delivery_pending"]));
+		expect(cancelStrings).not.toContain("terminated");
+		// ... and so are their queued deliveries
+		const deliveryCancel = updates.find((update) => update.table === agentDelivery);
+		expect(deliveryCancel?.set).toMatchObject({ status: "cancelled" });
+		expect(bareStrings(deliveryCancel?.clause)).toEqual(expect.arrayContaining([29, 30, "pending"]));
 	});
 
 	it("enforces configured concurrency across scheduler ticks and waits for active work on stop", async () => {

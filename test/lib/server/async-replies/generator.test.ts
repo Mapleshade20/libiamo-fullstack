@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
 vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
+import type { AgentHistoryMessage } from "$lib/server/async-replies/generator";
 import {
 	AgentGenerationError,
 	agentResponseDecisionSchema,
@@ -65,6 +66,21 @@ describe("structured agent response", () => {
 				{ id: 7, role: "user", content: "Parent" },
 			]),
 		).toMatchObject({ decision: { deliveries: [{ replyToMessageId: 7 }] }, warnings: [] });
+	});
+
+	it("rejects threaded targets pointing at the agent's own messages", () => {
+		const history: AgentHistoryMessage[] = [
+			{ id: 7, role: "user", content: "Learner comment" },
+			{ id: 8, role: "assistant", content: "Author reply" },
+		];
+		// pointing at the assistant message must not validate: the reply would nest under itself
+		expect(() => normalizeReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 8 }] }, "ao3", history)).toThrow(
+			"Invalid replyToMessageId",
+		);
+		expect(normalizeReplyTargets({ ...reply, deliveries: [{ ...reply.deliveries[0], replyToMessageId: 7 }] }, "ao3", history)).toMatchObject({
+			decision: { deliveries: [{ replyToMessageId: 7 }] },
+			warnings: [],
+		});
 	});
 
 	it("returns exact prompts, raw response, parsed result, metadata, and repair artifacts", async () => {

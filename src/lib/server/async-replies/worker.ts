@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
 import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/async-replies/timing";
 import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
-import { AgentGenerationError, generateAgentResponse } from "$lib/server/async-replies/generator";
+import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "$lib/server/db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 
@@ -53,7 +53,12 @@ export function shouldDeliverIntoEndedSession(
 	batchStatus: string,
 ): boolean {
 	if (session?.status === "in_progress") return true;
-	return hasEndedByMaxTurns(session) && batchStatus === "delivery_pending";
+	if (batchStatus !== "delivery_pending") return false;
+	if (hasEndedByMaxTurns(session)) return true;
+	// The abuse-terminating batch's own parting reply still lands (even if the
+	// feedback page already flipped the session to evaluated): the agent ended
+	// the session while composing that final message for the learner.
+	return (session?.status === "completed" || session?.status === "evaluated") && session.completionReason === "terminated_abuse";
 }
 
 function safeError(error: unknown): string {
@@ -377,58 +382,95 @@ export class AsyncReplyWorker {
 				return;
 			}
 
-			const deliveries = result.parsedResult.deliveries;
-			const terminated = result.parsedResult.decision === "terminate_abuse";
-			await db.transaction(async (tx) => {
-				const stillClaimed = await tx
-					.update(agentResponseBatch)
-					.set({
-						status: deliveries.length > 0 ? "delivery_pending" : terminated ? "terminated" : "no_reply",
-						requestMessages: result.requestMessages,
-						rawResponse: result.rawResponse,
-						parsedResult: result.parsedResult,
-						providerMetadata: result.providerMetadata,
-						allowIdleFollowUp: result.parsedResult.allowIdleFollowUp,
-						completedAt: deliveries.length > 0 ? null : now,
-						error: null,
-						workerId: null,
-						claimToken: null,
-						leaseExpiresAt: null,
-					})
-					.where(this.batchClaimFence(batch))
-					.returning({ id: agentResponseBatch.id });
-				if (stillClaimed.length === 0) return;
-
-				if (terminated && deliveries.length === 0) {
-					await tx
-						.update(practiceSession)
-						.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
-						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
-					await tx
-						.update(agentResponseBatch)
-						.set({ status: "cancelled", completedAt: now })
-						.where(
-							and(
-								eq(agentResponseBatch.sessionId, batch.sessionId),
-								inArray(agentResponseBatch.status, ["pending", "processing"]),
-								ne(agentResponseBatch.id, batch.id),
-							),
-						);
-				}
-				let dueAt = now;
-				for (const [sequence, delivery] of deliveries.entries()) {
-					await tx
-						.insert(agentDelivery)
-						.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
-					dueAt = getDeliveryDueAt(dueAt, delivery.content);
-				}
-				if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
-					await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
-				}
-			});
+			await this.persistGenerationOutcome(batch, session, result, now);
 		} catch (error) {
 			await this.handleGenerationFailure(batch, now, error);
 		}
+	}
+
+	/**
+	 * Persists a finished generation: flips the batch to its delivery/terminal
+	 * status under the claim fence, ends the session and cancels every sibling
+	 * batch on abuse termination, queues the deliveries, and schedules the idle
+	 * follow-up for silent turns.
+	 */
+	private async persistGenerationOutcome(
+		batch: ClaimedBatch,
+		session: { urgency: Urgency },
+		result: AgentGenerationArtifacts,
+		now: WorkerNow,
+	): Promise<void> {
+		const deliveries = result.parsedResult.deliveries;
+		const terminated = result.parsedResult.decision === "terminate_abuse";
+		await db.transaction(async (tx) => {
+			const stillClaimed = await tx
+				.update(agentResponseBatch)
+				.set({
+					status: deliveries.length > 0 ? "delivery_pending" : terminated ? "terminated" : "no_reply",
+					requestMessages: result.requestMessages,
+					rawResponse: result.rawResponse,
+					parsedResult: result.parsedResult,
+					providerMetadata: result.providerMetadata,
+					allowIdleFollowUp: result.parsedResult.allowIdleFollowUp,
+					completedAt: deliveries.length > 0 ? null : now,
+					error: null,
+					workerId: null,
+					claimToken: null,
+					leaseExpiresAt: null,
+				})
+				.where(this.batchClaimFence(batch))
+				.returning({ id: agentResponseBatch.id });
+			if (stillClaimed.length === 0) return;
+
+			// Abuse termination ends the session the moment the decision is made,
+			// final reply or not: no sibling batch may generate or deliver anything
+			// more, and the learner cannot keep the session alive while the parting
+			// message is still queued. The terminating batch keeps its delivery.
+			if (terminated) {
+				await tx
+					.update(practiceSession)
+					.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
+					.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
+				await tx
+					.update(agentResponseBatch)
+					.set({ status: "cancelled", completedAt: now })
+					.where(
+						and(
+							eq(agentResponseBatch.sessionId, batch.sessionId),
+							inArray(agentResponseBatch.status, ["pending", "processing", "delivery_pending"]),
+							ne(agentResponseBatch.id, batch.id),
+						),
+					);
+				const siblingIds = await tx
+					.select({ id: agentResponseBatch.id })
+					.from(agentResponseBatch)
+					.where(and(eq(agentResponseBatch.sessionId, batch.sessionId), ne(agentResponseBatch.id, batch.id)));
+				if (siblingIds.length > 0) {
+					await tx
+						.update(agentDelivery)
+						.set({ status: "cancelled" })
+						.where(
+							and(
+								inArray(
+									agentDelivery.batchId,
+									siblingIds.map((sibling) => sibling.id),
+								),
+								eq(agentDelivery.status, "pending"),
+							),
+						);
+				}
+			}
+			let dueAt = now;
+			for (const [sequence, delivery] of deliveries.entries()) {
+				await tx
+					.insert(agentDelivery)
+					.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
+				dueAt = getDeliveryDueAt(dueAt, delivery.content);
+			}
+			if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
+				await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
+			}
+		});
 	}
 
 	private async handleGenerationFailure(batch: ClaimedBatch, now: WorkerNow, error: unknown): Promise<void> {
