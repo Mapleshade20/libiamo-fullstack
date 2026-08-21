@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getDeliveryDelayMs, getSessionExpiry, sampleReplyDelayMs } from "$lib/async-replies/timing";
+import { getDeliveryDelayMs, getSessionExpiry, sampleReplyDelayMs } from "$lib/agent-replies/timing";
 import { URGENCY_PRESETS } from "$lib/constants";
 
-describe("async reply timing", () => {
+describe("agent reply timing", () => {
 	it.each(["high", "medium", "low"] as const)("samples %s reply delay from an exponential capped at its preset", (urgency) => {
 		const preset = URGENCY_PRESETS[urgency];
 		// u = 0 -> zero delay (instant reply); u -> 1 grows without bound but is capped.

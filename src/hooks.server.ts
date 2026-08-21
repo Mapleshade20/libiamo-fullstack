@@ -1,16 +1,16 @@
 import type { Handle } from "@sveltejs/kit";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { ensureAsyncReplyWorker } from "$lib/server/async-replies/boot";
+import { ensureAgentReplyWorker } from "$lib/server/agent-replies/boot";
 import { auth } from "$lib/server/auth/auth";
 import { sql } from "$lib/server/db";
 
-ensureAsyncReplyWorker();
+ensureAgentReplyWorker();
 
 process.on("sveltekit:shutdown", async (reason) => {
 	console.log(`SvelteKit shutdown: ${reason}`);
 
-	await globalThis.__asyncReplyWorker?.worker.stop();
+	await globalThis.__agentReplyWorker?.worker.stop();
 	await sql.end({
 		timeout: 5,
 	});

@@ -6,9 +6,9 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
-import type { AgentGenerationArtifacts } from "$lib/server/async-replies/generator";
+import type { AgentGenerationArtifacts } from "$lib/server/agent-replies/generator";
 import {
-	AsyncReplyWorker,
+	AgentReplyWorker,
 	buildDeliveredReplyMetadata,
 	getBatchGenerationInstruction,
 	getDeliveryDueAt,
@@ -19,7 +19,7 @@ import {
 	MAX_GENERATION_ATTEMPTS,
 	shouldDeliverIntoEndedSession,
 	shouldRetryGeneration,
-} from "$lib/server/async-replies/worker";
+} from "$lib/server/agent-replies/worker";
 import { agentDelivery, agentResponseBatch, practiceSession } from "$lib/server/db/schema";
 
 afterEach(() => vi.useRealTimers());
@@ -81,7 +81,7 @@ function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
 	return { tx, updates, inserts };
 }
 
-describe("async reply worker scheduling", () => {
+describe("agent reply worker scheduling", () => {
 	beforeEach(() => {
 		mockDb.transaction.mockReset();
 	});
@@ -170,7 +170,7 @@ describe("async reply worker scheduling", () => {
 			status: "processing",
 			generationCount: 1,
 			inputMessageId: 501,
-		} as Parameters<AsyncReplyWorker["persistGenerationOutcome"]>[0];
+		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
 		const result = {
 			requestMessages: [],
 			rawResponse: "",
@@ -185,7 +185,7 @@ describe("async reply worker scheduling", () => {
 
 		const { tx, updates, inserts } = makeRecordingTx(31, [29, 30]);
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
-		const worker = new AsyncReplyWorker({});
+		const worker = new AgentReplyWorker({});
 		await (
 			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
 		).persistGenerationOutcome(batch, { urgency: "high" }, result, now);
@@ -217,7 +217,7 @@ describe("async reply worker scheduling", () => {
 
 	it("enforces configured concurrency across scheduler ticks and waits for active work on stop", async () => {
 		vi.useFakeTimers();
-		const worker = new AsyncReplyWorker({ scanIntervalMs: 10, concurrency: 2 });
+		const worker = new AgentReplyWorker({ scanIntervalMs: 10, concurrency: 2 });
 		const internals = worker as unknown as {
 			expireSessions: ReturnType<typeof vi.fn>;
 			reclaimExpiredLeases: ReturnType<typeof vi.fn>;

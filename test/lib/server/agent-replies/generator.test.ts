@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
 vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
-import type { AgentHistoryMessage } from "$lib/server/async-replies/generator";
+import type { AgentHistoryMessage } from "$lib/server/agent-replies/generator";
 import {
 	AgentGenerationError,
 	agentResponseDecisionSchema,
 	buildAgentResponseMessages,
 	generateAgentResponse,
 	normalizeReplyTargets,
-} from "$lib/server/async-replies/generator";
+} from "$lib/server/agent-replies/generator";
 
 const reply = {
 	decision: "reply" as const,

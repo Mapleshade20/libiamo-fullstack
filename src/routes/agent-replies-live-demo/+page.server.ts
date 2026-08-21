@@ -1,8 +1,8 @@
 import { error, fail } from "@sveltejs/kit";
 import { z } from "zod";
 import { dev } from "$app/environment";
-import { ASYNC_REPLY_DEMO_TASKS } from "$lib/async-replies/live-demo";
-import { generateAgentResponse } from "$lib/server/async-replies/generator";
+import { AGENT_REPLY_DEMO_TASKS } from "$lib/agent-replies/live-demo";
+import { generateAgentResponse } from "$lib/server/agent-replies/generator";
 import type { Actions, PageServerLoad } from "./$types";
 
 const historySchema = z.array(
@@ -15,14 +15,14 @@ const historySchema = z.array(
 
 export const load: PageServerLoad = async (_event) => {
 	if (!dev) throw error(404, "Not found");
-	return { tasks: ASYNC_REPLY_DEMO_TASKS };
+	return { tasks: AGENT_REPLY_DEMO_TASKS };
 };
 
 export const actions: Actions = {
 	run: async (event) => {
 		if (!dev) throw error(404, "Not found");
 		const data = await event.request.formData();
-		const task = ASYNC_REPLY_DEMO_TASKS.find((candidate) => candidate.id === data.get("taskId"));
+		const task = AGENT_REPLY_DEMO_TASKS.find((candidate) => candidate.id === data.get("taskId"));
 		if (!task) return fail(400, { error: "Unknown demo task" });
 		const parsedHistory = historySchema.safeParse(JSON.parse(String(data.get("history") ?? "[]")));
 		if (!parsedHistory.success) return fail(400, { error: "Invalid demo history" });

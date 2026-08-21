@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
-import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/async-replies/timing";
+import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/agent-replies/timing";
 import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
-import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/async-replies/generator";
+import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/agent-replies/generator";
 import { db } from "$lib/server/db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 
@@ -15,7 +15,7 @@ export const MAX_GENERATION_ATTEMPTS = 3;
 type WorkerNow = Date;
 
 type ClaimedBatch = typeof agentResponseBatch.$inferSelect;
-type AsyncReplyExecutor = Pick<typeof db, "query" | "update" | "insert">;
+type AgentReplyExecutor = Pick<typeof db, "query" | "update" | "insert">;
 
 export function getDeliveryDueAt(firstDueAt: Date, previousContent: string | undefined): Date {
 	return new Date(firstDueAt.getTime() + (previousContent === undefined ? 0 : getDeliveryDelayMs(previousContent)));
@@ -119,7 +119,7 @@ export function getBatchGenerationInstruction(kind: string, followUpCount: numbe
 	return `The user has gone quiet since your last message. If you are genuinely still waiting on an answer (for example you asked a question or proposed a plan), send one short, natural follow-up that fits your persona; do not repeat your previous wording and do not pressure them. If the conversation has naturally wound down, choose no_reply. ${ordinal}`;
 }
 
-export type AsyncReplyWorkerOptions = {
+export type AgentReplyWorkerOptions = {
 	workerId?: string;
 	leaseMs?: number;
 	scanIntervalMs?: number;
@@ -127,7 +127,7 @@ export type AsyncReplyWorkerOptions = {
 	retryBackoffMs?: number;
 };
 
-export class AsyncReplyWorker {
+export class AgentReplyWorker {
 	private readonly workerId: string;
 	private readonly leaseMs: number;
 	private readonly scanIntervalMs: number;
@@ -138,8 +138,8 @@ export class AsyncReplyWorker {
 	private readonly activeGenerations = new Set<Promise<void>>();
 	private stopping = false;
 
-	constructor(options: AsyncReplyWorkerOptions = {}) {
-		this.workerId = options.workerId ?? `async-replies-${randomUUID()}`;
+	constructor(options: AgentReplyWorkerOptions = {}) {
+		this.workerId = options.workerId ?? `agent-replies-${randomUUID()}`;
 		this.leaseMs = options.leaseMs ?? DEFAULT_WORKER_LEASE_MS;
 		this.scanIntervalMs = options.scanIntervalMs ?? DEFAULT_WORKER_SCAN_INTERVAL_MS;
 		this.concurrency = options.concurrency ?? DEFAULT_WORKER_CONCURRENCY;
@@ -186,7 +186,7 @@ export class AsyncReplyWorker {
 	private scheduleTick(): void {
 		if (this.stopping || this.schedulerTick) return;
 		const settled = this.runScheduledTick()
-			.catch((error) => console.error("async reply worker tick failed", error))
+			.catch((error) => console.error("agent reply worker tick failed", error))
 			.finally(() => {
 				if (this.schedulerTick === settled) this.schedulerTick = undefined;
 			});
@@ -203,7 +203,7 @@ export class AsyncReplyWorker {
 			if (!batch) break;
 			let generation!: Promise<void>;
 			generation = this.processBatch(batch, now)
-				.catch((error) => console.error("async reply worker generation failed", error))
+				.catch((error) => console.error("agent reply worker generation failed", error))
 				.finally(() => this.activeGenerations.delete(generation));
 			this.activeGenerations.add(generation);
 		}
@@ -227,7 +227,7 @@ export class AsyncReplyWorker {
 				.update(agentResponseBatch)
 				.set({ leaseExpiresAt: new Date(Date.now() + this.leaseMs) })
 				.where(this.batchClaimFence(batch))
-				.catch((error) => console.error("async reply worker heartbeat failed", error));
+				.catch((error) => console.error("agent reply worker heartbeat failed", error));
 		}, intervalMs);
 		return () => clearInterval(timer);
 	}
@@ -508,7 +508,7 @@ export class AsyncReplyWorker {
 				}
 			});
 		} catch (persistenceError) {
-			console.error("async reply worker failed to persist generation failure", persistenceError);
+			console.error("agent reply worker failed to persist generation failure", persistenceError);
 		}
 	}
 
@@ -592,7 +592,7 @@ export class AsyncReplyWorker {
 		}
 	}
 
-	private async scheduleFollowUp(executor: AsyncReplyExecutor, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
+	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
 		const session = await executor.query.practiceSession.findFirst({ where: eq(practiceSession.id, sessionId) });
 		if (!session || session.status !== "in_progress" || session.followUpCount >= 2 || session.expiresAt <= now) return;
 		const existing = await executor.query.agentResponseBatch.findFirst({

@@ -1,6 +1,6 @@
 import type { UiVariant, Urgency } from "$lib/constants";
 
-export type AsyncReplyDemoTask = {
+export type AgentReplyDemoTask = {
 	id: string;
 	title: string;
 	ui: UiVariant;
@@ -10,9 +10,9 @@ export type AsyncReplyDemoTask = {
 	seedMessages: Array<{ id: number; role: "user" | "assistant"; content: string }>;
 };
 
-export type AsyncReplyDemoScenario = "no_reply" | "follow_up" | "terminate_abuse";
+export type AgentReplyDemoScenario = "no_reply" | "follow_up" | "terminate_abuse";
 
-export function simulatedDemoDecision(scenario: AsyncReplyDemoScenario) {
+export function simulatedDemoDecision(scenario: AgentReplyDemoScenario) {
 	if (scenario === "no_reply") return { decision: "no_reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null } as const;
 	if (scenario === "follow_up") return { decision: "no_reply", deliveries: [], allowIdleFollowUp: true, terminationReason: null } as const;
 	return {
@@ -23,7 +23,7 @@ export function simulatedDemoDecision(scenario: AsyncReplyDemoScenario) {
 	} as const;
 }
 
-export const ASYNC_REPLY_DEMO_TASKS: AsyncReplyDemoTask[] = [
+export const AGENT_REPLY_DEMO_TASKS: AgentReplyDemoTask[] = [
 	{
 		id: "discord-planning",
 		title: "Discord · Weekend planning",
@@ -44,6 +44,6 @@ export const ASYNC_REPLY_DEMO_TASKS: AsyncReplyDemoTask[] = [
 	},
 ];
 
-export function wouldReachDemoMaxTurns(task: AsyncReplyDemoTask, messages: Array<{ role: string }>): boolean {
+export function wouldReachDemoMaxTurns(task: AgentReplyDemoTask, messages: Array<{ role: string }>): boolean {
 	return messages.filter((message) => message.role === "user").length >= task.maxTurns;
 }

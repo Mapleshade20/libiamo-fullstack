@@ -2,16 +2,16 @@
 import { untrack } from "svelte";
 import { deserialize } from "$app/forms";
 import {
-	ASYNC_REPLY_DEMO_TASKS,
-	type AsyncReplyDemoScenario,
-	type AsyncReplyDemoTask,
+	AGENT_REPLY_DEMO_TASKS,
+	type AgentReplyDemoScenario,
+	type AgentReplyDemoTask,
 	simulatedDemoDecision,
 	wouldReachDemoMaxTurns,
-} from "$lib/async-replies/live-demo";
+} from "$lib/agent-replies/live-demo";
 
 let { data } = $props();
-let taskId = $state(ASYNC_REPLY_DEMO_TASKS[0].id);
-let task = $derived(data.tasks.find((candidate: AsyncReplyDemoTask) => candidate.id === taskId) as AsyncReplyDemoTask);
+let taskId = $state(AGENT_REPLY_DEMO_TASKS[0].id);
+let task = $derived(data.tasks.find((candidate: AgentReplyDemoTask) => candidate.id === taskId) as AgentReplyDemoTask);
 let messages = $state<Array<{ id: number | string; role: "user" | "assistant"; content: string }>>([]);
 let artifacts = $state<any[]>([]);
 let nowMinutes = $state(0);
@@ -74,7 +74,7 @@ async function runGeneration(instruction = "Respond to the latest conversation s
 	running = false;
 }
 
-function simulateScenario(scenario: AsyncReplyDemoScenario) {
+function simulateScenario(scenario: AgentReplyDemoScenario) {
 	const parsedResult = simulatedDemoDecision(scenario);
 	artifacts = [
 		{
@@ -115,12 +115,12 @@ $effect(() => {
 });
 </script>
 
-<svelte:head><title>Async Reply Lab · Libiamo</title></svelte:head>
+<svelte:head><title>Agent Reply Lab · Libiamo</title></svelte:head>
 
 <section class="mx-auto max-w-6xl space-y-6 py-8">
 	<header class="border-y border-border py-5">
 		<p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Development only · production prompt path</p>
-		<h1 class="font-serif text-4xl">Asynchronous Reply Lab</h1>
+		<h1 class="font-serif text-4xl">Agent Reply Lab</h1>
 	</header>
 
 	<div class="flex flex-wrap gap-3">
