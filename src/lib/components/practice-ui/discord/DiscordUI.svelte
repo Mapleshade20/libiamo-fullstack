@@ -6,6 +6,7 @@ import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
 import ChatHeader from "./ChatHeader.svelte";
+import { hasAgentStartedComposing } from "./helpers";
 import { i18n } from "./i18n";
 import MemberList from "./MemberList.svelte";
 import MessageInput from "./MessageInput.svelte";
@@ -68,6 +69,11 @@ const session = createPracticeSession(() => ({
 }));
 
 const openingStateData = session.openingStateData;
+
+// Real Discord typing means the person is composing: the indicator appears only
+// once the worker has claimed the reply batch (read watermark advanced), not as
+// an instant placeholder the moment the learner sends.
+const agentComposing = $derived(hasAgentStartedComposing(session.messages, session.agentReadUpToMessageId));
 
 const serverName = $derived(normalizeText(openingStateData.serverName, `${userName}'s Server`));
 const channelName = $derived(normalizeText(openingStateData.channelName, t.general));
@@ -217,7 +223,7 @@ $effect(() => {
 				<MessageStream
 					bind:chatContainer={session.chatContainer}
 					messages={session.messages}
-					isTyping={session.isTyping}
+					isTyping={session.isTyping && agentComposing}
 					isInitializing={session.isInitializing}
 					agentUser={session.agentUser}
 					limitReached={session.limitReached}
