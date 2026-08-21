@@ -67,7 +67,7 @@ export const i18n = {
 		retryInputPlaceholder: "La réponse de l'agent a échoué. Utilisez Réessayer.",
 		startConversation: "Commencer une conversation",
 		read: "Lu",
-		delivered: "Delivré",
+		delivered: "Délivré",
 		retry: "Réessayer",
 		stillProcessingMessage: "L'agent traite encore la demande. Réessayez dans un instant.",
 		retryFailedMessage: "La réponse de l'agent a échoué. Cliquez sur Réessayer pour réessayer.",
