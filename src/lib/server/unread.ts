@@ -27,15 +27,18 @@ export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]>
 		.where(and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["in_progress", "completed", "evaluated"])))
 		.groupBy(task.id, task.title, template.ui, practiceSession.status, practiceSession.lastSeenAssistantMessageId);
 
-	return rows
-		.filter((row) => row.unreadCount > 0)
-		.sort((a, b) => (b.latestAgeSeconds ?? 0) - (a.latestAgeSeconds ?? 0))
-		.map(({ taskId, title, ui, sessionStatus, unreadCount, latestAgeSeconds }) => ({
-			taskId,
-			title,
-			ui,
-			sessionStatus,
-			unreadCount,
-			latestAgeSeconds,
-		}));
+	return (
+		rows
+			.filter((row) => row.unreadCount > 0)
+			// Smaller ages are newer replies, so newest unread conversations come first.
+			.sort((a, b) => (a.latestAgeSeconds ?? 0) - (b.latestAgeSeconds ?? 0))
+			.map(({ taskId, title, ui, sessionStatus, unreadCount, latestAgeSeconds }) => ({
+				taskId,
+				title,
+				ui,
+				sessionStatus,
+				unreadCount,
+				latestAgeSeconds,
+			}))
+	);
 }
