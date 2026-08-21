@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	AsyncReplyWorker,
+	buildDeliveredReplyMetadata,
 	getBatchGenerationInstruction,
 	getDeliveryDueAt,
+	getThreadMetadataFromMessage,
 	getUrgencyFollowUpAt,
 	hasEndedByMaxTurns,
 	isStaleGeneration,
@@ -54,6 +56,27 @@ describe("async reply worker scheduling", () => {
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_turns" }, "pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "user_requested" }, "delivery_pending")).toBe(false);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "max_session_age" }, "delivery_pending")).toBe(false);
+	});
+
+	it("carries comment-thread metadata from the answered message onto delivered replies", () => {
+		const thread = getThreadMetadataFromMessage({
+			clientMessageId: "msg-1",
+			thread: { commentId: "ao3-user-msg-1", responderName: "HikariKitsune02", mode: "work" },
+		});
+		expect(thread).toEqual({ commentId: "ao3-user-msg-1", responderName: "HikariKitsune02" });
+		// linear surfaces (iMessage/Discord/Mail) store no thread metadata
+		expect(getThreadMetadataFromMessage({ clientMessageId: "msg-2" })).toBeNull();
+		expect(getThreadMetadataFromMessage(null)).toBeNull();
+		expect(getThreadMetadataFromMessage({ thread: { mode: "work" } })).toBeNull();
+
+		const metadata = buildDeliveredReplyMetadata(thread, 101);
+		expect(metadata.assistantAuthorName).toBe("HikariKitsune02");
+		expect(metadata.thread).toEqual({ parentCommentId: "ao3-user-msg-1", responderName: "HikariKitsune02", mode: "reply" });
+		expect(metadata.replyToMessageId).toBe(101);
+		expect(metadata.asyncDelivery).toBe(true);
+
+		// without thread metadata the payload keeps the legacy linear shape
+		expect(buildDeliveredReplyMetadata(null, null)).toEqual({ replyToMessageId: null, asyncDelivery: true });
 	});
 
 	it("bounds generation retries per batch", () => {

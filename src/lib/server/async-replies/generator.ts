@@ -109,7 +109,7 @@ const AGENT_RESPONSE_JSON_SHAPE = {
 
 export function buildAgentResponseMessages(input: Omit<GenerateAgentResponseInput, "userId">): ChatMessage[] {
 	const targetRule = THREADED_UIS.has(input.ui)
-		? "For Reddit/AO3, replyToMessageId may reference a message_id from the supplied history when threading matters. Otherwise use null."
+		? "For Reddit/AO3 comment threads, reply to each unanswered learner comment separately: one delivery per comment, with replyToMessageId set to that comment's message_id so each reply threads under its comment. Use null only for a reply that addresses the thread as a whole."
 		: "This is a linear interface. Every replyToMessageId must be null.";
 	const system = `${input.baseSystemPrompt}\n\nASYNC RESPONSE CONTRACT:\n- Return ONLY a single JSON object with exactly this shape: ${JSON.stringify(AGENT_RESPONSE_JSON_SHAPE)}\n- No Markdown fences, no commentary, no extra keys. Replace the example values with real ones; replyToMessageId is null when the target rule below says so.\n- decision=reply requires one or more complete, natural messages. Never emit sentence fragments, drafts, narration, sender labels, or mechanical punctuation splits.\n- decision=no_reply means a real person would reasonably send nothing now. It must contain no deliveries.\n- decision=terminate_abuse is reserved only for severe insults or attacks. Ordinary disagreement, thanks, farewells, or a conversation that feels complete are never abuse termination.\n- allowIdleFollowUp only controls whether a later idle follow-up may be scheduled. Setting it false never completes the session.\n- terminationReason is null unless decision=terminate_abuse.\n- ${targetRule}`;
 

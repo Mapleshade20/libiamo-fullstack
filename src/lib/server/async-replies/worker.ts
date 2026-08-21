@@ -60,6 +60,47 @@ function safeError(error: unknown): string {
 	return error instanceof Error && error.message.trim() ? error.message.slice(0, 500) : "The AI reply could not be generated.";
 }
 
+/**
+ * Comment-thread metadata stored on a user message at send time
+ * (`{ commentId, responderName, ... }` for AO3/Reddit turns).
+ */
+export function getThreadMetadataFromMessage(llmMetadata: unknown): { commentId?: string; responderName?: string } | null {
+	if (!llmMetadata || typeof llmMetadata !== "object") return null;
+	const thread = (llmMetadata as { thread?: unknown }).thread;
+	if (!thread || typeof thread !== "object") return null;
+	const commentId = (thread as { commentId?: unknown }).commentId;
+	const responderName = (thread as { responderName?: unknown }).responderName;
+	const commentIdStr = typeof commentId === "string" && commentId.trim() ? commentId.trim() : undefined;
+	const responderStr = typeof responderName === "string" && responderName.trim() ? responderName.trim() : undefined;
+	return commentIdStr || responderStr ? { commentId: commentIdStr, responderName: responderStr } : null;
+}
+
+/**
+ * Presentation metadata for a delivered reply on threaded surfaces (AO3/Reddit):
+ * the reply must nest under the comment it answers and carry the responder's
+ * name, exactly like the synchronous path (`buildAo3SendOptions`). Linear
+ * surfaces (iMessage/Discord/Mail) store no thread metadata and stay unchanged.
+ */
+export function buildDeliveredReplyMetadata(
+	thread: { commentId?: string; responderName?: string } | null,
+	replyToMessageId: number | null,
+): Record<string, unknown> {
+	return {
+		...(thread
+			? {
+					...(thread.responderName ? { assistantAuthorName: thread.responderName } : {}),
+					thread: {
+						parentCommentId: thread.commentId ?? null,
+						...(thread.responderName ? { responderName: thread.responderName } : {}),
+						mode: "reply",
+					},
+				}
+			: {}),
+		replyToMessageId,
+		asyncDelivery: true,
+	};
+}
+
 export function getUrgencyFollowUpAt(now: Date, urgency: Urgency, followUpCount: number): Date {
 	return new Date(now.getTime() + URGENCY_PRESETS[urgency].idleFollowUpDelayMs * Math.max(1, followUpCount));
 }
@@ -458,6 +499,18 @@ export class AsyncReplyWorker {
 					.returning({ id: agentDelivery.id });
 				if (claimed.length === 0) return;
 
+				// Resolve the comment this reply answers: the model targets a specific
+				// message when threading matters, otherwise the burst anchor (last message)
+				// folds the reply, mirroring the synchronous per-turn parent.
+				const targetMessageId = delivery.replyToMessageId ?? batch.inputMessageId;
+				const targetMessage = targetMessageId
+					? await tx.query.sessionMessage.findFirst({
+							where: eq(sessionMessage.id, targetMessageId),
+							columns: { llmMetadata: true },
+						})
+					: null;
+				const thread = getThreadMetadataFromMessage(targetMessage?.llmMetadata);
+
 				await tx
 					.insert(sessionMessage)
 					.values({
@@ -466,7 +519,7 @@ export class AsyncReplyWorker {
 						content: delivery.content,
 						responseBatchId: batch.id,
 						deliveryId: delivery.id,
-						llmMetadata: { replyToMessageId: delivery.replyToMessageId, asyncDelivery: true },
+						llmMetadata: buildDeliveredReplyMetadata(thread, delivery.replyToMessageId),
 					})
 					.onConflictDoNothing({ target: sessionMessage.deliveryId });
 
