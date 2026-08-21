@@ -24,28 +24,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
 import { agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
-import { completeSession, generateHint, getSessionOrFail, sendMessage, startSession, submitAsyncMessage } from "$lib/server/session";
-
-function mockAgentReply(reply: string, terminated = false) {
-	mockClient.chatJson.mockImplementation(async ({ messages }: { messages: unknown[] }) => {
-		const value = {
-			decision: terminated ? "terminate_abuse" : "reply",
-			deliveries: reply ? [{ content: reply, replyToMessageId: null }] : [],
-			allowIdleFollowUp: !terminated,
-			terminationReason: terminated ? "Severe abuse" : null,
-		};
-		return {
-			value,
-			content: JSON.stringify(value),
-			requestMessages: messages,
-			id: "chatcmpl-test",
-			model: "test-model",
-			finishReason: "stop",
-			raw: { id: "chatcmpl-test" },
-			repair: null,
-		};
-	});
-}
+import { completeSession, generateHint, getSessionOrFail, startSession, submitMessage } from "$lib/server/session";
 
 /** Walks mock drizzle args, collecting bare strings while skipping plain string arrays
  * (SQL chunks, enum value lists) so inArray params can be asserted precisely. */
@@ -394,193 +373,7 @@ describe("session service", () => {
 		});
 	});
 
-	describe("sendMessage", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Your MBTI type is ENFP." },
-			messages: [],
-		};
-
-		it("sends message and returns AI reply", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-
-			mockAgentReply("Hello back!");
-			const result = await sendMessage(123, "Hello!", USER_ID);
-
-			expect(result.reply).toBe("Hello back!");
-			expect(result.turnCount).toBe(1);
-			expect(result.terminated).toBe(false);
-
-			expect(mockClient.chatJson).toHaveBeenCalledWith(
-				expect.objectContaining({
-					messages: expect.arrayContaining([
-						expect.objectContaining({ role: "system", content: expect.stringContaining("ASYNC RESPONSE CONTRACT") }),
-						expect.objectContaining({ role: "user", content: expect.stringContaining("Hello!") }),
-					]),
-					schema: expect.anything(),
-					userId: USER_ID,
-				}),
-			);
-		});
-
-		it("includes previous messages in history", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ role: "user", content: "First message" },
-					{ role: "assistant", content: "First reply" },
-				],
-			});
-
-			mockAgentReply("Second reply");
-			await sendMessage(123, "Second message", USER_ID);
-
-			expect(mockClient.chatJson).toHaveBeenCalledWith(
-				expect.objectContaining({
-					messages: expect.arrayContaining([
-						expect.objectContaining({ role: "system" }),
-						expect.objectContaining({ role: "user", content: expect.stringContaining("First message") }),
-						expect.objectContaining({ role: "user", content: expect.stringContaining("First reply") }),
-						expect.objectContaining({ role: "user", content: expect.stringContaining("Second message") }),
-					]),
-					schema: expect.anything(),
-					userId: USER_ID,
-				}),
-			);
-		});
-
-		it("throws when session not found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-
-			await expect(sendMessage(999, "Hello", USER_ID)).rejects.toThrow("Session not found");
-		});
-
-		it("throws when session not in progress", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				status: "completed",
-			});
-
-			await expect(sendMessage(123, "Hello", USER_ID)).rejects.toThrow("Session not in progress");
-		});
-
-		it("throws when userMessage is empty", async () => {
-			await expect(sendMessage(123, "", USER_ID)).rejects.toThrow("userMessage is required");
-			await expect(sendMessage(123, "   ", USER_ID)).rejects.toThrow("userMessage is required");
-		});
-
-		it("calculates turn count correctly", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ role: "user", content: "1" },
-					{ role: "assistant", content: "a" },
-					{ role: "user", content: "2" },
-					{ role: "assistant", content: "b" },
-				],
-			});
-
-			mockAgentReply("c");
-			const result = await sendMessage(123, "3", USER_ID);
-
-			expect(result.turnCount).toBe(3);
-		});
-
-		it("returns existing assistant reply for duplicate clientMessageId", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } },
-					{ id: 2, role: "assistant", content: "Hello back!", llmMetadata: { raw: { terminate: true } } },
-				],
-			});
-
-			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
-
-			expect(result).toEqual({ reply: "Hello back!", turnCount: 1, terminated: true });
-			expect(mockClient.chatJson).not.toHaveBeenCalled();
-		});
-
-		it("does not treat a later turn's assistant reply as the duplicate clientMessageId reply", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } },
-					{ id: 2, role: "user", content: "Different turn", llmMetadata: { clientMessageId: "msg-2", failed: false } },
-					{ id: 3, role: "assistant", content: "Reply to different turn", llmMetadata: { raw: { terminate: false } } },
-				],
-			});
-
-			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
-
-			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
-			expect(mockClient.chatJson).not.toHaveBeenCalled();
-		});
-
-		it("returns pending for duplicate clientMessageId while assistant reply is still processing", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: false } }],
-			});
-
-			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
-
-			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
-			expect(mockClient.chatJson).not.toHaveBeenCalled();
-		});
-
-		it("retries failed generation without inserting a duplicate user message", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [{ id: 1, role: "user", content: "Hello!", llmMetadata: { clientMessageId: "msg-1", failed: true } }],
-			});
-			mockAgentReply("Recovered");
-
-			const result = await sendMessage(123, "Hello!", USER_ID, "msg-1");
-
-			expect(result).toEqual({ reply: "Recovered", turnCount: 1, terminated: false });
-			expect(mockDb.update).toHaveBeenCalled();
-			expect(mockDb.insert).toHaveBeenCalledTimes(1);
-		});
-
-		it("uses function calling to mark a conversation terminated", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("Goodbye!", true);
-
-			const result = await sendMessage(123, "bye", USER_ID);
-
-			expect(result).toEqual({ reply: "Goodbye!", turnCount: 1, terminated: true });
-			expect(mockClient.chatJson).toHaveBeenCalledWith(
-				expect.objectContaining({
-					messages: expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.stringContaining("terminate_abuse") })]),
-					schema: expect.anything(),
-					userId: USER_ID,
-				}),
-			);
-		});
-
-		it("does not make a second LLM request when the termination tool call has no content", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatJson.mockImplementation(async ({ messages }: { messages: unknown[] }) => ({
-				value: { decision: "terminate_abuse", deliveries: [], allowIdleFollowUp: false, terminationReason: "Severe abuse" },
-				content: JSON.stringify({ decision: "terminate_abuse", deliveries: [], allowIdleFollowUp: false, terminationReason: "Severe abuse" }),
-				requestMessages: messages,
-				id: "tool-only",
-				model: "test-model",
-				finishReason: "stop",
-				raw: { id: "tool-only" },
-				repair: null,
-			}));
-
-			const result = await sendMessage(123, "bye", USER_ID);
-
-			expect(result).toEqual({ reply: "", turnCount: 1, terminated: true });
-			expect(mockClient.chatText).not.toHaveBeenCalled();
-		});
-	});
-
-	describe("submitAsyncMessage", () => {
+	describe("submitMessage", () => {
 		it("persists the user message and schedules a batch without calling the provider", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,
@@ -591,9 +384,9 @@ describe("session service", () => {
 			});
 			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
 
-			const result = await submitAsyncMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
+			const result = await submitMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
 
-			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
+			expect(result).toEqual({ turnCount: 1, pending: true });
 			expect(mockDb.insert).toHaveBeenCalledWith(agentResponseBatch);
 			expect(mockClient.chatJson).not.toHaveBeenCalled();
 		});
@@ -628,9 +421,9 @@ describe("session service", () => {
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
 
-			const result = await submitAsyncMessage(123, "Me revoilà", USER_ID);
+			const result = await submitMessage(123, "Me revoilà", USER_ID);
 
-			expect(result).toEqual({ reply: "", turnCount: 2, pending: true });
+			expect(result).toEqual({ turnCount: 2, pending: true });
 			// the idle nudge is cancelled, not folded into
 			expect(updates.some(({ setArgs }) => bareStrings(setArgs).includes("cancelled"))).toBe(true);
 			// the new message gets a fresh reply batch at inputVersion 1
@@ -658,8 +451,8 @@ describe("session service", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
 			try {
-				const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
-				expect(result).toEqual({ reply: "", turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
+				const result = await submitMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+				expect(result).toEqual({ turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
 			} finally {
 				vi.useRealTimers();
 			}
@@ -705,9 +498,9 @@ describe("session service", () => {
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
 
-			const result = await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+			const result = await submitMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
 
-			expect(result).toEqual({ reply: "", turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
+			expect(result).toEqual({ turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
 			// the unclaimed batch itself is spared, so no farewell batch is queued either
 			expect(valuesMock).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "reply" }));
 			const cancelUpdate = updates.find(({ setArgs }) => bareStrings(setArgs).includes("cancelled"));
@@ -749,7 +542,7 @@ describe("session service", () => {
 					}) as unknown as ReturnType<typeof mockDb.insert>,
 			);
 
-			await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+			await submitMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
 
 			const cancelUpdate = updates.find(({ setArgs }) => bareStrings(setArgs).includes("cancelled"));
 			expect(cancelUpdate).toBeDefined();
@@ -801,7 +594,7 @@ describe("session service", () => {
 					}) as unknown as ReturnType<typeof mockDb.update>,
 			);
 
-			await submitAsyncMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
+			await submitMessage(123, "Last", USER_ID, "client-2", { maxTurns: 2 });
 
 			const batchCancel = updates.find(({ setArgs, whereArgs }) => {
 				strings.length = 0;
@@ -839,9 +632,9 @@ describe("session service", () => {
 			});
 			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
 
-			const result = await submitAsyncMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
+			const result = await submitMessage(123, "Hello", USER_ID, "client-1", { maxTurns: 3 });
 
-			expect(result).toEqual({ reply: "", turnCount: 1, pending: true });
+			expect(result).toEqual({ turnCount: 1, pending: true });
 			// the failure flag was cleared and a fresh batch was scheduled for the same message
 			expect(mockDb.update).toHaveBeenCalledWith(sessionMessage);
 			expect(mockDb.insert).toHaveBeenCalledWith(agentResponseBatch);
@@ -874,7 +667,7 @@ describe("session service", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
 			try {
-				await submitAsyncMessage(123, "second burst message", USER_ID);
+				await submitMessage(123, "second burst message", USER_ID);
 			} finally {
 				vi.useRealTimers();
 			}
@@ -907,7 +700,7 @@ describe("session service", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-08-19T12:00:10.000Z"));
 			try {
-				await submitAsyncMessage(123, "too late", USER_ID);
+				await submitMessage(123, "too late", USER_ID);
 			} finally {
 				vi.useRealTimers();
 			}
@@ -1054,153 +847,6 @@ describe("session service", () => {
 			});
 
 			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
-		});
-	});
-
-	describe("message persistence", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Test prompt." },
-			messages: [],
-		};
-
-		it("saves both user and assistant messages", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("AI reply");
-			const valuesMock = vi
-				.fn()
-				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
-				.mockReturnValueOnce(undefined);
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "User message", USER_ID);
-
-			expect(valuesMock).toHaveBeenCalledTimes(2);
-			expect(valuesMock).toHaveBeenNthCalledWith(1, { sessionId: 123, role: "user", content: "User message", llmMetadata: undefined });
-			expect(valuesMock).toHaveBeenNthCalledWith(2, {
-				sessionId: 123,
-				role: "assistant",
-				content: "AI reply",
-				llmMetadata: {
-					model: "test-model",
-					replyToMessageId: null,
-					raw: expect.objectContaining({ terminated: false, parsedResult: expect.objectContaining({ decision: "reply" }) }),
-				},
-			});
-		});
-
-		it("persists user message before requesting LLM output", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("AI reply");
-			const valuesMock = vi
-				.fn()
-				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
-				.mockReturnValueOnce(undefined);
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "Ordering check", USER_ID);
-
-			expect(valuesMock).toHaveBeenNthCalledWith(1, {
-				sessionId: 123,
-				role: "user",
-				content: "Ordering check",
-				llmMetadata: undefined,
-			});
-			expect(valuesMock.mock.invocationCallOrder[0]).toBeLessThan(mockClient.chatJson.mock.invocationCallOrder[0]);
-		});
-
-		it("trims user message before saving", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("reply");
-			const valuesMock = vi
-				.fn()
-				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
-				.mockReturnValueOnce(undefined);
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "  Hello  ", USER_ID);
-
-			expect(valuesMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ content: "Hello" }));
-		});
-
-		it("persists prompt content with display metadata for AO3-style turns", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("Author reply");
-			const valuesMock = vi
-				.fn()
-				.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) })
-				.mockReturnValueOnce(undefined);
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "Visible comment", USER_ID, "ao3-1", {
-				promptContent: "Prompt context plus visible comment",
-				userDisplayContent: "Visible comment",
-				userMetadata: { thread: { commentId: "ao3-user-ao3-1" } },
-				assistantAuthorName: "FicAuthor",
-				assistantMetadata: { thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" } },
-			});
-
-			expect(valuesMock).toHaveBeenNthCalledWith(1, {
-				sessionId: 123,
-				role: "user",
-				content: "Prompt context plus visible comment",
-				llmMetadata: expect.objectContaining({
-					clientMessageId: "ao3-1",
-					displayContent: "Visible comment",
-					thread: { commentId: "ao3-user-ao3-1" },
-				}),
-			});
-			expect(valuesMock).toHaveBeenNthCalledWith(
-				2,
-				expect.objectContaining({
-					role: "assistant",
-					content: "Author reply",
-					llmMetadata: expect.objectContaining({
-						assistantAuthorName: "FicAuthor",
-						thread: { commentId: "ao3-agent-ao3-1", parentCommentId: "ao3-user-ao3-1" },
-					}),
-				}),
-			);
-			expect(mockClient.chatJson).toHaveBeenCalledWith(
-				expect.objectContaining({
-					messages: expect.arrayContaining([
-						expect.objectContaining({ role: "user", content: expect.stringContaining("Prompt context plus visible comment") }),
-					]),
-					schema: expect.anything(),
-					userId: USER_ID,
-				}),
-			);
-		});
-
-		it("persists user message even when LLM generation fails", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatJson.mockRejectedValue(new Error("LLM timeout"));
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await expect(sendMessage(123, "Need a reply", USER_ID)).rejects.toThrow("LLM timeout");
-
-			expect(valuesMock).toHaveBeenCalledTimes(1);
-			expect(valuesMock).toHaveBeenCalledWith({
-				sessionId: 123,
-				role: "user",
-				content: "Need a reply",
-				llmMetadata: undefined,
-			});
-		});
-
-		it("marks failed clientMessageId metadata when LLM generation fails", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockClient.chatJson.mockRejectedValue(new Error("LLM timeout"));
-			const valuesMock = vi
-				.fn()
-				.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1, llmMetadata: { clientMessageId: "msg-1", failed: false } }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await expect(sendMessage(123, "Need a reply", USER_ID, "msg-1")).rejects.toThrow("LLM timeout");
-
-			expect(mockDb.update).toHaveBeenCalled();
 		});
 	});
 
@@ -1377,74 +1023,6 @@ describe("session service", () => {
 		});
 	});
 
-	describe("sendMessage history", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Test prompt." },
-			messages: [],
-		};
-
-		it("uses full flat history; threaded UIs provide target context via promptContent", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ id: 10, role: "user", content: "Msg 1" },
-					{ id: 20, role: "assistant", content: "Reply 1" },
-				],
-			});
-			mockAgentReply("Flat reply");
-			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 30 }]) });
-			mockDb.insert.mockReturnValue({ values: valuesMock });
-
-			await sendMessage(123, "New msg", USER_ID);
-
-			const historyArg = mockClient.chatJson.mock.calls[0][0].messages;
-			expect(historyArg).toEqual([
-				expect.objectContaining({ role: "system" }),
-				expect.objectContaining({ role: "user", content: expect.stringContaining("Msg 1") }),
-			]);
-			expect(historyArg[1].content).toContain("New msg");
-		});
-	});
-
-	describe("sendMessage maxTurns", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Test prompt." },
-			messages: [],
-		};
-
-		it("throws when maxTurns is reached", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ role: "user", content: "msg1" },
-					{ role: "assistant", content: "reply1" },
-					{ role: "user", content: "msg2" },
-					{ role: "assistant", content: "reply2" },
-				],
-			});
-
-			await expect(sendMessage(123, "msg3", USER_ID, undefined, { maxTurns: 2 })).rejects.toThrow("Maximum conversation turns reached");
-		});
-
-		it("does not throw when maxTurns is 0 (unlimited)", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				messages: [
-					{ role: "user", content: "msg1" },
-					{ role: "assistant", content: "reply1" },
-				],
-			});
-			mockAgentReply("reply2");
-
-			const result = await sendMessage(123, "msg2", USER_ID, undefined, { maxTurns: 0 });
-			expect(result.reply).toBe("reply2");
-		});
-	});
-
 	describe("buildRedditContext", () => {
 		const redditTask = {
 			id: 1,
@@ -1585,42 +1163,6 @@ describe("session service", () => {
 			});
 
 			await expect(generateHint(123, { mode: "content" })).rejects.toThrow("Task not found");
-		});
-	});
-
-	describe("sendMessage retry with generic thread metadata", () => {
-		const mockSession = {
-			id: 123,
-			status: "in_progress",
-			agentPromptSnapshot: { systemPrompt: "Test prompt." },
-			messages: [
-				{
-					id: 5,
-					role: "user",
-					content: "My failed comment",
-					llmMetadata: {
-						clientMessageId: "msg-retry",
-						failed: true,
-						thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1" },
-					},
-				},
-			],
-		};
-
-		it("updates the existing user message while preserving/merging thread metadata", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession);
-			mockAgentReply("Retry reply");
-
-			const setMock = vi.fn().mockReturnValue({ where: vi.fn() });
-			mockDb.update.mockReturnValue({ set: setMock });
-
-			await sendMessage(123, "My failed comment", USER_ID, "msg-retry", {
-				userMetadata: { thread: { commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" } },
-			});
-
-			const updateCall = setMock.mock.calls[0][0];
-			expect(updateCall.llmMetadata.failed).toBe(false);
-			expect(updateCall.llmMetadata.thread).toEqual({ commentId: "reddit-user-msg-retry", targetCommentId: "c1", responderName: "Commenter" });
 		});
 	});
 });

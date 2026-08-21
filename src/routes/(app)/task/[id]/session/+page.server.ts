@@ -22,9 +22,9 @@ import {
 	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
-	type SendMessageOptions,
+	type SubmitMessageOptions,
 	startSession,
-	submitAsyncMessage,
+	submitMessage,
 } from "$lib/server/session";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -224,7 +224,7 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 
-			const sendOptions: SendMessageOptions = {
+			const sendOptions: SubmitMessageOptions = {
 				// Prefer the turn limit frozen at session start so admin template edits never
 				// change the rules (or the displayed remaining turns) mid-session.
 				maxTurns: session.maxTurnsSnapshot ?? taskData.template.maxTurns,
@@ -265,7 +265,7 @@ export const actions: Actions = {
 				sendOptions.userDisplayContent = formattedMessage;
 			}
 
-			const result = await submitAsyncMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
+			const result = await submitMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

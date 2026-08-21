@@ -19,20 +19,12 @@ describe("buildRedditSendOptions", () => {
 
 		expect(options).toMatchObject({
 			userDisplayContent: "Can you explain?",
-			assistantAuthorName: "Commenter",
 			userMetadata: {
 				thread: {
 					commentId: "reddit-user-client-1",
 					targetCommentId: "c1",
 					responderName: "Commenter",
 					mode: "reply",
-				},
-			},
-			assistantMetadata: {
-				thread: {
-					commentId: "reddit-agent-client-1",
-					parentCommentId: "reddit-user-client-1",
-					responderName: "Commenter",
 				},
 			},
 		});
@@ -49,7 +41,6 @@ describe("buildRedditSendOptions", () => {
 			userName: "Learner",
 		});
 
-		expect(options?.assistantAuthorName).toBe("OP");
 		expect(options?.userMetadata).toMatchObject({ thread: { targetCommentId: null, mode: "post" } });
 		expect(options?.promptContent).toContain("new top-level Reddit comment");
 	});

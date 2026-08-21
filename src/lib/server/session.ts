@@ -1,9 +1,8 @@
 import { randomInt } from "node:crypto";
 import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/async-replies/timing";
+import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/agent-replies/timing";
 import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
-import { type AgentHistoryMessage, generateAgentResponse } from "$lib/server/async-replies/generator";
 import { db } from "./db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
 import { chatJson } from "./llm";
@@ -318,26 +317,16 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	}
 }
 
-type SendMessageResult = {
-	reply: string;
-	turnCount: number;
-	terminated?: boolean;
-	pending?: boolean;
+type SubmitMessageResult =
+	| { turnCount: number; pending: true }
 	/** The send itself completed the session (e.g. the maxTurns message); clients must navigate instead of calling complete. */
-	sessionCompleted?: boolean;
-	completionReason?: "max_turns";
-};
+	| { turnCount: number; pending: false; sessionCompleted: true; completionReason: "max_turns" };
 
 type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	hidden?: boolean;
-	mailBodyHtml?: string;
 	displayContent?: string;
-	assistantAuthorName?: string;
-	thread?: unknown;
-	model?: string;
-	raw?: unknown;
 };
 
 function getMessageMetadata(value: unknown): SessionMessageMetadata {
@@ -357,86 +346,20 @@ function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unk
 	return messages.filter((message) => message.role === "user" && !isHiddenUserMessage(message)).length;
 }
 
-function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
-	messages: T[],
-	clientMessageId: string,
-) {
-	const userIndex = messages.findIndex(
-		(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-	);
-
-	if (userIndex === -1) return null;
-
-	const userMessage = messages[userIndex];
-	const assistantReplyByClientId = messages.find(
-		(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-	);
-	const messagesAfterUser = messages.slice(userIndex + 1);
-	const nextUserMessageIndex = messagesAfterUser.findIndex((message) => message.role === "user");
-	const messagesInSameTurn = nextUserMessageIndex === -1 ? messagesAfterUser : messagesAfterUser.slice(0, nextUserMessageIndex);
-	const assistantReply =
-		assistantReplyByClientId ??
-		messagesInSameTurn.find((message) => {
-			if (message.role !== "assistant") return false;
-			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
-			return !assistantClientMessageId || assistantClientMessageId === clientMessageId;
-		});
-	const metadata = getMessageMetadata(userMessage.llmMetadata);
-
-	return {
-		userMessage,
-		assistantReply,
-		failed: metadata.failed === true,
-	};
-}
-
-function getStoredTermination(metadata: unknown) {
-	const raw = getMessageMetadata(metadata).raw;
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
-	const value = raw as { terminate?: unknown; terminated?: unknown };
-	return value.terminate === true || value.terminated === true;
-}
-
-function toAgentHistory(messages: Array<{ id?: number; role: string; content: string; llmMetadata?: unknown }>): AgentHistoryMessage[] {
-	return messages.flatMap((message, index) => {
-		if (message.role !== "user" && message.role !== "assistant") return [];
-		return [
-			{
-				id: message.id ?? `unsaved-${index}`,
-				role: message.role,
-				content: message.content,
-				metadata: message.llmMetadata,
-			} satisfies AgentHistoryMessage,
-		];
-	});
-}
-
-async function generateAssistantOutput(
-	baseSystemPrompt: string,
-	ui: UiVariant,
-	history: Array<{ id?: number; role: string; content: string; llmMetadata?: unknown }>,
-	userId: string,
-	additionalInstruction?: string,
-) {
-	return generateAgentResponse({ baseSystemPrompt, ui, history: toAgentHistory(history), userId, additionalInstruction });
-}
-
-export type SendMessageOptions = {
+export type SubmitMessageOptions = {
 	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
-	assistantAuthorName?: string;
-	assistantMetadata?: Record<string, unknown>;
 };
 
-export async function submitAsyncMessage(
+export async function submitMessage(
 	sessionId: number,
 	userMessage: string,
 	userId: string,
 	clientMessageId?: string,
-	options: SendMessageOptions = {},
-): Promise<SendMessageResult> {
+	options: SubmitMessageOptions = {},
+): Promise<SubmitMessageResult> {
 	const trimmedUserMessage = userMessage.trim();
 	if (!trimmedUserMessage) throw new Error("userMessage is required");
 	const promptContent = options.promptContent?.trim() || trimmedUserMessage;
@@ -458,7 +381,7 @@ export async function submitAsyncMessage(
 			);
 			if (existing) {
 				if (getMessageMetadata(existing.llmMetadata).failed !== true) {
-					return { reply: "", turnCount: countVisibleUserTurns(session.messages), pending: true };
+					return { turnCount: countVisibleUserTurns(session.messages), pending: true };
 				}
 				// A failed generation is terminal; a manual retry clears the failure and schedules a fresh batch.
 				await tx
@@ -551,7 +474,7 @@ export async function submitAsyncMessage(
 						),
 					);
 			}
-			return { reply: "", turnCount, pending: false, sessionCompleted: true, completionReason: "max_turns" };
+			return { turnCount, pending: false, sessionCompleted: true, completionReason: "max_turns" };
 		}
 
 		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));
@@ -613,263 +536,8 @@ export async function submitAsyncMessage(
 				inputVersion: 1,
 			});
 		}
-		return { reply: "", turnCount, pending: true };
+		return { turnCount, pending: true };
 	});
-}
-
-type RequestAgentOpeningOptions = {
-	maxTurns?: number | null;
-	promptContent?: string;
-	assistantAuthorName?: string;
-	assistantMetadata?: Record<string, unknown>;
-};
-
-export async function sendMessage(
-	sessionId: number,
-	userMessage: string,
-	userId: string,
-	clientMessageId?: string,
-	options: SendMessageOptions = {},
-): Promise<SendMessageResult> {
-	const trimmedUserMessage = userMessage.trim();
-	if (!trimmedUserMessage) {
-		throw new Error("userMessage is required");
-	}
-	const trimmedPromptContent = options.promptContent?.trim() || trimmedUserMessage;
-	const displayContent = options.userDisplayContent?.trim();
-
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: sessionMessageChronologicalOrder },
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
-
-	let activeMessages = session.messages;
-	let existingUserMessage: (typeof session.messages)[number] | null = null;
-	let reusedExistingUserMessage = false;
-
-	if (clientMessageId) {
-		const existingState = getExistingUserMessageState(session.messages, clientMessageId);
-		if (existingState?.assistantReply) {
-			return {
-				reply: existingState.assistantReply.content,
-				turnCount: countVisibleUserTurns(session.messages),
-				terminated: getStoredTermination(existingState.assistantReply.llmMetadata),
-			};
-		}
-
-		if (existingState && !existingState.failed) {
-			return {
-				reply: "",
-				turnCount: countVisibleUserTurns(session.messages),
-				pending: true,
-			};
-		}
-
-		existingUserMessage = existingState?.userMessage ?? null;
-		reusedExistingUserMessage = existingUserMessage !== null;
-	}
-
-	const maxTurns = options.maxTurns ?? 0;
-	if (!existingUserMessage && maxTurns > 0 && countVisibleUserTurns(activeMessages) >= maxTurns) {
-		throw new Error("Maximum conversation turns reached");
-	}
-
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
-
-	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
-	if (!existingUserMessage) {
-		const insertedMessages = await db
-			.insert(sessionMessage)
-			.values({
-				sessionId,
-				role: "user",
-				content: trimmedPromptContent,
-				llmMetadata:
-					clientMessageId || displayContent || options.userMetadata
-						? {
-								...options.userMetadata,
-								clientMessageId,
-								failed: false,
-								displayContent,
-							}
-						: undefined,
-			})
-			.returning();
-		const insertedUserMessage = insertedMessages[0];
-		if (insertedUserMessage) {
-			const persistedUserMessage = {
-				...insertedUserMessage,
-				role: insertedUserMessage.role ?? "user",
-				content: insertedUserMessage.content ?? trimmedPromptContent,
-				llmMetadata: insertedUserMessage.llmMetadata ?? options.userMetadata,
-			};
-			existingUserMessage = persistedUserMessage;
-			activeMessages = [...activeMessages, persistedUserMessage];
-		}
-	} else if (existingUserMessage.id) {
-		await db
-			.update(sessionMessage)
-			.set({
-				llmMetadata: {
-					...getMessageMetadata(existingUserMessage.llmMetadata),
-					...options.userMetadata,
-					clientMessageId,
-					failed: false,
-					failureError: null,
-					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true,
-					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-				},
-			})
-			.where(eq(sessionMessage.id, existingUserMessage.id));
-
-		activeMessages = activeMessages.map((message) =>
-			message === existingUserMessage
-				? {
-						...message,
-						llmMetadata: {
-							...getMessageMetadata(message.llmMetadata),
-							...options.userMetadata,
-							clientMessageId,
-							failed: false,
-							failureError: null,
-							hidden: getMessageMetadata(message.llmMetadata).hidden === true,
-							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
-						},
-					}
-				: message,
-		);
-	}
-
-	let output: Awaited<ReturnType<typeof generateAssistantOutput>>;
-	try {
-		output = await generateAssistantOutput(snapshot.systemPrompt, (snapshot.ui as UiVariant | undefined) ?? "discord", activeMessages, userId);
-	} catch (error) {
-		if (existingUserMessage?.id) {
-			await db
-				.update(sessionMessage)
-				.set({
-					llmMetadata: {
-						...getMessageMetadata(existingUserMessage.llmMetadata),
-						...options.userMetadata,
-						clientMessageId,
-						failed: true,
-						failureError: error instanceof Error && error.message.trim() ? error.message : null,
-						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true,
-						displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-					},
-				})
-				.where(eq(sessionMessage.id, existingUserMessage.id));
-		}
-		throw error;
-	}
-
-	for (const delivery of output.parsedResult.deliveries) {
-		await db.insert(sessionMessage).values({
-			sessionId,
-			role: "assistant",
-			content: delivery.content,
-			llmMetadata: {
-				...options.assistantMetadata,
-				...(clientMessageId ? { clientMessageId } : {}),
-				...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-				replyToMessageId: delivery.replyToMessageId,
-				model: output.providerMetadata.model,
-				raw: {
-					terminated: output.parsedResult.decision === "terminate_abuse",
-					requestMessages: output.requestMessages,
-					rawResponse: output.rawResponse,
-					parsedResult: output.parsedResult,
-					providerMetadata: output.providerMetadata,
-				},
-			},
-		});
-	}
-
-	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage ? 0 : 1);
-
-	return {
-		reply: output.parsedResult.deliveries[0]?.content ?? "",
-		turnCount,
-		terminated: output.parsedResult.decision === "terminate_abuse",
-	};
-}
-
-export async function requestAgentOpening(
-	sessionId: number,
-	userId: string,
-	clientMessageId?: string,
-	options: RequestAgentOpeningOptions = {},
-): Promise<SendMessageResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: sessionMessageChronologicalOrder },
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.userId !== userId) throw new Error("Access denied");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
-
-	if (clientMessageId) {
-		const existingAssistantReply = session.messages.find(
-			(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-		);
-		if (existingAssistantReply) {
-			return {
-				reply: existingAssistantReply.content,
-				turnCount: countVisibleUserTurns(session.messages),
-				terminated: getStoredTermination(existingAssistantReply.llmMetadata),
-			};
-		}
-	}
-
-	const maxTurns = options.maxTurns ?? 0;
-	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
-		throw new Error("Maximum conversation turns reached");
-	}
-
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: UiVariant };
-	const output = await generateAssistantOutput(
-		snapshot.systemPrompt,
-		snapshot.ui ?? "discord",
-		session.messages,
-		userId,
-		options.promptContent?.trim(),
-	);
-
-	for (const delivery of output.parsedResult.deliveries) {
-		await db.insert(sessionMessage).values({
-			sessionId,
-			role: "assistant",
-			content: delivery.content,
-			llmMetadata: {
-				...options.assistantMetadata,
-				...(clientMessageId ? { clientMessageId } : {}),
-				...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-				replyToMessageId: delivery.replyToMessageId,
-				model: output.providerMetadata.model,
-				raw: {
-					terminated: output.parsedResult.decision === "terminate_abuse",
-					requestMessages: output.requestMessages,
-					rawResponse: output.rawResponse,
-					parsedResult: output.parsedResult,
-					providerMetadata: output.providerMetadata,
-				},
-			},
-		});
-	}
-
-	return {
-		reply: output.parsedResult.deliveries[0]?.content ?? "",
-		turnCount: countVisibleUserTurns(session.messages),
-		terminated: output.parsedResult.decision === "terminate_abuse",
-	};
 }
 
 export async function completeSession(sessionId: number): Promise<void> {

@@ -8,7 +8,7 @@ import {
 } from "$lib/components/practice-ui/ao3/helpers";
 import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
 import type { CommentThreadMetadata } from "$lib/components/practice-ui/commentThread";
-import type { SendMessageOptions } from "$lib/server/session";
+import type { SubmitMessageOptions } from "$lib/server/session";
 
 type PersistedSessionMessage = {
 	id: number | string;
@@ -34,7 +34,7 @@ function buildAo3RetrySendOptions(params: {
 	messages: PersistedSessionMessage[];
 	openingState: Ao3OpeningState;
 	clientMessageId: string;
-}): SendMessageOptions | null {
+}): SubmitMessageOptions | null {
 	const originalUserMessage = params.messages.find((message) => {
 		const metadata = getAo3PersistedMetadata(message.llmMetadata);
 		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.thread;
@@ -45,20 +45,9 @@ function buildAo3RetrySendOptions(params: {
 	const thread = metadata.thread;
 	if (!thread) return null;
 
-	const responderName = thread.responderName || getAo3AuthorName(params.openingState);
-	const userCommentId = thread.commentId || `ao3-user-${params.clientMessageId}`;
 	return {
 		userDisplayContent: metadata.displayContent,
 		userMetadata: { thread },
-		assistantAuthorName: responderName,
-		assistantMetadata: {
-			thread: {
-				commentId: `ao3-agent-${params.clientMessageId}`,
-				parentCommentId: userCommentId,
-				responderName,
-				mode: "reply",
-			},
-		},
 	};
 }
 
@@ -67,10 +56,9 @@ function buildAo3NewTurnSendOptions(params: {
 	target: Ao3Target | null;
 	message: string;
 	clientMessageId: string;
-}): SendMessageOptions {
+}): SubmitMessageOptions {
 	const responderName = params.target?.username || getAo3AuthorName(params.openingState);
 	const userCommentId = `ao3-user-${params.clientMessageId}`;
-	const agentCommentId = `ao3-agent-${params.clientMessageId}`;
 	const mode = params.target ? "reply" : "work";
 	return {
 		promptContent: buildAo3UserPrompt({
@@ -86,15 +74,6 @@ function buildAo3NewTurnSendOptions(params: {
 				targetCommentId: params.target?.id ?? null,
 				responderName,
 				mode,
-			},
-		},
-		assistantAuthorName: responderName,
-		assistantMetadata: {
-			thread: {
-				commentId: agentCommentId,
-				parentCommentId: userCommentId,
-				responderName,
-				mode: "reply",
 			},
 		},
 	};
@@ -131,7 +110,7 @@ export function buildAo3SendOptions(params: {
 	message: string;
 	clientMessageId: string;
 	userName: string;
-}): SendMessageOptions | null {
+}): SubmitMessageOptions | null {
 	const retryOptions = buildAo3RetrySendOptions({
 		messages: params.messages,
 		openingState: params.openingState,
