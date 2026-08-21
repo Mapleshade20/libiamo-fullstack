@@ -5,7 +5,7 @@ import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import { completeAction, postAction } from "./apiService";
-import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
+import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
@@ -122,11 +122,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		];
 	}
 
-	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
-		if (result.status === "reply") {
-			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
-			if (result.terminated) handleCompleteAndNavigate(String(taskId ?? ""));
-		} else if (result.status === "session_completed") {
+	function applySendResult(result: MessageSubmissionResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
+		if (result.status === "session_completed") {
 			// The server already finished the session in the send transaction; navigate without calling complete.
 			finishAndNavigateToFeedback(String(taskId ?? ""));
 		} else if (result.status === "pending") {
@@ -162,7 +159,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		return invalidate(PRACTICE_SESSION_DEPENDENCY);
 	}
 
-	function refreshAfterSendResult(result: SendAttemptResult) {
+	function refreshAfterSendResult(result: MessageSubmissionResult) {
 		if (result.status === "pending") {
 			return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 		}
@@ -191,7 +188,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (originalUserMessage?.thread?.targetCommentId) {
 			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
 		}
-		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, retryExtraFields);
+		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, retryExtraFields);
 
 		applySendResult(result, message.clientMessageId, retryText, {
 			authorName: message.authorName,
@@ -283,7 +280,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
+		const result = await submitPracticeMessage(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
 
 		applySendResult(result, clientMessageId, currentText, agentPatch);
 

@@ -111,7 +111,7 @@ describe("mail presentation", () => {
 	it("builds agent messages for send result states", () => {
 		expect(
 			buildAgentMessageFromSendResult({
-				result: { status: "reply", text: "Thanks", terminated: false },
+				result: { status: "pending" },
 				clientMessageId: "mail-1",
 				retryText: "Original",
 				recipient,
@@ -123,8 +123,8 @@ describe("mail presentation", () => {
 		).toMatchObject({
 			id: "agent-1",
 			role: "agent",
-			text: "Thanks",
-			deliveryState: "sent",
+			text: "Still processing",
+			deliveryState: "pending",
 			clientMessageId: "mail-1",
 		});
 
@@ -146,22 +146,10 @@ describe("mail presentation", () => {
 		});
 	});
 
-	it("does not build a message for rejected or blank replies", () => {
+	it("does not build a message for rejected submissions", () => {
 		expect(
 			buildAgentMessageFromSendResult({
 				result: { status: "rejected" },
-				clientMessageId: "mail-1",
-				retryText: "Original",
-				recipient,
-				timestamp: "9:02",
-				stillProcessingMessage: "Still processing",
-				retryFailedMessage: "Failed",
-			}),
-		).toBeNull();
-
-		expect(
-			buildAgentMessageFromSendResult({
-				result: { status: "reply", text: "   ", terminated: false },
 				clientMessageId: "mail-1",
 				retryText: "Original",
 				recipient,

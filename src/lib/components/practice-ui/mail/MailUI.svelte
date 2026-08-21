@@ -8,7 +8,7 @@ import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction } from "../apiService";
-import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
+import { type MessageSubmissionResult, submitPracticeMessage } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
@@ -60,7 +60,7 @@ function refreshPracticeSession() {
 	return invalidate(PRACTICE_SESSION_DEPENDENCY);
 }
 
-function refreshAfterSendResult(result: SendAttemptResult) {
+function refreshAfterSendResult(result: MessageSubmissionResult) {
 	if (result.status === "pending") {
 		return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 	}
@@ -268,7 +268,7 @@ async function scrollToMessageBottom() {
 }
 
 function appendAgentMessageFromSendResult(
-	result: SendAttemptResult,
+	result: MessageSubmissionResult,
 	clientMessageId: string,
 	retryText: string,
 	agentMessageId = crypto.randomUUID(),
@@ -349,7 +349,7 @@ async function handleRetry(messageId: string) {
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
-		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
+		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
 
 		if (result.status === "session_completed") {
 			isCompleted = true;
@@ -391,14 +391,14 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await attemptAgentReply(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
+		const result = await submitPracticeMessage(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
 		if (result.status === "session_completed") {
 			// The server completed the session in the send transaction; navigate straight to feedback.
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
 			isCompleted = true;
 			window.location.href = `/task/${taskId}/feedback`;
-		} else if (result.status === "reply" || result.status === "pending" || result.status === "failed") {
+		} else if (result.status === "pending" || result.status === "failed") {
 			appendAgentMessageFromSendResult(result, clientMessageId, currentText);
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
