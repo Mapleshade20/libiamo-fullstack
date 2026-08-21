@@ -26,7 +26,10 @@ export function buildGeneratedInboxEmails({
 	tutorReplyLabel: string;
 	fallbackTime: string;
 }): NormalizedMailEmail[] {
-	return agentMessages.map((message, index) => {
+	// Pending agent messages are polling triggers, never renderable content:
+	// real mail stays silent until the reply actually lands.
+	const renderableAgentMessages = agentMessages.filter((message) => message.deliveryState !== "pending");
+	return renderableAgentMessages.map((message, index) => {
 		const previousUserMessage = [...messages]
 			.slice(
 				0,

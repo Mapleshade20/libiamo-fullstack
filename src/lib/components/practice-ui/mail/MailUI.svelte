@@ -286,8 +286,18 @@ function appendAgentMessageFromSendResult(
 	if (!agentMessage) return;
 
 	messages = [...messages, agentMessage];
-	selectedInboxId = `agent-${agentMessage.id}`;
-	activeMailbox = "inbox";
+	if (agentMessage.deliveryState === "pending") {
+		// No placeholder email while waiting: keep the just-sent mail in view;
+		// the reply arrives as a real inbox email on its own clock.
+		const sent = messages.find((m) => m.role === "user" && m.clientMessageId === clientMessageId);
+		if (sent) {
+			selectedSentId = sent.id;
+			activeMailbox = "sent";
+		}
+	} else {
+		selectedInboxId = `agent-${agentMessage.id}`;
+		activeMailbox = "inbox";
+	}
 }
 
 function handleFinishClick() {
@@ -427,7 +437,7 @@ function loadExistingSession(session: any) {
 		labels: t,
 	});
 
-	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden);
+	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden && m.deliveryState !== "pending");
 	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
 	if (
 		(!selectedInboxId || (activeMailbox === "inbox" && selectedInboxId.startsWith("agent-") && !selectedGeneratedInboxExists)) &&

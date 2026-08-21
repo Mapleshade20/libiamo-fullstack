@@ -82,4 +82,30 @@ describe("AO3 helpers", () => {
 		const userComment = root.replies.find((reply) => reply.id === "ao3-user-msg-1");
 		expect(userComment?.replies[0]).toMatchObject({ id: "ao3-agent-msg-1", username: "WispPattio" });
 	});
+
+	it("excludes pending placeholders from the comment tree (AO3 shows no processing state)", () => {
+		const messages: ChatMessage[] = [
+			{
+				id: "u1",
+				role: "user",
+				text: "Loved this chapter!",
+				timestamp: "now",
+				authorName: "Learner",
+				clientMessageId: "msg-1",
+			},
+			{
+				id: "a-pending",
+				role: "agent",
+				text: "Reply is still processing. Retry in a moment.",
+				timestamp: "now",
+				authorName: "HikariKitsune02",
+				clientMessageId: "msg-1",
+				deliveryState: "pending",
+			},
+		];
+
+		const tree = buildAo3CommentTree({ openingState, messages });
+		const flattened = flattenAo3Comments(tree).map((comment) => comment.id);
+		expect(flattened).not.toContain("a-pending");
+	});
 });

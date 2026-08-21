@@ -461,9 +461,6 @@ function handleFinishCancel() {
 				>
 				<div class="min-w-0 flex-1 break-words leading-6">
 					<MarkdownRenderer content={comment.comment} />
-					{#if comment.deliveryState === "pending"}
-						<p class="mt-2 text-sm italic text-[#666]">{t.stillProcessingMessage}</p>
-					{/if}
 					{#if comment.deliveryState === "failed" && comment.messageId}
 						<button type="button" class="ao3-action mt-2" onclick={() => session.handleRetry(comment.messageId ?? "")}>{t.retry}</button>
 					{/if}

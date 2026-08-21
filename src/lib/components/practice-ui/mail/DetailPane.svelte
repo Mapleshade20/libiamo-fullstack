@@ -160,11 +160,6 @@ const remainingTurnsLabel = $derived(remainingTurns === null ? "" : (t.turnsLeft
 						<RotateCcw size={15} />
 						{t.retry}
 					</button>
-				{:else if detailEmail.deliveryState === "pending"}
-					<div class="mt-6 flex items-center gap-2 text-sm text-[#6E6E73]">
-						<LoaderCircle size={16} class="animate-spin" />
-						{t.stillProcessingMessage}
-					</div>
 				{/if}
 			</article>
 		{:else}

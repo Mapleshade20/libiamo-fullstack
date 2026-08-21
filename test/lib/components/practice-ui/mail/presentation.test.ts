@@ -91,6 +91,23 @@ describe("mail presentation", () => {
 		});
 	});
 
+	it("generates no inbox email for pending placeholders (mail waits in silence)", () => {
+		const messages = buildMessages("Thanks for the update.");
+		const pendingAgent = { ...messages[1], deliveryState: "pending" as const };
+
+		const emails = buildGeneratedInboxEmails({
+			messages,
+			agentMessages: [pendingAgent],
+			recipient,
+			userName: "Learner",
+			noSubjectLabel: "(No Subject)",
+			tutorReplyLabel: "Tutor response",
+			fallbackTime: "Today",
+		});
+
+		expect(emails).toHaveLength(0);
+	});
+
 	it("builds agent messages for send result states", () => {
 		expect(
 			buildAgentMessageFromSendResult({
