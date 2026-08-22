@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockDb } = vi.hoisted(() => ({
-	mockDb: { transaction: vi.fn() },
+	mockDb: {
+		transaction: vi.fn(),
+		query: {
+			agentDelivery: { findMany: vi.fn() },
+			agentResponseBatch: { findFirst: vi.fn() },
+		},
+	},
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
@@ -20,7 +26,7 @@ import {
 	shouldDeliverIntoEndedSession,
 	shouldRetryGeneration,
 } from "$lib/server/agent-replies/worker";
-import { agentDelivery, agentResponseBatch, practiceSession } from "$lib/server/db/schema";
+import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 
 afterEach(() => vi.useRealTimers());
 
@@ -79,6 +85,53 @@ function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
 		}),
 	};
 	return { tx, updates, inserts };
+}
+
+type RecordedDeliveryOperation = { kind: string; table: unknown; set?: Record<string, unknown> };
+
+/** Transaction double for the delivery path: records lock/update/insert order and
+ * replays fixed rows for the locked session and batch reads. */
+function makeDeliveryTx(
+	options: { sessionRow?: Record<string, unknown> | null; batchRow?: Record<string, unknown> | null; remainingDelivery?: { id: number } | null } = {},
+) {
+	const operations: RecordedDeliveryOperation[] = [];
+	const sessionRow = options.sessionRow ?? { status: "in_progress", completionReason: null, urgency: "high" };
+	const batchRow = options.batchRow ?? { status: "delivery_pending" };
+	const tx = {
+		select: () => ({
+			from: (table: unknown) => ({
+				where: () => ({
+					for: (strength: string) => {
+						operations.push({ kind: `lock:${strength}`, table });
+						return Promise.resolve(table === practiceSession ? [sessionRow] : [batchRow]);
+					},
+				}),
+			}),
+		}),
+		update: (table: unknown) => ({
+			set: (values: Record<string, unknown>) => ({
+				where: () => {
+					operations.push({ kind: "update", table, set: values });
+					return Object.assign(Promise.resolve(undefined), {
+						returning: async () => [{ id: 1 }],
+					});
+				},
+			}),
+		}),
+		insert: (table: unknown) => ({
+			values: (values: Record<string, unknown>) => {
+				operations.push({ kind: "insert", table, set: values });
+				return { onConflictDoNothing: async () => undefined };
+			},
+		}),
+		query: {
+			sessionMessage: { findFirst: vi.fn().mockResolvedValue(null) },
+			agentDelivery: { findFirst: vi.fn().mockResolvedValue(options.remainingDelivery ?? null) },
+			practiceSession: { findFirst: vi.fn().mockResolvedValue(null) },
+			agentResponseBatch: { findFirst: vi.fn().mockResolvedValue(null) },
+		},
+	};
+	return { tx, operations };
 }
 
 describe("agent reply worker scheduling", () => {
@@ -213,6 +266,130 @@ describe("agent reply worker scheduling", () => {
 		const deliveryCancel = updates.find((update) => update.table === agentDelivery);
 		expect(deliveryCancel?.set).toMatchObject({ status: "cancelled" });
 		expect(bareStrings(deliveryCancel?.clause)).toEqual(expect.arrayContaining([29, 30, "pending"]));
+	});
+
+	it("locks the session and batch rows before claiming, then finalizes the batch after the last delivery", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		mockDb.query.agentDelivery.findMany.mockResolvedValue([
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+		]);
+		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+			id: 31,
+			sessionId: 5,
+			status: "delivery_pending",
+			inputMessageId: 501,
+			parsedResult: null,
+			allowIdleFollowUp: false,
+		});
+		const { tx, operations } = makeDeliveryTx({ remainingDelivery: null });
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+
+		await (worker as unknown as { deliverDueMessages: (now: Date) => Promise<void> }).deliverDueMessages(now);
+
+		// locks are taken session -> batch -> delivery, the order submitMessage uses
+		expect(operations.filter((operation) => operation.kind.startsWith("lock:"))).toEqual([
+			{ kind: "lock:update", table: practiceSession },
+			{ kind: "lock:update", table: agentResponseBatch },
+		]);
+		// the delivery is claimed only after the batch row lock is held, so a sibling
+		// delivery transaction cannot observe this claim as still pending
+		const batchLockIndex = operations.findIndex((operation) => operation.kind === "lock:update" && operation.table === agentResponseBatch);
+		const claimIndex = operations.findIndex(
+			(operation) => operation.kind === "update" && operation.table === agentDelivery && operation.set?.status === "delivered",
+		);
+		expect(claimIndex).toBeGreaterThan(batchLockIndex);
+
+		const finalize = operations.find(
+			(operation) => operation.kind === "update" && operation.table === agentResponseBatch && operation.set?.status === "completed",
+		);
+		expect(finalize).toBeDefined();
+		const messageInsert = operations.find((operation) => operation.kind === "insert" && operation.table === sessionMessage);
+		expect(messageInsert?.set).toMatchObject({ sessionId: 5, role: "assistant", content: "Salut !", deliveryId: 41, responseBatchId: 31 });
+	});
+
+	it("leaves the batch delivery_pending while a sibling delivery is still pending", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		mockDb.query.agentDelivery.findMany.mockResolvedValue([
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+		]);
+		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+			id: 31,
+			sessionId: 5,
+			status: "delivery_pending",
+			inputMessageId: 501,
+			parsedResult: null,
+			allowIdleFollowUp: false,
+		});
+		const { tx, operations } = makeDeliveryTx({ remainingDelivery: { id: 42 } });
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+
+		await (worker as unknown as { deliverDueMessages: (now: Date) => Promise<void> }).deliverDueMessages(now);
+
+		const finalize = operations.find(
+			(operation) =>
+				operation.kind === "update" &&
+				operation.table === agentResponseBatch &&
+				(operation.set?.status === "completed" || operation.set?.status === "terminated"),
+		);
+		expect(finalize).toBeUndefined();
+	});
+
+	it("finalizes a terminating batch inside the delivery transaction and ends the session", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		mockDb.query.agentDelivery.findMany.mockResolvedValue([
+			{ id: 41, batchId: 31, sequence: 0, content: "Je dois couper court.", replyToMessageId: null, dueAt: now },
+		]);
+		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+			id: 31,
+			sessionId: 5,
+			status: "delivery_pending",
+			inputMessageId: 501,
+			parsedResult: { decision: "terminate_abuse" },
+			allowIdleFollowUp: false,
+		});
+		const { tx, operations } = makeDeliveryTx({ remainingDelivery: null });
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+
+		await (worker as unknown as { deliverDueMessages: (now: Date) => Promise<void> }).deliverDueMessages(now);
+
+		expect(
+			operations.find((operation) => operation.kind === "update" && operation.table === agentResponseBatch && operation.set?.status === "terminated"),
+		).toBeDefined();
+		expect(
+			operations.find(
+				(operation) => operation.kind === "update" && operation.table === practiceSession && operation.set?.completionReason === "terminated_abuse",
+			),
+		).toBeDefined();
+	});
+
+	it("cancels the delivery instead of delivering into a user-ended session", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		mockDb.query.agentDelivery.findMany.mockResolvedValue([
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+		]);
+		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+			id: 31,
+			sessionId: 5,
+			status: "delivery_pending",
+			inputMessageId: 501,
+			parsedResult: null,
+			allowIdleFollowUp: false,
+		});
+		const { tx, operations } = makeDeliveryTx({
+			sessionRow: { status: "completed", completionReason: "user_requested", urgency: "high" },
+		});
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+
+		await (worker as unknown as { deliverDueMessages: (now: Date) => Promise<void> }).deliverDueMessages(now);
+
+		expect(
+			operations.find((operation) => operation.kind === "update" && operation.table === agentDelivery && operation.set?.status === "cancelled"),
+		).toBeDefined();
+		expect(operations.some((operation) => operation.kind === "insert" && operation.table === sessionMessage)).toBe(false);
 	});
 
 	it("enforces configured concurrency across scheduler ticks and waits for active work on stop", async () => {

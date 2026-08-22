@@ -367,6 +367,18 @@ export async function submitMessage(
 	const now = new Date();
 
 	return db.transaction(async (tx) => {
+		// Row lock that serializes concurrent submissions for the same session
+		// (double send, retry, second tab): without it two transactions read the
+		// same snapshot, both insert their learner message, both observe no active
+		// batch, and both schedule one — duplicating messages and generated replies
+		// and letting the turn count drift past maxTurns. Lock order here is
+		// session -> batch -> delivery, matching the worker's delivery transaction.
+		const [locked] = await tx
+			.select({ id: practiceSession.id })
+			.from(practiceSession)
+			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)))
+			.for("update");
+		if (!locked) throw new Error("Session not found");
 		const session = await tx.query.practiceSession.findFirst({
 			where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)),
 			with: { messages: { orderBy: sessionMessageChronologicalOrder } },
@@ -488,11 +500,13 @@ export async function submitMessage(
 			// The agent had already composed a reply when the new message landed: it is
 			// engaged, so re-engage quickly instead of restarting the full MTTH clock.
 			const reEngageAt = new Date(now.getTime() + RE_ENGAGE_DELAY_MS);
+			// The batch is cancelled before its deliveries so lock acquisition keeps
+			// the session -> batch -> delivery order the delivery worker uses.
+			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
 			await tx
 				.update(agentDelivery)
 				.set({ status: "cancelled" })
 				.where(and(eq(agentDelivery.batchId, activeBatch.id), eq(agentDelivery.status, "pending")));
-			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
 			await tx.insert(agentResponseBatch).values({
 				sessionId,
 				kind: "reply",

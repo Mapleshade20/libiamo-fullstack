@@ -10,7 +10,8 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 			agentResponseBatch: { findFirst: vi.fn(), findMany: vi.fn() },
 		},
 		insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => []) })) })),
-		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
+		update: vi.fn((_table: unknown) => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
+		select: vi.fn(),
 		transaction: vi.fn(),
 	},
 	mockClient: {
@@ -23,7 +24,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
-import { agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
+import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 import { completeSession, generateHint, getSessionOrFail, startSession, submitMessage } from "$lib/server/session";
 
 /** Walks mock drizzle args, collecting bare strings while skipping plain string arrays
@@ -65,6 +66,13 @@ describe("session service", () => {
 		}));
 		mockDb.update.mockImplementation(() => ({
 			set: vi.fn(() => ({ where: vi.fn() })),
+		}));
+		mockDb.select.mockImplementation(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn(() => ({
+					for: vi.fn().mockResolvedValue([{ id: 123 }]),
+				})),
+			})),
 		}));
 	});
 
@@ -676,6 +684,81 @@ describe("session service", () => {
 			expect(setMock).not.toHaveBeenCalledWith(expect.objectContaining({ dueAt: expect.any(Date) }));
 		});
 
+		it("locks the session row before reading state so concurrent submissions serialize", async () => {
+			const order: string[] = [];
+			mockDb.select.mockImplementation(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() => ({
+						for: (strength: string) => {
+							order.push(`lock:${strength}`);
+							return Promise.resolve([{ id: 123 }]);
+						},
+					})),
+				})),
+			}));
+			mockDb.query.practiceSession.findFirst.mockImplementation(async () => {
+				order.push("read-session");
+				return {
+					id: 123,
+					userId: USER_ID,
+					status: "in_progress",
+					urgency: "high",
+					messages: [],
+				};
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
+
+			const result = await submitMessage(123, "Hello", USER_ID);
+
+			expect(result).toEqual({ turnCount: 1, pending: true });
+			expect(order[0]).toBe("lock:update");
+			expect(order.indexOf("read-session")).toBeGreaterThan(order.indexOf("lock:update"));
+		});
+
+		it("throws when the session row lock finds no owned session", async () => {
+			mockDb.select.mockImplementation(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() => ({
+						for: vi.fn().mockResolvedValue([]),
+					})),
+				})),
+			}));
+
+			await expect(submitMessage(123, "Hello", USER_ID)).rejects.toThrow("Session not found");
+			expect(mockDb.query.practiceSession.findFirst).not.toHaveBeenCalled();
+		});
+
+		it("cancels the interrupted batch before its deliveries so lock order matches the delivery worker", async () => {
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				urgency: "high",
+				messages: [],
+			});
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
+				id: 11,
+				sessionId: 123,
+				status: "delivery_pending",
+				inputVersion: 4,
+			});
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: valuesMock,
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			await submitMessage(123, "too late", USER_ID);
+
+			// session -> batch -> delivery lock order, matching the worker's delivery transaction:
+			// the interrupted batch is cancelled before its queued deliveries
+			const updateTables = mockDb.update.mock.calls.map((call) => call[0]);
+			expect(updateTables[0]).toBe(agentResponseBatch);
+			expect(updateTables[1]).toBe(agentDelivery);
+		});
+
 		it("re-engages quickly instead of resampling when a message interrupts a pending delivery", async () => {
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 123,
@@ -759,7 +842,7 @@ describe("session service", () => {
 
 			// Verify session was marked as completed
 			expect(mockDb.update).toHaveBeenCalledWith(practiceSession);
-			expect(mockDb.update().set).toHaveBeenCalledWith(
+			expect(mockDb.update(undefined).set).toHaveBeenCalledWith(
 				expect.objectContaining({
 					status: "completed",
 					completedAt: expect.any(Date),

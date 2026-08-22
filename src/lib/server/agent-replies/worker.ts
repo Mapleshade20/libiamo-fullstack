@@ -521,19 +521,35 @@ export class AgentReplyWorker {
 		for (const delivery of deliveries) {
 			const batch = await db.query.agentResponseBatch.findFirst({ where: eq(agentResponseBatch.id, delivery.batchId) });
 			if (!batch) continue;
-			const session = await db.query.practiceSession.findFirst({
-				where: eq(practiceSession.id, batch.sessionId),
-				columns: { status: true, completionReason: true, urgency: true },
-			});
-			if (!session || !shouldDeliverIntoEndedSession(session, batch.status)) {
-				await db
-					.update(agentDelivery)
-					.set({ status: "cancelled" })
-					.where(and(eq(agentDelivery.id, delivery.id), eq(agentDelivery.status, "pending")));
-				continue;
-			}
 
 			await db.transaction(async (tx) => {
+				// Locks are taken session -> batch -> delivery, the same order as
+				// submitMessage, so concurrent submissions and deliveries only ever
+				// block each other, never deadlock. Reading the session under its row
+				// lock also makes the deliverability check transactional.
+				const [session] = await tx
+					.select({ status: practiceSession.status, completionReason: practiceSession.completionReason, urgency: practiceSession.urgency })
+					.from(practiceSession)
+					.where(eq(practiceSession.id, batch.sessionId))
+					.for("update");
+				// The batch row lock serializes "claim delivery + any sibling still pending?
+				// + finalize" across workers: without it, two transactions delivering
+				// sibling messages each observe the other's uncommitted claim as a
+				// pending delivery and both skip finalization, leaving the batch stuck
+				// in delivery_pending with its follow-up scheduling lost.
+				const [lockedBatch] = await tx
+					.select({ status: agentResponseBatch.status })
+					.from(agentResponseBatch)
+					.where(eq(agentResponseBatch.id, batch.id))
+					.for("update");
+				if (!session || !lockedBatch || !shouldDeliverIntoEndedSession(session, lockedBatch.status)) {
+					await tx
+						.update(agentDelivery)
+						.set({ status: "cancelled" })
+						.where(and(eq(agentDelivery.id, delivery.id), eq(agentDelivery.status, "pending")));
+					return;
+				}
+
 				const claimed = await tx
 					.update(agentDelivery)
 					.set({ status: "delivered", deliveredAt: now })
