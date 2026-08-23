@@ -100,6 +100,17 @@ export type GenerateAgentResponseInput = {
 
 const THREADED_UIS = new Set<UiVariant>(["reddit", "ao3"]);
 
+/**
+ * Idle follow-ups chase the learner's silence, which is only natural in
+ * point-to-point messaging. On public comment threads silence is a legitimate
+ * terminal state and re-pinging a silent stranger models the exact
+ * community-norm violation the simulation teaches learners to avoid, so no
+ * follow-up is ever scheduled there regardless of the model's allowIdleFollowUp.
+ */
+export function supportsIdleFollowUp(ui: UiVariant): boolean {
+	return !THREADED_UIS.has(ui);
+}
+
 const AGENT_RESPONSE_JSON_SHAPE = {
 	decision: "reply | no_reply | terminate_abuse",
 	deliveries: [{ content: "complete message text", replyToMessageId: null }],

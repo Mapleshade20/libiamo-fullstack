@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
 import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/agent-replies/timing";
-import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
-import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/agent-replies/generator";
+import { type UiVariant, URGENCY_PRESETS, type Urgency } from "$lib/constants";
+import {
+	type AgentGenerationArtifacts,
+	AgentGenerationError,
+	generateAgentResponse,
+	supportsIdleFollowUp,
+} from "$lib/server/agent-replies/generator";
 import { db } from "$lib/server/db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 
@@ -619,6 +624,11 @@ export class AgentReplyWorker {
 	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
 		const session = await executor.query.practiceSession.findFirst({ where: eq(practiceSession.id, sessionId) });
 		if (!session || session.status !== "in_progress" || session.followUpCount >= 2 || session.expiresAt <= now) return;
+		// Comment threads (Reddit/AO3) never chase a silent learner: silence ends a
+		// public thread naturally, and a nudge would model the very norm violation
+		// the simulation teaches learners to avoid.
+		const ui = (session.agentPromptSnapshot as { ui?: UiVariant } | null)?.ui ?? "discord";
+		if (!supportsIdleFollowUp(ui)) return;
 		const existing = await executor.query.agentResponseBatch.findFirst({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),

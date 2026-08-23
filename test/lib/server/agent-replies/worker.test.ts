@@ -14,6 +14,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
 import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import type { AgentGenerationArtifacts } from "$lib/server/agent-replies/generator";
+import { supportsIdleFollowUp } from "$lib/server/agent-replies/generator";
 import {
 	AgentReplyWorker,
 	buildDeliveredReplyMetadata,
@@ -61,6 +62,29 @@ const bareStrings = (value: unknown): Array<string | number> => {
 
 type RecordedUpdate = { table: unknown; set: Record<string, unknown>; clause: unknown };
 type RecordedInsert = { table: unknown; values: Record<string, unknown> };
+
+/** Executor double for the follow-up scheduler: replays the session row and
+ * records any follow-up batch insert. */
+function makeFollowUpExecutor(session: Record<string, unknown>) {
+	const inserts: RecordedInsert[] = [];
+	const executor = {
+		query: {
+			practiceSession: { findFirst: vi.fn().mockResolvedValue(session) },
+			agentResponseBatch: { findFirst: vi.fn().mockResolvedValue(null) },
+		},
+		update: () => ({
+			set: () => ({
+				where: () => Object.assign(Promise.resolve(undefined), { returning: async () => [{ id: 1 }] }),
+			}),
+		}),
+		insert: (table: unknown) => ({
+			values: async (values: Record<string, unknown>) => {
+				inserts.push({ table, values });
+			},
+		}),
+	};
+	return { executor, inserts };
+}
 
 function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
 	const updates: RecordedUpdate[] = [];
@@ -304,6 +328,51 @@ describe("agent reply worker scheduling", () => {
 		// second scales with the second message's own length (typing model)
 		expect(inserts[0]?.values.dueAt).toBe(completedAt);
 		expect(inserts[1]?.values.dueAt).toEqual(new Date(completedAt.getTime() + getDeliveryDelayMs("x".repeat(40))));
+	});
+
+	it("restricts idle follow-ups to messaging interfaces", () => {
+		expect(supportsIdleFollowUp("discord")).toBe(true);
+		expect(supportsIdleFollowUp("imessage")).toBe(true);
+		expect(supportsIdleFollowUp("apple_mail")).toBe(true);
+		expect(supportsIdleFollowUp("reddit")).toBe(false);
+		expect(supportsIdleFollowUp("ao3")).toBe(false);
+	});
+
+	it("never schedules idle follow-ups on comment-thread interfaces", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		const worker = new AgentReplyWorker({});
+		for (const ui of ["ao3", "reddit"] as const) {
+			const { executor, inserts } = makeFollowUpExecutor({
+				status: "in_progress",
+				followUpCount: 0,
+				expiresAt: new Date(now.getTime() + 3_600_000),
+				agentPromptSnapshot: { ui, systemPrompt: "prompt" },
+			});
+			await (
+				worker as unknown as {
+					scheduleFollowUp: (executor: unknown, sessionId: number, now: Date, urgency: "high") => Promise<void>;
+				}
+			).scheduleFollowUp(executor, 5, now, "high");
+			expect(inserts).toEqual([]);
+		}
+	});
+
+	it("schedules idle follow-ups on messaging interfaces", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		const worker = new AgentReplyWorker({});
+		const { executor, inserts } = makeFollowUpExecutor({
+			status: "in_progress",
+			followUpCount: 0,
+			expiresAt: new Date(now.getTime() + 3_600_000),
+			agentPromptSnapshot: { ui: "imessage", systemPrompt: "prompt" },
+		});
+		await (
+			worker as unknown as {
+				scheduleFollowUp: (executor: unknown, sessionId: number, now: Date, urgency: "high") => Promise<void>;
+			}
+		).scheduleFollowUp(executor, 5, now, "high");
+		expect(inserts.length).toBe(1);
+		expect(inserts[0]?.values).toMatchObject({ sessionId: 5, kind: "follow_up", status: "pending", inputMessageId: null });
 	});
 
 	it("locks the session and batch rows before claiming, then finalizes the batch after the last delivery", async () => {
