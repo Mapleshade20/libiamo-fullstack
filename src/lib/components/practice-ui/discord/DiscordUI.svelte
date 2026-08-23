@@ -223,7 +223,7 @@ $effect(() => {
 				<MessageStream
 					bind:chatContainer={session.chatContainer}
 					messages={session.messages}
-					isTyping={session.isTyping && agentComposing}
+					isTyping={(session.isTyping && agentComposing) || session.hasPendingReveals}
 					isInitializing={session.isInitializing}
 					agentUser={session.agentUser}
 					limitReached={session.limitReached}

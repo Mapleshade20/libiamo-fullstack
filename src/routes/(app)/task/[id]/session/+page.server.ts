@@ -14,7 +14,7 @@ import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
-import { practiceSession, task } from "$lib/server/db/schema";
+import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
@@ -162,9 +162,24 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			.where(and(eq(practiceSession.id, existingSession.id), eq(practiceSession.userId, user.id)));
 	}
 
+	// Earliest outstanding agent work for this session (batches still composing or
+	// pacing out deliveries). The client keeps polling while work is due soon and
+	// wakes once when the next item falls due, so later burst deliveries are never
+	// stranded after the pending placeholder clears.
+	const outstandingAgentWork = existingSession
+		? await db.query.agentResponseBatch.findFirst({
+				where: and(
+					eq(agentResponseBatch.sessionId, existingSession.id),
+					inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+				),
+				columns: { dueAt: true },
+				orderBy: (batches, { asc }) => [asc(batches.dueAt)],
+			})
+		: null;
+
 	return {
 		task: taskData,
-		existingSession,
+		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
 		taskId: taskIdStr,
 		// Frozen at session start; legacy sessions without a snapshot fall back to the live template value.
 		maxTurns: existingSession?.maxTurnsSnapshot ?? taskData.template.maxTurns ?? 0,

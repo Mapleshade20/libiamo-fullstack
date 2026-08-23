@@ -326,7 +326,7 @@ function showIncomingSender(index: number) {
 						</div>
 					{/each}
 
-					{#if session.isTyping && lastOutgoingRead}
+					{#if (session.isTyping && lastOutgoingRead) || session.hasPendingReveals}
 						<div class="mt-3 flex items-center">
 							<div class="rounded-[18px] bg-[#E5E5EA] px-3 py-2">
 								<div class="flex gap-1">

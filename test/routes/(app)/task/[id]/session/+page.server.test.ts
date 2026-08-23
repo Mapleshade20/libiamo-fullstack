@@ -8,6 +8,7 @@ const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
 				practiceSession: { findFirst: vi.fn() },
 				task: { findFirst: vi.fn() },
 				user: { findFirst: vi.fn() },
+				agentResponseBatch: { findFirst: vi.fn() },
 			},
 			select: vi.fn(() => ({
 				from: vi.fn(() => ({
@@ -95,6 +96,8 @@ describe("session page server", () => {
 				status: "in_progress",
 				messages: [],
 			});
+			const nextAgentWorkDueAt = new Date("2026-08-23T12:00:00.000Z");
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({ dueAt: nextAgentWorkDueAt });
 
 			const result = (await load({
 				params: { id: mockTaskId },
@@ -106,6 +109,10 @@ describe("session page server", () => {
 			expect(result.task).toEqual(mockTask);
 			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
+			// the earliest outstanding agent work drives the client's polling lifecycle
+			expect((result.existingSession as unknown as { nextAgentWorkDueAt?: unknown }).nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
+			const batchQuery = mockDb.query.agentResponseBatch.findFirst.mock.calls[0]?.[0];
+			expect(batchQuery.orderBy({ dueAt: "dueAt" }, { asc: (value: string) => `asc:${value}` })).toEqual(["asc:dueAt"]);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
 			expect(sessionQuery.orderBy({ startedAt: "startedAt", id: "id" }, { desc: (value: string) => `desc:${value}` })).toEqual([
 				"desc:startedAt",

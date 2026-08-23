@@ -1,6 +1,14 @@
 import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice-ui/session.svelte";
+import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
+import {
+	AGENT_WORK_DUE_SOON_MS,
+	AGENT_WORK_WAKE_BUFFER_MS,
+	createPracticeSession,
+	type PracticeSessionOptions,
+	planAgentWorkPolling,
+	resolveAgentName,
+} from "$lib/components/practice-ui/session.svelte";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 
 const mocks = vi.hoisted(() => ({
@@ -105,6 +113,32 @@ describe("resolveAgentName", () => {
 	});
 });
 
+describe("planAgentWorkPolling", () => {
+	const now = new Date("2026-08-23T12:00:00.000Z");
+
+	it("polls continuously while a placeholder is pending even without scheduled work", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: true, agentWorkDueAt: null, now })).toEqual({ kind: "interval" });
+	});
+
+	it("polls while agent work is due within the horizon", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: new Date(now.getTime() + AGENT_WORK_DUE_SOON_MS), now })).toEqual({
+			kind: "interval",
+		});
+	});
+
+	it("wakes once when the next agent work is far in the future", () => {
+		const dueAt = new Date(now.getTime() + 10 * 60_000);
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: dueAt, now })).toEqual({
+			kind: "wake",
+			delayMs: 10 * 60_000 + AGENT_WORK_WAKE_BUFFER_MS,
+		});
+	});
+
+	it("stops watching when no agent work is outstanding", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: null, now })).toEqual({ kind: "none" });
+	});
+});
+
 describe("createPracticeSession", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -164,6 +198,106 @@ describe("createPracticeSession", () => {
 
 		expect(session.isCompleted).toBe(true);
 		expect(chatContainer.scrollTop).toBe(240);
+	});
+
+	it("paces a burst of new agent messages at typing intervals", async () => {
+		vi.useFakeTimers();
+		const before = {
+			id: 401,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" },
+				{ id: 2, role: "assistant", content: "hello", createdAt: "2026-05-18T00:01:00.000Z" },
+			],
+		};
+		const after = {
+			...before,
+			messages: [
+				...before.messages,
+				{ id: 3, role: "assistant", content: "msg-three", createdAt: "2026-05-18T00:02:00.000Z" },
+				{ id: 4, role: "assistant", content: "msg-four", createdAt: "2026-05-18T00:03:00.000Z" },
+				{ id: 5, role: "assistant", content: "msg-five", createdAt: "2026-05-18T00:04:00.000Z" },
+			],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+		// the first burst message lands immediately; the rest wait their typing turn
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3"]);
+		expect(session.hasPendingReveals).toBe(true);
+
+		vi.advanceTimersByTime(getDeliveryDelayMs("msg-four"));
+		await waitForPromises();
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3", "4"]);
+
+		vi.advanceTimersByTime(getDeliveryDelayMs("msg-five"));
+		await waitForPromises();
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3", "4", "5"]);
+		expect(session.hasPendingReveals).toBe(false);
+		vi.useRealTimers();
+	});
+
+	it("shows a single newly delivered agent message immediately", async () => {
+		const before = {
+			id: 402,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" }],
+		};
+		const after = {
+			...before,
+			messages: [...before.messages, { id: 3, role: "assistant", content: "one reply", createdAt: "2026-05-18T00:02:00.000Z" }],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "3"]);
+		expect(session.hasPendingReveals).toBe(false);
+	});
+
+	it("reveals paced messages immediately when the user sends a new message", async () => {
+		vi.useFakeTimers();
+		mocks.submitPracticeMessage.mockResolvedValue({ status: "pending" });
+		const before = {
+			id: 403,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" },
+				{ id: 2, role: "assistant", content: "hello", createdAt: "2026-05-18T00:01:00.000Z" },
+			],
+		};
+		const after = {
+			...before,
+			messages: [
+				...before.messages,
+				{ id: 3, role: "assistant", content: "msg-three", createdAt: "2026-05-18T00:02:00.000Z" },
+				{ id: 4, role: "assistant", content: "msg-four", createdAt: "2026-05-18T00:03:00.000Z" },
+			],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+		expect(session.hasPendingReveals).toBe(true);
+
+		await session.handleSend("next message");
+
+		expect(session.hasPendingReveals).toBe(false);
+		const texts = session.messages.map((message) => message.text);
+		// the optimistic user message lands after the full agent burst
+		expect(texts.indexOf("msg-four")).toBeGreaterThan(-1);
+		expect(texts.indexOf("msg-four")).toBeLessThan(texts.indexOf("next message"));
+		vi.useRealTimers();
 	});
 
 	it("skips hydration when the server snapshot has not changed", async () => {

@@ -1,12 +1,13 @@
 import { onMount, tick } from "svelte";
 import { invalidate } from "$app/navigation";
+import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import { completeAction, postAction } from "./apiService";
 import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
@@ -17,6 +18,14 @@ export interface PracticeSessionLabels {
 	retryFailedMessage: string;
 	earlier: string;
 }
+
+export const SESSION_POLL_INTERVAL_MS = 3_000;
+/** Outstanding agent work due within this horizon keeps the client polling. */
+export const AGENT_WORK_DUE_SOON_MS = 30_000;
+/** Wake slightly after the due time so the worker has claimed the batch first. */
+export const AGENT_WORK_WAKE_BUFFER_MS = 2_000;
+
+export type AgentWorkPollingPlan = { kind: "interval" } | { kind: "wake"; delayMs: number } | { kind: "none" };
 
 export interface PracticeSessionOptions {
 	userName: string;
@@ -42,6 +51,32 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 		if (sender && sender !== userName) return sender;
 	}
 	return fallbackName;
+}
+
+/**
+ * How the client watches for outstanding agent work (a batch still composing or
+ * pacing out its deliveries): poll continuously while a reply placeholder is up
+ * or work falls due within the horizon, otherwise wake once when the next work
+ * item is due — and stop when nothing is outstanding.
+ */
+export function planAgentWorkPolling(input: { hasPendingPlaceholder: boolean; agentWorkDueAt: Date | null; now: Date }): AgentWorkPollingPlan {
+	const dueAt = input.agentWorkDueAt?.getTime() ?? null;
+	if (input.hasPendingPlaceholder || (dueAt !== null && dueAt <= input.now.getTime() + AGENT_WORK_DUE_SOON_MS)) {
+		return { kind: "interval" };
+	}
+	if (dueAt !== null) {
+		return { kind: "wake", delayMs: Math.max(0, dueAt + AGENT_WORK_WAKE_BUFFER_MS - input.now.getTime()) };
+	}
+	return { kind: "none" };
+}
+
+function toAgentWorkDueAt(value: unknown): Date | null {
+	if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+	if (typeof value === "string" && value.trim()) {
+		const parsed = parsePersistedMessageDate(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+	return null;
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
@@ -85,6 +120,15 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let inputText = $state("");
 	let chatContainer = $state<HTMLElement | null>(null);
 
+	// ── Staggered reveal ──────────────────────────────────────────
+	/** Agent messages that arrived in one poll and wait for their typing turn. */
+	let revealQueue = $state<ChatMessage[]>([]);
+	let revealTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Full hydrated list from the last snapshot (opening + session messages). */
+	let lastHydratedMessages: ChatMessage[] = [];
+	/** Session messages from the last hydration; the diff base for new deliveries. */
+	let lastSessionMessages: ChatMessage[] = [];
+
 	// ── Derived ────────────────────────────────────────────────────
 
 	const agentName = $derived(resolveAgentName(openingStateData, userName, agentUser.name));
@@ -95,6 +139,63 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 	const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
+	const nextAgentWorkDueAt = $derived(toAgentWorkDueAt((existingSession as { nextAgentWorkDueAt?: unknown } | null)?.nextAgentWorkDueAt));
+
+	// ── Staggered reveal ──────────────────────────────────────────
+
+	/** Messages currently displayed: the last hydrated list minus paced-out entries. */
+	function displayedMessages(): ChatMessage[] {
+		if (revealQueue.length === 0) return [...lastHydratedMessages];
+		const paced = new Set(revealQueue.map((message) => message.id));
+		return lastHydratedMessages.filter((message) => !paced.has(message.id));
+	}
+
+	function scheduleNextReveal() {
+		if (revealTimer !== undefined || revealQueue.length === 0) return;
+		const next = revealQueue[0];
+		if (!next) return;
+		// The wait before a paced message appears scales with its own length,
+		// mirroring the worker's typing-based delivery pacing.
+		revealTimer = setTimeout(() => {
+			revealTimer = undefined;
+			revealQueue = revealQueue.slice(1);
+			messages = displayedMessages();
+			void scrollToBottom();
+			scheduleNextReveal();
+		}, getDeliveryDelayMs(next.text));
+	}
+
+	function clearReveal() {
+		if (revealTimer !== undefined) {
+			clearTimeout(revealTimer);
+			revealTimer = undefined;
+		}
+		revealQueue = [];
+	}
+
+	/**
+	 * Queues newly delivered agent messages for paced reveal: the first lands
+	 * immediately (it is already overdue), the rest replay one at a time so a
+	 * coalesced poll burst still reads as live typing.
+	 */
+	function applyStaggeredReveal(sessionMessages: ChatMessage[]) {
+		const known = new Set([...lastSessionMessages.map((message) => message.id), ...revealQueue.map((message) => message.id)]);
+		const fresh = sessionMessages.filter(
+			(message) => message.role === "agent" && message.deliveryState === undefined && !message.isHidden && !known.has(message.id),
+		);
+		lastSessionMessages = sessionMessages;
+		if (fresh.length === 0) return;
+		revealQueue = revealQueue.length === 0 ? fresh.slice(1) : [...revealQueue, ...fresh];
+		scheduleNextReveal();
+	}
+
+	/** Shows paced-out messages at once, e.g. before appending a new user message. */
+	function flushRevealQueue() {
+		if (revealQueue.length === 0 && revealTimer === undefined) return;
+		clearReveal();
+		messages = [...lastHydratedMessages];
+		void scrollToBottom();
+	}
 
 	// ── Agent message helpers ──────────────────────────────────────
 	function addAgentMessage(params: {
@@ -174,6 +275,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	async function handleRetry(messageId: string) {
 		if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
 
+		flushRevealQueue();
+
 		const message = messages.find((m) => m.id === messageId);
 		if (!message?.clientMessageId) return;
 
@@ -235,6 +338,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
 	) {
 		if (!text.trim() || disabled) return;
+
+		// The optimistic user message must land after the full agent burst, so any
+		// paced-out messages are revealed first.
+		flushRevealQueue();
 
 		const currentText = prepareMarkdownText(text);
 		const clientMessageId = crypto.randomUUID();
@@ -301,6 +408,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		if (sessionData.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
 			const currentId = sessionData.id;
+			const isNewSession = currentId !== lastLoadedSessionId;
 			lastLoadedSessionId = currentId;
 			lastSessionSnapshot = sessionSnapshot;
 			sessionId = currentId;
@@ -329,7 +437,17 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				labels,
 			});
 
-			messages = [...openingMessages, ...sessionMessages];
+			lastHydratedMessages = [...openingMessages, ...sessionMessages];
+			if (isNewSession) {
+				// First load shows the full history at once; pacing applies only to
+				// messages that arrive while the learner is watching.
+				clearReveal();
+				lastSessionMessages = sessionMessages;
+				messages = [...lastHydratedMessages];
+			} else {
+				applyStaggeredReveal(sessionMessages);
+				messages = displayedMessages();
+			}
 
 			tick().then(() => {
 				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -362,6 +480,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				});
 
 				messages = [...openingMessages];
+				lastSessionMessages = [];
+				lastHydratedMessages = [...openingMessages];
 
 				await scrollToBottom();
 				await refreshTrialQuota();
@@ -392,14 +512,24 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	});
 
 	$effect(() => {
-		const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
-		if (needsPolling && !isSubmitting && sessionId && !isCompleted) {
+		const hasPendingPlaceholder = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
+		const plan = planAgentWorkPolling({ hasPendingPlaceholder, agentWorkDueAt: nextAgentWorkDueAt, now: new Date() });
+		if (plan.kind === "none" || !sessionId || isCompleted) return;
+		if (plan.kind === "interval") {
+			if (isSubmitting) return;
 			const interval = setInterval(() => {
 				void refreshPracticeSession();
 				void refreshTrialQuota();
-			}, 3000);
+			}, SESSION_POLL_INTERVAL_MS);
 			return () => clearInterval(interval);
 		}
+		// Far-future work (e.g. an idle follow-up): one wake-up at due time instead
+		// of polling the whole window.
+		const timer = setTimeout(() => {
+			void refreshPracticeSession();
+			void refreshTrialQuota();
+		}, plan.delayMs);
+		return () => clearTimeout(timer);
 	});
 
 	onMount(() => {
@@ -411,6 +541,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		return () => {
 			clearTimeout(enterTimeout);
+			if (revealTimer !== undefined) clearTimeout(revealTimer);
 		};
 	});
 
@@ -462,6 +593,9 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		},
 		get isAnyMessagePending() {
 			return isAnyMessagePending;
+		},
+		get hasPendingReveals() {
+			return revealQueue.length > 0;
 		},
 		get agentReadUpToMessageId() {
 			return agentReadUpToMessageId;
