@@ -12,6 +12,7 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
+import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import type { AgentGenerationArtifacts } from "$lib/server/agent-replies/generator";
 import {
 	AgentReplyWorker,
@@ -266,6 +267,43 @@ describe("agent reply worker scheduling", () => {
 		const deliveryCancel = updates.find((update) => update.table === agentDelivery);
 		expect(deliveryCancel?.set).toMatchObject({ status: "cancelled" });
 		expect(bareStrings(deliveryCancel?.clause)).toEqual(expect.arrayContaining([29, 30, "pending"]));
+	});
+
+	it("anchors the delivery timeline at completion and paces each message by its own length", async () => {
+		const completedAt = new Date("2026-08-21T12:00:00.000Z");
+		const batch = {
+			id: 31,
+			sessionId: 5,
+			claimToken: "token-31",
+			status: "processing",
+			generationCount: 1,
+			inputMessageId: 501,
+		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
+		const result = {
+			requestMessages: [],
+			rawResponse: "",
+			parsedResult: {
+				decision: "reply",
+				deliveries: [
+					{ content: "Salut !", replyToMessageId: null },
+					{ content: "x".repeat(40), replyToMessageId: null },
+				],
+				allowIdleFollowUp: false,
+			},
+			providerMetadata: { finishReason: "stop" },
+		} as unknown as AgentGenerationArtifacts;
+
+		const { tx, inserts } = makeRecordingTx(31, []);
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+		await (
+			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
+		).persistGenerationOutcome(batch, { urgency: "high" }, result, completedAt);
+
+		// the first message is due the moment composing finishes; the wait before the
+		// second scales with the second message's own length (typing model)
+		expect(inserts[0]?.values.dueAt).toBe(completedAt);
+		expect(inserts[1]?.values.dueAt).toEqual(new Date(completedAt.getTime() + getDeliveryDelayMs("x".repeat(40))));
 	});
 
 	it("locks the session and batch rows before claiming, then finalizes the batch after the last delivery", async () => {

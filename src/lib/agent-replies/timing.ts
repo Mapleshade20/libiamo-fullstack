@@ -23,7 +23,11 @@ export function getSessionExpiry(startedAt: Date, maxSessionAgeSeconds: number):
 	return new Date(startedAt.getTime() + maxSessionAgeSeconds * 1_000);
 }
 
-export function getDeliveryDelayMs(previousContent: string): number {
-	const unicodeLength = [...previousContent].length;
+/**
+ * Typing delay before a reply of this length is delivered: the wait scales with
+ * the length of the message being typed, hard-capped so the tail stays bounded.
+ */
+export function getDeliveryDelayMs(content: string): number {
+	const unicodeLength = [...content].length;
 	return Math.min(20_000, Math.max(1_500, 600 + 50 * unicodeLength));
 }

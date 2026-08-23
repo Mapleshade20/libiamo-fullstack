@@ -17,8 +17,8 @@ type WorkerNow = Date;
 type ClaimedBatch = typeof agentResponseBatch.$inferSelect;
 type AgentReplyExecutor = Pick<typeof db, "query" | "update" | "insert">;
 
-export function getDeliveryDueAt(firstDueAt: Date, previousContent: string | undefined): Date {
-	return new Date(firstDueAt.getTime() + (previousContent === undefined ? 0 : getDeliveryDelayMs(previousContent)));
+export function getDeliveryDueAt(previousDueAt: Date, content: string | undefined): Date {
+	return new Date(previousDueAt.getTime() + (content === undefined ? 0 : getDeliveryDelayMs(content)));
 }
 
 export function isStaleGeneration(input: { expectedInputMessageId: number | null; latestUserMessageId: number | null; sessionStatus: string }) {
@@ -345,6 +345,11 @@ export class AgentReplyWorker {
 				userId: session.userId,
 				additionalInstruction: getBatchGenerationInstruction(batch.kind, session.followUpCount),
 			});
+			// Anchor every post-generation timestamp at completion time. The scan's `now`
+			// predates the provider call; anchoring there would let generation latency
+			// pre-consume the staggered delivery schedule, so every delivery would already
+			// be overdue the moment it is committed.
+			const completedAt = new Date();
 			const freshSession = await db.query.practiceSession.findFirst({
 				where: eq(practiceSession.id, session.id),
 				columns: { status: true, completionReason: true },
@@ -371,20 +376,20 @@ export class AgentReplyWorker {
 					.update(agentResponseBatch)
 					.set({
 						status: sessionEnded ? "cancelled" : "pending",
-						dueAt: new Date(now.getTime() + RE_ENGAGE_DELAY_MS),
+						dueAt: new Date(completedAt.getTime() + RE_ENGAGE_DELAY_MS),
 						staleCount: batch.staleCount + 1,
 						workerId: null,
 						claimToken: null,
 						leaseExpiresAt: null,
-						completedAt: sessionEnded ? now : null,
+						completedAt: sessionEnded ? completedAt : null,
 					})
 					.where(this.batchClaimFence(batch));
 				return;
 			}
 
-			await this.persistGenerationOutcome(batch, session, result, now);
+			await this.persistGenerationOutcome(batch, session, result, completedAt);
 		} catch (error) {
-			await this.handleGenerationFailure(batch, now, error);
+			await this.handleGenerationFailure(batch, new Date(), error);
 		}
 	}
 
@@ -460,12 +465,15 @@ export class AgentReplyWorker {
 						);
 				}
 			}
+			// Typing simulation: the first message is due the moment the agent finishes
+			// composing (the provider latency acted as its typing time), and the wait
+			// before each later message scales with that message's own length.
 			let dueAt = now;
 			for (const [sequence, delivery] of deliveries.entries()) {
+				if (sequence > 0) dueAt = getDeliveryDueAt(dueAt, delivery.content);
 				await tx
 					.insert(agentDelivery)
 					.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
-				dueAt = getDeliveryDueAt(dueAt, delivery.content);
 			}
 			if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
 				await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
