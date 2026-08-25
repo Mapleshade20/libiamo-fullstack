@@ -29,9 +29,10 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		columns: { tutorFeedback: true },
+		columns: { tutorFeedback: true, status: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
+	if (sessionData?.status === "abandoned") return null;
 
 	return {
 		language: sessionData?.task?.language ?? "en",

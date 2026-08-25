@@ -63,7 +63,10 @@ export function shouldDeliverIntoEndedSession(
 	// The abuse-terminating batch's own parting reply still lands (even if the
 	// feedback page already flipped the session to evaluated): the agent ended
 	// the session while composing that final message for the learner.
-	return (session?.status === "completed" || session?.status === "evaluated") && session.completionReason === "terminated_abuse";
+	return (
+		(session?.status === "completed" || session?.status === "evaluated" || session?.status === "abandoned") &&
+		session.completionReason === "terminated_abuse"
+	);
 }
 
 function safeError(error: unknown): string {
@@ -240,7 +243,7 @@ export class AgentReplyWorker {
 	private async expireSessions(now: WorkerNow): Promise<void> {
 		const expired = await db
 			.update(practiceSession)
-			.set({ status: "completed", completionReason: "max_session_age", completedAt: now })
+			.set({ status: "abandoned", completionReason: "max_session_age", completedAt: now })
 			.where(and(eq(practiceSession.status, "in_progress"), lte(practiceSession.expiresAt, now)))
 			.returning({ id: practiceSession.id });
 
@@ -439,7 +442,7 @@ export class AgentReplyWorker {
 			if (terminated) {
 				await tx
 					.update(practiceSession)
-					.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
+					.set({ status: "abandoned", completionReason: "terminated_abuse", completedAt: now })
 					.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
 				await tx
 					.update(agentResponseBatch)
@@ -612,7 +615,7 @@ export class AgentReplyWorker {
 				if (terminated) {
 					await tx
 						.update(practiceSession)
-						.set({ status: "completed", completionReason: "terminated_abuse", completedAt: now })
+						.set({ status: "abandoned", completionReason: "terminated_abuse", completedAt: now })
 						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
 				} else if (batch.allowIdleFollowUp) {
 					await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);

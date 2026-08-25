@@ -108,7 +108,7 @@ describe("session service", () => {
 					expect.objectContaining({
 						urgency: "low",
 						startedAt: new Date("2025-06-11T12:00:00.000Z"),
-						expiresAt: new Date("2025-06-18T12:00:00.000Z"),
+						expiresAt: new Date("2025-06-13T12:00:00.000Z"),
 					}),
 				);
 			} finally {

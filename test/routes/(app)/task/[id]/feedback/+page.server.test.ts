@@ -64,6 +64,11 @@ describe("task feedback page load", () => {
 		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
 	});
 
+	it("redirects abandoned sessions instead of opening a report", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "abandoned" }));
+		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
+	});
+
 	it("returns page data for completed session", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession());
 		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1" }))) as any;

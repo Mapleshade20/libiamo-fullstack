@@ -45,6 +45,10 @@ describe("quest hall task decisions", () => {
 			href: "/task/7/feedback",
 			labelKey: "hall.reviewReport",
 		});
+		expect(getHallQuestAction(quest({ id: 8, sessionStatus: "abandoned" }))).toEqual({
+			href: "/task/8",
+			labelKey: "hall.enter",
+		});
 	});
 
 	it("keeps unsupported practice UIs on the full brief", () => {

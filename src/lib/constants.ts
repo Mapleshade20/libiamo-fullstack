@@ -166,6 +166,8 @@ export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 export const URGENCIES = ["high", "medium", "low"] as const;
 export type Urgency = (typeof URGENCIES)[number];
 
+export const PRACTICE_SESSION_MAX_AGE_SECONDS = 48 * 60 * 60;
+
 export type UrgencyPreset = {
 	/** Mean of the exponential reply delay distribution (true MTTH). */
 	replyMtthMs: number;
@@ -178,28 +180,28 @@ export type UrgencyPreset = {
 export const URGENCY_PRESETS: Record<Urgency, UrgencyPreset> = {
 	high: {
 		replyMtthMs: 30_000,
-		replyCapMs: 2 * 60_000,
-		maxSessionAgeSeconds: 3 * 60 * 60,
+		replyCapMs: 1 * 60_000,
+		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 60 * 60_000,
 	},
 	medium: {
-		replyMtthMs: 3 * 60_000,
-		replyCapMs: 2 * 60 * 60_000,
-		maxSessionAgeSeconds: 24 * 60 * 60,
+		replyMtthMs: 2 * 60_000,
+		replyCapMs: 8 * 60_000,
+		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 12 * 60 * 60_000,
 	},
 	low: {
-		replyMtthMs: 30 * 60_000,
-		replyCapMs: 6 * 60 * 60_000,
-		maxSessionAgeSeconds: 48 * 60 * 60,
+		replyMtthMs: 10 * 60_000,
+		replyCapMs: 40 * 60_000,
+		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 24 * 60 * 60_000,
 	},
 };
 
 export const URGENCY_LABELS: Record<Urgency, string> = {
-	high: "High — ~30 s (max 2 min)",
-	medium: "Medium — ~3 min (max 2 h)",
-	low: "Low — ~30 min (max 6 h)",
+	high: "High — ~30 s (max 1 min)",
+	medium: "Medium — ~2 min (max 8 min)",
+	low: "Low — ~10 min (max 40 min)",
 };
 
 export const CADENCES = ["weekly", "daily", "none"] as const;

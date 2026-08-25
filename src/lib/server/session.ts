@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/agent-replies/timing";
-import { getLanguageEnglishName, type UiVariant, URGENCY_PRESETS } from "$lib/constants";
+import { getLanguageEnglishName, PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVariant } from "$lib/constants";
 import { db } from "./db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
 import { chatJson } from "./llm";
@@ -275,7 +275,7 @@ export async function startSession(taskId: number, userId: string, _learningLang
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
 	const urgency = taskData.urgency ?? "high";
-	const maxSessionAgeSeconds = taskData.maxSessionAgeSeconds ?? URGENCY_PRESETS[urgency].maxSessionAgeSeconds;
+	const maxSessionAgeSeconds = PRACTICE_SESSION_MAX_AGE_SECONDS;
 	const startedAt = new Date();
 
 	try {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(new URL("../../../../drizzle/0010_async_agent_replies.sql", import.meta.url), "utf8");
+const abandonmentMigration = readFileSync(new URL("../../../../drizzle/0015_abandon_expired_sessions.sql", import.meta.url), "utf8");
 
 describe("async replies migration", () => {
 	it("maps legacy slow records before rebuilding the interaction enum", () => {
@@ -24,5 +25,15 @@ describe("async replies migration", () => {
 		expect(migration).toContain("CURRENT_TIMESTAMP + make_interval");
 		expect(migration).toContain("WHEN 'high'::\"urgency\" THEN 43200");
 		expect(migration).toContain("WHEN 'low'::\"urgency\" THEN 604800");
+	});
+
+	it("normalizes session expiry to 48 hours and removes follow-up exhaustion", () => {
+		expect(abandonmentMigration).toContain('SET "max_session_age_seconds" = 172800');
+		expect(abandonmentMigration).toContain('SET "expires_at" = "started_at" + make_interval(secs => 172800)');
+		expect(abandonmentMigration).toContain("SET \"status\" = 'abandoned'");
+		expect(abandonmentMigration).toContain("WHERE \"completion_reason\" = 'follow_up_exhausted'");
+		expect(abandonmentMigration).toContain(
+			"CREATE TYPE \"public\".\"session_completion_reason\" AS ENUM('user_requested', 'max_turns', 'max_session_age', 'terminated_abuse')",
+		);
 	});
 });

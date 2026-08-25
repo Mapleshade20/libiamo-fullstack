@@ -7,14 +7,13 @@ export const interactionTypeEnum = pgEnum("interaction_type", [...INTERACTION_TY
 export const uiVariantEnum = pgEnum("ui_variant", [...UI_VARIANTS]);
 export const cadenceEnum = pgEnum("cadence", [...CADENCES]);
 export const scheduleOriginEnum = pgEnum("schedule_origin", ["manual", "auto"]);
-export const sessionStatusEnum = pgEnum("session_status", ["in_progress", "completed", "evaluated"]);
+export const sessionStatusEnum = pgEnum("session_status", ["in_progress", "completed", "evaluated", "abandoned"]);
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const urgencyEnum = pgEnum("urgency", [...URGENCIES]);
 export const sessionCompletionReasonEnum = pgEnum("session_completion_reason", [
 	"user_requested",
 	"max_turns",
 	"max_session_age",
-	"follow_up_exhausted",
 	"terminated_abuse",
 ]);
 export const agentResponseBatchKindEnum = pgEnum("agent_response_batch_kind", ["opening", "reply", "follow_up"]);

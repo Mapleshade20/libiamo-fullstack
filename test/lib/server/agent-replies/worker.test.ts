@@ -207,6 +207,7 @@ describe("agent reply worker scheduling", () => {
 		// including when the feedback page has already flipped it to evaluated
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession({ status: "evaluated", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
+		expect(shouldDeliverIntoEndedSession({ status: "abandoned", completionReason: "terminated_abuse" }, "delivery_pending")).toBe(true);
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "pending")).toBe(false);
 	});
 
@@ -280,7 +281,7 @@ describe("agent reply worker scheduling", () => {
 
 		// the session ends at decision time, not when the final reply lands
 		const sessionUpdate = updates.find((update) => update.table === practiceSession);
-		expect(sessionUpdate?.set).toMatchObject({ status: "completed", completionReason: "terminated_abuse" });
+		expect(sessionUpdate?.set).toMatchObject({ status: "abandoned", completionReason: "terminated_abuse" });
 
 		// sibling batches — including ones already mid-delivery — are cancelled now
 		const cancelUpdate = updates.find((update) => update.table === agentResponseBatch && update.set.status === "cancelled");

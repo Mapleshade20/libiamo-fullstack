@@ -425,7 +425,7 @@ function loadExistingSession(session: any) {
 	lastLoadedSessionId = session.id;
 	lastSessionSnapshot = sessionSnapshot;
 	sessionId = session.id;
-	isCompleted = session.status === "completed" || session.status === "evaluated";
+	isCompleted = session.status === "completed" || session.status === "evaluated" || session.status === "abandoned";
 
 	messages = buildChatMessages({
 		rawMessages: session.messages ?? [],

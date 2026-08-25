@@ -3,6 +3,12 @@ import { getDeliveryDelayMs, getSessionExpiry, sampleReplyDelayMs } from "$lib/a
 import { URGENCY_PRESETS } from "$lib/constants";
 
 describe("agent reply timing", () => {
+	it("uses the configured MTTH and cap for each urgency", () => {
+		expect(URGENCY_PRESETS.high).toMatchObject({ replyMtthMs: 30_000, replyCapMs: 60_000 });
+		expect(URGENCY_PRESETS.medium).toMatchObject({ replyMtthMs: 2 * 60_000, replyCapMs: 8 * 60_000 });
+		expect(URGENCY_PRESETS.low).toMatchObject({ replyMtthMs: 10 * 60_000, replyCapMs: 40 * 60_000 });
+	});
+
 	it.each(["high", "medium", "low"] as const)("samples %s reply delay from an exponential capped at its preset", (urgency) => {
 		const preset = URGENCY_PRESETS[urgency];
 		// u = 0 -> zero delay (instant reply); u -> 1 grows without bound but is capped.

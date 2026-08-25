@@ -19,6 +19,7 @@ const objectives = $derived(task.objectives ?? []);
 
 let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
 let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
+let isAbandoned = $derived(task.sessionStatus === "abandoned");
 let lang = $derived(task.language as LanguageCode);
 let showTranslateModal = $state(false);
 let showNativeLanguagePrompt = $state(false);
@@ -66,6 +67,8 @@ function difficultyLabel(level: number): string {
 					<Badge class="bg-green-500/10 text-green-600 hover:bg-green-500/10 border-green-500/20 text-[10px] font-bold uppercase tracking-widest">
 						{t(lang, "task.completed")}
 					</Badge>
+				{:else if isAbandoned}
+					<Badge variant="destructive" class="text-[10px] font-bold uppercase tracking-widest"> {t(lang, "task.abandoned")} </Badge>
 				{/if}
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
 					{UI_VARIANT_LABELS[
@@ -139,6 +142,8 @@ function difficultyLabel(level: number): string {
 						>
 							{t(lang, "hall.reviewReport")}
 						</Button>
+					{:else if isAbandoned}
+						<span class="text-sm text-muted-foreground">{t(lang, "task.abandoned")}</span>
 					{:else if isPracticeEnabled}
 						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
 					{:else}

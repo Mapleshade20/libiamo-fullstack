@@ -217,7 +217,7 @@ describe("tasks helpers", () => {
 				variantId: 1,
 				origin: "auto",
 				urgency: "high",
-				maxSessionAgeSeconds: 3 * 60 * 60,
+				maxSessionAgeSeconds: 48 * 60 * 60,
 			}),
 		);
 		randomSpy.mockRestore();

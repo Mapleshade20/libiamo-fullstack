@@ -123,7 +123,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		where: and(
 			eq(practiceSession.taskId, taskId),
 			eq(practiceSession.userId, user.id),
-			inArray(practiceSession.status, ["in_progress", "completed", "evaluated"]),
+			inArray(practiceSession.status, ["in_progress", "completed", "evaluated", "abandoned"]),
 		),
 		columns: {
 			id: true,

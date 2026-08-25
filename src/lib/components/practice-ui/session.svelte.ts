@@ -417,7 +417,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			agentUser = { ...pool.agentUser };
 			onPoolInit?.(pool);
 
-			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
+			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated" || sessionData.status === "abandoned";
 
 			const openingMessages = getOpeningStateMessages({
 				openingStateData,
