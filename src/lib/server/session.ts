@@ -555,18 +555,22 @@ export async function submitMessage(
 }
 
 export async function completeSession(sessionId: number): Promise<void> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		columns: { id: true, status: true },
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") {
-		throw new Error("Session not in progress");
-	}
-
 	const now = new Date();
 	await db.transaction(async (tx) => {
+		// The status check and the write must share one locked view of the row: the
+		// turn limit (submitMessage), the expiry sweep, and abuse termination all end
+		// sessions concurrently. Reading outside the transaction let this overwrite
+		// their outcome — relabelling a max_turns completion the worker reads to spare
+		// its final reply, or resurrecting an already-abandoned session as completed.
+		// Lock order is session -> batch -> delivery, matching submitMessage.
+		const [locked] = await tx
+			.select({ id: practiceSession.id, status: practiceSession.status })
+			.from(practiceSession)
+			.where(eq(practiceSession.id, sessionId))
+			.for("update");
+		if (!locked) throw new Error("Session not found");
+		if (locked.status !== "in_progress") throw new Error("Session not in progress");
+
 		const cancellable = await tx.query.agentResponseBatch.findMany({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),

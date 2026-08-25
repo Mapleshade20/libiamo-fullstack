@@ -70,11 +70,22 @@ describe("session service", () => {
 		mockDb.select.mockImplementation(() => ({
 			from: vi.fn(() => ({
 				where: vi.fn(() => ({
-					for: vi.fn().mockResolvedValue([{ id: 123 }]),
+					for: vi.fn().mockResolvedValue([{ id: 123, status: "in_progress" }]),
 				})),
 			})),
 		}));
 	});
+
+	/** Drives the `SELECT ... FOR UPDATE` row lock both submitMessage and completeSession take. */
+	const mockLockedSessionRow = (rows: unknown[]) => {
+		const forMock = vi.fn().mockResolvedValue(rows);
+		mockDb.select.mockImplementation(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn(() => ({ for: forMock })),
+			})),
+		}));
+		return forMock;
+	};
 
 	const mockTask = {
 		id: 1,
@@ -909,27 +920,29 @@ describe("session service", () => {
 		});
 
 		it("throws when session not found", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+			mockLockedSessionRow([]);
 
 			await expect(completeSession(999)).rejects.toThrow("Session not found");
 		});
 
-		it("throws when session not in progress", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				status: "completed",
-			});
+		it("reads the status under a row lock before writing the completion", async () => {
+			const forMock = mockLockedSessionRow([{ id: 123, status: "in_progress" }]);
 
-			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
+			await completeSession(123);
+
+			expect(forMock).toHaveBeenCalledWith("update");
 		});
 
-		it("throws when session already evaluated", async () => {
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				...mockSession,
-				status: "evaluated",
-			});
+		// max_turns (the final send), the expiry sweep, and abuse termination all end
+		// sessions concurrently under the same row lock. Whichever committed first owns
+		// the outcome: a later "end practice" click must not relabel a max_turns
+		// completion (the worker reads that reason to spare the final reply) nor
+		// resurrect an abandoned session as completed.
+		it.each(["completed", "evaluated", "abandoned"])("refuses to overwrite a session already %s", async (status) => {
+			mockLockedSessionRow([{ id: 123, status }]);
 
 			await expect(completeSession(123)).rejects.toThrow("Session not in progress");
+			expect(mockDb.update).not.toHaveBeenCalled();
 		});
 	});
 
