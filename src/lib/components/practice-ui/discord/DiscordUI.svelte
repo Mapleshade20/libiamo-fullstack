@@ -22,7 +22,6 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -33,7 +32,6 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
-	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -59,7 +57,6 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
-	timeZone,
 	labels: sessionLabels,
 	taskId,
 	onPoolInit(pool) {

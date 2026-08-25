@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
@@ -13,7 +14,7 @@ export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 	const language = user.activeLanguage as LanguageCode;
 
-	const userTz = user.timezone || "UTC";
+	const userTz = getBrowserTimezone(event.cookies);
 	const userLocalDateStr = getLocalDateString(userTz);
 
 	await ensureTasksForDate(language, userLocalDateStr);

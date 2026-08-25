@@ -33,7 +33,6 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -44,7 +43,6 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
-	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -88,7 +86,7 @@ let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
 
-const todayLabel = $derived(getTodayDateString(language, timeZone));
+const todayLabel = $derived(getTodayDateString(language));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
 const recipient = $derived(getMailContactFromOpeningEmails(openingStateData.emails, getMailContact(taskId || sessionId || userName)));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
@@ -125,7 +123,7 @@ const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
-const formatTimestamp = $derived(createTimeFormatter(timeZone));
+const formatTimestamp = $derived(createTimeFormatter());
 
 function getDefaultDraft(): DraftEmail {
 	return {

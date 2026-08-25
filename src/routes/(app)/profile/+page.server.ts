@@ -12,55 +12,6 @@ import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
 
-/**
- * Build timezone option list with UTC offset and long display name.
- * Uses a single `now` per entry for both Intl.DateTimeFormat.formatToParts calls.
- */
-function buildTimezoneList(): { value: string; label: string }[] {
-	try {
-		const raw = Intl.supportedValuesOf("timeZone");
-		return raw.map((tz) => {
-			try {
-				const now = new Date();
-
-				const offsetParts = new Intl.DateTimeFormat("en-US", {
-					timeZone: tz,
-					timeZoneName: "shortOffset",
-				}).formatToParts(now);
-				const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
-
-				const localizedName =
-					new Intl.DateTimeFormat("en-US", {
-						timeZone: tz,
-						timeZoneName: "long",
-					})
-						.formatToParts(now)
-						.find((p) => p.type === "timeZoneName")?.value || tz;
-
-				return {
-					value: tz,
-					label: `${tz} (${localizedName}, ${utcOffset})`,
-				};
-			} catch {
-				return { value: tz, label: tz };
-			}
-		});
-	} catch {
-		// Runtime doesn't support Intl.supportedValuesOf — return empty
-		return [];
-	}
-}
-
-// Memoize at module scope: Intl.supportedValuesOf("timeZone") is static.
-let _cachedTimezones: { value: string; label: string }[] | undefined;
-
-function getMemoizedTimezones(): { value: string; label: string }[] {
-	if (!_cachedTimezones) {
-		_cachedTimezones = buildTimezoneList();
-	}
-	return _cachedTimezones;
-}
-
 export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
@@ -72,7 +23,6 @@ export const load: PageServerLoad = async (event) => {
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
-		serverTimezones: getMemoizedTimezones(),
 		serverNativeLanguages: getNativeLanguageOptions("en"),
 		hasApiKey,
 		trialQuota,
@@ -88,7 +38,6 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const raw = {
 			name: formData.get("name")?.toString() ?? undefined,
-			timezone: formData.get("timezone")?.toString() ?? undefined,
 			nativeLanguage: formData.get("nativeLanguage")?.toString() ?? undefined,
 			feedbackLanguagePreference: formData.get("feedbackLanguagePreference")?.toString() ?? undefined,
 			apiKey: formData.get("apiKey")?.toString() || undefined,

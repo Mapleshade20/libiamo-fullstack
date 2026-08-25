@@ -1,11 +1,17 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { onNavigate } from "$app/navigation";
 import "./layout.css";
 import favicon from "$lib/assets/favicon.svg";
+import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { resolvePageTransition } from "$lib/client/page-transition";
 
 let { children } = $props();
 let transitionSequence = 0;
+
+onMount(() => {
+	void syncBrowserTimeZone();
+});
 
 onNavigate((navigation) => {
 	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "fade";

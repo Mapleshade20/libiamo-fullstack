@@ -8,7 +8,6 @@ const data = {
 		email: "alice@example.com",
 		role: "learner",
 		activeLanguage: "fr",
-		timezone: "Europe/Paris",
 		nativeLanguage: "en",
 		feedbackLanguagePreference: "native",
 	},

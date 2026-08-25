@@ -355,7 +355,7 @@ describe("createPracticeSession", () => {
 			tutorFeedback: null,
 			messages: undefined,
 		};
-		const session = createSession(createOptions({ existingSession: null, timeZone: "Asia/Tokyo" }));
+		const session = createSession(createOptions({ existingSession: null }));
 
 		session.hydrateFromExistingSession(existingSession);
 

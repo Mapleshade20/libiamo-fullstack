@@ -23,7 +23,6 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
@@ -34,7 +33,6 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
-	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
@@ -60,7 +58,6 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
-	timeZone,
 	labels: sessionLabels,
 	taskId,
 }));
@@ -299,7 +296,7 @@ function showIncomingSender(index: number) {
 				<div bind:this={session.chatContainer} class="flex-1 overflow-y-auto px-3 py-4 md:bg-[#F9F9FB] md:px-8 md:py-6">
 					<div class="mb-4 flex items-center justify-center md:hidden">
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
-						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, timeZone)}</span>
+						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language)}</span>
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 					</div>
 

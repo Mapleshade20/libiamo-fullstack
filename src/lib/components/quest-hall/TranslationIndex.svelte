@@ -34,7 +34,6 @@ function monthLabel(value: string) {
 	return new Date(`${value}-01T12:00:00.000Z`).toLocaleDateString(lang, {
 		month: "long",
 		year: "numeric",
-		timeZone: "UTC",
 	});
 }
 

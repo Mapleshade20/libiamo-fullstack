@@ -24,7 +24,6 @@ describe("(app) layout +layout.server", () => {
 			email: "Alice@Example.com",
 			role: "learner",
 			activeLanguage: "en",
-			timezone: "UTC",
 			nativeLanguage: "es",
 		};
 
@@ -35,7 +34,6 @@ describe("(app) layout +layout.server", () => {
 			email: "Alice@Example.com",
 			role: "learner",
 			activeLanguage: "en",
-			timezone: "UTC",
 			nativeLanguage: "es",
 		});
 		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);

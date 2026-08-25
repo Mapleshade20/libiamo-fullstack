@@ -34,7 +34,6 @@ export interface PracticeSessionOptions {
 	existingSession: any;
 	openingState: unknown;
 	maxTurns: number;
-	timeZone?: string;
 	labels: PracticeSessionLabels;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
 	taskId?: string | number;
@@ -87,13 +86,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const existingSession = $derived(getOptions().existingSession);
 	const openingState = $derived(getOptions().openingState);
 	const maxTurns = $derived(getOptions().maxTurns);
-	const timeZone = $derived(getOptions().timeZone);
 	const labels = $derived(getOptions().labels);
 	const onPoolInit = $derived(getOptions().onPoolInit);
 	const taskId = $derived(getOptions().taskId);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
-	const formatTimestamp = $derived(createTimeFormatter(timeZone));
+	const formatTimestamp = $derived(createTimeFormatter());
 
 	// ── State ──────────────────────────────────────────────────────
 

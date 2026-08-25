@@ -54,7 +54,7 @@ describe("session page server", () => {
 		mockDb.query.user.findFirst.mockResolvedValue(null);
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", timezone: "UTC" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
@@ -144,7 +144,7 @@ describe("session page server", () => {
 
 			const result = (await load({
 				params: { id: mockTaskId },
-				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
+				locals: { user: { ...mockUser, name: "Stale Name" } },
 			} as any)) as { user?: unknown };
 
 			expect(result.user).toBeUndefined();

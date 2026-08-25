@@ -9,34 +9,12 @@ import {
 	USER_NAME_MAX_LENGTH,
 } from "$lib/constants";
 
-export const timezoneSchema = z.preprocess(
-	(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-	z
-		.string()
-		.optional()
-		.refine(
-			(tz) => {
-				if (!tz) return true;
-				try {
-					Intl.DateTimeFormat(undefined, { timeZone: tz });
-					return true;
-				} catch {
-					return false;
-				}
-			},
-			{
-				message: "Invalid timezone format. Please use a valid IANA timezone (e.g., Asia/Shanghai).",
-			},
-		),
-);
-
 const byokFields = ["apiKey", "apiBaseUrl", "apiModel"] as const;
 const byokMessage = "All three fields (API Key, Base URL, Model) are required when configuring BYOK";
 
 export const profileSchema = z
 	.object({
 		name: z.string().max(USER_NAME_MAX_LENGTH).optional(),
-		timezone: timezoneSchema,
 		nativeLanguage: z.preprocess(
 			(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
 			z.enum(NATIVE_LANGUAGE_CODES, { message: "Please select a supported native language" }).optional(),
