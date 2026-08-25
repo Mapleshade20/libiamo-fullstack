@@ -26,6 +26,7 @@ import {
 	startSession,
 	submitMessage,
 } from "$lib/server/session";
+import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -156,10 +157,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		0,
 	);
 	if (existingSession && latestAssistantMessageId) {
-		await db
-			.update(practiceSession)
-			.set({ lastSeenAssistantMessageId: latestAssistantMessageId })
-			.where(and(eq(practiceSession.id, existingSession.id), eq(practiceSession.userId, user.id)));
+		await markAssistantMessagesSeen(existingSession.id, user.id, latestAssistantMessageId);
 	}
 
 	// Earliest outstanding agent work for this session (batches still composing or

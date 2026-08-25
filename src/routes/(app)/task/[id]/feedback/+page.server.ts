@@ -9,6 +9,7 @@ import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExi
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail } from "$lib/server/session";
+import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 function hasOversizedUserText(values: string[]) {
@@ -90,10 +91,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		0,
 	);
 	if (latestAssistantMessageId) {
-		await db
-			.update(practiceSession)
-			.set({ lastSeenAssistantMessageId: latestAssistantMessageId })
-			.where(and(eq(practiceSession.id, session.id), eq(practiceSession.userId, user.id)));
+		await markAssistantMessagesSeen(session.id, user.id, latestAssistantMessageId);
 	}
 
 	// Get task data
