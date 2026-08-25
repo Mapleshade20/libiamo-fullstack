@@ -42,7 +42,7 @@ export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]>
 		.innerJoin(task, eq(task.id, practiceSession.taskId))
 		.innerJoin(template, eq(template.id, task.templateId))
 		.leftJoin(sessionMessage, eq(sessionMessage.sessionId, practiceSession.id))
-		.where(and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["in_progress", "completed", "evaluated"])))
+		.where(and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["in_progress", "completed", "evaluated", "abandoned"])))
 		.groupBy(task.id, task.title, template.ui, practiceSession.status, practiceSession.lastSeenAssistantMessageId);
 
 	return (

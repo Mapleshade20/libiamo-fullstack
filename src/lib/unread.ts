@@ -7,8 +7,13 @@ export type UnreadInboxItem = {
 	latestAgeSeconds: number | null;
 };
 
+/**
+ * Abandoned sessions route to the transcript, not the report: the feedback page
+ * refuses them, and the reply that made one unread is the agent's parting message
+ * after an abuse termination, which only the session view renders.
+ */
 export function unreadTargetHref(item: Pick<UnreadInboxItem, "taskId" | "sessionStatus">): string {
-	return `/task/${item.taskId}/${item.sessionStatus === "in_progress" ? "session" : "feedback"}`;
+	return `/task/${item.taskId}/${item.sessionStatus === "completed" || item.sessionStatus === "evaluated" ? "feedback" : "session"}`;
 }
 
 /**

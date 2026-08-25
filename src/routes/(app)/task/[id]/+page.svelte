@@ -143,7 +143,11 @@ function difficultyLabel(level: number): string {
 							{t(lang, "hall.reviewReport")}
 						</Button>
 					{:else if isAbandoned}
-						<span class="text-sm text-muted-foreground">{t(lang, "task.abandoned")}</span>
+						<!-- Abuse termination ends the session while still delivering the agent's
+						     parting reply, so the transcript must stay reachable to read it. -->
+						<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">
+							{t(lang, "task.viewConversation")}
+						</Button>
 					{:else if isPracticeEnabled}
 						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
 					{:else}

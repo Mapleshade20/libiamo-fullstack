@@ -8,6 +8,13 @@ describe("unread helpers", () => {
 		expect(unreadTargetHref({ taskId: 8, sessionStatus: "evaluated" })).toBe("/task/8/feedback");
 	});
 
+	// An abuse termination abandons the session but still delivers the agent's
+	// parting reply. The feedback page refuses abandoned sessions, so the unread
+	// entry has to lead to the transcript instead.
+	it("targets the transcript for abandoned conversations", () => {
+		expect(unreadTargetHref({ taskId: 9, sessionStatus: "abandoned" })).toBe("/task/9/session");
+	});
+
 	it("formats relative ages across unit boundaries", () => {
 		expect(formatRelativeAge(30, "en")).toContain("now");
 		expect(formatRelativeAge(90, "en")).toContain("minute");
