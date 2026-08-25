@@ -16,6 +16,7 @@ type RetryLabels = {
 type MessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
+	noReply?: boolean;
 	failureError?: string | null;
 	hidden?: boolean;
 	displayContent?: string;
@@ -70,10 +71,18 @@ function compactStringSnapshot(value: string) {
 
 export function stableMetadataSnapshot(value: unknown) {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-	const metadata = value as { clientMessageId?: unknown; failed?: unknown; failureError?: unknown; hidden?: unknown; mailBodyHtml?: unknown };
+	const metadata = value as {
+		clientMessageId?: unknown;
+		failed?: unknown;
+		noReply?: unknown;
+		failureError?: unknown;
+		hidden?: unknown;
+		mailBodyHtml?: unknown;
+	};
 	return JSON.stringify({
 		clientMessageId: metadata.clientMessageId ?? "",
 		failed: metadata.failed === true,
+		noReply: metadata.noReply === true,
 		failureError: typeof metadata.failureError === "string" ? metadata.failureError : "",
 		hidden: metadata.hidden === true,
 		mailBodyHtml: typeof metadata.mailBodyHtml === "string" ? compactStringSnapshot(metadata.mailBodyHtml) : "",
@@ -118,7 +127,10 @@ function hasAssistantReplyInSameTurn(rawMessages: PersistedSessionMessage[], use
 	const failed = getMessageMetadata(userMessage.llmMetadata).failed === true;
 	for (let index = userMessageIndex + 1; index < rawMessages.length; index += 1) {
 		const message = rawMessages[index];
-		if (message.role === "user" && failed) return false;
+		if (message.role === "user") {
+			if (failed) return false;
+			if (getMessageMetadata(message.llmMetadata).noReply === true) return true;
+		}
 		if (isAgentRole(message.role)) {
 			const assistantClientMessageId = getClientMessageId(message);
 			if (clientMessageId && assistantClientMessageId && assistantClientMessageId !== clientMessageId) continue;
@@ -196,7 +208,7 @@ export function buildChatMessages({
 			thread: metadata.thread,
 		} satisfies ChatMessage;
 
-		if (message.role !== "user" || !metadata.clientMessageId || hasAssistantReplyInSameTurn(sortedRawMessages, index)) {
+		if (message.role !== "user" || !metadata.clientMessageId || metadata.noReply === true || hasAssistantReplyInSameTurn(sortedRawMessages, index)) {
 			return [mappedMessage];
 		}
 

@@ -86,7 +86,7 @@ function makeFollowUpExecutor(session: Record<string, unknown>) {
 	return { executor, inserts };
 }
 
-function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
+function makeRecordingTx(batchId: number, siblingBatchIds: number[], inputMessageMetadata: unknown = null) {
 	const updates: RecordedUpdate[] = [];
 	const inserts: RecordedInsert[] = [];
 	const tx = {
@@ -108,6 +108,9 @@ function makeRecordingTx(batchId: number, siblingBatchIds: number[]) {
 				inserts.push({ table, values });
 			},
 		}),
+		query: {
+			sessionMessage: { findFirst: vi.fn().mockResolvedValue({ llmMetadata: inputMessageMetadata }) },
+		},
 	};
 	return { tx, updates, inserts };
 }
@@ -329,6 +332,41 @@ describe("agent reply worker scheduling", () => {
 		// second scales with the second message's own length (typing model)
 		expect(inserts[0]?.values.dueAt).toBe(completedAt);
 		expect(inserts[1]?.values.dueAt).toEqual(new Date(completedAt.getTime() + getDeliveryDelayMs("x".repeat(40))));
+	});
+
+	it("marks the input message terminal when the agent chooses no reply", async () => {
+		const completedAt = new Date("2026-08-21T12:00:00.000Z");
+		const batch = {
+			id: 31,
+			sessionId: 5,
+			claimToken: "token-31",
+			status: "processing",
+			generationCount: 1,
+			inputMessageId: 501,
+		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
+		const result = {
+			requestMessages: [],
+			rawResponse: "",
+			parsedResult: {
+				decision: "no_reply",
+				deliveries: [],
+				allowIdleFollowUp: false,
+			},
+			providerMetadata: { finishReason: "stop" },
+		} as unknown as AgentGenerationArtifacts;
+
+		const { tx, updates, inserts } = makeRecordingTx(31, [], { clientMessageId: "msg-1", thread: { commentId: "c1" } });
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+		await (
+			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
+		).persistGenerationOutcome(batch, { urgency: "high" }, result, completedAt);
+
+		const messageUpdate = updates.find((update) => update.table === sessionMessage);
+		expect(messageUpdate?.set).toEqual({ llmMetadata: { clientMessageId: "msg-1", thread: { commentId: "c1" }, noReply: true } });
+		expect(inserts).toEqual([]);
+		const batchUpdate = updates.find((update) => update.table === agentResponseBatch);
+		expect(batchUpdate?.set.status).toBe("no_reply");
 	});
 
 	it("restricts idle follow-ups to messaging interfaces", () => {

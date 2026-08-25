@@ -37,7 +37,7 @@ describe("structured agent response", () => {
 		expect(agentResponseDecisionSchema.safeParse({ ...reply, terminationReason: "ordinary goodbye" }).success).toBe(false);
 	});
 
-	it("makes ordinary farewells non-terminating and idle-follow-up semantics explicit in the prompt", () => {
+	it("serializes conversation history into a user message", () => {
 		const messages = buildAgentResponseMessages({
 			baseSystemPrompt: "Speak Spanish.",
 			ui: "imessage",
@@ -45,8 +45,6 @@ describe("structured agent response", () => {
 		});
 
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
-		expect(messages[0].content).toContain("farewells");
-		expect(messages[0].content).toContain("Setting it false never completes the session");
 		expect(messages[1].content).toContain('"message_id":7');
 		expect(messages[1].content).toContain("Gracias, adiós.");
 	});

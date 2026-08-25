@@ -435,6 +435,18 @@ export class AgentReplyWorker {
 				.returning({ id: agentResponseBatch.id });
 			if (stillClaimed.length === 0) return;
 
+			if (deliveries.length === 0 && result.parsedResult.decision === "no_reply" && batch.inputMessageId !== null) {
+				const inputMessage = await tx.query.sessionMessage.findFirst({
+					where: eq(sessionMessage.id, batch.inputMessageId),
+					columns: { llmMetadata: true },
+				});
+				const metadata = (inputMessage?.llmMetadata ?? {}) as Record<string, unknown>;
+				await tx
+					.update(sessionMessage)
+					.set({ llmMetadata: { ...metadata, noReply: true } })
+					.where(eq(sessionMessage.id, batch.inputMessageId));
+			}
+
 			// Abuse termination ends the session the moment the decision is made,
 			// final reply or not: no sibling batch may generate or deliver anything
 			// more, and the learner cannot keep the session alive while the parting
