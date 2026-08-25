@@ -68,13 +68,17 @@ SET "urgency" = CASE
 	WHEN "interaction_type" = 'chat' THEN 'high'::"urgency"
 	ELSE NULL
 END;--> statement-breakpoint
+-- Translate templates carry no urgency by design, but the pre-existing manual
+-- scheduling path never rejected them, so historical tasks may point at one.
+-- Their urgency must still be materialized or the NOT NULL below fails outright.
+-- Such tasks run no chat session, so the slowest preset is the harmless default.
 UPDATE "task"
 SET
-	"urgency" = "template"."urgency",
-	"max_session_age_seconds" = CASE "template"."urgency"
+	"urgency" = COALESCE("template"."urgency", 'low'::"urgency"),
+	"max_session_age_seconds" = CASE COALESCE("template"."urgency", 'low'::"urgency")
 		WHEN 'high'::"urgency" THEN 43200
 		WHEN 'medium'::"urgency" THEN 259200
-		WHEN 'low'::"urgency" THEN 604800
+		ELSE 604800
 	END
 FROM "template"
 WHERE "task"."template_id" = "template"."id";--> statement-breakpoint

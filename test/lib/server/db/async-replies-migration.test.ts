@@ -24,7 +24,17 @@ describe("async replies migration", () => {
 		expect(sessionBackfill).toBeLessThan(sessionNotNull);
 		expect(migration).toContain("CURRENT_TIMESTAMP + make_interval");
 		expect(migration).toContain("WHEN 'high'::\"urgency\" THEN 43200");
-		expect(migration).toContain("WHEN 'low'::\"urgency\" THEN 604800");
+		expect(migration).toContain("ELSE 604800");
+	});
+
+	it("materializes an urgency for tasks whose template has none", () => {
+		// Translate templates keep a NULL urgency, and the pre-existing manual
+		// scheduling path never rejected them, so a historical task may point at one.
+		// Every branch of the task backfill must therefore produce a non-NULL value
+		// or the NOT NULL that follows aborts the whole migration.
+		const taskBackfill = migration.slice(migration.indexOf('UPDATE "task"'), migration.indexOf('UPDATE "practice_session"'));
+		expect(taskBackfill).toContain('COALESCE("template"."urgency", \'low\'::"urgency")');
+		expect(taskBackfill).not.toMatch(/WHEN 'low'::"urgency" THEN 604800\s*\n\s*END/);
 	});
 
 	it("normalizes session expiry to 48 hours and removes follow-up exhaustion", () => {
