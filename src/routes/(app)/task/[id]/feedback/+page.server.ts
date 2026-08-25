@@ -8,7 +8,7 @@ import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
-import { getSessionOrFail } from "$lib/server/session";
+import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
 import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -30,7 +30,7 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		columns: { tutorFeedback: true, status: true },
+		columns: { tutorFeedback: true, status: true, maxTurnsSnapshot: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
 	if (sessionData?.status === "abandoned") return null;
@@ -38,7 +38,7 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 	return {
 		language: sessionData?.task?.language ?? "en",
 		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
-		maxTurns: sessionData?.task?.template?.maxTurns ?? 0,
+		maxTurns: resolveSessionMaxTurns(sessionData?.maxTurnsSnapshot, sessionData?.task?.template?.maxTurns),
 	};
 }
 

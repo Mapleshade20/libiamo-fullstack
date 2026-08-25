@@ -25,7 +25,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/llm", () => mockClient);
 
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
-import { completeSession, generateHint, getSessionOrFail, startSession, submitMessage } from "$lib/server/session";
+import { completeSession, generateHint, getSessionOrFail, resolveSessionMaxTurns, startSession, submitMessage } from "$lib/server/session";
 
 /** Walks mock drizzle args, collecting bare strings while skipping plain string arrays
  * (SQL chunks, enum value lists) so inArray params can be asserted precisely. */
@@ -1073,6 +1073,29 @@ describe("session service", () => {
 			expect(message.content).toMatch(/^start:/);
 			expect(message.content).toContain("[... message truncated ...]");
 			expect(message.content).toMatch(/:end$/);
+		});
+	});
+
+	describe("resolveSessionMaxTurns", () => {
+		// Every flow that bounds work by the turn limit — the send path, the remaining
+		// turns display, and the feedback follow-ups — must read the same frozen value,
+		// or an admin editing the template retroactively changes a finished session's
+		// rules and legitimate follow-ups start failing validation.
+		it("prefers the limit frozen at session start over the live template", () => {
+			expect(resolveSessionMaxTurns(8, 3)).toBe(8);
+		});
+
+		it("falls back to the template for sessions predating the snapshot", () => {
+			expect(resolveSessionMaxTurns(null, 3)).toBe(3);
+			expect(resolveSessionMaxTurns(undefined, 3)).toBe(3);
+		});
+
+		it("reports no limit when neither side declares one", () => {
+			expect(resolveSessionMaxTurns(null, null)).toBe(0);
+		});
+
+		it("keeps an explicit zero snapshot instead of reviving the template", () => {
+			expect(resolveSessionMaxTurns(0, 3)).toBe(0);
 		});
 	});
 

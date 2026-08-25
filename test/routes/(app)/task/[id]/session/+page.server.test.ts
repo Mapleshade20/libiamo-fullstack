@@ -23,6 +23,9 @@ const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
 			generateHint: vi.fn(),
 			getSessionOrFail: vi.fn(),
 			followUpOnFeedback: vi.fn(),
+			// Pure helper: keep the real behaviour so the assertions below still describe
+			// which turn limit the page resolves rather than a mock's return value.
+			resolveSessionMaxTurns: (snapshot: number | null | undefined, templateMaxTurns: number | null | undefined) => snapshot ?? templateMaxTurns ?? 0,
 			orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
 		},
 		mockNoteService: {

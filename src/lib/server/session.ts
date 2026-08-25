@@ -232,6 +232,17 @@ type StartSessionResult = {
 	mbti: string;
 };
 
+/**
+ * The turn limit a session runs under. It is frozen at session start so an admin
+ * editing the template cannot change the rules (or the remaining-turns display)
+ * underneath a learner, and the feedback flow must honour the same frozen value:
+ * the limits it derives describe how long that conversation was allowed to get.
+ * Sessions started before the snapshot column existed fall back to the template.
+ */
+export function resolveSessionMaxTurns(maxTurnsSnapshot: number | null | undefined, templateMaxTurns: number | null | undefined): number {
+	return maxTurnsSnapshot ?? templateMaxTurns ?? 0;
+}
+
 export async function startSession(taskId: number, userId: string, _learningLanguage?: string): Promise<StartSessionResult> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),

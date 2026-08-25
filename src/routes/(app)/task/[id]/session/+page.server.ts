@@ -22,6 +22,7 @@ import {
 	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
+	resolveSessionMaxTurns,
 	type SubmitMessageOptions,
 	startSession,
 	submitMessage,
@@ -179,8 +180,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		task: taskData,
 		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
 		taskId: taskIdStr,
-		// Frozen at session start; legacy sessions without a snapshot fall back to the live template value.
-		maxTurns: existingSession?.maxTurnsSnapshot ?? taskData.template.maxTurns ?? 0,
+		maxTurns: resolveSessionMaxTurns(existingSession?.maxTurnsSnapshot, taskData.template.maxTurns),
 	};
 };
 
@@ -238,9 +238,7 @@ export const actions: Actions = {
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 
 			const sendOptions: SubmitMessageOptions = {
-				// Prefer the turn limit frozen at session start so admin template edits never
-				// change the rules (or the displayed remaining turns) mid-session.
-				maxTurns: session.maxTurnsSnapshot ?? taskData.template.maxTurns,
+				maxTurns: resolveSessionMaxTurns(session.maxTurnsSnapshot, taskData.template.maxTurns),
 			};
 			let mailNameInstruction = "";
 			if (taskData.template.ui === "apple_mail") {
