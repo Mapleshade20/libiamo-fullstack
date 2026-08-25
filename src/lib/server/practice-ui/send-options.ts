@@ -5,11 +5,11 @@ import type { RedditOpeningState } from "$lib/components/practice-ui/reddit/type
 import type { UiVariant } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
-import { orderSessionMessagesChronologically, type SendMessageOptions } from "$lib/server/session";
+import { orderSessionMessagesChronologically, type SubmitMessageOptions } from "$lib/server/session";
 import { buildAo3SendOptions } from "./ao3";
 import { buildRedditSendOptions } from "./reddit";
 
-type PracticeUiSendOptionsResult = { ok: true; options: SendMessageOptions } | { ok: false; status: number; error: string };
+type PracticeUiSendOptionsResult = { ok: true; options: SubmitMessageOptions } | { ok: false; status: number; error: string };
 
 function getFormString(formData: FormData, key: string): string {
 	const value = formData.get(key);

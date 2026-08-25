@@ -12,6 +12,7 @@ let { data, form } = $props();
 type ImportedTemplateData = {
 	language?: string;
 	interactionType?: string;
+	urgency?: string | null;
 	ui?: string;
 	cadence?: string;
 	difficulty?: number;
@@ -20,7 +21,6 @@ type ImportedTemplateData = {
 	pointReward?: number;
 	gemReward?: number;
 	isActive?: boolean;
-	agentStartsFirst?: boolean;
 	titleBase?: string;
 	shortObjectiveBase?: string | null;
 	descriptionBase?: string | null;

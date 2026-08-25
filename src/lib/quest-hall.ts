@@ -1,6 +1,6 @@
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 
-export type HallQuestSessionStatus = "in_progress" | "completed" | "evaluated" | null;
+export type HallQuestSessionStatus = "in_progress" | "completed" | "evaluated" | "abandoned" | null;
 
 export interface HallQuest {
 	id: number;
@@ -11,6 +11,8 @@ export interface HallQuest {
 	templateInteractionType: string;
 	pointReward: number;
 	sessionStatus: HallQuestSessionStatus;
+	unreadCount: number | null;
+	hasUnreadReply: boolean;
 }
 
 export function isHallQuestFinished(status: HallQuestSessionStatus): boolean {
@@ -29,6 +31,9 @@ export function getInitialHallQuestId(tasks: HallQuest[]): number | null {
 export function getHallQuestAction(task: HallQuest): { href: string; labelKey: string } {
 	if (isHallQuestFinished(task.sessionStatus)) {
 		return { href: `/task/${task.id}/feedback`, labelKey: "hall.reviewReport" };
+	}
+	if (task.sessionStatus === "abandoned") {
+		return { href: `/task/${task.id}`, labelKey: "hall.enter" };
 	}
 
 	if (isPracticeUiImplemented(task.templateUi)) {

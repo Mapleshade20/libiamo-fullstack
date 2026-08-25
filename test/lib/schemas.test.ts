@@ -67,6 +67,7 @@ describe("schemas", () => {
 	const baseTemplate = {
 		language: "en",
 		interactionType: "chat",
+		urgency: "high",
 		ui: "discord",
 		cadence: "daily",
 		difficulty: 2,
@@ -113,7 +114,6 @@ describe("schemas", () => {
 			interactionType: "translate",
 			ui: "translator",
 			cadence: "none",
-			agentStartsFirst: "on",
 			shortObjectiveBase: "Translate this on the card.",
 			materialsMd: "# Background",
 			agentPromptBase: "a note to a close friend",
@@ -122,7 +122,6 @@ describe("schemas", () => {
 
 		expect(result.shortObjectiveBase).toBeNull();
 		expect(result.materialsMd).toBeNull();
-		expect(result.agentStartsFirst).toBe(false);
 	});
 
 	it("returns error when required template fields are missing", () => {
@@ -173,6 +172,7 @@ describe("schemas", () => {
 	const baseContribution = {
 		language: "en",
 		interactionType: "chat",
+		urgency: "high",
 		ui: "discord",
 		titleBase: "Chat with {{friend}}",
 	};
@@ -181,6 +181,20 @@ describe("schemas", () => {
 		const result = templateContributionSchema.parse(baseContribution);
 		expect(result.titleBase).toBe("Chat with {{friend}}");
 		expect(result.interactionType).toBe("chat");
+	});
+
+	it("requires urgency for non-translation templates and clears it for translation", () => {
+		expect(templateSchema.safeParse({ ...baseTemplate, urgency: undefined }).success).toBe(false);
+		const translation = templateSchema.parse({
+			...baseTemplate,
+			interactionType: "translate",
+			ui: "translator",
+			cadence: "none",
+			urgency: "low",
+			agentPromptBase: "a letter to a friend",
+			translationReference: "Bonjour.",
+		});
+		expect(translation.urgency).toBeNull();
 	});
 
 	it("templateContributionSchema rejects missing required fields", () => {
@@ -197,7 +211,6 @@ describe("schemas", () => {
 		expect(result).not.toHaveProperty("pointReward");
 		expect(result).not.toHaveProperty("gemReward");
 		expect(result).not.toHaveProperty("isActive");
-		expect(result).not.toHaveProperty("agentStartsFirst");
 	});
 
 	it("templateContributionSchema transforms objectivesBase newline to array", () => {
@@ -259,7 +272,6 @@ describe("schemas", () => {
 
 		expect(result.shortObjectiveBase).toBeNull();
 		expect(result.materialsMd).toBeNull();
-		expect(result).not.toHaveProperty("agentStartsFirst");
 	});
 
 	it("templateContributionSchema returns empty for optional fields when not provided", () => {

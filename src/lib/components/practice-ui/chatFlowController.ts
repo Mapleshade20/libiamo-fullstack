@@ -2,11 +2,11 @@ import { deserialize } from "$app/forms";
 
 const AGENT_REPLY_TIMEOUT_MS = 25_000;
 
-export type SendAttemptResult =
-	| { status: "reply"; text: string; terminated: boolean }
+export type MessageSubmissionResult =
 	| { status: "pending" }
 	| { status: "failed"; error?: string }
-	| { status: "rejected" };
+	| { status: "rejected" }
+	| { status: "session_completed"; completionReason?: string };
 
 function actionErrorMessage(result: unknown): string | undefined {
 	if (!result || typeof result !== "object") return undefined;
@@ -16,12 +16,12 @@ function actionErrorMessage(result: unknown): string | undefined {
 	return typeof error === "string" && error.trim() ? error : undefined;
 }
 
-export async function attemptAgentReply(
+export async function submitPracticeMessage(
 	sessionId: number,
 	messageText: string,
 	clientMessageId: string,
 	extraFields: Record<string, string> = {},
-): Promise<SendAttemptResult> {
+): Promise<MessageSubmissionResult> {
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
@@ -50,14 +50,13 @@ export async function attemptAgentReply(
 		}
 
 		if (result?.type === "success" && result.data) {
+			if ((result.data as any).sessionCompleted) {
+				return { status: "session_completed", completionReason: (result.data as any).completionReason };
+			}
 			if ((result.data as any).pending) {
 				return { status: "pending" };
 			}
-			return {
-				status: "reply",
-				text: result.data.reply as string,
-				terminated: (result.data as any).terminated ?? false,
-			};
+			return { status: "failed" };
 		}
 
 		return { status: "failed" };

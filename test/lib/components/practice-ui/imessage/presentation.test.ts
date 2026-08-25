@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "$lib/components/practice-ui/imessage/presentation";
+import {
+	getBubbleGroupPosition,
+	getLastOutgoingMessageId,
+	getRenderableMessages,
+	isLastOutgoingMessageRead,
+} from "$lib/components/practice-ui/imessage/presentation";
 import { resolveAgentName } from "$lib/components/practice-ui/session.svelte";
 
 function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
@@ -103,5 +108,32 @@ describe("getLastOutgoingMessageId", () => {
 	it("returns null when there is no user message", () => {
 		const id = getLastOutgoingMessageId([createMessage({ id: "1", role: "agent" })]);
 		expect(id).toBeNull();
+	});
+});
+
+describe("isLastOutgoingMessageRead", () => {
+	it("is unread while the reply watermark lags behind the persisted message id", () => {
+		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user", deliveryState: "sent" })], 11);
+		expect(read).toBe(false);
+	});
+
+	it("is read once the watermark reaches the message id", () => {
+		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user", deliveryState: "sent" })], 12);
+		expect(read).toBe(true);
+	});
+
+	it("stays unread for a fresh client-side message with a uuid id, even a digit-prefixed one", () => {
+		for (const id of [crypto.randomUUID(), "8f3a9c2e-1b4d-4e5f-9a2b-6c7d8e9f0a1b"]) {
+			const read = isLastOutgoingMessageRead([createMessage({ id, role: "user", deliveryState: "sent" })], 40);
+			expect(read).toBe(false);
+		}
+	});
+
+	it("is read when an agent message follows even without a watermark", () => {
+		const read = isLastOutgoingMessageRead(
+			[createMessage({ id: "12", role: "user", deliveryState: "sent" }), createMessage({ id: "13", role: "agent", deliveryState: "sent" })],
+			null,
+		);
+		expect(read).toBe(true);
 	});
 });

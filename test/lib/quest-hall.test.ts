@@ -11,6 +11,8 @@ function quest(overrides: Partial<HallQuest> = {}): HallQuest {
 		templateInteractionType: "chat",
 		pointReward: 20,
 		sessionStatus: null,
+		unreadCount: null,
+		hasUnreadReply: false,
 		...overrides,
 	};
 }
@@ -42,6 +44,10 @@ describe("quest hall task decisions", () => {
 		expect(getHallQuestAction(quest({ id: 7, sessionStatus: "evaluated" }))).toEqual({
 			href: "/task/7/feedback",
 			labelKey: "hall.reviewReport",
+		});
+		expect(getHallQuestAction(quest({ id: 8, sessionStatus: "abandoned" }))).toEqual({
+			href: "/task/8",
+			labelKey: "hall.enter",
 		});
 	});
 

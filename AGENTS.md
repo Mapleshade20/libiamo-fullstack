@@ -62,6 +62,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
     - Time-dependent tests: use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
     - Do not build prompt tests from piles of `toContain()` assertions against fixed prose. Test message roles/order, structured JSON payloads, schemas, and behavioral invariants instead; review qualitative wording through the live-model harness.
+    - Do not assert that prompts contain arbitrary individual words; prompt tests should verify structure, serialized inputs, and behavioral contracts rather than brittle wording.
 - Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).
 - The repository follows an issue-plan-implement workflow. Issues and plans are at `docs/`. An issue should present "what to do", which is a detailed description of new features to implement and bugs to fix. Its corresponding plan records "how to do", which goes through technical decisions, implementation specs and work stages.
     - Issue's frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test) `link` (a GitHub issue link), `status` (needs-review / needs-plan / implementing / done),

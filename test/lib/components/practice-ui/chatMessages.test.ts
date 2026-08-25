@@ -87,6 +87,24 @@ describe("buildChatMessages", () => {
 		});
 	});
 
+	it("does not add a pending placeholder after a persisted no-reply decision", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "I am still thinking",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", noReply: true },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
 	it("does not add a retry placeholder when the same turn already has an assistant reply", () => {
 		const result = buildChatMessages({
 			...baseOptions,
@@ -223,6 +241,91 @@ describe("buildChatMessages", () => {
 		});
 
 		expect(result.map((message) => message.id)).toEqual(["1", "retry-1", "2", "3"]);
+	});
+
+	it("clears every pending burst placeholder when a later folded reply lands", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "First",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:00:02Z"),
+					llmMetadata: { clientMessageId: "msg-2" },
+				},
+				{
+					id: 3,
+					role: "user",
+					content: "Third",
+					createdAt: new Date("2026-01-01T10:00:04Z"),
+					llmMetadata: { clientMessageId: "msg-3" },
+				},
+				{ id: 4, role: "assistant", content: "Folded reply covering all three", createdAt: new Date("2026-01-01T10:00:40Z") },
+			],
+		});
+
+		// one folded reply answers the whole burst: no pending placeholder survives,
+		// so the typing indicator clears when the reply becomes visible
+		expect(result.map((message) => message.id)).toEqual(["1", "2", "3", "4"]);
+	});
+
+	it("clears every pending burst placeholder when the folded batch chooses no reply", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "First",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1" },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Second",
+					createdAt: new Date("2026-01-01T10:00:02Z"),
+					llmMetadata: { clientMessageId: "msg-2", noReply: true },
+				},
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "2"]);
+		expect(result.some((message) => message.deliveryState === "pending")).toBe(false);
+	});
+
+	it("keeps a failed turn's retry placeholder even when a later reply lands", () => {
+		const result = buildChatMessages({
+			...baseOptions,
+			rawMessages: [
+				{
+					id: 1,
+					role: "user",
+					content: "Failed turn",
+					createdAt: new Date("2026-01-01T10:00:00Z"),
+					llmMetadata: { clientMessageId: "msg-1", failed: true },
+				},
+				{
+					id: 2,
+					role: "user",
+					content: "Follow-up",
+					createdAt: new Date("2026-01-01T10:01:00Z"),
+					llmMetadata: { clientMessageId: "msg-2" },
+				},
+				{ id: 3, role: "assistant", content: "Reply", createdAt: new Date("2026-01-01T10:02:00Z") },
+			],
+		});
+
+		expect(result.map((message) => message.id)).toEqual(["1", "retry-1", "2", "3"]);
+		expect(result[1]?.deliveryState).toBe("failed");
 	});
 
 	it("respects custom isHidden callback", () => {
@@ -461,12 +564,13 @@ describe("session snapshots", () => {
 					status: "sent",
 					content: "To: Maya\nSubject: Hi\n\nHello",
 					createdAt: "2026-01-01 10:00:00",
-					llmMetadata: { clientMessageId: "mail-1", failed: true, hidden: false, mailBodyHtml: largeMailBody },
+					llmMetadata: { clientMessageId: "mail-1", failed: true, noReply: true, hidden: false, mailBodyHtml: largeMailBody },
 				},
 			],
 		});
 
 		expect(snapshot).toContain('"failed":true');
+		expect(snapshot).toContain('"noReply":true');
 		expect(snapshot).toContain('"mailBodyHtml"');
 		expect(snapshot).not.toContain(largeMailBody);
 		expect(snapshot.length).toBeLessThan(260);

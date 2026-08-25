@@ -11,7 +11,6 @@ export const user = pgTable(
 		emailVerified: boolean("email_verified").default(false).notNull(),
 		image: text("image"),
 		role: userRoleEnum("role").default("learner").notNull(),
-		timezone: text("timezone").default("UTC").notNull(),
 		nativeLanguage: text("native_language"),
 		feedbackLanguagePreference: text("feedback_language_preference").$type<"native" | "target">().default("native").notNull(),
 		gemsBalance: integer("gems_balance").default(0).notNull(),

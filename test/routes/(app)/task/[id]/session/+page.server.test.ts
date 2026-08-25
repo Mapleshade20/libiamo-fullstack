@@ -1,32 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => ({
-	mockDb: {
-		query: {
-			practiceSession: { findFirst: vi.fn() },
-			task: { findFirst: vi.fn() },
-			user: { findFirst: vi.fn() },
-		},
-		select: vi.fn(() => ({
-			from: vi.fn(() => ({
-				where: vi.fn(() => []),
+const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
+	const submitMessage = vi.fn();
+	return {
+		mockDb: {
+			query: {
+				practiceSession: { findFirst: vi.fn() },
+				task: { findFirst: vi.fn() },
+				user: { findFirst: vi.fn() },
+				agentResponseBatch: { findFirst: vi.fn() },
+			},
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() => []),
+				})),
 			})),
-		})),
-	},
-	mockSessionService: {
-		startSession: vi.fn(),
-		sendMessage: vi.fn(),
-		completeSession: vi.fn(),
-		generateHint: vi.fn(),
-		getSessionOrFail: vi.fn(),
-		followUpOnFeedback: vi.fn(),
-		orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
-	},
-	mockNoteService: {
-		createNotesBatch: vi.fn(),
-		validateAndCreateNoteFromSelection: vi.fn(),
-	},
-}));
+		},
+		mockSessionService: {
+			startSession: vi.fn(),
+			submitMessage,
+			completeSession: vi.fn(),
+			generateHint: vi.fn(),
+			getSessionOrFail: vi.fn(),
+			followUpOnFeedback: vi.fn(),
+			// Pure helper: keep the real behaviour so the assertions below still describe
+			// which turn limit the page resolves rather than a mock's return value.
+			resolveSessionMaxTurns: (snapshot: number | null | undefined, templateMaxTurns: number | null | undefined) => snapshot ?? templateMaxTurns ?? 0,
+			orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
+		},
+		mockNoteService: {
+			createNotesBatch: vi.fn(),
+			validateAndCreateNoteFromSelection: vi.fn(),
+		},
+	};
+});
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/session", () => mockSessionService);
@@ -35,7 +42,6 @@ vi.mock("$lib/server/feedback", () => ({
 }));
 vi.mock("$lib/server/note", () => mockNoteService);
 
-import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -51,7 +57,7 @@ describe("session page server", () => {
 		mockDb.query.user.findFirst.mockResolvedValue(null);
 	});
 
-	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en", timezone: "UTC" };
+	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
@@ -93,6 +99,8 @@ describe("session page server", () => {
 				status: "in_progress",
 				messages: [],
 			});
+			const nextAgentWorkDueAt = new Date("2026-08-23T12:00:00.000Z");
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({ dueAt: nextAgentWorkDueAt });
 
 			const result = (await load({
 				params: { id: mockTaskId },
@@ -104,6 +112,10 @@ describe("session page server", () => {
 			expect(result.task).toEqual(mockTask);
 			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
+			// the earliest outstanding agent work drives the client's polling lifecycle
+			expect((result.existingSession as unknown as { nextAgentWorkDueAt?: unknown }).nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
+			const batchQuery = mockDb.query.agentResponseBatch.findFirst.mock.calls[0]?.[0];
+			expect(batchQuery.orderBy({ dueAt: "dueAt" }, { asc: (value: string) => `asc:${value}` })).toEqual(["asc:dueAt"]);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
 			expect(sessionQuery.orderBy({ startedAt: "startedAt", id: "id" }, { desc: (value: string) => `desc:${value}` })).toEqual([
 				"desc:startedAt",
@@ -135,7 +147,7 @@ describe("session page server", () => {
 
 			const result = (await load({
 				params: { id: mockTaskId },
-				locals: { user: { ...mockUser, name: "Stale Name", timezone: "UTC" } },
+				locals: { user: { ...mockUser, name: "Stale Name" } },
 			} as any)) as { user?: unknown };
 
 			expect(result.user).toBeUndefined();
@@ -209,7 +221,7 @@ describe("session page server", () => {
 		it.each(["apple_mail", "reddit"] as const)("allows %s tasks", async (ui) => {
 			const implementedTask = {
 				...mockTask,
-				template: { ui, maxTurns: 99, interactionType: "chat", agentStartsFirst: true },
+				template: { ui, maxTurns: 99, interactionType: "chat" },
 			};
 			mockDb.query.task.findFirst.mockResolvedValue(implementedTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
@@ -321,36 +333,35 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockResolvedValue({
-				reply: "Hello back",
+			mockSessionService.submitMessage.mockResolvedValue({
 				turnCount: 2,
+				pending: true,
 			});
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 
 			expect(result).toMatchObject({
 				success: true,
-				reply: "Hello back",
 				turnCount: 2,
+				pending: true,
 			});
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { maxTurns: 0 });
 		});
 
-		it("passes clientMessageId through to sendMessage", async () => {
+		it("passes clientMessageId through to submitMessage", async () => {
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 789,
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockResolvedValue({
-				reply: "Still working",
+			mockSessionService.submitMessage.mockResolvedValue({
 				turnCount: 2,
 				pending: true,
 			});
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { hiddenUserMessage: false, maxTurns: 0 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { maxTurns: 0 });
 		});
 
 		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
@@ -360,7 +371,7 @@ describe("session page server", () => {
 				variant: { openingState: { emails: [] } },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks for your email.", turnCount: 1 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
 
 			const result = await actions.send(
 				createFormEvent({
@@ -373,14 +384,13 @@ describe("session page server", () => {
 				}),
 			);
 
-			expect(result).toMatchObject({ success: true, reply: "Thanks for your email.", turnCount: 1 });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+			expect(result).toMatchObject({ success: true, pending: true, turnCount: 1 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(
 				789,
 				"To: Maya\nSubject: Meeting\n\nHello Maya",
 				"user_123",
 				"mail-1",
 				expect.objectContaining({
-					hiddenUserMessage: false,
 					maxTurns: 3,
 					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
 					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
@@ -388,48 +398,6 @@ describe("session page server", () => {
 				}),
 			);
 		});
-
-		it("passes learner display name to Apple Mail agent-first opening prompts", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
-			});
-			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Test User,", turnCount: 0 });
-
-			await actions.send(
-				createFormEvent({
-					values: {
-						sessionId: "789",
-						message: MAIL_AGENT_OPENING_MESSAGE,
-						clientMessageId: "join-789",
-					},
-				}),
-			);
-
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
-				789,
-				MAIL_AGENT_OPENING_MESSAGE,
-				"user_123",
-				"join-789",
-				expect.objectContaining({
-					hiddenUserMessage: true,
-					maxTurns: 3,
-					promptContent: expect.stringContaining("Learner profile display name: Test User."),
-				}),
-			);
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
-				expect.any(Number),
-				expect.any(String),
-				expect.any(String),
-				expect.any(String),
-				expect.objectContaining({
-					promptContent: expect.stringContaining("Use the task template, agent prompt, and scenario/opening-state context"),
-				}),
-			);
-		});
-
 		it("uses the latest profile name in Apple Mail prompt context", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
@@ -438,7 +406,7 @@ describe("session page server", () => {
 			});
 			mockDb.query.user.findFirst.mockResolvedValue({ name: "Profile Name" });
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Hello Profile Name,", turnCount: 0 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 0, pending: true });
 
 			await actions.send(
 				createFormEvent({
@@ -451,7 +419,7 @@ describe("session page server", () => {
 				}),
 			);
 
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(
 				789,
 				"*User joined the server*",
 				"user_123",
@@ -475,24 +443,22 @@ describe("session page server", () => {
 				},
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks!", turnCount: 1 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
 
 			const result = await actions.send(
 				createFormEvent({ values: { sessionId: "789", message: "What did you like?", clientMessageId: "ao3-msg", threadTargetCommentId: "c1" } }),
 			);
 
-			expect(result).toMatchObject({ success: true, reply: "Thanks!" });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+			expect(result).toMatchObject({ success: true, pending: true });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(
 				789,
 				"What did you like?",
 				"user_123",
 				"ao3-msg",
 				expect.objectContaining({
-					hiddenUserMessage: false,
 					maxTurns: 4,
 					promptContent: expect.stringContaining("Comment author you must roleplay as: ReaderA"),
 					userDisplayContent: "What did you like?",
-					assistantAuthorName: "ReaderA",
 					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
 				}),
 			);
@@ -512,7 +478,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Invalid AO3 reply target" } });
-			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
+			expect(mockSessionService.submitMessage).not.toHaveBeenCalled();
 		});
 
 		it("retries failed AO3 turns from persisted metadata even if the target no longer resolves", async () => {
@@ -538,20 +504,19 @@ describe("session page server", () => {
 					},
 				],
 			});
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Recovered", turnCount: 1 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
 
 			const result = await actions.send(
 				createFormEvent({ values: { sessionId: "789", message: "Hello again", clientMessageId: "ao3-msg", threadTargetCommentId: "missing" } }),
 			);
 
-			expect(result).toMatchObject({ success: true, reply: "Recovered" });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(
+			expect(result).toMatchObject({ success: true, pending: true });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(
 				789,
 				"Hello again",
 				"user_123",
 				"ao3-msg",
 				expect.objectContaining({
-					assistantAuthorName: "ReaderA",
 					userDisplayContent: "Hello again",
 					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "missing", responderName: "ReaderA", mode: "reply" } },
 				}),
@@ -565,17 +530,17 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockResolvedValue({
-				reply: "Hola",
+			mockSessionService.submitMessage.mockResolvedValue({
 				turnCount: 1,
+				pending: true,
 			});
 
 			const result = await actions.send(
 				createFormEvent({ user: { ...mockUser, activeLanguage: "fr" }, values: { sessionId: "789", message: "Hola" } }),
 			);
 
-			expect(result).toMatchObject({ success: true, reply: "Hola" });
-			expect(mockSessionService.sendMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { hiddenUserMessage: false, maxTurns: 0 });
+			expect(result).toMatchObject({ success: true, pending: true });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {
@@ -600,7 +565,7 @@ describe("session page server", () => {
 
 			expect(result).toMatchObject({ status: 400, data: { error: "Message is too long" } });
 			expect(mockSessionService.getSessionOrFail).not.toHaveBeenCalled();
-			expect(mockSessionService.sendMessage).not.toHaveBeenCalled();
+			expect(mockSessionService.submitMessage).not.toHaveBeenCalled();
 		});
 
 		it("rejects overlong client message IDs before task lookup", async () => {
@@ -620,13 +585,13 @@ describe("session page server", () => {
 				variant: { openingState: { emails: [] } },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
 
 			const message = "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1);
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${message}</div>` } }));
 
 			expect(result).toMatchObject({ success: true });
-			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+			expect(mockSessionService.submitMessage).toHaveBeenCalled();
 		});
 
 		it("allows Apple Mail messages at the body limit even when headers push the formatted message over the raw limit", async () => {
@@ -636,14 +601,14 @@ describe("session page server", () => {
 				variant: { openingState: { emails: [] } },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
-			mockSessionService.sendMessage.mockResolvedValue({ reply: "Thanks", turnCount: 1 });
+			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
 
 			const body = "x".repeat(MAIL_TEXT_MAX_LENGTH);
 			const message = `To: Maya Chen <maya@example.com>\nSubject: Update\n\n${body}`;
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message, bodyHtml: `<div>${body}</div>` } }));
 
 			expect(result).toMatchObject({ success: true });
-			expect(mockSessionService.sendMessage).toHaveBeenCalled();
+			expect(mockSessionService.submitMessage).toHaveBeenCalled();
 		});
 
 		it("rejects Apple Mail messages over the mail limit", async () => {
@@ -704,7 +669,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockRejectedValue(new Error(error));
+			mockSessionService.submitMessage.mockRejectedValue(new Error(error));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 			expect(result).toMatchObject({ status, data: { error } });
@@ -716,7 +681,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockRejectedValue({ some: "object error" });
+			mockSessionService.submitMessage.mockRejectedValue({ some: "object error" });
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "The AI request failed. Please try again." } });
@@ -728,7 +693,7 @@ describe("session page server", () => {
 				userId: "user_123",
 				taskId: 456,
 			});
-			mockSessionService.sendMessage.mockRejectedValue(new Error("Unexpected transport error"));
+			mockSessionService.submitMessage.mockRejectedValue(new Error("Unexpected transport error"));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 			expect(result).toMatchObject({ status: 500, data: { error: "Unexpected transport error" } });
@@ -738,7 +703,7 @@ describe("session page server", () => {
 			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, language: "en", template: { maxTurns: 5 } });
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 
-			mockSessionService.sendMessage.mockRejectedValue(new Error("Maximum conversation turns reached"));
+			mockSessionService.submitMessage.mockRejectedValue(new Error("Maximum conversation turns reached"));
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello" } }));
 

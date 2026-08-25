@@ -8,12 +8,10 @@ const data = {
 		email: "alice@example.com",
 		role: "user",
 		activeLanguage: "fr",
-		timezone: "Europe/Paris",
 		nativeLanguage: "en",
 		feedbackLanguagePreference: "native",
 	},
 	avatarUrl: "https://example.com/avatar.png",
-	serverTimezones: [{ value: "Europe/Paris", label: "Europe/Paris" }],
 	serverNativeLanguages: [{ value: "en" as const, label: "English" }],
 	hasApiKey: false,
 	trialQuota: null,
@@ -36,7 +34,6 @@ describe("Profile page", () => {
 
 		expect(body).toContain("Profil");
 		expect(body).toContain("Paramètres");
-		expect(body).toContain("Fuseau Horaire");
 		expect(body).toContain("Sélectionnez votre langue maternelle");
 		expect(body).toContain("Clé API du LLM");
 		expect(body).toContain("Saisissez votre clé API");
@@ -44,7 +41,7 @@ describe("Profile page", () => {
 		expect(body).toContain("Déconnexion");
 	});
 
-	it.each(["feedbackLanguagePreference", "timezone", "nativeLanguage"])("renders %s without a Save button", (field) => {
+	it.each(["feedbackLanguagePreference", "nativeLanguage"])("renders %s without a Save button", (field) => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 		const fieldPosition = body.indexOf(`name="${field}"`);
 		const formStart = body.lastIndexOf("<form", fieldPosition);

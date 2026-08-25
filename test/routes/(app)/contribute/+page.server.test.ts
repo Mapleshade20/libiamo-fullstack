@@ -47,6 +47,7 @@ function createEvent(entries: Record<string, string>, userId = "user-1") {
 const validEntries: Record<string, string> = {
 	language: "en",
 	interactionType: "chat",
+	urgency: "high",
 	ui: "imessage",
 	titleBase: "Chat with {{friend}} about {{topic}}",
 	firstVariantSlotValues: JSON.stringify({ friend: "Alice", topic: "weather" }),

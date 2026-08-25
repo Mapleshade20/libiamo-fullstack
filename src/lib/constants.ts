@@ -155,13 +155,49 @@ export function getLanguageEnglishName(code: string): string {
 	}
 }
 
-export const INTERACTION_TYPES = ["chat", "slow", "translate"] as const;
+export const INTERACTION_TYPES = ["chat", "translate"] as const;
 export type InteractionType = (typeof INTERACTION_TYPES)[number];
 
 export const INTERACTION_TYPE_LABELS: Record<InteractionType, string> = {
 	chat: "Chat",
-	slow: "Slow Reply",
 	translate: "Translate",
+};
+
+export const URGENCIES = ["high", "medium", "low"] as const;
+export type Urgency = (typeof URGENCIES)[number];
+
+export const PRACTICE_SESSION_MAX_AGE_SECONDS = 48 * 60 * 60;
+
+export type UrgencyPreset = {
+	/** Mean of the exponential reply delay distribution (true MTTH). */
+	replyMtthMs: number;
+	/** Hard cap: a reply is force-delivered at this delay even if the sampled tail exceeds it. */
+	replyCapMs: number;
+	idleFollowUpDelayMs: number;
+};
+
+export const URGENCY_PRESETS: Record<Urgency, UrgencyPreset> = {
+	high: {
+		replyMtthMs: 30_000,
+		replyCapMs: 1 * 60_000,
+		idleFollowUpDelayMs: 60 * 60_000,
+	},
+	medium: {
+		replyMtthMs: 2 * 60_000,
+		replyCapMs: 8 * 60_000,
+		idleFollowUpDelayMs: 12 * 60 * 60_000,
+	},
+	low: {
+		replyMtthMs: 10 * 60_000,
+		replyCapMs: 40 * 60_000,
+		idleFollowUpDelayMs: 24 * 60 * 60_000,
+	},
+};
+
+export const URGENCY_LABELS: Record<Urgency, string> = {
+	high: "High — ~30 s (max 1 min)",
+	medium: "Medium — ~2 min (max 8 min)",
+	low: "Low — ~10 min (max 40 min)",
 };
 
 export const CADENCES = ["weekly", "daily", "none"] as const;

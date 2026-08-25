@@ -25,22 +25,15 @@ const localeByLanguage = {
 	ja: "ja-JP",
 } as const;
 
-// Start with server-rendered list (progressive enhancement fallback),
-// then replace with localized labels on the client.
-let allTimezones = $state<{ value: string; label: string }[]>([]);
 let localizedNativeLanguageOptions = $state<{ value: string; label: string }[]>([]);
 
-const timezoneOptions = $derived(allTimezones.length > 0 ? allTimezones : (data.serverTimezones ?? []));
 const nativeLanguageOptions = $derived(
 	localizedNativeLanguageOptions.length > 0 ? localizedNativeLanguageOptions : (data.serverNativeLanguages ?? []),
 );
 
-let timezoneInputValue = $state("");
 let nativeLanguageInputValue = $state("");
 let apiBaseUrlValue = $state("");
 let apiModelValue = $state("");
-let detectedTimezone = $state("");
-let timezoneForm: HTMLFormElement | null = $state(null);
 let nameForm: HTMLFormElement | null = $state(null);
 let nameInput: HTMLInputElement | null = $state(null);
 let apiKeyForm: HTMLFormElement | null = $state(null);
@@ -67,11 +60,6 @@ function formatTokenCount(value: number) {
 }
 
 $effect(() => {
-	const val = form?.values?.timezone ?? data.user.timezone ?? "";
-	timezoneInputValue = val;
-});
-
-$effect(() => {
 	nativeLanguageInputValue = form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "";
 });
 
@@ -84,50 +72,9 @@ $effect(() => {
 });
 
 onMount(() => {
-	// Detect user's current local timezone
-	detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-	// Rebuild the list with localized labels on the client side
 	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
 	localizedNativeLanguageOptions = getNativeLanguageOptions(lang);
-
-	try {
-		const rawTimezones = Intl.supportedValuesOf("timeZone");
-		allTimezones = rawTimezones.map((tz) => {
-			try {
-				const now = new Date();
-
-				const offsetParts = new Intl.DateTimeFormat(lang, {
-					timeZone: tz,
-					timeZoneName: "shortOffset",
-				}).formatToParts(now);
-				const utcOffset = offsetParts.find((p) => p.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
-
-				const localizedName =
-					new Intl.DateTimeFormat(lang, {
-						timeZone: tz,
-						timeZoneName: "long",
-					})
-						.formatToParts(now)
-						.find((p) => p.type === "timeZoneName")?.value || tz;
-
-				return {
-					value: tz,
-					label: `${tz} (${localizedName}, ${utcOffset})`,
-				};
-			} catch {
-				return { value: tz, label: tz };
-			}
-		});
-	} catch {
-		// Fallback: leave allTimezones empty so timezoneOptions continues using data.serverTimezones.
-	}
 });
-
-function applyDetectedTimezone() {
-	timezoneInputValue = detectedTimezone;
-	void tick().then(() => timezoneForm?.requestSubmit());
-}
 
 function autosave(event: Event) {
 	(event.currentTarget as HTMLFormElement).requestSubmit();
@@ -281,34 +228,6 @@ function handleNameKeydown(event: KeyboardEvent) {
 						<p class="text-xs text-amber-700">{t(lang, "profile.feedbackMissingNative")}</p>
 					{/if}
 				</fieldset>
-			</form>
-
-			<form bind:this={timezoneForm} method="POST" action="?/updateProfile" onchange={autosave} use:enhance={enhanceSilently} class="space-y-2">
-				<Label for="timezone">{t(lang, "profile.timezone")}</Label>
-				<select
-					id="timezone"
-					name="timezone"
-					bind:value={timezoneInputValue}
-					aria-invalid={Boolean(form?.errors?.timezone)}
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
-				>
-					<option value="" disabled>{t(lang, "profile.selectTimezone")}</option>
-					{#each timezoneOptions as tz}
-						<option value={tz.value}>{tz.label}</option>
-					{/each}
-				</select>
-
-				{#if detectedTimezone && timezoneInputValue !== detectedTimezone}
-					<div class="mt-1 text-xs text-muted-foreground">
-						{t(lang, "profile.currentTimezone")} <span class="font-bold text-foreground">{detectedTimezone}</span>.
-						<button type="button" class="ml-1 font-medium text-black underline hover:no-underline" onclick={applyDetectedTimezone}>
-							{t(lang, "profile.useTimezone")}
-						</button>
-					</div>
-				{/if}
-				{#if form?.errors?.timezone}
-					<p class="text-sm text-red-600">{form.errors.timezone[0]}</p>
-				{/if}
 			</form>
 
 			<form method="POST" action="?/updateProfile" onchange={autosave} use:enhance={enhanceSilently} class="space-y-2">

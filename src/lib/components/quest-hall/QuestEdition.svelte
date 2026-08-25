@@ -86,12 +86,14 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 					{@const Icon = uiIcons[task.templateUi] ?? MessageSquare}
 					{@const active = selectedId === task.id}
 					{@const finished = isHallQuestFinished(task.sessionStatus)}
+					{@const ongoing = task.sessionStatus === "in_progress"}
 					<div class="quest-entry" style="--quest-order: {index};">
 						<button
 							type="button"
 							class="quest-key"
 							class:is-active={active}
 							class:is-finished={finished}
+							class:is-ongoing={ongoing}
 							aria-expanded={active}
 							aria-controls="quest-mobile-detail-{id}-{task.id} quest-desktop-detail-{id}-{task.id}"
 							onclick={() => selectTask(task.id)}
@@ -105,9 +107,22 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 								<span class="chapter-number">{String(index + 1).padStart(2, "0")}</span>
 							</span>
 							<span class="key-copy">
-								<span class="key-meta"> {UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.templateUi} </span>
+								<span class="key-meta">
+									<span> {UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.templateUi} </span>
+									{#if ongoing}
+										<span class="meta-ongoing">· {t(lang, "hall.card.inProgress")}</span>
+									{/if}
+								</span>
 								<span class="key-title">{task.title}</span>
 							</span>
+							{#if task.hasUnreadReply}
+								<span class="unread-reply" aria-label={t(lang, "hall.unreadReply")}>
+									<Mail size={12} strokeWidth={2} />
+									{#if (task.unreadCount ?? 0) > 1}
+										<span>×{task.unreadCount}</span>
+									{/if}
+								</span>
+							{/if}
 							<span class="difficulty-strokes" aria-label="{t(lang, 'hall.difficulty')} {task.templateDifficulty} / 3">
 								{#each [1, 2, 3] as level}
 									<span class:is-filled={level <= task.templateDifficulty}></span>
@@ -145,6 +160,19 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	border-bottom: 1px solid var(--border);
 	padding: 1.15rem 0 1.4rem;
 	animation: edition-settle 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.unread-reply {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.15rem;
+	border-radius: 999px;
+	background: var(--hall-wine);
+	padding: 0.25rem 0.4rem;
+	font-size: 0.62rem;
+	font-weight: 700;
+	color: white;
+	white-space: nowrap;
 }
 
 .edition-header {
@@ -250,6 +278,22 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	background: #317452;
 }
 
+/* In-progress quests rest under a warm wine "wet ink" wash: the story is being
+   written. Selected cards deepen the wash instead of losing it. */
+.quest-key.is-ongoing {
+	border-color: color-mix(in oklab, #9a3943 26%, var(--border));
+	background: color-mix(in oklab, #9a3943 7%, var(--card));
+}
+
+.quest-key.is-ongoing:hover {
+	border-color: color-mix(in oklab, #9a3943 40%, var(--border));
+	background: color-mix(in oklab, #9a3943 10%, var(--card));
+}
+
+.quest-key.is-active.is-ongoing {
+	background: color-mix(in oklab, #9a3943 11%, var(--card));
+}
+
 .key-cap {
 	position: relative;
 	display: grid;
@@ -269,6 +313,10 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 .is-finished .key-cap {
 	background: color-mix(in oklab, #8faf8f 24%, var(--card));
 	color: #225c3b;
+}
+
+.is-ongoing .key-cap {
+	background: color-mix(in oklab, var(--color-accent-rose) 12%, var(--card));
 }
 
 .chapter-number {
@@ -293,6 +341,11 @@ function unfoldBrief(_node: Element, { duration = 340 }: { duration?: number } =
 	font-weight: 650;
 	text-transform: uppercase;
 	color: var(--muted-foreground);
+}
+
+.meta-ongoing {
+	color: #9a3943;
+	font-weight: 650;
 }
 
 .key-title {

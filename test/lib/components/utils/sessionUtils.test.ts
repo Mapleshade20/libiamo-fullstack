@@ -9,12 +9,17 @@ describe("sessionUtils", () => {
 		{ role: "user", isHidden: false },
 	] as any[];
 
-	it("calculates turns correctly when agentStartsFirst is true", () => {
-		expect(calculateCurrentTurns(mockMessages, true)).toBe(2);
+	it("counts visible user turns", () => {
+		expect(calculateCurrentTurns(mockMessages)).toBe(2);
 	});
 
-	it("calculates turns correctly when agentStartsFirst is false", () => {
-		expect(calculateCurrentTurns(mockMessages, false)).toBe(1);
+	it("never counts pending or failed agent placeholders as turns", () => {
+		const withPlaceholders = [
+			{ role: "user", isHidden: false },
+			{ role: "agent", isHidden: false, deliveryState: "pending" },
+			{ role: "agent", isHidden: false, deliveryState: "failed" },
+		] as any[];
+		expect(calculateCurrentTurns(withPlaceholders)).toBe(1);
 	});
 
 	it("checks turn limits correctly", () => {

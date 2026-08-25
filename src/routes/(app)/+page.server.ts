@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { LanguageCode } from "$lib/i18n";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
@@ -13,7 +14,7 @@ export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
 	const language = user.activeLanguage as LanguageCode;
 
-	const userTz = user.timezone || "UTC";
+	const userTz = getBrowserTimezone(event.cookies);
 	const userLocalDateStr = getLocalDateString(userTz);
 
 	await ensureTasksForDate(language, userLocalDateStr);
@@ -88,27 +89,38 @@ export const load: PageServerLoad = async (event) => {
 						taskId: true,
 						status: true,
 						startedAt: true,
+						lastSeenAssistantMessageId: true,
+					},
+					with: {
+						messages: {
+							columns: { id: true, role: true },
+						},
 					},
 					orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 				})
 			: [];
 
-	const latestSessionStatusByTaskId = new Map<number, (typeof relatedSessions)[number]["status"]>();
+	const latestSessionByTaskId = new Map<number, (typeof relatedSessions)[number]>();
 	for (const session of relatedSessions) {
-		if (!latestSessionStatusByTaskId.has(session.taskId)) {
-			latestSessionStatusByTaskId.set(session.taskId, session.status);
+		if (!latestSessionByTaskId.has(session.taskId)) {
+			latestSessionByTaskId.set(session.taskId, session);
 		}
 	}
+	const addSessionState = <T extends { id: number }>(taskItem: T) => {
+		const session = latestSessionByTaskId.get(taskItem.id);
+		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
+		const unreadCount = session?.messages?.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
+		return {
+			...taskItem,
+			sessionStatus: session?.status ?? null,
+			unreadCount,
+			hasUnreadReply: unreadCount > 0,
+		};
+	};
 
 	return {
-		weeklyTasks: weeklyTasks.map((taskItem) => ({
-			...taskItem,
-			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
-		})),
-		dailyTasks: dailyTasks.map((taskItem) => ({
-			...taskItem,
-			sessionStatus: latestSessionStatusByTaskId.get(taskItem.id) ?? null,
-		})),
+		weeklyTasks: weeklyTasks.map(addSessionState),
+		dailyTasks: dailyTasks.map(addSessionState),
 		translationTasks: translationTasks.map(({ createdAt, ...taskItem }) => ({
 			...taskItem,
 			createdMonth: getLocalDateString(userTz, createdAt).slice(0, 7),

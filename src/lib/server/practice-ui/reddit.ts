@@ -8,7 +8,7 @@ import {
 	type RedditTarget,
 } from "$lib/components/practice-ui/reddit/helpers";
 import type { RedditOpeningState } from "$lib/components/practice-ui/reddit/types";
-import type { SendMessageOptions } from "$lib/server/session";
+import type { SubmitMessageOptions } from "$lib/server/session";
 
 type PersistedSessionMessage = {
 	id: number | string;
@@ -34,7 +34,7 @@ function buildRedditRetrySendOptions(params: {
 	messages: PersistedSessionMessage[];
 	openingState: RedditOpeningState;
 	clientMessageId: string;
-}): SendMessageOptions | null {
+}): SubmitMessageOptions | null {
 	const originalUserMessage = params.messages.find((message) => {
 		const metadata = getRedditPersistedMetadata(message.llmMetadata);
 		return message.role === "user" && metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.thread;
@@ -45,20 +45,9 @@ function buildRedditRetrySendOptions(params: {
 	const thread = metadata.thread;
 	if (!thread) return null;
 
-	const responderName = thread.responderName || getRedditPostAuthor(params.openingState);
-	const userCommentId = thread.commentId || `reddit-user-${params.clientMessageId}`;
 	return {
 		userDisplayContent: metadata.displayContent,
 		userMetadata: { thread },
-		assistantAuthorName: responderName,
-		assistantMetadata: {
-			thread: {
-				commentId: `reddit-agent-${params.clientMessageId}`,
-				parentCommentId: userCommentId,
-				responderName,
-				mode: "reply",
-			},
-		},
 	};
 }
 
@@ -67,10 +56,9 @@ function buildRedditNewTurnSendOptions(params: {
 	target: RedditTarget | null;
 	message: string;
 	clientMessageId: string;
-}): SendMessageOptions {
+}): SubmitMessageOptions {
 	const responderName = params.target?.username || getRedditPostAuthor(params.openingState);
 	const userCommentId = `reddit-user-${params.clientMessageId}`;
-	const agentCommentId = `reddit-agent-${params.clientMessageId}`;
 	const mode = params.target ? "reply" : "post";
 	return {
 		promptContent: buildRedditUserPrompt({
@@ -86,15 +74,6 @@ function buildRedditNewTurnSendOptions(params: {
 				targetCommentId: params.target?.id ?? null,
 				responderName,
 				mode,
-			},
-		},
-		assistantAuthorName: responderName,
-		assistantMetadata: {
-			thread: {
-				commentId: agentCommentId,
-				parentCommentId: userCommentId,
-				responderName,
-				mode: "reply",
 			},
 		},
 	};
@@ -131,7 +110,7 @@ export function buildRedditSendOptions(params: {
 	message: string;
 	clientMessageId: string;
 	userName: string;
-}): SendMessageOptions | null {
+}): SubmitMessageOptions | null {
 	const retryOptions = buildRedditRetrySendOptions({
 		messages: params.messages,
 		openingState: params.openingState,

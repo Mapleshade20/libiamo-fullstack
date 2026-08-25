@@ -358,9 +358,49 @@ describe("chatJson", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatJson } = await import("$lib/server/llm");
-		await expect(chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
-			"The AI response was not in the expected format. Please try again.",
+		const failure = await chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] }).catch(
+			(error) => error,
 		);
+		expect(failure.message).toBe("The AI response was not in the expected format. Please try again.");
+		expect(failure.details).toMatchObject({
+			requestMessages: [{ role: "system", content: "Return JSON." }],
+			initialContent: "not json",
+			repair: {
+				content: "still not json",
+				requestMessages: [
+					{ role: "system", content: "Return JSON." },
+					{ role: "assistant", content: "not json" },
+					expect.objectContaining({ role: "user" }),
+				],
+			},
+		});
+		expect(failure.details.errors).toEqual([expect.stringContaining("not json"), expect.stringContaining("still not json")]);
+	});
+
+	it("preserves the initial response and repair prompt when the repair provider call fails", async () => {
+		const fetchMock = vi
+			.fn<FetchLike>()
+			.mockResolvedValueOnce(createChatCompletionResponse("not json"))
+			.mockRejectedValueOnce(new TypeError("repair connection failed"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatJson } = await import("$lib/server/llm");
+		const failure = await chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] }).catch(
+			(error) => error,
+		);
+
+		expect(failure.details).toMatchObject({
+			initialContent: "not json",
+			repair: {
+				content: null,
+				raw: null,
+				requestMessages: [
+					{ role: "system", content: "Return JSON." },
+					{ role: "assistant", content: "not json" },
+					expect.objectContaining({ role: "user" }),
+				],
+			},
+		});
 	});
 
 	it("does not repair a truncated structured completion", async () => {

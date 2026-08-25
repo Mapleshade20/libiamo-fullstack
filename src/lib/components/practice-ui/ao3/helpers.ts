@@ -147,7 +147,9 @@ export function buildAo3CommentTree(params: {
 }): Ao3RenderableComment[] {
 	return buildCommentThreadTree<Ao3CommentNode, Ao3RenderableComment>({
 		openingComments: params.openingState.previousComments ?? [],
-		messages: params.messages,
+		// Pending placeholders are polling triggers only: real AO3 shows nothing
+		// between submitting a comment and the author's reply appearing.
+		messages: params.messages.filter((message) => message.deliveryState !== "pending"),
 		config: ao3ThreadConfig,
 		mapOpeningComment: (comment, base) => ({
 			username: base.author,

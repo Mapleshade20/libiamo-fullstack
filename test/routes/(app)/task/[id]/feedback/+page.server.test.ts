@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
 		query: { practiceSession: { findFirst: vi.fn() } },
+		update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
 	},
 }));
 
@@ -60,6 +61,11 @@ describe("task feedback page load", () => {
 
 	it("redirects when session is still in_progress", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "in_progress" }));
+		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
+	});
+
+	it("redirects abandoned sessions instead of opening a report", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "abandoned" }));
 		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
 	});
 

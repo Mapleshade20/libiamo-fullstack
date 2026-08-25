@@ -58,21 +58,16 @@ describe("Profile +page.server", () => {
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
-		it("returns serverTimezones and hasApiKey", async () => {
+		it("returns native languages and hasApiKey", async () => {
 			const event = { locals: { user: { id: "test-user" } } } as any;
-			const result = (await load(event)) as { serverTimezones: any[]; hasApiKey: boolean; apiBaseUrl: string; apiModel: string };
+			const result = (await load(event)) as { serverNativeLanguages: any[]; hasApiKey: boolean; apiBaseUrl: string; apiModel: string };
 
-			expect(result.serverTimezones).toBeDefined();
-			expect(Array.isArray(result.serverTimezones)).toBe(true);
+			expect(result.serverNativeLanguages).toBeDefined();
+			expect(Array.isArray(result.serverNativeLanguages)).toBe(true);
 
 			expect(result.hasApiKey).toBe(false);
 			expect(result.apiBaseUrl).toBe("");
 			expect(result.apiModel).toBe("");
-
-			if (result.serverTimezones.length > 0) {
-				expect(result.serverTimezones[0]).toHaveProperty("value");
-				expect(result.serverTimezones[0]).toHaveProperty("label");
-			}
 		});
 
 		it("returns saved BYOK provider and model without exposing the API key", async () => {
@@ -124,7 +119,6 @@ describe("Profile +page.server", () => {
 		it("updateProfile calls auth update and returns success", async () => {
 			const event = createActionEvent({
 				name: "Alice",
-				timezone: "Asia/Shanghai",
 				nativeLanguage: "zh",
 			});
 
@@ -133,7 +127,6 @@ describe("Profile +page.server", () => {
 			expect(auth.api.updateUser).toHaveBeenCalledWith({
 				body: {
 					name: "Alice",
-					timezone: "Asia/Shanghai",
 					nativeLanguage: "zh",
 				},
 				headers: event.request.headers,
@@ -143,7 +136,6 @@ describe("Profile +page.server", () => {
 
 		it.each([
 			{ field: "feedbackLanguagePreference", value: "target" },
-			{ field: "timezone", value: "Europe/Paris" },
 			{ field: "nativeLanguage", value: "fr" },
 		])("updateProfile saves only the changed $field setting", async ({ field, value }) => {
 			const event = createActionEvent({ [field]: value });
@@ -157,10 +149,10 @@ describe("Profile +page.server", () => {
 			expect(result).toEqual({ success: true });
 		});
 
-		it("updateProfile normalizes blank timezone to undefined", async () => {
+		it("updateProfile ignores unknown fields", async () => {
 			const event = createActionEvent({
 				name: "Alice",
-				timezone: "",
+				timezone: "Europe/Paris",
 			});
 
 			const result = await actions.updateProfile(event);

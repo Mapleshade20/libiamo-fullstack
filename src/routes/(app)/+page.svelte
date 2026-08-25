@@ -1,7 +1,7 @@
 <script lang="ts">
 import QuestEdition from "$lib/components/quest-hall/QuestEdition.svelte";
 import TranslationIndex from "$lib/components/quest-hall/TranslationIndex.svelte";
-import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
+import UnreadInbox from "$lib/components/quest-hall/UnreadInbox.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
 import { formatHallEditionDate } from "$lib/quest-hall";
 
@@ -25,11 +25,7 @@ let lang = $derived(data.user.activeLanguage as LanguageCode);
 			<p>{data.subtitle}</p>
 		</div>
 
-		<div class="edition-seal" aria-hidden="true">
-			<span>LIBIAMO</span>
-			<WineGlassIcon width={42} height={42} />
-			<span>DAILY</span>
-		</div>
+		<UnreadInbox {lang} />
 	</header>
 
 	{#key data.user.activeLanguage}
@@ -52,6 +48,7 @@ let lang = $derived(data.user.activeLanguage as LanguageCode);
 
 .hall-masthead {
 	position: relative;
+	z-index: 10;
 	display: grid;
 	min-height: 12rem;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -116,52 +113,11 @@ let lang = $derived(data.user.activeLanguage as LanguageCode);
 	animation: subtitle-ink 520ms 220ms ease-out both;
 }
 
-.edition-seal {
-	position: relative;
-	display: none;
-	width: 6.3rem;
-	aspect-ratio: 1;
-	place-items: center;
-	align-content: center;
-	border: 1px solid color-mix(in oklab, var(--hall-wine) 62%, var(--border));
-	color: var(--hall-wine);
-	transform: rotate(2deg);
-}
-
-.edition-seal::before,
-.edition-seal::after {
-	position: absolute;
-	inset: 0.35rem;
-	border: 1px solid color-mix(in oklab, var(--hall-wine) 38%, transparent);
-	content: "";
-}
-
-.edition-seal::after {
-	inset: 0.7rem;
-}
-
-.edition-seal span {
-	position: relative;
-	z-index: 1;
-}
-
-.edition-seal span {
-	font-size: 0.48rem;
-	font-weight: 700;
-	letter-spacing: 0.15em;
-}
-
 .hall-sections {
 	display: flex;
 	margin-top: 2rem;
 	flex-direction: column;
 	gap: 2.6rem;
-}
-
-@media (min-width: 640px) {
-	.edition-seal {
-		display: grid;
-	}
 }
 
 @keyframes masthead-enter {

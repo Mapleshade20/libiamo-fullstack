@@ -16,18 +16,16 @@ import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
-import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages } from "./presentation";
+import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
 interface Props {
 	taskId?: string | number;
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
-	agentStartsFirst?: boolean;
 }
 
 let {
@@ -35,11 +33,9 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
-	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
-	agentStartsFirst = true,
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -62,8 +58,6 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
-	agentStartsFirst,
-	timeZone,
 	labels: sessionLabels,
 	taskId,
 }));
@@ -76,6 +70,7 @@ const contactName = $derived(session.agentName);
 const contactInitial = $derived(contactName.charAt(0).toUpperCase());
 const renderableMessages = $derived(getRenderableMessages(session.messages));
 const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessages));
+const lastOutgoingRead = $derived(isLastOutgoingMessageRead(renderableMessages, session.agentReadUpToMessageId));
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 
 let showHintMenu = $state(false);
@@ -301,7 +296,7 @@ function showIncomingSender(index: number) {
 				<div bind:this={session.chatContainer} class="flex-1 overflow-y-auto px-3 py-4 md:bg-[#F9F9FB] md:px-8 md:py-6">
 					<div class="mb-4 flex items-center justify-center md:hidden">
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
-						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, timeZone)}</span>
+						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language)}</span>
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 					</div>
 
@@ -323,12 +318,12 @@ function showIncomingSender(index: number) {
 								</button>
 							{/if}
 							{#if msg.role === "user" && msg.id === lastOutgoingMessageId}
-								<span class="mt-1 mr-1 text-[11px] text-[#8E8E93]">{t.read}</span>
+								<span class="mt-1 mr-1 text-[11px] text-[#8E8E93]">{lastOutgoingRead ? t.read : t.delivered}</span>
 							{/if}
 						</div>
 					{/each}
 
-					{#if session.isTyping}
+					{#if (session.isTyping && lastOutgoingRead) || session.hasPendingReveals}
 						<div class="mt-3 flex items-center">
 							<div class="rounded-[18px] bg-[#E5E5EA] px-3 py-2">
 								<div class="flex gap-1">

@@ -29,6 +29,8 @@ let {
 	retryLabel?: string;
 	onRetry?: (id: string) => void;
 } = $props();
+
+let visibleMessages = $derived(messages.filter((message) => !message.isHidden && message.deliveryState !== "pending"));
 </script>
 
 <div bind:this={chatContainer} class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
@@ -38,25 +40,32 @@ let {
 		<div class="h-px flex-1 bg-[#404249]"></div>
 	</div>
 
-	{#each messages.filter((m) => !m.isHidden && m.deliveryState !== "pending") as msg (msg.id)}
-		<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
-			<div
-				class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
+	{#each visibleMessages as msg, index (msg.id)}
+		{@const grouped = index > 0 && visibleMessages[index - 1]?.role === msg.role && visibleMessages[index - 1]?.authorName === msg.authorName}
+		<div class:mt-4={!grouped} class:mt-0.5={grouped} class="flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
+			{#if grouped}
+				<div class="mr-4 w-10 shrink-0 text-right text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100">{msg.timestamp}</div>
+			{:else}
+				<div
+					class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
 				'agent'
 					? msg.avatarColor
 					: 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden shadow-inner"
-			>
-				{#if msg.role === "user" && msg.avatar}
-					<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
-				{:else}
-					{msg.authorName.charAt(0).toUpperCase()}
-				{/if}
-			</div>
-			<div class="flex-1 overflow-hidden">
-				<div class="flex items-baseline gap-2">
-					<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
-					<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
+				>
+					{#if msg.role === "user" && msg.avatar}
+						<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
+					{:else}
+						{msg.authorName.charAt(0).toUpperCase()}
+					{/if}
 				</div>
+			{/if}
+			<div class="flex-1 overflow-hidden">
+				{#if !grouped}
+					<div class="flex items-baseline gap-2">
+						<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
+						<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
+					</div>
+				{/if}
 				<div class="mt-0.5 text-[#DBDEE1] break-words leading-normal">
 					{#if msg.role === "agent" && msg.deliveryState === "failed"}
 						<div class="mt-1 flex flex-wrap items-center gap-2">

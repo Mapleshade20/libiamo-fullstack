@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount, tick } from "svelte";
+import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
@@ -16,15 +16,10 @@ let password = $state("");
 let confirmPassword = $state("");
 let confirmPasswordError = $state("");
 
-let clientTimezone = $state("UTC");
 let signUpForm: HTMLFormElement | null = $state(null);
 let confirmPasswordInput: HTMLInputElement | null = $state(null);
 
 const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to sign up", message: form.message } : null);
-
-onMount(() => {
-	clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-});
 
 // Clear mismatch error naturally when passwords match
 $effect(() => {
@@ -62,8 +57,6 @@ $effect(() => {
 			}}
 			class="space-y-4"
 		>
-			<input type="hidden" name="timezone" value={clientTimezone}>
-
 			<div class="space-y-2">
 				<Label for="name">Name</Label>
 				<Input id="name" name="name" value={form?.values?.name ?? ""} required aria-invalid={Boolean(form?.errors?.name)} />

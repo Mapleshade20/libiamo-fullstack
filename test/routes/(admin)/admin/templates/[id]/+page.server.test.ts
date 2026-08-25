@@ -72,6 +72,7 @@ function createActionEvent(entries: Record<string, string>, paramsId = "1") {
 const validTemplateEntries: Record<string, string> = {
 	language: "en",
 	interactionType: "chat",
+	urgency: "high",
 	ui: "imessage",
 	cadence: "daily",
 	difficulty: "1",
@@ -187,7 +188,6 @@ describe("Admin Templates [id] +page.server", () => {
 			const event = createActionEvent(
 				{
 					...validTranslationEntries,
-					agentStartsFirst: "on",
 					shortObjectiveBase: "Translate this letter.",
 					materialsMd: "# Background",
 				},
@@ -196,7 +196,7 @@ describe("Admin Templates [id] +page.server", () => {
 
 			expect(await actions.save(event)).toEqual({ saved: true });
 			const update = (db.update as any).mock.results[0].value;
-			expect(update.set).toHaveBeenCalledWith(expect.objectContaining({ agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null }));
+			expect(update.set).toHaveBeenCalledWith(expect.objectContaining({ shortObjectiveBase: null, materialsMd: null }));
 		});
 	});
 

@@ -7,11 +7,10 @@ import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
-import { completeAction, postAction, requestAgentOpeningAction } from "../apiService";
-import { attemptAgentReply, type SendAttemptResult } from "../chatFlowController";
+import { completeAction, postAction } from "../apiService";
+import { type MessageSubmissionResult, submitPracticeMessage } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
 import ComposeWindow from "./ComposeWindow.svelte";
-import { MAIL_AGENT_OPENING_MESSAGE } from "./constants";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
 import MessageList from "./MessageList.svelte";
@@ -34,11 +33,9 @@ interface Props {
 	userName?: string;
 	avatarUrl?: string;
 	language?: string;
-	timeZone?: string;
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
-	agentStartsFirst?: boolean;
 }
 
 let {
@@ -46,11 +43,9 @@ let {
 	userName = "Learner",
 	avatarUrl = "",
 	language = "en",
-	timeZone = "UTC",
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
-	agentStartsFirst = true,
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -63,7 +58,7 @@ function refreshPracticeSession() {
 	return invalidate(PRACTICE_SESSION_DEPENDENCY);
 }
 
-function refreshAfterSendResult(result: SendAttemptResult) {
+function refreshAfterSendResult(result: MessageSubmissionResult) {
 	if (result.status === "pending") {
 		return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 	}
@@ -91,7 +86,7 @@ let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
 
-const todayLabel = $derived(getTodayDateString(language, timeZone));
+const todayLabel = $derived(getTodayDateString(language));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
 const recipient = $derived(getMailContactFromOpeningEmails(openingStateData.emails, getMailContact(taskId || sessionId || userName)));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
@@ -128,7 +123,7 @@ const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
-const formatTimestamp = $derived(createTimeFormatter(timeZone));
+const formatTimestamp = $derived(createTimeFormatter());
 
 function getDefaultDraft(): DraftEmail {
 	return {
@@ -271,7 +266,7 @@ async function scrollToMessageBottom() {
 }
 
 function appendAgentMessageFromSendResult(
-	result: SendAttemptResult,
+	result: MessageSubmissionResult,
 	clientMessageId: string,
 	retryText: string,
 	agentMessageId = crypto.randomUUID(),
@@ -289,8 +284,18 @@ function appendAgentMessageFromSendResult(
 	if (!agentMessage) return;
 
 	messages = [...messages, agentMessage];
-	selectedInboxId = `agent-${agentMessage.id}`;
-	activeMailbox = "inbox";
+	if (agentMessage.deliveryState === "pending") {
+		// No placeholder email while waiting: keep the just-sent mail in view;
+		// the reply arrives as a real inbox email on its own clock.
+		const sent = messages.find((m) => m.role === "user" && m.clientMessageId === clientMessageId);
+		if (sent) {
+			selectedSentId = sent.id;
+			activeMailbox = "sent";
+		}
+	} else {
+		selectedInboxId = `agent-${agentMessage.id}`;
+		activeMailbox = "inbox";
+	}
 }
 
 function handleFinishClick() {
@@ -342,8 +347,13 @@ async function handleRetry(messageId: string) {
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
-		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
+		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
 
+		if (result.status === "session_completed") {
+			isCompleted = true;
+			window.location.href = `/task/${taskId}/feedback`;
+			return;
+		}
 		appendAgentMessageFromSendResult(result, message.clientMessageId, retryText);
 		await refreshAfterSendResult(result);
 	} finally {
@@ -359,7 +369,6 @@ async function handleSendEmail() {
 	const currentText = formatDraftMessage(draft, t.noSubject);
 	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
 	const clientMessageId = crypto.randomUUID();
-	const expectedTurnCount = currentTurns + 1;
 	isSubmitting = true;
 
 	const sentMessage: ChatMessage = {
@@ -380,16 +389,17 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await attemptAgentReply(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
-		if (result.status === "reply" || result.status === "pending" || result.status === "failed") {
+		const result = await submitPracticeMessage(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
+		if (result.status === "session_completed") {
+			// The server completed the session in the send transaction; navigate straight to feedback.
+			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
+			draft = getDefaultDraft();
+			isCompleted = true;
+			window.location.href = `/task/${taskId}/feedback`;
+		} else if (result.status === "pending" || result.status === "failed") {
 			appendAgentMessageFromSendResult(result, clientMessageId, currentText);
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 			draft = getDefaultDraft();
-			if (maxTurns > 0 && expectedTurnCount >= maxTurns && result.status === "reply") {
-				await handleComplete(true);
-			} else if (result.status === "reply" && result.terminated === true) {
-				await handleComplete(true);
-			}
 			await refreshAfterSendResult(result);
 		} else {
 			console.error("Mail submission was rejected:", result);
@@ -413,7 +423,7 @@ function loadExistingSession(session: any) {
 	lastLoadedSessionId = session.id;
 	lastSessionSnapshot = sessionSnapshot;
 	sessionId = session.id;
-	isCompleted = session.status === "completed" || session.status === "evaluated";
+	isCompleted = session.status === "completed" || session.status === "evaluated" || session.status === "abandoned";
 
 	messages = buildChatMessages({
 		rawMessages: session.messages ?? [],
@@ -425,7 +435,7 @@ function loadExistingSession(session: any) {
 		labels: t,
 	});
 
-	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden);
+	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden && m.deliveryState !== "pending");
 	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
 	if (
 		(!selectedInboxId || (activeMailbox === "inbox" && selectedInboxId.startsWith("agent-") && !selectedGeneratedInboxExists)) &&
@@ -458,40 +468,17 @@ onMount(async () => {
 	const hasSavedDraft = hasDraftContent(savedDraft);
 	if (!isCompleted && hasSavedDraft) draft = savedDraft;
 
-	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails && !agentStartsFirst) {
+	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails) {
 		openComposer(true);
 	}
 
-	if (!hasTemplateOpeningEmails && existingSession?.id && !hasExistingMessages && agentStartsFirst) {
-		isInitializing = true;
-		try {
-			const result = await requestAgentOpeningAction(existingSession.id, MAIL_AGENT_OPENING_MESSAGE);
-			if (result.type === "success" && result.data) {
-				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
-			} else {
-				openComposer(true);
-			}
-		} catch (error) {
-			console.error("Mail opening message failed:", error);
-			openComposer(true);
-		} finally {
-			isInitializing = false;
-		}
-	} else if (!existingSession) {
+	if (!existingSession) {
 		isInitializing = true;
 		try {
 			const startResult = await postAction("start", null);
 			if (startResult.type === "success" && startResult.data) {
 				sessionId = startResult.data.sessionId as number;
 				lastLoadedSessionId = sessionId;
-				if (agentStartsFirst) {
-					if (!hasTemplateOpeningEmails) {
-						const openingResult = await requestAgentOpeningAction(sessionId, MAIL_AGENT_OPENING_MESSAGE);
-						if (openingResult.type !== "success") openComposer(true);
-					}
-				} else {
-					openComposer(true);
-				}
 				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 			} else {
 				console.error("Mail session initialization was rejected:", startResult);

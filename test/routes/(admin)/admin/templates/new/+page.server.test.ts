@@ -55,6 +55,7 @@ function createEvent(entries: Record<string, string>, userId = "admin-1", role =
 const validTemplateEntries: Record<string, string> = {
 	language: "en",
 	interactionType: "chat",
+	urgency: "high",
 	ui: "imessage",
 	cadence: "daily",
 	difficulty: "1",
@@ -185,13 +186,12 @@ describe("Admin Templates New +page.server", () => {
 		it("clears unsupported translation fields before insert", async () => {
 			const event = createEvent({
 				...validTranslationEntries,
-				agentStartsFirst: "on",
 				shortObjectiveBase: "Translate this letter.",
 				materialsMd: "# Background",
 			});
 
 			await expect(actions.create(event)).rejects.toMatchObject({ status: 302, location: "/admin/templates" });
-			expect(mockValues).toHaveBeenCalledWith(expect.objectContaining({ agentStartsFirst: false, shortObjectiveBase: null, materialsMd: null }));
+			expect(mockValues).toHaveBeenCalledWith(expect.objectContaining({ shortObjectiveBase: null, materialsMd: null }));
 		});
 
 		it("marks contribution as approved when fromContributionId is provided", async () => {

@@ -71,6 +71,62 @@
       "when": 1785250055915,
       "tag": "0009_vocab_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787108534123,
+      "tag": "0010_async_agent_replies",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787136621483,
+      "tag": "0011_remove_agent_starts_first",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787145680232,
+      "tag": "0012_agent_read_up_to_message_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787147217717,
+      "tag": "0013_max_turns_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787426654000,
+      "tag": "0014_backfill_last_seen_assistant_message_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787624890696,
+      "tag": "0015_abandon_expired_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787629741380,
+      "tag": "0016_remove_user_timezone",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787686094160,
+      "tag": "0017_drop_task_max_session_age",
+      "breakpoints": true
     }
   ]
 }

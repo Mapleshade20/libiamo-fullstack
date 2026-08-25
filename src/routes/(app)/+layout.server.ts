@@ -20,7 +20,6 @@ export const load: LayoutServerLoad = async (event) => {
 			email: user.email,
 			role: user.role,
 			activeLanguage: user.activeLanguage,
-			timezone: user.timezone,
 			nativeLanguage: user.nativeLanguage,
 			feedbackLanguagePreference: user.feedbackLanguagePreference,
 		},

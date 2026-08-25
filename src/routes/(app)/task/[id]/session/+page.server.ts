@@ -2,7 +2,6 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
-import { MAIL_AGENT_OPENING_MESSAGE } from "$lib/components/practice-ui/mail/constants";
 import { parseDraftFromMessage, summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
@@ -15,7 +14,7 @@ import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
-import { practiceSession, task } from "$lib/server/db/schema";
+import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
 import {
@@ -23,22 +22,18 @@ import {
 	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
-	requestAgentOpening,
-	type SendMessageOptions,
-	sendMessage,
+	resolveSessionMaxTurns,
+	type SubmitMessageOptions,
 	startSession,
+	submitMessage,
 } from "$lib/server/session";
+import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
 emojiConverter.colons_mode = true;
 
-function isMailAgentStartTrigger(message: string, clientMessageId: string, sessionId: number) {
-	return message.trim() === MAIL_AGENT_OPENING_MESSAGE && clientMessageId === `join-${sessionId}`;
-}
-
-function isOverlongMessage(ui: string, rawMessage: string, hiddenUserMessage: boolean) {
-	if (hiddenUserMessage) return false;
+function isOverlongMessage(ui: string, rawMessage: string) {
 	if (ui === "apple_mail") {
 		return parseDraftFromMessage(rawMessage, "").body.length > MAIL_TEXT_MAX_LENGTH;
 	}
@@ -72,7 +67,7 @@ function mapCompleteSessionError(e: unknown) {
 	if (!(e instanceof Error)) return null;
 	if (e.message === "Session not found") return fail(404, { error: e.message });
 	if (e.message === "Task not found") return fail(404, { error: e.message });
-	if (e.message === "Session not in progress or completed") return fail(409, { error: e.message });
+	if (e.message === "Session not in progress or completed" || e.message === "Session not in progress") return fail(409, { error: e.message });
 	return null;
 }
 
@@ -120,7 +115,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		},
 		with: {
 			variant: { columns: { openingState: true } },
-			template: { columns: { ui: true, maxTurns: true, agentStartsFirst: true } },
+			template: { columns: { ui: true, maxTurns: true } },
 		},
 	});
 
@@ -130,12 +125,14 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		where: and(
 			eq(practiceSession.taskId, taskId),
 			eq(practiceSession.userId, user.id),
-			inArray(practiceSession.status, ["in_progress", "completed", "evaluated"]),
+			inArray(practiceSession.status, ["in_progress", "completed", "evaluated", "abandoned"]),
 		),
 		columns: {
 			id: true,
 			status: true,
 			tutorFeedback: true,
+			agentReadUpToMessageId: true,
+			maxTurnsSnapshot: true,
 		},
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		with: {
@@ -156,11 +153,34 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
 	}
 
+	const latestAssistantMessageId = existingSession?.messages.reduce(
+		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
+		0,
+	);
+	if (existingSession && latestAssistantMessageId) {
+		await markAssistantMessagesSeen(existingSession.id, user.id, latestAssistantMessageId);
+	}
+
+	// Earliest outstanding agent work for this session (batches still composing or
+	// pacing out deliveries). The client keeps polling while work is due soon and
+	// wakes once when the next item falls due, so later burst deliveries are never
+	// stranded after the pending placeholder clears.
+	const outstandingAgentWork = existingSession
+		? await db.query.agentResponseBatch.findFirst({
+				where: and(
+					eq(agentResponseBatch.sessionId, existingSession.id),
+					inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+				),
+				columns: { dueAt: true },
+				orderBy: (batches, { asc }) => [asc(batches.dueAt)],
+			})
+		: null;
+
 	return {
 		task: taskData,
-		existingSession,
+		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
 		taskId: taskIdStr,
-		agentStartsFirst: taskData.template.agentStartsFirst,
+		maxTurns: resolveSessionMaxTurns(existingSession?.maxTurnsSnapshot, taskData.template.maxTurns),
 	};
 };
 
@@ -208,8 +228,7 @@ export const actions: Actions = {
 				return fail(404, { error: "Task not found" });
 			}
 
-			const hiddenUserMessage = isMailAgentStartTrigger(rawMessage, clientMessageId, sessionId);
-			if (isOverlongMessage(taskData.template.ui, rawMessage, hiddenUserMessage)) {
+			if (isOverlongMessage(taskData.template.ui, rawMessage)) {
 				return fail(400, { error: "Message is too long" });
 			}
 
@@ -218,93 +237,46 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 
-			const sendOptions: SendMessageOptions = {
-				hiddenUserMessage,
-				maxTurns: taskData.template.maxTurns,
+			const sendOptions: SubmitMessageOptions = {
+				maxTurns: resolveSessionMaxTurns(session.maxTurnsSnapshot, taskData.template.maxTurns),
 			};
-			const learnerProfileName = taskData.template.ui === "apple_mail" ? await getLearnerProfileName(user) : user.name || "Learner";
-			const mailNameInstruction = [
-				`Learner profile display name: ${learnerProfileName}.`,
-				"Use this profile name for the first direct greeting if the learner has not clearly introduced another preferred name.",
-				"After the learner self-identifies in the email thread, use the learner's own stated name instead.",
-			].join("\n");
-			if (hiddenUserMessage && taskData.template.ui === "apple_mail") {
-				sendOptions.promptContent = [
-					"This is an internal Apple Mail practice trigger, not a learner-authored email.",
-					"Use the task template, agent prompt, and scenario/opening-state context already provided in the system prompt to write the first visible email.",
-					"If that context describes a specific incoming message or situation, follow it closely. Only invent a concise plausible initiating email when the template does not provide one.",
-					"Do not welcome the learner to the app, do not say you will help draft the email, and do not speak as a tutor or assistant.",
-					mailNameInstruction,
+			let mailNameInstruction = "";
+			if (taskData.template.ui === "apple_mail") {
+				const learnerProfileName = await getLearnerProfileName(user);
+				mailNameInstruction = [
+					`Learner profile display name: ${learnerProfileName}.`,
+					"Use this profile name for the first direct greeting if the learner has not clearly introduced another preferred name.",
+					"After the learner self-identifies in the email thread, use the learner's own stated name instead.",
 				].join("\n");
 			}
 
-			if (!hiddenUserMessage) {
-				const uiOptions = await buildPracticeUiSendOptions({
-					ui: taskData.template.ui,
-					formData,
-					openingState: taskData.variant?.openingState,
-					sessionId,
-					message: formattedMessage,
-					clientMessageId,
-					userName: user.name || "Learner",
-				});
+			const uiOptions = await buildPracticeUiSendOptions({
+				ui: taskData.template.ui,
+				formData,
+				openingState: taskData.variant?.openingState,
+				sessionId,
+				message: formattedMessage,
+				clientMessageId,
+				userName: user.name || "Learner",
+			});
 
-				if (!uiOptions.ok) return fail(uiOptions.status, { error: uiOptions.error });
-				Object.assign(sendOptions, uiOptions.options);
-				if (taskData.template.ui === "apple_mail") {
-					const mailBodyHtml =
-						sendOptions.userMetadata && typeof sendOptions.userMetadata.mailBodyHtml === "string" ? sendOptions.userMetadata.mailBodyHtml : "";
-					const mailBodyLayout = summarizeMailBodyLayout(mailBodyHtml);
-					const mailFormatInstruction = [
-						mailBodyLayout
-							? `Learner email body layout:\n${mailBodyLayout}`
-							: "Learner email body layout: plain text or no special formatting detected.",
-						"Use this layout context when interpreting the learner's message. If your email reply benefits from structure, use clear plain-text paragraphs, indentation, or list markers that preserve the intended email formatting.",
-					].join("\n");
-					sendOptions.promptContent = [formattedMessage, mailNameInstruction, mailFormatInstruction].join("\n\n");
-					sendOptions.userDisplayContent = formattedMessage;
-				}
+			if (!uiOptions.ok) return fail(uiOptions.status, { error: uiOptions.error });
+			Object.assign(sendOptions, uiOptions.options);
+			if (taskData.template.ui === "apple_mail") {
+				const mailBodyHtml =
+					sendOptions.userMetadata && typeof sendOptions.userMetadata.mailBodyHtml === "string" ? sendOptions.userMetadata.mailBodyHtml : "";
+				const mailBodyLayout = summarizeMailBodyLayout(mailBodyHtml);
+				const mailFormatInstruction = [
+					mailBodyLayout
+						? `Learner email body layout:\n${mailBodyLayout}`
+						: "Learner email body layout: plain text or no special formatting detected.",
+					"Use this layout context when interpreting the learner's message. If your email reply benefits from structure, use clear plain-text paragraphs, indentation, or list markers that preserve the intended email formatting.",
+				].join("\n");
+				sendOptions.promptContent = [formattedMessage, mailNameInstruction, mailFormatInstruction].join("\n\n");
+				sendOptions.userDisplayContent = formattedMessage;
 			}
 
-			const result = await sendMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
-			return { success: true, ...result };
-		} catch (e) {
-			const mappedError = mapSendMessageError(e);
-			if (mappedError) return mappedError;
-
-			return fail(llmErrorStatus(e), { error: llmErrorMessage(e) });
-		}
-	},
-
-	agentOpening: async ({ request, params, locals }) => {
-		const user = requireUser({ locals });
-
-		const taskId = Number.parseInt(params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
-
-		const formData = await request.formData();
-		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
-		const clientMessageIdValue = formData.get("clientMessageId");
-		const clientMessageId = typeof clientMessageIdValue === "string" ? clientMessageIdValue.trim() : "";
-
-		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
-		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
-
-		try {
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				with: { template: true },
-			});
-			if (!taskData) {
-				return fail(404, { error: "Task not found" });
-			}
-
-			const session = await getSessionOrFail(sessionId, user.id, taskId);
-			if (!session) return fail(403, { error: "Access denied" });
-
-			const result = await requestAgentOpening(sessionId, user.id, clientMessageId || undefined, {
-				maxTurns: taskData.template.maxTurns,
-			});
+			const result = await submitMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapSendMessageError(e);

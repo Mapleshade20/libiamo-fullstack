@@ -12,6 +12,7 @@ import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import type { LanguageCode } from "$lib/i18n";
+import { parseMarkedText } from "$lib/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -19,6 +20,7 @@ import AnnotationPopup from "./AnnotationPopup.svelte";
 let { data } = $props();
 
 let feedback = $state<FeedbackResult | null>(null);
+let summaryParts = $derived(parseMarkedText(feedback?.summary ?? "").parts);
 let isGenerating = $state(false);
 let generationError = $state<string | null>(null);
 let activeAnnotation = $state<{
@@ -383,7 +385,13 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 									data-previous-context={getConversationExcerpt()}
 									class="whitespace-pre-wrap [overflow-wrap:anywhere]"
 								>
-									{feedback.summary}
+									{#each summaryParts as part}
+										{#if part.type === "mark"}
+											<mark class="rounded bg-yellow-200/60 px-1 font-semibold">{part.content}</mark>
+										{:else}
+											{part.content}
+										{/if}
+									{/each}
 								</p>
 							</div>
 						</div>

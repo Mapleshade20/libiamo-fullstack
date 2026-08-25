@@ -172,8 +172,21 @@ describe("parseTemplateJson", () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
+			expect(result.data.template.urgency).toBe("high");
 			expect(result.data.template.titleBase).toBe("Chat with {{friend}}");
 			expect(result.data.variants[0].slotValues).toEqual({ friend: "Alice" });
+		}
+	});
+
+	it("maps legacy slow JSON to chat with low urgency", () => {
+		const legacy = structuredClone(validPayload);
+		legacy.template.interactionType = "slow";
+		const result = parseTemplateJson(JSON.stringify(legacy));
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.template.interactionType).toBe("chat");
+			expect(result.data.template.urgency).toBe("low");
 		}
 	});
 
@@ -215,7 +228,6 @@ describe("parseTemplateJson", () => {
 					difficulty: 2,
 					pointReward: 10,
 					gemReward: 5,
-					agentStartsFirst: true,
 					titleBase: "A letter",
 					shortObjectiveBase: "Translate this letter.",
 					materialsMd: "# Background",
@@ -230,7 +242,6 @@ describe("parseTemplateJson", () => {
 		if (result.success) {
 			expect(result.data.template.shortObjectiveBase).toBeNull();
 			expect(result.data.template.materialsMd).toBeNull();
-			expect(result.data.template.agentStartsFirst).toBe(false);
 		}
 	});
 });

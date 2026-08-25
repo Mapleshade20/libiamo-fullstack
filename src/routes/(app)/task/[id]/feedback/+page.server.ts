@@ -8,7 +8,8 @@ import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
-import { getSessionOrFail } from "$lib/server/session";
+import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
+import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 function hasOversizedUserText(values: string[]) {
@@ -29,14 +30,15 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		columns: { tutorFeedback: true },
+		columns: { tutorFeedback: true, status: true, maxTurnsSnapshot: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
+	if (sessionData?.status === "abandoned") return null;
 
 	return {
 		language: sessionData?.task?.language ?? "en",
 		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
-		maxTurns: sessionData?.task?.template?.maxTurns ?? 0,
+		maxTurns: resolveSessionMaxTurns(sessionData?.maxTurnsSnapshot, sessionData?.task?.template?.maxTurns),
 	};
 }
 
@@ -80,6 +82,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Redirect if not completed
 	if (session.status !== "completed" && session.status !== "evaluated") {
 		throw redirect(303, `/task/${taskId}/session`);
+	}
+
+	// Visiting the feedback page reads the conversation: advance the seen-watermark
+	// so late-delivered replies stop counting as unread on the home page.
+	const latestAssistantMessageId = session.messages.reduce(
+		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
+		0,
+	);
+	if (latestAssistantMessageId) {
+		await markAssistantMessagesSeen(session.id, user.id, latestAssistantMessageId);
 	}
 
 	// Get task data

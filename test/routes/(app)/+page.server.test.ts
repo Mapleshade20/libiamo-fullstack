@@ -26,6 +26,10 @@ const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => 
 	mockGetLocalDateString: vi.fn((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17"),
 }));
 
+const { mockGetBrowserTimezone } = vi.hoisted(() => ({
+	mockGetBrowserTimezone: vi.fn(() => "UTC"),
+}));
+
 vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
@@ -94,6 +98,10 @@ vi.mock("$lib/server/scheduling/tasks", () => ({
 	ensureTasksForDate: mockEnsureTasksForDate,
 }));
 
+vi.mock("$lib/server/browser-timezone", () => ({
+	getBrowserTimezone: mockGetBrowserTimezone,
+}));
+
 vi.mock("$lib/server/scheduling/dates", () => ({
 	getMondayOfWeekForDate: mockGetMondayOfWeekForDate,
 	getLocalDateString: mockGetLocalDateString,
@@ -120,7 +128,14 @@ describe("(app) home +page.server", () => {
 		];
 		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
 		mockFindMany.mockResolvedValueOnce([
-			{ id: 1001, taskId: 1, status: "evaluated", startedAt: new Date("2026-04-17T10:00:00.000Z") },
+			{
+				id: 1001,
+				taskId: 1,
+				status: "evaluated",
+				startedAt: new Date("2026-04-17T10:00:00.000Z"),
+				lastSeenAssistantMessageId: 6,
+				messages: [{ id: 7, role: "assistant" }],
+			},
 			{ id: 1002, taskId: 2, status: "in_progress", startedAt: new Date("2026-04-17T11:00:00.000Z") },
 		]);
 
@@ -131,8 +146,8 @@ describe("(app) home +page.server", () => {
 		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
 		expect(result).toEqual(
 			expect.objectContaining({
-				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated" }],
-				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress" }],
+				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", unreadCount: 1, hasUnreadReply: true }],
+				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", unreadCount: 0, hasUnreadReply: false }],
 				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
 				translationMonth: "2026-04",
 				editionDate: "2026-04-17",
@@ -164,8 +179,9 @@ describe("(app) home +page.server", () => {
 		);
 	});
 
-	it("buckets translation templates in the user's timezone", async () => {
+	it("buckets translation templates in the browser timezone", async () => {
 		const createdAt = new Date("2026-08-31T19:00:00.000Z");
+		mockGetBrowserTimezone.mockReturnValue("Pacific/Auckland");
 		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => (date ? "2026-09-01" : "2026-09-01"));
 		mockWhere
 			.mockResolvedValueOnce([])
@@ -174,15 +190,16 @@ describe("(app) home +page.server", () => {
 		mockFindMany.mockResolvedValue([]);
 
 		const result = (await load({
-			locals: { user: { id: "u1", activeLanguage: "en", timezone: "Pacific/Auckland" } },
+			locals: { user: { id: "u1", activeLanguage: "en" } },
 		} as any)) as any;
 
+		expect(mockGetBrowserTimezone).toHaveBeenCalled();
 		expect(mockGetLocalDateString).toHaveBeenCalledWith("Pacific/Auckland", createdAt);
 		expect(result.translationMonth).toBe("2026-09");
 		expect(result.translationTasks[0]?.createdMonth).toBe("2026-09");
 	});
 
-	describe("timezone logic", () => {
+	describe("browser timezone logic", () => {
 		beforeEach(() => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2026-04-17T10:00:00Z"));
@@ -192,7 +209,8 @@ describe("(app) home +page.server", () => {
 			vi.useRealTimers();
 		});
 
-		it("should use UTC as default timezone if user.timezone is missing", async () => {
+		it("should use UTC when the browser timezone cookie is missing", async () => {
+			mockGetBrowserTimezone.mockReturnValue("UTC");
 			mockGetLocalDateString.mockReturnValue("2026-04-17");
 			mockWhere.mockResolvedValue([]);
 			const user = { id: "u1", activeLanguage: "en" };
@@ -203,10 +221,11 @@ describe("(app) home +page.server", () => {
 			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
 		});
 
-		it("should calculate local date correctly based on valid user timezone (e.g., Asia/Tokyo)", async () => {
+		it("should calculate local date using the browser timezone", async () => {
+			mockGetBrowserTimezone.mockReturnValue("Asia/Tokyo");
 			mockGetLocalDateString.mockReturnValue("2026-04-18");
 			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
+			const user = { id: "u1", activeLanguage: "en" };
 
 			await load({ locals: { user } } as any);
 
@@ -214,14 +233,15 @@ describe("(app) home +page.server", () => {
 			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-18");
 		});
 
-		it("should fallback gracefully if timezone is invalid", async () => {
+		it("does not read a timezone from the user profile", async () => {
+			mockGetBrowserTimezone.mockReturnValue("UTC");
 			mockGetLocalDateString.mockReturnValue("2026-04-17");
 			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en", timezone: "Invalid/Timezone" };
+			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
 
 			await load({ locals: { user } } as any);
 
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("Invalid/Timezone");
+			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
 			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
 		});
 	});

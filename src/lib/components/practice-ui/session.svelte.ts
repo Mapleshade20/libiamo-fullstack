@@ -1,12 +1,13 @@
 import { onMount, tick } from "svelte";
 import { invalidate } from "$app/navigation";
+import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
-import { completeAction, postAction, requestAgentFirstReplyAction } from "./apiService";
-import { attemptAgentReply, type SendAttemptResult } from "./chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "./chatMessages";
+import { completeAction, postAction } from "./apiService";
+import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
+import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 import type { ChatOpeningState, ChatUser } from "./discord/types";
 import { initUserPool } from "./discord/userPool";
@@ -18,6 +19,14 @@ export interface PracticeSessionLabels {
 	earlier: string;
 }
 
+export const SESSION_POLL_INTERVAL_MS = 3_000;
+/** Outstanding agent work due within this horizon keeps the client polling. */
+export const AGENT_WORK_DUE_SOON_MS = 30_000;
+/** Wake slightly after the due time so the worker has claimed the batch first. */
+export const AGENT_WORK_WAKE_BUFFER_MS = 2_000;
+
+export type AgentWorkPollingPlan = { kind: "interval" } | { kind: "wake"; delayMs: number } | { kind: "none" };
+
 export interface PracticeSessionOptions {
 	userName: string;
 	avatarUrl: string;
@@ -25,8 +34,6 @@ export interface PracticeSessionOptions {
 	existingSession: any;
 	openingState: unknown;
 	maxTurns: number;
-	agentStartsFirst: boolean;
-	timeZone?: string;
 	labels: PracticeSessionLabels;
 	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
 	taskId?: string | number;
@@ -45,6 +52,32 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 	return fallbackName;
 }
 
+/**
+ * How the client watches for outstanding agent work (a batch still composing or
+ * pacing out its deliveries): poll continuously while a reply placeholder is up
+ * or work falls due within the horizon, otherwise wake once when the next work
+ * item is due — and stop when nothing is outstanding.
+ */
+export function planAgentWorkPolling(input: { hasPendingPlaceholder: boolean; agentWorkDueAt: Date | null; now: Date }): AgentWorkPollingPlan {
+	const dueAt = input.agentWorkDueAt?.getTime() ?? null;
+	if (input.hasPendingPlaceholder || (dueAt !== null && dueAt <= input.now.getTime() + AGENT_WORK_DUE_SOON_MS)) {
+		return { kind: "interval" };
+	}
+	if (dueAt !== null) {
+		return { kind: "wake", delayMs: Math.max(0, dueAt + AGENT_WORK_WAKE_BUFFER_MS - input.now.getTime()) };
+	}
+	return { kind: "none" };
+}
+
+function toAgentWorkDueAt(value: unknown): Date | null {
+	if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+	if (typeof value === "string" && value.trim()) {
+		const parsed = parsePersistedMessageDate(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+	return null;
+}
+
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
 	// Use $derived to keep values reactive after targeted invalidation re-runs getOptions().
 	// One-time destructuring would capture stale values and never update.
@@ -53,14 +86,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const existingSession = $derived(getOptions().existingSession);
 	const openingState = $derived(getOptions().openingState);
 	const maxTurns = $derived(getOptions().maxTurns);
-	const agentStartsFirst = $derived(getOptions().agentStartsFirst);
-	const timeZone = $derived(getOptions().timeZone);
 	const labels = $derived(getOptions().labels);
 	const onPoolInit = $derived(getOptions().onPoolInit);
 	const taskId = $derived(getOptions().taskId);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
-	const formatTimestamp = $derived(createTimeFormatter(timeZone));
+	const formatTimestamp = $derived(createTimeFormatter());
 
 	// ── State ──────────────────────────────────────────────────────
 
@@ -75,6 +106,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let isInitializing = $state(false);
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
+	let agentReadUpToMessageId = $state<number | null>(null);
 	let agentUser = $state<ChatUser>({
 		id: "agent",
 		name: "Agent",
@@ -86,16 +118,82 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let inputText = $state("");
 	let chatContainer = $state<HTMLElement | null>(null);
 
+	// ── Staggered reveal ──────────────────────────────────────────
+	/** Agent messages that arrived in one poll and wait for their typing turn. */
+	let revealQueue = $state<ChatMessage[]>([]);
+	let revealTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Full hydrated list from the last snapshot (opening + session messages). */
+	let lastHydratedMessages: ChatMessage[] = [];
+	/** Session messages from the last hydration; the diff base for new deliveries. */
+	let lastSessionMessages: ChatMessage[] = [];
+
 	// ── Derived ────────────────────────────────────────────────────
 
 	const agentName = $derived(resolveAgentName(openingStateData, userName, agentUser.name));
 	const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
 	const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
 	const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
-	const currentTurns = $derived(calculateCurrentTurns(messages, agentStartsFirst));
+	const currentTurns = $derived(calculateCurrentTurns(messages));
 	const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
 	const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
+	const nextAgentWorkDueAt = $derived(toAgentWorkDueAt((existingSession as { nextAgentWorkDueAt?: unknown } | null)?.nextAgentWorkDueAt));
+
+	// ── Staggered reveal ──────────────────────────────────────────
+
+	/** Messages currently displayed: the last hydrated list minus paced-out entries. */
+	function displayedMessages(): ChatMessage[] {
+		if (revealQueue.length === 0) return [...lastHydratedMessages];
+		const paced = new Set(revealQueue.map((message) => message.id));
+		return lastHydratedMessages.filter((message) => !paced.has(message.id));
+	}
+
+	function scheduleNextReveal() {
+		if (revealTimer !== undefined || revealQueue.length === 0) return;
+		const next = revealQueue[0];
+		if (!next) return;
+		// The wait before a paced message appears scales with its own length,
+		// mirroring the worker's typing-based delivery pacing.
+		revealTimer = setTimeout(() => {
+			revealTimer = undefined;
+			revealQueue = revealQueue.slice(1);
+			messages = displayedMessages();
+			void scrollToBottom();
+			scheduleNextReveal();
+		}, getDeliveryDelayMs(next.text));
+	}
+
+	function clearReveal() {
+		if (revealTimer !== undefined) {
+			clearTimeout(revealTimer);
+			revealTimer = undefined;
+		}
+		revealQueue = [];
+	}
+
+	/**
+	 * Queues newly delivered agent messages for paced reveal: the first lands
+	 * immediately (it is already overdue), the rest replay one at a time so a
+	 * coalesced poll burst still reads as live typing.
+	 */
+	function applyStaggeredReveal(sessionMessages: ChatMessage[]) {
+		const known = new Set([...lastSessionMessages.map((message) => message.id), ...revealQueue.map((message) => message.id)]);
+		const fresh = sessionMessages.filter(
+			(message) => message.role === "agent" && message.deliveryState === undefined && !message.isHidden && !known.has(message.id),
+		);
+		lastSessionMessages = sessionMessages;
+		if (fresh.length === 0) return;
+		revealQueue = revealQueue.length === 0 ? fresh.slice(1) : [...revealQueue, ...fresh];
+		scheduleNextReveal();
+	}
+
+	/** Shows paced-out messages at once, e.g. before appending a new user message. */
+	function flushRevealQueue() {
+		if (revealQueue.length === 0 && revealTimer === undefined) return;
+		clearReveal();
+		messages = [...lastHydratedMessages];
+		void scrollToBottom();
+	}
 
 	// ── Agent message helpers ──────────────────────────────────────
 	function addAgentMessage(params: {
@@ -123,10 +221,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		];
 	}
 
-	function applySendResult(result: SendAttemptResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
-		if (result.status === "reply") {
-			addAgentMessage({ text: result.text, deliveryState: "sent", clientMessageId, messagePatch: agentMessagePatch });
-			if (result.terminated) handleCompleteAndNavigate(String(taskId ?? ""));
+	function applySendResult(result: MessageSubmissionResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
+		if (result.status === "session_completed") {
+			// The server already finished the session in the send transaction; navigate without calling complete.
+			finishAndNavigateToFeedback(String(taskId ?? ""));
 		} else if (result.status === "pending") {
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
@@ -150,24 +248,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		return typeof error === "string" && error.trim() ? error : undefined;
 	}
 
-	function mapOpeningActionResult(result: any): SendAttemptResult {
-		if (result?.type === "failure") {
-			const error = actionErrorMessage(result);
-			if (error) return { status: "failed", error };
-			if (result.status >= 400 && result.status < 500) return { status: "rejected" };
-			return { status: "failed" };
-		}
-		if (result?.type === "success" && result.data) {
-			if ((result.data as any).pending) return { status: "pending" };
-			return {
-				status: "reply",
-				text: result.data.reply as string,
-				terminated: (result.data as any).terminated ?? false,
-			};
-		}
-		return { status: "failed" };
-	}
-
 	// ── Actions ────────────────────────────────────────────────────
 
 	function refreshTrialQuota() {
@@ -178,7 +258,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		return invalidate(PRACTICE_SESSION_DEPENDENCY);
 	}
 
-	function refreshAfterSendResult(result: SendAttemptResult) {
+	function refreshAfterSendResult(result: MessageSubmissionResult) {
 		if (result.status === "pending") {
 			return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
 		}
@@ -192,6 +272,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	async function handleRetry(messageId: string) {
 		if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
+
+		flushRevealQueue();
 
 		const message = messages.find((m) => m.id === messageId);
 		if (!message?.clientMessageId) return;
@@ -207,7 +289,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (originalUserMessage?.thread?.targetCommentId) {
 			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
 		}
-		const result = await attemptAgentReply(sessionId, retryText, message.clientMessageId, retryExtraFields);
+		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, retryExtraFields);
 
 		applySendResult(result, message.clientMessageId, retryText, {
 			authorName: message.authorName,
@@ -226,9 +308,15 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			const result = await completeAction(sessionId);
 
 			if (result.type === "success") {
-				isCompleted = true;
-				// Navigate to feedback page
-				window.location.href = `/task/${taskId}/feedback`;
+				finishAndNavigateToFeedback(taskId);
+			} else {
+				// A completed session (e.g. finished by the send itself) is still a success for navigation purposes.
+				const error = actionErrorMessage(result) ?? "";
+				if (error.includes("Session not in progress")) {
+					finishAndNavigateToFeedback(taskId);
+				} else {
+					console.error("Completion failed:", error || result);
+				}
 			}
 		} catch (error) {
 			console.error("Completion failed:", error);
@@ -237,12 +325,21 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		}
 	}
 
+	function finishAndNavigateToFeedback(taskId: string) {
+		isCompleted = true;
+		window.location.href = `/task/${taskId}/feedback`;
+	}
+
 	async function handleSend(
 		text: string,
 		extraFields: Record<string, string> = {},
 		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
 	) {
 		if (!text.trim() || disabled) return;
+
+		// The optimistic user message must land after the full agent burst, so any
+		// paced-out messages are revealed first.
+		flushRevealQueue();
 
 		const currentText = prepareMarkdownText(text);
 		const clientMessageId = crypto.randomUUID();
@@ -288,7 +385,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		];
 		await scrollToBottom();
 
-		const result = await attemptAgentReply(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
+		const result = await submitPracticeMessage(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
 
 		applySendResult(result, clientMessageId, currentText, agentPatch);
 
@@ -309,6 +406,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		if (sessionData.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
 			const currentId = sessionData.id;
+			const isNewSession = currentId !== lastLoadedSessionId;
 			lastLoadedSessionId = currentId;
 			lastSessionSnapshot = sessionSnapshot;
 			sessionId = currentId;
@@ -317,7 +415,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			agentUser = { ...pool.agentUser };
 			onPoolInit?.(pool);
 
-			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated";
+			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated" || sessionData.status === "abandoned";
 
 			const openingMessages = getOpeningStateMessages({
 				openingStateData,
@@ -337,7 +435,17 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				labels,
 			});
 
-			messages = [...openingMessages, ...sessionMessages];
+			lastHydratedMessages = [...openingMessages, ...sessionMessages];
+			if (isNewSession) {
+				// First load shows the full history at once; pacing applies only to
+				// messages that arrive while the learner is watching.
+				clearReveal();
+				lastSessionMessages = sessionMessages;
+				messages = [...lastHydratedMessages];
+			} else {
+				applyStaggeredReveal(sessionMessages);
+				messages = displayedMessages();
+			}
 
 			tick().then(() => {
 				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -370,12 +478,8 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				});
 
 				messages = [...openingMessages];
-
-				if (agentStartsFirst) {
-					await scrollToBottom();
-					const openingResult = await requestAgentFirstReplyAction(currentId);
-					applySendResult(mapOpeningActionResult(openingResult), `join-${currentId}`);
-				}
+				lastSessionMessages = [];
+				lastHydratedMessages = [...openingMessages];
 
 				await scrollToBottom();
 				await refreshTrialQuota();
@@ -395,19 +499,35 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	$effect(() => {
 		if (existingSession) {
+			// Read-receipt watermark updates on every poll; unlike hydrateFromExistingSession
+			// it must not be gated by the message snapshot (claiming a batch changes no messages).
+			agentReadUpToMessageId =
+				typeof (existingSession as { agentReadUpToMessageId?: unknown }).agentReadUpToMessageId === "number"
+					? (existingSession as { agentReadUpToMessageId: number }).agentReadUpToMessageId
+					: null;
 			hydrateFromExistingSession(existingSession);
 		}
 	});
 
 	$effect(() => {
-		const needsPolling = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
-		if (needsPolling && !isSubmitting && sessionId) {
+		const hasPendingPlaceholder = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
+		const plan = planAgentWorkPolling({ hasPendingPlaceholder, agentWorkDueAt: nextAgentWorkDueAt, now: new Date() });
+		if (plan.kind === "none" || !sessionId || isCompleted) return;
+		if (plan.kind === "interval") {
+			if (isSubmitting) return;
 			const interval = setInterval(() => {
 				void refreshPracticeSession();
 				void refreshTrialQuota();
-			}, 3000);
+			}, SESSION_POLL_INTERVAL_MS);
 			return () => clearInterval(interval);
 		}
+		// Far-future work (e.g. an idle follow-up): one wake-up at due time instead
+		// of polling the whole window.
+		const timer = setTimeout(() => {
+			void refreshPracticeSession();
+			void refreshTrialQuota();
+		}, plan.delayMs);
+		return () => clearTimeout(timer);
 	});
 
 	onMount(() => {
@@ -419,6 +539,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		return () => {
 			clearTimeout(enterTimeout);
+			if (revealTimer !== undefined) clearTimeout(revealTimer);
 		};
 	});
 
@@ -470,6 +591,12 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		},
 		get isAnyMessagePending() {
 			return isAnyMessagePending;
+		},
+		get hasPendingReveals() {
+			return revealQueue.length > 0;
+		},
+		get agentReadUpToMessageId() {
+			return agentReadUpToMessageId;
 		},
 		get isTyping() {
 			return isTyping;

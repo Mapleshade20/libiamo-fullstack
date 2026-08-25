@@ -1,10 +1,11 @@
 import { randomInt } from "node:crypto";
-import { type AnyColumn, and, asc, eq, type SQL } from "drizzle-orm";
+import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { getLanguageEnglishName, type UiVariant } from "$lib/constants";
+import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/agent-replies/timing";
+import { getLanguageEnglishName, PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVariant } from "$lib/constants";
 import { db } from "./db";
-import { practiceSession, sessionMessage, task } from "./db/schema";
-import { type ChatMessage, type ChatTool, chatJson, chatTools } from "./llm";
+import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
+import { chatJson } from "./llm";
 
 export const sessionMessageChronologicalOrder = [asc(sessionMessage.createdAt), asc(sessionMessage.id)];
 
@@ -231,6 +232,17 @@ type StartSessionResult = {
 	mbti: string;
 };
 
+/**
+ * The turn limit a session runs under. It is frozen at session start so an admin
+ * editing the template cannot change the rules (or the remaining-turns display)
+ * underneath a learner, and the feedback flow must honour the same frozen value:
+ * the limits it derives describe how long that conversation was allowed to get.
+ * Sessions started before the snapshot column existed fall back to the template.
+ */
+export function resolveSessionMaxTurns(maxTurnsSnapshot: number | null | undefined, templateMaxTurns: number | null | undefined): number {
+	return maxTurnsSnapshot ?? templateMaxTurns ?? 0;
+}
+
 export async function startSession(taskId: number, userId: string, _learningLanguage?: string): Promise<StartSessionResult> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
@@ -273,6 +285,8 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
+	const urgency = taskData.urgency ?? "high";
+	const startedAt = new Date();
 
 	try {
 		const [session] = await db
@@ -281,6 +295,10 @@ export async function startSession(taskId: number, userId: string, _learningLang
 				userId,
 				taskId,
 				agentPromptSnapshot: snapshot,
+				maxTurnsSnapshot: taskData.template.maxTurns ?? 0,
+				urgency,
+				startedAt,
+				expiresAt: getSessionExpiry(startedAt, PRACTICE_SESSION_MAX_AGE_SECONDS),
 				status: "in_progress",
 			})
 			.returning();
@@ -309,23 +327,16 @@ export async function startSession(taskId: number, userId: string, _learningLang
 	}
 }
 
-type SendMessageResult = {
-	reply: string;
-	turnCount: number;
-	terminated?: boolean;
-	pending?: boolean;
-};
+type SubmitMessageResult =
+	| { turnCount: number; pending: true }
+	/** The send itself completed the session (e.g. the maxTurns message); clients must navigate instead of calling complete. */
+	| { turnCount: number; pending: false; sessionCompleted: true; completionReason: "max_turns" };
 
 type SessionMessageMetadata = {
 	clientMessageId?: string;
 	failed?: boolean;
 	hidden?: boolean;
-	mailBodyHtml?: string;
 	displayContent?: string;
-	assistantAuthorName?: string;
-	thread?: unknown;
-	model?: string;
-	raw?: unknown;
 };
 
 function getMessageMetadata(value: unknown): SessionMessageMetadata {
@@ -345,350 +356,263 @@ function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unk
 	return messages.filter((message) => message.role === "user" && !isHiddenUserMessage(message)).length;
 }
 
-function getExistingUserMessageState<T extends { id?: number; role: string; content: string; llmMetadata?: unknown }>(
-	messages: T[],
-	clientMessageId: string,
-) {
-	const userIndex = messages.findIndex(
-		(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-	);
-
-	if (userIndex === -1) return null;
-
-	const userMessage = messages[userIndex];
-	const assistantReplyByClientId = messages.find(
-		(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-	);
-	const messagesAfterUser = messages.slice(userIndex + 1);
-	const nextUserMessageIndex = messagesAfterUser.findIndex((message) => message.role === "user");
-	const messagesInSameTurn = nextUserMessageIndex === -1 ? messagesAfterUser : messagesAfterUser.slice(0, nextUserMessageIndex);
-	const assistantReply =
-		assistantReplyByClientId ??
-		messagesInSameTurn.find((message) => {
-			if (message.role !== "assistant") return false;
-			const assistantClientMessageId = getMessageMetadata(message.llmMetadata).clientMessageId;
-			return !assistantClientMessageId || assistantClientMessageId === clientMessageId;
-		});
-	const metadata = getMessageMetadata(userMessage.llmMetadata);
-
-	return {
-		userMessage,
-		assistantReply,
-		failed: metadata.failed === true,
-	};
-}
-
-const TERMINATE_CONVERSATION_TOOL: ChatTool = {
-	type: "function",
-	function: {
-		name: "terminate_conversation",
-		description: "Call this only when the learner severely insults or abuses you.",
-		parameters: {
-			type: "object",
-			additionalProperties: false,
-			properties: {
-				reason: {
-					type: "string",
-					description: "Short reason why the conversation should end.",
-				},
-			},
-			required: ["reason"],
-		},
-	},
-};
-
-function getStoredTermination(metadata: unknown) {
-	const raw = getMessageMetadata(metadata).raw;
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
-	const value = raw as { terminate?: unknown; terminated?: unknown };
-	return value.terminate === true || value.terminated === true;
-}
-
-function buildSystemPromptWithPlainText(systemPrompt: string) {
-	return `${systemPrompt}\n\nCRITICAL REPLY RULES:\n- Reply in natural plain text only — like a real person typing in chat.\n- NEVER prefix your reply with a username or sender label (e.g. "CodePanic_Leo:" or "Alice:"). Just the reply text.\n- NEVER include asterisk-wrapped actions or narration (e.g. "*reads message twice*").\n- NEVER output JSON, markdown fences, or metadata.\n- Write ONLY the conversational reply. Nothing else.\n\nCall terminate_conversation ONLY IF the learner severely insults or abuses you. Do not call it for goodbyes, completed tasks, natural endpoints, or ordinary disagreement.`;
-}
-
-async function generateAssistantOutput(history: ChatMessage[], userId: string): Promise<{ reply: string; terminated: boolean; raw: unknown }> {
-	const response = await chatTools({ messages: history, tools: [TERMINATE_CONVERSATION_TOOL], userId });
-	const terminationCall = response.toolCalls.find((toolCall) => toolCall.name === "terminate_conversation");
-	let reply = response.content;
-	const raw: Record<string, unknown> = {
-		terminated: terminationCall !== undefined,
-		toolCalls: response.toolCalls,
-		completion: response.raw,
-	};
-
-	if (!reply && terminationCall) {
-		reply = "I’m going to end this conversation here.";
-	}
-
-	return { reply, terminated: terminationCall !== undefined, raw };
-}
-
-export type SendMessageOptions = {
-	hiddenUserMessage?: boolean;
+export type SubmitMessageOptions = {
 	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
-	assistantAuthorName?: string;
-	assistantMetadata?: Record<string, unknown>;
 };
 
-type RequestAgentOpeningOptions = {
-	maxTurns?: number | null;
-	promptContent?: string;
-	assistantAuthorName?: string;
-	assistantMetadata?: Record<string, unknown>;
-};
-
-export async function sendMessage(
+export async function submitMessage(
 	sessionId: number,
 	userMessage: string,
 	userId: string,
 	clientMessageId?: string,
-	options: SendMessageOptions = {},
-): Promise<SendMessageResult> {
+	options: SubmitMessageOptions = {},
+): Promise<SubmitMessageResult> {
 	const trimmedUserMessage = userMessage.trim();
-	if (!trimmedUserMessage) {
-		throw new Error("userMessage is required");
-	}
-	const trimmedPromptContent = options.promptContent?.trim() || trimmedUserMessage;
+	if (!trimmedUserMessage) throw new Error("userMessage is required");
+	const promptContent = options.promptContent?.trim() || trimmedUserMessage;
 	const displayContent = options.userDisplayContent?.trim();
+	const now = new Date();
 
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: sessionMessageChronologicalOrder },
-		},
-	});
+	return db.transaction(async (tx) => {
+		// Row lock that serializes concurrent submissions for the same session
+		// (double send, retry, second tab): without it two transactions read the
+		// same snapshot, both insert their learner message, both observe no active
+		// batch, and both schedule one — duplicating messages and generated replies
+		// and letting the turn count drift past maxTurns. Lock order here is
+		// session -> batch -> delivery, matching the worker's delivery transaction.
+		const [locked] = await tx
+			.select({ id: practiceSession.id })
+			.from(practiceSession)
+			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)))
+			.for("update");
+		if (!locked) throw new Error("Session not found");
+		const session = await tx.query.practiceSession.findFirst({
+			where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)),
+			with: { messages: { orderBy: sessionMessageChronologicalOrder } },
+		});
+		if (!session) throw new Error("Session not found");
+		if (session.status !== "in_progress") throw new Error("Session not in progress");
 
-	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
-
-	let activeMessages = session.messages;
-	let existingUserMessage: (typeof session.messages)[number] | null = null;
-	let reusedExistingUserMessage = false;
-
-	if (clientMessageId) {
-		const existingState = getExistingUserMessageState(session.messages, clientMessageId);
-		if (existingState?.assistantReply) {
-			return {
-				reply: existingState.assistantReply.content,
-				turnCount: countVisibleUserTurns(session.messages),
-				terminated: getStoredTermination(existingState.assistantReply.llmMetadata),
-			};
+		let revivedMessageId: number | null = null;
+		if (clientMessageId) {
+			const existing = session.messages.find(
+				(message) => message.role === "user" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
+			);
+			if (existing) {
+				if (getMessageMetadata(existing.llmMetadata).failed !== true) {
+					return { turnCount: countVisibleUserTurns(session.messages), pending: true };
+				}
+				// A failed generation is terminal; a manual retry clears the failure and schedules a fresh batch.
+				await tx
+					.update(sessionMessage)
+					.set({ llmMetadata: { ...getMessageMetadata(existing.llmMetadata), failed: false, failureError: null } })
+					.where(eq(sessionMessage.id, existing.id));
+				revivedMessageId = existing.id;
+			}
 		}
 
-		if (existingState && !existingState.failed) {
-			return {
-				reply: "",
-				turnCount: countVisibleUserTurns(session.messages),
-				pending: true,
-			};
-		}
-
-		existingUserMessage = existingState?.userMessage ?? null;
-		reusedExistingUserMessage = existingUserMessage !== null;
-	}
-
-	const maxTurns = options.maxTurns ?? 0;
-	if (!existingUserMessage && !options.hiddenUserMessage && maxTurns > 0 && countVisibleUserTurns(activeMessages) >= maxTurns) {
-		throw new Error("Maximum conversation turns reached");
-	}
-
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; ui?: string };
-
-	const systemPromptWithPlainText = buildSystemPromptWithPlainText(snapshot.systemPrompt);
-
-	// Build LLM history. Threaded UIs provide precise target context through promptContent
-	// and stable comment metadata; persisted DB parent ids are not used for UI structure.
-	const history: ChatMessage[] = [{ role: "system", content: systemPromptWithPlainText }];
-	for (const m of activeMessages) {
-		history.push({ role: m.role as "user" | "assistant" | "system", content: m.content });
-	}
-	if (!existingUserMessage) {
-		history.push({ role: "user", content: trimmedPromptContent });
-	}
-
-	// Persist the learner's message before calling the LLM so it is never lost on generation failure.
-	if (!existingUserMessage) {
-		const insertedMessages = await db
-			.insert(sessionMessage)
-			.values({
-				sessionId,
-				role: "user",
-				content: trimmedPromptContent,
-				llmMetadata:
-					clientMessageId || options.hiddenUserMessage || displayContent || options.userMetadata
-						? {
-								...options.userMetadata,
-								clientMessageId,
-								failed: false,
-								hidden: options.hiddenUserMessage === true,
-								displayContent,
-							}
-						: undefined,
-			})
-			.returning();
-		const insertedUserMessage = insertedMessages[0];
-		if (insertedUserMessage) {
-			existingUserMessage = insertedUserMessage;
-			activeMessages = [...activeMessages, insertedUserMessage];
-		}
-	} else if (existingUserMessage.id) {
-		await db
-			.update(sessionMessage)
-			.set({
-				llmMetadata: {
-					...getMessageMetadata(existingUserMessage.llmMetadata),
-					...options.userMetadata,
-					clientMessageId,
-					failed: false,
-					failureError: null,
-					hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
-					displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-				},
-			})
-			.where(eq(sessionMessage.id, existingUserMessage.id));
-
-		activeMessages = activeMessages.map((message) =>
-			message === existingUserMessage
-				? {
-						...message,
-						llmMetadata: {
-							...getMessageMetadata(message.llmMetadata),
-							...options.userMetadata,
-							clientMessageId,
-							failed: false,
-							failureError: null,
-							hidden: getMessageMetadata(message.llmMetadata).hidden === true || options.hiddenUserMessage === true,
-							displayContent: displayContent ?? getMessageMetadata(message.llmMetadata).displayContent,
-						},
-					}
-				: message,
-		);
-	}
-
-	let output: { reply: string; terminated: boolean; raw: unknown };
-	try {
-		output = await generateAssistantOutput(history, userId);
-	} catch (error) {
-		if (existingUserMessage?.id) {
-			await db
-				.update(sessionMessage)
-				.set({
-					llmMetadata: {
-						...getMessageMetadata(existingUserMessage.llmMetadata),
-						...options.userMetadata,
-						clientMessageId,
-						failed: true,
-						failureError: error instanceof Error && error.message.trim() ? error.message : null,
-						hidden: getMessageMetadata(existingUserMessage.llmMetadata).hidden === true || options.hiddenUserMessage === true,
-						displayContent: displayContent ?? getMessageMetadata(existingUserMessage.llmMetadata).displayContent,
-					},
+		let inputMessageId = revivedMessageId;
+		if (!inputMessageId) {
+			const inserted = await tx
+				.insert(sessionMessage)
+				.values({
+					sessionId,
+					role: "user",
+					content: promptContent,
+					llmMetadata:
+						clientMessageId || displayContent || options.userMetadata
+							? {
+									...options.userMetadata,
+									clientMessageId,
+									displayContent,
+								}
+							: undefined,
 				})
-				.where(eq(sessionMessage.id, existingUserMessage.id));
+				.returning({ id: sessionMessage.id });
+			inputMessageId = inserted[0]?.id ?? null;
+			if (!inputMessageId) throw new Error("Failed to persist message");
 		}
-		throw error;
-	}
 
-	await db.insert(sessionMessage).values({
-		sessionId,
-		role: "assistant",
-		content: output.reply,
-		llmMetadata: {
-			...options.assistantMetadata,
-			...(clientMessageId ? { clientMessageId } : {}),
-			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-			model: "tool-calling",
-			raw: output.raw,
-		},
-	});
-
-	const turnCount = countVisibleUserTurns(session.messages) + (reusedExistingUserMessage || options.hiddenUserMessage ? 0 : 1);
-
-	return { reply: output.reply, turnCount, terminated: output.terminated };
-}
-
-export async function requestAgentOpening(
-	sessionId: number,
-	userId: string,
-	clientMessageId?: string,
-	options: RequestAgentOpeningOptions = {},
-): Promise<SendMessageResult> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: {
-			messages: { orderBy: sessionMessageChronologicalOrder },
-		},
-	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.userId !== userId) throw new Error("Access denied");
-	if (session.status !== "in_progress") throw new Error("Session not in progress");
-
-	if (clientMessageId) {
-		const existingAssistantReply = session.messages.find(
-			(message) => message.role === "assistant" && getMessageMetadata(message.llmMetadata).clientMessageId === clientMessageId,
-		);
-		if (existingAssistantReply) {
-			return {
-				reply: existingAssistantReply.content,
-				turnCount: countVisibleUserTurns(session.messages),
-				terminated: getStoredTermination(existingAssistantReply.llmMetadata),
-			};
+		const turnCount = countVisibleUserTurns(session.messages) + (revivedMessageId !== null ? 0 : 1);
+		const maxTurns = options.maxTurns ?? 0;
+		if (maxTurns > 0 && turnCount >= maxTurns) {
+			await tx
+				.update(practiceSession)
+				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
+				.where(eq(practiceSession.id, sessionId));
+			const activeBatches = await tx.query.agentResponseBatch.findMany({
+				where: and(
+					eq(agentResponseBatch.sessionId, sessionId),
+					inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+				),
+				columns: { id: true, status: true },
+			});
+			const nothingWillDeliver = !activeBatches.some((batch) => batch.status === "processing" || batch.status === "delivery_pending");
+			// A session that never saw a single agent reply still gets one: its unclaimed
+			// batch is spared so the reply arrives on the natural sampled clock, and when
+			// nothing is scheduled at all (every batch failed or chose silence) a farewell
+			// batch is queued right away.
+			const neverReplied = !session.messages.some((message) => message.role === "assistant");
+			const spareUnclaimed = neverReplied && nothingWillDeliver;
+			const hasPending = activeBatches.some((batch) => batch.status === "pending");
+			const cancelled = await tx
+				.update(agentResponseBatch)
+				.set({ status: "cancelled", completedAt: now })
+				.where(
+					and(
+						eq(agentResponseBatch.sessionId, sessionId),
+						inArray(agentResponseBatch.status, spareUnclaimed && hasPending ? ["stale"] : ["pending", "stale"]),
+					),
+				)
+				.returning({ id: agentResponseBatch.id });
+			// Replies the agent already composed (delivery_pending) or is still composing
+			// (processing, held by a worker's claim fence) are left alive on purpose: the
+			// turn limit ends the session, but the in-flight reply is still delivered
+			// into it. Orphaned processing batches are cancelled later via lease reclaim.
+			if (spareUnclaimed && !hasPending) {
+				await tx.insert(agentResponseBatch).values({
+					sessionId,
+					kind: "reply",
+					status: "pending",
+					dueAt: new Date(now.getTime() + RE_ENGAGE_DELAY_MS),
+					inputMessageId,
+					inputVersion: 1,
+				});
+			}
+			if (cancelled.length > 0) {
+				await tx
+					.update(agentDelivery)
+					.set({ status: "cancelled" })
+					.where(
+						and(
+							inArray(
+								agentDelivery.batchId,
+								cancelled.map((batch) => batch.id),
+							),
+							eq(agentDelivery.status, "pending"),
+						),
+					);
+			}
+			return { turnCount, pending: false, sessionCompleted: true, completionReason: "max_turns" };
 		}
-	}
 
-	const maxTurns = options.maxTurns ?? 0;
-	if (maxTurns > 0 && countVisibleUserTurns(session.messages) >= maxTurns) {
-		throw new Error("Maximum conversation turns reached");
-	}
-
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string };
-	const history: ChatMessage[] = [{ role: "system", content: buildSystemPromptWithPlainText(snapshot.systemPrompt) }];
-	for (const message of session.messages) {
-		history.push({ role: message.role as "user" | "assistant" | "system", content: message.content });
-	}
-	if (options.promptContent?.trim()) {
-		history.push({ role: "user", content: options.promptContent.trim() });
-	}
-
-	const output = await generateAssistantOutput(history, userId);
-
-	await db.insert(sessionMessage).values({
-		sessionId,
-		role: "assistant",
-		content: output.reply,
-		llmMetadata: {
-			...options.assistantMetadata,
-			...(clientMessageId ? { clientMessageId } : {}),
-			...(options.assistantAuthorName ? { assistantAuthorName: options.assistantAuthorName } : {}),
-			model: "tool-calling",
-			raw: output.raw,
-		},
+		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));
+		const activeBatch = await tx.query.agentResponseBatch.findFirst({
+			where: and(
+				eq(agentResponseBatch.sessionId, sessionId),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
+		});
+		if (activeBatch?.status === "delivery_pending") {
+			// The agent had already composed a reply when the new message landed: it is
+			// engaged, so re-engage quickly instead of restarting the full MTTH clock.
+			const reEngageAt = new Date(now.getTime() + RE_ENGAGE_DELAY_MS);
+			// The batch is cancelled before its deliveries so lock acquisition keeps
+			// the session -> batch -> delivery order the delivery worker uses.
+			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
+			await tx
+				.update(agentDelivery)
+				.set({ status: "cancelled" })
+				.where(and(eq(agentDelivery.batchId, activeBatch.id), eq(agentDelivery.status, "pending")));
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: "reply",
+				status: "pending",
+				dueAt: reEngageAt,
+				inputMessageId,
+				inputVersion: activeBatch.inputVersion + 1,
+			});
+		} else if (activeBatch && activeBatch.kind === "follow_up" && activeBatch.status !== "processing") {
+			// The user came back before the idle nudge fired, so the silence condition
+			// is gone: cancel the nudge and answer the new message on a fresh sampled
+			// clock instead of folding into the idle batch's far-future due time.
+			await tx.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(eq(agentResponseBatch.id, activeBatch.id));
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: "reply",
+				status: "pending",
+				dueAt,
+				inputMessageId,
+				inputVersion: 1,
+			});
+		} else if (activeBatch) {
+			// Additional messages in the same burst fold into the scheduled batch without
+			// pushing its due time: the clock is anchored to the first message, so rapid
+			// typing can never postpone the reply indefinitely.
+			await tx
+				.update(agentResponseBatch)
+				.set({
+					...(activeBatch.status === "processing" ? {} : { status: "pending" as const }),
+					inputMessageId,
+					inputVersion: activeBatch.inputVersion + 1,
+				})
+				.where(eq(agentResponseBatch.id, activeBatch.id));
+		} else {
+			await tx.insert(agentResponseBatch).values({
+				sessionId,
+				kind: "reply",
+				status: "pending",
+				dueAt,
+				inputMessageId,
+				inputVersion: 1,
+			});
+		}
+		return { turnCount, pending: true };
 	});
-
-	return {
-		reply: output.reply,
-		turnCount: countVisibleUserTurns(session.messages),
-		terminated: output.terminated,
-	};
 }
 
 export async function completeSession(sessionId: number): Promise<void> {
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		columns: { id: true, status: true },
+	const now = new Date();
+	await db.transaction(async (tx) => {
+		// The status check and the write must share one locked view of the row: the
+		// turn limit (submitMessage), the expiry sweep, and abuse termination all end
+		// sessions concurrently. Reading outside the transaction let this overwrite
+		// their outcome — relabelling a max_turns completion the worker reads to spare
+		// its final reply, or resurrecting an already-abandoned session as completed.
+		// Lock order is session -> batch -> delivery, matching submitMessage.
+		const [locked] = await tx
+			.select({ id: practiceSession.id, status: practiceSession.status })
+			.from(practiceSession)
+			.where(eq(practiceSession.id, sessionId))
+			.for("update");
+		if (!locked) throw new Error("Session not found");
+		if (locked.status !== "in_progress") throw new Error("Session not in progress");
+
+		const cancellable = await tx.query.agentResponseBatch.findMany({
+			where: and(
+				eq(agentResponseBatch.sessionId, sessionId),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
+			columns: { id: true },
+		});
+		await tx
+			.update(practiceSession)
+			.set({ status: "completed", completionReason: "user_requested", completedAt: now })
+			.where(eq(practiceSession.id, sessionId));
+		await tx
+			.update(agentResponseBatch)
+			.set({ status: "cancelled", completedAt: now })
+			.where(
+				and(eq(agentResponseBatch.sessionId, sessionId), inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"])),
+			);
+		if (cancellable.length > 0) {
+			await tx
+				.update(agentDelivery)
+				.set({ status: "cancelled" })
+				.where(
+					and(
+						inArray(
+							agentDelivery.batchId,
+							cancellable.map((batch) => batch.id),
+						),
+						eq(agentDelivery.status, "pending"),
+					),
+				);
+		}
 	});
-
-	if (!session) throw new Error("Session not found");
-	if (session.status !== "in_progress") {
-		throw new Error("Session not in progress");
-	}
-
-	await db.update(practiceSession).set({ status: "completed", completedAt: new Date() }).where(eq(practiceSession.id, sessionId));
 }
 
 export type HintRequest = {

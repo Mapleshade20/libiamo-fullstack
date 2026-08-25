@@ -1,6 +1,14 @@
 import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice-ui/session.svelte";
+import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
+import {
+	AGENT_WORK_DUE_SOON_MS,
+	AGENT_WORK_WAKE_BUFFER_MS,
+	createPracticeSession,
+	type PracticeSessionOptions,
+	planAgentWorkPolling,
+	resolveAgentName,
+} from "$lib/components/practice-ui/session.svelte";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 
 const mocks = vi.hoisted(() => ({
@@ -8,8 +16,7 @@ const mocks = vi.hoisted(() => ({
 	invalidate: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
-	requestAgentFirstReplyAction: vi.fn(),
-	attemptAgentReply: vi.fn(),
+	submitPracticeMessage: vi.fn(),
 	initUserPool: vi.fn(),
 }));
 
@@ -25,11 +32,10 @@ vi.mock("$app/navigation", () => ({
 vi.mock("$lib/components/practice-ui/apiService", () => ({
 	postAction: mocks.postAction,
 	completeAction: mocks.completeAction,
-	requestAgentFirstReplyAction: mocks.requestAgentFirstReplyAction,
 }));
 
 vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
-	attemptAgentReply: mocks.attemptAgentReply,
+	submitPracticeMessage: mocks.submitPracticeMessage,
 }));
 
 vi.mock("$lib/components/practice-ui/discord/userPool", () => ({
@@ -44,7 +50,6 @@ function createOptions(overrides: Partial<PracticeSessionOptions> = {}): Practic
 		existingSession: null,
 		openingState: {},
 		maxTurns: 0,
-		agentStartsFirst: true,
 		labels: {
 			stillProcessingMessage: "Still processing...",
 			retryFailedMessage: "Reply failed. Retry.",
@@ -105,6 +110,32 @@ describe("resolveAgentName", () => {
 		);
 
 		expect(name).toBe("Agent");
+	});
+});
+
+describe("planAgentWorkPolling", () => {
+	const now = new Date("2026-08-23T12:00:00.000Z");
+
+	it("polls continuously while a placeholder is pending even without scheduled work", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: true, agentWorkDueAt: null, now })).toEqual({ kind: "interval" });
+	});
+
+	it("polls while agent work is due within the horizon", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: new Date(now.getTime() + AGENT_WORK_DUE_SOON_MS), now })).toEqual({
+			kind: "interval",
+		});
+	});
+
+	it("wakes once when the next agent work is far in the future", () => {
+		const dueAt = new Date(now.getTime() + 10 * 60_000);
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: dueAt, now })).toEqual({
+			kind: "wake",
+			delayMs: 10 * 60_000 + AGENT_WORK_WAKE_BUFFER_MS,
+		});
+	});
+
+	it("stops watching when no agent work is outstanding", () => {
+		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: null, now })).toEqual({ kind: "none" });
 	});
 });
 
@@ -169,6 +200,106 @@ describe("createPracticeSession", () => {
 		expect(chatContainer.scrollTop).toBe(240);
 	});
 
+	it("paces a burst of new agent messages at typing intervals", async () => {
+		vi.useFakeTimers();
+		const before = {
+			id: 401,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" },
+				{ id: 2, role: "assistant", content: "hello", createdAt: "2026-05-18T00:01:00.000Z" },
+			],
+		};
+		const after = {
+			...before,
+			messages: [
+				...before.messages,
+				{ id: 3, role: "assistant", content: "msg-three", createdAt: "2026-05-18T00:02:00.000Z" },
+				{ id: 4, role: "assistant", content: "msg-four", createdAt: "2026-05-18T00:03:00.000Z" },
+				{ id: 5, role: "assistant", content: "msg-five", createdAt: "2026-05-18T00:04:00.000Z" },
+			],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+		// the first burst message lands immediately; the rest wait their typing turn
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3"]);
+		expect(session.hasPendingReveals).toBe(true);
+
+		vi.advanceTimersByTime(getDeliveryDelayMs("msg-four"));
+		await waitForPromises();
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3", "4"]);
+
+		vi.advanceTimersByTime(getDeliveryDelayMs("msg-five"));
+		await waitForPromises();
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "2", "3", "4", "5"]);
+		expect(session.hasPendingReveals).toBe(false);
+		vi.useRealTimers();
+	});
+
+	it("shows a single newly delivered agent message immediately", async () => {
+		const before = {
+			id: 402,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" }],
+		};
+		const after = {
+			...before,
+			messages: [...before.messages, { id: 3, role: "assistant", content: "one reply", createdAt: "2026-05-18T00:02:00.000Z" }],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+
+		expect(session.messages.map((message) => message.id)).toEqual(["1", "3"]);
+		expect(session.hasPendingReveals).toBe(false);
+	});
+
+	it("reveals paced messages immediately when the user sends a new message", async () => {
+		vi.useFakeTimers();
+		mocks.submitPracticeMessage.mockResolvedValue({ status: "pending" });
+		const before = {
+			id: 403,
+			status: "in_progress",
+			tutorFeedback: null,
+			messages: [
+				{ id: 1, role: "user", content: "hi", createdAt: "2026-05-18T00:00:00.000Z" },
+				{ id: 2, role: "assistant", content: "hello", createdAt: "2026-05-18T00:01:00.000Z" },
+			],
+		};
+		const after = {
+			...before,
+			messages: [
+				...before.messages,
+				{ id: 3, role: "assistant", content: "msg-three", createdAt: "2026-05-18T00:02:00.000Z" },
+				{ id: 4, role: "assistant", content: "msg-four", createdAt: "2026-05-18T00:03:00.000Z" },
+			],
+		};
+		const session = createSession(createOptions({ existingSession: before }));
+		session.hydrateFromExistingSession(before);
+		await waitForPromises();
+		session.hydrateFromExistingSession(after);
+		await waitForPromises();
+		expect(session.hasPendingReveals).toBe(true);
+
+		await session.handleSend("next message");
+
+		expect(session.hasPendingReveals).toBe(false);
+		const texts = session.messages.map((message) => message.text);
+		// the optimistic user message lands after the full agent burst
+		expect(texts.indexOf("msg-four")).toBeGreaterThan(-1);
+		expect(texts.indexOf("msg-four")).toBeLessThan(texts.indexOf("next message"));
+		vi.useRealTimers();
+	});
+
 	it("skips hydration when the server snapshot has not changed", async () => {
 		const existingSession = {
 			id: 103,
@@ -224,7 +355,7 @@ describe("createPracticeSession", () => {
 			tutorFeedback: null,
 			messages: undefined,
 		};
-		const session = createSession(createOptions({ existingSession: null, timeZone: "Asia/Tokyo" }));
+		const session = createSession(createOptions({ existingSession: null }));
 
 		session.hydrateFromExistingSession(existingSession);
 
@@ -232,11 +363,9 @@ describe("createPracticeSession", () => {
 		expect(session.messages).toEqual([]);
 	});
 
-	it("sends user message and appends agent reply", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "reply",
-			text: "Great reply",
-			terminated: false,
+	it("sends user message and appends the pending reply placeholder", async () => {
+		mocks.submitPracticeMessage.mockResolvedValue({
+			status: "pending",
 		});
 		const existingSession = {
 			id: 202,
@@ -250,41 +379,10 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 		await session.handleSend("Hello there");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
-		expect(session.messages.some((message) => message.role === "agent" && message.text === "Great reply")).toBe(true);
+		expect(session.messages.some((message) => message.role === "agent" && message.deliveryState === "pending")).toBe(true);
 		expect(mocks.invalidate).toHaveBeenCalledWith(TRIAL_QUOTA_DEPENDENCY);
-	});
-
-	it("completes when a sent reply terminates the session", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "reply",
-			text: "Final reply",
-			terminated: true,
-		});
-		mocks.completeAction.mockResolvedValue({
-			type: "success",
-			data: {
-				feedback: {
-					content: "Completed",
-					objectiveResults: [],
-				},
-			},
-		});
-		const existingSession = {
-			id: 203,
-			status: "in_progress",
-			tutorFeedback: null,
-			messages: [],
-		};
-		const session = createSession(createOptions({ existingSession }));
-
-		session.hydrateFromExistingSession(existingSession);
-		await session.handleSend("Finish this");
-		await waitForPromises();
-
-		expect(mocks.completeAction).toHaveBeenCalledWith(203);
-		expect(session.isCompleted).toBe(true);
 	});
 
 	it("ignores empty or disabled sends", async () => {
@@ -293,14 +391,12 @@ describe("createPracticeSession", () => {
 		await session.handleSend("   ");
 		await session.handleSend("hello");
 
-		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(mocks.submitPracticeMessage).not.toHaveBeenCalled();
 	});
 
 	it("retries failed placeholder with persisted retry text", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "reply",
-			text: "Recovered response",
-			terminated: false,
+		mocks.submitPracticeMessage.mockResolvedValue({
+			status: "pending",
 		});
 		const existingSession = {
 			id: 303,
@@ -326,9 +422,9 @@ describe("createPracticeSession", () => {
 
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(303, "Original learner message", "msg-5", {});
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(303, "Original learner message", "msg-5", {});
 		expect(session.messages.find((message) => message.id === failedMessage?.id)?.isHidden).toBe(true);
-		expect(session.messages.some((message) => message.role === "agent" && message.text === "Recovered response")).toBe(true);
+		expect(session.messages.some((message) => message.role === "agent" && message.deliveryState === "pending")).toBe(true);
 	});
 
 	it("scrolls manually when a chat container is bound", async () => {
@@ -353,7 +449,7 @@ describe("createPracticeSession", () => {
 		session.hydrateFromExistingSession(existingSession);
 		await session.handleRetry(session.messages[0]?.id ?? "");
 
-		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(mocks.submitPracticeMessage).not.toHaveBeenCalled();
 	});
 
 	it("ignores retry while completion state blocks actions", async () => {
@@ -376,14 +472,12 @@ describe("createPracticeSession", () => {
 		session.hydrateFromExistingSession(existingSession);
 		await session.handleRetry(session.messages.find((message) => message.deliveryState === "failed")?.id ?? "");
 
-		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(mocks.submitPracticeMessage).not.toHaveBeenCalled();
 	});
 
 	it("retries AO3 replies with their original target comment id", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "reply",
-			text: "Recovered AO3 response",
-			terminated: false,
+		mocks.submitPracticeMessage.mockResolvedValue({
+			status: "pending",
 		});
 		const existingSession = {
 			id: 304,
@@ -412,14 +506,12 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { threadTargetCommentId: "c1" });
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { threadTargetCommentId: "c1" });
 	});
 
 	it("retries generic threaded replies with their original target comment id", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
-			status: "reply",
-			text: "Recovered Reddit response",
-			terminated: false,
+		mocks.submitPracticeMessage.mockResolvedValue({
+			status: "pending",
 		});
 		const existingSession = {
 			id: 305,
@@ -448,36 +540,10 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.attemptAgentReply).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
 	});
-
-	it("starts a fresh session and requests first agent reply when agent starts first", async () => {
-		mocks.postAction.mockResolvedValue({
-			type: "success",
-			data: { sessionId: 404 },
-		});
-		mocks.requestAgentFirstReplyAction.mockResolvedValue({
-			type: "success",
-			data: { pending: true },
-		});
-		const session = createSession(
-			createOptions({
-				existingSession: null,
-				agentStartsFirst: true,
-			}),
-		);
-
-		await session.initializeFreshSession();
-		await waitForPromises();
-
-		expect(mocks.postAction).toHaveBeenCalledWith("start", null);
-		expect(mocks.requestAgentFirstReplyAction).toHaveBeenCalledWith(404);
-		expect(session.messages.some((message) => message.role === "user" && message.isHidden)).toBe(false);
-		expect(session.messages.some((message) => message.deliveryState === "pending")).toBe(true);
-	});
-
 	it("adds failed placeholder and retry text when send attempt fails", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
+		mocks.submitPracticeMessage.mockResolvedValue({
 			status: "failed",
 		});
 		const existingSession = {
@@ -497,7 +563,7 @@ describe("createPracticeSession", () => {
 	});
 
 	it("warns and avoids agent placeholder when send is rejected", async () => {
-		mocks.attemptAgentReply.mockResolvedValue({
+		mocks.submitPracticeMessage.mockResolvedValue({
 			status: "rejected",
 		});
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -517,7 +583,7 @@ describe("createPracticeSession", () => {
 	});
 
 	it("auto-completes when turn limit is reached without waiting-retry state", async () => {
-		mocks.postAction.mockResolvedValue({
+		mocks.completeAction.mockResolvedValue({
 			type: "success",
 			data: {
 				feedback: {
@@ -536,7 +602,6 @@ describe("createPracticeSession", () => {
 			createOptions({
 				existingSession,
 				maxTurns: 1,
-				agentStartsFirst: true,
 			}),
 		);
 
@@ -620,8 +685,7 @@ describe("createPracticeSession", () => {
 		expect(mapped[0]?.isHidden).toBe(true);
 		expect(mapped[1]?.text).toBe("new");
 	});
-
-	it("initializes without agent-first reply when agentStartsFirst is false", async () => {
+	it("initializes a fresh session without requesting any agent opening", async () => {
 		mocks.postAction.mockResolvedValue({
 			type: "success",
 			data: { sessionId: 703 },
@@ -629,14 +693,13 @@ describe("createPracticeSession", () => {
 		const session = createSession(
 			createOptions({
 				existingSession: null,
-				agentStartsFirst: false,
 			}),
 		);
 
 		await session.initializeFreshSession();
 
-		expect(mocks.requestAgentFirstReplyAction).not.toHaveBeenCalled();
-		expect(mocks.attemptAgentReply).not.toHaveBeenCalled();
+		expect(mocks.submitPracticeMessage).not.toHaveBeenCalled();
+		expect(session.sessionId).toBe(703);
 		expect(session.messages.some((message) => message.isHidden)).toBe(false);
 	});
 

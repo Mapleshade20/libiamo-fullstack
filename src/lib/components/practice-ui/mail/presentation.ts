@@ -1,4 +1,4 @@
-import type { SendAttemptResult } from "../chatFlowController";
+import type { MessageSubmissionResult } from "../chatFlowController";
 import type { ChatMessage } from "../chatMessages";
 import { ensureReplySubject, normalizeAgentSignature, normalizeReplySubject, parseAgentMailReply, parseDraftFromMessage } from "./mailUtils";
 import type { NormalizedMailEmail } from "./types";
@@ -26,7 +26,10 @@ export function buildGeneratedInboxEmails({
 	tutorReplyLabel: string;
 	fallbackTime: string;
 }): NormalizedMailEmail[] {
-	return agentMessages.map((message, index) => {
+	// Pending agent messages are polling triggers, never renderable content:
+	// real mail stays silent until the reply actually lands.
+	const renderableAgentMessages = agentMessages.filter((message) => message.deliveryState !== "pending");
+	return renderableAgentMessages.map((message, index) => {
 		const previousUserMessage = [...messages]
 			.slice(
 				0,
@@ -72,7 +75,7 @@ export function buildAgentMessageFromSendResult({
 	retryFailedMessage,
 	id = crypto.randomUUID(),
 }: {
-	result: SendAttemptResult;
+	result: MessageSubmissionResult;
 	clientMessageId: string;
 	retryText: string;
 	recipient: MailContact;
@@ -81,20 +84,6 @@ export function buildAgentMessageFromSendResult({
 	retryFailedMessage: string;
 	id?: string;
 }): ChatMessage | null {
-	if (result.status === "reply") {
-		if (!result.text.trim()) return null;
-		return {
-			id,
-			role: "agent",
-			text: result.text,
-			timestamp,
-			authorName: recipient.name,
-			avatarColor: "bg-[#3478F6]",
-			deliveryState: "sent",
-			clientMessageId,
-		};
-	}
-
 	if (result.status === "pending") {
 		return {
 			id,
