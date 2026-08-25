@@ -1,6 +1,5 @@
 import { and, asc, notInArray as drizzleNotInArray, eq, max, ne, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
-import { URGENCY_PRESETS } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { task, template, templateVariant } from "$lib/server/db/schema";
 import { dayjs, getMondayFromWeekString, getMondayOfWeekForDate, toDateString } from "./dates";
@@ -54,7 +53,6 @@ async function insertTask(tpl: typeof template.$inferSelect, dateStr: string, or
 			date: dateStr,
 			origin,
 			urgency: tpl.urgency,
-			maxSessionAgeSeconds: URGENCY_PRESETS[tpl.urgency].maxSessionAgeSeconds,
 			title: resolveSlots(tpl.titleBase, slots),
 			shortObjective: tpl.shortObjectiveBase ? resolveSlots(tpl.shortObjectiveBase, slots) : null,
 			description: tpl.descriptionBase ? resolveSlots(tpl.descriptionBase, slots) : null,

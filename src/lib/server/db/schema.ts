@@ -158,7 +158,6 @@ export const task = pgTable(
 		date: date("date").notNull(),
 		origin: scheduleOriginEnum("origin").notNull(),
 		urgency: urgencyEnum("urgency").notNull(),
-		maxSessionAgeSeconds: integer("max_session_age_seconds").notNull(),
 
 		title: text("title").notNull(),
 		shortObjective: text("short_objective"),

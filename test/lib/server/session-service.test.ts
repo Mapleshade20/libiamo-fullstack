@@ -92,7 +92,6 @@ describe("session service", () => {
 		agentPrompt: "You are a helpful assistant.",
 		language: "en",
 		urgency: "high" as const,
-		maxSessionAgeSeconds: 43_200,
 		template: {
 			ui: "discord" as const,
 		},
@@ -109,7 +108,7 @@ describe("session service", () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date("2025-06-11T12:00:00.000Z"));
 			try {
-				mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, urgency: "low", maxSessionAgeSeconds: 604_800 });
+				mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, urgency: "low" });
 				const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 123 }]) });
 				mockDb.insert.mockReturnValue({ values: valuesMock });
 

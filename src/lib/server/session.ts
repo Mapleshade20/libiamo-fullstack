@@ -275,7 +275,6 @@ export async function startSession(taskId: number, userId: string, _learningLang
 
 	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
 	const urgency = taskData.urgency ?? "high";
-	const maxSessionAgeSeconds = PRACTICE_SESSION_MAX_AGE_SECONDS;
 	const startedAt = new Date();
 
 	try {
@@ -288,7 +287,7 @@ export async function startSession(taskId: number, userId: string, _learningLang
 				maxTurnsSnapshot: taskData.template.maxTurns ?? 0,
 				urgency,
 				startedAt,
-				expiresAt: getSessionExpiry(startedAt, maxSessionAgeSeconds),
+				expiresAt: getSessionExpiry(startedAt, PRACTICE_SESSION_MAX_AGE_SECONDS),
 				status: "in_progress",
 			})
 			.returning();

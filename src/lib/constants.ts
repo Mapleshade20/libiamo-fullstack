@@ -173,7 +173,6 @@ export type UrgencyPreset = {
 	replyMtthMs: number;
 	/** Hard cap: a reply is force-delivered at this delay even if the sampled tail exceeds it. */
 	replyCapMs: number;
-	maxSessionAgeSeconds: number;
 	idleFollowUpDelayMs: number;
 };
 
@@ -181,19 +180,16 @@ export const URGENCY_PRESETS: Record<Urgency, UrgencyPreset> = {
 	high: {
 		replyMtthMs: 30_000,
 		replyCapMs: 1 * 60_000,
-		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 60 * 60_000,
 	},
 	medium: {
 		replyMtthMs: 2 * 60_000,
 		replyCapMs: 8 * 60_000,
-		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 12 * 60 * 60_000,
 	},
 	low: {
 		replyMtthMs: 10 * 60_000,
 		replyCapMs: 40 * 60_000,
-		maxSessionAgeSeconds: PRACTICE_SESSION_MAX_AGE_SECONDS,
 		idleFollowUpDelayMs: 24 * 60 * 60_000,
 	},
 };
