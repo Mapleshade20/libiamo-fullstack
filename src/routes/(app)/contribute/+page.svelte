@@ -1,4 +1,5 @@
 <script lang="ts">
+import { base } from "$app/paths";
 import { page } from "$app/state";
 import { parseTemplateJson } from "$lib/admin/template-actions";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
@@ -89,7 +90,7 @@ function fillFromJson() {
 	{#if success}
 		<div class="rounded-md border border-border bg-card p-4 space-y-2">
 			<p class="text-sm text-muted-foreground">An admin will review your template soon.</p>
-			<a href="/" class="inline-block text-sm font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground">
+			<a href="{base}/" class="inline-block text-sm font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground">
 				&larr; Back to Quests
 			</a>
 		</div>

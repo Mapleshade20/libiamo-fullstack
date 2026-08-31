@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
@@ -35,15 +36,15 @@ async function routeContext(event: { locals: App.Locals; params: { id: string } 
 	if (!id) throw error(404, "Template not found");
 	const template = await getTranslationTemplate(id, user.activeLanguage);
 	if (!template) throw error(404, "Translation template not found");
-	if (!user.nativeLanguage) throw redirect(303, `/translate/${id}`);
+	if (!user.nativeLanguage) throw redirect(303, `${base}/translate/${id}`);
 	const attempt = await findTranslationAttempt({ userId: user.id, templateId: id, promptLanguage: user.nativeLanguage });
-	if (!attempt) throw redirect(303, `/translate/${id}`);
+	if (!attempt) throw redirect(303, `${base}/translate/${id}`);
 	return { user, id, template, attempt };
 }
 
 export const load: PageServerLoad = async (event) => {
 	const { id, template, attempt } = await routeContext(event);
-	if (attempt.workflowPhase !== "draft") throw redirect(303, `/translate/${id}/feedback`);
+	if (attempt.workflowPhase !== "draft") throw redirect(303, `${base}/translate/${id}/feedback`);
 	return { template, attempt: { id: attempt.id, candidates: attempt.candidates, answers: await getTranslationAnswers(attempt.id) } };
 };
 
@@ -72,6 +73,6 @@ export const actions: Actions = {
 		} catch (cause) {
 			return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
-		throw redirect(303, `/translate/${id}/feedback`);
+		throw redirect(303, `${base}/translate/${id}/feedback`);
 	},
 };

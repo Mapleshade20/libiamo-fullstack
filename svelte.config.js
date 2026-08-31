@@ -18,6 +18,12 @@ const config = {
 		// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),
+		// Base path is baked in at build time. Empty for local dev and root-domain
+		// deploys; set to e.g. "/se-projects/libiamo" when the site is served from a
+		// sub-path. Every internal URL must go through `base` from "$app/paths".
+		paths: {
+			base: process.env.BASE_PATH ?? "",
+		},
 		alias: {
 			$routes: "src/routes",
 		},

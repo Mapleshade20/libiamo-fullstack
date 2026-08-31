@@ -6,6 +6,7 @@ import Mail from "@lucide/svelte/icons/mail";
 import Play from "@lucide/svelte/icons/play";
 import Star from "@lucide/svelte/icons/star";
 import type { Component } from "svelte";
+import { base } from "$app/paths";
 import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
 import { getHallQuestAction, type HallQuest, isHallQuestFinished } from "$lib/quest-hall";
@@ -67,7 +68,7 @@ let uiLabel = $derived(UI_VARIANT_LABELS[task.templateUi as UiVariant] ?? task.t
 				</div>
 			</div>
 			<div class="brief-actions">
-				<a class="full-brief-link" href="/task/{task.id}">
+				<a class="full-brief-link" href="{base}/task/{task.id}">
 					<FileText size={16} strokeWidth={1.6} />
 					<span>{t(lang, "hall.edition.fullBrief")}</span>
 				</a>

@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { base } from "$app/paths";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import type { FeedbackResult } from "$lib/feedback/types";
 import { requireUser } from "$lib/server/auth/authz";
@@ -77,11 +78,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		},
 	});
 
-	if (!session) throw redirect(303, `/task/${taskId}/session`);
+	if (!session) throw redirect(303, `${base}/task/${taskId}/session`);
 
 	// Redirect if not completed
 	if (session.status !== "completed" && session.status !== "evaluated") {
-		throw redirect(303, `/task/${taskId}/session`);
+		throw redirect(303, `${base}/task/${taskId}/session`);
 	}
 
 	// Visiting the feedback page reads the conversation: advance the seen-watermark

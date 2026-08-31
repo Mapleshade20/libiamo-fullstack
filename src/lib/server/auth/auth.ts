@@ -1,13 +1,24 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { sveltekitCookies } from "better-auth/svelte-kit";
+import { base } from "$app/paths";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
 import { db } from "$lib/server/db";
 
 export const auth = betterAuth({
-	baseURL: env.ORIGIN,
+	// Better Auth derives its router prefix from `new URL(baseURL).pathname`, and
+	// `withPath()` only appends the default "/api/auth" when baseURL has no path of
+	// its own. Spelling the mount point out and pinning basePath to "/" keeps the
+	// request matcher and the router in agreement for both root and sub-path
+	// deploys; at the root this resolves to exactly the previous default.
+	baseURL: `${env.ORIGIN}${base}/api/auth`,
+	basePath: "/",
+	advanced: {
+		// No-op at the root; scopes cookies to the app when BASE_PATH is set.
+		defaultCookieAttributes: { path: base || "/" },
+	},
 	secret: env.BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: "pg" }),
 	emailAndPassword: {
@@ -31,8 +42,8 @@ export const auth = betterAuth({
 		expiresIn: 3600,
 		sendVerificationEmail: async ({ user, url }) => {
 			const urlObj = new URL(url);
-			urlObj.searchParams.set("callbackURL", "/verify?success=1");
-			urlObj.searchParams.set("errorURL", "/verify"); // back to verify page when error
+			urlObj.searchParams.set("callbackURL", `${base}/verify?success=1`);
+			urlObj.searchParams.set("errorURL", `${base}/verify`); // back to verify page when error
 			void sendEmail({
 				to: user.email,
 				subject: "Libiamo | Verify your email address",

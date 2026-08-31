@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { getNativeLanguageOptions } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema } from "$lib/schemas";
@@ -102,6 +103,6 @@ export const actions: Actions = {
 	signOut: async (event) => {
 		requireUser(event);
 		await auth.api.signOut({ headers: event.request.headers });
-		return redirect(302, "/sign-in");
+		return redirect(302, `${base}/sign-in`);
 	},
 };

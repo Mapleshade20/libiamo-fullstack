@@ -1,8 +1,9 @@
 import { error, redirect } from "@sveltejs/kit";
+import { base } from "$app/paths";
 
 export function requireUser(event: { locals: App.Locals }) {
 	const user = event.locals.user;
-	if (!user) throw redirect(302, "/sign-in");
+	if (!user) throw redirect(302, `${base}/sign-in`);
 
 	return user;
 }

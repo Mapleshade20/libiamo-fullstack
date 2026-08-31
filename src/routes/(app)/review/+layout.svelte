@@ -1,11 +1,12 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
+import { base } from "$app/paths";
 import { page } from "$app/state";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 
 let { children, data } = $props();
 
-let isManagePage = $derived(page.url.pathname === "/review/manage");
+let isManagePage = $derived(page.url.pathname === `${base}/review/manage`);
 let selectedLanguage = $derived.by((): LanguageCode | "all" => {
 	const requestedLanguage = page.url.searchParams.get("language");
 	if ((LANGUAGE_CODES as readonly string[]).includes(requestedLanguage ?? "")) return requestedLanguage as LanguageCode;
@@ -13,8 +14,8 @@ let selectedLanguage = $derived.by((): LanguageCode | "all" => {
 	return data.user.activeLanguage as LanguageCode;
 });
 let studyLanguage = $derived(selectedLanguage === "all" ? (data.user.activeLanguage as LanguageCode) : selectedLanguage);
-let studyHref = $derived(`/review?language=${studyLanguage}`);
-let manageHref = $derived(selectedLanguage === "all" ? "/review/manage" : `/review/manage?language=${selectedLanguage}`);
+let studyHref = $derived(`${base}/review?language=${studyLanguage}`);
+let manageHref = $derived(selectedLanguage === "all" ? `${base}/review/manage` : `${base}/review/manage?language=${selectedLanguage}`);
 
 function changeLanguage(event: Event) {
 	const language = (event.currentTarget as HTMLSelectElement).value;

@@ -1,4 +1,5 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { base } from "$app/paths";
 import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
@@ -28,5 +29,5 @@ export async function switchActiveLanguage(event: { locals: App.Locals; request:
 		})
 		.onConflictDoNothing();
 
-	return redirect(302, "/");
+	return redirect(302, `${base}/`);
 }

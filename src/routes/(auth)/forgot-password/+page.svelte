@@ -1,6 +1,7 @@
 <script lang="ts">
 import { tick } from "svelte";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
@@ -57,7 +58,7 @@ $effect(() => {
 				<div class="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
 					<p class="text-sm text-red-700 font-medium">Invalid or Expired Link</p>
 					<p class="text-sm text-red-600 mt-1">The reset link is invalid or has expired. Please request a new one.</p>
-					<a href="/forgot-password" class="mt-4 block text-sm underline text-blue-600 hover:text-blue-800"> Request a new reset link </a>
+					<a href="{base}/forgot-password" class="mt-4 block text-sm underline text-blue-600 hover:text-blue-800"> Request a new reset link </a>
 				</div>
 			{:else}
 				<!-- Reset form — stays visible on retryable server errors -->
@@ -132,5 +133,5 @@ $effect(() => {
 			</form>
 		{/if}
 	</Card.Content>
-	<Card.Footer class="text-sm"> <a href="/sign-in" class="text-muted-foreground hover:underline">Back to Sign In</a> </Card.Footer>
+	<Card.Footer class="text-sm"> <a href="{base}/sign-in" class="text-muted-foreground hover:underline">Back to Sign In</a> </Card.Footer>
 </Card.Root>

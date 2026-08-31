@@ -1,6 +1,7 @@
 <script lang="ts">
 import { tick } from "svelte";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
@@ -121,7 +122,7 @@ $effect(() => {
 	<Card.Footer class="text-sm">
 		<p class="text-muted-foreground">
 			Already have an account?
-			<a href="/sign-in" class="font-medium text-foreground hover:underline">Sign In</a>
+			<a href="{base}/sign-in" class="font-medium text-foreground hover:underline">Sign In</a>
 		</p>
 	</Card.Footer>
 </Card.Root>

@@ -3,6 +3,7 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
 import Star from "@lucide/svelte/icons/star";
+import { base } from "$app/paths";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import TranslateModal from "$lib/components/translate/TranslateModal.svelte";
 import { Badge } from "$lib/components/ui/badge";
@@ -55,7 +56,7 @@ function difficultyLabel(level: number): string {
 </div>
 
 <div class="task-stagger relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-2xl min-w-0 flex-col">
-	<a href="/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+	<a href="{base}/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
 		<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 		<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "task.returnToHall")}</span>
 	</a>
@@ -112,7 +113,7 @@ function difficultyLabel(level: number): string {
 		{#if showNativeLanguagePrompt}
 			<div class="mt-10 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
 				Set your native language before using translation help.
-				<a href="/profile" class="font-medium underline hover:no-underline">Go to profile settings</a>.
+				<a href="{base}/profile" class="font-medium underline hover:no-underline">Go to profile settings</a>.
 			</div>
 		{/if}
 
@@ -138,18 +139,18 @@ function difficultyLabel(level: number): string {
 					{#if isFinished}
 						<Button
 							class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
-							href="/task/{task.id}/feedback"
+							href="{base}/task/{task.id}/feedback"
 						>
 							{t(lang, "hall.reviewReport")}
 						</Button>
 					{:else if isAbandoned}
 						<!-- Abuse termination ends the session while still delivering the agent's
 						     parting reply, so the transcript must stay reachable to read it. -->
-						<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">
+						<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
 							{t(lang, "task.viewConversation")}
 						</Button>
 					{:else if isPracticeEnabled}
-						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
+						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">{t(lang, "task.startPractice")}</Button>
 					{:else}
 						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
 					{/if}

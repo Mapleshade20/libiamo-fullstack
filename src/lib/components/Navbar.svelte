@@ -3,6 +3,7 @@ import Menu from "@lucide/svelte/icons/menu";
 import X from "@lucide/svelte/icons/x";
 import { slide } from "svelte/transition";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { page } from "$app/state";
 import { type NavbarTransitionDirection, setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
@@ -32,19 +33,21 @@ interface Props {
 let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props = $props();
 
 // --- Nav items ---
+// Hrefs carry `base` so they work under a sub-path deploy and so they can be
+// compared directly against `page.url.pathname`, which also includes `base`.
 const appItems: NavItem[] = $derived([
-	{ href: "/review", label: "Review" },
-	{ href: "/", label: "Quests", exact: true, sectionPaths: ["/task", "/translate"] },
-	{ href: "/archive", label: "Archive" },
-	...(user.role !== "admin" ? [{ href: "/contribute", label: "Contribute" }] : []),
-	...(user.role === "admin" ? [{ href: "/admin/templates", label: "Admin" }] : []),
+	{ href: `${base}/review`, label: "Review" },
+	{ href: `${base}/`, label: "Quests", exact: true, sectionPaths: [`${base}/task`, `${base}/translate`] },
+	{ href: `${base}/archive`, label: "Archive" },
+	...(user.role !== "admin" ? [{ href: `${base}/contribute`, label: "Contribute" }] : []),
+	...(user.role === "admin" ? [{ href: `${base}/admin/templates`, label: "Admin" }] : []),
 ]);
 
 const adminItems: NavItem[] = [
-	{ href: "/admin/templates", label: "Templates" },
-	{ href: "/admin/schedule", label: "Schedule" },
-	{ href: "/admin/reviews", label: "Reviews" },
-	{ href: "/", label: "\u2190 App", exact: true, transitionDirection: "backward" },
+	{ href: `${base}/admin/templates`, label: "Templates" },
+	{ href: `${base}/admin/schedule`, label: "Schedule" },
+	{ href: `${base}/admin/reviews`, label: "Reviews" },
+	{ href: `${base}/`, label: "\u2190 App", exact: true, transitionDirection: "backward" },
 ];
 
 const navItems = $derived(mode === "app" ? appItems : adminItems);
@@ -156,7 +159,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 >
 	<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
 		<!-- Left: Logo -->
-		<a href="/" class="flex items-center gap-2">
+		<a href="{base}/" class="flex items-center gap-2">
 			<WineGlassIcon />
 			<span class="font-serif text-xl font-normal tracking-tight text-foreground">Libiamo</span>
 			{#if mode === "admin"}
@@ -199,7 +202,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 		<div class="flex items-center gap-3">
 			{#if mode === "app" && trialQuota}
 				<a
-					href="/profile"
+					href="{base}/profile"
 					class="hidden sm:flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {quotaTone === 'depleted'
 						? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
 						: quotaTone === 'low'
@@ -249,7 +252,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 						>
 							<form
 								method="POST"
-								action="/?/switchLanguage"
+								action="{base}/?/switchLanguage"
 								use:enhance={() => {
 									return async ({ update }) => {
 										langOpen = false;
@@ -279,7 +282,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 
 				<!-- Avatar -->
 				{#if avatarUrl}
-					<a href="/profile" class="flex items-center transition-opacity hover:opacity-80">
+					<a href="{base}/profile" class="flex items-center transition-opacity hover:opacity-80">
 						<img src={avatarUrl} alt={user.name} class="h-8 w-8 rounded-full border border-border object-cover shadow-sm">
 					</a>
 				{/if}

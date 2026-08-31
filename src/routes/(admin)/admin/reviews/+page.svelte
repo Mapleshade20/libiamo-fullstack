@@ -1,4 +1,5 @@
 <script lang="ts">
+import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import * as Table from "$lib/components/ui/table";
 import { type LanguageCode } from "$lib/constants";
@@ -38,7 +39,7 @@ function formatDate(date: Date | null): string {
 				{#each data.pendingContributions as c}
 					<Table.Row>
 						<Table.Cell>{c.id}</Table.Cell>
-						<Table.Cell class="max-w-[200px] truncate"> <a href="/admin/reviews/{c.id}" class="hover:underline">{c.titleBase}</a> </Table.Cell>
+						<Table.Cell class="max-w-[200px] truncate"> <a href="{base}/admin/reviews/{c.id}" class="hover:underline">{c.titleBase}</a> </Table.Cell>
 						<Table.Cell><Badge variant="outline">{(c.language as LanguageCode).toUpperCase()}</Badge></Table.Cell>
 						<Table.Cell class="text-xs">{c.interactionType}</Table.Cell>
 						<Table.Cell>
@@ -49,7 +50,9 @@ function formatDate(date: Date | null): string {
 						</Table.Cell>
 						<Table.Cell class="text-xs text-muted-foreground">{formatDate(c.submittedAt)}</Table.Cell>
 						<Table.Cell>
-							<a href="/admin/reviews/{c.id}" class="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"> Review </a>
+							<a href="{base}/admin/reviews/{c.id}" class="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+								Review
+							</a>
 						</Table.Cell>
 					</Table.Row>
 				{/each}

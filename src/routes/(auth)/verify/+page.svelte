@@ -1,4 +1,5 @@
 <script lang="ts">
+import { base } from "$app/paths";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -36,15 +37,18 @@ const actionNotification = $derived(
 		{:else if data.error}
 			<div class="space-y-3 text-center">
 				<p class="text-muted-foreground">The verification link may have expired.</p>
-				<Button href="/sign-in" variant="default">Sign In</Button>
+				<Button href="{base}/sign-in" variant="default">Sign In</Button>
 			</div>
 		{:else if data.success}
 			<div class="space-y-3 text-center">
 				<p class="text-muted-foreground">Email verified.</p>
-				<Button href="/" variant="default">Begin Your Journey</Button>
+				<Button href="{base}/" variant="default">Begin Your Journey</Button>
 			</div>
 		{:else}
-			<p class="text-center text-muted-foreground"><a href="/sign-in" class="font-medium text-foreground hover:underline">Sign in</a> to continue.</p>
+			<p class="text-center text-muted-foreground">
+				<a href="{base}/sign-in" class="font-medium text-foreground hover:underline">Sign in</a>
+				to continue.
+			</p>
 		{/if}
 	</Card.Content>
 </Card.Root>

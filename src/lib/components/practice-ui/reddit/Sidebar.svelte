@@ -7,6 +7,7 @@ import Search from "@lucide/svelte/icons/search";
 import Settings from "@lucide/svelte/icons/settings";
 import TrendingUp from "@lucide/svelte/icons/trending-up";
 import { fade, fly } from "svelte/transition";
+import { base } from "$app/paths";
 import { FEATURED_GAMES } from "./data";
 import { getAvatarColor } from "./utils";
 
@@ -171,7 +172,7 @@ const subredditColor = $derived(getAvatarColor(subreddit));
 				</div>
 				<Settings size={14} class="ml-auto shrink-0 text-[#878A8C]" />
 			</button>
-			<a href="/task/{taskId}" class="flex items-center gap-1.5 px-2 text-xs font-medium text-[#FF4500] hover:underline">
+			<a href="{base}/task/{taskId}" class="flex items-center gap-1.5 px-2 text-xs font-medium text-[#FF4500] hover:underline">
 				<LogOut size={12} />
 				{t.returnTask}
 			</a>

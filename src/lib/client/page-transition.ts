@@ -1,3 +1,5 @@
+import { base } from "$app/paths";
+
 export type PageTransitionKind = "none" | "fade" | "section-fade" | "navbar-forward" | "navbar-backward";
 export type NavbarTransitionDirection = "forward" | "backward";
 
@@ -16,7 +18,7 @@ function destinationKey(url: URL) {
 }
 
 function stableSection(pathname: string) {
-	if (pathname === "/review" || pathname === "/review/manage") return "review";
+	if (pathname === `${base}/review` || pathname === `${base}/review/manage`) return "review";
 	return null;
 }
 

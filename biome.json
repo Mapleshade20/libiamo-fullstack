@@ -56,6 +56,16 @@
 	},
 	"overrides": [
 		{
+			"includes": ["test/base-path.test.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noTemplateCurlyInString": "off"
+					}
+				}
+			}
+		},
+		{
 			"includes": ["**/*.svelte"],
 			"linter": {
 				"rules": {

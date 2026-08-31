@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { db } from "$lib/server/db";
@@ -9,7 +10,7 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) {
-		return redirect(302, "/");
+		return redirect(302, `${base}/`);
 	}
 	return {};
 };
@@ -56,6 +57,6 @@ export const actions: Actions = {
 			return fail(500, { message: "Unexpected error", values: raw });
 		}
 
-		return redirect(302, "/verify?pending=1");
+		return redirect(302, `${base}/verify?pending=1`);
 	},
 };

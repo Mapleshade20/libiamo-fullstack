@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { forgotPasswordSchema, resetPasswordSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import type { Actions, PageServerLoad } from "./$types";
@@ -29,7 +30,7 @@ export const actions: Actions = {
 			await auth.api.requestPasswordReset({
 				body: {
 					email: result.data.email,
-					redirectTo: "/forgot-password",
+					redirectTo: `${base}/forgot-password`,
 				},
 			});
 		} catch {
@@ -65,6 +66,6 @@ export const actions: Actions = {
 			return fail(500, { resetMessage: "Unexpected error" });
 		}
 
-		return redirect(302, "/sign-in?reset=success");
+		return redirect(302, `${base}/sign-in?reset=success`);
 	},
 };

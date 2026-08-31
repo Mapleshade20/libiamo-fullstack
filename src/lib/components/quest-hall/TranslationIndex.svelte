@@ -5,6 +5,7 @@ import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
 import { fly } from "svelte/transition";
+import { base } from "$app/paths";
 import { type LanguageCode, t } from "$lib/i18n";
 import { shiftCalendarMonth } from "$lib/month";
 
@@ -77,7 +78,7 @@ function changeMonth(amount: -1 | 1) {
 					{#each visibleTasks as task, index (task.id)}
 						{@const status = statusMap[String(task.id)]}
 						<li style="--translation-order: {index};">
-							<a href="/translate/{task.id}" class:is-complete={status === "completed"}>
+							<a href="{base}/translate/{task.id}" class:is-complete={status === "completed"}>
 								<span class="translation-number">{String(index + 1).padStart(2, "0")}</span>
 								<span class="translation-mark">
 									{#if status === "completed"}

@@ -2,6 +2,7 @@
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Search from "@lucide/svelte/icons/search";
+import { base } from "$app/paths";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
 import { type LanguageCode, t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
@@ -131,7 +132,7 @@ function handleCardListKeydown(event: KeyboardEvent) {
 					{t(lang, "review.manage.filter")}
 				</button>
 				<a
-					href="/review/manage"
+					href="{base}/review/manage"
 					class="flex h-10 items-center rounded-lg border border-border px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
 					>{t(lang, "review.manage.clear")}</a
 				>

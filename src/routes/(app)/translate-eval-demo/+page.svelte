@@ -3,6 +3,7 @@ import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Home from "@lucide/svelte/icons/home";
 import { fade } from "svelte/transition";
 import { browser } from "$app/environment";
+import { base } from "$app/paths";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
 import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
@@ -364,7 +365,7 @@ $effect(() => {
 				<h1 tabindex="-1" class="font-serif text-4xl tracking-tight focus:outline-none">{t(UI_LANG, "eval.complete.title")}</h1>
 				<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(UI_LANG, "eval.complete.body")}</p>
 				<Button
-					href="/translate"
+					href="{base}/translate"
 					size="icon"
 					class="mt-8 size-12 rounded-full"
 					aria-label={t(UI_LANG, "eval.complete.homeAria")}

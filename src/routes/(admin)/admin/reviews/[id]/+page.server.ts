@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
+import { base } from "$app/paths";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { templateContribution, user } from "$lib/server/db/schema";
@@ -70,6 +71,6 @@ export const actions: Actions = {
 			.set({ status: "rejected", reviewedBy: admin.id, reviewNotes })
 			.where(and(eq(templateContribution.id, id), eq(templateContribution.status, "pending")));
 
-		throw redirect(302, "/admin/reviews");
+		throw redirect(302, `${base}/admin/reviews`);
 	},
 };

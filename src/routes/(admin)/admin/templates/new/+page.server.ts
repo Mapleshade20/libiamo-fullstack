@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { parseTemplateForm, parseTemplateJson, prepareVariantPayload } from "$lib/admin/template-actions";
 import { templateSchema } from "$lib/schemas";
 import { requireAdmin } from "$lib/server/auth/authz";
@@ -102,7 +103,7 @@ export const actions: Actions = {
 			});
 		}
 
-		return redirect(302, "/admin/templates");
+		return redirect(302, `${base}/admin/templates`);
 	},
 
 	importJson: async (event) => {

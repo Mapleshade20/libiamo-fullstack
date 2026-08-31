@@ -2,6 +2,7 @@
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
+import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
@@ -285,7 +286,7 @@ function handleFinishCancel() {
 
 	<div class="mx-auto w-[92%] max-w-[1200px] pt-6 pb-12">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-			<a href={`/task/${taskId}`} class="text-[#900] hover:border-b hover:border-dotted hover:border-[#900]">← {t.returnTask}</a>
+			<a href={`${base}/task/${taskId}`} class="text-[#900] hover:border-b hover:border-dotted hover:border-[#900]">← {t.returnTask}</a>
 			{#if !session.isCompleted && session.sessionId}
 				<button
 					type="button"

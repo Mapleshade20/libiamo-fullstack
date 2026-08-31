@@ -2,6 +2,7 @@
 import Eye from "@lucide/svelte/icons/eye";
 import EyeOff from "@lucide/svelte/icons/eye-off";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
@@ -70,7 +71,9 @@ const actionNotification = $derived(
 		</form>
 	</Card.Content>
 	<Card.Footer class="flex flex-col gap-2 text-sm">
-		<a href="/forgot-password" class="text-muted-foreground hover:underline">Forgot password?</a>
-		<p class="text-muted-foreground">Don't have an account? <a href="/sign-up" class="font-medium text-foreground hover:underline">Sign Up</a></p>
+		<a href="{base}/forgot-password" class="text-muted-foreground hover:underline">Forgot password?</a>
+		<p class="text-muted-foreground">
+			Don't have an account? <a href="{base}/sign-up" class="font-medium text-foreground hover:underline">Sign Up</a>
+		</p>
 	</Card.Footer>
 </Card.Root>

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { untrack } from "svelte";
+import { base } from "$app/paths";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
@@ -87,7 +88,7 @@ async function rate(rating: number) {
 	isSubmitting = true;
 
 	try {
-		const res = await fetch(`/api/review/${currentCard.id}/rate`, {
+		const res = await fetch(`${base}/api/review/${currentCard.id}/rate`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ rating, elapsedSeconds: Math.round((Date.now() - cardRevealedAt) / 1000) }),
@@ -162,7 +163,9 @@ async function rate(rating: number) {
 
 	{#if currentCard}
 		<div class="border-t border-border pt-6 text-center">
-			<a href="/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground">{t(lang, "review.editCurrent")}</a>
+			<a href="{base}/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground"
+				>{t(lang, "review.editCurrent")}</a
+			>
 		</div>
 	{/if}
 </div>

@@ -5,6 +5,7 @@ import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
+import { base } from "$app/paths";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
@@ -216,14 +217,14 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
-				<a href="/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
+				<a href="{base}/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
 					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
 				</a>
 				<div class="min-w-0 flex items-center gap-3">
 					<h1 class="min-w-0 truncate text-base">{data.taskTitle}</h1>
 					<Button
-						href="/task/{data.taskId}/session"
+						href="{base}/task/{data.taskId}/session"
 						variant="outline"
 						size="icon-sm"
 						class="border-[#d8d0c5] bg-white/70 text-[#2a2520] hover:bg-[#f5f2ed]"

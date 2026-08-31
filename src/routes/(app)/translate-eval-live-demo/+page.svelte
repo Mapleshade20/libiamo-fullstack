@@ -10,6 +10,7 @@ import type { ActionResult } from "@sveltejs/kit";
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
+import { base } from "$app/paths";
 import { autoGrowTextarea } from "$lib/client/auto-grow-textarea";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import DiffView from "$lib/components/translate-evaluation/DiffView.svelte";
@@ -566,7 +567,7 @@ async function generatePractice(): Promise<void> {
 
 <div class="mx-auto w-full max-w-5xl">
 	<div class="mb-8 flex flex-wrap items-center justify-between gap-3">
-		<a href="/translate-eval-demo" class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+		<a href="{base}/translate-eval-demo" class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
 			<ArrowLeft size={15} />
 			Static visual demo
 		</a>

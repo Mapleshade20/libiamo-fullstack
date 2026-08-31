@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { parseTemplateForm, prepareVariantPayload } from "$lib/admin/template-actions";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { templateContributionSchema } from "$lib/schemas";
@@ -15,7 +16,7 @@ function hasOversizedSlotValues(slotValues: Record<string, string>) {
 
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
-	if (user.role === "admin") throw redirect(302, "/");
+	if (user.role === "admin") throw redirect(302, `${base}/`);
 
 	const contributions = await db
 		.select({
@@ -75,6 +76,6 @@ export const actions: Actions = {
 			});
 		}
 
-		return redirect(302, "/contribute?success=1");
+		return redirect(302, `${base}/contribute?success=1`);
 	},
 };

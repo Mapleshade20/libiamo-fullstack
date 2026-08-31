@@ -54,7 +54,11 @@ describe("auth server configuration", () => {
 		expect(mockBetterAuth).toHaveBeenCalledTimes(1);
 
 		const config = mockBetterAuth.mock.calls[0]?.[0] as any;
-		expect(config.baseURL).toBe("http://localhost:5173");
+		// Better Auth only appends its default "/api/auth" when baseURL has no path,
+		// so we always spell the mount point out and pin basePath to "/".
+		expect(config.baseURL).toBe("http://localhost:5173/api/auth");
+		expect(config.basePath).toBe("/");
+		expect(config.advanced.defaultCookieAttributes.path).toBe("/");
 		expect(config.secret).toBe("test-secret");
 		expect(config.emailAndPassword.enabled).toBe(true);
 		expect(config.emailAndPassword.requireEmailVerification).toBe(true);
@@ -97,6 +101,38 @@ describe("auth server configuration", () => {
 			subject: "Libiamo | Reset your password",
 			text: "Click the link to reset your password: https://example.com/reset-token",
 			html: expect.any(String),
+		});
+	});
+
+	describe("sub-path deployment", () => {
+		beforeEach(() => {
+			vi.resetModules();
+			vi.doMock("$app/paths", () => ({ base: "/se-projects/libiamo", assets: "" }));
+		});
+
+		it("mounts the auth router and scopes cookies under the base path", async () => {
+			await import("$lib/server/auth/auth");
+
+			const config = mockBetterAuth.mock.calls[0]?.[0] as any;
+			expect(config.baseURL).toBe("http://localhost:5173/se-projects/libiamo/api/auth");
+			expect(config.basePath).toBe("/");
+			// Many projects share this origin, so cookies must not escape our prefix.
+			expect(config.advanced.defaultCookieAttributes.path).toBe("/se-projects/libiamo");
+		});
+
+		it("points verification callbacks at base-path-aware routes", async () => {
+			await import("$lib/server/auth/auth");
+
+			const config = mockBetterAuth.mock.calls[0]?.[0] as any;
+			await config.emailVerification.sendVerificationEmail({
+				user: { email: "learner@example.com" },
+				url: "https://example.com/verify-token",
+			});
+
+			const sent = mockSendEmail.mock.calls[0]?.[0] as { text: string };
+			const callbackURL = new URL(sent.text.split(": ").pop() as string).searchParams;
+			expect(callbackURL.get("callbackURL")).toBe("/se-projects/libiamo/verify?success=1");
+			expect(callbackURL.get("errorURL")).toBe("/se-projects/libiamo/verify");
 		});
 	});
 });

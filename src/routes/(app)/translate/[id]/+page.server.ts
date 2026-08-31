@@ -1,4 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
+import { base } from "$app/paths";
 import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
@@ -72,7 +73,7 @@ export const actions: Actions = {
 		} catch (cause) {
 			return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
-		throw redirect(303, `/translate/${templateId}/attempt`);
+		throw redirect(303, `${base}/translate/${templateId}/attempt`);
 	},
 
 	retake: async (event) => {
@@ -86,6 +87,6 @@ export const actions: Actions = {
 		} catch (cause) {
 			return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
-		throw redirect(303, `/translate/${templateId}/attempt`);
+		throw redirect(303, `${base}/translate/${templateId}/attempt`);
 	},
 };

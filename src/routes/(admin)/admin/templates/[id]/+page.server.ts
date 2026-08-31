@@ -1,6 +1,7 @@
 import { type ActionFailure, error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { base } from "$app/paths";
 import { parseVariantFormData, prepareVariantPayload } from "$lib/admin/template-actions";
 import { buildTemplateImportPreview } from "$lib/admin/template-import-preview";
 import { templateSchema } from "$lib/schemas";
@@ -118,7 +119,7 @@ export const actions: Actions = {
 			await tx.delete(template).where(eq(template.id, id));
 		});
 
-		return redirect(302, "/admin/templates");
+		return redirect(302, `${base}/admin/templates`);
 	},
 
 	activateTemplate: async (event) => {

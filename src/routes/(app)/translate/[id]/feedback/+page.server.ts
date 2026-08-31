@@ -1,5 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
+import { base } from "$app/paths";
 import type { EvaluationData } from "$lib/components/translate-evaluation/types";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
@@ -55,9 +56,9 @@ async function routeContext(event: { locals: App.Locals; params: { id: string } 
 	if (!id) throw error(404, "Template not found");
 	const template = await getTranslationTemplate(id, user.activeLanguage);
 	if (!template) throw error(404, "Translation template not found");
-	if (!user.nativeLanguage) throw redirect(303, `/translate/${id}`);
+	if (!user.nativeLanguage) throw redirect(303, `${base}/translate/${id}`);
 	const attempt = await findTranslationAttempt({ userId: user.id, templateId: id, promptLanguage: user.nativeLanguage });
-	if (!attempt) throw redirect(303, `/translate/${id}`);
+	if (!attempt) throw redirect(303, `${base}/translate/${id}`);
 	return { user, id, template, attempt };
 }
 
@@ -90,7 +91,7 @@ function evaluationData(
 
 export const load: PageServerLoad = async (event) => {
 	const { id, template, attempt } = await routeContext(event);
-	if (attempt.workflowPhase === "draft") throw redirect(303, `/translate/${id}/attempt`);
+	if (attempt.workflowPhase === "draft") throw redirect(303, `${base}/translate/${id}/attempt`);
 	const hydrated = attempt.evaluation ? await hydrateTranslationEvaluation(attempt) : null;
 	const practiceNotes = attempt.practiceGeneratedAt ? await getTranslationPracticeNotes(attempt) : [];
 	return {

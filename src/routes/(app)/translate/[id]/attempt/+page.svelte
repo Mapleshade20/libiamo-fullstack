@@ -5,6 +5,7 @@ import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Send from "@lucide/svelte/icons/send";
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
+import { base } from "$app/paths";
 import {
 	parseTranslationDraft,
 	serializeTranslationDraft,
@@ -52,7 +53,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 <svelte:window onkeydown={(event) => { if (event.key === "Escape") candidatePickerIndex = null; }} />
 
 <div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
-	<a href="/translate/{data.template.id}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+	<a href="{base}/translate/{data.template.id}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
 		><ArrowLeft size={15} />{t(lang, "common.back")}</a
 	>
 	<header class="mt-8 border-b border-border pb-7">

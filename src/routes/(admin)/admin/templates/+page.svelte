@@ -1,4 +1,5 @@
 <script lang="ts">
+import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Table from "$lib/components/ui/table";
@@ -19,7 +20,7 @@ function submitFilters(event: Event) {
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1 class="text-3xl">Templates</h1>
-		<Button href="/admin/templates/new">New Template</Button>
+		<Button href="{base}/admin/templates/new">New Template</Button>
 	</div>
 
 	<!-- Filters -->
@@ -73,7 +74,7 @@ function submitFilters(event: Event) {
 							{tpl.isActive ? 'Active' : 'Inactive'}
 						</span>
 					</Table.Cell>
-					<Table.Cell> <a href="/admin/templates/{tpl.id}" class="text-sm text-muted-foreground hover:underline">Edit</a> </Table.Cell>
+					<Table.Cell> <a href="{base}/admin/templates/{tpl.id}" class="text-sm text-muted-foreground hover:underline">Edit</a> </Table.Cell>
 				</Table.Row>
 			{/each}
 		</Table.Body>

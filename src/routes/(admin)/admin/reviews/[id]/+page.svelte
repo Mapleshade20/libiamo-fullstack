@@ -2,6 +2,7 @@
 import Pencil from "@lucide/svelte/icons/pencil";
 import X from "@lucide/svelte/icons/x";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
@@ -33,7 +34,9 @@ function fmtDate(d: Date | null): string {
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<a href="/admin/reviews" class="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2">&larr; Back to Review Pool</a>
+		<a href="{base}/admin/reviews" class="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+			>&larr; Back to Review Pool</a
+		>
 		<Badge variant="outline" class={statusBadge.class}>{statusBadge.label}</Badge>
 	</div>
 
@@ -170,7 +173,7 @@ function fmtDate(d: Date | null): string {
 	{#if c.status === "pending"}
 		<div class="h-px bg-border"></div>
 		<div class="flex items-center gap-3">
-			<a href="/admin/templates/new?fromContribution={c.id}">
+			<a href="{base}/admin/templates/new?fromContribution={c.id}">
 				<Button class="bg-green-600 hover:bg-green-700 text-white">
 					<Pencil size={16} class="mr-1.5" />
 					Edit &amp; Approve

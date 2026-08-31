@@ -7,6 +7,7 @@ import Gem from "@lucide/svelte/icons/gem";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Star from "@lucide/svelte/icons/star";
 import { enhance } from "$app/forms";
+import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
@@ -48,7 +49,7 @@ function difficultyLabel(level: number): string {
 </div>
 
 <div class="task-stagger relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-2xl min-w-0 flex-col">
-	<a href="/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+	<a href="{base}/" class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
 		<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 		<span class="text-sm font-medium uppercase tracking-wide">{t(lang, "task.returnToHall")}</span>
 	</a>
@@ -101,7 +102,7 @@ function difficultyLabel(level: number): string {
 				</div>
 
 				{#if data.blockedReason}
-					<Button href="/profile" variant="outline" class="w-full justify-center sm:w-auto">
+					<Button href="{base}/profile" variant="outline" class="w-full justify-center sm:w-auto">
 						<AlertCircle size={14} />
 						{t(lang, "translate.details.settings")}
 					</Button>

@@ -2,6 +2,7 @@
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Mail from "@lucide/svelte/icons/mail";
 import { fade } from "svelte/transition";
+import { base } from "$app/paths";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
@@ -17,7 +18,7 @@ let total = $derived(items.reduce((sum, item) => sum + item.unreadCount, 0));
 
 async function refresh() {
 	try {
-		const res = await fetch("/api/unread");
+		const res = await fetch(`${base}/api/unread`);
 		if (!res.ok) return;
 		const data = (await res.json()) as { items: UnreadInboxItem[] };
 		items = data.items;
