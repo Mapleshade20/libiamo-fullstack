@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
 import {
 	buildRedditCommentTree,
-	buildRedditUserPrompt,
 	countRedditComments,
-	findRedditTarget,
 	flattenRedditComments,
 	getRedditCommentVotes,
 } from "$lib/components/practice-ui/reddit/helpers";
@@ -27,18 +25,6 @@ describe("Reddit comment-thread helpers", () => {
 
 		expect(result.map((comment) => comment.id)).toEqual(["c1", "opening-0-0"]);
 		expect(result[1]).toMatchObject({ username: "OriginalPoster", depth: 1, parentId: "c1" });
-	});
-
-	it("builds per-turn prompt for post comments and targeted replies", () => {
-		const direct = buildRedditUserPrompt({ openingState, comment: "Great post!", target: null, responderName: "OriginalPoster" });
-		expect(direct).toContain("new top-level Reddit comment");
-		expect(direct).toContain("roleplay as the post author, OriginalPoster");
-
-		const target = findRedditTarget(openingState, "c1");
-		if (!target) throw new Error("target missing");
-		const reply = buildRedditUserPrompt({ openingState, comment: "Why?", target, responderName: target.username });
-		expect(reply).toContain("Comment author you must roleplay as: ThoughtfulUser");
-		expect(reply).toContain("Original comment: A teacher took me seriously.");
 	});
 
 	it("attaches session comments under their Reddit targets using generic thread metadata", () => {

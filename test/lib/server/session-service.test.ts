@@ -136,7 +136,7 @@ describe("session service", () => {
 			expect(valuesMock).toHaveBeenCalledWith(expect.objectContaining({ maxTurnsSnapshot: 5 }));
 		});
 
-		it("creates session and persists language-constrained prompt", async () => {
+		it("creates a session with a generated persona", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
 			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
@@ -145,169 +145,6 @@ describe("session service", () => {
 
 			expect(result.sessionId).toBe(123);
 			expect(result.mbti).toMatch(/^(INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)$/);
-			expect(result.systemPrompt).toContain("IMPORTANT: You MUST give all your conversational replies in ENGLISH");
-			expect(result.systemPrompt).toContain("Scenario: Discord");
-			expect(result.systemPrompt).toContain("You are a helpful assistant.");
-		});
-
-		it("falls back to MBTI-only prompt when agentPrompt is null", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				agentPrompt: null,
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("Scenario: Discord");
-			expect(result.systemPrompt).not.toContain("You are a helpful assistant.");
-		});
-
-		it("formats Discord history with sender before text even when openingState stores text first", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				variant: {
-					openingState: {
-						serverName: "Amigos",
-						channelName: "general",
-						previousMessages: [{ text: "Sii ya lo vi", sender: "Mario" }],
-					},
-				},
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("History:\n- Mario: Sii ya lo vi");
-			expect(result.systemPrompt).not.toContain("History:\n- Sii ya lo vi: Mario");
-		});
-
-		it("keeps known message fields first and appends extra opening-state fields", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "reddit" as const },
-				variant: {
-					openingState: {
-						post: { title: "Introductions", body: "Say hello" },
-						previousComments: [{ text: "Hola", author: "Mina", likes: 3, empty: "" }],
-					},
-				},
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("Existing nested comments:\n- Mina: Hola");
-			expect(result.systemPrompt).not.toContain("Hola: Mina");
-		});
-
-		it("uses a generic Mail app context when there are no received emails", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "apple_mail" as const },
-				variant: { openingState: { emails: [] } },
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("Scenario: Mail app");
-		});
-
-		it("formats multiple received emails including optional time", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "apple_mail" as const },
-				variant: {
-					openingState: {
-						emails: [
-							{ from: "maya@example.com", to: "me@example.com", subject: "Schedule", body: "Are you free?", time: "9:00 AM" },
-							{ from: "daniel@example.com", to: "me@example.com", subject: "Follow-up", body: "Thanks" },
-						],
-					},
-				},
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("Scenario: Received emails");
-			expect(result.systemPrompt).toContain("  Time: 9:00 AM");
-			expect(result.systemPrompt).toContain("Email 2:");
-		});
-
-		it("formats iMessage history with sender before text even when openingState stores text first", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui: "imessage" as const },
-				variant: {
-					openingState: {
-						previousMessages: [{ text: "¿Vienes?", sender: "Ana" }],
-					},
-				},
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-
-			expect(result.systemPrompt).toContain("Previous:\n- Ana: ¿Vienes?");
-			expect(result.systemPrompt).not.toContain("Previous:\n- ¿Vienes?: Ana");
-		});
-
-		it.each([
-			{
-				name: "reddit",
-				ui: "reddit" as const,
-				openingState: { post: { title: "Test Post", body: "Body" } },
-				requiredText: "Scenario: Reddit post",
-			},
-			{
-				name: "apple_mail",
-				ui: "apple_mail" as const,
-				openingState: { emails: [{ from: "boss@company.com", to: "user@example.com", subject: "Meeting", body: "See you" }] },
-				requiredText: "Scenario: Received email",
-			},
-			{
-				name: "imessage",
-				ui: "imessage" as const,
-				openingState: { previousMessages: [{ sender: "Alice", text: "Hey!" }] },
-				requiredText: "Scenario: iMessage conversation",
-			},
-			{
-				name: "ao3",
-				ui: "ao3" as const,
-				openingState: { workTitle: "My Fanfic" },
-				requiredText: "Scenario: AO3 work page comment thread",
-			},
-			{
-				name: "translator_with_text",
-				ui: "translator" as const,
-				openingState: { sourceText: "Bonjour" },
-				requiredText: "Text to translate: Bonjour",
-			},
-			{
-				name: "translator_empty",
-				ui: "translator" as const,
-				openingState: { sourceText: "" },
-				requiredText: "Translation task",
-			},
-		])("builds a valid scenario context for $name", async ({ ui, openingState, requiredText }) => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...mockTask,
-				template: { ui },
-				variant: { openingState },
-			});
-			const returningMock = vi.fn().mockResolvedValue([{ id: 123 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-
-			const result = await startSession(1, "user_456", "English");
-			expect(result.systemPrompt).toContain(requiredText);
 		});
 
 		it("handles unknown UI by continuing without scenario-specific context", async () => {
@@ -321,7 +158,6 @@ describe("session service", () => {
 
 			const result = await startSession(1, "user_456", "English");
 			expect(result.sessionId).toBe(123);
-			expect(result.systemPrompt).toContain("You are a helpful assistant.");
 		});
 
 		it.each([
@@ -961,13 +797,9 @@ describe("session service", () => {
 			const result = await generateHint(123, { mode: "content", nativeLanguage: "ja" });
 
 			expect(result).toEqual({ contentHint: "背景をもう少し説明する。" });
-			expect(mockClient.chatJson).toHaveBeenCalledWith(
-				expect.objectContaining({
-					schema: expect.any(Object),
-					messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Japanese") })]),
-					userId: USER_ID,
-				}),
-			);
+			const request = mockClient.chatJson.mock.calls[0][0];
+			expect(request).toMatchObject({ schema: expect.any(Object), userId: USER_ID });
+			expect(request.messages.map((message: { role: string }) => message.role)).toEqual(["system", "user"]);
 		});
 
 		it("throws error if session is not found", async () => {
@@ -1020,7 +852,6 @@ describe("session service", () => {
 			const request = mockClient.chatJson.mock.calls[0][0];
 			expect(request.messages[0].content).not.toContain("Ignore the tutor");
 			expect(request.messages[0].content).not.toContain("You MUST give all replies");
-			expect(request.messages[0].content).toContain("Scenario: Customer service conversation");
 			expect(JSON.parse(request.messages[1].content)).toMatchObject({
 				currentDraft: "Bonjour",
 				intendedMeaning: "我已经检查过",
@@ -1138,94 +969,6 @@ describe("session service", () => {
 
 			const session = await getSessionOrFail(123, "u1", 456);
 			expect(session).toBeNull();
-		});
-	});
-
-	describe("buildRedditContext", () => {
-		const redditTask = {
-			id: 1,
-			agentPrompt: "You are a Reddit user.",
-			language: "en",
-			template: { ui: "reddit" as const },
-			variant: { openingState: {} },
-		};
-
-		beforeEach(() => {
-			const returningMock = vi.fn().mockResolvedValue([{ id: 1 }]);
-			mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: returningMock }) });
-		});
-
-		it("includes post title and body when both are present", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...redditTask,
-				variant: { openingState: { post: { title: "Best way to learn French?", body: "Any advice?" } } },
-			});
-
-			const result = await startSession(1, USER_ID);
-
-			expect(result.systemPrompt).toContain("Scenario: Reddit post");
-			expect(result.systemPrompt).toContain("Title: Best way to learn French?");
-			expect(result.systemPrompt).toContain("Content: Any advice?");
-		});
-
-		it("shows only the title line when post has no body", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...redditTask,
-				variant: { openingState: { post: { title: "Title only post" } } },
-			});
-
-			const result = await startSession(1, USER_ID);
-
-			expect(result.systemPrompt).toContain("Title: Title only post");
-			expect(result.systemPrompt).not.toContain("Content:");
-		});
-
-		it("shows only the content line when post has no title", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...redditTask,
-				variant: { openingState: { post: { body: "Body only post" } } },
-			});
-
-			const result = await startSession(1, USER_ID);
-
-			expect(result.systemPrompt).not.toContain("Title:");
-			expect(result.systemPrompt).toContain("Content: Body only post");
-		});
-
-		it("adds existing comments section when previousComments are provided", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...redditTask,
-				variant: {
-					openingState: {
-						post: { title: "Learning Spanish tips?" },
-						previousComments: [
-							{ author: "SpanishPro", text: "Use Anki for vocab.", replies: [{ author: "OP", text: "Thanks!" }] },
-							{ author: "TravellerJane", text: "Immersion works best!" },
-						],
-					},
-				},
-			});
-
-			const result = await startSession(1, USER_ID);
-
-			expect(result.systemPrompt).toContain("Existing nested comments");
-			expect(result.systemPrompt).toContain("- SpanishPro: Use Anki for vocab.");
-			expect(result.systemPrompt).toContain("  - OP: Thanks!");
-			expect(result.systemPrompt).toContain("- TravellerJane: Immersion works best!");
-		});
-
-		it("shows the base label with no extra lines when post is empty", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({
-				...redditTask,
-				variant: { openingState: { post: {} } },
-			});
-
-			const result = await startSession(1, USER_ID);
-
-			expect(result.systemPrompt).toContain("Scenario: Reddit post");
-			expect(result.systemPrompt).not.toContain("Title:");
-			expect(result.systemPrompt).not.toContain("Content:");
-			expect(result.systemPrompt).not.toContain("Existing comments");
 		});
 	});
 

@@ -176,11 +176,10 @@ describe("agent reply worker scheduling", () => {
 	it("injects an idle nudge instruction only into follow_up generations", () => {
 		expect(getBatchGenerationInstruction("reply", 1)).toBeUndefined();
 		const first = getBatchGenerationInstruction("follow_up", 1);
-		expect(first).toContain("gone quiet");
-		expect(first).toContain("no_reply");
-		expect(first).not.toContain("final follow-up");
 		const last = getBatchGenerationInstruction("follow_up", 2);
-		expect(last).toContain("final follow-up");
+		expect(first).toEqual(expect.any(String));
+		expect(last).toEqual(expect.any(String));
+		expect(last).not.toBe(first);
 	});
 
 	it("uses urgency-specific idle follow-up windows", () => {

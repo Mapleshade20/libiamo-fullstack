@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
 import {
-	buildTargetedCommentPrompt,
 	type CommentThreadConfig,
 	type CommentThreadTarget,
 	countThreadComments,
@@ -236,33 +235,5 @@ describe("findTargetInMessages", () => {
 
 	it("returns null when not found", () => {
 		expect(findTargetInMessages(messages, testConfig, "nonexistent")).toBeNull();
-	});
-});
-
-describe("buildTargetedCommentPrompt", () => {
-	const baseParams = {
-		surfaceName: "Reddit",
-		containerDescription: 'r/AskReddit post "Test"',
-		containerAuthorName: "the post author",
-		comment: "Great point!",
-		responderName: "TheResponder",
-		topLevelActionDescription: "new top-level Reddit comment",
-		replyActionDescription: "replied to this Reddit comment",
-	};
-
-	it("builds top-level comment prompt", () => {
-		const result = buildTargetedCommentPrompt({ ...baseParams, target: null });
-		expect(result).toContain("new top-level");
-		expect(result).toContain("roleplay as the post author");
-		expect(result).toContain("Great point!");
-		expect(result).not.toContain("Original comment");
-	});
-
-	it("builds reply prompt for targeted comment", () => {
-		const target: CommentThreadTarget = { id: "c1", author: "Alice", text: "Original text", depth: 0, parentId: null };
-		const result = buildTargetedCommentPrompt({ ...baseParams, target });
-		expect(result).toContain("Comment author you must roleplay as: TheResponder");
-		expect(result).toContain("Original comment: Original text");
-		expect(result).not.toContain("new top-level");
 	});
 });

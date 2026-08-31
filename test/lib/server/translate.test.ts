@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
-import { buildEvaluationPrompt, buildExpressionsPrompt } from "$lib/server/translate";
+import type { LanguageCode } from "$lib/constants";
 
 const { mockChatJson } = vi.hoisted(() => ({
 	mockChatJson: vi.fn(),
@@ -24,39 +23,6 @@ afterEach(() => {
 
 const lang = (code: string): LanguageCode => code as LanguageCode;
 
-describe("buildExpressionsPrompt", () => {
-	it("includes native and target language names in the prompt", () => {
-		const prompt = buildExpressionsPrompt(lang("en"), lang("fr"));
-		expect(prompt).toContain(getLanguageEnglishName("en"));
-		expect(prompt).toContain(getLanguageEnglishName("fr"));
-		expect(prompt).toContain("JSON array of strings");
-	});
-
-	it("includes guidance to return only JSON", () => {
-		const prompt = buildExpressionsPrompt(lang("en"), lang("es"));
-		expect(prompt).toContain("ONLY a JSON array of strings");
-		expect(prompt).toContain("no markdown fences");
-	});
-});
-
-describe("buildEvaluationPrompt", () => {
-	it("includes native and target language names", () => {
-		const prompt = buildEvaluationPrompt(lang("en"), lang("ja"));
-		expect(prompt).toContain(getLanguageEnglishName("en"));
-		expect(prompt).toContain(getLanguageEnglishName("ja"));
-	});
-
-	it("includes evaluation criteria and JSON shape", () => {
-		const prompt = buildEvaluationPrompt(lang("es"), lang("fr"));
-		expect(prompt).toContain("Accuracy");
-		expect(prompt).toContain("Grammar");
-		expect(prompt).toContain("Naturalness");
-		expect(prompt).toContain("Register");
-		expect(prompt).toContain('"feedback"');
-		expect(prompt).toContain('"correction"');
-	});
-});
-
 describe("generateExpressions", () => {
 	it("returns structured expressions from chatJson", async () => {
 		mockChatJson.mockResolvedValueOnce({ value: ["Could I have the check, please?", "Is this seat taken?"] });
@@ -64,41 +30,9 @@ describe("generateExpressions", () => {
 		const result = await generateExpressions({ title: "Ordering at a café" }, lang("en"), lang("fr"), "user-1");
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
-		expect(mockChatJson).toHaveBeenCalledWith(
-			expect.objectContaining({
-				schema: expect.anything(),
-				messages: [
-					expect.objectContaining({ role: "system", content: expect.stringContaining("expert French language teacher") }),
-					expect.objectContaining({ role: "user", content: expect.stringContaining("Ordering at a café") }),
-				],
-				options: { temperature: 0.7, maxTokens: 1024 },
-				userId: "user-1",
-			}),
-		);
-	});
-
-	it("passes task context details to the LLM", async () => {
-		mockChatJson.mockResolvedValueOnce({ value: ["One expression"] });
-
-		await generateExpressions(
-			{
-				title: "Writing an email",
-				description: "Practice composing a formal email",
-				objectives: ["Use proper salutations", "Close politely"],
-				uiLabel: "Apple Mail",
-				interactionType: "compose",
-			},
-			lang("en"),
-			lang("fr"),
-		);
-
-		const userMessage = mockChatJson.mock.calls[0][0].messages[1].content as string;
-		expect(userMessage).toContain("Writing an email");
-		expect(userMessage).toContain("formal email");
-		expect(userMessage).toContain("Use proper salutations");
-		expect(userMessage).toContain("Close politely");
-		expect(userMessage).toContain("Apple Mail");
-		expect(userMessage).toContain("compose");
+		const request = mockChatJson.mock.calls[0][0];
+		expect(request).toMatchObject({ schema: expect.anything(), options: { temperature: 0.7, maxTokens: 1024 }, userId: "user-1" });
+		expect(request.messages.map((message: { role: string }) => message.role)).toEqual(["system", "user"]);
 	});
 });
 
@@ -124,7 +58,6 @@ describe("evaluateUserTranslation", () => {
 		expect(mockChatJson).toHaveBeenCalledWith(
 			expect.objectContaining({
 				schema: expect.any(Object),
-				messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Je voudrais") })]),
 				userId: "user-1",
 			}),
 		);

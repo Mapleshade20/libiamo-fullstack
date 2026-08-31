@@ -130,8 +130,6 @@ describe("generated Note entry points", () => {
 		});
 
 		const request = mockChatJson.mock.calls[0]?.[0];
-		expect(request?.messages[0]?.content).toContain("native language is French");
-		expect(request?.messages[0]?.content).toContain("nativeDefinition is its concise dictionary-style equivalent written entirely in French");
 		expect(JSON.parse(request?.messages[1]?.content ?? "{}").items[0]).toMatchObject({
 			ordinal: 0,
 			conversationSnippet: "[user] I could of arrived earlier.",

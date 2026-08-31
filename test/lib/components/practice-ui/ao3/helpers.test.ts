@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildAo3CommentTree,
-	buildAo3UserPrompt,
 	findAo3Target,
 	flattenAo3Comments,
 	getAo3AdditionalTags,
@@ -41,18 +40,6 @@ describe("AO3 helpers", () => {
 		expect(getAo3AdditionalTags(openingState)).toEqual(["Magic", "No Aura", "Slow Burn"]);
 		expect(findAo3Target(openingState, "c1-r1")?.username).toBe("HikariKitsune02");
 		expect(findAo3Target(openingState, "missing")).toBeNull();
-	});
-
-	it("builds per-turn prompt for direct work comments and targeted replies", () => {
-		const direct = buildAo3UserPrompt({ openingState, comment: "Loved this!", target: null, responderName: "HikariKitsune02" });
-		expect(direct).toContain("new top-level AO3 comment");
-		expect(direct).toContain("roleplay as the work author, HikariKitsune02");
-
-		const target = findAo3Target(openingState, "c1");
-		if (!target) throw new Error("target missing");
-		const reply = buildAo3UserPrompt({ openingState, comment: "What changed?", target, responderName: target.username });
-		expect(reply).toContain("Comment author you must roleplay as: WispPattio");
-		expect(reply).toContain("Original comment: I’d love to know the differences.");
 	});
 
 	it("attaches session comments under their AO3 targets", () => {

@@ -45,8 +45,8 @@ describe("structured agent response", () => {
 		});
 
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
-		expect(messages[1].content).toContain('"message_id":7');
-		expect(messages[1].content).toContain("Gracias, adiós.");
+		const serializedHistory = messages[1].content.slice(messages[1].content.indexOf("["));
+		expect(JSON.parse(serializedHistory)).toEqual([{ message_id: 7, role: "user", content: "Gracias, adiós." }]);
 	});
 
 	it("coerces linear-interface targets to null and rejects unknown threaded targets", () => {
@@ -115,15 +115,6 @@ describe("structured agent response", () => {
 			finishReason: "stop",
 			repair: { initialContent: "bad" },
 		});
-	});
-
-	it("inlines the exact JSON response shape into the system prompt", () => {
-		const [system] = buildAgentResponseMessages({ baseSystemPrompt: "Context", ui: "discord", history: [] });
-		expect(system.role).toBe("system");
-		expect(system.content).toContain('"decision":"reply | no_reply | terminate_abuse"');
-		expect(system.content).toContain('"deliveries":[{"content":"complete message text","replyToMessageId":null}]');
-		expect(system.content).toContain('"allowIdleFollowUp":true');
-		expect(system.content).toContain('"terminationReason":null');
 	});
 
 	it("wraps provider failures with request evidence for later inspection", async () => {

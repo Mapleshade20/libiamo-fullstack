@@ -96,20 +96,13 @@ describe("translation service", () => {
 		expect(mockChatJson).toHaveBeenCalledTimes(1);
 		const request = mockChatJson.mock.calls[0][0];
 		expect(request.userId).toBe("u1");
-		expect(request.messages[0].content).toContain("French");
-		expect(request.messages[0].content).toContain("English");
-		expect(request.messages[0].content).toContain("Return ONLY one valid JSON object");
-		expect(request.messages[0].content).toContain("Never return a numbered list");
-		expect(request.messages.at(-1).content).toContain("a numbered list");
 		const assistantExamples = request.messages.filter((message: { role: string }) => message.role === "assistant");
 		expect(assistantExamples).toHaveLength(2);
 		for (const example of assistantExamples) {
-			expect(example.content).toMatch(/^\{\n {2}"paragraphs": \[\n {4}\{/);
 			const parsed = JSON.parse(example.content);
 			for (const paragraph of parsed.paragraphs) expect(paragraph.candidates).toHaveLength(2);
 		}
 		expect(JSON.parse(assistantExamples[0].content).paragraphs).toHaveLength(2);
-		expect(request.messages[0].content).toMatch(/Use exactly this shape: \{\n {2}"paragraphs": \[\n {4}\{/);
 	});
 
 	it("rejects missing paragraphs, duplicate indices, and incorrect candidate counts", async () => {

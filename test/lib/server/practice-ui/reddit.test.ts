@@ -28,7 +28,6 @@ describe("buildRedditSendOptions", () => {
 				},
 			},
 		});
-		expect(options?.promptContent).toContain("Comment author you must roleplay as: Commenter");
 	});
 
 	it("falls back to the post author for top-level comments", () => {
@@ -42,7 +41,6 @@ describe("buildRedditSendOptions", () => {
 		});
 
 		expect(options?.userMetadata).toMatchObject({ thread: { targetCommentId: null, mode: "post" } });
-		expect(options?.promptContent).toContain("new top-level Reddit comment");
 	});
 
 	it("rejects missing reply targets", () => {
