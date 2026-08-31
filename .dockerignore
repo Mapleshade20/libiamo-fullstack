@@ -1,0 +1,45 @@
+# Build context exclusions for the deployment image.
+# Keep src/, static/, drizzle/, and the pnpm manifests — the image is built from source.
+
+.git
+.github
+.gitattributes
+.pre-commit-config.yaml
+
+# Secrets and local env. Nothing here is needed to build.
+.env
+.env.*
+
+# Dependencies and caches
+node_modules
+**/node_modules
+.pnpm-store
+.svelte-kit
+.deploy
+
+# Build artifacts — the image rebuilds these itself, and copying a host build
+# would smuggle in a stale BASE_PATH.
+build
+coverage
+
+# Local database scratch dir (see .gitignore)
+db
+data
+**/data
+*.sqlite3
+*.db
+
+# Not needed to build or run
+test
+docs
+*.md
+sonar-project.properties
+
+# Keys, editors, logs
+*.pem
+*.key
+*.p12
+.idea
+.vscode
+*.log
+.DS_Store

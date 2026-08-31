@@ -1,0 +1,34 @@
+# Libiamo application server.
+#
+# Migrations are applied by the image entrypoint before the server listens, and
+# it retries for ~30s, which covers Postgres still starting up. That is why this
+# unit only needs ordering against the database, not health gating.
+#
+# To update: change the Image tag below, then
+#   systemctl --user daemon-reload && systemctl --user restart libiamo-app
+
+[Unit]
+Description=Libiamo app
+Requires=libiamo-db.service
+After=libiamo-db.service
+
+[Container]
+ContainerName=libiamo-app
+Image=ghcr.io/mapleshade20/libiamo:latest
+Pod=libiamo.pod
+
+EnvironmentFile=%h/.config/libiamo/app.env
+
+# Enables `podman auto-update` to pull a newer digest for this tag and restart.
+# Only meaningful with a moving tag such as :latest; drop it when pinning a
+# version you intend to change by hand.
+AutoUpdate=registry
+
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

@@ -34,7 +34,27 @@ pnpm build
 
 You can preview the production build with `pnpm preview`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Deploying
+
+Libiamo ships as a container image published to `ghcr.io/mapleshade20/libiamo`.
+
+Production uses rootless Podman with systemd-managed quadlet units — the app and
+Postgres 18 share one pod, and nothing but port 3000 is exposed:
+
+```sh
+scp -r deploy/podman/ user@server:~/libiamo-deploy
+ssh user@server 'bash ~/libiamo-deploy/install.sh'
+```
+
+A Compose file is also provided for local trials and for Podman < 5.0:
+
+```sh
+cp .env.docker.example .env.docker   # then fill in every CHANGE_ME
+podman compose --env-file .env.docker up -d
+```
+
+Either way the schema is created on first boot. See [DEPLOYMENT.md](./DEPLOYMENT.md)
+for reverse-proxy configuration, updates and rollback, and backups.
 
 ## Core Concepts
 

@@ -1,0 +1,19 @@
+# Pod holding the app and its database.
+#
+# Containers in a pod share one network namespace, so the app reaches Postgres at
+# 127.0.0.1:5432 and Postgres is NOT reachable from the host — only the port
+# published here is.
+#
+# Requires Podman >= 5.0 (.pod quadlet units). Check with `podman --version`.
+
+[Unit]
+Description=Libiamo pod
+
+[Pod]
+PodName=libiamo
+
+# Only the app is exposed, on loopback. Terminate TLS in the host's reverse proxy.
+PublishPort=127.0.0.1:3000:3000
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,10 @@
+# Persistent storage for the Postgres cluster.
+#
+# Rootless volumes live under ~/.local/share/containers/storage/volumes/.
+# Removing this volume destroys the database.
+
+[Unit]
+Description=Libiamo database volume
+
+[Volume]
+VolumeName=libiamo-db-data

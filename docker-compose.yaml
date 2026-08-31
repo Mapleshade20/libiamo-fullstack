@@ -1,0 +1,123 @@
+# Libiamo self-hosted stack (Compose).
+#
+# For production on Podman >= 5.0, prefer the native quadlet units in
+# deploy/podman/ — see DEPLOYMENT.md. This file is for local trials and for
+# Podman < 5.0, and works with both `docker compose` and `podman compose`.
+#
+#   cp .env.docker.example .env.docker && chmod 600 .env.docker
+#   podman compose --env-file .env.docker up -d
+#
+# NOTE: here the containers sit on a network, not in a pod, so DATABASE_URL must
+# use the service name `database` as its host — not 127.0.0.1 as in the pod.
+#
+# By default this runs the app plus a private Postgres 18:
+#
+#   docker compose --env-file .env.docker up -d
+#
+# To use a database you already run elsewhere, point DATABASE_URL at it and start
+# only the app. `required: false` on the dependency means Compose will not pull
+# the bundled database in behind your back:
+#
+#   docker compose --env-file .env.docker up -d app
+#
+# The app publishes to 127.0.0.1 only; terminate TLS in your reverse proxy.
+
+name: libiamo
+
+services:
+  app:
+    # Published image. Build locally instead with:
+    #   docker compose --env-file .env.docker build
+    image: "${APP_IMAGE:-ghcr.io/mapleshade20/libiamo:latest}"
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Compile-time. "" serves from the domain root.
+        BASE_PATH: "${BASE_PATH-}"
+
+    restart: unless-stopped
+    init: true
+
+    # Bind to loopback so only the host's reverse proxy can reach it.
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
+
+    environment:
+      TZ: "${TZ:-Asia/Shanghai}"
+
+      # adapter-node builds every request URL from ORIGIN. Bare origin, no path.
+      ORIGIN: "${ORIGIN:?ORIGIN is required, e.g. https://app.libiamo.net}"
+
+      # Set explicitly in .env.docker: either the bundled database (host
+      # `database`) or an external Postgres.
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}"
+
+      SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
+      SMTP_PORT: "${SMTP_PORT:-465}"
+      SMTP_SECURE: "${SMTP_SECURE:-true}"
+      SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
+      SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
+      SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
+
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:?OPENAI_BASE_URL is required}"
+      OPENAI_MODEL: "${OPENAI_MODEL:?OPENAI_MODEL is required}"
+      TRIAL_TOKEN_BUDGET: "${TRIAL_TOKEN_BUDGET:-50000}"
+
+      BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-20M}"
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
+      LLM_DEBUG: "${LLM_DEBUG:-false}"
+      DB_DEBUG: "${DB_DEBUG:-0}"
+
+    depends_on:
+      database:
+        condition: service_healthy
+        required: false
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  database:
+    # Postgres 18 keeps its cluster in /var/lib/postgresql/18/docker and declares
+    # the volume at /var/lib/postgresql — NOT the pre-18 /var/lib/postgresql/data.
+    # Mounting the old path silently discards data on recreate.
+    image: "postgres:18.6-alpine"
+    restart: unless-stopped
+
+    environment:
+      TZ: "${TZ:-Asia/Shanghai}"
+      POSTGRES_DB: "${POSTGRES_DB:-libiamo}"
+      POSTGRES_USER: "${POSTGRES_USER:-libiamo}"
+      # Must match the credentials inside DATABASE_URL above.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+
+    volumes:
+      - database-data:/var/lib/postgresql
+
+    # Not published: reachable only from other services on the compose network.
+    expose:
+      - "5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-libiamo} -d ${POSTGRES_DB:-libiamo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  database-data:

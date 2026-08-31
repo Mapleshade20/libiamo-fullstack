@@ -21,6 +21,15 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+!.env.docker.example
+
+# Deployment secrets and runtime data
+*.pem
+*.key
+*.p12
+data/*
+uploads/*
+media/*
 
 # Vite
 vite.config.js.timestamp-*
