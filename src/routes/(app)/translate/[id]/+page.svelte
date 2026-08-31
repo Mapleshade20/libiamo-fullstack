@@ -4,6 +4,7 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Clock from "@lucide/svelte/icons/clock";
 import Gem from "@lucide/svelte/icons/gem";
+import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Star from "@lucide/svelte/icons/star";
 import { enhance } from "$app/forms";
@@ -16,6 +17,7 @@ import { type LanguageCode, t } from "$lib/i18n";
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 let attempt = $derived(data.attempt);
+let starting = $state(false);
 let isDraft = $derived(!attempt || attempt.workflowPhase === "draft");
 let isComplete = $derived(attempt?.workflowPhase === "completed");
 let primaryHref = $derived(isDraft ? `/translate/${data.template.id}/attempt` : `/translate/${data.template.id}/feedback`);
@@ -107,8 +109,32 @@ function difficultyLabel(level: number): string {
 						{t(lang, "translate.details.settings")}
 					</Button>
 				{:else if !attempt}
-					<form method="POST" action="?/start" use:enhance class="w-full sm:w-auto">
-						<Button type="submit" class="w-full justify-center px-4 sm:w-auto sm:px-8">{primaryLabel}</Button>
+					<form
+						method="POST"
+						action="?/start"
+						use:enhance={({ cancel }) => {
+							if (starting) {
+								cancel();
+								return;
+							}
+							starting = true;
+							return async ({ update }) => {
+								try {
+									await update();
+								} finally {
+									starting = false;
+								}
+							};
+						}}
+						class="w-full sm:w-56"
+					>
+						<Button type="submit" disabled={starting} aria-busy={starting} class="w-full justify-center px-4 sm:px-8">
+							{#if starting}
+								<LoaderCircle class="animate-spin" />
+							{/if}
+							{starting ? t(lang, "translate.details.preparing") : primaryLabel}
+						</Button>
+						<span class="sr-only" role="status" aria-live="polite"> {starting ? t(lang, "translate.details.preparing") : ""} </span>
 					</form>
 				{:else}
 					<div class="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
