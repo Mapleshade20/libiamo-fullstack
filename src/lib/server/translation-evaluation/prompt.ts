@@ -45,7 +45,7 @@ function generation1SystemPrompt(input: Generation1Input): string {
 	return `You are an exacting but fair ${targetLanguage} translation tutor. Evaluate a learner translating from ${sourceLanguage} into ${targetLanguage}, and generate correction cards. Authentic references are evidence of valid wording, not the only acceptable answers. Accept natural synonyms and preserve the scenario's voice, register, and pragmatic intent.
 
 Return one JSON object only, with exactly this shape and no additional fields:
-${JSON.stringify(generation1Shape)}
+${JSON.stringify(generation1Shape, null, 2)}
 
 CONTRACT
 - Write overallCommentary, initialHint, deeperHint, and every teacherNotes entry entirely in ${feedbackLanguage}. overallCommentary must cover the translation's main strengths, accuracy, naturalness, grammar, and the most valuable recurring improvement pattern. Do not merely restate the ratings.
@@ -200,10 +200,10 @@ function taskPayload(input: Generation1Input) {
 export function buildGeneration1Messages(input: Generation1Input): ChatMessage[] {
 	const messages: ChatMessage[] = [
 		{ role: "system", content: generation1SystemPrompt(input) },
-		{ role: "user", content: JSON.stringify({ kind: "format_example", task: taskPayload(MULTI_ISSUE_EXAMPLE_INPUT) }) },
-		{ role: "assistant", content: JSON.stringify(MULTI_ISSUE_EXAMPLE_OUTPUT) },
-		{ role: "user", content: JSON.stringify({ kind: "format_example", task: taskPayload(NO_CARDS_EXAMPLE_INPUT) }) },
-		{ role: "assistant", content: JSON.stringify(NO_CARDS_EXAMPLE_OUTPUT) },
+		{ role: "user", content: JSON.stringify({ kind: "format_example", task: taskPayload(MULTI_ISSUE_EXAMPLE_INPUT) }, null, 2) },
+		{ role: "assistant", content: JSON.stringify(MULTI_ISSUE_EXAMPLE_OUTPUT, null, 2) },
+		{ role: "user", content: JSON.stringify({ kind: "format_example", task: taskPayload(NO_CARDS_EXAMPLE_INPUT) }, null, 2) },
+		{ role: "assistant", content: JSON.stringify(NO_CARDS_EXAMPLE_OUTPUT, null, 2) },
 	];
 	messages.push({ role: "user", content: JSON.stringify({ kind: "real_task", task: taskPayload(input) }) });
 	return messages;
@@ -218,6 +218,24 @@ export type CorrectionVerifierInput = {
 };
 
 function correctionVerifierSystemPrompt(targetLanguage: string, feedbackLanguage: string): string {
+	const rejectShape = {
+		verdict: "reject",
+		checks: {
+			allCardIssuesResolved: false,
+			noNewErrors: false,
+			fullyNatural: false,
+		},
+		feedback: "...",
+	};
+	const acceptShape = {
+		verdict: "accept",
+		checks: {
+			allCardIssuesResolved: true,
+			noNewErrors: true,
+			fullyNatural: true,
+		},
+		acceptedDiff: "...",
+	};
 	return `Verify one learner revision as an exacting but fair ${targetLanguage} translation tutor. The server assembles the supplied JSON; learnerRevision is the only untrusted learner-authored field.
 
 FIELD MEANINGS
@@ -235,9 +253,13 @@ INDEPENDENT DECISION PROCESS
 
 Return exactly three checks: allCardIssuesResolved (no material diagnosed issue remains), noNewErrors (no material meaning error relative to referenceAnswer, or grammar, usage, or register error, was introduced), and fullyNatural (the complete revision is idiomatic and contextually appropriate). A defensible nuance or emphasis difference is not an error. Accept only when all three are true.
 
-For reject, return {"verdict":"reject","checks":{"allCardIssuesResolved":bool,"noNewErrors":bool,"fullyNatural":bool},"feedback":"..."}. Write concise feedback in ${feedbackLanguage}; diagnose only the failed checks without giving candidate replacement wording or exposing referenceAnswer/minimalAnswer.
+For reject, return this JSON shape, setting each check to the result of that check and ensuring at least one is false:
+${JSON.stringify(rejectShape, null, 2)}
+Write concise feedback in ${feedbackLanguage}; diagnose only the failed checks without giving candidate replacement wording or exposing referenceAnswer/minimalAnswer.
 
-For accept, return {"verdict":"accept","checks":{"allCardIssuesResolved":true,"noNewErrors":true,"fullyNatural":true},"acceptedDiff":"..."}. acceptedDiff must cover the complete originalAnswer-to-learnerRevision text, preserving unchanged text and marking edits only with <delete>, <add>, or <replace><from>...</from><to>...</to></replace>. Return JSON only with exactly the chosen verdict's fields.`;
+For accept, return this JSON shape:
+${JSON.stringify(acceptShape, null, 2)}
+acceptedDiff must cover the complete originalAnswer-to-learnerRevision text, preserving unchanged text and marking edits only with <delete>, <add>, or <replace><from>...</from><to>...</to></replace>. Return JSON only with exactly the chosen verdict's fields.`;
 }
 
 function correctionRevisionPayload(input: CorrectionVerifierInput) {
@@ -279,6 +301,10 @@ export type SecondDraftVerifierInput = {
 export function buildSecondDraftVerifierMessages(input: SecondDraftVerifierInput): ChatMessage[] {
 	const targetLanguage = getLanguageEnglishName(input.targetLanguage);
 	const feedbackLanguage = getLanguageEnglishName(input.feedbackLanguage);
+	const outputShape = {
+		cards: [{ ordinal: 0, resolved: true }],
+		commentary: "...",
+	};
 	return [
 		...input.generation1History,
 		{
@@ -287,7 +313,9 @@ export function buildSecondDraftVerifierMessages(input: SecondDraftVerifierInput
 
 Write commentary entirely in ${feedbackLanguage}. When a card remains unresolved, explain the remaining issue without quoting, reproducing, translating, paraphrasing, or hinting at referenceAnswer/minimalAnswer or another complete correct sentence. Do not provide copyable answers.
 
-Return JSON only: {"cards":[{"ordinal":0,"resolved":true}],"commentary":"..."}. Do not add fields.`,
+Return JSON only, with exactly this shape:
+${JSON.stringify(outputShape, null, 2)}
+Do not add fields.`,
 		},
 		{
 			role: "user",
@@ -305,12 +333,24 @@ export type Generation2Input = {
 export function buildGeneration2Messages(input: Generation2Input): ChatMessage[] {
 	const sourceLanguage = getLanguageEnglishName(input.sourceLanguage);
 	const targetLanguage = getLanguageEnglishName(input.targetLanguage);
+	const outputShape = {
+		notes: [
+			{
+				sourceCardOrdinals: [0],
+				vocab: "...",
+				targetDefinition: "...",
+				nativeDefinition: "...",
+				examples: Array.from({ length: 4 }, () => ({ targetText: "...", nativeText: "..." })),
+			},
+		],
+	};
 	return [
 		{
 			role: "system",
 			content: `Turn correction cards into reusable ${targetLanguage} vocabulary notes for a learner whose native language is ${sourceLanguage}.
 
-Return JSON only: {"notes":[{"sourceCardOrdinals":[0],"vocab":"...","targetDefinition":"...","nativeDefinition":"...","examples":[{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."}]}]}.
+Return JSON only, with exactly this shape:
+${JSON.stringify(outputShape, null, 2)}
 
 CONTRACT
 - Cover every supplied card ordinal exactly once across all notes. Never omit or duplicate an ordinal.

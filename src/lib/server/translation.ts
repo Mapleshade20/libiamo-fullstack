@@ -70,12 +70,16 @@ function variantsFewShotMessages(candidateCount: number) {
 		},
 		{
 			role: "assistant" as const,
-			content: JSON.stringify({
-				paragraphs: [
-					{ paragraphIndex: 0, candidates: SPANISH_GREETING_VARIANTS.slice(0, candidateCount) },
-					{ paragraphIndex: 1, candidates: SPANISH_FAREWELL_VARIANTS.slice(0, candidateCount) },
-				],
-			}),
+			content: JSON.stringify(
+				{
+					paragraphs: [
+						{ paragraphIndex: 0, candidates: SPANISH_GREETING_VARIANTS.slice(0, candidateCount) },
+						{ paragraphIndex: 1, candidates: SPANISH_FAREWELL_VARIANTS.slice(0, candidateCount) },
+					],
+				},
+				null,
+				2,
+			),
 		},
 		{
 			role: "user" as const,
@@ -83,9 +87,13 @@ function variantsFewShotMessages(candidateCount: number) {
 		},
 		{
 			role: "assistant" as const,
-			content: JSON.stringify({
-				paragraphs: [{ paragraphIndex: 0, candidates: ENGLISH_THANKS_VARIANTS.slice(0, candidateCount) }],
-			}),
+			content: JSON.stringify(
+				{
+					paragraphs: [{ paragraphIndex: 0, candidates: ENGLISH_THANKS_VARIANTS.slice(0, candidateCount) }],
+				},
+				null,
+				2,
+			),
 		},
 	];
 }
@@ -110,14 +118,18 @@ export async function generateTranslationVariants({
 	if (!Number.isInteger(candidateCount) || candidateCount < 1 || candidateCount > 10) throw new Error("Candidate count must be between 1 and 10.");
 	if (paragraphs.length === 0 || paragraphs.some((paragraph) => !paragraph.trim())) throw new Error("Source paragraphs must be non-empty.");
 	if (!context.trim()) throw new Error("Translation context must be non-empty.");
-	const outputShape = JSON.stringify({
-		paragraphs: [
-			{
-				paragraphIndex: 0,
-				candidates: Array.from({ length: candidateCount }, (_, index) => `<candidate ${index + 1}>`),
-			},
-		],
-	});
+	const outputShape = JSON.stringify(
+		{
+			paragraphs: [
+				{
+					paragraphIndex: 0,
+					candidates: Array.from({ length: candidateCount }, (_, index) => `<candidate ${index + 1}>`),
+				},
+			],
+		},
+		null,
+		2,
+	);
 
 	const { value: result } = await chatJson({
 		schema: VariantsSchema,

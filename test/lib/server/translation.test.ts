@@ -104,10 +104,12 @@ describe("translation service", () => {
 		const assistantExamples = request.messages.filter((message: { role: string }) => message.role === "assistant");
 		expect(assistantExamples).toHaveLength(2);
 		for (const example of assistantExamples) {
+			expect(example.content).toMatch(/^\{\n {2}"paragraphs": \[\n {4}\{/);
 			const parsed = JSON.parse(example.content);
 			for (const paragraph of parsed.paragraphs) expect(paragraph.candidates).toHaveLength(2);
 		}
 		expect(JSON.parse(assistantExamples[0].content).paragraphs).toHaveLength(2);
+		expect(request.messages[0].content).toMatch(/Use exactly this shape: \{\n {2}"paragraphs": \[\n {4}\{/);
 	});
 
 	it("rejects missing paragraphs, duplicate indices, and incorrect candidate counts", async () => {

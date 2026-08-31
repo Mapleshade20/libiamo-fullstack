@@ -85,8 +85,19 @@ export async function createNotes(input: CreateNotesInput) {
 function notesSystemPrompt(input: { targetLanguage: string; nativeLanguage: string; maximumNotes?: number }) {
 	const target = getLanguageEnglishName(input.targetLanguage);
 	const native = getLanguageEnglishName(input.nativeLanguage);
-	return `Turn selected tutor feedback into reusable ${target} vocabulary notes for a learner whose native language is ${native}. Return JSON only:
-{"notes":[{"sourceItemOrdinals":[0],"vocab":"...","targetDefinition":"...","nativeDefinition":"...","examples":[{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."},{"targetText":"...","nativeText":"..."}]}]}.
+	const outputShape = {
+		notes: [
+			{
+				sourceItemOrdinals: [0],
+				vocab: "...",
+				targetDefinition: "...",
+				nativeDefinition: "...",
+				examples: Array.from({ length: NOTE_EXAMPLE_COUNT }, () => ({ targetText: "...", nativeText: "..." })),
+			},
+		],
+	};
+	return `Turn selected tutor feedback into reusable ${target} vocabulary notes for a learner whose native language is ${native}. Return JSON only, with exactly this shape:
+${JSON.stringify(outputShape, null, 2)}
 
 CONTRACT
 - Return an empty notes array when none of the supplied items identifies a concrete reusable ${target} word or expression.
