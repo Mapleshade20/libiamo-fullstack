@@ -23,10 +23,10 @@ command -v podman >/dev/null || die "podman is not installed"
 
 PODMAN_VERSION="$(podman --version | awk '{print $3}')"
 PODMAN_MAJOR="${PODMAN_VERSION%%.*}"
-if [ "$PODMAN_MAJOR" -lt 5 ]; then
-    die "podman $PODMAN_VERSION found, but .pod quadlet units need >= 5.0.
-     Debian 12 ships 4.3; install from backports or use the compose path
-     (docker-compose.yaml) instead."
+PODMAN_MINOR="${PODMAN_VERSION#*.}"; PODMAN_MINOR="${PODMAN_MINOR%%.*}"
+if [ "$PODMAN_MAJOR" -lt 4 ] || { [ "$PODMAN_MAJOR" -eq 4 ] && [ "$PODMAN_MINOR" -lt 4 ]; }; then
+    die "podman $PODMAN_VERSION found, but quadlet needs >= 4.4.
+     Install a newer podman, or use the compose path (docker-compose.yaml)."
 fi
 say "podman $PODMAN_VERSION"
 
@@ -55,7 +55,7 @@ if [ ! -f "$CONF_DIR/db.env" ] && [ ! -f "$CONF_DIR/app.env" ]; then
     sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${DB_PASSWORD}|" \
         "$SRC/db.env.example" > "$CONF_DIR/db.env"
 
-    sed -e "s|^DATABASE_URL=.*|DATABASE_URL=postgres://libiamo:${DB_PASSWORD}@127.0.0.1:5432/libiamo|" \
+    sed -e "s|^DATABASE_URL=.*|DATABASE_URL=postgres://libiamo:${DB_PASSWORD}@libiamo-db:5432/libiamo|" \
         -e "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=${AUTH_SECRET}|" \
         "$SRC/app.env.example" > "$CONF_DIR/app.env"
 
@@ -66,7 +66,7 @@ fi
 
 # --- Units --------------------------------------------------------------------
 say "Installing quadlet units into $UNIT_DIR"
-for unit in libiamo.pod libiamo-db.volume libiamo-db.container libiamo-app.container; do
+for unit in libiamo.network libiamo-db.volume libiamo-db.container libiamo-app.container; do
     install -m 644 "$SRC/$unit" "$UNIT_DIR/$unit"
     echo "    $unit"
 done

@@ -20,20 +20,28 @@ files) or `docker-compose.yaml`.
 
 ## 1. Podman quadlet (recommended)
 
-Both containers live in one pod, so they share a network namespace: the app
-reaches Postgres at `127.0.0.1:5432`, and Postgres is **not** reachable from the
-host at all. Only port 3000 is published, on loopback.
+The app and Postgres sit on a private `libiamo` network. Container-name DNS
+resolves `libiamo-db`, and the database publishes no port, so it is reachable
+only from that network — not from the host. Only port 3000 is published, on
+loopback.
+
+> A pod (shared network namespace) would be the more idiomatic Podman topology,
+> but Podman 5.x builds the pod's infra container through a "rootfs-overlay" that
+> needs unprivileged overlayfs mounts. Kernels before 5.11 — Debian 11's 5.10
+> among them — refuse those, and the infra conmon pidfile then never appears, so
+> systemd tears the pod down immediately. A network avoids that machinery
+> entirely and gives equivalent isolation.
 
 ### Requirements
 
-Podman **>= 5.0** — `.pod` quadlet units do not exist before that.
+Podman **>= 4.4** (quadlet).
 
 ```sh
 podman --version
 ```
 
-Debian 13 (trixie) ships Podman 5.x. Debian 12 ships 4.3; install from
-`bookworm-backports` or use the [compose path](#2-compose) instead.
+Also check that `conmon` was built with journald support if you want to change
+`LogDriver`; see [Troubleshooting](#8-troubleshooting).
 
 ### Install
 
@@ -64,16 +72,21 @@ expose the app — auth and email links are built from it.
 
 ```sh
 systemctl --user status libiamo-app libiamo-db
-journalctl --user -u libiamo-app -f
+podman logs -f libiamo-app                  # container output
+journalctl --user -u libiamo-app -f         # unit lifecycle only
 curl -fsS http://127.0.0.1:3000/health      # {"status":"ok"}
 
 systemctl --user restart libiamo-app
-systemctl --user stop libiamo-pod           # stops the whole pod
+systemctl --user stop libiamo-app libiamo-db
 ```
 
 Units are generated from the quadlet files, so `libiamo-app.container` becomes
 `libiamo-app.service`. After editing any unit file, run
 `systemctl --user daemon-reload`.
+
+Container output goes to `podman logs`, not the journal — the units use the
+`k8s-file` log driver because a `conmon` built without journald support fails
+outright with `LogDriver=journald`.
 
 The database starts empty; the app's entrypoint creates the schema on first boot.
 
@@ -109,10 +122,15 @@ podman compose --env-file .env.docker up -d app
 
 ## 3. Reverse proxy
 
-Two settings matter more than the rest: LLM calls run long, and streamed
-responses must not be buffered.
+The app does not stream responses — LLM calls complete server-side and the full
+response is returned at once — so no flush/buffering tuning is needed. The one
+thing that matters is that a single request can legitimately take minutes while
+the translation-evaluation chain runs.
 
 ### nginx
+
+nginx defaults to a 60s upstream timeout and a 1 MB request body, both of which
+are too small here, so these need setting explicitly.
 
 ```nginx
 server {
@@ -136,9 +154,6 @@ server {
         # multi-step LLM calls that outlast the 60s default.
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
-
-        # Token streaming must not sit in a buffer.
-        proxy_buffering off;
     }
 }
 ```
@@ -147,17 +162,15 @@ server {
 
 ```caddy
 app.libiamo.net {
-    reverse_proxy 127.0.0.1:3000 {
-        transport http {
-            read_timeout 300s
-        }
-        flush_interval -1
-    }
-    request_body {
-        max_size 20MB
-    }
+    reverse_proxy 127.0.0.1:3000
 }
 ```
+
+That is the whole config. Caddy's defaults already do what the nginx block spells
+out: automatic TLS, `X-Forwarded-*`, the original `Host` passed upstream, **no**
+upstream read timeout, and **no** request body limit. Adding
+`transport http { read_timeout … }` here would only *impose* a ceiling that does
+not otherwise exist, which is the opposite of what long LLM calls need.
 
 `ORIGIN` must match the public URL exactly (bare origin, no trailing path). A
 mismatch shows up as rejected form posts and broken email links.
@@ -314,9 +327,22 @@ compose it is `database`.
 **`systemctl --user` units vanish after logout.** Lingering is not enabled:
 `sudo loginctl enable-linger $USER`.
 
-**Quadlet units are not generated.** `.pod` support needs Podman >= 5.0, and unit
-files must sit in `~/.config/containers/systemd/`. Check with
-`/usr/lib/systemd/system-generators/podman-system-generator --user --dryrun`.
+**Quadlet units are not generated.** Needs Podman >= 4.4, and unit files must sit
+in `~/.config/containers/systemd/`. Inspect what is produced with
+`podman-system-generator --user --dryrun` (under `/usr/lib/systemd/` or
+`/usr/local/lib/systemd/`).
+
+**`Error: conmon failed: exit status 1`, exit code 126.** Run the generated
+`ExecStart` by hand to see conmon's real message. If it says *"Include journald
+in compilation path"*, that conmon was built without journald support and cannot
+serve `LogDriver=journald` — these units use `k8s-file` for exactly this reason.
+
+**Container starts but never reports healthy.** An image built in OCI format
+loses its `HEALTHCHECK`, so `libiamo-app.container` declares `HealthCmd=`
+itself. If you build with a non-empty `BASE_PATH`, add it to that URL.
+
+**Port already in use on 3000.** Usually a previous non-container deployment.
+`ss -tlnp | grep 3000` names the process.
 
 **Form posts fail / cross-site POST errors.** `ORIGIN` does not match the URL in
 the browser, scheme included.

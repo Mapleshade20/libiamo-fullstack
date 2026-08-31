@@ -15,7 +15,10 @@ After=libiamo-db.service
 [Container]
 ContainerName=libiamo-app
 Image=ghcr.io/mapleshade20/libiamo:latest
-Pod=libiamo.pod
+Network=libiamo.network
+
+# Bound to loopback: terminate TLS in the host's reverse proxy.
+PublishPort=127.0.0.1:3000:3000
 
 EnvironmentFile=%h/.config/libiamo/app.env
 
@@ -24,7 +27,20 @@ EnvironmentFile=%h/.config/libiamo/app.env
 # version you intend to change by hand.
 AutoUpdate=registry
 
-LogDriver=journald
+# Declared here rather than relying on the image's HEALTHCHECK: an image built
+# in OCI format drops that field, so it cannot be counted on.
+# Append the base path if the image was built with a non-empty BASE_PATH.
+HealthCmd=wget -qO /dev/null http://127.0.0.1:3000/health
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=60s
+
+# k8s-file rather than journald: a conmon built without journald support fails
+# outright ("Include journald in compilation path"). Use `podman logs` to read
+# container output; systemd still journals the unit's own lifecycle.
+LogDriver=k8s-file
+LogOpt=max-size=10mb
 
 [Service]
 Restart=always

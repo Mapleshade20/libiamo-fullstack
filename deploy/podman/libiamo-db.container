@@ -1,6 +1,6 @@
 # Postgres 18 for Libiamo.
 #
-# Not published to the host: only containers in the pod can reach it.
+# Publishes no port: reachable only from the libiamo network, by container name.
 
 [Unit]
 Description=Libiamo database (Postgres 18)
@@ -8,7 +8,7 @@ Description=Libiamo database (Postgres 18)
 [Container]
 ContainerName=libiamo-db
 Image=docker.io/library/postgres:18.6-alpine
-Pod=libiamo.pod
+Network=libiamo.network
 
 # Postgres 18 keeps its cluster in /var/lib/postgresql/18/docker and declares the
 # volume at /var/lib/postgresql — NOT the pre-18 /var/lib/postgresql/data.
@@ -25,7 +25,11 @@ HealthTimeout=5s
 HealthRetries=10
 HealthStartPeriod=30s
 
-LogDriver=journald
+# k8s-file rather than journald: a conmon built without journald support fails
+# outright ("Include journald in compilation path"). Use `podman logs` to read
+# container output; systemd still journals the unit's own lifecycle.
+LogDriver=k8s-file
+LogOpt=max-size=10mb
 
 [Service]
 Restart=always

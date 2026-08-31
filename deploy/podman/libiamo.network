@@ -1,0 +1,17 @@
+# Private network for the app and its database.
+#
+# Container-name DNS works on user-defined networks, so the app reaches Postgres
+# at libiamo-db:5432. The database publishes no port, so it is reachable only
+# from this network — not from the host and not from outside.
+#
+# The network is not marked Internal: the app needs outbound access for the LLM
+# API and SMTP.
+
+[Unit]
+Description=Libiamo network
+
+[Network]
+NetworkName=libiamo
+
+[Install]
+WantedBy=default.target
