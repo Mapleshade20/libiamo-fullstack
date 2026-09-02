@@ -65,6 +65,7 @@
 	"dependencies": {
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.1",
+		"gsap": "^3.15.0",
 		"isomorphic-dompurify": "^3.9.0",
 		"motion": "^12.42.2"
 	},

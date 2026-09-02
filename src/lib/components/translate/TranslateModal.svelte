@@ -18,10 +18,24 @@ interface Props {
 	taskInteractionType: string;
 	nativeLanguage: string;
 	targetLanguage: string;
+	generateExpressionsAction?: string;
+	evaluateTranslationAction?: string;
 	onclose: () => void;
 }
 
-let { show, taskTitle, taskDescription, taskObjectives, taskUi, taskInteractionType, nativeLanguage, targetLanguage, onclose }: Props = $props();
+let {
+	show,
+	taskTitle,
+	taskDescription,
+	taskObjectives,
+	taskUi,
+	taskInteractionType,
+	nativeLanguage,
+	targetLanguage,
+	generateExpressionsAction = "?/generateExpressions",
+	evaluateTranslationAction = "?/evaluateTranslation",
+	onclose,
+}: Props = $props();
 
 let lang = $derived(nativeLanguage as LanguageCode);
 
@@ -62,7 +76,7 @@ async function handleGenerate() {
 		f.set("nativeLanguage", nativeLanguage);
 		f.set("targetLanguage", targetLanguage);
 
-		const res = await fetch("?/generateExpressions", { method: "POST", body: f });
+		const res = await fetch(generateExpressionsAction, { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { expressions?: string[]; error?: string };
@@ -99,7 +113,7 @@ async function handleCheck(idx: number) {
 		f.set("nativeLanguage", nativeLanguage);
 		f.set("targetLanguage", targetLanguage);
 
-		const res = await fetch("?/evaluateTranslation", { method: "POST", body: f });
+		const res = await fetch(evaluateTranslationAction, { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { feedback?: string; correction?: string; error?: string };

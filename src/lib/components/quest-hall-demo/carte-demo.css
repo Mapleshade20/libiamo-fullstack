@@ -1,0 +1,116 @@
+:where(.carte-demo-theme) {
+	--carte-canvas: #f1ece2;
+	--carte-paper: #f7f1e6;
+	--carte-sheet: #fffaf1;
+	--carte-cover: #6f303a;
+	--carte-ink: #2d2924;
+	--carte-ink-muted: #6d665d;
+	--carte-wine: #803945;
+	--carte-olive: #65705a;
+	--carte-blue: #526878;
+	--carte-green: #416c55;
+	--carte-brass: #b39150;
+	--carte-brass-dark: #765d28;
+	--carte-focus: #305f89;
+	--carte-ribbon-text: #fffaf1;
+	--carte-duration-fast: 180ms;
+	--carte-duration-standard: 340ms;
+	--carte-duration-ceremonial: 520ms;
+	--carte-duration-exit: 240ms;
+	--carte-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+	--carte-ease-in-out: cubic-bezier(0.45, 0, 0.15, 1);
+	--carte-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+	color: var(--carte-ink);
+	background: var(--carte-canvas);
+}
+
+.carte-3d-stage {
+	perspective: 1600px;
+	perspective-origin: 50% 45%;
+}
+
+.carte-preserve-3d {
+	transform-style: preserve-3d;
+}
+
+.carte-face {
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+}
+
+.carte-face--back {
+	transform: rotateY(180deg);
+}
+
+.carte-motion-layer {
+	will-change: transform, opacity;
+}
+
+.carte-paper {
+	border: 1px solid color-mix(in oklab, var(--carte-ink) 16%, transparent);
+	background: linear-gradient(110deg, color-mix(in oklab, white 42%, transparent), transparent 24%), var(--carte-sheet);
+	box-shadow:
+		0 18px 40px color-mix(in oklab, var(--carte-ink) 12%, transparent),
+		inset 0 0 30px color-mix(in oklab, var(--carte-brass) 5%, transparent);
+}
+
+.carte-long-title {
+	font-family: var(--font-serif);
+	text-wrap: balance;
+	hyphens: auto;
+	overflow-wrap: break-word;
+}
+
+.carte-hit-target {
+	min-width: 2.75rem;
+	min-height: 2.75rem;
+}
+
+.carte-focusable:focus-visible {
+	outline: 2px solid var(--carte-focus);
+	outline-offset: 3px;
+}
+
+.carte-mobile-leaf {
+	display: none;
+}
+
+@media (max-width: 56.24rem) {
+	.carte-demo-theme .carte-desktop-spread {
+		display: none;
+	}
+
+	.carte-mobile-leaf {
+		display: block;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:where(.carte-demo-theme) {
+		--carte-duration-fast: 1ms;
+		--carte-duration-standard: 1ms;
+		--carte-duration-ceremonial: 1ms;
+		--carte-duration-exit: 1ms;
+	}
+
+	.carte-demo-theme *,
+	.carte-demo-theme *::before,
+	.carte-demo-theme *::after {
+		animation-duration: 1ms;
+		animation-iteration-count: 1;
+		scroll-behavior: auto;
+		transition-duration: 1ms;
+	}
+}
+
+@media (forced-colors: active) {
+	.carte-paper {
+		border: 1px solid CanvasText;
+		background: Canvas;
+		box-shadow: none;
+	}
+
+	.carte-focusable:focus-visible {
+		outline-color: Highlight;
+	}
+}
