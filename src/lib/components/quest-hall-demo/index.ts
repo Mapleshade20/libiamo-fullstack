@@ -1,3 +1,4 @@
+export * from "./book-motion";
 export { default as CoverEmblem } from "./CoverEmblem.svelte";
 export { default as CoverUnreadBadge } from "./CoverUnreadBadge.svelte";
 export { default as DemoControls } from "./DemoControls.svelte";

@@ -361,7 +361,7 @@ export type QuestHallDemoEvent =
 	| { type: "switch-section"; section: QuestHallDemoSection; leaf?: number }
 	| { type: "turn-leaf"; leaf: number }
 	| { type: "select-task"; task: QuestHallDemoTaskKey }
-	| { type: "return-from-prepare" }
+	| { type: "return-from-prepare"; destination?: "home" | "catalog" }
 	| { type: "set-scenario"; scenario: QuestHallDemoScenario }
 	| { type: "set-resource"; resource: QuestHallDemoResource }
 	| { type: "set-motion"; motion: QuestHallDemoMotion };
@@ -420,7 +420,7 @@ export function reduceQuestHallDemoState(current: QuestHallDemoUrlState, event: 
 				"push",
 			);
 		case "return-from-prepare":
-			return makeTransition(current, { view: "catalog", task: null }, "back");
+			return makeTransition(current, { view: event.destination ?? "catalog", task: null }, "back");
 		case "set-scenario":
 			return makeTransition(current, { scenario: event.scenario }, "replace");
 		case "set-resource":

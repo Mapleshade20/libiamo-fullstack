@@ -248,6 +248,10 @@ describe("Quest Hall demo reducer", () => {
 			state: { view: "catalog", task: null },
 			historyIntent: "back",
 		});
+		expect(reduceQuestHallDemoState(prepare, { type: "return-from-prepare", destination: "home" })).toMatchObject({
+			state: { view: "home", task: null },
+			historyIntent: "back",
+		});
 	});
 
 	it("returns none and the same reference for no-op events", () => {

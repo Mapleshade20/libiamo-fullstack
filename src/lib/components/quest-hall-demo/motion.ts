@@ -1,6 +1,42 @@
 import { gsap } from "gsap";
+import { Flip } from "gsap/Flip";
+
+gsap.registerPlugin(Flip);
 
 export type CarteMotionStopMode = "hold" | "reset" | "finish";
+
+export interface CarteFitVars {
+	x: number;
+	y: number;
+	scaleX: number;
+	scaleY: number;
+	rotation: number;
+	skewX: number;
+}
+
+const IDENTITY_FIT: CarteFitVars = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0 };
+
+/**
+ * Measures the transform that drops `element` onto `slot` without applying it,
+ * so the caller can schedule it inside a larger timeline. `probe` lets a wider
+ * element (the open spread) be aligned by one of its halves instead.
+ */
+export function measureCarteFit(element: Element, slot: Element | null | undefined, probe?: Element | null): CarteFitVars {
+	if (!slot) return IDENTITY_FIT;
+	const slotBounds = slot.getBoundingClientRect();
+	if (slotBounds.width <= 0 || slotBounds.height <= 0) return IDENTITY_FIT;
+
+	const vars = Flip.fit(element, slot, { scale: true, getVars: true, ...(probe ? { fitChild: probe } : {}) }) as Partial<CarteFitVars> | null;
+	if (!vars) return IDENTITY_FIT;
+	return {
+		x: vars.x ?? 0,
+		y: vars.y ?? 0,
+		scaleX: vars.scaleX ?? 1,
+		scaleY: vars.scaleY ?? 1,
+		rotation: vars.rotation ?? 0,
+		skewX: vars.skewX ?? 0,
+	};
+}
 
 export const CARTE_MOTION_TOKENS = {
 	durationFast: 0.18,
@@ -125,4 +161,4 @@ export function createCarteMotionScope(scope?: Element | string): CarteMotionSco
 	};
 }
 
-export { gsap };
+export { Flip, gsap };

@@ -13,16 +13,21 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Star from "@lucide/svelte/icons/star";
 import Wine from "@lucide/svelte/icons/wine";
 import { onMount, tick, untrack } from "svelte";
-import { goto } from "$app/navigation";
+import { disableScrollHandling, goto } from "$app/navigation";
 import { base } from "$app/paths";
 import {
+	CARTE_BOOK_FULL_TURN,
 	CARTE_MOTION_TOKENS,
 	type CarteDemoControlGroup,
+	type CarteFitVars,
 	type CarteMotionScope,
 	CoverEmblem,
-	CoverUnreadBadge,
+	createCarteBookCloseTiming,
+	createCarteBookOpenEase,
+	createCarteBookOpenTiming,
 	createCarteMotionScope,
 	DemoControls,
+	measureCarteFit,
 	prefersReducedCarteMotion,
 	RibbonTabs,
 	TaskStatusMark,
@@ -53,9 +58,11 @@ let { data } = $props();
 const initialDemoState = untrack(() => ({ ...data.demoState })) as QuestHallDemoUrlState;
 
 const ROUTE = `${base}/quest-hall-layout-demo/bureau-spread`;
-const CATALOG_COVER_OPEN_ROTATION = -180;
-const CATALOG_COVER_OPEN_Z = 0;
-const CATALOG_COVER_CLOSED_Z = 12;
+// The cover is a rigid board hinged on the spine: it never changes height, it
+// only swings. Its underside is the left page, so at -180° it lands coplanar
+// with the recto and the spread is simply the book seen from above.
+const COVER_OPEN_ROTATION = -180;
+
 const TURNING_SHEET_LIFT_Z = 12;
 const SECTION_ORDER: QuestHallDemoSection[] = ["daily", "weekly", "translation"];
 const SECTION_LABELS: Record<QuestHallDemoSection, string> = {
@@ -80,28 +87,38 @@ const SCENARIO_LABELS: ReadonlyArray<{ value: QuestHallDemoScenario; label: stri
 let rootEl = $state<HTMLElement>();
 let homeStage = $state<HTMLElement>();
 let recommendationsEl = $state<HTMLElement>();
-let closedBookStack = $state<HTMLElement>();
-let closedCover = $state<HTMLElement>();
-let coverButton = $state<HTMLButtonElement>();
 let catalogStage = $state<HTMLElement>();
-let catalogBook = $state<HTMLElement>();
-let catalogBookShadow = $state<HTMLElement>();
-let catalogCover = $state<HTMLElement>();
-let spreadContent = $state<HTMLElement>();
-let catalogLeftPage = $state<HTMLElement>();
-let catalogRightPage = $state<HTMLElement>();
-let catalogLeftPageStack = $state<HTMLElement>();
+let prepareStage = $state<HTMLElement>();
+let preparationPanel = $state<HTMLElement>();
+
+// The one and only CARTE. It never changes stage or gets handed off to a proxy;
+// every view just re-fits and re-poses this same solid.
+let bookLayer = $state<HTMLElement>();
+let carteBook = $state<HTMLElement>();
+let carteBookTilt = $state<HTMLElement>();
+let carteRectoProbe = $state<HTMLElement>();
+let carteCover = $state<HTMLElement>();
+let carteLeftHalf = $state<HTMLElement>();
+let carteTurnZones = $state<HTMLElement>();
+let carteShadow = $state<HTMLElement>();
+let cartePageLeft = $state<HTMLElement>();
+let cartePageRight = $state<HTMLElement>();
 let turningSheet = $state<HTMLElement>();
+
+// Layout-only placeholders: each view owns an invisible box telling the book
+// where to sit. They carry the click targets too, so the book itself stays
+// non-interactive except for the spread.
+let homeSlot = $state<HTMLElement>();
+let catalogSlot = $state<HTMLElement>();
+let prepareSlot = $state<HTMLElement>();
+
 let mobileBook = $state<HTMLElement>();
 let mobilePaper = $state<HTMLElement>();
 let mobileEdgeTabs = $state<HTMLElement>();
-let prepareStage = $state<HTMLElement>();
 let prepareDock = $state<HTMLElement>();
-let dockedCover = $state<HTMLElement>();
-let preparationPanel = $state<HTMLElement>();
-let coverHandoff = $state<HTMLElement>();
 
 let motionScope: CarteMotionScope | null = null;
+let closedBookIdle: ReturnType<CarteMotionScope["to"]> | null = null;
 let systemReduced = $state(false);
 let mounted = $state(false);
 let visualView = $state(initialDemoState.view);
@@ -111,7 +128,11 @@ let optimisticState = $state<QuestHallDemoUrlState>({ ...initialDemoState });
 let pendingSignature = $state<string | null>(null);
 let observedSignature = $state(stateSignature(initialDemoState));
 let localHistoryDepth = $state(0);
+let homeReturnScrollY = 0;
 let catalogReturnScrollY: number | null = null;
+let suppressNextPopstateScroll = false;
+let preparationOriginView: "home" | "catalog" = initialDemoState.view === "home" ? "home" : "catalog";
+let displayedPreparation = $state(untrack(() => data.selectedPreparation));
 let mobilePosition = $state(0);
 let mobileLocation = $state(`${initialDemoState.section}-${initialDemoState.leaf}`);
 let lastSelectedKey = $state<string | null>(initialDemoState.task);
@@ -129,6 +150,8 @@ let turnPreview = $state<{
 	toSpread: QuestHallDemoBookSpread;
 } | null>(null);
 let isPaperTurning = $derived(turnPreview !== null);
+let narrowLayout = $state(false);
+let spreadIsLive = $derived(visualView === "catalog" && !narrowLayout && transitionTo === null);
 
 let recommendations = $derived(deriveQuestHallDemoRecommendations(data).slice(0, 2));
 let unreadReplyCount = $derived(getQuestHallDemoUnreadReplyCount(data));
@@ -274,85 +297,85 @@ function statusActionLabel(item: QuestHallDemoItem): string {
 	return "Voir les détails";
 }
 
-function setSceneObjectsTerminal(view: QuestHallDemoUrlState["view"]) {
+function stopClosedBookIdle() {
+	closedBookIdle?.kill();
+	closedBookIdle = null;
+}
+
+function startClosedBookIdle() {
+	stopClosedBookIdle();
+	if (!motionScope || !carteBookTilt) return;
+	if (isReduced()) {
+		motionScope.set(carteBookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
+		return;
+	}
+
+	closedBookIdle = motionScope.to(carteBookTilt, {
+		rotateX: "random(-3.2, 3.2, 0.1)",
+		rotateY: "random(-4.2, 4.2, 0.1)",
+		rotateZ: "random(-0.7, 0.7, 0.1)",
+		duration: 4.2,
+		ease: "sine.inOut",
+		repeat: -1,
+		repeatRefresh: true,
+		yoyo: true,
+	});
+}
+
+type CarteView = QuestHallDemoUrlState["view"];
+
+const IDENTITY_FIT: CarteFitVars = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0 };
+
+/** The spread only exists on wide viewports; narrower ones read a flat leaf. */
+function isBookSpread(view: CarteView): boolean {
+	return view === "catalog" && !narrowLayout;
+}
+
+function slotFor(view: CarteView): HTMLElement | undefined {
+	if (view === "catalog") return narrowLayout ? undefined : catalogSlot;
+	return view === "prepare" ? prepareSlot : homeSlot;
+}
+
+/**
+ * Closed views only show the book's right half, so they are aligned by that
+ * half rather than by the whole spread box. Measured lazily right before the
+ * tween so a resize or a scroll mid-flight cannot desynchronise it.
+ */
+function measureBookFit(view: CarteView): CarteFitVars {
+	if (!carteBook) return IDENTITY_FIT;
+	const slot = slotFor(view);
+	if (!slot) return IDENTITY_FIT;
+	return measureCarteFit(carteBook, slot, isBookSpread(view) ? null : carteRectoProbe);
+}
+
+function leftHalfParts(): HTMLElement[] {
+	return carteLeftHalf ? Array.from(carteLeftHalf.querySelectorAll<HTMLElement>(".carte-surface")) : [];
+}
+
+/** Puts the solid into a view's resting pose without any interpolation. */
+function setBookTerminal(view: CarteView) {
+	if (!motionScope || !carteBook) return;
+	const open = isBookSpread(view);
+	motionScope.set(carteBook, { ...measureBookFit(view), rotation: 0, skewX: 0 });
+	if (carteBookTilt) motionScope.set(carteBookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
+	if (carteCover) motionScope.set(carteCover, { rotateY: open ? COVER_OPEN_ROTATION : 0 });
+	motionScope.set(leftHalfParts(), { autoAlpha: open ? 1 : 0 });
+	if (carteTurnZones) motionScope.set(carteTurnZones, { autoAlpha: open ? 1 : 0 });
+	if (carteShadow) motionScope.set(carteShadow, { autoAlpha: 1, z: -2, scaleX: open ? 1 : 0.52, transformOrigin: "right center" });
+	if (bookLayer) motionScope.set(bookLayer, { autoAlpha: view === "catalog" && narrowLayout ? 0 : 1 });
+}
+
+function setSceneObjectsTerminal(view: CarteView) {
 	if (!motionScope) return;
-	if (catalogBook) {
-		motionScope.set(catalogBook, {
-			x: "0%",
-			y: 0,
-			scaleX: 1,
-			scaleY: 1,
-			rotateX: 0,
-			rotateZ: 0,
-		});
-	}
-	if (catalogCover) {
-		motionScope.set(catalogCover, {
-			autoAlpha: view === "catalog" ? 0 : 1,
-			rotateY: view === "catalog" ? CATALOG_COVER_OPEN_ROTATION : 0,
-			x: 0,
-			y: 0,
-			scaleX: 1,
-			scaleY: 1,
-			transformOrigin: "left center",
-			z: view === "catalog" ? CATALOG_COVER_OPEN_Z : CATALOG_COVER_CLOSED_Z,
-			zIndex: view === "catalog" ? 2 : 12,
-		});
-	}
-	if (catalogBookShadow) {
-		motionScope.set(catalogBookShadow, {
-			autoAlpha: view === "catalog" ? 1 : 0,
-			scaleX: view === "catalog" ? 1 : 0.5,
-			scaleY: 1,
-			transformOrigin: "right center",
-		});
-	}
+	setBookTerminal(view);
 	if (turningSheet) motionScope.set(turningSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
-	if (spreadContent) motionScope.set(spreadContent, { autoAlpha: 1 });
-	if (catalogLeftPage) {
-		motionScope.set(catalogLeftPage, {
-			autoAlpha: view === "catalog" ? 1 : 0,
-			rotateY: 0,
-			x: 0,
-			y: 0,
-			transformOrigin: "right center",
-		});
-	}
-	if (catalogRightPage) motionScope.set(catalogRightPage, { autoAlpha: 1 });
-	if (catalogLeftPageStack) motionScope.set(catalogLeftPageStack, { autoAlpha: view === "catalog" ? 1 : 0, x: 0 });
 	if (mobileBook) motionScope.set(mobileBook, { autoAlpha: view === "catalog" ? 1 : 0, y: 0, scale: 1 });
 	if (mobilePaper) motionScope.set(mobilePaper, { autoAlpha: 1, x: 0, y: 0, scale: 1, rotateZ: 0 });
 	if (mobileEdgeTabs) motionScope.set(mobileEdgeTabs, { autoAlpha: view === "catalog" ? 1 : 0, x: 0, y: 0, scale: 1, rotateZ: 0 });
 	if (recommendationsEl) motionScope.set(recommendationsEl, { autoAlpha: view === "home" ? 1 : 0, x: 0 });
-	if (closedBookStack) {
-		motionScope.set(closedBookStack, { autoAlpha: view === "home" ? 1 : 0, x: 0, y: 0, scaleX: 1, scaleY: 1 });
-	}
 	if (prepareDock) motionScope.set(prepareDock, { autoAlpha: view === "prepare" ? 1 : 0, x: 0, y: 0, scaleX: 1, scaleY: 1 });
-	if (dockedCover) motionScope.set(dockedCover, { autoAlpha: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 });
 	if (preparationPanel) motionScope.set(preparationPanel, { autoAlpha: view === "prepare" ? 1 : 0, x: 0, y: 0 });
 	if (rootEl) motionScope.set(rootEl.querySelectorAll(".task-card, .recommendation-card"), { x: 0, y: 0, scaleX: 1, scaleY: 1 });
-	if (coverHandoff) {
-		motionScope.set(coverHandoff, {
-			autoAlpha: 0,
-			left: 0,
-			top: 0,
-			width: 0,
-			height: 0,
-			x: 0,
-			y: 0,
-			scaleX: 1,
-			scaleY: 1,
-		});
-		const handoffParts = coverHandoff.querySelectorAll<HTMLElement>("strong, .cover-emblem");
-		motionScope.set(handoffParts, {
-			autoAlpha: 1,
-			x: 0,
-			y: 0,
-			scaleX: 1,
-			scaleY: 1,
-			transformOrigin: "center center",
-		});
-	}
 }
 
 function resetPaperTurnVisuals() {
@@ -360,22 +383,18 @@ function resetPaperTurnVisuals() {
 	paperTurnSequence += 1;
 	pendingPaperTurnSection = null;
 	turnPreview = null;
-	if (spreadContent) motionScope.set(spreadContent, { autoAlpha: 1 });
-	if (catalogLeftPage) motionScope.set(catalogLeftPage, { autoAlpha: 1, rotateY: 0, transformOrigin: "right center" });
-	if (catalogRightPage) motionScope.set(catalogRightPage, { autoAlpha: 1 });
-	if (catalogLeftPageStack) motionScope.set(catalogLeftPageStack, { autoAlpha: 1, x: 0 });
+	if (cartePageLeft) motionScope.set(cartePageLeft, { autoAlpha: 1 });
+	if (cartePageRight) motionScope.set(cartePageRight, { autoAlpha: 1 });
 	if (turningSheet) motionScope.set(turningSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
-	if (catalogBook) motionScope.set(catalogBook, { rotateZ: 0 });
-	if (catalogBookShadow) motionScope.set(catalogBookShadow, { autoAlpha: 1, scaleX: 1, scaleY: 1, transformOrigin: "right center" });
 	if (mobilePaper) motionScope.set(mobilePaper, { autoAlpha: 1, x: 0, y: 0, scale: 1, rotateZ: 0 });
 	if (mobileEdgeTabs) motionScope.set(mobileEdgeTabs, { x: 0, y: 0, rotateZ: 0 });
 }
 
 function applyStageTerminal(view: QuestHallDemoUrlState["view"]) {
 	if (!motionScope || !homeStage || !catalogStage || !prepareStage) return;
-	motionScope.set(homeStage, { autoAlpha: view === "home" ? 1 : 0, pointerEvents: view === "home" ? "auto" : "none" });
-	motionScope.set(catalogStage, { autoAlpha: view === "catalog" ? 1 : 0, pointerEvents: view === "catalog" ? "auto" : "none" });
-	motionScope.set(prepareStage, { autoAlpha: view === "prepare" ? 1 : 0, pointerEvents: view === "prepare" ? "auto" : "none" });
+	motionScope.set(homeStage, { autoAlpha: view === "home" ? 1 : 0, zIndex: "auto", pointerEvents: view === "home" ? "auto" : "none" });
+	motionScope.set(catalogStage, { autoAlpha: view === "catalog" ? 1 : 0, zIndex: "auto", pointerEvents: view === "catalog" ? "auto" : "none" });
+	motionScope.set(prepareStage, { autoAlpha: view === "prepare" ? 1 : 0, zIndex: "auto", pointerEvents: view === "prepare" ? "auto" : "none" });
 	setSceneObjectsTerminal(view);
 }
 
@@ -386,6 +405,8 @@ function setStageTerminal(view: QuestHallDemoUrlState["view"]) {
 	if (!motionScope) return;
 	motionScope.stopAll("hold");
 	applyStageTerminal(view);
+	if (view === "home") startClosedBookIdle();
+	else stopClosedBookIdle();
 }
 
 function settleViewTransition() {
@@ -397,6 +418,8 @@ function completeViewTransition(view: QuestHallDemoUrlState["view"]) {
 	transitionFrom = null;
 	transitionTo = null;
 	applyStageTerminal(view);
+	if (view === "home") startClosedBookIdle();
+	else stopClosedBookIdle();
 }
 
 function resetCompletionReplayDecorations(showStamp: boolean) {
@@ -421,29 +444,40 @@ function isNarrowViewport(): boolean {
 	return typeof window !== "undefined" && window.matchMedia("(max-width: 64rem)").matches;
 }
 
-function alignCatalogStageForReopen() {
-	if (!rootEl) return;
+function getCatalogReopenScrollY(): number {
+	if (!rootEl) return window.scrollY;
 	if (catalogReturnScrollY !== null) {
-		window.scrollTo({ left: window.scrollX, top: catalogReturnScrollY, behavior: "auto" });
+		const target = catalogReturnScrollY;
 		catalogReturnScrollY = null;
-		return;
+		return target;
 	}
 
 	const stageStack = rootEl.querySelector<HTMLElement>(".stage-stack");
-	if (!stageStack) return;
+	if (!stageStack) return window.scrollY;
 
 	const narrow = isNarrowViewport();
 	const navigationBottom = document.querySelector<HTMLElement>("[data-app-nav]")?.getBoundingClientRect().bottom ?? 0;
 	const narrowStageOffset = window.innerHeight >= 600 ? 86 : 16;
 	const targetViewportTop = Math.max(0, navigationBottom) + (narrow ? narrowStageOffset : 16);
 	const stageBounds = stageStack.getBoundingClientRect();
-	if (!narrow && stageBounds.top >= targetViewportTop && stageBounds.top <= window.innerHeight * 0.55) return;
+	if (!narrow && stageBounds.top >= targetViewportTop && stageBounds.top <= window.innerHeight * 0.55) return window.scrollY;
 
-	window.scrollTo({
-		left: window.scrollX,
-		top: Math.max(0, window.scrollY + stageBounds.top - targetViewportTop),
-		behavior: "auto",
-	});
+	return Math.max(0, window.scrollY + stageBounds.top - targetViewportTop);
+}
+
+function addScrollTransition(timeline: ReturnType<CarteMotionScope["timeline"]>, targetY: number, duration: number) {
+	const scrollPosition = { y: window.scrollY };
+	if (Math.abs(scrollPosition.y - targetY) < 1) return;
+	timeline.to(
+		scrollPosition,
+		{
+			y: targetY,
+			duration,
+			ease: CARTE_MOTION_TOKENS.easeInOut,
+			onUpdate: () => window.scrollTo({ left: window.scrollX, top: scrollPosition.y, behavior: "auto" }),
+		},
+		0,
+	);
 }
 
 function firstVisibleButton(scope: ParentNode | undefined, selector: string): HTMLButtonElement | undefined {
@@ -467,14 +501,14 @@ function focusStageTarget(stage: HTMLElement | undefined, target: HTMLElement | 
 function focusCatalog() {
 	const closeButton = firstVisibleButton(catalogStage, ".catalog-toolbar .quiet-button");
 	const selectedTab = firstVisibleButton(catalogStage, 'button[role="tab"][aria-selected="true"]');
-	const firstTask = firstVisibleButton(catalogStage, ".task-select");
+	const firstTask = firstVisibleButton(rootEl, ".task-select");
 	focusStageTarget(catalogStage, closeButton ?? firstTask ?? selectedTab);
 }
 
 function focusSelectedTask() {
 	const selector = lastSelectedKey ? `.task-select[data-task-key="${lastSelectedKey}"]` : ".task-select";
 	queueMicrotask(() => {
-		const selectedTask = firstVisibleButton(catalogStage, selector);
+		const selectedTask = firstVisibleButton(rootEl, selector);
 		const navigationBottom = document.querySelector<HTMLElement>("[data-app-nav]")?.getBoundingClientRect().bottom ?? 0;
 		const bounds = selectedTask?.getBoundingClientRect();
 		if (selectedTask && bounds && bounds.bottom > navigationBottom && bounds.top < window.innerHeight) {
@@ -490,7 +524,7 @@ function focusPreparation() {
 }
 
 function focusHome() {
-	focusStageTarget(homeStage, coverButton);
+	focusStageTarget(homeStage, homeSlot);
 }
 
 function focusViewDestination(from: QuestHallDemoUrlState["view"], to: QuestHallDemoUrlState["view"]) {
@@ -519,485 +553,214 @@ function restoreDesktopPagerFocus(direction: -1 | 1) {
 		if (isNarrowViewport()) return;
 		const preferredLabel = direction > 0 ? "Feuillet suivant" : "Feuillet précédent";
 		const fallbackLabel = direction > 0 ? "Feuillet précédent" : "Feuillet suivant";
-		const preferred = firstVisibleButton(catalogStage, `button.page-turn-surface[aria-label="${preferredLabel}"]:not(:disabled)`);
-		const fallback = firstVisibleButton(catalogStage, `button.page-turn-surface[aria-label="${fallbackLabel}"]:not(:disabled)`);
+		const preferred = firstVisibleButton(rootEl, `button.page-turn-surface[aria-label="${preferredLabel}"]:not(:disabled)`);
+		const fallback = firstVisibleButton(rootEl, `button.page-turn-surface[aria-label="${fallbackLabel}"]:not(:disabled)`);
 		(preferred ?? fallback)?.focus({ preventScroll: true });
 	});
 }
 
-function addCoverHandoff(
-	timeline: ReturnType<CarteMotionScope["timeline"]>,
-	source: HTMLElement,
-	target: HTMLElement,
-	at: number,
-	duration: number,
-): number {
-	let sourceBounds: DOMRect | null = null;
-	let targetBounds: DOMRect | null = null;
-	const handoffTitle = coverHandoff?.querySelector<HTMLElement>("strong") ?? null;
-	const handoffEmblem = coverHandoff?.querySelector<HTMLElement>(".cover-emblem") ?? null;
-	const sourceTitle = source.querySelector<HTMLElement>("strong");
-	const targetTitle = target.querySelector<HTMLElement>("strong");
-	const sourceEmblem = source.querySelector<HTMLElement>(".cover-emblem");
-	const targetEmblem = target.querySelector<HTMLElement>(".cover-emblem");
-	let titleTarget = { x: 0, y: 0, scaleX: 1, scaleY: 1, autoAlpha: 1 };
-	let emblemTarget = { x: 0, y: 0, scaleX: 1, scaleY: 1, autoAlpha: 1 };
+/**
+ * Re-fits the one solid onto a view's slot. Measured inside the timeline so a
+ * scroll or resize between the click and the first frame cannot desync it.
+ */
+function addBookFit(timeline: ReturnType<CarteMotionScope["timeline"]>, view: CarteView, at: number, duration: number, ease: string) {
+	if (!carteBook) return;
+	let fit = IDENTITY_FIT;
 	timeline.call(
 		() => {
-			sourceBounds = source.getBoundingClientRect();
-			targetBounds = target.getBoundingClientRect();
-			const usable = sourceBounds.width > 0 && sourceBounds.height > 0 && targetBounds.width > 0 && targetBounds.height > 0;
-			if (!usable || !coverHandoff) {
-				sourceBounds = null;
-				targetBounds = null;
-				return;
-			}
-			const activeSourceBounds = sourceBounds;
-			const activeTargetBounds = targetBounds;
-			motionScope?.set(coverHandoff, {
-				autoAlpha: 1,
-				left: activeSourceBounds.left,
-				top: activeSourceBounds.top,
-				width: activeSourceBounds.width,
-				height: activeSourceBounds.height,
-				x: 0,
-				y: 0,
-				scaleX: 1,
-				scaleY: 1,
-				transformOrigin: "left top",
-			});
-
-			const scaleX = activeTargetBounds.width / activeSourceBounds.width;
-			const scaleY = activeTargetBounds.height / activeSourceBounds.height;
-			const alignPart = (part: HTMLElement, sourcePart: HTMLElement, targetPart: HTMLElement) => {
-				motionScope?.set(part, { autoAlpha: 1, x: 0, y: 0, scaleX: 1, scaleY: 1, transformOrigin: "left top" });
-				const basePartBounds = part.getBoundingClientRect();
-				const sourcePartBounds = sourcePart.getBoundingClientRect();
-				const targetPartBounds = targetPart.getBoundingClientRect();
-				if (basePartBounds.width <= 0 || basePartBounds.height <= 0 || sourcePartBounds.width <= 0 || sourcePartBounds.height <= 0) {
-					motionScope?.set(part, { autoAlpha: 0 });
-					return { x: 0, y: 0, scaleX: 1, scaleY: 1, autoAlpha: 0 };
-				}
-
-				const baseX = basePartBounds.left - activeSourceBounds.left;
-				const baseY = basePartBounds.top - activeSourceBounds.top;
-				motionScope?.set(part, {
-					x: sourcePartBounds.left - activeSourceBounds.left - baseX,
-					y: sourcePartBounds.top - activeSourceBounds.top - baseY,
-					scaleX: sourcePartBounds.width / basePartBounds.width,
-					scaleY: sourcePartBounds.height / basePartBounds.height,
-				});
-
-				if (targetPartBounds.width <= 0 || targetPartBounds.height <= 0) {
-					return { x: 0, y: 0, scaleX: 0.75, scaleY: 0.75, autoAlpha: 0 };
-				}
-				return {
-					x: (targetPartBounds.left - activeTargetBounds.left) / scaleX - baseX,
-					y: (targetPartBounds.top - activeTargetBounds.top) / scaleY - baseY,
-					scaleX: targetPartBounds.width / (basePartBounds.width * scaleX),
-					scaleY: targetPartBounds.height / (basePartBounds.height * scaleY),
-					autoAlpha: 1,
-				};
-			};
-
-			if (handoffTitle && sourceTitle && targetTitle) titleTarget = alignPart(handoffTitle, sourceTitle, targetTitle);
-			if (handoffEmblem && sourceEmblem && targetEmblem) emblemTarget = alignPart(handoffEmblem, sourceEmblem, targetEmblem);
+			fit = measureBookFit(view);
 		},
 		[],
 		at,
 	);
 	timeline.to(
-		coverHandoff ?? [],
+		carteBook,
 		{
-			x: () => (sourceBounds && targetBounds ? targetBounds.left - sourceBounds.left : 0),
-			y: () => (sourceBounds && targetBounds ? targetBounds.top - sourceBounds.top : 0),
-			scaleX: () => (sourceBounds && targetBounds ? targetBounds.width / sourceBounds.width : 1),
-			scaleY: () => (sourceBounds && targetBounds ? targetBounds.height / sourceBounds.height : 1),
+			x: () => fit.x,
+			y: () => fit.y,
+			scaleX: () => fit.scaleX,
+			scaleY: () => fit.scaleY,
 			duration,
-			ease: CARTE_MOTION_TOKENS.easeInOut,
+			ease,
 		},
 		at,
 	);
-	if (handoffTitle) {
-		timeline.to(
-			handoffTitle,
-			{
-				autoAlpha: () => titleTarget.autoAlpha,
-				x: () => titleTarget.x,
-				y: () => titleTarget.y,
-				scaleX: () => titleTarget.scaleX,
-				scaleY: () => titleTarget.scaleY,
-				duration,
-				ease: CARTE_MOTION_TOKENS.easeInOut,
-			},
-			at + 0.001,
-		);
-	}
-	if (handoffEmblem) {
-		timeline.to(
-			handoffEmblem,
-			{
-				autoAlpha: () => emblemTarget.autoAlpha,
-				x: () => emblemTarget.x,
-				y: () => emblemTarget.y,
-				scaleX: () => emblemTarget.scaleX,
-				scaleY: () => emblemTarget.scaleY,
-				duration,
-				ease: CARTE_MOTION_TOKENS.easeInOut,
-			},
-			at + 0.001,
-		);
-	}
-	return at + duration;
 }
 
-function playViewTransition(from: QuestHallDemoUrlState["view"], to: QuestHallDemoUrlState["view"], selectedElement?: HTMLElement) {
+/**
+ * The cover is a hinged board; opening it is the only thing that turns a closed
+ * CARTE into a spread. The left leaf block and the contact shadow follow it.
+ */
+function addCoverSwing(
+	timeline: ReturnType<CarteMotionScope["timeline"]>,
+	open: boolean,
+	at: number,
+	duration: number,
+	ease: string | ((progress: number) => number),
+) {
+	if (carteCover) timeline.to(carteCover, { rotateY: open ? COVER_OPEN_ROTATION : 0, duration, ease }, at);
+	const parts = leftHalfParts();
+	if (parts.length > 0) {
+		// The already-turned leaves only belong on the table once the cover has
+		// swung past them, so they arrive under it rather than popping beside it.
+		if (open) timeline.to(parts, { autoAlpha: 1, duration: duration * 0.3 }, at + duration * 0.62);
+		else timeline.to(parts, { autoAlpha: 0, duration: duration * 0.26 }, at + duration * 0.06);
+	}
+	if (carteTurnZones) timeline.to(carteTurnZones, { autoAlpha: open ? 1 : 0, duration: duration * 0.3 }, open ? at + duration * 0.62 : at);
+	if (carteShadow) timeline.to(carteShadow, { scaleX: open ? 1 : 0.52, duration, ease }, at);
+}
+
+/**
+ * Every view change is the same physical event: the one book is re-fitted onto
+ * the destination slot and its cover swung to match. Nothing is ever swapped
+ * for a look-alike, so there is no seam left to cross-fade.
+ */
+function playViewTransition(from: CarteView, to: CarteView, selectedElement?: HTMLElement) {
 	if (!motionScope || !homeStage || !catalogStage || !prepareStage) {
 		setStageTerminal(to);
 		return;
 	}
 
 	settleViewTransition();
-	if (from === "prepare" && to === "catalog") alignCatalogStageForReopen();
+	const scrollTargetY =
+		to === "home" && from !== "home" ? homeReturnScrollY : from === "prepare" && to === "catalog" ? getCatalogReopenScrollY() : null;
+	stopClosedBookIdle();
 	motionScope.stopAll("hold");
 	resetPaperTurnVisuals();
 	if (rootEl?.contains(document.activeElement)) rootEl.focus({ preventScroll: true });
 	transitionFrom = from;
 	transitionTo = to;
+
 	const reduced = isReduced();
-	const duration = reduced ? 0.14 : CARTE_MOTION_TOKENS.durationCeremonial;
+	const narrow = isNarrowViewport();
 	const timeline = motionScope.timeline({ defaults: { ease: CARTE_MOTION_TOKENS.easeInOut } });
+	const stages = { home: homeStage, catalog: catalogStage, prepare: prepareStage } satisfies Record<CarteView, HTMLElement>;
+	const fromStage = stages[from];
+	const toStage = stages[to];
+	const idleStage = [homeStage, catalogStage, prepareStage].find((stage) => stage !== fromStage && stage !== toStage);
+	const finish = () => {
+		completeViewTransition(to);
+		focusViewDestination(from, to);
+	};
+
+	if (idleStage) timeline.set(idleStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
+	timeline.set(fromStage, { autoAlpha: 1, pointerEvents: "none" }, 0);
+	timeline.set(toStage, { autoAlpha: 0, visibility: "visible", pointerEvents: "none" }, 0);
+
+	if (scrollTargetY !== null) {
+		if (reduced) window.scrollTo({ left: window.scrollX, top: scrollTargetY, behavior: "auto" });
+		else addScrollTransition(timeline, scrollTargetY, from === "prepare" && to === "catalog" ? 0.48 : 0.62);
+	}
+
 	if (reduced) {
-		const fromStage = from === "home" ? homeStage : from === "catalog" ? catalogStage : prepareStage;
-		const targetStage = to === "home" ? homeStage : to === "catalog" ? catalogStage : prepareStage;
-		const inactiveStage = [homeStage, catalogStage, prepareStage].find((stage) => stage !== fromStage && stage !== targetStage);
 		setSceneObjectsTerminal(to);
-		if (inactiveStage) timeline.set(inactiveStage, { autoAlpha: 0, pointerEvents: "none" });
-		timeline
-			.set(targetStage, { autoAlpha: 0, visibility: "visible", pointerEvents: "none" })
-			.to(fromStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.1 }, 0)
-			.to(targetStage, { autoAlpha: 1, duration: 0.12 }, 0.04)
-			.call(() => {
-				completeViewTransition(to);
-				focusViewDestination(from, to);
-			});
+		timeline.to(fromStage, { autoAlpha: 0, duration: 0.1 }, 0).to(toStage, { autoAlpha: 1, duration: 0.12 }, 0.04).call(finish);
 		return;
 	}
 
-	if (from === "home" && to === "catalog" && isNarrowViewport()) {
-		timeline.set(catalogStage, { autoAlpha: 0, pointerEvents: "none" });
-		if (mobileBook) {
-			timeline.set(mobileBook, {
-				autoAlpha: 0,
-				y: 20,
-				scale: 0.985,
-				transformOrigin: "center top",
-			});
-		}
-		if (mobilePaper) {
-			timeline.set(mobilePaper, {
-				autoAlpha: 0,
-				x: 0,
-				y: 62,
-				scale: 0.94,
-				rotateZ: -1.2,
-				transformOrigin: "center bottom",
-			});
-		}
-		if (mobileEdgeTabs) timeline.set(mobileEdgeTabs, { autoAlpha: 0, x: -14, y: 0 });
-		if (recommendationsEl) {
-			timeline.to(recommendationsEl, { autoAlpha: 0, x: -12, duration: CARTE_MOTION_TOKENS.durationExit }, 0);
-		}
-		if (closedBookStack) {
-			timeline.to(
-				closedBookStack,
-				{
-					autoAlpha: 0,
-					scale: 1.14,
-					y: -10,
-					transformOrigin: "center top",
-					duration: 0.3,
-					ease: CARTE_MOTION_TOKENS.easeOut,
-				},
-				0,
-			);
-		}
-		timeline.to(homeStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.18 }, 0.14);
-		timeline.set(catalogStage, { autoAlpha: 1, pointerEvents: "none" }, 0.32);
-		if (mobileBook) {
-			timeline.to(mobileBook, { autoAlpha: 1, y: 0, scale: 1, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, 0.32);
-		}
-		if (mobilePaper) {
-			timeline.to(mobilePaper, { autoAlpha: 1, y: 0, scale: 1, rotateZ: 0, duration: 0.52, ease: CARTE_MOTION_TOKENS.easeOut }, 0.38);
-		}
-		if (mobileEdgeTabs) {
-			timeline.to(mobileEdgeTabs, { autoAlpha: 1, x: 0, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeOut }, 0.58);
-		}
-	} else if (from === "catalog" && to === "home" && isNarrowViewport()) {
-		timeline.set(homeStage, { autoAlpha: 0, pointerEvents: "none" });
-		if (mobileEdgeTabs) timeline.to(mobileEdgeTabs, { autoAlpha: 0, x: -12, duration: 0.14, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
-		if (mobilePaper) {
-			timeline.to(mobilePaper, { autoAlpha: 0, y: 64, scale: 0.94, rotateZ: 1.1, duration: 0.36, ease: CARTE_MOTION_TOKENS.easeInOut }, 0);
-		}
-		if (mobileBook) timeline.to(mobileBook, { autoAlpha: 0, y: 18, scale: 0.985, duration: 0.24 }, 0.26);
-		timeline.to(catalogStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, 0.38);
-		timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" }, 0.52);
-		if (closedBookStack) {
-			timeline.set(closedBookStack, { autoAlpha: 0, scale: 1.14, y: -10, transformOrigin: "center top" }, 0.52);
-			timeline.to(closedBookStack, { autoAlpha: 1, scale: 1, y: 0, duration: 0.34, ease: CARTE_MOTION_TOKENS.easeOut }, 0.52);
-		}
-		if (recommendationsEl) timeline.to(recommendationsEl, { autoAlpha: 1, x: 0, duration: 0.3 }, 0.6);
-	} else if (from === "home" && to === "catalog") {
-		const handoffAt = 0.02;
-		const handoffDuration = 0.5;
-		const handoff = closedCover && catalogCover && coverHandoff ? { source: closedCover, target: catalogCover } : null;
-		const openAt = handoff ? handoffAt + handoffDuration + 0.04 : 0.3;
-		const openEnd = openAt + duration;
-		timeline.set(catalogStage, { autoAlpha: 0, pointerEvents: "none" });
-		if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0, rotateZ: 0 });
-		if (catalogBookShadow) timeline.set(catalogBookShadow, { autoAlpha: 0, scaleX: 0.5, transformOrigin: "right center" });
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 0, rotateY: 0, z: CATALOG_COVER_CLOSED_Z, zIndex: 12 });
-		if (spreadContent) timeline.set(spreadContent, { autoAlpha: 1 });
-		if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 0 });
-		if (catalogRightPage) timeline.set(catalogRightPage, { autoAlpha: 1 });
-		if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 0 });
-		if (recommendationsEl) timeline.to(recommendationsEl, { autoAlpha: 0, x: -28, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
-		if (handoff) {
-			addCoverHandoff(timeline, handoff.source, handoff.target, handoffAt, handoffDuration);
-			if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 0 }, handoffAt + 0.015);
-		} else if (closedBookStack) {
-			timeline.to(closedBookStack, { autoAlpha: 0, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
-		}
-		timeline.to(homeStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.18 }, 0.14);
-		timeline.set(catalogStage, { autoAlpha: 1, pointerEvents: "none" }, openAt - 0.02);
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 1 }, openAt - 0.02);
-		if (coverHandoff) timeline.to(coverHandoff, { autoAlpha: 0, duration: 0.06 }, openAt - 0.02);
-		if (catalogBookShadow) {
-			timeline.to(catalogBookShadow, { autoAlpha: 1, scaleX: 1, duration, ease: CARTE_MOTION_TOKENS.easeInOut }, openAt);
-		}
-		if (catalogCover) {
-			timeline.to(
-				catalogCover,
-				{ rotateY: CATALOG_COVER_OPEN_ROTATION, z: CATALOG_COVER_OPEN_Z, duration, ease: CARTE_MOTION_TOKENS.easeInOut },
-				openAt,
-			);
-		}
-		if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 1 }, openEnd);
-		if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 1 }, openEnd);
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 0, zIndex: 2 }, openEnd);
-	} else if (from === "catalog" && to === "home") {
-		const closeAt = 0.04;
-		const closeEnd = closeAt + duration;
-		const handoffDuration = 0.46;
-		const handoff = catalogCover && closedCover && coverHandoff ? { source: catalogCover, target: closedCover } : null;
-		const handoffEnd = handoff ? closeEnd + handoffDuration : closeEnd + 0.18;
-		timeline.set(homeStage, { autoAlpha: 0, pointerEvents: "none" });
-		if (recommendationsEl) timeline.set(recommendationsEl, { autoAlpha: 0, x: -28 });
-		if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 0, x: 0, y: 0, scaleX: 1, scaleY: 1 });
-		if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0, rotateZ: 0 });
-		if (catalogBookShadow) timeline.set(catalogBookShadow, { autoAlpha: 1, scaleX: 1, transformOrigin: "right center" });
-		if (catalogCover) {
-			timeline.set(catalogCover, { autoAlpha: 1, rotateY: CATALOG_COVER_OPEN_ROTATION, z: CATALOG_COVER_OPEN_Z, zIndex: 12 }, 0);
-			timeline.to(catalogCover, { rotateY: 0, z: CATALOG_COVER_CLOSED_Z, duration, ease: CARTE_MOTION_TOKENS.easeInOut }, closeAt);
-		}
-		if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 0 }, 0);
-		if (catalogLeftPageStack) timeline.to(catalogLeftPageStack, { autoAlpha: 0, duration: 0.12 }, closeAt);
-		if (catalogBookShadow) {
-			timeline.to(catalogBookShadow, { autoAlpha: 0, scaleX: 0.5, duration, ease: CARTE_MOTION_TOKENS.easeInOut }, closeAt);
-		}
-		if (handoff) {
-			addCoverHandoff(timeline, handoff.source, handoff.target, closeEnd, handoffDuration);
-			timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" }, closeEnd);
-			timeline.set(handoff.source, { autoAlpha: 0 }, closeEnd + 0.015);
-			timeline.to(catalogStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.18 }, closeEnd);
-			if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 1 }, handoffEnd - 0.06);
-			if (coverHandoff) timeline.to(coverHandoff, { autoAlpha: 0, duration: 0.08 }, handoffEnd - 0.06);
-		} else {
-			timeline.to(catalogStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, closeEnd);
-			timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" }, closeEnd + 0.16);
-			if (closedBookStack) timeline.to(closedBookStack, { autoAlpha: 1, duration: 0.2 }, closeEnd + 0.16);
-		}
-		if (recommendationsEl)
-			timeline.to(recommendationsEl, { autoAlpha: 1, x: 0, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, handoffEnd - 0.1);
-	} else if ((from === "catalog" || from === "home") && to === "prepare") {
-		const selectedSurface = selectedElement?.closest<HTMLElement>(".task-card, .recommendation-card") ?? selectedElement;
-		const narrow = isNarrowViewport();
-		const sourceCover = catalogCover;
-		const handoffProxy = coverHandoff;
-		const targetCover = dockedCover;
-		const canHandoffCover = from === "catalog" && !narrow && sourceCover && handoffProxy && targetCover;
-		const homeHandoff = from === "home" && closedCover && handoffProxy && targetCover ? { source: closedCover, target: targetCover } : null;
-		timeline.set(prepareStage, { autoAlpha: 1, pointerEvents: "none" }, 0);
-		if (prepareDock) timeline.set(prepareDock, { autoAlpha: 0, x: 0, scale: 1 }, 0);
-		if (preparationPanel) timeline.set(preparationPanel, { autoAlpha: 0, x: narrow ? 0 : 36 }, 0);
-		if (selectedSurface) {
-			timeline.to(selectedSurface, { y: -7, scale: 1.01, duration: 0.12, ease: CARTE_MOTION_TOKENS.easeOut }, 0);
-			timeline.to(selectedSurface, { y: 0, scale: 1, duration: 0.16, ease: CARTE_MOTION_TOKENS.easeInOut }, 0.12);
-		}
+	const opening = isBookSpread(to) && !isBookSpread(from);
+	const closing = isBookSpread(from) && !isBookSpread(to);
+	const bookLeaves = to === "catalog" && narrow;
+	const bookReturns = from === "catalog" && narrow;
+	let bookEnd: number = CARTE_MOTION_TOKENS.durationCeremonial;
 
-		if (homeHandoff) {
-			const handoffAt = 0.02;
-			const handoffEnd = addCoverHandoff(timeline, homeHandoff.source, homeHandoff.target, handoffAt, 0.52);
-			if (recommendationsEl) timeline.to(recommendationsEl, { autoAlpha: 0, x: -24, duration: 0.24 }, 0);
-			if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 0 }, handoffAt + 0.015);
-			timeline.to(homeStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.2 }, 0.16);
-			if (prepareDock) timeline.set(prepareDock, { autoAlpha: 1 }, handoffEnd - 0.06);
-			timeline.to(handoffProxy ?? [], { autoAlpha: 0, duration: 0.08 }, handoffEnd - 0.06);
-			if (preparationPanel) {
-				timeline.to(preparationPanel, { autoAlpha: 1, x: 0, duration: 0.42, ease: CARTE_MOTION_TOKENS.easeOut }, handoffEnd + 0.02);
-			}
-		} else if (canHandoffCover) {
-			const closeAt = 0.04;
-			const closeDuration = duration * 0.88;
-			const handoffAt = closeAt + closeDuration;
-			const handoffDuration = 0.44;
-			const handoffEnd = addCoverHandoff(timeline, sourceCover, targetCover, handoffAt, handoffDuration);
-
-			if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0, rotateZ: 0 }, 0);
-			if (catalogBookShadow) timeline.set(catalogBookShadow, { autoAlpha: 1, scaleX: 1, transformOrigin: "right center" }, 0);
-			timeline.set(
-				sourceCover,
-				{
-					autoAlpha: 1,
-					rotateY: CATALOG_COVER_OPEN_ROTATION,
-					x: 0,
-					y: 0,
-					scaleX: 1,
-					scaleY: 1,
-					z: CATALOG_COVER_OPEN_Z,
-					zIndex: 12,
-				},
-				closeAt,
-			);
-			timeline.to(sourceCover, { rotateY: 0, z: CATALOG_COVER_CLOSED_Z, duration: closeDuration, ease: CARTE_MOTION_TOKENS.easeInOut }, closeAt);
-			if (catalogBookShadow) {
-				timeline.to(catalogBookShadow, { autoAlpha: 0, scaleX: 0.5, duration: closeDuration, ease: CARTE_MOTION_TOKENS.easeInOut }, closeAt);
-			}
-			if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 0 }, closeAt);
-			if (catalogLeftPageStack) {
-				timeline.to(catalogLeftPageStack, { autoAlpha: 0, x: 12, duration: 0.16, ease: CARTE_MOTION_TOKENS.easeExit }, closeAt + 0.04);
-			}
-			timeline.set(sourceCover, { autoAlpha: 0 }, handoffAt + 0.015);
-			timeline.to(catalogStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.18, ease: CARTE_MOTION_TOKENS.easeExit }, handoffAt + 0.015);
-			if (prepareDock) timeline.to(prepareDock, { autoAlpha: 1, duration: 0.12, ease: CARTE_MOTION_TOKENS.easeOut }, handoffEnd - 0.08);
-			timeline.set(handoffProxy, { autoAlpha: 0 }, handoffEnd + 0.04);
-			if (preparationPanel) {
-				timeline.to(preparationPanel, { autoAlpha: 1, x: 0, duration: 0.42, ease: CARTE_MOTION_TOKENS.easeOut }, handoffEnd + 0.04);
-			}
-		} else {
-			const revealPrepareAt = from === "catalog" ? 0.34 : 0.24;
-			if (from === "catalog") {
-				if (mobileEdgeTabs) timeline.to(mobileEdgeTabs, { autoAlpha: 0, x: -14, duration: 0.16, ease: CARTE_MOTION_TOKENS.easeExit }, 0.08);
-				if (mobilePaper) {
-					timeline.to(
-						mobilePaper,
-						{ autoAlpha: 0, x: 38, y: 14, scale: 0.97, rotateZ: 0.8, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeExit },
-						0.06,
-					);
-				}
-				if (mobileBook) timeline.to(mobileBook, { autoAlpha: 0, scale: 0.985, duration: 0.2 }, 0.18);
-				timeline.to(catalogStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, 0.24);
-			} else {
-				if (closedBookStack) timeline.to(closedBookStack, { x: -58, scale: 0.78, autoAlpha: 0, duration: duration * 0.65 }, 0);
-				timeline.to(homeStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.2 }, 0.2);
-			}
-			if (prepareDock) timeline.to(prepareDock, { autoAlpha: 1, x: 0, scale: 1, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, revealPrepareAt);
-			if (preparationPanel) {
-				timeline.to(preparationPanel, { autoAlpha: 1, x: 0, duration: 0.38, ease: CARTE_MOTION_TOKENS.easeOut }, revealPrepareAt + 0.06);
-			}
+	if (bookLeaves) {
+		if (bookLayer) timeline.to(bookLayer, { autoAlpha: 0, duration: 0.22, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
+		bookEnd = 0.24;
+	} else if (bookReturns) {
+		// Nothing to interpolate from: the solid was parked off-screen while the
+		// flat leaf held the stage, so it is posed first and then faded back in.
+		timeline.call(() => setBookTerminal(to), [], 0.1);
+		if (bookLayer) timeline.to(bookLayer, { autoAlpha: 1, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, 0.14);
+		bookEnd = 0.46;
+	} else if (opening) {
+		const timing = createCarteBookOpenTiming();
+		if (bookLayer) timeline.set(bookLayer, { autoAlpha: 1 }, 0);
+		addBookFit(timeline, to, 0, timing.spinDuration, "power2.inOut");
+		if (carteBookTilt) {
+			timeline.to(carteBookTilt, { rotateX: 0, rotateY: CARTE_BOOK_FULL_TURN, rotateZ: 0, duration: timing.spinDuration, ease: "power2.inOut" }, 0);
+			timeline.set(carteBookTilt, { rotateY: 0 }, timing.spinDuration);
 		}
-	} else if (from === "prepare" && to === "catalog" && isNarrowViewport()) {
-		timeline.set(catalogStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
-		if (mobileBook) {
-			timeline.set(
-				mobileBook,
-				{
-					autoAlpha: 0,
-					y: 18,
-					scale: 0.985,
-					transformOrigin: "center top",
-				},
-				0,
-			);
+		addCoverSwing(timeline, true, timing.coverStart, timing.coverDuration, createCarteBookOpenEase(timing));
+		bookEnd = Math.max(timing.spinDuration, timing.totalDuration);
+	} else if (closing) {
+		const timing = createCarteBookCloseTiming();
+		if (bookLayer) timeline.set(bookLayer, { autoAlpha: 1 }, 0);
+		addCoverSwing(timeline, false, 0, timing.coverDuration, "power1.inOut");
+		addBookFit(timeline, to, timing.coverStart, timing.spinDuration, "power2.inOut");
+		if (carteBookTilt) {
+			timeline.set(carteBookTilt, { rotateY: CARTE_BOOK_FULL_TURN }, timing.coverStart);
+			timeline.to(carteBookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0, duration: timing.spinDuration, ease: "power2.inOut" }, timing.coverStart);
 		}
-		if (mobilePaper) {
-			timeline.set(
-				mobilePaper,
-				{
-					autoAlpha: 0,
-					x: 0,
-					y: 54,
-					scale: 0.95,
-					rotateZ: -1,
-					transformOrigin: "center bottom",
-				},
-				0,
-			);
-		}
-		if (mobileEdgeTabs) timeline.set(mobileEdgeTabs, { autoAlpha: 0, x: -12, y: 0 }, 0);
-		if (preparationPanel) {
-			timeline.to(preparationPanel, { autoAlpha: 0, x: 24, duration: 0.22, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
-		}
-		if (prepareDock) {
-			timeline.to(prepareDock, { autoAlpha: 0, x: -12, scale: 0.97, duration: 0.2, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
-		}
-		timeline.to(prepareStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, 0.14);
-		timeline.set(catalogStage, { autoAlpha: 1, pointerEvents: "none" }, 0.28);
-		if (mobileBook) {
-			timeline.to(mobileBook, { autoAlpha: 1, y: 0, scale: 1, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, 0.28);
-		}
-		if (mobilePaper) {
-			timeline.to(mobilePaper, { autoAlpha: 1, y: 0, scale: 1, rotateZ: 0, duration: 0.46, ease: CARTE_MOTION_TOKENS.easeOut }, 0.34);
-		}
-		if (mobileEdgeTabs) {
-			timeline.to(mobileEdgeTabs, { autoAlpha: 1, x: 0, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeOut }, 0.54);
-		}
-	} else if (from === "prepare" && to === "catalog") {
-		const handoff =
-			!isNarrowViewport() && dockedCover && catalogCover && coverHandoff ? { source: dockedCover, target: catalogCover, proxy: coverHandoff } : null;
-		const handoffAt = 0.04;
-		timeline.set(catalogStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
-		if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0, rotateZ: 0 }, 0);
-		if (catalogBookShadow) timeline.set(catalogBookShadow, { autoAlpha: 0, scaleX: 0.5, transformOrigin: "right center" }, 0);
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 1, rotateY: 0, z: CATALOG_COVER_CLOSED_Z, zIndex: 12 }, 0);
-		if (spreadContent) timeline.set(spreadContent, { autoAlpha: 1 }, 0);
-		if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 0 }, 0);
-		if (catalogRightPage) timeline.set(catalogRightPage, { autoAlpha: 1 }, 0);
-		if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 0 }, 0);
-		const handoffEnd = handoff ? addCoverHandoff(timeline, handoff.source, handoff.target, handoffAt, 0.44) : 0.4;
-		const openAt = handoff ? handoffEnd + 0.04 : 0.4;
-		const openEnd = openAt + duration;
-		if (preparationPanel) timeline.to(preparationPanel, { autoAlpha: 0, x: reduced ? 0 : 72, duration: reduced ? 0.12 : 0.28 }, 0);
-		if (handoff) {
-			timeline.set(handoff.source, { autoAlpha: 0 }, handoffAt + 0.015);
-			timeline.to(prepareStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, handoffAt + 0.08);
-			timeline.set(catalogStage, { autoAlpha: 1, pointerEvents: "none" }, handoffEnd - 0.06);
-			timeline.set(handoff.target, { autoAlpha: 1 }, handoffEnd - 0.06);
-			timeline.to(handoff.proxy, { autoAlpha: 0, duration: 0.08 }, handoffEnd - 0.06);
-		} else {
-			if (prepareDock) timeline.to(prepareDock, { autoAlpha: 0, x: reduced ? 0 : -38, scale: reduced ? 1 : 0.9, duration: reduced ? 0.12 : 0.28 }, 0);
-			timeline.to(prepareStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.16 }, 0.24);
-			timeline.set(catalogStage, { autoAlpha: 1, pointerEvents: "none" }, openAt);
-		}
-		if (catalogBookShadow) {
-			timeline.to(catalogBookShadow, { autoAlpha: 1, scaleX: 1, duration, ease: CARTE_MOTION_TOKENS.easeInOut }, openAt);
-		}
-		if (catalogCover) {
-			timeline.to(catalogCover, { rotateY: CATALOG_COVER_OPEN_ROTATION, z: CATALOG_COVER_OPEN_Z, duration }, openAt);
-		}
-		if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 1 }, openEnd);
-		if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 1 }, openEnd);
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 0, zIndex: 2 }, openEnd);
+		bookEnd = timing.totalDuration;
 	} else {
-		timeline.to([homeStage, catalogStage, prepareStage], { autoAlpha: 0, pointerEvents: "none", duration: reduced ? 0.08 : 0.16 });
-		const target = to === "home" ? homeStage : to === "catalog" ? catalogStage : prepareStage;
-		timeline.to(target, { autoAlpha: 1, pointerEvents: "none", duration: reduced ? 0.12 : 0.22 });
+		if (bookLayer) timeline.set(bookLayer, { autoAlpha: 1 }, 0);
+		// The idle sway is killed wherever it happened to be, so the book has to
+		// be eased out of that angle rather than snapped flat on arrival.
+		if (carteBookTilt) {
+			timeline.to(
+				carteBookTilt,
+				{ rotateX: 0, rotateY: 0, rotateZ: 0, duration: CARTE_MOTION_TOKENS.durationCeremonial, ease: CARTE_MOTION_TOKENS.easeInOut },
+				0,
+			);
+		}
+		addBookFit(timeline, to, 0, CARTE_MOTION_TOKENS.durationCeremonial, CARTE_MOTION_TOKENS.easeInOut);
 	}
 
-	timeline.call(() => {
-		completeViewTransition(to);
-		focusViewDestination(from, to);
-	});
+	const chromeIn = Math.max(0.2, bookEnd - 0.36);
+	timeline.to(fromStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.24 }, 0.04);
+	timeline.set(toStage, { autoAlpha: 1 }, chromeIn);
+
+	if (selectedElement) {
+		const surface = selectedElement.closest<HTMLElement>(".task-card, .recommendation-card") ?? selectedElement;
+		timeline.to(surface, { y: -7, scale: 1.01, duration: 0.12, ease: CARTE_MOTION_TOKENS.easeOut }, 0);
+		timeline.to(surface, { y: 0, scale: 1, duration: 0.16 }, 0.12);
+	}
+
+	if (recommendationsEl) {
+		if (from === "home") timeline.to(recommendationsEl, { autoAlpha: 0, x: -28, duration: 0.3, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
+		if (to === "home") {
+			timeline.set(recommendationsEl, { autoAlpha: 0, x: -28 }, 0);
+			timeline.to(recommendationsEl, { autoAlpha: 1, x: 0, duration: 0.34, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn);
+		}
+	}
+	if (prepareDock) {
+		if (from === "prepare") timeline.to(prepareDock, { autoAlpha: 0, duration: 0.2, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
+		if (to === "prepare") {
+			timeline.set(prepareDock, { autoAlpha: 0 }, 0);
+			timeline.to(prepareDock, { autoAlpha: 1, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn);
+		}
+	}
+	if (preparationPanel) {
+		if (from === "prepare") timeline.to(preparationPanel, { autoAlpha: 0, x: 28, duration: 0.26, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
+		if (to === "prepare") {
+			timeline.set(preparationPanel, { autoAlpha: 0, x: narrow ? 0 : 36 }, 0);
+			timeline.to(preparationPanel, { autoAlpha: 1, x: 0, duration: 0.4, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn + 0.04);
+		}
+	}
+
+	if (narrow) {
+		if (to === "catalog") {
+			if (mobileBook) {
+				timeline.set(mobileBook, { autoAlpha: 0, y: 18, scale: 0.985, transformOrigin: "center top" }, 0);
+				timeline.to(mobileBook, { autoAlpha: 1, y: 0, scale: 1, duration: 0.28, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn);
+			}
+			if (mobilePaper) {
+				timeline.set(mobilePaper, { autoAlpha: 0, y: 54, scale: 0.95, rotateZ: -1, transformOrigin: "center bottom" }, 0);
+				timeline.to(mobilePaper, { autoAlpha: 1, y: 0, scale: 1, rotateZ: 0, duration: 0.5, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn + 0.06);
+			}
+			if (mobileEdgeTabs) {
+				timeline.set(mobileEdgeTabs, { autoAlpha: 0, x: -12 }, 0);
+				timeline.to(mobileEdgeTabs, { autoAlpha: 1, x: 0, duration: 0.24, ease: CARTE_MOTION_TOKENS.easeOut }, chromeIn + 0.22);
+			}
+		} else if (from === "catalog") {
+			if (mobileEdgeTabs) timeline.to(mobileEdgeTabs, { autoAlpha: 0, x: -12, duration: 0.14, ease: CARTE_MOTION_TOKENS.easeExit }, 0);
+			if (mobilePaper) timeline.to(mobilePaper, { autoAlpha: 0, y: 64, scale: 0.94, rotateZ: 1.1, duration: 0.34 }, 0);
+			if (mobileBook) timeline.to(mobileBook, { autoAlpha: 0, y: 18, scale: 0.985, duration: 0.22 }, 0.22);
+		}
+	}
+
+	timeline.call(finish, [], Math.max(bookEnd, chromeIn + 0.44));
 }
 
 async function playPaperTurn(
@@ -1006,7 +769,7 @@ async function playPaperTurn(
 	target?: { section: QuestHallDemoSection; leaf: number },
 	source?: { section: QuestHallDemoSection; leaf: number },
 ) {
-	if (!motionScope || !turningSheet || !spreadContent) {
+	if (!motionScope || !turningSheet) {
 		swap?.();
 		return;
 	}
@@ -1034,7 +797,8 @@ async function playPaperTurn(
 	}
 	const timeline = motionScope.timeline({ defaults: { ease: CARTE_MOTION_TOKENS.easeInOut } });
 	if (reduced) {
-		const content = narrow && mobilePaper ? mobilePaper : spreadContent;
+		// Reduced motion swaps the leaves in place; both page faces fade as one.
+		const content = narrow && mobilePaper ? [mobilePaper] : [cartePageLeft, cartePageRight].filter((page) => page !== undefined);
 		timeline
 			.to(content, { autoAlpha: 0, duration: 0.08 })
 			.call(() => {
@@ -1118,7 +882,6 @@ async function playPaperTurn(
 			void tick().then(() => {
 				if (sequence !== paperTurnSequence) return;
 				if (turningSheet) motionScope?.set(turningSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
-				if (catalogBook) motionScope?.set(catalogBook, { rotateZ: 0 });
 				if (shouldRestoreDesktopPagerFocus) restoreDesktopPagerFocus(direction);
 			});
 		},
@@ -1132,6 +895,8 @@ async function navigateTransition(event: QuestHallDemoEvent, selectedElement?: H
 	if (transition.historyIntent === "none") return;
 	interruptCompletionReplay();
 	const previous = optimisticState;
+	if (previous.view === "home" && transition.state.view !== "home") homeReturnScrollY = window.scrollY;
+	if (previous.view === "catalog" && transition.state.view === "prepare") catalogReturnScrollY = window.scrollY;
 	optimisticState = { ...transition.state };
 	pendingSignature = stateSignature(transition.state);
 
@@ -1142,6 +907,7 @@ async function navigateTransition(event: QuestHallDemoEvent, selectedElement?: H
 
 	if (transition.historyIntent === "back" && localHistoryDepth > 0) {
 		localHistoryDepth -= 1;
+		suppressNextPopstateScroll = true;
 		history.back();
 		return;
 	}
@@ -1188,13 +954,13 @@ function turnLeaf(direction: -1 | 1) {
 
 function selectItem(item: QuestHallDemoItem, event: MouseEvent) {
 	lastSelectedKey = item.key;
-	catalogReturnScrollY = optimisticState.view === "catalog" ? window.scrollY : null;
+	preparationOriginView = optimisticState.view === "home" ? "home" : "catalog";
 	void navigateTransition({ type: "select-task", task: item.key }, event.currentTarget as HTMLElement);
 }
 
 function returnFromPreparation(event?: MouseEvent) {
 	event?.preventDefault();
-	void navigateTransition({ type: "return-from-prepare" });
+	void navigateTransition({ type: "return-from-prepare", destination: preparationOriginView });
 }
 
 function setScenario(scenario: QuestHallDemoScenario) {
@@ -1318,7 +1084,6 @@ async function replayCompletion() {
 	timeline.set(catalogStage, { autoAlpha: 0, pointerEvents: "none" });
 	if (prepareStage) timeline.set(prepareStage, { autoAlpha: 0, pointerEvents: "none" });
 	if (recommendationsEl) timeline.set(recommendationsEl, { autoAlpha: 1, x: 0 });
-	if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 1, x: 0, scale: 1 });
 	if (oldRecommendation) timeline.set(oldRecommendation, { autoAlpha: 1, x: 0 });
 	timeline.set(cards, { autoAlpha: 0, y: reduced ? 0 : 18 });
 
@@ -1334,61 +1099,52 @@ async function replayCompletion() {
 		if (oldRecommendation) timeline.to(oldRecommendation, { autoAlpha: 0, duration: 0.1 }, 0.04);
 		timeline.to(homeStage, { autoAlpha: 0, duration: 0.1 }, 0.14);
 		timeline.set(catalogStage, { autoAlpha: 1 }, 0.24);
-		if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0 }, 0.24);
-		if (catalogCover) {
-			timeline.set(catalogCover, { autoAlpha: 0, rotateY: CATALOG_COVER_OPEN_ROTATION, z: CATALOG_COVER_OPEN_Z, zIndex: 2 }, 0.24);
-		}
+		timeline.call(() => setBookTerminal("catalog"), [], 0.24);
 		timeline.set(stamps, { autoAlpha: 0, scale: 1, rotate: -2 }, 0.24);
 		timeline.to(stamps, { autoAlpha: 1, duration: 0.12 }, 0.26);
 		timeline.to(catalogStage, { autoAlpha: 0, duration: 0.1 }, 0.4);
-		if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0, rotateZ: 0 }, 0.5);
-		if (catalogCover) timeline.set(catalogCover, { autoAlpha: 1, rotateY: 0, z: CATALOG_COVER_CLOSED_Z, zIndex: 12 }, 0.5);
+		timeline.call(() => setBookTerminal("home"), [], 0.5);
 		timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" }, 0.5);
 		timeline.to(cards, { autoAlpha: 1, duration: 0.12 }, 0.52);
 		timeline.call(finish);
 		return;
 	}
 
-	if (oldRecommendation) timeline.to(oldRecommendation, { autoAlpha: 0, x: reduced ? 0 : -28, duration: reduced ? 0.12 : 0.28 }, 0.08);
-	timeline.to(homeStage, { autoAlpha: 0, duration: reduced ? 0.1 : 0.2 }, reduced ? 0.18 : 0.3);
-	timeline.set(catalogStage, { autoAlpha: 1 }, reduced ? 0.24 : 0.44);
-	if (catalogBook) timeline.set(catalogBook, { x: "0%", scale: 1, rotateX: 0 });
-	if (catalogCover) {
-		timeline.set(catalogCover, {
-			autoAlpha: 0,
-			rotateY: CATALOG_COVER_OPEN_ROTATION,
-			z: CATALOG_COVER_OPEN_Z,
-			zIndex: 2,
-		});
+	// The replay opens the CARTE to stamp mission 01 and closes it again, so it
+	// drives the same solid through the same swing the real transition uses.
+	const closeAt = 0.8;
+	const closeTiming = createCarteBookCloseTiming();
+	if (oldRecommendation) timeline.to(oldRecommendation, { autoAlpha: 0, x: -28, duration: 0.28 }, 0.08);
+	timeline.to(homeStage, { autoAlpha: 0, duration: 0.2 }, 0.3);
+	timeline.call(() => setBookTerminal("catalog"), [], 0.36);
+	timeline.set(catalogStage, { autoAlpha: 1 }, 0.44);
+	timeline.set(stamps, { autoAlpha: 0, scale: 1.6, rotate: -8 });
+	timeline.to(stamps, { autoAlpha: 1, scale: 1, rotate: -2, duration: 0.28, ease: "back.out(1.8)" }, 0.54);
+	addCoverSwing(timeline, false, closeAt, closeTiming.coverDuration, "power1.inOut");
+	addBookFit(timeline, "home", closeAt + closeTiming.coverStart, closeTiming.spinDuration, "power2.inOut");
+	if (carteBookTilt) {
+		timeline.set(carteBookTilt, { rotateY: CARTE_BOOK_FULL_TURN }, closeAt + closeTiming.coverStart);
+		timeline.to(
+			carteBookTilt,
+			{ rotateX: 0, rotateY: 0, rotateZ: 0, duration: closeTiming.spinDuration, ease: "power2.inOut" },
+			closeAt + closeTiming.coverStart,
+		);
 	}
-	if (spreadContent) timeline.set(spreadContent, { autoAlpha: 1 });
-	if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 1 });
-	if (catalogRightPage) timeline.set(catalogRightPage, { autoAlpha: 1 });
-	if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 1 });
-	if (catalogBookShadow) timeline.set(catalogBookShadow, { scaleX: 1, transformOrigin: "right center" });
-	timeline.set(stamps, { autoAlpha: 0, scale: reduced ? 1 : 1.6, rotate: reduced ? 0 : -8 });
-	timeline.to(stamps, { autoAlpha: 1, scale: 1, rotate: -2, duration: reduced ? 0.12 : 0.28, ease: "back.out(1.8)" }, reduced ? 0.26 : 0.54);
-	if (!reduced && catalogCover) {
-		timeline.set(catalogCover, { autoAlpha: 1, rotateY: CATALOG_COVER_OPEN_ROTATION, z: CATALOG_COVER_OPEN_Z, zIndex: 12 }, 0.8);
-		timeline.to(catalogCover, { rotateY: 0, z: CATALOG_COVER_CLOSED_Z, duration: CARTE_MOTION_TOKENS.durationCeremonial }, 0.8);
-	}
-	if (catalogLeftPage) timeline.set(catalogLeftPage, { autoAlpha: 0 }, 0.8);
-	if (catalogLeftPageStack) timeline.set(catalogLeftPageStack, { autoAlpha: 0 }, 0.8);
-	if (catalogBookShadow) {
-		timeline.to(catalogBookShadow, { scaleX: 0.5, duration: CARTE_MOTION_TOKENS.durationCeremonial, ease: CARTE_MOTION_TOKENS.easeInOut }, 0.8);
-	}
-	timeline.to(catalogStage, { autoAlpha: 0, duration: reduced ? 0.1 : 0.2 }, reduced ? 0.5 : 1.34);
-	timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" });
-	if (recommendationsEl) timeline.set(recommendationsEl, { autoAlpha: 1, x: 0 });
-	if (closedBookStack) timeline.set(closedBookStack, { autoAlpha: 1, x: 0, scale: 1 });
-	timeline.to(cards, {
-		autoAlpha: 1,
-		y: 0,
-		duration: reduced ? 0.12 : 0.32,
-		stagger: reduced ? 0 : 0.08,
-		ease: CARTE_MOTION_TOKENS.easeOut,
-	});
-	timeline.call(finish);
+	timeline.to(catalogStage, { autoAlpha: 0, duration: 0.2 }, closeAt + closeTiming.coverDuration * 0.5);
+	timeline.set(homeStage, { autoAlpha: 1, pointerEvents: "none" }, closeAt + closeTiming.totalDuration - 0.3);
+	if (recommendationsEl) timeline.set(recommendationsEl, { autoAlpha: 1, x: 0 }, closeAt + closeTiming.totalDuration - 0.3);
+	timeline.to(
+		cards,
+		{
+			autoAlpha: 1,
+			y: 0,
+			duration: 0.32,
+			stagger: 0.08,
+			ease: CARTE_MOTION_TOKENS.easeOut,
+		},
+		closeAt + closeTiming.totalDuration - 0.28,
+	);
+	timeline.call(finish, [], closeAt + closeTiming.totalDuration + 0.12);
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -1411,10 +1167,19 @@ onMount(() => {
 			systemReduced = false;
 		};
 	});
+	motionScope.matchMedia().add("(max-width: 64rem)", () => {
+		narrowLayout = true;
+		setStageTerminal(optimisticState.view);
+		return () => {
+			narrowLayout = false;
+			setStageTerminal(optimisticState.view);
+		};
+	});
 	mounted = true;
 	setStageTerminal(data.demoState.view);
 	return () => {
 		mounted = false;
+		stopClosedBookIdle();
 		motionScope?.revert();
 		motionScope = null;
 	};
@@ -1446,8 +1211,16 @@ $effect(() => {
 	const signature = stateSignature(next);
 	if (!mounted || signature === observedSignature) return;
 	const previous = optimisticState;
+	if (suppressNextPopstateScroll) {
+		disableScrollHandling();
+		suppressNextPopstateScroll = false;
+	}
+	if (previous.view === "home" && next.view !== "home") homeReturnScrollY = window.scrollY;
+	if (previous.view === "catalog" && next.view === "prepare") catalogReturnScrollY = window.scrollY;
 	observedSignature = signature;
 	optimisticState = { ...next };
+	if (next.view === "prepare" && (previous.view === "home" || previous.view === "catalog")) preparationOriginView = previous.view;
+	if (next.view === "prepare" && data.selectedPreparation) displayedPreparation = data.selectedPreparation;
 	const wasPending = pendingSignature === signature;
 	if (wasPending) pendingSignature = null;
 	if (!wasPending && previous.view !== next.view) {
@@ -1565,7 +1338,9 @@ $effect(() => {
 			{/if}
 		</p>
 		{#if respectResourceState && (optimisticState.resource !== "ready" || spread.items.length === 0)}
-			{@render resourceStateCopy(spread)}
+			{#if side === "left"}
+				{@render resourceStateCopy(spread)}
+			{/if}
 		{:else}
 			<div class="page-task-list" class:is-compact={side === "right" || spread.leaf > 1}>
 				{#each (side === "left" ? spread.leftItems : spread.rightItems) as item (item.key)}
@@ -1685,26 +1460,15 @@ $effect(() => {
 				</div>
 
 				<div class="closed-book-zone">
-					<div class="closed-book-stack" bind:this={closedBookStack}>
-						<div class="closed-book-wrap carte-3d-stage">
-							<button
-								bind:this={coverButton}
-								type="button"
-								class="closed-book carte-focusable"
-								aria-label={unreadReplyCount > 0 ? `Ouvrir la CARTE — ${unreadReplySummary}` : "Ouvrir la CARTE"}
-								aria-expanded={optimisticState.view !== "home"}
-								onclick={() => openCatalog()}
-							>
-								<span class="book-page-edges" aria-hidden="true"></span>
-								<span class="closed-cover" bind:this={closedCover}>
-									<span class="cover-depth" aria-hidden="true"></span>
-									<span class="cover-rule" aria-hidden="true"></span>
-									<strong>CARTE</strong>
-									<CoverEmblem size={118} finish="foil" unreadCount={unreadReplyCount} />
-									<span class="cover-rule cover-rule-bottom" aria-hidden="true"></span>
-								</span>
-							</button>
-						</div>
+					<div class="closed-book-stack">
+						<button
+							bind:this={homeSlot}
+							type="button"
+							class="carte-slot carte-slot--home carte-focusable"
+							aria-label={unreadReplyCount > 0 ? `Ouvrir la CARTE — ${unreadReplySummary}` : "Ouvrir la CARTE"}
+							aria-expanded={optimisticState.view !== "home"}
+							onclick={() => openCatalog()}
+						></button>
 						<RibbonTabs
 							tabs={ribbonTabs}
 							value={optimisticState.section}
@@ -1741,116 +1505,17 @@ $effect(() => {
 				<span class="leaf-counter" aria-live="polite">Feuillet {catalogPagePosition.current} / {catalogPagePosition.total}</span>
 			</div>
 
-			<div class="catalog-book-stage carte-3d-stage">
-				<div class="catalog-book carte-preserve-3d" bind:this={catalogBook}>
-					<div class="book-shadow" bind:this={catalogBookShadow} aria-hidden="true"></div>
-					<div class="page-stack page-stack-left" bind:this={catalogLeftPageStack} aria-hidden="true"></div>
-					<div class="page-stack page-stack-right" aria-hidden="true"></div>
-					<div class="book-spread">
-						<div class="book-spine" aria-hidden="true"></div>
-						<div
-							class="spread-content"
-							bind:this={spreadContent}
-							id="bureau-catalog-panel"
-							role="tabpanel"
-							aria-busy={isPaperTurning}
-							inert={isPaperTurning}
-						>
-							<div class="left-page" bind:this={catalogLeftPage}>
-								<button
-									type="button"
-									class="page-turn-surface page-turn-previous"
-									aria-label="Feuillet précédent"
-									disabled={!previousTurnTarget || isPaperTurning || transitionTo !== null}
-									onclick={() => turnLeaf(-1)}
-								>
-									<span class="page-turn-cue" aria-hidden="true"><ChevronLeft size={22} strokeWidth={1.35} /></span>
-								</button>
-								<p class="page-folio">
-									<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
-									<span>{SECTION_LABELS[staticLeftPage.section]} · {folioFor(staticLeftPage.section, staticLeftPage.spread.leaf, "left")}</span>
-								</p>
-								{#if optimisticState.resource !== "ready" || staticLeftPage.spread.items.length === 0}
-									{@render resourceContent(false, staticLeftPage.spread, null)}
-								{:else}
-									<div class="page-task-list" class:is-compact={staticLeftPage.spread.leaf > 1}>
-										{#each leftPageItems as item (item.key)}
-											{@render taskCard(item)}
-										{/each}
-									</div>
-								{/if}
-							</div>
-							<div class="right-page" bind:this={catalogRightPage}>
-								<p class="page-folio page-folio-right">
-									<span>{folioFor(staticRightPage.section, staticRightPage.spread.leaf, "right")} · CARTE</span>
-									<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
-								</p>
-								{#if optimisticState.resource === "ready" && staticRightPage.spread.items.length > 0}
-									<div class="page-task-list is-compact">
-										{#each rightPageItems as item (item.key)}
-											{@render taskCard(item)}
-										{/each}
-										{#if rightPageItems.length === 0}
-											<div class="blank-leaf" aria-hidden="true"></div>
-										{/if}
-									</div>
-								{/if}
-								<button
-									type="button"
-									class="page-turn-surface page-turn-next"
-									aria-label="Feuillet suivant"
-									disabled={!nextTurnTarget || isPaperTurning || transitionTo !== null}
-									onclick={() => turnLeaf(1)}
-								>
-									<span class="page-turn-cue" aria-hidden="true"><ChevronRight size={22} strokeWidth={1.35} /></span>
-								</button>
-							</div>
-						</div>
-						<div class="turning-sheet carte-preserve-3d" bind:this={turningSheet} aria-hidden="true">
-							<div class="turning-sheet-face turning-sheet-front carte-face">
-								{#if turnPreview}
-									{@render pageCopy(
-												turnPreview.fromSection,
-												turnPreview.fromSpread,
-												turnPreview.direction > 0 ? "right" : "left",
-												turnPreview.direction < 0,
-											)}
-								{/if}
-								<span class="turning-sheet-shade"></span>
-							</div>
-							<div class="turning-sheet-face turning-sheet-back carte-face carte-face--back">
-								{#if turnPreview}
-									{@render pageCopy(
-												turnPreview.toSection,
-												turnPreview.toSpread,
-												turnPreview.direction > 0 ? "left" : "right",
-												turnPreview.direction > 0,
-											)}
-								{/if}
-								<span class="turning-sheet-shade"></span>
-							</div>
-						</div>
-						<div class="catalog-cover carte-preserve-3d" bind:this={catalogCover} aria-hidden="true">
-							<div class="catalog-cover-face catalog-cover-front carte-face">
-								<span class="cover-depth" aria-hidden="true"></span>
-								<strong>CARTE</strong>
-								<CoverEmblem size={104} finish="foil" unreadCount={unreadReplyCount} />
-							</div>
-							<div class="catalog-cover-face catalog-cover-back carte-face carte-face--back" data-carte-cover="light">
-								{@render pageCopy(optimisticState.section, currentLeaf, "left", true)}
-							</div>
-						</div>
-					</div>
-					<RibbonTabs
-						tabs={ribbonTabs}
-						value={optimisticState.section}
-						onselect={switchSection}
-						orientation="vertical"
-						variant="bookmark"
-						controls="bureau-catalog-panel"
-						class="desktop-page-tabs"
-					/>
-				</div>
+			<div class="catalog-book-stage">
+				<div class="carte-slot carte-slot--catalog" bind:this={catalogSlot} aria-hidden="true"></div>
+				<RibbonTabs
+					tabs={ribbonTabs}
+					value={optimisticState.section}
+					onselect={switchSection}
+					orientation="vertical"
+					variant="bookmark"
+					controls="bureau-catalog-panel"
+					class="desktop-page-tabs"
+				/>
 			</div>
 
 			<div class="carte-mobile-leaf mobile-book" bind:this={mobileBook}>
@@ -1918,12 +1583,7 @@ $effect(() => {
 					aria-label={unreadReplyCount > 0 ? `Rouvrir le catalogue — ${unreadReplySummary}` : "Rouvrir le catalogue"}
 					onclick={() => returnFromPreparation()}
 				>
-					<span class="docked-cover" bind:this={dockedCover}>
-						<span class="cover-depth" aria-hidden="true"></span>
-						<strong>CARTE</strong>
-						<CoverEmblem size={84} finish="foil" unreadCount={unreadReplyCount} />
-						<CoverUnreadBadge count={unreadReplyCount} class="compact-cover-unread" />
-					</span>
+					<span class="carte-slot carte-slot--prepare" bind:this={prepareSlot} aria-hidden="true"></span>
 					<span class="dock-action"><BookOpen size={17} aria-hidden="true" /> Rouvrir le catalogue</span>
 				</button>
 
@@ -1941,21 +1601,21 @@ $effect(() => {
 							<p>Vous pouvez réessayer sans quitter cette mission.</p>
 							<button type="button" class="paper-button carte-hit-target carte-focusable" onclick={() => setResource("ready")}>Réessayer</button>
 						</div>
-					{:else if data.selectedPreparation?.kind === "quest"}
+					{:else if displayedPreparation?.kind === "quest"}
 						<TaskPreparation
-							task={data.selectedPreparation.data.task}
-							nativeLanguage={data.selectedPreparation.data.nativeLanguage}
+							task={displayedPreparation.data.task}
+							nativeLanguage={displayedPreparation.data.nativeLanguage}
 							simulated={optimisticState.scenario !== "actual"}
 							backHref={stateUrl({ ...optimisticState, view: "catalog", task: null })}
 							backLabel="Retour au catalogue"
 							onback={returnFromPreparation}
 						/>
-					{:else if data.selectedPreparation?.kind === "translation"}
+					{:else if displayedPreparation?.kind === "translation"}
 						<TranslationPreparation
-							template={data.selectedPreparation.data.template}
-							attempt={data.selectedPreparation.data.attempt}
-							blockedReason={data.selectedPreparation.data.blockedReason}
-							lang={data.selectedPreparation.data.template.language}
+							template={displayedPreparation.data.template}
+							attempt={displayedPreparation.data.attempt}
+							blockedReason={displayedPreparation.data.blockedReason}
+							lang={displayedPreparation.data.template.language}
 							mode="pane"
 							backHref={stateUrl({ ...optimisticState, view: "catalog", task: null })}
 							backLabel="Retour au catalogue"
@@ -1974,12 +1634,157 @@ $effect(() => {
 				</div>
 			</div>
 		</section>
-	</div>
 
-	<div class="cover-handoff" bind:this={coverHandoff} aria-hidden="true">
-		<span class="cover-depth" aria-hidden="true"></span>
-		<strong>CARTE</strong>
-		<CoverEmblem size={104} finish="foil" unreadCount={unreadReplyCount} />
+		<!--
+			The CARTE itself. It sits outside the three stages because it is the
+			same physical object in all of them: only its slot and its cover angle
+			change. The layer ignores pointers so the slots underneath stay
+			clickable; the open spread takes events back on its own.
+		-->
+		<div class="carte-book-layer" bind:this={bookLayer}>
+			<div class="carte-book-frame">
+				<div
+					class="carte-book"
+					bind:this={carteBook}
+					id="bureau-catalog-panel"
+					role="tabpanel"
+					aria-busy={isPaperTurning}
+					inert={!spreadIsLive || isPaperTurning}
+				>
+					<span class="carte-recto-probe" bind:this={carteRectoProbe} aria-hidden="true"></span>
+					<div class="carte-book-tilt" bind:this={carteBookTilt}>
+						<div class="carte-book-solid">
+							<span class="carte-contact-shadow" bind:this={carteShadow} aria-hidden="true"></span>
+
+							<!-- Leaves already turned: they only exist once the cover has cleared them. -->
+							<div class="carte-half carte-half--left" bind:this={carteLeftHalf} aria-hidden="true">
+								<span class="carte-surface carte-deck carte-deck--blank"></span>
+								<span class="carte-surface carte-edge carte-edge--fore"></span>
+								<span class="carte-surface carte-edge carte-edge--head"></span>
+								<span class="carte-surface carte-edge carte-edge--tail"></span>
+								<span class="carte-surface carte-board carte-board--base"></span>
+							</div>
+
+							<!-- The text block, and the recto is its top leaf. -->
+							<div class="carte-half carte-half--right">
+								<span class="carte-edge carte-edge--fore" aria-hidden="true"></span>
+								<span class="carte-edge carte-edge--head" aria-hidden="true"></span>
+								<span class="carte-edge carte-edge--tail" aria-hidden="true"></span>
+								<span class="carte-edge carte-edge--spine" aria-hidden="true"></span>
+								<span class="carte-board carte-board--base" aria-hidden="true"></span>
+								<div class="carte-page carte-page--right carte-face" bind:this={cartePageRight}>
+									<p class="page-folio page-folio-right">
+										<span>{folioFor(staticRightPage.section, staticRightPage.spread.leaf, "right")} · CARTE</span>
+										<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
+									</p>
+									{#if optimisticState.resource === "ready" && staticRightPage.spread.items.length > 0}
+										<div class="page-task-list is-compact">
+											{#each rightPageItems as item (item.key)}
+												{@render taskCard(item)}
+											{/each}
+											{#if rightPageItems.length === 0}
+												<div class="blank-leaf" aria-hidden="true"></div>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							</div>
+
+							<!--
+								Turning a leaf is a grab at the edge of the book, not a click on
+								the page, so the pagers sit in their own band rather than inside
+								either page's clipped box.
+							-->
+							<div class="carte-turn-zones" bind:this={carteTurnZones}>
+								<button
+									type="button"
+									class="page-turn-surface page-turn-previous"
+									aria-label="Feuillet précédent"
+									disabled={!previousTurnTarget || isPaperTurning || transitionTo !== null}
+									onclick={() => turnLeaf(-1)}
+								>
+									<span class="page-turn-cue" aria-hidden="true"><ChevronLeft size={22} strokeWidth={1.35} /></span>
+								</button>
+								<button
+									type="button"
+									class="page-turn-surface page-turn-next"
+									aria-label="Feuillet suivant"
+									disabled={!nextTurnTarget || isPaperTurning || transitionTo !== null}
+									onclick={() => turnLeaf(1)}
+								>
+									<span class="page-turn-cue" aria-hidden="true"><ChevronRight size={22} strokeWidth={1.35} /></span>
+								</button>
+							</div>
+
+							<div class="carte-turn-hinge" aria-hidden="true">
+								<div class="turning-sheet carte-preserve-3d" bind:this={turningSheet}>
+									<div class="turning-sheet-face turning-sheet-front carte-face">
+										{#if turnPreview}
+											{@render pageCopy(
+														turnPreview.fromSection,
+														turnPreview.fromSpread,
+														turnPreview.direction > 0 ? "right" : "left",
+														turnPreview.direction < 0,
+													)}
+										{/if}
+										<span class="turning-sheet-shade"></span>
+									</div>
+									<div class="turning-sheet-face turning-sheet-back carte-face carte-face--back">
+										{#if turnPreview}
+											{@render pageCopy(
+														turnPreview.toSection,
+														turnPreview.toSpread,
+														turnPreview.direction > 0 ? "left" : "right",
+														turnPreview.direction > 0,
+													)}
+										{/if}
+										<span class="turning-sheet-shade"></span>
+									</div>
+								</div>
+							</div>
+
+							<!--
+								The cover is a board hinged on the spine. Its underside is the
+								left page, which is why opening it never swaps anything out.
+							-->
+							<div class="carte-cover-hinge">
+								<div class="carte-cover carte-preserve-3d" bind:this={carteCover}>
+									<span class="carte-cover-face carte-cover-face--front carte-face" aria-hidden="true">
+										<span class="cover-depth"></span>
+										<span class="cover-rule"></span>
+										<strong>CARTE</strong>
+										<CoverEmblem size={104} finish="foil" unreadCount={unreadReplyCount} />
+										<span class="cover-rule cover-rule-bottom"></span>
+									</span>
+									<div
+										class="carte-cover-face carte-cover-face--back carte-face carte-face--back carte-page carte-page--left"
+										bind:this={cartePageLeft}
+									>
+										<p class="page-folio">
+											<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
+											<span>{SECTION_LABELS[staticLeftPage.section]} · {folioFor(staticLeftPage.section, staticLeftPage.spread.leaf, "left")}</span>
+										</p>
+										{#if optimisticState.resource !== "ready" || staticLeftPage.spread.items.length === 0}
+											{@render resourceContent(false, staticLeftPage.spread, null)}
+										{:else}
+											<div class="page-task-list" class:is-compact={staticLeftPage.spread.leaf > 1}>
+												{#each leftPageItems as item (item.key)}
+													{@render taskCard(item)}
+												{/each}
+											</div>
+										{/if}
+									</div>
+									<span class="carte-edge carte-edge--board carte-edge--fore" aria-hidden="true"></span>
+									<span class="carte-edge carte-edge--board carte-edge--head" aria-hidden="true"></span>
+									<span class="carte-edge carte-edge--board carte-edge--tail" aria-hidden="true"></span>
+									<span class="carte-edge carte-edge--board carte-edge--spine" aria-hidden="true"></span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<div class="demo-laboratory">
@@ -1999,6 +1804,12 @@ $effect(() => {
 .bureau-demo {
 	--bureau-serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	--bureau-body-size: 1rem;
+	/* A book does not change proportion when it opens: the spread is exactly
+	   two of its pages, so the closed footprint is half of it. */
+	--carte-spread-aspect: 1.48;
+	--carte-page-aspect: 0.74;
+	/* How far the bookmark of the section you are on slides out of the book. */
+	--ribbon-tab-reach: 0.62rem;
 	--font-serif: var(--bureau-serif);
 	position: relative;
 	min-height: calc(100dvh - 8rem);
@@ -2241,38 +2052,29 @@ $effect(() => {
 }
 
 .closed-book-stack {
-	--book-frame-padding: 1.5rem;
 	position: relative;
-	width: min(100%, 29rem);
-}
-
-.closed-book-wrap {
-	position: relative;
-	z-index: 2;
-	width: 100%;
-	padding: var(--book-frame-padding);
-	pointer-events: none;
+	width: min(100%, 26rem);
 }
 
 .closed-book-stack > :global(.book-edge-tabs) {
 	position: absolute;
 	top: 22%;
-	left: calc(100% - var(--book-frame-padding) - 0.4rem);
+	left: calc(100% - 0.9rem);
 	z-index: 1;
 	width: max-content;
 	gap: 0.12rem;
 }
 
 .closed-book-stack > :global(.book-edge-tabs .ribbon-tab),
-.catalog-book > :global(.desktop-page-tabs .ribbon-tab) {
-	width: 3.45rem;
-	min-width: 3.45rem;
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-tab) {
+	width: 4.3rem;
+	min-width: 4.3rem;
 	height: 2.75rem;
 	min-height: 2.75rem;
 }
 
 .closed-book-stack > :global(.book-edge-tabs .ribbon-face),
-.catalog-book > :global(.desktop-page-tabs .ribbon-face) {
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-face) {
 	width: 100%;
 	height: 2.125rem;
 	min-height: 2.125rem;
@@ -2286,7 +2088,7 @@ $effect(() => {
 }
 
 .closed-book-stack > :global(.book-edge-tabs .ribbon-label),
-.catalog-book > :global(.desktop-page-tabs .ribbon-label) {
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-label) {
 	font-size: 0.64rem;
 	line-height: 1;
 	writing-mode: horizontal-tb;
@@ -2294,85 +2096,44 @@ $effect(() => {
 	white-space: nowrap;
 }
 
-.closed-book-stack > :global(.book-edge-tabs .ribbon-tab:hover:not(:disabled) .ribbon-face),
-.closed-book-stack > :global(.book-edge-tabs .ribbon-tab[aria-selected="true"] .ribbon-face),
-.catalog-book > :global(.desktop-page-tabs .ribbon-tab:hover:not(:disabled) .ribbon-face),
-.catalog-book > :global(.desktop-page-tabs .ribbon-tab[aria-selected="true"] .ribbon-face) {
+/*
+ * A closed CARTE is not open at any section, so its three bookmarks sit flush
+ * and all behave alike under the pointer.
+ */
+.closed-book-stack > :global(.book-edge-tabs .ribbon-tab[aria-selected="true"]:not(:hover) .ribbon-face) {
+	transform: none;
+}
+
+.closed-book-stack > :global(.book-edge-tabs .ribbon-tab:hover:not(:disabled) .ribbon-face) {
+	transform: translateX(0.3rem);
+}
+
+/*
+ * Open, the current section stays out. Hovering it must leave it exactly where
+ * it is — the hover reach is shorter, so sharing one rule pulled it back in and
+ * made switching sections look like two moves instead of one.
+ */
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-tab[aria-selected="true"] .ribbon-face) {
+	transform: translateX(var(--ribbon-tab-reach));
+}
+
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-tab:hover:not(:disabled):not([aria-selected="true"]) .ribbon-face) {
 	transform: translateX(0.3rem);
 }
 
 .closed-book-stack > :global(.book-edge-tabs .ribbon-tab:focus-visible),
-.catalog-book > :global(.desktop-page-tabs .ribbon-tab:focus-visible),
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-tab:focus-visible),
 .mobile-edge-tab-shell :global(.menu-edge-tabs .ribbon-tab:focus-visible) {
 	outline: 0;
 }
 
 .closed-book-stack > :global(.book-edge-tabs .ribbon-tab:focus-visible .ribbon-face),
-.catalog-book > :global(.desktop-page-tabs .ribbon-tab:focus-visible .ribbon-face),
+.catalog-book-stage > :global(.desktop-page-tabs .ribbon-tab:focus-visible .ribbon-face),
 .mobile-edge-tab-shell :global(.menu-edge-tabs .ribbon-tab:focus-visible .ribbon-face) {
 	box-shadow:
 		inset 0 0 0 2px var(--carte-sheet),
 		inset 1px 0 color-mix(in oklab, white 18%, transparent),
 		inset -1px 0 color-mix(in oklab, black 20%, transparent);
-}
-
-.closed-book {
-	position: relative;
-	display: block;
-	width: 100%;
-	aspect-ratio: 0.79;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	cursor: pointer;
-	pointer-events: auto;
-	transform: rotateX(4deg) rotateY(-7deg) rotateZ(1deg);
-	transform-style: preserve-3d;
-}
-
-.closed-cover,
-.docked-cover {
-	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	border: 1px solid color-mix(in oklab, var(--carte-brass) 58%, transparent);
-	background: linear-gradient(105deg, color-mix(in oklab, white 10%, transparent), transparent 22%), var(--carte-cover);
-	color: var(--carte-brass);
-}
-
-.closed-cover {
-	box-shadow:
-		inset -3px 0 5px -3px color-mix(in oklab, var(--carte-ink) 32%, transparent),
-		inset 0 -3px 5px -3px color-mix(in oklab, var(--carte-ink) 28%, transparent),
-		0 18px 26px -17px color-mix(in oklab, var(--carte-ink) 34%, transparent),
-		0 5px 9px -6px color-mix(in oklab, var(--carte-ink) 22%, transparent);
-	transition: box-shadow 180ms var(--carte-ease-out);
-}
-
-.docked-cover {
-	box-shadow:
-		inset -2px 0 4px -2px color-mix(in oklab, var(--carte-ink) 28%, transparent),
-		inset 0 -2px 4px -2px color-mix(in oklab, var(--carte-ink) 24%, transparent),
-		0 14px 28px -16px color-mix(in oklab, var(--carte-ink) 20%, transparent),
-		0 3px 8px -6px color-mix(in oklab, var(--carte-ink) 12%, transparent);
-}
-
-.closed-cover {
-	position: absolute;
-	inset: 0;
-	transform: translateZ(18px);
-}
-
-@media (hover: hover) and (pointer: fine) {
-	.closed-book:hover .closed-cover {
-		box-shadow:
-			inset -3px 0 5px -3px color-mix(in oklab, var(--carte-ink) 34%, transparent),
-			inset 0 -3px 5px -3px color-mix(in oklab, var(--carte-ink) 30%, transparent),
-			0 21px 30px -17px color-mix(in oklab, var(--carte-ink) 36%, transparent),
-			0 6px 11px -6px color-mix(in oklab, var(--carte-ink) 24%, transparent);
-	}
 }
 
 .cover-depth {
@@ -2407,23 +2168,15 @@ $effect(() => {
 	box-shadow: 0 6px 10px -7px color-mix(in oklab, var(--carte-ink) 48%, transparent);
 }
 
-.closed-cover > strong,
-.catalog-cover-front > strong,
-.docked-cover > strong,
-.cover-handoff > strong,
-.closed-cover > :global(.cover-emblem),
-.catalog-cover-front > :global(.cover-emblem),
-.docked-cover > :global(.cover-emblem),
-.cover-handoff > :global(.cover-emblem) {
+.carte-cover-face--front > strong,
+.carte-cover-face--front > :global(.cover-emblem) {
 	position: relative;
 	z-index: 1;
 }
 
-.closed-cover > strong,
-.catalog-cover-front > strong,
-.docked-cover > strong {
+.carte-cover-face--front > strong {
 	font-family: var(--font-serif);
-	font-size: clamp(2.5rem, 6vw, 4.8rem);
+	font-size: clamp(2rem, 5vw, 4.4rem);
 	font-weight: 380;
 	letter-spacing: 0.08em;
 }
@@ -2440,56 +2193,6 @@ $effect(() => {
 .cover-rule-bottom {
 	top: auto;
 	bottom: 10%;
-}
-
-.book-page-edges {
-	--page-edge-depth: 0.22rem;
-	position: absolute;
-	inset: 0.42rem -0.38rem -0.48rem 0.42rem;
-	border: 1px solid color-mix(in oklab, var(--carte-ink) 15%, transparent);
-	background:
-		linear-gradient(90deg, transparent 97%, color-mix(in oklab, var(--carte-ink) 10%, transparent)),
-		linear-gradient(0deg, color-mix(in oklab, var(--carte-ink) 11%, transparent), transparent 3.5%),
-		color-mix(in oklab, var(--carte-sheet) 94%, var(--carte-paper));
-	box-shadow:
-		0 8px 14px -10px color-mix(in oklab, var(--carte-ink) 34%, transparent),
-		inset -3px -3px 5px color-mix(in oklab, var(--carte-ink) 8%, transparent);
-	transform: translateZ(2px);
-	pointer-events: none;
-}
-
-.book-page-edges::before,
-.book-page-edges::after {
-	position: absolute;
-	content: "";
-}
-
-.book-page-edges::before {
-	top: 0.35rem;
-	right: calc(-1 * var(--page-edge-depth));
-	bottom: 0.2rem;
-	width: var(--page-edge-depth);
-	border-right: 1px solid color-mix(in oklab, var(--carte-ink) 18%, transparent);
-	background:
-		linear-gradient(90deg, color-mix(in oklab, var(--carte-ink) 12%, transparent), transparent 36%),
-		repeating-linear-gradient(0deg, #cec3b2 0 1px, #faf4e9 1px 3px);
-	box-shadow:
-		inset 2px 0 3px color-mix(in oklab, var(--carte-ink) 12%, transparent),
-		5px 9px 13px -7px color-mix(in oklab, var(--carte-ink) 32%, transparent);
-}
-
-.book-page-edges::after {
-	right: calc(-1 * var(--page-edge-depth));
-	bottom: calc(-1 * var(--page-edge-depth));
-	left: 0.35rem;
-	height: var(--page-edge-depth);
-	border-bottom: 1px solid color-mix(in oklab, var(--carte-ink) 18%, transparent);
-	background:
-		linear-gradient(0deg, color-mix(in oklab, var(--carte-ink) 14%, transparent), transparent 42%),
-		repeating-linear-gradient(90deg, #cec3b2 0 1px, #faf4e9 1px 3px);
-	box-shadow:
-		inset 0 2px 3px color-mix(in oklab, var(--carte-ink) 10%, transparent),
-		0 10px 15px -8px color-mix(in oklab, var(--carte-ink) 34%, transparent);
 }
 
 .catalog-toolbar {
@@ -2527,187 +2230,116 @@ $effect(() => {
 }
 
 .catalog-book-stage {
-	container-type: inline-size;
+	--carte-stage-gutter: 3.25rem;
+	--ribbon-tab-width: 4.3rem;
+	--ribbon-tab-offset: -0.15rem;
+	/* The leaves sit a little proud of the book's layout box, being lifted by
+	   the block's own thickness, so the clip has to clear that too. */
+	--carte-leaf-bleed: 0.25rem;
+	position: relative;
 	max-width: 74rem;
 	margin: 0 auto;
-	padding: 1.5rem 3.25rem 1.5rem 2.5rem;
-	perspective: clamp(1600px, 135vw, 2000px);
-	perspective-origin: 50% 45%;
+	padding: 1.5rem var(--carte-stage-gutter) 1.5rem 2.5rem;
 }
 
-.catalog-book {
-	position: relative;
-	width: 100%;
-	aspect-ratio: 1.48;
-	transform-origin: center center;
-}
-
-.catalog-book > :global(.desktop-page-tabs) {
-	position: absolute;
-	top: 22%;
-	right: -2.9rem;
-	z-index: 2;
-	gap: 0.12rem;
-	filter: drop-shadow(7px 5px 7px color-mix(in oklab, var(--carte-ink) 14%, transparent));
-}
-
-.book-shadow {
+.carte-page {
 	position: absolute;
 	inset: 0;
-	z-index: 0;
-	background: none;
-	filter: none;
-	transform: translateZ(-30px);
-	transform-origin: right center;
-	pointer-events: none;
-}
-
-.book-shadow::before,
-.book-shadow::after {
-	position: absolute;
-	border-radius: 50%;
-	content: "";
-}
-
-.book-shadow::before {
-	right: 2.5%;
-	bottom: -3%;
-	left: 2.5%;
-	height: 18%;
-	background: radial-gradient(
-		ellipse at center,
-		color-mix(in oklab, var(--carte-ink) 14%, transparent) 0%,
-		color-mix(in oklab, var(--carte-ink) 7%, transparent) 48%,
-		transparent 76%
-	);
-	filter: blur(18px);
-}
-
-.book-shadow::after {
-	right: 7%;
-	bottom: -0.75%;
-	left: 7%;
-	height: 6%;
-	background: color-mix(in oklab, var(--carte-ink) 12%, transparent);
-	filter: blur(7px);
-}
-
-.page-stack {
-	position: absolute;
-	top: 1.1%;
-	bottom: -1.4%;
-	z-index: 1;
-	width: clamp(0.75rem, 1.2vw, 1.1rem);
-	border: 1px solid color-mix(in oklab, var(--carte-ink) 15%, transparent);
-	background: repeating-linear-gradient(0deg, #d8cfbf 0 1px, #f7f1e6 1px 4px);
-	pointer-events: none;
-}
-
-.page-stack-left {
-	left: -0.7%;
-	transform: translateZ(-5px);
-}
-
-.page-stack-right {
-	right: -0.7%;
-	transform: translateZ(-5px);
-}
-
-.book-spread {
-	position: absolute;
-	inset: 0;
-	z-index: 3;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	overflow: visible;
-	transform: rotateX(1.2deg);
-	transform-style: preserve-3d;
-}
-
-.book-spine {
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 50%;
-	z-index: 7;
-	width: 2.2rem;
-	background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--carte-ink) 13%, transparent), transparent);
-	transform: translateX(-50%) translateZ(5px);
-	pointer-events: none;
-}
-
-.spread-content {
-	position: absolute;
-	inset: 0;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	transform-style: preserve-3d;
-}
-
-.left-page,
-.right-page {
-	position: relative;
 	display: flex;
 	min-width: 0;
 	flex-direction: column;
-	padding: clamp(1.75rem, 4cqi, 3rem);
+	padding: clamp(1.75rem, 8%, 3rem);
 	border: 1px solid color-mix(in oklab, var(--carte-ink) 16%, transparent);
 	overflow: hidden;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	pointer-events: auto;
 }
 
-.left-page {
+.carte-page--left {
 	border-right: 0;
 	background: linear-gradient(90deg, var(--carte-sheet), color-mix(in oklab, var(--carte-paper) 92%, var(--carte-ink)));
-	backface-visibility: hidden;
-	transform-style: preserve-3d;
 }
 
-.right-page {
+.carte-page--right {
 	border-left: 0;
 	background: linear-gradient(90deg, color-mix(in oklab, var(--carte-paper) 92%, var(--carte-ink)), var(--carte-sheet));
+	transform: translateZ(var(--carte-depth));
 }
 
-.left-page > :not(.page-turn-surface),
-.right-page > :not(.page-turn-surface) {
+.carte-page > * {
 	position: relative;
 	z-index: 2;
 	pointer-events: none;
 }
 
-.page-turn-surface {
+.carte-turn-zones {
 	position: absolute;
 	inset: 0;
+	/* Level with the leaves, so no sheet can sit between hand and page edge. */
+	transform: translateZ(calc(var(--carte-depth) + 2px));
+	pointer-events: none;
+}
+
+/*
+ * Turning reaches from the arrow's inner edge out to one button width past the
+ * book, because that overshoot is where a hand goes for the corner of a page.
+ * The full page used to be live, which made the left leaf greedy and left the
+ * right arrow with nothing to catch a slightly wide aim.
+ */
+.page-turn-surface {
+	--page-turn-reach: 1.8rem;
+	--page-turn-cue-inset: 0.35rem;
+	position: absolute;
+	top: 0;
+	bottom: 0;
 	z-index: 1;
-	width: 100%;
+	width: calc(var(--page-turn-cue-inset) + var(--page-turn-reach) * 2);
 	padding: 0;
 	border: 0;
 	background: transparent;
 	color: var(--carte-wine);
 	cursor: pointer;
+	pointer-events: auto;
 	touch-action: manipulation;
 }
 
+.page-turn-previous {
+	left: calc(-1 * var(--page-turn-reach));
+}
+
+.page-turn-next {
+	right: calc(-1 * var(--page-turn-reach));
+}
+
+/* The wash stays on the paper: it starts at the book edge and fades inward. */
 .page-turn-surface::before {
 	position: absolute;
-	inset: 0;
+	top: 0;
+	bottom: 0;
 	content: "";
 	opacity: 0;
+	pointer-events: none;
 	transition: opacity 160ms ease;
 }
 
 .page-turn-previous::before {
-	background: linear-gradient(90deg, color-mix(in oklab, var(--carte-wine) 7%, transparent), transparent 20%);
+	right: -7rem;
+	left: var(--page-turn-reach);
+	background: linear-gradient(90deg, color-mix(in oklab, var(--carte-wine) 7%, transparent), transparent 24%);
 }
 
 .page-turn-next::before {
-	background: linear-gradient(270deg, color-mix(in oklab, var(--carte-wine) 7%, transparent), transparent 20%);
+	right: var(--page-turn-reach);
+	left: -7rem;
+	background: linear-gradient(270deg, color-mix(in oklab, var(--carte-wine) 7%, transparent), transparent 24%);
 }
 
 .page-turn-cue {
 	position: absolute;
 	top: 50%;
 	display: grid;
-	width: 1.8rem;
+	width: var(--page-turn-reach);
 	height: 3rem;
 	place-items: center;
 	border: 1px solid transparent;
@@ -2722,11 +2354,11 @@ $effect(() => {
 }
 
 .page-turn-previous .page-turn-cue {
-	left: 0.35rem;
+	left: calc(var(--page-turn-reach) + var(--page-turn-cue-inset));
 }
 
 .page-turn-next .page-turn-cue {
-	right: 0.35rem;
+	right: calc(var(--page-turn-reach) + var(--page-turn-cue-inset));
 }
 
 .page-turn-surface:focus-visible {
@@ -2934,43 +2566,6 @@ $effect(() => {
 	color: color-mix(in oklab, var(--carte-ink) 16%, transparent);
 }
 
-.catalog-cover,
-.turning-sheet {
-	position: absolute;
-	top: 0;
-	right: 0;
-	z-index: 12;
-	width: 50%;
-	height: 100%;
-	pointer-events: none;
-	transform-origin: left center;
-	transform-style: preserve-3d;
-}
-
-.catalog-cover {
-	z-index: 12;
-}
-
-.catalog-cover-face {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	border: 1px solid color-mix(in oklab, var(--carte-brass) 55%, transparent);
-	background: var(--carte-cover);
-	color: var(--carte-brass);
-	box-shadow: -8px 12px 28px color-mix(in oklab, var(--carte-ink) 22%, transparent);
-}
-
-.catalog-cover-back {
-	border: 0;
-	background: linear-gradient(90deg, color-mix(in oklab, var(--carte-ink) 8%, transparent), transparent 28%), var(--carte-paper);
-	color: var(--carte-ink);
-	box-shadow: 8px 10px 24px color-mix(in oklab, var(--carte-ink) 16%, transparent);
-}
-
 .page-copy {
 	position: absolute;
 	inset: 0;
@@ -2978,7 +2573,7 @@ $effect(() => {
 	display: flex;
 	min-width: 0;
 	flex-direction: column;
-	padding: clamp(1.75rem, 4cqi, 3rem);
+	padding: clamp(1.75rem, 8%, 3rem);
 	overflow: hidden;
 	background: linear-gradient(90deg, color-mix(in oklab, var(--carte-paper) 92%, var(--carte-ink)), var(--carte-sheet));
 	color: var(--carte-ink);
@@ -2989,48 +2584,25 @@ $effect(() => {
 	background: linear-gradient(90deg, var(--carte-sheet), color-mix(in oklab, var(--carte-paper) 92%, var(--carte-ink)));
 }
 
-.catalog-cover-back .page-copy {
-	border: 1px solid color-mix(in oklab, var(--carte-ink) 16%, transparent);
-	border-right: 0;
-}
-
-.catalog-cover-front > strong {
-	font-size: clamp(2rem, 5vw, 4.4rem);
-}
-
-.cover-handoff {
-	position: fixed;
-	top: 0;
-	left: 0;
-	z-index: 60;
-	display: flex;
-	visibility: hidden;
-	width: 0;
-	height: 0;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	border: 1px solid color-mix(in oklab, var(--carte-brass) 55%, transparent);
-	background: var(--carte-cover);
-	color: var(--carte-brass);
-	box-shadow: -8px 12px 28px color-mix(in oklab, var(--carte-ink) 22%, transparent);
-	opacity: 0;
+.carte-turn-hinge {
+	position: absolute;
+	inset: 0;
+	transform: translateZ(calc(var(--carte-depth) + 1.4px));
+	transform-style: preserve-3d;
 	pointer-events: none;
-	transform-origin: left top;
-	will-change: transform, opacity;
-}
-
-.cover-handoff strong {
-	font-family: var(--font-serif);
-	font-size: clamp(2rem, 5vw, 4.4rem);
-	font-weight: 380;
-	letter-spacing: 0.08em;
 }
 
 .turning-sheet {
+	position: absolute;
+	top: 0;
+	right: 0;
 	z-index: 14;
+	width: 50%;
+	height: 100%;
 	visibility: hidden;
+	transform-origin: left center;
 	transform-style: preserve-3d;
+	pointer-events: none;
 }
 
 .turning-sheet-face {
@@ -3128,8 +2700,6 @@ $effect(() => {
 }
 
 .prepare-dock {
-	position: sticky;
-	top: 1rem;
 	display: grid;
 	gap: 0.8rem;
 	width: 100%;
@@ -3137,19 +2707,6 @@ $effect(() => {
 	border: 0;
 	background: transparent;
 	cursor: pointer;
-}
-
-.docked-cover {
-	width: 100%;
-	aspect-ratio: 0.76;
-}
-
-.docked-cover > :global(.compact-cover-unread) {
-	display: none;
-}
-
-.docked-cover > strong {
-	font-size: clamp(1.8rem, 4vw, 3rem);
 }
 
 .dock-action {
@@ -3292,18 +2849,277 @@ $effect(() => {
 	color: var(--carte-ink-muted);
 }
 
+/*
+ * The CARTE, as one solid. Every surface below is a face of the same box: the
+ * cover hinged on the spine, the text block under it, and the leaves already
+ * turned on the left. Views never swap it for a look-alike — they only re-fit
+ * it onto their slot and change the cover angle, so there is no seam to hide.
+ */
+.carte-book-layer {
+	position: absolute;
+	z-index: 3;
+	inset: 0;
+	pointer-events: none;
+}
+
+.carte-book-frame {
+	max-width: 74rem;
+	margin: 0 auto;
+	padding: 1.5rem 3.25rem 1.5rem 2.5rem;
+	/* Flat enough that the book stays undistorted when it sits off-centre in
+	   the home and preparation slots, deep enough to still read as an object. */
+	perspective: clamp(2600px, 220vw, 4200px);
+	perspective-origin: 50% 42%;
+}
+
+.carte-book {
+	--carte-depth: 26px;
+	--carte-cover-depth: 6px;
+	--carte-leaf-depth: calc(var(--carte-depth) - var(--carte-cover-depth));
+	position: relative;
+	width: 100%;
+	aspect-ratio: var(--carte-spread-aspect);
+	transform-style: preserve-3d;
+	will-change: transform;
+}
+
+/* Closed views align the book by this half, never by the whole spread box. */
+.carte-recto-probe {
+	position: absolute;
+	inset: 0 0 0 50%;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.carte-book-tilt,
+.carte-book-solid {
+	position: absolute;
+	inset: 0;
+	transform-style: preserve-3d;
+}
+
+.carte-book-tilt {
+	/* A closed CARTE turns about its own centre, which is the recto's centre. */
+	transform-origin: 75% 50%;
+	will-change: transform;
+}
+
+.carte-contact-shadow {
+	position: absolute;
+	right: 0;
+	bottom: -3.5%;
+	left: 0;
+	height: 17%;
+	border-radius: 50%;
+	background: radial-gradient(
+		ellipse at center,
+		color-mix(in oklab, var(--carte-ink) 28%, transparent) 0%,
+		color-mix(in oklab, var(--carte-ink) 13%, transparent) 46%,
+		transparent 76%
+	);
+	filter: blur(16px);
+	transform-origin: right center;
+	pointer-events: none;
+}
+
+.carte-half {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 50%;
+	transform-style: preserve-3d;
+}
+
+.carte-half--right {
+	--carte-edge-depth: var(--carte-depth);
+	right: 0;
+}
+
+.carte-half--left {
+	--carte-edge-depth: var(--carte-leaf-depth);
+	left: 0;
+}
+
+.carte-deck,
+.carte-board,
+.carte-edge {
+	position: absolute;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	pointer-events: none;
+}
+
+.carte-deck {
+	inset: 0;
+	border: 1px solid color-mix(in oklab, var(--carte-ink) 16%, transparent);
+	transform: translateZ(var(--carte-edge-depth));
+}
+
+.carte-deck--blank {
+	border-right: 0;
+	background: linear-gradient(90deg, var(--carte-sheet), color-mix(in oklab, var(--carte-paper) 92%, var(--carte-ink)));
+}
+
+/* The underside of the block: the back board, only ever seen mid-spin. */
+.carte-board--base {
+	inset: 0;
+	border: 1px solid color-mix(in oklab, var(--carte-brass) 45%, transparent);
+	background: linear-gradient(115deg, color-mix(in oklab, white 8%, transparent), transparent 30%), var(--carte-cover);
+	transform: rotateY(180deg);
+}
+
+.carte-edge {
+	background:
+		linear-gradient(90deg, color-mix(in oklab, var(--carte-ink) 15%, transparent), transparent 42%),
+		repeating-linear-gradient(0deg, #cec3b2 0 1px, #faf4e9 1px 3px);
+}
+
+.carte-edge--fore {
+	top: 0;
+	right: 0;
+	width: var(--carte-edge-depth);
+	height: 100%;
+	transform-origin: right center;
+	transform: rotateY(90deg);
+}
+
+.carte-edge--spine {
+	top: 0;
+	left: 0;
+	width: var(--carte-edge-depth);
+	height: 100%;
+	background: linear-gradient(90deg, #55232c, #773440);
+	transform-origin: left center;
+	transform: rotateY(-90deg);
+}
+
+.carte-edge--head {
+	top: 0;
+	right: 0;
+	left: 0;
+	height: var(--carte-edge-depth);
+	background:
+		linear-gradient(0deg, color-mix(in oklab, var(--carte-ink) 15%, transparent), transparent 42%),
+		repeating-linear-gradient(90deg, #cec3b2 0 1px, #faf4e9 1px 3px);
+	transform-origin: center top;
+	transform: rotateX(90deg);
+}
+
+.carte-edge--tail {
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: var(--carte-edge-depth);
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--carte-ink) 15%, transparent), transparent 42%),
+		repeating-linear-gradient(90deg, #cec3b2 0 1px, #faf4e9 1px 3px);
+	transform-origin: center bottom;
+	transform: rotateX(-90deg);
+}
+
+/* Board edges are the same geometry with cover material and cover thickness. */
+.carte-edge--board {
+	background: linear-gradient(135deg, color-mix(in oklab, var(--carte-cover) 88%, black), color-mix(in oklab, var(--carte-cover) 68%, black));
+}
+
+.carte-cover-hinge {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 50%;
+	/* A hair above the recto so the two coincident planes never z-fight. */
+	transform: translateZ(calc(var(--carte-depth) + 0.6px));
+	transform-style: preserve-3d;
+	pointer-events: none;
+}
+
+.carte-cover {
+	--carte-edge-depth: var(--carte-cover-depth);
+	position: absolute;
+	inset: 0;
+	transform-origin: left center;
+	transform-style: preserve-3d;
+	will-change: transform;
+}
+
+.carte-cover-face {
+	position: absolute;
+	inset: 0;
+}
+
+.carte-cover-face--front {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	border: 1px solid color-mix(in oklab, var(--carte-brass) 58%, transparent);
+	background: linear-gradient(105deg, color-mix(in oklab, white 10%, transparent), transparent 22%), var(--carte-cover);
+	box-shadow:
+		inset -3px 0 5px -3px color-mix(in oklab, var(--carte-ink) 32%, transparent),
+		inset 0 -3px 5px -3px color-mix(in oklab, var(--carte-ink) 28%, transparent);
+	color: var(--carte-brass);
+	transform: translateZ(var(--carte-cover-depth));
+}
+
+.carte-cover-face--front > strong,
+.carte-cover-face--front > :global(.cover-emblem) {
+	position: relative;
+	z-index: 1;
+}
+
+.carte-cover-face--front > strong {
+	font-family: var(--font-serif);
+	font-size: clamp(2rem, 5vw, 4.4rem);
+	font-weight: 380;
+	letter-spacing: 0.08em;
+}
+
+/* Layout-only footprints. Each view owns one; the book is fitted onto it. */
+.carte-slot {
+	display: block;
+	width: 100%;
+	aspect-ratio: var(--carte-page-aspect);
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.carte-slot--catalog {
+	aspect-ratio: var(--carte-spread-aspect);
+}
+
+/*
+ * A bookmark reads as tucked under the page edge, which normally means letting
+ * the book paint over it. But the turn band reaches out across the bookmarks
+ * and, being in the layer above, would take every tap meant for them. So they
+ * outrank the layer for hit testing and are clipped at the leaf edge instead of
+ * being occluded by it — same picture, opposite priority.
+ */
+.catalog-book-stage > :global(.desktop-page-tabs) {
+	position: absolute;
+	top: 24%;
+	right: var(--ribbon-tab-offset);
+	z-index: 5;
+	gap: 0.12rem;
+	/* Only the left edge clips; the other three are opened up so neither the
+	   drop shadow nor the current bookmark's reach gets cut off. */
+	clip-path: inset(
+		-1rem calc(-1 * var(--ribbon-tab-reach) - 0.75rem) -1rem
+			calc(var(--ribbon-tab-width) + var(--ribbon-tab-offset) - var(--carte-stage-gutter) + var(--carte-leaf-bleed))
+	);
+	filter: drop-shadow(7px 5px 7px color-mix(in oklab, var(--carte-ink) 14%, transparent));
+}
+
+button.carte-slot {
+	cursor: pointer;
+}
+
 @media (min-width: 64.01rem) {
 	.bureau-demo {
 		--bureau-canvas-width: min(90rem, calc(100vw - 2rem));
 		width: var(--bureau-canvas-width);
 		margin-inline: calc((100% - var(--bureau-canvas-width)) / 2);
-	}
-}
-
-@media (max-width: 72rem) {
-	.left-page,
-	.right-page {
-		transform: none;
 	}
 }
 
@@ -3335,11 +3151,6 @@ $effect(() => {
 
 	.catalog-book-stage {
 		padding-inline: 0.5rem;
-	}
-
-	.left-page,
-	.right-page {
-		padding: 1.5rem;
 	}
 }
 
@@ -3387,30 +3198,12 @@ $effect(() => {
 	}
 
 	.prepare-dock {
-		position: static;
 		grid-template-columns: 5.5rem 1fr;
 		align-items: center;
 	}
 
-	.docked-cover {
+	.carte-slot--prepare {
 		width: 5.5rem;
-	}
-
-	.docked-cover > strong {
-		font-size: 1rem;
-	}
-
-	.docked-cover :global(.cover-emblem) {
-		display: none;
-	}
-
-	.docked-cover > :global(.compact-cover-unread) {
-		--carte-unread-badge-size: 1.35rem;
-		position: absolute;
-		top: -0.45rem;
-		right: -0.45rem;
-		z-index: 4;
-		display: grid;
 	}
 
 	.preparation-panel {
@@ -3448,30 +3241,7 @@ $effect(() => {
 	}
 
 	.closed-book-stack {
-		--book-frame-padding: 0.25rem;
 		width: clamp(12rem, 60vw, 14rem);
-	}
-
-	.closed-book-wrap {
-		padding: var(--book-frame-padding);
-	}
-
-	.closed-book {
-		transform: rotateZ(-0.8deg);
-	}
-
-	.book-page-edges {
-		--page-edge-depth: 0.22rem;
-	}
-
-	.closed-cover > strong {
-		font-size: clamp(1.8rem, 8vw, 2.2rem);
-		letter-spacing: 0.06em;
-	}
-
-	.closed-cover :global(.cover-emblem) {
-		margin-block: 0;
-		transform: none;
 	}
 
 	.closed-book-stack :global(.book-edge-tabs .ribbon-label),
@@ -3490,17 +3260,9 @@ $effect(() => {
 	.preparation-panel {
 		padding-inline: 0.9rem;
 	}
-
-	.closed-book-stack {
-		--book-frame-padding: 0.2rem;
-	}
 }
 
 @media (max-width: 22rem) {
-	.closed-cover > strong {
-		font-size: 1.75rem;
-	}
-
 	.closed-book-stack :global(.book-edge-tabs .ribbon-label),
 	.mobile-edge-tab-shell :global(.menu-edge-tabs .ribbon-label) {
 		font-size: 0.56rem;
@@ -3509,10 +3271,7 @@ $effect(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.closed-book,
-	.catalog-book,
-	.left-page,
-	.right-page {
+	.carte-book-tilt {
 		transform: none;
 	}
 }
