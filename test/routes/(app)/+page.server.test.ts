@@ -1,34 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth/auth";
+import { loadQuestHallData } from "$lib/server/quest-hall";
 import { actions, load } from "$routes/(app)/+page.server";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
-const { mockWhere, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockOrderBy } = vi.hoisted(() => {
-	const mockWhere = vi.fn();
-	const mockOrderBy = vi.fn();
-	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
-	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
-	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
-	const mockSelect = vi.fn(() => ({ from: mockFrom }));
-	const mockFindMany = vi.fn();
+const { mockLoadQuestHallData, mockGetBrowserTimezone } = vi.hoisted(() => ({
+	mockLoadQuestHallData: vi.fn(),
+	mockGetBrowserTimezone: vi.fn(() => "Europe/Paris"),
+}));
+
+const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
 	const mockOnConflictDoNothing = vi.fn();
 	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockLeftJoin, mockOrderBy };
+	return { mockOnConflictDoNothing, mockValues, mockInsert };
 });
-
-const { mockEnsureTasksForDate } = vi.hoisted(() => ({
-	mockEnsureTasksForDate: vi.fn(),
-}));
-
-const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => ({
-	mockGetMondayOfWeekForDate: vi.fn(() => "2026-04-13"),
-	mockGetLocalDateString: vi.fn((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17"),
-}));
-
-const { mockGetBrowserTimezone } = vi.hoisted(() => ({
-	mockGetBrowserTimezone: vi.fn(() => "UTC"),
-}));
 
 vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
@@ -38,212 +24,47 @@ vi.mock("$lib/server/auth/auth", () => ({
 	},
 }));
 
-vi.mock("$lib/server/db", () => ({
-	db: {
-		select: mockSelect,
-		insert: mockInsert,
-		query: {
-			practiceSession: {
-				findMany: mockFindMany,
-			},
-		},
-	},
-}));
-
-vi.mock("$lib/server/db/schema", () => ({
-	task: {
-		id: "id",
-		title: "title",
-		shortObjective: "shortObjective",
-		description: "description",
-		objectives: "objectives",
-		date: "date",
-		language: "language",
-		templateId: "templateId",
-		cadence: "cadence",
-	},
-	template: {
-		id: "id",
-		titleBase: "titleBase",
-		descriptionBase: "descriptionBase",
-		interactionType: "interactionType",
-		ui: "ui",
-		difficulty: "difficulty",
-		pointReward: "pointReward",
-		cadence: "cadence",
-		language: "template.language",
-		isActive: "isActive",
-		createdAt: "createdAt",
-	},
-	userLearningProfile: Symbol("userLearningProfile"),
-	practiceSession: {
-		status: "status",
-		taskId: "taskId",
-		userId: "userId",
-	},
-	translationAttempt: {
-		sourceSetId: "translationAttempt.sourceSetId",
-		workflowPhase: "workflowPhase",
-		userId: "translationAttempt.userId",
-		updatedAt: "translationAttempt.updatedAt",
-	},
-	translationSourceSet: {
-		id: "translationSourceSet.id",
-		templateId: "translationSourceSet.templateId",
-		promptLanguage: "translationSourceSet.promptLanguage",
-	},
-}));
-
-vi.mock("$lib/server/scheduling/tasks", () => ({
-	ensureTasksForDate: mockEnsureTasksForDate,
-}));
-
 vi.mock("$lib/server/browser-timezone", () => ({
 	getBrowserTimezone: mockGetBrowserTimezone,
 }));
 
-vi.mock("$lib/server/scheduling/dates", () => ({
-	getMondayOfWeekForDate: mockGetMondayOfWeekForDate,
-	getLocalDateString: mockGetLocalDateString,
+vi.mock("$lib/server/quest-hall", () => ({
+	loadQuestHallData: mockLoadQuestHallData,
+}));
+
+vi.mock("$lib/server/db", () => ({
+	db: {
+		insert: mockInsert,
+	},
+}));
+
+vi.mock("$lib/server/db/schema", () => ({
+	userLearningProfile: Symbol("userLearningProfile"),
 }));
 
 describe("(app) home +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17");
+		mockGetBrowserTimezone.mockReturnValue("Europe/Paris");
 	});
 
-	it("redirects unauthenticated users", async () => {
+	it("redirects unauthenticated users before loading Hall data", async () => {
 		await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({
 			status: 302,
 			location: "/sign-in",
 		});
+		expect(mockLoadQuestHallData).not.toHaveBeenCalled();
 	});
 
-	it("loads weekly and daily tasks for active language", async () => {
-		const weeklyTasks = [{ id: 1, title: "Weekly" }];
-		const dailyTasks = [{ id: 2, title: "Daily" }];
-		const translationTasks = [
-			{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdAt: new Date("2026-04-08T12:00:00.000Z") },
-		];
-		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
-		mockFindMany.mockResolvedValueOnce([
-			{
-				id: 1001,
-				taskId: 1,
-				status: "evaluated",
-				startedAt: new Date("2026-04-17T10:00:00.000Z"),
-				lastSeenAssistantMessageId: 6,
-				messages: [{ id: 7, role: "assistant" }],
-			},
-			{ id: 1002, taskId: 2, status: "in_progress", startedAt: new Date("2026-04-17T11:00:00.000Z") },
-		]);
+	it("loads the Hall service for the authenticated user and browser timezone", async () => {
+		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
+		const hallData = { editionDate: "2026-04-17", dailyTasks: [], weeklyTasks: [], translationTasks: [] };
+		mockLoadQuestHallData.mockResolvedValue(hallData);
+		const cookies = { get: vi.fn() };
 
-		const user = { id: "u1", activeLanguage: "en" };
-		const result = await load({ locals: { user } } as any);
-
-		expect(mockEnsureTasksForDate).toHaveBeenCalledTimes(1);
-		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
-		expect(result).toEqual(
-			expect.objectContaining({
-				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", unreadCount: 1, hasUnreadReply: true }],
-				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", unreadCount: 0, hasUnreadReply: false }],
-				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
-				translationMonth: "2026-04",
-				editionDate: "2026-04-17",
-			}),
-		);
-	});
-
-	it("loads translation tasks from every creation month and keeps the latest attempt status", async () => {
-		mockWhere
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ id: 7, titleBase: "A poem", createdAt: new Date("2025-12-04T12:00:00.000Z") }]);
-		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
-		mockOrderBy.mockResolvedValueOnce([
-			{ templateId: 7, status: "correction" },
-			{ templateId: 7, status: "draft" },
-		]);
-
-		const result = await load({
-			locals: { user: { id: "u1", activeLanguage: "en", nativeLanguage: "fr" } },
-		} as any);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				translationMonth: "2026-04",
-				translationTasks: [{ id: 7, titleBase: "A poem", createdMonth: "2025-12" }],
-				translationStatusMap: { 7: "correction" },
-			}),
-		);
-	});
-
-	it("buckets translation templates in the browser timezone", async () => {
-		const createdAt = new Date("2026-08-31T19:00:00.000Z");
-		mockGetBrowserTimezone.mockReturnValue("Pacific/Auckland");
-		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => (date ? "2026-09-01" : "2026-09-01"));
-		mockWhere
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ id: 8, titleBase: "A letter", createdAt }]);
-		mockFindMany.mockResolvedValue([]);
-
-		const result = (await load({
-			locals: { user: { id: "u1", activeLanguage: "en" } },
-		} as any)) as any;
-
-		expect(mockGetBrowserTimezone).toHaveBeenCalled();
-		expect(mockGetLocalDateString).toHaveBeenCalledWith("Pacific/Auckland", createdAt);
-		expect(result.translationMonth).toBe("2026-09");
-		expect(result.translationTasks[0]?.createdMonth).toBe("2026-09");
-	});
-
-	describe("browser timezone logic", () => {
-		beforeEach(() => {
-			vi.useFakeTimers();
-			vi.setSystemTime(new Date("2026-04-17T10:00:00Z"));
-		});
-
-		afterEach(() => {
-			vi.useRealTimers();
-		});
-
-		it("should use UTC when the browser timezone cookie is missing", async () => {
-			mockGetBrowserTimezone.mockReturnValue("UTC");
-			mockGetLocalDateString.mockReturnValue("2026-04-17");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
-		});
-
-		it("should calculate local date using the browser timezone", async () => {
-			mockGetBrowserTimezone.mockReturnValue("Asia/Tokyo");
-			mockGetLocalDateString.mockReturnValue("2026-04-18");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("Asia/Tokyo");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-18");
-		});
-
-		it("does not read a timezone from the user profile", async () => {
-			mockGetBrowserTimezone.mockReturnValue("UTC");
-			mockGetLocalDateString.mockReturnValue("2026-04-17");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
-		});
+		await expect(load({ locals: { user }, cookies } as any)).resolves.toBe(hallData);
+		expect(mockGetBrowserTimezone).toHaveBeenCalledWith(cookies);
+		expect(loadQuestHallData).toHaveBeenCalledWith(user, "Europe/Paris");
 	});
 
 	runSwitchLanguageActionSuite({
