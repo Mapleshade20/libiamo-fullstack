@@ -38,6 +38,14 @@ export function measureCarteFit(element: Element, slot: Element | null | undefin
 	};
 }
 
+/** Reads the two tilt angles GSAP currently has on an element, in degrees. */
+export function readCarteTilt(target: Element): { rotateX: number; rotateY: number } {
+	return {
+		rotateX: Number(gsap.getProperty(target, "rotateX")),
+		rotateY: Number(gsap.getProperty(target, "rotateY")),
+	};
+}
+
 export const CARTE_MOTION_TOKENS = {
 	durationFast: 0.18,
 	durationStandard: 0.42,

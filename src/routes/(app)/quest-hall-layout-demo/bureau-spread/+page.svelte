@@ -17,6 +17,8 @@ import { disableScrollHandling, goto } from "$app/navigation";
 import { base } from "$app/paths";
 import {
 	CARTE_BOOK_FULL_TURN,
+	CARTE_COVER_LIGHT_REST,
+	CARTE_IDLE_SWAY,
 	CARTE_MOTION_TOKENS,
 	type CarteDemoControlGroup,
 	type CarteFitVars,
@@ -25,11 +27,13 @@ import {
 	createCarteBookCloseTiming,
 	createCarteBookOpenEase,
 	createCarteBookOpenTiming,
+	createCarteCoverLight,
 	createCarteMotionScope,
 	DemoControls,
 	measureCarteFit,
 	prefersReducedCarteMotion,
 	RibbonTabs,
+	readCarteTilt,
 	TaskStatusMark,
 } from "$lib/components/quest-hall-demo";
 import TaskPreparation from "$lib/components/task/TaskPreparation.svelte";
@@ -118,7 +122,7 @@ let mobileEdgeTabs = $state<HTMLElement>();
 let prepareDock = $state<HTMLElement>();
 
 let motionScope: CarteMotionScope | null = null;
-let closedBookIdle: ReturnType<CarteMotionScope["to"]> | null = null;
+let closedBookIdle: ReturnType<CarteMotionScope["to"]>[] = [];
 let systemReduced = $state(false);
 let mounted = $state(false);
 let visualView = $state(initialDemoState.view);
@@ -152,28 +156,33 @@ let turnPreview = $state<{
 let isPaperTurning = $derived(turnPreview !== null);
 let narrowLayout = $state(false);
 let spreadIsLive = $derived(visualView === "catalog" && !narrowLayout && transitionTo === null);
+// Closing a book does not turn its pages. The URL goes back to whatever the
+// closed view was left on, but the leaves under the swinging cover keep the
+// spread they were open at until the board has come to rest.
+let heldCatalogLocation = $state<{ section: QuestHallDemoSection; leaf: number } | null>(null);
+let catalogLocation = $derived(heldCatalogLocation ?? { section: optimisticState.section, leaf: optimisticState.leaf });
 
 let recommendations = $derived(deriveQuestHallDemoRecommendations(data).slice(0, 2));
 let unreadReplyCount = $derived(getQuestHallDemoUnreadReplyCount(data));
 let unreadReplySummary = $derived(`${unreadReplyCount} ${unreadReplyCount === 1 ? "nouvelle réponse non lue" : "nouvelles réponses non lues"}`);
-let currentLeaf = $derived(getQuestHallDemoBookSpread(data, optimisticState.section, optimisticState.leaf));
-let catalogPagePosition = $derived(getQuestHallDemoCatalogPagePosition(data, optimisticState.section, currentLeaf.leaf));
+let currentLeaf = $derived(getQuestHallDemoBookSpread(data, catalogLocation.section, catalogLocation.leaf));
+let catalogPagePosition = $derived(getQuestHallDemoCatalogPagePosition(data, catalogLocation.section, currentLeaf.leaf));
 let staticLeftPage = $derived.by(() => {
-	if (!turnPreview?.usesSheet) return { section: optimisticState.section, spread: currentLeaf };
+	if (!turnPreview?.usesSheet) return { section: catalogLocation.section, spread: currentLeaf };
 	return turnPreview.direction > 0
 		? { section: turnPreview.fromSection, spread: turnPreview.fromSpread }
 		: { section: turnPreview.toSection, spread: turnPreview.toSpread };
 });
 let staticRightPage = $derived.by(() => {
-	if (!turnPreview?.usesSheet) return { section: optimisticState.section, spread: currentLeaf };
+	if (!turnPreview?.usesSheet) return { section: catalogLocation.section, spread: currentLeaf };
 	return turnPreview.direction > 0
 		? { section: turnPreview.toSection, spread: turnPreview.toSpread }
 		: { section: turnPreview.fromSection, spread: turnPreview.fromSpread };
 });
 let leftPageItems = $derived(staticLeftPage.spread.leftItems);
 let rightPageItems = $derived(staticRightPage.spread.rightItems);
-let previousTurnTarget = $derived(getQuestHallDemoCatalogTurnTarget(data, optimisticState.section, currentLeaf.leaf, -1));
-let nextTurnTarget = $derived(getQuestHallDemoCatalogTurnTarget(data, optimisticState.section, currentLeaf.leaf, 1));
+let previousTurnTarget = $derived(getQuestHallDemoCatalogTurnTarget(data, catalogLocation.section, currentLeaf.leaf, -1));
+let nextTurnTarget = $derived(getQuestHallDemoCatalogTurnTarget(data, catalogLocation.section, currentLeaf.leaf, 1));
 let currentMobileItem = $derived(currentLeaf.items[mobilePosition] ?? currentLeaf.items[0] ?? null);
 let forceReduced = $derived(optimisticState.motion === "reduce");
 let reducedMotion = $derived(forceReduced || systemReduced);
@@ -182,7 +191,7 @@ let liveMessage = $derived.by(() => {
 		return `${recommendations.length} recommandations disponibles.${unreadReplyCount > 0 ? ` ${unreadReplySummary}.` : ""}`;
 	}
 	if (optimisticState.view === "prepare") return "Préparation de la mission sélectionnée.";
-	return `${SECTION_LABELS[optimisticState.section]}, feuillet ${catalogPagePosition.current} sur ${catalogPagePosition.total}.`;
+	return `${SECTION_LABELS[catalogLocation.section]}, feuillet ${catalogPagePosition.current} sur ${catalogPagePosition.total}.`;
 });
 let ribbonTabs = $derived([
 	{
@@ -298,28 +307,80 @@ function statusActionLabel(item: QuestHallDemoItem): string {
 }
 
 function stopClosedBookIdle() {
-	closedBookIdle?.kill();
-	closedBookIdle = null;
+	for (const tween of closedBookIdle) tween.kill();
+	closedBookIdle = [];
 }
 
+/** Writes the modelled window response onto the board for the current tilt. */
+function applyCoverLight(rotateX: number, rotateY: number) {
+	if (!carteCover) return;
+	const light = createCarteCoverLight(rotateX, rotateY);
+	carteCover.style.setProperty("--cover-sheen-x", `${light.sheenX.toFixed(2)}%`);
+	carteCover.style.setProperty("--cover-sheen-y", `${light.sheenY.toFixed(2)}%`);
+	carteCover.style.setProperty("--cover-gloss", light.gloss.toFixed(3));
+	carteCover.style.setProperty("--cover-shade", light.shade.toFixed(3));
+}
+
+function syncCoverLightToTilt() {
+	if (!carteBookTilt) return;
+	const tilt = readCarteTilt(carteBookTilt);
+	applyCoverLight(tilt.rotateX, tilt.rotateY);
+}
+
+/**
+ * Eases the board back to the pose the window models as square-on, so a view
+ * change never snaps the sheen off the cover it was resting on.
+ */
+function addCoverLightSettle(timeline: ReturnType<CarteMotionScope["timeline"]>, at: number, duration: number, ease: string) {
+	if (!carteCover) return;
+	timeline.to(
+		carteCover,
+		{
+			"--cover-sheen-x": `${CARTE_COVER_LIGHT_REST.sheenX}%`,
+			"--cover-sheen-y": `${CARTE_COVER_LIGHT_REST.sheenY}%`,
+			"--cover-gloss": CARTE_COVER_LIGHT_REST.gloss,
+			"--cover-shade": CARTE_COVER_LIGHT_REST.shade,
+			duration,
+			ease,
+		},
+		at,
+	);
+}
+
+/**
+ * A closed CARTE resting on the bureau keeps drifting. The two axes run on
+ * their own periods and re-roll their target every cycle, so the board wanders
+ * instead of retracing a loop, and the cover's lighting is recomputed from the
+ * angles it reaches rather than baked into the sway.
+ */
 function startClosedBookIdle() {
 	stopClosedBookIdle();
 	if (!motionScope || !carteBookTilt) return;
 	if (isReduced()) {
 		motionScope.set(carteBookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
+		applyCoverLight(0, 0);
 		return;
 	}
 
-	closedBookIdle = motionScope.to(carteBookTilt, {
-		rotateX: "random(-3.2, 3.2, 0.1)",
-		rotateY: "random(-4.2, 4.2, 0.1)",
-		rotateZ: "random(-0.7, 0.7, 0.1)",
-		duration: 4.2,
-		ease: "sine.inOut",
-		repeat: -1,
-		repeatRefresh: true,
-		yoyo: true,
-	});
+	motionScope.set(carteBookTilt, { rotateZ: 0 });
+	closedBookIdle = [
+		motionScope.to(carteBookTilt, {
+			rotateX: `random(${-CARTE_IDLE_SWAY.pitch}, ${CARTE_IDLE_SWAY.pitch}, 0.1)`,
+			duration: CARTE_IDLE_SWAY.pitchPeriod,
+			ease: "sine.inOut",
+			repeat: -1,
+			repeatRefresh: true,
+			onUpdate: syncCoverLightToTilt,
+		}),
+		motionScope.to(carteBookTilt, {
+			rotateY: `random(${-CARTE_IDLE_SWAY.yaw}, ${CARTE_IDLE_SWAY.yaw}, 0.1)`,
+			duration: CARTE_IDLE_SWAY.yawPeriod,
+			ease: "sine.inOut",
+			repeat: -1,
+			repeatRefresh: true,
+			onUpdate: syncCoverLightToTilt,
+		}),
+	];
 }
 
 type CarteView = QuestHallDemoUrlState["view"];
@@ -359,6 +420,7 @@ function setBookTerminal(view: CarteView) {
 	motionScope.set(carteBook, { ...measureBookFit(view), rotation: 0, skewX: 0 });
 	if (carteBookTilt) motionScope.set(carteBookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
 	if (carteCover) motionScope.set(carteCover, { rotateY: open ? COVER_OPEN_ROTATION : 0 });
+	applyCoverLight(0, 0);
 	motionScope.set(leftHalfParts(), { autoAlpha: open ? 1 : 0 });
 	if (carteTurnZones) motionScope.set(carteTurnZones, { autoAlpha: open ? 1 : 0 });
 	if (carteShadow) motionScope.set(carteShadow, { autoAlpha: 1, z: -2, scaleX: open ? 1 : 0.52, transformOrigin: "right center" });
@@ -398,9 +460,19 @@ function applyStageTerminal(view: QuestHallDemoUrlState["view"]) {
 	setSceneObjectsTerminal(view);
 }
 
+/**
+ * A view change that leaves the spread pins the leaves in place for the whole
+ * swing, so the cover closes over the spread the reader was actually on rather
+ * than over a book that flipped itself back to the first feuillet mid-air.
+ */
+function holdCatalogLocationFor(from: CarteView, to: CarteView) {
+	heldCatalogLocation = from === "catalog" && to !== "catalog" ? { section: catalogLocation.section, leaf: currentLeaf.leaf } : null;
+}
+
 function setStageTerminal(view: QuestHallDemoUrlState["view"]) {
 	transitionFrom = null;
 	transitionTo = null;
+	heldCatalogLocation = null;
 	visualView = view;
 	if (!motionScope) return;
 	motionScope.stopAll("hold");
@@ -417,6 +489,7 @@ function completeViewTransition(view: QuestHallDemoUrlState["view"]) {
 	visualView = view;
 	transitionFrom = null;
 	transitionTo = null;
+	heldCatalogLocation = null;
 	applyStageTerminal(view);
 	if (view === "home") startClosedBookIdle();
 	else stopClosedBookIdle();
@@ -628,6 +701,7 @@ function playViewTransition(from: CarteView, to: CarteView, selectedElement?: HT
 	motionScope.stopAll("hold");
 	resetPaperTurnVisuals();
 	if (rootEl?.contains(document.activeElement)) rootEl.focus({ preventScroll: true });
+	holdCatalogLocationFor(from, to);
 	transitionFrom = from;
 	transitionTo = to;
 
@@ -657,6 +731,10 @@ function playViewTransition(from: CarteView, to: CarteView, selectedElement?: HT
 		timeline.to(fromStage, { autoAlpha: 0, duration: 0.1 }, 0).to(toStage, { autoAlpha: 1, duration: 0.12 }, 0.04).call(finish);
 		return;
 	}
+
+	// The idle sway was killed wherever it happened to be, so the window's
+	// reading of the board has to be eased back to square rather than snapped.
+	addCoverLightSettle(timeline, 0, CARTE_MOTION_TOKENS.durationStandard, CARTE_MOTION_TOKENS.easeInOut);
 
 	const opening = isBookSpread(to) && !isBookSpread(from);
 	const closing = isBookSpread(from) && !isBookSpread(to);
@@ -1240,7 +1318,7 @@ $effect(() => {
 });
 
 $effect(() => {
-	const location = `${optimisticState.section}-${optimisticState.leaf}`;
+	const location = `${catalogLocation.section}-${catalogLocation.leaf}`;
 	if (location === mobileLocation) return;
 	mobileLocation = location;
 	mobilePosition = 0;
@@ -1388,7 +1466,6 @@ $effect(() => {
 	<p class="sr-only" aria-live="polite" aria-atomic="true">{liveMessage}</p>
 
 	<header class="bureau-heading">
-		<p class="eyebrow">Édition d’apprentissage · Bureau A</p>
 		<h1>{data.greeting}</h1>
 		<p>Laissez la journée se déplier dans une autre langue.</p>
 	</header>
@@ -1471,7 +1548,7 @@ $effect(() => {
 						></button>
 						<RibbonTabs
 							tabs={ribbonTabs}
-							value={optimisticState.section}
+							value={catalogLocation.section}
 							onselect={(id) => openCatalog(id as QuestHallDemoSection)}
 							orientation="vertical"
 							variant="bookmark"
@@ -1499,7 +1576,7 @@ $effect(() => {
 					Fermer la CARTE
 				</button>
 				<div>
-					<p>{SECTION_LABELS[optimisticState.section]}</p>
+					<p>{SECTION_LABELS[catalogLocation.section]}</p>
 					<h2 id="catalog-title">Choisissez une mission</h2>
 				</div>
 				<span class="leaf-counter" aria-live="polite">Feuillet {catalogPagePosition.current} / {catalogPagePosition.total}</span>
@@ -1509,7 +1586,7 @@ $effect(() => {
 				<div class="carte-slot carte-slot--catalog" bind:this={catalogSlot} aria-hidden="true"></div>
 				<RibbonTabs
 					tabs={ribbonTabs}
-					value={optimisticState.section}
+					value={catalogLocation.section}
 					onselect={switchSection}
 					orientation="vertical"
 					variant="bookmark"
@@ -1544,7 +1621,7 @@ $effect(() => {
 					<div class="mobile-edge-tab-shell" bind:this={mobileEdgeTabs}>
 						<RibbonTabs
 							tabs={ribbonTabs}
-							value={optimisticState.section}
+							value={catalogLocation.section}
 							onselect={switchSection}
 							orientation="vertical"
 							variant="bookmark"
@@ -1557,7 +1634,7 @@ $effect(() => {
 					<div class="mobile-paper carte-paper" bind:this={mobilePaper} id="bureau-mobile-catalog-panel" role="tabpanel">
 						<p class="page-folio">
 							<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
-							<span>{SECTION_LABELS[optimisticState.section]} · Feuillet {catalogPagePosition.current} / {catalogPagePosition.total}</span>
+							<span>{SECTION_LABELS[catalogLocation.section]} · Feuillet {catalogPagePosition.current} / {catalogPagePosition.total}</span>
 						</p>
 						{@render resourceContent(true, currentLeaf, currentMobileItem)}
 					</div>
@@ -1755,6 +1832,7 @@ $effect(() => {
 										<strong>CARTE</strong>
 										<CoverEmblem size={104} finish="foil" unreadCount={unreadReplyCount} />
 										<span class="cover-rule cover-rule-bottom"></span>
+										<span class="cover-sheen"></span>
 									</span>
 									<div
 										class="carte-cover-face carte-cover-face--back carte-face carte-face--back carte-page carte-page--left"
@@ -1852,7 +1930,6 @@ $effect(() => {
 	margin: 0;
 }
 
-.bureau-heading .eyebrow,
 .section-heading > p,
 .catalog-toolbar > div > p {
 	font-family: var(--font-sans);
@@ -1864,7 +1941,6 @@ $effect(() => {
 }
 
 .bureau-heading h1 {
-	margin-top: 0.35rem;
 	font-family: var(--font-serif);
 	font-size: clamp(2rem, 4vw, 3.65rem);
 	font-weight: 350;
@@ -2193,6 +2269,52 @@ $effect(() => {
 .cover-rule-bottom {
 	top: auto;
 	bottom: 10%;
+}
+
+/*
+ * How the bureau's window falls on the board. There is one source — a soft,
+ * low afternoon window high on the front-left, roughly ten o'clock and some
+ * 35° above the desk — plus warm bounce off the paper-coloured room for
+ * everything it misses, so the light it lays down is faint and amber rather
+ * than white. The board is faintly bowed, as bound board always is, so the
+ * window leaves a broad satin lobe on the cloth instead of a mirror point: the
+ * lobe slides as the CARTE sways, the far corner deepens as the board turns
+ * out of the light, and both sit above the foil so the emblem and the title
+ * catch the same sweep the cloth does.
+ */
+.cover-sheen {
+	position: absolute;
+	z-index: 2;
+	inset: 0;
+	pointer-events: none;
+}
+
+.cover-sheen::before,
+.cover-sheen::after {
+	position: absolute;
+	inset: 0;
+	content: "";
+}
+
+.cover-sheen::before {
+	background: radial-gradient(
+		62% 58% at var(--cover-sheen-x) var(--cover-sheen-y),
+		color-mix(in oklab, #fff1d4 14%, transparent),
+		color-mix(in oklab, #fff1d4 5%, transparent) 42%,
+		transparent 74%
+	);
+	opacity: var(--cover-gloss);
+}
+
+/* A shadow on wine cloth is dark wine, not grey: the room's bounce keeps the
+   corner the window misses in the cover's own colour. */
+.cover-sheen::after {
+	background: linear-gradient(
+		128deg,
+		transparent 34%,
+		color-mix(in oklab, color-mix(in oklab, var(--carte-ink) 76%, var(--carte-cover)) 15%, transparent)
+	);
+	opacity: var(--cover-shade);
 }
 
 .catalog-toolbar {
@@ -3036,6 +3158,12 @@ $effect(() => {
 
 .carte-cover {
 	--carte-edge-depth: var(--carte-cover-depth);
+	/* Where the window rests on a board lying square to the reader; the sway
+	   drives these away from rest frame by frame. */
+	--cover-sheen-x: 32%;
+	--cover-sheen-y: 26%;
+	--cover-gloss: 1;
+	--cover-shade: 1;
 	position: absolute;
 	inset: 0;
 	transform-origin: left center;
@@ -3054,7 +3182,7 @@ $effect(() => {
 	justify-content: center;
 	flex-direction: column;
 	border: 1px solid color-mix(in oklab, var(--carte-brass) 58%, transparent);
-	background: linear-gradient(105deg, color-mix(in oklab, white 10%, transparent), transparent 22%), var(--carte-cover);
+	background: var(--carte-cover);
 	box-shadow:
 		inset -3px 0 5px -3px color-mix(in oklab, var(--carte-ink) 32%, transparent),
 		inset 0 -3px 5px -3px color-mix(in oklab, var(--carte-ink) 28%, transparent);
