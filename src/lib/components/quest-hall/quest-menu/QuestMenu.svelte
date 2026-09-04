@@ -3,6 +3,7 @@ import { onMount, tick } from "svelte";
 import { pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
+import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { type LanguageCode, t } from "$lib/i18n";
 import {
 	adaptHallDataToQuestMenu,
@@ -36,10 +37,11 @@ interface Props {
 	data: HallData;
 	initialLocation: HallLocation;
 	initialPreparation?: QuestHallPreparation | null;
+	accountScope: string;
 	lang: LanguageCode;
 }
 
-let { data, initialLocation, initialPreparation = null, lang }: Props = $props();
+let { data, initialLocation, initialPreparation = null, accountScope, lang }: Props = $props();
 // svelte-ignore state_referenced_locally
 let location = $state<HallLocation>({ ...initialLocation });
 let narrowItemKey = $state<QuestMenuItemKey | null>(null);
@@ -216,6 +218,24 @@ function retryPreparation(): void {
 	if (location.task) void preparationResource?.load(location.task, data.editionDate);
 }
 
+function saveWorkflowReturnContext(): void {
+	if (!location.task) return;
+	const sectionKeys = new Set(catalog.sections[location.section].map((item) => item.key));
+	saveQuestHallReturnContext({
+		accountScope,
+		activeLanguage: data.activeLanguage,
+		edition: data.editionDate,
+		origin: preparationOriginView,
+		section: location.section,
+		spread: location.leaf,
+		narrowItemKey: narrowItemKey && sectionKeys.has(narrowItemKey) ? narrowItemKey : null,
+		selectedKey: location.task,
+		translationMonth: data.translationMonth,
+		scrollOffset: window.scrollY,
+		focusTarget: "preparation",
+	});
+}
+
 function focusView(view: QuestMenuView): void {
 	queueMicrotask(() => {
 		const target = view === "prepare" ? preparationPanel : view === "home" ? homeSlot : catalogStage?.querySelector<HTMLElement>(".quiet-button");
@@ -328,6 +348,26 @@ function handleKeydown(event: KeyboardEvent): void {
 
 onMount(() => {
 	mounted = true;
+	const returnContext = restoreQuestHallReturnContext({
+		accountScope,
+		activeLanguage: data.activeLanguage,
+		edition: data.editionDate,
+		translationMonths: new Set([data.translationMonth, ...data.translationTasks.map((task) => task.createdMonth)]),
+		itemKeys: new Set([
+			...QUEST_MENU_SECTIONS.flatMap((section) => catalog.sections[section].map((item) => item.key)),
+			...data.translationTasks.map((task) => `translation-${task.id}`),
+		]),
+		translationItemMonths: new Map(data.translationTasks.map((task) => [`translation-${task.id}`, task.createdMonth])),
+		spreadCounts: Object.fromEntries(QUEST_MENU_SECTIONS.map((section) => [section, catalog.spreads[section].length])) as Record<
+			QuestMenuSection,
+			number
+		>,
+	});
+	const restoringWorkflow = returnContext !== null && initialLocation.view === "prepare" && initialLocation.task === returnContext.selectedKey;
+	if (restoringWorkflow) {
+		preparationOriginView = returnContext.origin === "home" ? "home" : "catalog";
+		narrowItemKey = returnContext.narrowItemKey;
+	}
 	preparationResource = createQuestHallPreparationResource({
 		endpoint: `${base}/api/quest-hall/preparation`,
 		onchange: (state) => {
@@ -389,7 +429,14 @@ onMount(() => {
 	window.addEventListener("resize", updateLayout);
 	window.addEventListener("popstate", handlePopstate);
 	updateLayout();
-	void tick().then(() => animator?.settle(visibleView));
+	void tick().then(() => {
+		animator?.settle(visibleView);
+		if (!restoringWorkflow || !returnContext) return;
+		requestAnimationFrame(() => {
+			window.scrollTo({ top: returnContext.scrollOffset, behavior: "auto" });
+			if (returnContext.focusTarget === "preparation") preparationPanel?.focus({ preventScroll: true });
+		});
+	});
 	return () => {
 		cancelAnimationFrame(resizeFrame);
 		media.removeEventListener("change", updateLayout);
@@ -467,6 +514,7 @@ onMount(() => {
 			bind:panelElement={preparationPanel}
 			onback={returnFromPreparation}
 			onretry={retryPreparation}
+			onworkflowentry={saveWorkflowReturnContext}
 		/>
 	</div>
 

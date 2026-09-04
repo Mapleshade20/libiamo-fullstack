@@ -3,6 +3,7 @@ import AlertTriangle from "@lucide/svelte/icons/alert-triangle";
 import BookOpen from "@lucide/svelte/icons/book-open";
 import FileText from "@lucide/svelte/icons/file-text";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+import { base } from "$app/paths";
 import type { QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import TaskPreparation from "$lib/components/task/TaskPreparation.svelte";
 import TranslationPreparation from "$lib/components/translate/TranslationPreparation.svelte";
@@ -20,6 +21,7 @@ interface Props {
 	panelElement?: HTMLDivElement | null;
 	onback: () => void;
 	onretry: () => void;
+	onworkflowentry: () => void;
 }
 
 let {
@@ -34,9 +36,32 @@ let {
 	panelElement = $bindable(null),
 	onback,
 	onretry,
+	onworkflowentry,
 }: Props = $props();
 
 let backLabel = $derived(t(lang, returnView === "home" ? "hall.menu.backToRecommendations" : "hall.menu.backToCatalog"));
+
+function productionPath(url: URL): string {
+	return base && url.pathname.startsWith(base) ? url.pathname.slice(base.length) : url.pathname;
+}
+
+function handleClickCapture(event: MouseEvent): void {
+	if (!(event.target instanceof Element)) return;
+	const anchor = event.target.closest("a");
+	if (!(anchor instanceof HTMLAnchorElement)) return;
+	const path = productionPath(new URL(anchor.href));
+	if (/^\/task\/[1-9]\d*\/(?:session|feedback)$/.test(path) || /^\/translate\/[1-9]\d*\/(?:attempt|feedback)$/.test(path)) {
+		onworkflowentry();
+	}
+}
+
+function handleSubmitCapture(event: SubmitEvent): void {
+	if (!(event.target instanceof HTMLFormElement)) return;
+	const action = new URL(event.target.action);
+	if (/^\/translate\/[1-9]\d*$/.test(productionPath(action)) && (action.search === "?/start" || action.search === "?/retake")) {
+		onworkflowentry();
+	}
+}
 </script>
 
 <section
@@ -53,7 +78,14 @@ let backLabel = $derived(t(lang, returnView === "home" ? "hall.menu.backToRecomm
 			<span class="dock-action"><BookOpen size={17} aria-hidden="true" /> {backLabel}</span>
 		</button>
 
-		<div bind:this={panelElement} class="preparation-panel" tabindex="-1" aria-busy={resource.status === "loading"}>
+		<div
+			bind:this={panelElement}
+			class="preparation-panel"
+			tabindex="-1"
+			aria-busy={resource.status === "loading"}
+			onclickcapture={handleClickCapture}
+			onsubmitcapture={handleSubmitCapture}
+		>
 			{#if resource.status === "loading"}
 				<div class="resource-state" role="status" aria-live="polite">
 					<LoaderCircle class="loading-icon" size={24} aria-hidden="true" />

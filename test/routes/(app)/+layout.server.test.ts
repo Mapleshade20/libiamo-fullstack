@@ -6,6 +6,14 @@ vi.mock("$lib/server/trial-quota", () => ({
 	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
 }));
 
+vi.mock("$lib/server/browser-timezone", () => ({
+	getBrowserTimezone: vi.fn(() => "UTC"),
+}));
+
+vi.mock("$lib/server/scheduling/dates", () => ({
+	getLocalDateString: vi.fn(() => "2026-09-04"),
+}));
+
 const ALICE_EMAIL_MD5 = "c160f8cc69a4f0bf2b0362752353d060";
 const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";
 
@@ -36,6 +44,8 @@ describe("(app) layout +layout.server", () => {
 			activeLanguage: "en",
 			nativeLanguage: "es",
 		});
+		expect(result.accountScope).toBe("u4IDDbwryroyqQvy4geoSoVvxfAzt3xICDarb3f0Dxk");
+		expect(result.questHallEdition).toBe("2026-09-04");
 		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);
 	});
 

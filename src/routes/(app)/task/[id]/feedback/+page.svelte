@@ -6,6 +6,7 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
@@ -34,6 +35,8 @@ let activeAnnotation = $state<{
 } | null>(null);
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
+// svelte-ignore state_referenced_locally
+let detailsHref = $state(`${base}/task/${data.taskId}`);
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
@@ -45,6 +48,15 @@ $effect(() => {
 // Trigger client-only generation after mount. Calling fetch from an eager
 // reactive effect can run during SSR and causes SvelteKit warnings.
 onMount(() => {
+	detailsHref = getQuestHallWorkflowReturnHref({
+		destination: "details",
+		accountScope: data.accountScope,
+		activeLanguage: data.user.activeLanguage as LanguageCode,
+		edition: data.questHallEdition,
+		item: { kind: "quest", id: Number(data.taskId) },
+		base,
+		fallbackHref: detailsHref,
+	});
 	if (data.existingFeedback) {
 		feedback = data.existingFeedback;
 		return;
@@ -217,7 +229,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
-				<a href="{base}/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
+				<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
 					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
 				</a>

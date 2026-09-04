@@ -14,11 +14,18 @@ let lang = $derived(data.activeLanguage as LanguageCode);
 </svelte:head>
 
 {#key data.activeLanguage}
-	<QuestMenu {data} initialLocation={data.hallLocation} initialPreparation={data.initialPreparation} {lang} />
+	<QuestMenu {data} initialLocation={data.hallLocation} initialPreparation={data.initialPreparation} accountScope={data.accountScope} {lang} />
 
 	<div class="legacy-entry-points">
 		<UnreadInbox {lang} />
-		<TranslationIndex tasks={data.translationTasks} statusMap={data.translationStatusMap} initialMonth={data.translationMonth} {lang} />
+		<TranslationIndex
+			tasks={data.translationTasks}
+			statusMap={data.translationStatusMap}
+			initialMonth={data.translationMonth}
+			accountScope={data.accountScope}
+			edition={data.editionDate}
+			{lang}
+		/>
 	</div>
 {/key}
 

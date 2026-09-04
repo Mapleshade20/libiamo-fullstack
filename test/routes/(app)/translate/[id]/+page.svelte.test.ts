@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import TranslationDetailPage from "$routes/(app)/translate/[id]/+page.svelte";
 
 const data = {
+	accountScope: "account-a",
+	questHallEdition: "2026-09-04",
 	user: {
 		name: "Alice",
 		email: "alice@example.com",

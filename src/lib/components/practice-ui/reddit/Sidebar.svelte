@@ -14,6 +14,7 @@ import { getAvatarColor } from "./utils";
 let {
 	t = {} as Record<string, string>,
 	taskId = "" as string | number,
+	returnHref = "",
 	subreddit = "AskReddit",
 	userName = "",
 	avatarUrl = "",
@@ -23,6 +24,7 @@ let {
 }: {
 	t?: Record<string, string>;
 	taskId?: string | number;
+	returnHref?: string;
 	subreddit?: string;
 	userName?: string;
 	avatarUrl?: string;
@@ -172,7 +174,7 @@ const subredditColor = $derived(getAvatarColor(subreddit));
 				</div>
 				<Settings size={14} class="ml-auto shrink-0 text-[#878A8C]" />
 			</button>
-			<a href="{base}/task/{taskId}" class="flex items-center gap-1.5 px-2 text-xs font-medium text-[#FF4500] hover:underline">
+			<a href={returnHref || `${base}/task/${taskId}`} class="flex items-center gap-1.5 px-2 text-xs font-medium text-[#FF4500] hover:underline">
 				<LogOut size={12} />
 				{t.returnTask}
 			</a>

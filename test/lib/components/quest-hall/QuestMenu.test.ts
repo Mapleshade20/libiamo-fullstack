@@ -46,7 +46,7 @@ const home: HallLocation = { view: "home", section: "daily", leaf: 1, task: null
 
 describe("QuestMenu", () => {
 	it("server-renders the personalized home, recommendations, ribbons, and canonical links", () => {
-		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
+		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
 
 		expect(body).toContain("Good morning, Fedor");
 		expect(body).toContain("Recommended");
@@ -63,13 +63,15 @@ describe("QuestMenu", () => {
 		["fr", "CARTE"],
 		["ja", "メニュー"],
 	] as const)("server-renders the localized menu title for %s", (lang, title) => {
-		const { body } = render(QuestMenu, { props: { data: hallData({ activeLanguage: lang }), initialLocation: home, lang } });
+		const { body } = render(QuestMenu, {
+			props: { data: hallData({ activeLanguage: lang }), initialLocation: home, accountScope: "account-a", lang },
+		});
 
 		expect(body).toContain(`>${title}</strong>`);
 	});
 
 	it("keeps the left page on the hinged cover and renders the book depth surfaces", () => {
-		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
+		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
 
 		expect(body).toContain('class="cover-face cover-face-back page page-left ');
 		expect(body).toContain('class="book-surface book-deck book-deck-blank ');
@@ -82,6 +84,7 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData(),
 				initialLocation: { view: "catalog", section: "translation", leaf: 1, task: null },
+				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -97,6 +100,7 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData({ dailyTasks: [], weeklyTasks: [], translationTasks: [] }),
 				initialLocation: home,
+				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -111,6 +115,7 @@ describe("QuestMenu", () => {
 			props: {
 				data,
 				initialLocation: { view: "prepare", section: "daily", leaf: 1, task: "daily-1" },
+				accountScope: "account-a",
 				initialPreparation: {
 					kind: "quest",
 					key: "daily-1",

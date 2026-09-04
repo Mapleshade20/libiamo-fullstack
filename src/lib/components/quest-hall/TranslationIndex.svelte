@@ -4,10 +4,14 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
+import { onMount, tick } from "svelte";
 import { fly } from "svelte/transition";
+import { replaceState } from "$app/navigation";
 import { base } from "$app/paths";
+import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { type LanguageCode, t } from "$lib/i18n";
 import { shiftCalendarMonth } from "$lib/month";
+import { getQuestMenuItemKey } from "$lib/quest-hall/menu";
 
 interface TranslationTask {
 	id: number;
@@ -21,10 +25,12 @@ interface Props {
 	tasks: TranslationTask[];
 	statusMap: Record<string, string>;
 	initialMonth: string;
+	accountScope: string;
+	edition: string;
 	lang: LanguageCode;
 }
 
-let { tasks, statusMap, initialMonth, lang }: Props = $props();
+let { tasks, statusMap, initialMonth, accountScope, edition, lang }: Props = $props();
 // The month intentionally starts from the server-provided month and then stays client-controlled.
 // svelte-ignore state_referenced_locally
 let month = $state(initialMonth);
@@ -42,6 +48,47 @@ function changeMonth(amount: -1 | 1) {
 	monthDirection = amount;
 	month = shiftCalendarMonth(month, amount);
 }
+
+function saveReturnContext(task: TranslationTask): void {
+	const selectedKey = getQuestMenuItemKey("translation", task.id);
+	saveQuestHallReturnContext({
+		accountScope,
+		activeLanguage: lang,
+		edition,
+		origin: "translation-index",
+		section: "translation",
+		spread: 1,
+		narrowItemKey: selectedKey,
+		selectedKey,
+		translationMonth: task.createdMonth,
+		scrollOffset: window.scrollY,
+		focusTarget: "translation-item",
+	});
+}
+
+onMount(() => {
+	if (new URL(window.location.href).searchParams.get("return") !== "translation") return;
+	replaceState(`${base}/`, {});
+	const translationKeys = tasks.map((task) => getQuestMenuItemKey("translation", task.id));
+	const returnContext = restoreQuestHallReturnContext({
+		accountScope,
+		activeLanguage: lang,
+		edition,
+		translationMonths: new Set([initialMonth, ...tasks.map((task) => task.createdMonth)]),
+		itemKeys: new Set(translationKeys),
+		translationItemMonths: new Map(tasks.map((task) => [getQuestMenuItemKey("translation", task.id), task.createdMonth])),
+		spreadCounts: { daily: 1, weekly: 1, translation: 1 },
+	});
+	if (!returnContext || returnContext.origin !== "translation-index") return;
+	monthDirection = 1;
+	month = returnContext.translationMonth;
+	void tick().then(() => {
+		requestAnimationFrame(() => {
+			window.scrollTo({ top: returnContext.scrollOffset, behavior: "auto" });
+			document.querySelector<HTMLElement>(`[data-translation-key="${returnContext.selectedKey}"]`)?.focus({ preventScroll: true });
+		});
+	});
+});
 </script>
 
 <section class="translation-index" aria-labelledby="translation-index-title">
@@ -78,7 +125,12 @@ function changeMonth(amount: -1 | 1) {
 					{#each visibleTasks as task, index (task.id)}
 						{@const status = statusMap[String(task.id)]}
 						<li style="--translation-order: {index};">
-							<a href="{base}/translate/{task.id}" class:is-complete={status === "completed"}>
+							<a
+								href="{base}/translate/{task.id}"
+								data-translation-key={getQuestMenuItemKey("translation", task.id)}
+								class:is-complete={status === "completed"}
+								onclick={() => saveReturnContext(task)}
+							>
 								<span class="translation-number">{String(index + 1).padStart(2, "0")}</span>
 								<span class="translation-mark">
 									{#if status === "completed"}
@@ -214,6 +266,12 @@ function changeMonth(amount: -1 | 1) {
 
 .translation-list a:hover::after {
 	transform: scaleX(1);
+}
+
+.translation-list a:focus-visible {
+	border-radius: 0.2rem;
+	outline: 2px solid var(--hall-wine, #803945);
+	outline-offset: 3px;
 }
 
 .translation-number {

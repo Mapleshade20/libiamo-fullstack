@@ -3,6 +3,7 @@ import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidate } from "$app/navigation";
+import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
@@ -36,6 +37,7 @@ interface Props {
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
+	returnHref?: string;
 }
 
 let {
@@ -46,6 +48,7 @@ let {
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
+	returnHref = "",
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -541,7 +544,7 @@ $effect(() => {
 		<Sidebar
 			{showSidebar}
 			{activeMailbox}
-			returnHref={`/task/${taskId}`}
+			returnHref={returnHref || `${base}/task/${taskId}`}
 			inboxCount={inboxEmails.length}
 			{sentCount}
 			{draftCount}
