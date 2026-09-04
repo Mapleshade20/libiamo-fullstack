@@ -9,6 +9,7 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Star from "@lucide/svelte/icons/star";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
+import { handlePreparationActionResult } from "$lib/client/quest-hall/preparation-actions";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
@@ -49,6 +50,8 @@ let {
 }: Props = $props();
 
 let starting = $state(false);
+let retaking = $state(false);
+let embeddedError = $state<string | null>(null);
 let isDraft = $derived(!attempt || attempt.workflowPhase === "draft");
 let isComplete = $derived(attempt?.workflowPhase === "completed");
 let primaryHref = $derived(isDraft ? `${base}/translate/${template.id}/attempt` : `${base}/translate/${template.id}/feedback`);
@@ -115,8 +118,8 @@ function difficultyLabel(level: number): string {
 			</div>
 		{/if}
 
-		{#if form?.error}
-			<p class="form-error" role="alert">{form.error}</p>
+		{#if form?.error || embeddedError}
+			<p class="form-error" role="alert">{form?.error ?? embeddedError}</p>
 		{/if}
 
 		<div class="preparation-footer">
@@ -144,10 +147,12 @@ function difficultyLabel(level: number): string {
 								cancel();
 								return;
 							}
+							embeddedError = null;
 							starting = true;
-							return async ({ update }) => {
+							return async ({ result, update }) => {
 								try {
-									await update();
+									if (mode === "pane") embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
+									else await update();
 								} finally {
 									starting = false;
 								}
@@ -171,12 +176,24 @@ function difficultyLabel(level: number): string {
 								method="POST"
 								action={retakeAction}
 								use:enhance={({ cancel }) => {
-									if (!confirm(t(lang, "translate.details.restartConfirm"))) cancel();
-									return async ({ update }) => update();
+									if (retaking || !confirm(t(lang, "translate.details.restartConfirm"))) {
+										cancel();
+										return;
+									}
+									embeddedError = null;
+									retaking = true;
+									return async ({ result, update }) => {
+										try {
+											if (mode === "pane") embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
+											else await update();
+										} finally {
+											retaking = false;
+										}
+									};
 								}}
 								class="w-full sm:w-auto"
 							>
-								<Button type="submit" variant="ghost" class="w-full justify-center sm:w-auto">
+								<Button type="submit" variant="ghost" disabled={retaking} aria-busy={retaking} class="w-full justify-center sm:w-auto">
 									<RotateCcw size={14} aria-hidden="true" />
 									{isComplete ? t(lang, "translate.details.tryAgain") : t(lang, "translate.details.abandon")}
 								</Button>

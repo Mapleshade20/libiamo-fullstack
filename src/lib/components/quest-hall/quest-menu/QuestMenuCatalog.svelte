@@ -23,6 +23,7 @@ interface Props {
 	onclose: () => void;
 	onselect: (section: QuestMenuSection) => void;
 	onmove: (direction: -1 | 1) => void;
+	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -43,6 +44,7 @@ let {
 	onclose,
 	onselect,
 	onmove,
+	onselectitem,
 }: Props = $props();
 </script>
 
@@ -81,6 +83,7 @@ let {
 		bind:paperElement
 		{onselect}
 		{onmove}
+		{onselectitem}
 	/>
 </section>
 

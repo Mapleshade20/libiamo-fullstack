@@ -20,6 +20,7 @@ interface Props {
 	recommendationsElement?: HTMLDivElement | null;
 	onopen: () => void;
 	onselect: (section: QuestMenuSection) => void;
+	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -35,6 +36,7 @@ let {
 	recommendationsElement = $bindable(null),
 	onopen,
 	onselect,
+	onselectitem,
 }: Props = $props();
 
 function sectionLabel(section: QuestMenuSection): string {
@@ -76,7 +78,9 @@ function itemObjective(item: QuestMenuItem): string | null {
 							{#if itemObjective(item)}
 								<p>{itemObjective(item)}</p>
 							{/if}
-							<a href={getQuestMenuItemHref(item, base)}>{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" /></a>
+							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem(item, event)}>
+								{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
+							</a>
 						</article>
 					{/each}
 				</div>

@@ -14,7 +14,7 @@ let lang = $derived(data.activeLanguage as LanguageCode);
 </svelte:head>
 
 {#key data.activeLanguage}
-	<QuestMenu {data} initialLocation={data.hallLocation} {lang} />
+	<QuestMenu {data} initialLocation={data.hallLocation} initialPreparation={data.initialPreparation} {lang} />
 
 	<div class="legacy-entry-points">
 		<UnreadInbox {lang} />

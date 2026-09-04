@@ -19,10 +19,11 @@ interface Props {
 	backHref?: string;
 	backLabel?: string;
 	onback?: (event: MouseEvent) => void;
+	mode?: "page" | "pane";
 	simulated?: boolean;
 }
 
-let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, simulated = false }: Props = $props();
+let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, mode = "page", simulated = false }: Props = $props();
 
 let objectives = $derived(task.objectives ?? []);
 let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
@@ -54,112 +55,142 @@ function difficultyLabel(level: number): string {
 }
 </script>
 
-<a href={backHref} onclick={onback} class="group flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
-	<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-	<span class="text-sm font-medium uppercase tracking-wide">{resolvedBackLabel}</span>
-</a>
-
-<div class="mt-12 flex flex-1 flex-col">
-	<div>
-		<div class="mb-4 flex flex-wrap items-center gap-2">
-			{#if isFinished}
-				<Badge class="border-green-500/20 bg-green-500/10 text-[10px] font-bold uppercase tracking-widest text-green-600 hover:bg-green-500/10">
-					{t(lang, "task.completed")}
-				</Badge>
-			{:else if isAbandoned}
-				<Badge variant="destructive" class="text-[10px] font-bold uppercase tracking-widest"> {t(lang, "task.abandoned")} </Badge>
-			{/if}
-			<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
-				{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
-			</Badge>
-			<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-				{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
-			</Badge>
-			<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
-		</div>
-		<h1 class="text-2xl md:text-3xl">{task.title}</h1>
-	</div>
-
-	{#if task.description}
-		<p class="mt-8 text-base leading-relaxed text-muted-foreground">{task.description}</p>
+<section class="task-preparation" class:is-pane={mode === "pane"} aria-labelledby="task-preparation-title">
+	{#if onback}
+		<button
+			type="button"
+			onclick={onback}
+			class="group flex min-h-11 w-fit items-center gap-2 border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-foreground"
+		>
+			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+			<span class="text-sm font-medium uppercase tracking-wide">{resolvedBackLabel}</span>
+		</button>
+	{:else}
+		<a href={backHref} class="group flex min-h-11 w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+			<span class="text-sm font-medium uppercase tracking-wide">{resolvedBackLabel}</span>
+		</a>
 	{/if}
 
-	{#if objectives.length > 0}
-		<div class="mt-8">
-			<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
-			<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
-				{#each objectives as obj}
-					<li>{obj}</li>
-				{/each}
-			</ol>
-		</div>
-	{/if}
-
-	{#if task.materialsMd}
-		<div class="mt-10">
-			<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
-			<div class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 text-base leading-normal shadow-sm">
-				{@html renderMarkdown(task.materialsMd)}
-			</div>
-		</div>
-	{/if}
-
-	{#if showNativeLanguagePrompt}
-		<div class="mt-10 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-			{t(lang, "translate.details.missingNative")}
-			<a href="{base}/profile" class="font-medium underline hover:no-underline">{t(lang, "translate.details.settings")}</a>.
-		</div>
-	{/if}
-
-	<div class="mt-auto pt-12 pb-4">
-		<div class="mb-6 h-px w-full bg-border"></div>
-		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div class="flex items-center gap-4 text-sm text-muted-foreground">
-				<span class="flex items-center gap-1.5">
-					<Star size={14} strokeWidth={1.5} />
-					{task.pointReward}
-					{t(lang, "task.points")}
-				</span>
-			</div>
-
-			<div class="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-				{#if canShowUsefulExpressions}
-					<Button variant="outline" class="w-full justify-center sm:w-auto" onclick={openTranslateModal}>
-						<Languages size={14} class="mr-1.5" />
-						{t(lang, "task.usefulExpressions")}
-					</Button>
-				{/if}
-
+	<div class="task-preparation-body mt-12 flex flex-1 flex-col">
+		<div>
+			<div class="mb-4 flex flex-wrap items-center gap-2">
 				{#if isFinished}
-					{#if simulated}
-						<Button class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black sm:w-auto sm:px-8" disabled>
-							Bilan simulé
-						</Button>
-					{:else}
-						<Button
-							class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
-							href="{base}/task/{task.id}/feedback"
-						>
-							{t(lang, "hall.reviewReport")}
+					<Badge class="border-green-500/20 bg-green-500/10 text-[10px] font-bold uppercase tracking-widest text-green-600 hover:bg-green-500/10">
+						{t(lang, "task.completed")}
+					</Badge>
+				{:else if isAbandoned}
+					<Badge variant="destructive" class="text-[10px] font-bold uppercase tracking-widest"> {t(lang, "task.abandoned")} </Badge>
+				{/if}
+				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
+					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
+				</Badge>
+				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
+					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
+				</Badge>
+				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
+			</div>
+			<h1 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h1>
+		</div>
+
+		{#if task.description}
+			<p class="mt-8 text-base leading-relaxed text-muted-foreground">{task.description}</p>
+		{/if}
+
+		{#if objectives.length > 0}
+			<div class="mt-8">
+				<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
+				<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
+					{#each objectives as obj}
+						<li>{obj}</li>
+					{/each}
+				</ol>
+			</div>
+		{/if}
+
+		{#if task.materialsMd}
+			<div class="mt-10">
+				<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
+				<div class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 text-base leading-normal shadow-sm">
+					{@html renderMarkdown(task.materialsMd)}
+				</div>
+			</div>
+		{/if}
+
+		{#if showNativeLanguagePrompt}
+			<div class="mt-10 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+				{t(lang, "translate.details.missingNative")}
+				<a href="{base}/profile" class="font-medium underline hover:no-underline">{t(lang, "translate.details.settings")}</a>.
+			</div>
+		{/if}
+
+		<div class="mt-auto pt-12 pb-4">
+			<div class="mb-6 h-px w-full bg-border"></div>
+			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-4 text-sm text-muted-foreground">
+					<span class="flex items-center gap-1.5">
+						<Star size={14} strokeWidth={1.5} />
+						{task.pointReward}
+						{t(lang, "task.points")}
+					</span>
+				</div>
+
+				<div class="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+					{#if canShowUsefulExpressions}
+						<Button variant="outline" class="w-full justify-center sm:w-auto" onclick={openTranslateModal}>
+							<Languages size={14} class="mr-1.5" />
+							{t(lang, "task.usefulExpressions")}
 						</Button>
 					{/if}
-				{:else if isAbandoned}
-					<!-- Abuse termination ends the session while still delivering the agent's
+
+					{#if isFinished}
+						{#if simulated}
+							<Button class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black sm:w-auto sm:px-8" disabled>
+								Bilan simulé
+							</Button>
+						{:else}
+							<Button
+								class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
+								href="{base}/task/{task.id}/feedback"
+							>
+								{t(lang, "hall.reviewReport")}
+							</Button>
+						{/if}
+					{:else if isAbandoned}
+						<!-- Abuse termination ends the session while still delivering the agent's
 					     parting reply, so the transcript must stay reachable to read it. -->
-					<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
-						{t(lang, "task.viewConversation")}
-					</Button>
-				{:else if isPracticeEnabled}
-					<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session"> {t(lang, "task.startPractice")} </Button>
-				{:else}
-					<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
-				{/if}
+						<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+							{t(lang, "task.viewConversation")}
+						</Button>
+					{:else if isPracticeEnabled}
+						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+							{t(lang, "task.startPractice")}
+						</Button>
+					{:else}
+						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>
-</div>
+</section>
 
 <style>
+.task-preparation {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	flex-direction: column;
+}
+
+.task-preparation.is-pane {
+	min-height: clamp(30rem, 64vh, 42rem);
+}
+
+.task-preparation.is-pane .task-preparation-body {
+	margin-top: clamp(1.75rem, 5vw, 3rem);
+}
+
 :global(.task-background-material h3) {
 	margin-top: 0.5rem;
 	margin-bottom: 0.25rem;

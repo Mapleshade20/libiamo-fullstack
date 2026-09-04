@@ -47,6 +47,7 @@ export function normalizeHallLocation(value: Partial<HallLocation>, catalog?: Qu
 	let section = isSection(value.section) ? value.section : DEFAULT_HALL_LOCATION.section;
 	let task = typeof value.task === "string" && getQuestMenuItemSection(value.task) ? value.task : null;
 	if (task) section = getQuestMenuItemSection(task) ?? section;
+	if (task && catalog && !catalog.sections[section].some((item) => item.key === task)) task = null;
 	if (view === "prepare" && !task) view = "catalog";
 	if (view !== "prepare") task = null;
 
@@ -86,7 +87,7 @@ export type HallNavigationEvent =
 	| { type: "switch-section"; section: QuestMenuSection; leaf?: number }
 	| { type: "turn-leaf"; section: QuestMenuSection; leaf: number }
 	| { type: "select-item"; task: QuestMenuItemKey }
-	| { type: "return-from-prepare" };
+	| { type: "return-from-prepare"; destination?: "home" | "catalog" };
 
 export interface HallNavigationTransition {
 	location: HallLocation;
@@ -135,6 +136,6 @@ export function reduceHallLocation(current: HallLocation, event: HallNavigationE
 				catalog,
 			);
 		case "return-from-prepare":
-			return transition(current, { view: "catalog", task: null }, "back", catalog);
+			return transition(current, { view: event.destination ?? "catalog", task: null }, "back", catalog);
 	}
 }

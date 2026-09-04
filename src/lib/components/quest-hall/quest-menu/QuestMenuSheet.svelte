@@ -20,6 +20,7 @@ interface Props {
 	paperElement?: HTMLDivElement | null;
 	onselect: (section: QuestMenuSection) => void;
 	onmove: (direction: -1 | 1) => void;
+	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -35,6 +36,7 @@ let {
 	paperElement = $bindable(null),
 	onselect,
 	onmove,
+	onselectitem,
 }: Props = $props();
 </script>
 
@@ -53,7 +55,7 @@ let {
 		<div class="mobile-paper" bind:this={paperElement}>
 			<p class="page-folio"><Wine size={14} /> {sectionLabel} · {t(lang, "hall.menu.folio")} {folio}</p>
 			{#if item}
-				<QuestMenuItemCard {item} {lang} />
+				<QuestMenuItemCard {item} {lang} onselect={onselectitem} />
 			{:else}
 				<p class="blank-page">{t(lang, "hall.noTasks")}</p>
 			{/if}

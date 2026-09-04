@@ -104,4 +104,39 @@ describe("QuestMenu", () => {
 		expect(body).toContain("Everything is complete for this edition.");
 		expect(body).toContain("No quests available yet.");
 	});
+
+	it("server-renders a directly selected quest in the preparation pane", () => {
+		const data = hallData();
+		const { body } = render(QuestMenu, {
+			props: {
+				data,
+				initialLocation: { view: "prepare", section: "daily", leaf: 1, task: "daily-1" },
+				initialPreparation: {
+					kind: "quest",
+					key: "daily-1",
+					data: {
+						nativeLanguage: "fr",
+						task: {
+							id: 1,
+							title: "Prepared quest",
+							description: "Detailed briefing",
+							objectives: ["Reply naturally"],
+							language: "en",
+							templateInteractionType: "chat",
+							templateUi: "imessage",
+							templateDifficulty: 2,
+							materialsMd: null,
+							pointReward: 10,
+							sessionStatus: null,
+						},
+					},
+				},
+				lang: "en",
+			},
+		});
+
+		expect(body).toContain("Prepared quest");
+		expect(body).toContain("Detailed briefing");
+		expect(body).toContain('href="/task/1/session"');
+	});
 });

@@ -13,9 +13,10 @@ interface Props {
 	item: QuestMenuItem;
 	lang: LanguageCode;
 	compact?: boolean;
+	onselect?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
-let { item, lang, compact = false }: Props = $props();
+let { item, lang, compact = false, onselect }: Props = $props();
 let title = $derived(item.kind === "quest" ? item.task.title : item.task.titleBase);
 let objective = $derived(item.kind === "quest" ? item.task.shortObjective : item.task.descriptionBase);
 let difficulty = $derived(item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty);
@@ -54,7 +55,9 @@ function difficultyLabel(level: number): string {
 			<span><Star size={14} aria-hidden="true" /> {item.task.pointReward} {t(lang, "task.points")}</span>
 		{/if}
 	</div>
-	<a class="detail-link" href={getQuestMenuItemHref(item, base)}> {t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" /> </a>
+	<a class="detail-link" href={getQuestMenuItemHref(item, base)} onclick={(event) => onselect?.(item, event)}>
+		{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
+	</a>
 </article>
 
 <style>

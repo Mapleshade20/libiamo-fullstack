@@ -3,7 +3,7 @@ import { Flip } from "gsap/Flip";
 
 gsap.registerPlugin(Flip);
 
-export type QuestMenuView = "home" | "catalog";
+export type QuestMenuView = "home" | "catalog" | "prepare";
 
 export interface QuestMenuFit {
 	x: number;
@@ -31,9 +31,13 @@ export interface QuestMenuBookMotionTiming {
 export interface QuestMenuMotionElements {
 	homeStage: HTMLElement | null;
 	catalogStage: HTMLElement | null;
+	preparationStage: HTMLElement | null;
 	recommendationsElement: HTMLElement | null;
 	homeSlot: HTMLElement | null;
 	catalogSlot: HTMLElement | null;
+	preparationSlot: HTMLElement | null;
+	preparationDock: HTMLElement | null;
+	preparationPanel: HTMLElement | null;
 	bookFrame: HTMLElement | null;
 	bookTilt: HTMLElement | null;
 	rectoProbe: HTMLElement | null;
@@ -47,7 +51,7 @@ export interface QuestMenuMotionElements {
 
 export interface QuestMenuAnimator {
 	settle: (view: QuestMenuView) => void;
-	transitionView: (view: QuestMenuView, onComplete: () => void) => void;
+	transitionView: (from: QuestMenuView, view: QuestMenuView, onComplete: () => void, selectedElement?: HTMLElement) => void;
 	transitionPage: (narrow: boolean, direction: -1 | 1, onHandoff: () => void, onComplete: () => void) => void;
 	destroy: () => void;
 }
@@ -204,8 +208,8 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		if (!elements.bookFrame) return IDENTITY_FIT;
 		return measureQuestMenuFit(
 			elements.bookFrame,
-			view === "home" ? elements.homeSlot : elements.catalogSlot,
-			view === "home" ? elements.rectoProbe : undefined,
+			view === "home" ? elements.homeSlot : view === "catalog" ? elements.catalogSlot : elements.preparationSlot,
+			view === "catalog" ? undefined : elements.rectoProbe,
 		);
 	}
 
@@ -222,15 +226,20 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		turnTimeline = null;
 		if (elements.turnSheet) gsap.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
 		gsap.set(elements.bookFrame, { ...targetFit(view, elements), rotation: 0, skewX: 0, autoAlpha: 1 });
-		gsap.set(elements.cover, { rotateY: view === "catalog" ? -180 : 0 });
-		gsap.set(leftHalfParts(elements.leftHalf), { autoAlpha: view === "catalog" ? 1 : 0 });
-		if (elements.turnControls) gsap.set(elements.turnControls, { autoAlpha: view === "catalog" ? 1 : 0 });
-		gsap.set(elements.bookShadow, { autoAlpha: 1, z: -2, scaleX: view === "catalog" ? 1 : 0.52, transformOrigin: "right center" });
+		const open = view === "catalog";
+		gsap.set(elements.cover, { rotateY: open ? -180 : 0 });
+		gsap.set(leftHalfParts(elements.leftHalf), { autoAlpha: open ? 1 : 0 });
+		if (elements.turnControls) gsap.set(elements.turnControls, { autoAlpha: open ? 1 : 0 });
+		gsap.set(elements.bookShadow, { autoAlpha: 1, z: -2, scaleX: open ? 1 : 0.52, transformOrigin: "right center" });
 		gsap.set(elements.bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
 		if (elements.homeStage) gsap.set(elements.homeStage, { autoAlpha: view === "home" ? 1 : 0, pointerEvents: view === "home" ? "auto" : "none" });
 		if (elements.catalogStage)
 			gsap.set(elements.catalogStage, { autoAlpha: view === "catalog" ? 1 : 0, pointerEvents: view === "catalog" ? "auto" : "none" });
+		if (elements.preparationStage)
+			gsap.set(elements.preparationStage, { autoAlpha: view === "prepare" ? 1 : 0, pointerEvents: view === "prepare" ? "auto" : "none" });
 		if (elements.recommendationsElement) gsap.set(elements.recommendationsElement, { autoAlpha: view === "home" ? 1 : 0, x: 0 });
+		if (elements.preparationDock) gsap.set(elements.preparationDock, { autoAlpha: view === "prepare" ? 1 : 0 });
+		if (elements.preparationPanel) gsap.set(elements.preparationPanel, { autoAlpha: view === "prepare" ? 1 : 0, x: 0 });
 		setCoverLight();
 		if (view === "home") startIdle();
 	}
@@ -254,7 +263,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		timeline.to(bookShadow, { scaleX: open ? 1 : 0.52, duration, ease }, at);
 	}
 
-	function transitionView(view: QuestMenuView, onComplete: () => void): void {
+	function transitionView(from: QuestMenuView, view: QuestMenuView, onComplete: () => void, selectedElement?: HTMLElement): void {
 		const elements = getElements();
 		if (
 			!elements.bookFrame ||
@@ -263,7 +272,8 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			!elements.leftHalf ||
 			!elements.bookShadow ||
 			!elements.homeStage ||
-			!elements.catalogStage
+			!elements.catalogStage ||
+			!elements.preparationStage
 		) {
 			settle(view);
 			onComplete();
@@ -279,8 +289,16 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		turnTimeline?.kill();
 		turnTimeline = null;
 		if (elements.turnSheet) gsap.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
-		const fromStage = view === "catalog" ? elements.homeStage : elements.catalogStage;
-		const toStage = view === "catalog" ? elements.catalogStage : elements.homeStage;
+		const stages: Record<QuestMenuView, HTMLElement> = {
+			home: elements.homeStage,
+			catalog: elements.catalogStage,
+			prepare: elements.preparationStage,
+		};
+		const fromStage = stages[from];
+		const toStage = stages[view];
+		const idleStage = Object.entries(stages).find(([stageView]) => stageView !== from && stageView !== view)?.[1];
+		const narrow = window.matchMedia("(max-width: 64rem)").matches;
+		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
 		const fit = targetFit(view, elements);
 		let bookEnd: number = QUEST_MENU_MOTION_TOKENS.durationTurn;
 		const timeline = gsap.timeline({
@@ -292,6 +310,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			},
 		});
 		viewTimeline = timeline;
+		if (idleStage) timeline.set(idleStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
 		timeline.set(fromStage, { autoAlpha: 1, pointerEvents: "none" }, 0);
 		timeline.set(toStage, { autoAlpha: 0, visibility: "visible", pointerEvents: "none" }, 0);
 		timeline.to(
@@ -305,7 +324,26 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			},
 			0,
 		);
-		if (view === "catalog") {
+		const bookLeaves = view === "catalog" && narrow;
+		const bookReturns = from === "catalog" && narrow;
+		const opening = view === "catalog" && from !== "catalog" && !narrow;
+		const closing = from === "catalog" && view !== "catalog" && !narrow;
+		if (bookLeaves) {
+			if (bookLayer) timeline.set(bookLayer, { autoAlpha: 0 }, 0);
+			bookEnd = 0.24;
+		} else if (bookReturns) {
+			timeline.set(elements.bookFrame, { ...fit, rotation: 0, skewX: 0 }, 0.1);
+			timeline.set(elements.bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 }, 0.1);
+			timeline.set(elements.cover, { rotateY: 0 }, 0.1);
+			timeline.set(leftHalfParts(elements.leftHalf), { autoAlpha: 0 }, 0.1);
+			if (elements.turnControls) timeline.set(elements.turnControls, { autoAlpha: 0 }, 0.1);
+			timeline.set(elements.bookShadow, { autoAlpha: 1, scaleX: 0.52 }, 0.1);
+			if (bookLayer) {
+				timeline.set(bookLayer, { autoAlpha: 0 }, 0);
+				timeline.to(bookLayer, { autoAlpha: 1, duration: 0.28, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, 0.14);
+			}
+			bookEnd = 0.46;
+		} else if (opening) {
 			const timing = createQuestMenuBookOpenTiming();
 			timeline.to(elements.bookFrame, { ...fit, duration: timing.spinDuration }, 0);
 			timeline.to(elements.bookTilt, { rotateX: 0, rotateY: QUEST_MENU_BOOK_FULL_TURN, rotateZ: 0, duration: timing.spinDuration }, 0);
@@ -322,7 +360,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 				createQuestMenuBookOpenEase(timing),
 			);
 			bookEnd = Math.max(timing.spinDuration, timing.totalDuration);
-		} else {
+		} else if (closing) {
 			const timing = createQuestMenuBookCloseTiming();
 			addCoverSwing(
 				timeline,
@@ -339,17 +377,41 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			timeline.set(elements.bookTilt, { rotateY: QUEST_MENU_BOOK_FULL_TURN }, timing.coverStart);
 			timeline.to(elements.bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0, duration: timing.spinDuration }, timing.coverStart);
 			bookEnd = timing.totalDuration;
+		} else {
+			bookEnd = 0.72;
+			timeline.to(elements.bookFrame, { ...fit, duration: bookEnd }, 0);
+			timeline.to(elements.bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0, duration: bookEnd }, 0);
 		}
 
 		const chromeIn = Math.max(0.2, bookEnd - 0.36);
 		timeline.to(fromStage, { autoAlpha: 0, pointerEvents: "none", duration: 0.24 }, 0.04);
 		timeline.set(toStage, { autoAlpha: 1 }, chromeIn);
+		if (selectedElement) {
+			const surface = selectedElement.closest<HTMLElement>(".task-card, .recommendation-card") ?? selectedElement;
+			timeline.to(surface, { y: -7, scale: 1.01, duration: 0.12, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, 0);
+			timeline.to(surface, { y: 0, scale: 1, duration: 0.16 }, 0.12);
+		}
 		if (elements.recommendationsElement) {
-			if (view === "catalog")
+			if (from === "home")
 				timeline.to(elements.recommendationsElement, { autoAlpha: 0, x: -28, duration: 0.3, ease: QUEST_MENU_MOTION_TOKENS.easeExit }, 0);
-			else {
+			if (view === "home") {
 				timeline.set(elements.recommendationsElement, { autoAlpha: 0, x: -28 }, 0);
 				timeline.to(elements.recommendationsElement, { autoAlpha: 1, x: 0, duration: 0.34, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, chromeIn);
+			}
+		}
+		if (elements.preparationDock) {
+			if (from === "prepare") timeline.to(elements.preparationDock, { autoAlpha: 0, duration: 0.2, ease: QUEST_MENU_MOTION_TOKENS.easeExit }, 0);
+			if (view === "prepare") {
+				timeline.set(elements.preparationDock, { autoAlpha: 0 }, 0);
+				timeline.to(elements.preparationDock, { autoAlpha: 1, duration: 0.24, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, chromeIn);
+			}
+		}
+		if (elements.preparationPanel) {
+			if (from === "prepare")
+				timeline.to(elements.preparationPanel, { autoAlpha: 0, x: 28, duration: 0.26, ease: QUEST_MENU_MOTION_TOKENS.easeExit }, 0);
+			if (view === "prepare") {
+				timeline.set(elements.preparationPanel, { autoAlpha: 0, x: narrow ? 0 : 36 }, 0);
+				timeline.to(elements.preparationPanel, { autoAlpha: 1, x: 0, duration: 0.4, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, chromeIn + 0.04);
 			}
 		}
 		timeline.call(() => undefined, [], Math.max(bookEnd, chromeIn + 0.44));

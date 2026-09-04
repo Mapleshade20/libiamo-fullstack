@@ -3,7 +3,7 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Wine from "@lucide/svelte/icons/wine";
 import { type LanguageCode, t } from "$lib/i18n";
-import type { QuestMenuSection, QuestMenuSpread } from "$lib/quest-hall/menu";
+import type { QuestMenuItem, QuestMenuSection, QuestMenuSpread } from "$lib/quest-hall/menu";
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
 
@@ -18,7 +18,7 @@ export interface QuestMenuTurnPreview {
 }
 
 interface Props {
-	view: "home" | "catalog";
+	view: "home" | "catalog" | "prepare";
 	section: QuestMenuSection;
 	spread: QuestMenuSpread;
 	turnPreview: QuestMenuTurnPreview | null;
@@ -37,6 +37,7 @@ interface Props {
 	turnControls?: HTMLDivElement | null;
 	turnSheet?: HTMLDivElement | null;
 	onturn: (direction: -1 | 1) => void;
+	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -59,6 +60,7 @@ let {
 	turnControls = $bindable(null),
 	turnSheet = $bindable(null),
 	onturn,
+	onselectitem,
 }: Props = $props();
 
 let staticLeftSection = $derived(!turnPreview ? section : turnPreview.direction > 0 ? turnPreview.fromSection : turnPreview.toSection);
@@ -91,7 +93,7 @@ function sectionLabel(value: QuestMenuSection): string {
 	</p>
 	<div class="page-items" class:is-compact={side === "right" || pageSpread.leaf > 1}>
 		{#each (side === "left" ? pageSpread.leftItems : pageSpread.rightItems) as item (item.key)}
-			<QuestMenuItemCard {item} {lang} compact={side === "right" || pageSpread.leaf > 1} />
+			<QuestMenuItemCard {item} {lang} compact={side === "right" || pageSpread.leaf > 1} onselect={onselectitem} />
 		{:else}
 			<p class="blank-page">{t(lang, "hall.noTasks")}</p>
 		{/each}
@@ -104,7 +106,7 @@ function sectionLabel(value: QuestMenuSection): string {
 	</div>
 {/snippet}
 
-<div class="book-layer" aria-hidden={view === "home"} inert={view === "home"}>
+<div class="book-layer" class:is-prepare={view === "prepare"} aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
 	<div class="book-frame-shell">
 		<div class="book-frame" bind:this={bookFrame} aria-busy={turning}>
 			<span class="recto-probe" bind:this={rectoProbe} aria-hidden="true"></span>
@@ -759,7 +761,7 @@ function sectionLabel(value: QuestMenuSection): string {
 }
 
 @media (max-width: 64rem) {
-	.book-layer {
+	.book-layer:not(.is-prepare) {
 		display: none;
 	}
 }

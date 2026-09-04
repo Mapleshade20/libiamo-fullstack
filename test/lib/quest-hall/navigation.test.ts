@@ -49,6 +49,7 @@ describe("production Hall navigation", () => {
 	it("normalizes malformed values and clamps catalog leaves", () => {
 		expect(parseHallLocation("?view=broken&section=other&leaf=-8&task=nope", catalog)).toEqual(DEFAULT_HALL_LOCATION);
 		expect(parseHallLocation("?view=prepare&task=nope", catalog)).toMatchObject({ view: "catalog", task: null });
+		expect(parseHallLocation("?view=prepare&task=daily-999", catalog)).toMatchObject({ view: "catalog", task: null });
 		expect(parseHallLocation("?view=catalog&section=daily&leaf=99", catalog)).toMatchObject({ section: "daily", leaf: 2 });
 		expect(normalizeHallLocation({ view: "prepare", task: "translation-21" })).toMatchObject({
 			view: "prepare",
@@ -83,6 +84,10 @@ describe("production Hall navigation", () => {
 	it("infers the preparation section and returns none for a no-op", () => {
 		const selected = reduceHallLocation({ ...DEFAULT_HALL_LOCATION }, { type: "select-item", task: "weekly-11" }, catalog);
 		expect(selected).toMatchObject({ location: { view: "prepare", section: "weekly", task: "weekly-11" }, historyIntent: "push" });
+		expect(reduceHallLocation(selected.location, { type: "return-from-prepare", destination: "home" }, catalog)).toMatchObject({
+			location: { view: "home", task: null },
+			historyIntent: "back",
+		});
 		const unchanged = reduceHallLocation({ ...DEFAULT_HALL_LOCATION }, { type: "close-catalog" }, catalog);
 		expect(unchanged.historyIntent).toBe("none");
 	});
