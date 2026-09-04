@@ -1,13 +1,15 @@
 <script lang="ts">
-import { onMount, tick } from "svelte";
+import { onMount, tick, untrack } from "svelte";
 import { pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { type LanguageCode, t } from "$lib/i18n";
+import { shiftCalendarMonth } from "$lib/month";
 import {
 	adaptHallDataToQuestMenu,
 	getQuestMenuFolio,
+	getQuestMenuItemId,
 	getQuestMenuNarrowTarget,
 	getQuestMenuSpread,
 	getQuestMenuTurnTarget,
@@ -42,8 +44,14 @@ interface Props {
 }
 
 let { data, initialLocation, initialPreparation = null, accountScope, lang }: Props = $props();
+function getInitialTranslationMonth(): string {
+	const taskId = initialLocation.section === "translation" ? getQuestMenuItemId(initialLocation.task) : null;
+	return data.translationTasks.find((task) => task.id === taskId)?.createdMonth ?? data.translationMonth;
+}
 // svelte-ignore state_referenced_locally
 let location = $state<HallLocation>({ ...initialLocation });
+// svelte-ignore state_referenced_locally
+let translationMonth = $state(untrack(getInitialTranslationMonth));
 let narrowItemKey = $state<QuestMenuItemKey | null>(null);
 let narrowLayout = $state(false);
 let mounted = $state(false);
@@ -86,7 +94,7 @@ let cover = $state<HTMLDivElement | null>(null);
 let turnControls = $state<HTMLDivElement | null>(null);
 let turnSheet = $state<HTMLDivElement | null>(null);
 
-let catalog = $derived(adaptHallDataToQuestMenu(data));
+let catalog = $derived(adaptHallDataToQuestMenu(data, translationMonth));
 let currentSpread = $derived(getQuestMenuSpread(catalog, location.section, location.leaf));
 let currentFolio = $derived(getQuestMenuFolio(catalog, location.section, currentSpread.leaf));
 let previousTarget = $derived(getQuestMenuTurnTarget(catalog, location.section, currentSpread.leaf, -1));
@@ -145,8 +153,8 @@ function motionElements(): QuestMenuMotionElements {
 	};
 }
 
-async function applyTransition(event: HallNavigationEvent, selectedElement?: HTMLElement): Promise<void> {
-	const transition = reduceHallLocation(location, event, catalog);
+async function applyTransition(event: HallNavigationEvent, selectedElement?: HTMLElement, transitionCatalog = catalog): Promise<void> {
+	const transition = reduceHallLocation(location, event, transitionCatalog);
 	if (transition.historyIntent === "none") return;
 	const previousView = visibleView;
 	const nextView = transition.location.view;
@@ -205,9 +213,14 @@ function isPlainPrimaryActivation(event: MouseEvent): boolean {
 function selectItem(item: QuestMenuItem, event: MouseEvent): void {
 	if (!isPlainPrimaryActivation(event) || viewTransitioning) return;
 	event.preventDefault();
+	let transitionCatalog = catalog;
+	if (item.kind === "translation" && item.task.createdMonth !== translationMonth) {
+		translationMonth = item.task.createdMonth;
+		transitionCatalog = adaptHallDataToQuestMenu(data, translationMonth);
+	}
 	preparationOriginView = visibleView === "home" ? "home" : "catalog";
 	void preparationResource?.load(item.key, data.editionDate);
-	void applyTransition({ type: "select-item", task: item.key }, event.currentTarget as HTMLElement);
+	void applyTransition({ type: "select-item", task: item.key }, event.currentTarget as HTMLElement, transitionCatalog);
 }
 
 function returnFromPreparation(): void {
@@ -230,7 +243,7 @@ function saveWorkflowReturnContext(): void {
 		spread: location.leaf,
 		narrowItemKey: narrowItemKey && sectionKeys.has(narrowItemKey) ? narrowItemKey : null,
 		selectedKey: location.task,
-		translationMonth: data.translationMonth,
+		translationMonth,
 		scrollOffset: window.scrollY,
 		focusTarget: "preparation",
 	});
@@ -318,6 +331,19 @@ function switchSection(section: QuestMenuSection): void {
 	moveTo({ section, leaf: 1 }, direction, narrowLayout ? targetItemKey : undefined);
 }
 
+function changeTranslationMonth(direction: -1 | 1): void {
+	if (turning || viewTransitioning) return;
+	const nextMonth = shiftCalendarMonth(translationMonth, direction);
+	const nextCatalog = adaptHallDataToQuestMenu(data, nextMonth);
+	translationMonth = nextMonth;
+	if (location.section === "translation") {
+		location = {
+			...location,
+			leaf: getQuestMenuSpread(nextCatalog, "translation", location.leaf).leaf,
+		};
+	}
+}
+
 function moveNarrow(direction: -1 | 1): void {
 	const target = direction < 0 ? narrowPreviousTarget : narrowNextTarget;
 	if (!target) return;
@@ -366,6 +392,7 @@ onMount(() => {
 	const restoringWorkflow = returnContext !== null && initialLocation.view === "prepare" && initialLocation.task === returnContext.selectedKey;
 	if (restoringWorkflow) {
 		preparationOriginView = returnContext.origin === "home" ? "home" : "catalog";
+		translationMonth = returnContext.translationMonth;
 		narrowItemKey = returnContext.narrowItemKey;
 	}
 	preparationResource = createQuestHallPreparationResource({
@@ -489,6 +516,7 @@ onMount(() => {
 			folio={currentFolio}
 			item={currentNarrowItem}
 			itemCount={catalog.sections[location.section].length}
+			{translationMonth}
 			{ribbons}
 			canMovePrevious={narrowPreviousTarget !== null}
 			canMoveNext={narrowNextTarget !== null}
@@ -499,6 +527,7 @@ onMount(() => {
 			onclose={closeCatalog}
 			onselect={switchSection}
 			onmove={moveNarrow}
+			onmonthchange={changeTranslationMonth}
 			onselectitem={selectItem}
 		/>
 

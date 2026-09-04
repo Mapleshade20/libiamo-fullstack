@@ -23,6 +23,7 @@ vi.mock("drizzle-orm", () => ({
 	desc: (column: unknown) => ({ op: "desc", column }),
 	eq: (column: unknown, value: unknown) => ({ op: "eq", column, value }),
 	inArray: (column: unknown, values: unknown[]) => ({ op: "inArray", column, values }),
+	sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ op: "sql", strings: [...strings], values }),
 }));
 
 vi.mock("$lib/server/db", () => ({
@@ -148,8 +149,8 @@ describe("loadQuestHallData", () => {
 				},
 			])
 			.mockResolvedValueOnce([
-				{ templateId: 42, status: "correction" },
 				{ templateId: 42, status: "draft" },
+				{ templateId: 42, status: "completed" },
 				{ templateId: 41, status: "completed" },
 			]);
 		mockFindMany.mockResolvedValue([
@@ -207,7 +208,7 @@ describe("loadQuestHallData", () => {
 					createdMonth: "2026-03",
 				},
 			],
-			translationStatusMap: { 41: "completed", 42: "correction" },
+			translationStatusMap: { 41: "completed", 42: "draft" },
 		});
 		expect(() => JSON.stringify(result)).not.toThrow();
 
@@ -218,6 +219,11 @@ describe("loadQuestHallData", () => {
 			{ op: "desc", column: "template.id" },
 		]);
 		expect(mockOrderBy.mock.calls[3]).toEqual([
+			{
+				op: "sql",
+				strings: ["", " <> 'completed' DESC"],
+				values: ["translationAttempt.workflowPhase"],
+			},
 			{ op: "desc", column: "translationAttempt.updatedAt" },
 			{ op: "desc", column: "translationAttempt.id" },
 		]);
@@ -225,6 +231,7 @@ describe("loadQuestHallData", () => {
 		const attemptScope = (mockWhere.mock.calls as unknown[][])[3]?.[0];
 		expect(containsCondition(attemptScope, { op: "eq", column: "translationAttempt.userId", value: "user-1" })).toBe(true);
 		expect(containsCondition(attemptScope, { op: "eq", column: "translationSourceSet.promptLanguage", value: "en" })).toBe(true);
+		expect(containsCondition(attemptScope, { op: "inArray", column: "translationSourceSet.templateId" })).toBe(true);
 
 		const sessionQuery = mockFindMany.mock.calls[0]?.[0];
 		expect(containsCondition(sessionQuery.where, { op: "eq", column: "practiceSession.userId", value: "user-1" })).toBe(true);

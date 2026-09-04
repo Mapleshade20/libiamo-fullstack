@@ -1,4 +1,6 @@
+import { desc } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { translationAttempt } from "$lib/server/db/schema";
 
 const { mockDb, mockGenerateEvaluation, mockVerifyCorrection } = vi.hoisted(() => {
 	const db = {
@@ -20,6 +22,7 @@ vi.mock("$lib/server/translation-evaluation/verifier", async (importOriginal) =>
 
 import {
 	assertGeneration1CallFitsBudget,
+	findTranslationAttempt,
 	finishTranslationCorrections,
 	retryTranslationEvaluation,
 	submitTranslationAttempt,
@@ -73,6 +76,23 @@ function answerSelect(answers: unknown[]) {
 beforeEach(() => {
 	vi.clearAllMocks();
 	mockDb.transaction.mockImplementation(async (callback) => callback(mockDb));
+});
+
+describe("findTranslationAttempt", () => {
+	it("prefers unfinished attempts and breaks equal update times by newest id", async () => {
+		const limit = vi.fn().mockResolvedValue([]);
+		const orderBy = vi.fn((..._values: unknown[]) => ({ limit }));
+		const where = vi.fn(() => ({ orderBy }));
+		const innerJoin = vi.fn(() => ({ where }));
+		mockDb.select.mockReturnValue({ from: vi.fn(() => ({ innerJoin })) });
+
+		await findTranslationAttempt({ userId: "u1", templateId: 7, promptLanguage: "en" });
+
+		expect(orderBy).toHaveBeenCalledOnce();
+		expect(orderBy.mock.calls[0]).toHaveLength(3);
+		expect(orderBy.mock.calls[0][2]).toEqual(desc(translationAttempt.id));
+		expect(limit).toHaveBeenCalledWith(1);
+	});
 });
 
 describe("submitTranslationAttempt", () => {

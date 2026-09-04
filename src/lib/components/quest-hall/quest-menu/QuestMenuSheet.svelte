@@ -57,7 +57,7 @@ let {
 			{#if item}
 				<QuestMenuItemCard {item} {lang} onselect={onselectitem} />
 			{:else}
-				<p class="blank-page">{t(lang, "hall.noTasks")}</p>
+				<p class="blank-page">{t(lang, section === "translation" ? "translate.empty" : "hall.noTasks")}</p>
 			{/if}
 		</div>
 	</div>

@@ -95,7 +95,7 @@ function sectionLabel(value: QuestMenuSection): string {
 		{#each (side === "left" ? pageSpread.leftItems : pageSpread.rightItems) as item (item.key)}
 			<QuestMenuItemCard {item} {lang} compact={side === "right" || pageSpread.leaf > 1} onselect={onselectitem} />
 		{:else}
-			<p class="blank-page">{t(lang, "hall.noTasks")}</p>
+			<p class="blank-page">{t(lang, pageSection === "translation" ? "translate.empty" : "hall.noTasks")}</p>
 		{/each}
 	</div>
 {/snippet}

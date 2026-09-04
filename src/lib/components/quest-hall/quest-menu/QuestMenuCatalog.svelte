@@ -1,6 +1,9 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import { type LanguageCode, t } from "$lib/i18n";
+import { formatCalendarMonth } from "$lib/month";
 import type { QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 import QuestMenuSheet from "./QuestMenuSheet.svelte";
@@ -13,6 +16,7 @@ interface Props {
 	folio: { current: number; total: number };
 	item: QuestMenuItem | null;
 	itemCount: number;
+	translationMonth: string;
 	ribbons: QuestMenuRibbon[];
 	canMovePrevious: boolean;
 	canMoveNext: boolean;
@@ -23,6 +27,7 @@ interface Props {
 	onclose: () => void;
 	onselect: (section: QuestMenuSection) => void;
 	onmove: (direction: -1 | 1) => void;
+	onmonthchange: (direction: -1 | 1) => void;
 	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
@@ -34,6 +39,7 @@ let {
 	folio,
 	item,
 	itemCount,
+	translationMonth,
 	ribbons,
 	canMovePrevious,
 	canMoveNext,
@@ -44,6 +50,7 @@ let {
 	onclose,
 	onselect,
 	onmove,
+	onmonthchange,
 	onselectitem,
 }: Props = $props();
 </script>
@@ -61,6 +68,22 @@ let {
 		<div>
 			<p>{sectionLabel}</p>
 			<h2 id="quest-menu-catalog-title">{t(lang, "hall.menu.chooseMission")}</h2>
+			{#if section === "translation"}
+				<div class="month-press" aria-label={t(lang, "translate.month")}>
+					<button
+						type="button"
+						aria-label={t(lang, "translate.previousMonth")}
+						title={t(lang, "translate.previousMonth")}
+						onclick={() => onmonthchange(-1)}
+					>
+						<ChevronLeft size={17} aria-hidden="true" />
+					</button>
+					<span aria-live="polite">{formatCalendarMonth(translationMonth, lang)}</span>
+					<button type="button" aria-label={t(lang, "translate.nextMonth")} title={t(lang, "translate.nextMonth")} onclick={() => onmonthchange(1)}>
+						<ChevronRight size={17} aria-hidden="true" />
+					</button>
+				</div>
+			{/if}
 		</div>
 		<span>{t(lang, "hall.menu.folio")} {folio.current} / {folio.total}</span>
 	</div>
@@ -123,6 +146,52 @@ let {
 	font-size: clamp(1.45rem, 3vw, 2.25rem);
 	font-weight: 380;
 	line-height: 1.08;
+}
+
+.month-press {
+	display: grid;
+	width: min(19rem, 100%);
+	grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+	align-items: stretch;
+	margin: 0.75rem auto 0;
+	border: 1px solid color-mix(in oklab, var(--menu-ink) 22%, transparent);
+	background: color-mix(in oklab, var(--menu-sheet) 80%, transparent);
+	box-shadow: 0 2px 0 color-mix(in oklab, var(--menu-ink) 10%, transparent);
+	font-family: var(--font-sans);
+}
+
+.month-press button {
+	display: grid;
+	min-width: 44px;
+	min-height: 44px;
+	place-items: center;
+	color: var(--menu-ink-muted);
+	transition:
+		background-color 160ms ease,
+		color 160ms ease;
+}
+
+.month-press button:hover {
+	background: color-mix(in oklab, var(--menu-blue) 10%, transparent);
+	color: var(--menu-blue);
+}
+
+.month-press button:focus-visible {
+	outline: 2px solid var(--menu-focus);
+	outline-offset: -3px;
+}
+
+.month-press span {
+	display: grid;
+	place-items: center;
+	border-inline: 1px solid color-mix(in oklab, var(--menu-ink) 18%, transparent);
+	padding: 0.55rem 0.75rem;
+	font-size: 0.68rem;
+	font-weight: 750;
+	letter-spacing: 0.07em;
+	line-height: 1.2;
+	text-transform: uppercase;
+	color: var(--menu-ink);
 }
 
 .quiet-button {
@@ -207,6 +276,11 @@ let {
 	.catalog-toolbar > div {
 		grid-column: 1 / -1;
 		grid-row: 1;
+	}
+
+	.month-press {
+		width: 100%;
+		margin-top: 0.65rem;
 	}
 
 	.catalog-toolbar .quiet-button {

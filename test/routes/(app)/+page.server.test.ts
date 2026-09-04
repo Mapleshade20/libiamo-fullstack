@@ -141,6 +141,36 @@ describe("(app) home +page.server", () => {
 		});
 	});
 
+	it("server-loads an older-month translation selected by a workflow return URL", async () => {
+		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
+		const hallData = {
+			activeLanguage: "fr",
+			nativeLanguage: "en",
+			localDate: "2026-09-04",
+			localMonday: "2026-08-31",
+			editionDate: "2026-09-04",
+			translationMonth: "2026-09",
+			greeting: "Bonjour, Fedor",
+			subtitle: "Choose a quest",
+			dailyTasks: [],
+			weeklyTasks: [],
+			translationTasks: [
+				{ id: 21, titleBase: "Current", descriptionBase: null, difficulty: 1, createdMonth: "2026-09" },
+				{ id: 22, titleBase: "Older", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+			],
+			translationStatusMap: { "22": "draft" },
+		};
+		const preparation = { kind: "translation", key: "translation-22", data: { template: { id: 22 } } };
+		mockLoadQuestHallData.mockResolvedValue(hallData);
+		mockGetQuestHallPreparation.mockResolvedValue(preparation);
+		const url = new URL("https://libiamo.test/?view=prepare&section=translation&task=translation-22");
+
+		await expect(load({ locals: { user }, cookies: { get: vi.fn() }, depends: vi.fn(), url } as any)).resolves.toMatchObject({
+			hallLocation: { view: "prepare", section: "translation", leaf: 1, task: "translation-22" },
+			initialPreparation: preparation,
+		});
+	});
+
 	runSwitchLanguageActionSuite({
 		action: actions.switchLanguage,
 		updateUser: auth.api.updateUser as any,

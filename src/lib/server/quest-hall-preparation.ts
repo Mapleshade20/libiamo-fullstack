@@ -50,11 +50,11 @@ export async function getQuestHallPreparation({
 	const activeLanguage = user.activeLanguage as LanguageCode;
 	if (section === "translation") {
 		const [membership] = await db
-			.select({ createdAt: template.createdAt })
+			.select({ id: template.id })
 			.from(template)
 			.where(and(eq(template.id, id), eq(template.language, activeLanguage), eq(template.ui, "translator"), eq(template.isActive, true)))
 			.limit(1);
-		if (!membership || getLocalDateString(browserTimezone, membership.createdAt).slice(0, 7) !== localDate.slice(0, 7)) return null;
+		if (!membership) return null;
 
 		const data = await getTranslationPreparationData({
 			userId: user.id,

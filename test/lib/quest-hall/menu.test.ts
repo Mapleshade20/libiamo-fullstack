@@ -80,6 +80,46 @@ describe("Quest menu production adaptation", () => {
 		expect(getQuestMenuUnreadCount(catalog)).toBe(2);
 	});
 
+	it("rebuilds translation spreads for the selected month and clamps stale leaves", () => {
+		const data = hallData({
+			translationTasks: [
+				...Array.from({ length: 8 }, (_, index) => ({
+					id: 30 + index,
+					titleBase: `September ${index + 1}`,
+					descriptionBase: null,
+					difficulty: 1,
+					createdMonth: "2026-09",
+				})),
+				{ id: 50, titleBase: "August", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+			],
+		});
+
+		const september = adaptHallDataToQuestMenu(data, "2026-09");
+		const august = adaptHallDataToQuestMenu(data, "2026-08");
+		const empty = adaptHallDataToQuestMenu(data, "2026-07");
+
+		expect(september.sections.translation).toHaveLength(8);
+		expect(september.spreads.translation).toHaveLength(3);
+		expect(august.sections.translation.map((item) => item.key)).toEqual(["translation-50"]);
+		expect(getQuestMenuSpread(august, "translation", 3).leaf).toBe(1);
+		expect(empty.spreads.translation).toHaveLength(1);
+		expect(empty.spreads.translation[0].items).toEqual([]);
+	});
+
+	it("can recommend unfinished translation work from an older month", () => {
+		const catalog = adaptHallDataToQuestMenu(
+			hallData({
+				dailyTasks: [],
+				weeklyTasks: [quest(11)],
+				translationStatusMap: { "22": "draft" },
+			}),
+			"2026-09",
+		);
+
+		expect(catalog.sections.translation.map((item) => item.key)).toEqual(["translation-21"]);
+		expect(catalog.recommendations.map((item) => item.key)).toEqual(["translation-22", "weekly-11"]);
+	});
+
 	it("uses stable keys and canonical production detail links", () => {
 		const catalog = adaptHallDataToQuestMenu(hallData());
 		expect(getQuestMenuItemKey("daily", 31)).toBe("daily-31");

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { InteractionType, LanguageCode, TranslationWorkflowPhase, UiVariant } from "$lib/constants";
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
@@ -96,17 +96,25 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 		.where(and(eq(template.language, activeLanguage), eq(template.ui, "translator"), eq(template.isActive, true)))
 		.orderBy(desc(template.createdAt), desc(template.id));
 
-	const translationAttempts = user.nativeLanguage
-		? await db
-				.select({
-					templateId: translationSourceSet.templateId,
-					status: translationAttempt.workflowPhase,
-				})
-				.from(translationAttempt)
-				.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
-				.where(and(eq(translationAttempt.userId, user.id), eq(translationSourceSet.promptLanguage, user.nativeLanguage)))
-				.orderBy(desc(translationAttempt.updatedAt), desc(translationAttempt.id))
-		: [];
+	const translationTemplateIds = translationTasks.map((taskItem) => taskItem.id);
+	const translationAttempts =
+		user.nativeLanguage && translationTemplateIds.length > 0
+			? await db
+					.select({
+						templateId: translationSourceSet.templateId,
+						status: translationAttempt.workflowPhase,
+					})
+					.from(translationAttempt)
+					.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
+					.where(
+						and(
+							eq(translationAttempt.userId, user.id),
+							eq(translationSourceSet.promptLanguage, user.nativeLanguage),
+							inArray(translationSourceSet.templateId, translationTemplateIds),
+						),
+					)
+					.orderBy(sql`${translationAttempt.workflowPhase} <> 'completed' DESC`, desc(translationAttempt.updatedAt), desc(translationAttempt.id))
+			: [];
 
 	const translationStatusByTemplateId = new Map<number, TranslationWorkflowPhase>();
 	for (const attempt of translationAttempts) {

@@ -10,7 +10,7 @@ import { replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { type LanguageCode, t } from "$lib/i18n";
-import { shiftCalendarMonth } from "$lib/month";
+import { formatCalendarMonth, shiftCalendarMonth } from "$lib/month";
 import { getQuestMenuItemKey } from "$lib/quest-hall/menu";
 
 interface TranslationTask {
@@ -38,10 +38,7 @@ let monthDirection = $state(1);
 let visibleTasks = $derived(tasks.filter((task) => task.createdMonth === month));
 
 function monthLabel(value: string) {
-	return new Date(`${value}-01T12:00:00.000Z`).toLocaleDateString(lang, {
-		month: "long",
-		year: "numeric",
-	});
+	return formatCalendarMonth(value, lang);
 }
 
 function changeMonth(amount: -1 | 1) {

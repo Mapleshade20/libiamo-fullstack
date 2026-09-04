@@ -90,24 +90,22 @@ function adaptQuestItems(tasks: HallQuest[], section: "daily" | "weekly"): Quest
 	});
 }
 
-function adaptTranslationItems(data: Pick<HallData, "translationTasks" | "translationStatusMap" | "translationMonth">): QuestMenuItem[] {
-	return data.translationTasks
-		.filter((task) => task.createdMonth === data.translationMonth)
-		.map((source, index) => {
-			const task = { ...source };
-			const workflowPhase = data.translationStatusMap[String(task.id)] ?? null;
-			return {
-				kind: "translation" as const,
-				key: getQuestMenuItemKey("translation", task.id),
-				section: "translation" as const,
-				id: task.id,
-				ordinal: index + 1,
-				state: translationState(workflowPhase),
-				hasUnread: false,
-				workflowPhase,
-				task,
-			};
-		});
+function adaptTranslationItems(data: Pick<HallData, "translationTasks" | "translationStatusMap">, tasks: HallTranslationTask[]): QuestMenuItem[] {
+	return tasks.map((source, index) => {
+		const task = { ...source };
+		const workflowPhase = data.translationStatusMap[String(task.id)] ?? null;
+		return {
+			kind: "translation" as const,
+			key: getQuestMenuItemKey("translation", task.id),
+			section: "translation" as const,
+			id: task.id,
+			ordinal: index + 1,
+			state: translationState(workflowPhase),
+			hasUnread: false,
+			workflowPhase,
+			task,
+		};
+	});
 }
 
 export function buildQuestMenuSpreads(items: QuestMenuItem[]): QuestMenuSpread[] {
@@ -162,11 +160,23 @@ export function deriveQuestMenuRecommendations(sections: Record<QuestMenuSection
 
 export function adaptHallDataToQuestMenu(
 	data: Pick<HallData, "dailyTasks" | "weeklyTasks" | "translationTasks" | "translationStatusMap" | "translationMonth">,
+	translationMonth = data.translationMonth,
 ): QuestMenuCatalog {
+	const daily = adaptQuestItems(data.dailyTasks, "daily");
+	const weekly = adaptQuestItems(data.weeklyTasks, "weekly");
+	const translation = adaptTranslationItems(
+		data,
+		data.translationTasks.filter((task) => task.createdMonth === translationMonth),
+	);
 	const sections: Record<QuestMenuSection, QuestMenuItem[]> = {
-		daily: adaptQuestItems(data.dailyTasks, "daily"),
-		weekly: adaptQuestItems(data.weeklyTasks, "weekly"),
-		translation: adaptTranslationItems(data),
+		daily,
+		weekly,
+		translation,
+	};
+	const recommendationSections: Record<QuestMenuSection, QuestMenuItem[]> = {
+		daily,
+		weekly,
+		translation: adaptTranslationItems(data, data.translationTasks),
 	};
 	return {
 		sections,
@@ -175,7 +185,7 @@ export function adaptHallDataToQuestMenu(
 			weekly: buildQuestMenuSpreads(sections.weekly),
 			translation: buildQuestMenuSpreads(sections.translation),
 		},
-		recommendations: deriveQuestMenuRecommendations(sections),
+		recommendations: deriveQuestMenuRecommendations(recommendationSections),
 	};
 }
 

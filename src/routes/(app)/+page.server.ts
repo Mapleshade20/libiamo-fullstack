@@ -1,4 +1,4 @@
-import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
+import { adaptHallDataToQuestMenu, getQuestMenuItemId } from "$lib/quest-hall/menu";
 import { parseHallLocation, QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
 import { getBrowserTimezone } from "$lib/server/browser-timezone";
@@ -12,7 +12,11 @@ export const load: PageServerLoad = async (event) => {
 	event.depends(QUEST_HALL_DEPENDENCY);
 	const browserTimezone = getBrowserTimezone(event.cookies);
 	const hallData = await loadQuestHallData(user, browserTimezone);
-	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData));
+	const requestedLocation = parseHallLocation(event.url);
+	const requestedTranslationId = requestedLocation.section === "translation" ? getQuestMenuItemId(requestedLocation.task) : null;
+	const requestedTranslationMonth =
+		hallData.translationTasks.find((task) => task.id === requestedTranslationId)?.createdMonth ?? hallData.translationMonth;
+	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, requestedTranslationMonth));
 	const initialPreparation =
 		hallLocation.view === "prepare" && hallLocation.task
 			? await getQuestHallPreparation({

@@ -79,7 +79,7 @@ describe("QuestMenu", () => {
 		expect(body).toContain("Today · 01");
 	});
 
-	it("server-renders a direct catalog location with current-month production items", () => {
+	it("server-renders a direct catalog location with localized month controls and current-month production items", () => {
 		const { body } = render(QuestMenu, {
 			props: {
 				data: hallData(),
@@ -92,7 +92,45 @@ describe("QuestMenu", () => {
 		expect(body).toContain("Choose a mission");
 		expect(body).toContain("Current letter");
 		expect(body).toContain('href="/translate/21"');
+		expect(body).toContain('aria-label="Previous month"');
+		expect(body).toContain('aria-label="Next month"');
+		expect(body).toContain("September 2026");
 		expect(body).not.toContain("Archived letter");
+	});
+
+	it("server-renders an older translation preparation with its matching month", () => {
+		const data = hallData();
+		const { body } = render(QuestMenu, {
+			props: {
+				data,
+				initialLocation: { view: "prepare", section: "translation", leaf: 1, task: "translation-22" },
+				accountScope: "account-a",
+				initialPreparation: {
+					kind: "translation",
+					key: "translation-22",
+					data: {
+						template: {
+							id: 22,
+							title: "Archived letter",
+							description: null,
+							language: "en",
+							translationReference: ["Reference"],
+							context: "A letter",
+							difficulty: 2,
+							estimatedWords: null,
+							pointReward: 3,
+							gemReward: 30,
+						},
+						attempt: null,
+						blockedReason: null,
+					},
+				},
+				lang: "en",
+			},
+		});
+
+		expect(body).toContain("Archived letter");
+		expect(body).toContain("August 2026");
 	});
 
 	it("keeps empty production sections navigable", () => {

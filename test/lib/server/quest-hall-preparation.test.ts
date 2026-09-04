@@ -72,9 +72,9 @@ describe("getQuestHallPreparation", () => {
 		expect(mockGetTaskPreparationData).not.toHaveBeenCalled();
 	});
 
-	it("loads only current-month translation entries", async () => {
+	it("loads an active translation entry from any catalog month", async () => {
 		const data = { template: { id: 12 }, attempt: null, blockedReason: null };
-		mockLimit.mockResolvedValueOnce([{ createdAt: new Date("2026-09-02T12:00:00.000Z") }]);
+		mockLimit.mockResolvedValueOnce([{ id: 12 }]);
 		mockGetTranslationPreparationData.mockResolvedValueOnce(data);
 
 		await expect(
