@@ -12,4 +12,15 @@ describe("task UI translations", () => {
 		expect(t(lang as LanguageCode, "hall.card.overview")).toBe(overview);
 		expect(t(lang as LanguageCode, "task.returnToHall")).toBe(returnToHall);
 	});
+
+	it.each([
+		["en", "MENU", "Open menu", "Choose a mission"],
+		["es", "CARTA", "Abrir la carta", "Elige una misión"],
+		["fr", "CARTE", "Ouvrir la carte", "Choisissez une mission"],
+		["ja", "メニュー", "メニューを開く", "ミッションを選ぶ"],
+	] as const)("localizes menu branding and controls for %s", (lang, brand, open, chooseMission) => {
+		expect(t(lang as LanguageCode, "hall.menu.brand")).toBe(brand);
+		expect(t(lang as LanguageCode, "hall.menu.open")).toBe(open);
+		expect(t(lang as LanguageCode, "hall.menu.chooseMission")).toBe(chooseMission);
+	});
 });

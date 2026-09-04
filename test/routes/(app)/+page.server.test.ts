@@ -58,11 +58,30 @@ describe("(app) home +page.server", () => {
 
 	it("loads the Hall service for the authenticated user and browser timezone", async () => {
 		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
-		const hallData = { editionDate: "2026-04-17", dailyTasks: [], weeklyTasks: [], translationTasks: [] };
+		const hallData = {
+			activeLanguage: "fr",
+			nativeLanguage: "en",
+			localDate: "2026-04-17",
+			localMonday: "2026-04-13",
+			editionDate: "2026-04-17",
+			translationMonth: "2026-04",
+			greeting: "Bonjour, Fedor",
+			subtitle: "Choose a quest",
+			dailyTasks: [],
+			weeklyTasks: [],
+			translationTasks: [],
+			translationStatusMap: {},
+		};
 		mockLoadQuestHallData.mockResolvedValue(hallData);
 		const cookies = { get: vi.fn() };
+		const depends = vi.fn();
+		const url = new URL("https://libiamo.test/?view=catalog&section=weekly&leaf=9");
 
-		await expect(load({ locals: { user }, cookies } as any)).resolves.toBe(hallData);
+		await expect(load({ locals: { user }, cookies, depends, url } as any)).resolves.toEqual({
+			...hallData,
+			hallLocation: { view: "catalog", section: "weekly", leaf: 1, task: null },
+		});
+		expect(depends).toHaveBeenCalledWith("quest-hall:data");
 		expect(mockGetBrowserTimezone).toHaveBeenCalledWith(cookies);
 		expect(loadQuestHallData).toHaveBeenCalledWith(user, "Europe/Paris");
 	});
