@@ -32,13 +32,14 @@ const data = {
 } as const;
 
 describe("production Quest Hall page", () => {
-	it("mounts translation browsing inside the Quest Menu while retaining the temporary unread entry point", () => {
+	it("mounts translation browsing and the integrated unread trigger inside the Quest Menu", () => {
 		const { body } = render(HomePage, { props: { data: data as any } });
 
 		expect(body).toContain("Open menu");
 		expect(body).toContain("Daily quest");
 		expect(body).toContain("Translation task");
-		expect(body).toContain("Unread replies");
+		expect(body).toContain("Replies: 0 unread replies");
+		expect(body).not.toContain("legacy-entry-points");
 		expect(body).not.toContain("Translation task month");
 		expect(body).not.toContain('id="translation-index-title"');
 	});

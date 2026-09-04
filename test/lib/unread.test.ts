@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRelativeAge, unreadTargetHref } from "$lib/unread";
+import { formatRelativeAge, formatUnreadBadgeCount, unreadTargetHref } from "$lib/unread";
 
 describe("unread helpers", () => {
 	it("targets the session page for in-progress conversations and feedback otherwise", () => {
@@ -13,6 +13,14 @@ describe("unread helpers", () => {
 	// entry has to lead to the transcript instead.
 	it("targets the transcript for abandoned conversations", () => {
 		expect(unreadTargetHref({ taskId: 9, sessionStatus: "abandoned" })).toBe("/task/9/session");
+	});
+
+	it("applies the configured application base path to canonical targets", () => {
+		expect(unreadTargetHref({ taskId: 4, sessionStatus: "in_progress" }, "/libiamo")).toBe("/libiamo/task/4/session");
+	});
+
+	it("caps the compact badge at nine while retaining exact totals elsewhere", () => {
+		expect([0, 1, 9, 10].map(formatUnreadBadgeCount)).toEqual(["0", "1", "9", "9+"]);
 	});
 
 	it("formats relative ages across unit boundaries", () => {

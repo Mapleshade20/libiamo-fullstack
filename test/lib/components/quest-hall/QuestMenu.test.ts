@@ -57,6 +57,20 @@ describe("QuestMenu", () => {
 		expect(body).toContain(">2</span>");
 	});
 
+	it("shows an exact accessible inbox total and caps the compact cover badge at nine", () => {
+		const { body } = render(QuestMenu, {
+			props: {
+				data: hallData({ dailyTasks: [quest(1, { unreadCount: 10, hasUnreadReply: true })] }),
+				initialLocation: home,
+				accountScope: "account-a",
+				lang: "en",
+			},
+		});
+
+		expect(body).toContain("Replies: 10 unread replies");
+		expect(body).toContain(">9+</span>");
+	});
+
 	it.each([
 		["en", "MENU"],
 		["es", "CARTA"],

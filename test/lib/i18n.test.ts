@@ -23,4 +23,15 @@ describe("task UI translations", () => {
 		expect(t(lang as LanguageCode, "hall.menu.open")).toBe(open);
 		expect(t(lang as LanguageCode, "hall.menu.chooseMission")).toBe(chooseMission);
 	});
+
+	it.each([
+		["en", "Replies", "Checking for replies…", "10 unread replies"],
+		["es", "Respuestas", "Buscando respuestas…", "10 respuestas sin leer"],
+		["fr", "Réponses", "Recherche de réponses…", "10 réponses non lues"],
+		["ja", "返信", "返信を確認しています…", "未読の返信が10件あります"],
+	] as const)("localizes unread inbox states for %s", (lang, trigger, loading, count) => {
+		expect(t(lang as LanguageCode, "hall.unreadTrigger")).toBe(trigger);
+		expect(t(lang as LanguageCode, "hall.unreadLoading")).toBe(loading);
+		expect(t(lang as LanguageCode, "hall.unreadCountMany").replace("{count}", "10")).toBe(count);
+	});
 });

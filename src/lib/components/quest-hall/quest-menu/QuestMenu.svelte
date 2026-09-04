@@ -1,9 +1,10 @@
 <script lang="ts">
 import { onMount, tick, untrack } from "svelte";
-import { pushState, replaceState } from "$app/navigation";
+import { invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
+import { createUnreadSubscription, type UnreadSubscriptionState } from "$lib/client/quest-hall/unread-subscription";
 import { type LanguageCode, t } from "$lib/i18n";
 import { shiftCalendarMonth } from "$lib/month";
 import {
@@ -19,7 +20,14 @@ import {
 	type QuestMenuItemKey,
 	type QuestMenuSection,
 } from "$lib/quest-hall/menu";
-import { type HallLocation, type HallNavigationEvent, hallLocationUrl, parseHallLocation, reduceHallLocation } from "$lib/quest-hall/navigation";
+import {
+	type HallLocation,
+	type HallNavigationEvent,
+	hallLocationUrl,
+	parseHallLocation,
+	QUEST_HALL_DEPENDENCY,
+	reduceHallLocation,
+} from "$lib/quest-hall/navigation";
 import type { HallData } from "$lib/server/quest-hall";
 import type { QuestHallPreparation } from "$lib/server/quest-hall-preparation";
 import {
@@ -32,6 +40,7 @@ import {
 import QuestMenuBook, { type QuestMenuTurnPreview } from "./QuestMenuBook.svelte";
 import QuestMenuCatalog from "./QuestMenuCatalog.svelte";
 import QuestMenuHome from "./QuestMenuHome.svelte";
+import QuestMenuInbox from "./QuestMenuInbox.svelte";
 import QuestMenuPreparation from "./QuestMenuPreparation.svelte";
 import type { QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
@@ -74,6 +83,7 @@ let paperTurnSequence = 0;
 let viewTransitionSequence = 0;
 let animator: QuestMenuAnimator | null = null;
 let preparationResource: ReturnType<typeof createQuestHallPreparationResource> | null = null;
+let unreadSubscription: ReturnType<typeof createUnreadSubscription> | null = null;
 
 let homeStage = $state<HTMLElement | null>(null);
 let catalogStage = $state<HTMLElement | null>(null);
@@ -102,7 +112,11 @@ let nextTarget = $derived(getQuestMenuTurnTarget(catalog, location.section, curr
 let currentNarrowItem = $derived(currentSpread.items.find((item) => item.key === narrowItemKey) ?? currentSpread.items[0] ?? null);
 let narrowPreviousTarget = $derived(getQuestMenuNarrowTarget(catalog, location.section, currentSpread.leaf, currentNarrowItem?.key ?? null, -1));
 let narrowNextTarget = $derived(getQuestMenuNarrowTarget(catalog, location.section, currentSpread.leaf, currentNarrowItem?.key ?? null, 1));
-let unreadCount = $derived(getQuestMenuUnreadCount(catalog));
+// The server-rendered current-edition total prevents a blank badge before the
+// all-edition subscription supplies the authoritative inbox total.
+// svelte-ignore state_referenced_locally
+let unreadState = $state<UnreadSubscriptionState>({ items: [], total: getQuestMenuUnreadCount(catalog), status: "loading" });
+let unreadCount = $derived(unreadState.total);
 let visibleView: QuestMenuView = $derived(location.view);
 let viewTransitioning = $derived(transitionTo !== null);
 let homePresent = $derived(visibleView === "home" || transitionFrom === "home" || transitionTo === "home");
@@ -402,6 +416,16 @@ onMount(() => {
 			if (state.status === "error") void tick().then(() => preparationPanel?.focus());
 		},
 	});
+	unreadSubscription = createUnreadSubscription({
+		endpoint: `${base}/api/unread`,
+		initialTotal: unreadState.total,
+		onchange: (state) => {
+			unreadState = state;
+		},
+		onHallFactsChange: () => {
+			void invalidate(QUEST_HALL_DEPENDENCY);
+		},
+	});
 	if (initialLocation.view === "prepare" && initialLocation.task && !initialPreparation) {
 		void preparationResource.load(initialLocation.task, data.editionDate);
 	}
@@ -471,6 +495,8 @@ onMount(() => {
 		window.removeEventListener("popstate", handlePopstate);
 		preparationResource?.cancel();
 		preparationResource = null;
+		unreadSubscription?.destroy();
+		unreadSubscription = null;
 		animator?.destroy();
 		animator = null;
 	};
@@ -487,8 +513,11 @@ onMount(() => {
 
 <div class="quest-menu" data-view={visibleView}>
 	<header class="hall-heading">
-		<h1>{data.greeting}</h1>
-		<p>{data.subtitle}</p>
+		<div class="heading-copy">
+			<h1>{data.greeting}</h1>
+			<p>{data.subtitle}</p>
+		</div>
+		<QuestMenuInbox items={unreadState.items} total={unreadCount} status={unreadState.status} {lang} />
 	</header>
 
 	<div class="stage-stack">
@@ -623,11 +652,19 @@ onMount(() => {
 }
 
 .hall-heading {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: clamp(1rem, 3vw, 2.5rem);
 	max-width: 74rem;
 	margin: 0 auto clamp(1.25rem, 3vw, 2.25rem);
 }
 
-.hall-heading h1 {
+.heading-copy {
+	min-width: 0;
+}
+
+.heading-copy h1 {
 	margin: 0;
 	font-family: var(--font-serif);
 	font-size: clamp(2rem, 4vw, 3.65rem);
@@ -637,7 +674,7 @@ onMount(() => {
 	white-space: nowrap;
 }
 
-.hall-heading > p {
+.heading-copy > p {
 	margin: 0.65rem 0 0;
 	font-size: 1rem;
 	line-height: 1.55;
@@ -657,7 +694,7 @@ onMount(() => {
 }
 
 @media (max-width: 64rem) {
-	.hall-heading h1 {
+	.heading-copy h1 {
 		white-space: normal;
 		text-wrap: balance;
 		overflow-wrap: anywhere;
