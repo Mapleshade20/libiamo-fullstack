@@ -91,7 +91,7 @@ describe("Quest Hall unread subscription", () => {
 		subscription.destroy();
 	});
 
-	it("refreshes Hall facts for membership, status, and count changes but not age-only updates", async () => {
+	it("reconciles the first response, then refreshes Hall facts for changes but not age-only updates", async () => {
 		const fetcher = vi
 			.fn()
 			.mockResolvedValueOnce(response([item(1)]))
@@ -110,7 +110,7 @@ describe("Quest Hall unread subscription", () => {
 
 		for (let index = 0; index < 5; index += 1) await subscription.refresh();
 
-		expect(onHallFactsChange).toHaveBeenCalledTimes(3);
+		expect(onHallFactsChange).toHaveBeenCalledTimes(4);
 		subscription.destroy();
 	});
 

@@ -225,6 +225,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		turnTimeline?.kill();
 		turnTimeline = null;
 		if (elements.turnSheet) gsap.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
+		if (elements.mobilePaper) gsap.set(elements.mobilePaper, { autoAlpha: 1, x: 0, y: 0, rotateZ: 0, scale: 1 });
 		gsap.set(elements.bookFrame, { ...targetFit(view, elements), rotation: 0, skewX: 0, autoAlpha: 1 });
 		const open = view === "catalog";
 		gsap.set(elements.cover, { rotateY: open ? -180 : 0 });

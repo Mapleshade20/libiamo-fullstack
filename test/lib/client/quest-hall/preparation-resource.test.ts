@@ -82,4 +82,18 @@ describe("Quest Hall preparation resource", () => {
 
 		expect(states.map((state) => state.status)).toEqual(["loading", "error", "loading", "ready"]);
 	});
+
+	it("requests a Hall refresh when the selected edition has expired", async () => {
+		const onEditionExpired = vi.fn();
+		const resource = createQuestHallPreparationResource({
+			endpoint: "/preparation",
+			fetcher: vi.fn().mockResolvedValue(response({ error: "This Quest Hall edition is no longer current" }, 409)),
+			onchange: vi.fn(),
+			onEditionExpired,
+		});
+
+		await resource.load("daily-2", "2026-09-04");
+
+		expect(onEditionExpired).toHaveBeenCalledOnce();
+	});
 });

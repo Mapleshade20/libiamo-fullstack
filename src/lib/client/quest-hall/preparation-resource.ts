@@ -11,13 +11,19 @@ interface CreateQuestHallPreparationResourceOptions {
 	endpoint: string;
 	fetcher?: typeof fetch;
 	onchange: (state: QuestHallPreparationResourceState) => void;
+	onEditionExpired?: () => void;
 }
 
 function isAbortError(cause: unknown): boolean {
 	return cause instanceof DOMException && cause.name === "AbortError";
 }
 
-export function createQuestHallPreparationResource({ endpoint, fetcher = fetch, onchange }: CreateQuestHallPreparationResourceOptions) {
+export function createQuestHallPreparationResource({
+	endpoint,
+	fetcher = fetch,
+	onchange,
+	onEditionExpired,
+}: CreateQuestHallPreparationResourceOptions) {
 	let requestSequence = 0;
 	let controller: AbortController | null = null;
 
@@ -37,6 +43,7 @@ export function createQuestHallPreparationResource({ endpoint, fetcher = fetch, 
 			if (sequence !== requestSequence) return;
 			if (!response.ok || !body.preparation || body.preparation.key !== key) {
 				onchange({ status: "error", key, preparation: null, error: body.error ?? "Failed to load preparation" });
+				if (response.status === 409) onEditionExpired?.();
 				return;
 			}
 			onchange({ status: "ready", key, preparation: body.preparation, error: null });

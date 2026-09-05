@@ -68,7 +68,10 @@ export function createUnreadSubscription({
 
 			const items = body.items;
 			const total = Number.isSafeInteger(body.total) && (body.total ?? -1) >= 0 ? (body.total as number) : getUnreadTotal(items);
-			const hallFactsChanged = successfulItems !== null && unreadHallFactsChanged(successfulItems, items);
+			// The first response may already differ from the server-rendered Hall if a
+			// reply arrived between SSR and subscription startup. Refresh once so cards
+			// and recommendations reconcile with the authoritative inbox facts.
+			const hallFactsChanged = successfulItems === null || unreadHallFactsChanged(successfulItems, items);
 			successfulItems = items;
 			state = { items, total, status: "ready" };
 			onchange(state);

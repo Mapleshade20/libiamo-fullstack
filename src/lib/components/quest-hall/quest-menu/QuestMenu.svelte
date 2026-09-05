@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount, tick, untrack } from "svelte";
-import { invalidate, pushState, replaceState } from "$app/navigation";
+import { afterNavigate, invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
@@ -85,6 +85,8 @@ let viewTransitionSequence = 0;
 let animator: QuestMenuAnimator | null = null;
 let preparationResource: ReturnType<typeof createQuestHallPreparationResource> | null = null;
 let unreadSubscription: ReturnType<typeof createUnreadSubscription> | null = null;
+let editionRefresh: Promise<void> | null = null;
+let observedEditionDate = untrack(() => data.editionDate);
 
 let homeStage = $state<HTMLElement | null>(null);
 let catalogStage = $state<HTMLElement | null>(null);
@@ -246,6 +248,52 @@ function retryPreparation(): void {
 	if (location.task) void preparationResource?.load(location.task, data.editionDate);
 }
 
+function sameLocation(left: HallLocation, right: HallLocation): boolean {
+	return left.view === right.view && left.section === right.section && left.leaf === right.leaf && left.task === right.task;
+}
+
+async function synchronizeServerLocation(nextLocation: HallLocation, nextPreparation: QuestHallPreparation | null): Promise<void> {
+	const previousView = visibleView;
+	localHistoryDepth = 0;
+	viewTransitionSequence += 1;
+	paperTurnSequence += 1;
+	turnPreview = null;
+	turning = false;
+	transitionFrom = null;
+	transitionTo = null;
+
+	if (nextLocation.section === "translation") {
+		const taskId = getQuestMenuItemId(nextLocation.task);
+		translationMonth = data.translationTasks.find((task) => task.id === taskId)?.createdMonth ?? data.translationMonth;
+	}
+	location = { ...nextLocation };
+
+	if (nextLocation.view === "prepare" && nextLocation.task) {
+		if (previousView !== "prepare") preparationOriginView = previousView === "home" ? "home" : "catalog";
+		if (nextPreparation?.key === nextLocation.task) {
+			preparationResource?.cancel();
+			preparationState = { status: "ready", key: nextLocation.task, preparation: nextPreparation, error: null };
+		} else {
+			void preparationResource?.load(nextLocation.task, data.editionDate);
+		}
+	} else {
+		preparationResource?.cancel(true);
+	}
+
+	await tick();
+	animator?.settle(nextLocation.view);
+	focusView(nextLocation.view);
+}
+
+function refreshExpiredEdition(): void {
+	if (editionRefresh) return;
+	editionRefresh = invalidate(QUEST_HALL_DEPENDENCY)
+		.catch(() => undefined)
+		.finally(() => {
+			editionRefresh = null;
+		});
+}
+
 function saveWorkflowReturnContext(): void {
 	if (!location.task) return;
 	const sectionKeys = new Set(catalog.sections[location.section].map((item) => item.key));
@@ -270,6 +318,18 @@ function focusView(view: QuestMenuView): void {
 		target?.focus({ preventScroll: true });
 	});
 }
+
+afterNavigate(() => {
+	if (!mounted || sameLocation(initialLocation, location)) return;
+	void synchronizeServerLocation(initialLocation, initialPreparation);
+});
+
+$effect(() => {
+	const nextEditionDate = data.editionDate;
+	if (!mounted || nextEditionDate === observedEditionDate) return;
+	observedEditionDate = nextEditionDate;
+	void synchronizeServerLocation(initialLocation, initialPreparation);
+});
 
 function openCatalog(section: QuestMenuSection = location.section): void {
 	void applyTransition({ type: "open-catalog", section });
@@ -418,6 +478,7 @@ onMount(() => {
 			preparationState = state;
 			if (state.status === "error") void tick().then(() => preparationPanel?.focus());
 		},
+		onEditionExpired: refreshExpiredEdition,
 	});
 	unreadSubscription = createUnreadSubscription({
 		endpoint: `${base}/api/unread`,
@@ -652,10 +713,10 @@ onMount(() => {
 .hall-heading,
 .stage-stack {
 	position: relative;
-	z-index: 1;
 }
 
 .hall-heading {
+	z-index: 2;
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
@@ -686,6 +747,7 @@ onMount(() => {
 }
 
 .stage-stack {
+	z-index: 1;
 	display: grid;
 	min-height: clamp(39rem, 68vw, 54rem);
 }
