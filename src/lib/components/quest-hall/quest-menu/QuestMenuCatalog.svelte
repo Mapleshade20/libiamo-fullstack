@@ -199,7 +199,7 @@ let {
 	transform: translateX(0.3rem);
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 44rem) {
 	.catalog-book-stage {
 		display: none;
 	}

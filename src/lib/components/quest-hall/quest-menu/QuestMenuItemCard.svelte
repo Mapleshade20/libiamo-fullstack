@@ -157,6 +157,28 @@ function difficultyLabel(level: number): string {
 	font-size: 0.74rem;
 	font-weight: 750;
 	text-decoration: none;
+	transition:
+		color 180ms ease,
+		background-color 180ms ease,
+		box-shadow 180ms ease,
+		transform 180ms ease;
+}
+
+.detail-link :global(svg) {
+	transition: transform 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.detail-link:hover {
+		color: var(--menu-sheet);
+		background: var(--menu-wine);
+		box-shadow: 0 6px 14px color-mix(in oklab, var(--menu-wine) 22%, transparent);
+		transform: translateY(-2px);
+	}
+
+	.detail-link:hover :global(svg) {
+		transform: translateX(3px);
+	}
 }
 
 .detail-link:focus-visible {
@@ -187,5 +209,17 @@ function difficultyLabel(level: number): string {
 
 .is-compact .detail-link {
 	min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.detail-link,
+	.detail-link :global(svg) {
+		transition: none;
+	}
+
+	.detail-link:hover,
+	.detail-link:hover :global(svg) {
+		transform: none;
+	}
 }
 </style>

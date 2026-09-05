@@ -34,6 +34,7 @@ import type { QuestHallPreparation } from "$lib/server/quest-hall-preparation";
 import {
 	createQuestMenuAnimator,
 	prefersReducedQuestMenuMotion,
+	QUEST_MENU_NARROW_MEDIA_QUERY,
 	type QuestMenuAnimator,
 	type QuestMenuMotionElements,
 	type QuestMenuView,
@@ -449,6 +450,18 @@ function handleKeydown(event: KeyboardEvent): void {
 	}
 }
 
+function handleBookPointerMove(event: PointerEvent): void {
+	if (event.pointerType !== "mouse" || turning || viewTransitioning) {
+		animator?.clearPointerInteraction(visibleView);
+		return;
+	}
+	animator?.interactWithPointer(visibleView, event.clientX, event.clientY);
+}
+
+function handleBookPointerLeave(): void {
+	animator?.clearPointerInteraction(visibleView);
+}
+
 onMount(() => {
 	mounted = true;
 	const returnContext = restoreQuestHallReturnContext({
@@ -494,7 +507,7 @@ onMount(() => {
 		void preparationResource.load(initialLocation.task, data.editionDate);
 	}
 	animator = createQuestMenuAnimator(motionElements);
-	const media = matchMedia("(max-width: 64rem)");
+	const media = matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY);
 	const updateLayout = () => {
 		// Settling kills the page timeline without invoking its completion callback.
 		// Drop its preview and input lock as well, keeping the last committed spread.
@@ -572,7 +585,7 @@ onMount(() => {
 });
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onpointermove={handleBookPointerMove} onpointerleave={handleBookPointerLeave} />
 
 <div class="quest-menu" data-view={visibleView}>
 	<header class="hall-heading">

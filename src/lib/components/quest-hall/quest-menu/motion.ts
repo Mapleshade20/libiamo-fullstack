@@ -51,6 +51,8 @@ export interface QuestMenuMotionElements {
 
 export interface QuestMenuAnimator {
 	settle: (view: QuestMenuView) => void;
+	interactWithPointer: (view: QuestMenuView, clientX: number, clientY: number) => void;
+	clearPointerInteraction: (view: QuestMenuView) => void;
 	transitionView: (from: QuestMenuView, view: QuestMenuView, onComplete: () => void, selectedElement?: HTMLElement) => void;
 	transitionPage: (narrow: boolean, direction: -1 | 1, onHandoff: () => void, onComplete: () => void) => void;
 	destroy: () => void;
@@ -59,6 +61,7 @@ export interface QuestMenuAnimator {
 const IDENTITY_FIT: QuestMenuFit = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0 };
 export const QUEST_MENU_BOOK_SPIN_DURATION = 1.18;
 export const QUEST_MENU_BOOK_FULL_TURN = -360;
+export const QUEST_MENU_NARROW_MEDIA_QUERY = "(max-width: 44rem)";
 export const QUEST_MENU_MOTION_TOKENS = {
 	durationTurn: 0.52,
 	easeOut: "power3.out",
@@ -71,6 +74,16 @@ export const QUEST_MENU_IDLE_SWAY = {
 	yaw: 6.6,
 	yawPeriod: 2.8,
 } as const;
+export const QUEST_MENU_POINTER_TILT = {
+	lift: 5,
+	pitch: 2.4,
+	yaw: 3.2,
+	roll: 0.16,
+	scale: 1.006,
+	duration: 0.26,
+	returnDuration: 0.42,
+} as const;
+const QUEST_MENU_BOOK_RESTING_ORIGIN = "75% 50%";
 const KEY_LIGHT = { x: -0.45, y: -0.6, z: 0.66 } as const;
 
 function boundedUnit(value: number): number {
@@ -158,6 +171,9 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	let viewTimeline: gsap.core.Timeline | null = null;
 	let idleTweens: gsap.core.Tween[] = [];
 	let turnTimeline: gsap.core.Timeline | null = null;
+	let pointerTween: gsap.core.Tween | null = null;
+	let pointerActive = false;
+	let settledView: QuestMenuView = "home";
 
 	function stopIdle(): void {
 		for (const tween of idleTweens) tween.kill();
@@ -204,6 +220,104 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		];
 	}
 
+	function stopPointerInteraction(reset: boolean): void {
+		pointerActive = false;
+		pointerTween?.kill();
+		pointerTween = null;
+		if (!reset) return;
+		const { bookTilt } = getElements();
+		if (!bookTilt) return;
+		gsap.set(bookTilt, {
+			rotateX: 0,
+			rotateY: 0,
+			rotateZ: 0,
+			y: 0,
+			scale: 1,
+			transformOrigin: QUEST_MENU_BOOK_RESTING_ORIGIN,
+		});
+		setCoverLight();
+	}
+
+	function pointerSurface(elements: QuestMenuMotionElements): HTMLElement | null {
+		return elements.rectoProbe ?? elements.bookFrame;
+	}
+
+	function interactWithPointer(view: QuestMenuView, clientX: number, clientY: number): void {
+		const elements = getElements();
+		if (view !== "home") {
+			if (pointerActive) stopPointerInteraction(true);
+			return;
+		}
+		if (!elements.bookTilt || viewTimeline?.isActive() || turnTimeline?.isActive() || prefersReducedQuestMenuMotion()) {
+			if (pointerActive) stopPointerInteraction(true);
+			return;
+		}
+		const surface = pointerSurface(elements);
+		if (!surface) return;
+		const bounds = surface.getBoundingClientRect();
+		if (
+			bounds.width <= 0 ||
+			bounds.height <= 0 ||
+			clientX < bounds.left ||
+			clientX > bounds.right ||
+			clientY < bounds.top ||
+			clientY > bounds.bottom
+		) {
+			clearPointerInteraction(view);
+			return;
+		}
+
+		if (!pointerActive) {
+			pointerActive = true;
+			stopIdle();
+		}
+		const horizontal = clamp(((clientX - bounds.left) / bounds.width - 0.5) * 2, -1, 1);
+		const vertical = clamp(((clientY - bounds.top) / bounds.height - 0.5) * 2, -1, 1);
+		const originX = 75 + horizontal * 2.4;
+		const originY = 50 + vertical * 2;
+		pointerTween = gsap.to(elements.bookTilt, {
+			rotateX: -vertical * QUEST_MENU_POINTER_TILT.pitch,
+			rotateY: horizontal * QUEST_MENU_POINTER_TILT.yaw,
+			rotateZ: horizontal * QUEST_MENU_POINTER_TILT.roll,
+			y: -QUEST_MENU_POINTER_TILT.lift,
+			scale: QUEST_MENU_POINTER_TILT.scale,
+			transformOrigin: `${originX}% ${originY}%`,
+			duration: QUEST_MENU_POINTER_TILT.duration,
+			ease: "power2.out",
+			overwrite: "auto",
+			onUpdate: setCoverLight,
+		});
+	}
+
+	function clearPointerInteraction(view: QuestMenuView): void {
+		if (!pointerActive) return;
+		pointerActive = false;
+		pointerTween?.kill();
+		pointerTween = null;
+		const { bookTilt } = getElements();
+		if (!bookTilt) return;
+		if (prefersReducedQuestMenuMotion()) {
+			stopPointerInteraction(true);
+			return;
+		}
+		pointerTween = gsap.to(bookTilt, {
+			rotateX: 0,
+			rotateY: 0,
+			rotateZ: 0,
+			y: 0,
+			scale: 1,
+			transformOrigin: QUEST_MENU_BOOK_RESTING_ORIGIN,
+			duration: QUEST_MENU_POINTER_TILT.returnDuration,
+			ease: "power3.out",
+			overwrite: "auto",
+			onUpdate: setCoverLight,
+			onComplete: () => {
+				pointerTween = null;
+				if (!pointerActive && settledView === view && view === "home") startIdle();
+			},
+		});
+	}
+
 	function targetFit(view: QuestMenuView, elements: QuestMenuMotionElements): QuestMenuFit {
 		if (!elements.bookFrame) return IDENTITY_FIT;
 		return measureQuestMenuFit(
@@ -220,19 +334,30 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	function settle(view: QuestMenuView): void {
 		const elements = getElements();
 		if (!elements.bookFrame || !elements.bookTilt || !elements.cover || !elements.leftHalf || !elements.bookShadow) return;
+		settledView = view;
 		stopIdle();
+		stopPointerInteraction(false);
 		viewTimeline?.kill();
 		turnTimeline?.kill();
 		turnTimeline = null;
 		if (elements.turnSheet) gsap.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
 		if (elements.mobilePaper) gsap.set(elements.mobilePaper, { autoAlpha: 1, x: 0, y: 0, rotateZ: 0, scale: 1 });
+		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
+		if (bookLayer) gsap.set(bookLayer, { autoAlpha: 1 });
 		gsap.set(elements.bookFrame, { ...targetFit(view, elements), rotation: 0, skewX: 0, autoAlpha: 1 });
 		const open = view === "catalog";
 		gsap.set(elements.cover, { rotateY: open ? -180 : 0 });
 		gsap.set(leftHalfParts(elements.leftHalf), { autoAlpha: open ? 1 : 0 });
 		if (elements.turnControls) gsap.set(elements.turnControls, { autoAlpha: open ? 1 : 0 });
 		gsap.set(elements.bookShadow, { autoAlpha: 1, z: -2, scaleX: open ? 1 : 0.52, transformOrigin: "right center" });
-		gsap.set(elements.bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
+		gsap.set(elements.bookTilt, {
+			rotateX: 0,
+			rotateY: 0,
+			rotateZ: 0,
+			y: 0,
+			scale: 1,
+			transformOrigin: QUEST_MENU_BOOK_RESTING_ORIGIN,
+		});
 		if (elements.homeStage) gsap.set(elements.homeStage, { autoAlpha: view === "home" ? 1 : 0, pointerEvents: view === "home" ? "auto" : "none" });
 		if (elements.catalogStage)
 			gsap.set(elements.catalogStage, { autoAlpha: view === "catalog" ? 1 : 0, pointerEvents: view === "catalog" ? "auto" : "none" });
@@ -286,6 +411,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			return;
 		}
 		stopIdle();
+		stopPointerInteraction(true);
 		viewTimeline?.kill();
 		turnTimeline?.kill();
 		turnTimeline = null;
@@ -298,7 +424,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		const fromStage = stages[from];
 		const toStage = stages[view];
 		const idleStage = Object.entries(stages).find(([stageView]) => stageView !== from && stageView !== view)?.[1];
-		const narrow = window.matchMedia("(max-width: 64rem)").matches;
+		const narrow = window.matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY).matches;
 		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
 		const fit = targetFit(view, elements);
 		let bookEnd: number = QUEST_MENU_MOTION_TOKENS.durationTurn;
@@ -419,6 +545,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	}
 
 	function transitionPage(narrow: boolean, direction: -1 | 1, onHandoff: () => void, onComplete: () => void): void {
+		stopPointerInteraction(true);
 		turnTimeline?.kill();
 		const elements = getElements();
 		if (narrow && elements.mobilePaper) {
@@ -468,10 +595,11 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	function destroy(): void {
 		viewTimeline?.kill();
 		turnTimeline?.kill();
+		stopPointerInteraction(false);
 		stopIdle();
 	}
 
-	return { settle, transitionView, transitionPage, destroy };
+	return { settle, interactWithPointer, clearPointerInteraction, transitionView, transitionPage, destroy };
 }
 
 export { gsap };

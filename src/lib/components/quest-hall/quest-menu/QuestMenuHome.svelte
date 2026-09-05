@@ -219,6 +219,29 @@ function itemObjective(item: QuestMenuItem): string | null {
 	font-family: var(--font-sans);
 	font-size: 0.75rem;
 	font-weight: 750;
+	text-decoration: none;
+	transition:
+		color 180ms ease,
+		background-color 180ms ease,
+		box-shadow 180ms ease,
+		transform 180ms ease;
+}
+
+.recommendation-card a :global(svg) {
+	transition: transform 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.recommendation-card a:hover {
+		color: var(--menu-sheet);
+		background: var(--menu-wine);
+		box-shadow: 0 6px 14px color-mix(in oklab, var(--menu-wine) 22%, transparent);
+		transform: translateY(-2px);
+	}
+
+	.recommendation-card a:hover :global(svg) {
+		transform: translateX(3px);
+	}
 }
 
 .recommendation-card a:focus-visible,
@@ -257,6 +280,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 	padding: 0;
 	border: 0;
 	background: transparent;
+	cursor: pointer;
 }
 
 .mobile-cover {
@@ -318,13 +342,13 @@ function itemObjective(item: QuestMenuItem): string | null {
 		gap: 2rem;
 		min-height: 0;
 	}
-
-	.mobile-cover {
-		display: flex;
-	}
 }
 
 @media (max-width: 44rem) {
+	.mobile-cover {
+		display: flex;
+	}
+
 	.home-grid {
 		grid-template-columns: 1fr;
 		gap: 1.5rem;
@@ -340,6 +364,18 @@ function itemObjective(item: QuestMenuItem): string | null {
 
 	.closed-book-stack {
 		width: clamp(12rem, 60vw, 14rem);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.recommendation-card a,
+	.recommendation-card a :global(svg) {
+		transition: none;
+	}
+
+	.recommendation-card a:hover,
+	.recommendation-card a:hover :global(svg) {
+		transform: none;
 	}
 }
 </style>

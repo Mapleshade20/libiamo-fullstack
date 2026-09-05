@@ -79,7 +79,7 @@ let {
 	display: none;
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 44rem) {
 	.mobile-book {
 		--mobile-tab-gutter: clamp(2.0625rem, 9vw, 2.375rem);
 		display: block;

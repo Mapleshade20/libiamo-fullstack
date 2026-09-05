@@ -769,7 +769,7 @@ function sectionLabel(value: QuestMenuSection): string {
 	opacity: var(--cover-shade);
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 44rem) {
 	.book-layer:not(.is-prepare) {
 		display: none;
 	}
