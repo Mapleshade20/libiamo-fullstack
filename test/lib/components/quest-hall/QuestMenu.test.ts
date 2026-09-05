@@ -85,13 +85,27 @@ describe("QuestMenu", () => {
 		expect(body).toContain(`>${title}</strong>`);
 	});
 
-	it("keeps the left page on the hinged cover and renders the book depth surfaces", () => {
+	it("renders the closed book shell without mounting hidden catalog cards", () => {
 		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
 
 		expect(body).toContain('class="cover-face cover-face-back page page-left ');
 		expect(body).toContain('class="book-surface book-deck book-deck-blank ');
 		expect(body).toContain('class="book-edge book-edge-board book-edge-spine ');
-		expect(body).toContain("Today · 01");
+		expect(body).not.toContain('class="task-card');
+		// The real book stays hidden until fitted. No placeholder is painted.
+		expect(body).not.toContain("static-cover");
+		expect(body).not.toContain("is-revealing");
+		expect(body).not.toMatch(/class="book-layer [^"]*is-ready/);
+	});
+
+	it.each(["home", "catalog"] as const)("keeps the three desktop section tabs inside the animated book in %s", (view) => {
+		const { body } = render(QuestMenu, {
+			props: { data: hallData(), initialLocation: { ...home, view }, accountScope: "account-a", lang: "en" },
+		});
+		const bookMarkup = body.slice(body.indexOf('class="book-layer'));
+		expect(bookMarkup).toContain('class="book-ribbons');
+		expect(bookMarkup.match(/role="tab"/g)).toHaveLength(3);
+		expect(body).not.toContain('class="catalog-ribbons');
 	});
 
 	it("server-renders a direct catalog location with localized month controls and current-month production items", () => {
@@ -115,7 +129,22 @@ describe("QuestMenu", () => {
 		expect(body).not.toContain("Archived letter");
 	});
 
-	it("server-renders an older translation preparation with its matching month", () => {
+	it("populates both responsive catalog surfaces so CSS can switch layouts without an empty page", () => {
+		const { body } = render(QuestMenu, {
+			props: {
+				data: hallData(),
+				initialLocation: { view: "catalog", section: "daily", leaf: 1, task: null },
+				accountScope: "account-a",
+				lang: "en",
+			},
+		});
+
+		// One daily quest appears in the spread and in the narrow sheet. Neither
+		// surface depends on a client-side measurement to receive its content.
+		expect(body.match(/class="task-card\b/g)).toHaveLength(2);
+	});
+
+	it("server-renders an older translation preparation without mounting hidden catalog cards", () => {
 		const data = hallData();
 		const { body } = render(QuestMenu, {
 			props: {
@@ -147,21 +176,21 @@ describe("QuestMenu", () => {
 		});
 
 		expect(body).toContain("Archived letter");
-		expect(body).toContain("August 2026");
+		expect(body).not.toContain('class="task-card');
 	});
 
 	it("keeps empty production sections navigable", () => {
 		const { body } = render(QuestMenu, {
 			props: {
 				data: hallData({ dailyTasks: [], weeklyTasks: [], translationTasks: [] }),
-				initialLocation: home,
+				initialLocation: { view: "catalog", section: "daily", leaf: 1, task: null },
 				accountScope: "account-a",
 				lang: "en",
 			},
 		});
 
-		expect(body).toContain("Everything is complete for this edition.");
 		expect(body).toContain("No quests available yet.");
+		expect(body).toContain("Menu sections");
 	});
 
 	it("server-renders a directly selected quest in the preparation pane", () => {

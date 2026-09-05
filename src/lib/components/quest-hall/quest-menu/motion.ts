@@ -50,7 +50,8 @@ export interface QuestMenuMotionElements {
 }
 
 export interface QuestMenuAnimator {
-	settle: (view: QuestMenuView) => void;
+	settle: (view: QuestMenuView) => boolean;
+	setAmbientMotionEnabled: (enabled: boolean) => void;
 	interactWithPointer: (view: QuestMenuView, clientX: number, clientY: number) => void;
 	clearPointerInteraction: (view: QuestMenuView) => void;
 	transitionView: (from: QuestMenuView, view: QuestMenuView, onComplete: () => void, selectedElement?: HTMLElement) => void;
@@ -151,13 +152,14 @@ export function createQuestMenuBookCloseTiming(randomValue = Math.random()): Que
 	};
 }
 
-export function measureQuestMenuFit(element: Element, slot: Element | null | undefined, probe?: Element | null): QuestMenuFit {
-	if (!slot) return IDENTITY_FIT;
+export function measureQuestMenuFit(element: Element, slot: Element | null | undefined, probe?: Element | null): QuestMenuFit | null {
+	if (!slot) return null;
 	const bounds = slot.getBoundingClientRect();
-	if (bounds.width <= 0 || bounds.height <= 0) return IDENTITY_FIT;
+	const sourceBounds = element.getBoundingClientRect();
+	if (bounds.width <= 0 || bounds.height <= 0 || sourceBounds.width <= 0 || sourceBounds.height <= 0) return null;
 	const variables = Flip.fit(element, slot, { scale: true, getVars: true, ...(probe ? { fitChild: probe } : {}) }) as Partial<QuestMenuFit> | null;
-	if (!variables) return IDENTITY_FIT;
-	return {
+	if (!variables) return null;
+	const fit = {
 		x: variables.x ?? 0,
 		y: variables.y ?? 0,
 		scaleX: variables.scaleX ?? 1,
@@ -165,6 +167,7 @@ export function measureQuestMenuFit(element: Element, slot: Element | null | und
 		rotation: variables.rotation ?? 0,
 		skewX: variables.skewX ?? 0,
 	};
+	return Object.values(fit).every(Number.isFinite) && fit.scaleX > 0 && fit.scaleY > 0 ? fit : null;
 }
 
 export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElements): QuestMenuAnimator {
@@ -174,8 +177,15 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	let pointerTween: gsap.core.Tween | null = null;
 	let pointerActive = false;
 	let settledView: QuestMenuView = "home";
+	let ambientMotionEnabled = true;
+	let pointerFrame = 0;
+	let pendingPointer: { view: QuestMenuView; clientX: number; clientY: number } | null = null;
+	let lightCover: HTMLElement | null = null;
+	let coverGloss: HTMLElement | null = null;
+	let coverShade: HTMLElement | null = null;
 
 	function stopIdle(): void {
+		gsap.ticker.remove(setCoverLight);
 		for (const tween of idleTweens) tween.kill();
 		idleTweens = [];
 	}
@@ -183,17 +193,25 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 	function setCoverLight(): void {
 		const { cover, bookTilt } = getElements();
 		if (!cover || !bookTilt) return;
+		if (lightCover !== cover) {
+			lightCover = cover;
+			coverGloss = cover.querySelector<HTMLElement>(".cover-gloss");
+			coverShade = cover.querySelector<HTMLElement>(".cover-shade");
+		}
 		const light = createQuestMenuCoverLight(Number(gsap.getProperty(bookTilt, "rotateX")), Number(gsap.getProperty(bookTilt, "rotateY")));
-		cover.style.setProperty("--cover-sheen-x", `${light.sheenX}%`);
-		cover.style.setProperty("--cover-sheen-y", `${light.sheenY}%`);
-		cover.style.setProperty("--cover-gloss", String(light.gloss));
-		cover.style.setProperty("--cover-shade", String(light.shade));
+		// Move a pre-painted ellipse rather than repainting a radial gradient or
+		// invalidating inherited custom properties throughout both book faces.
+		if (coverGloss) {
+			coverGloss.style.transform = `translate(${(light.sheenX - QUEST_MENU_COVER_LIGHT_REST.sheenX) / 1.24}%, ${(light.sheenY - QUEST_MENU_COVER_LIGHT_REST.sheenY) / 1.16}%)`;
+			coverGloss.style.opacity = String(light.gloss);
+		}
+		if (coverShade) coverShade.style.opacity = String(light.shade);
 	}
 
 	function startIdle(): void {
 		const { bookTilt } = getElements();
 		stopIdle();
-		if (!bookTilt) return;
+		if (!bookTilt || !ambientMotionEnabled) return;
 		if (prefersReducedQuestMenuMotion()) {
 			gsap.set(bookTilt, { rotateX: 0, rotateY: 0, rotateZ: 0 });
 			setCoverLight();
@@ -207,7 +225,6 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 				ease: "sine.inOut",
 				repeat: -1,
 				repeatRefresh: true,
-				onUpdate: setCoverLight,
 			}),
 			gsap.to(bookTilt, {
 				rotateY: `random(${-QUEST_MENU_IDLE_SWAY.yaw}, ${QUEST_MENU_IDLE_SWAY.yaw}, 0.1)`,
@@ -215,12 +232,36 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 				ease: "sine.inOut",
 				repeat: -1,
 				repeatRefresh: true,
-				onUpdate: setCoverLight,
 			}),
 		];
+		// The ticker runs after both axis tweens: one lighting update per frame.
+		gsap.ticker.add(setCoverLight);
+	}
+
+	function cancelPointerFrame(): void {
+		if (pointerFrame) cancelAnimationFrame(pointerFrame);
+		pointerFrame = 0;
+		pendingPointer = null;
+	}
+
+	function setAmbientMotionEnabled(enabled: boolean): void {
+		if (ambientMotionEnabled === enabled) return;
+		ambientMotionEnabled = enabled;
+		if (!enabled) {
+			cancelPointerFrame();
+			gsap.ticker.remove(setCoverLight);
+			for (const tween of idleTweens) tween.pause();
+			if (pointerActive || pointerTween) stopPointerInteraction(true);
+		} else if (settledView === "home" && !viewTimeline?.isActive() && !turnTimeline?.isActive()) {
+			if (idleTweens.length) {
+				for (const tween of idleTweens) tween.resume();
+				gsap.ticker.add(setCoverLight);
+			} else startIdle();
+		}
 	}
 
 	function stopPointerInteraction(reset: boolean): void {
+		cancelPointerFrame();
 		pointerActive = false;
 		pointerTween?.kill();
 		pointerTween = null;
@@ -242,7 +283,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		return elements.rectoProbe ?? elements.bookFrame;
 	}
 
-	function interactWithPointer(view: QuestMenuView, clientX: number, clientY: number): void {
+	function applyPointerInteraction(view: QuestMenuView, clientX: number, clientY: number): void {
 		const elements = getElements();
 		if (view !== "home") {
 			if (pointerActive) stopPointerInteraction(true);
@@ -289,7 +330,20 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		});
 	}
 
+	function interactWithPointer(view: QuestMenuView, clientX: number, clientY: number): void {
+		if (!ambientMotionEnabled || view !== "home") return;
+		pendingPointer = { view, clientX, clientY };
+		if (pointerFrame) return;
+		pointerFrame = requestAnimationFrame(() => {
+			pointerFrame = 0;
+			const pointer = pendingPointer;
+			pendingPointer = null;
+			if (pointer) applyPointerInteraction(pointer.view, pointer.clientX, pointer.clientY);
+		});
+	}
+
 	function clearPointerInteraction(view: QuestMenuView): void {
+		cancelPointerFrame();
 		if (!pointerActive) return;
 		pointerActive = false;
 		pointerTween?.kill();
@@ -318,8 +372,8 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		});
 	}
 
-	function targetFit(view: QuestMenuView, elements: QuestMenuMotionElements): QuestMenuFit {
-		if (!elements.bookFrame) return IDENTITY_FIT;
+	function targetFit(view: QuestMenuView, elements: QuestMenuMotionElements): QuestMenuFit | null {
+		if (!elements.bookFrame) return null;
 		return measureQuestMenuFit(
 			elements.bookFrame,
 			view === "home" ? elements.homeSlot : view === "catalog" ? elements.catalogSlot : elements.preparationSlot,
@@ -331,9 +385,9 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		return Array.from(element.querySelectorAll<HTMLElement>(".book-surface"));
 	}
 
-	function settle(view: QuestMenuView): void {
+	function settle(view: QuestMenuView): boolean {
 		const elements = getElements();
-		if (!elements.bookFrame || !elements.bookTilt || !elements.cover || !elements.leftHalf || !elements.bookShadow) return;
+		if (!elements.bookFrame || !elements.bookTilt || !elements.cover || !elements.leftHalf || !elements.bookShadow) return false;
 		settledView = view;
 		stopIdle();
 		stopPointerInteraction(false);
@@ -343,8 +397,11 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		if (elements.turnSheet) gsap.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 });
 		if (elements.mobilePaper) gsap.set(elements.mobilePaper, { autoAlpha: 1, x: 0, y: 0, rotateZ: 0, scale: 1 });
 		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
-		if (bookLayer) gsap.set(bookLayer, { autoAlpha: 1 });
-		gsap.set(elements.bookFrame, { ...targetFit(view, elements), rotation: 0, skewX: 0, autoAlpha: 1 });
+		const fit = targetFit(view, elements);
+		if (fit) {
+			if (bookLayer) gsap.set(bookLayer, { autoAlpha: 1 });
+			gsap.set(elements.bookFrame, { ...fit, rotation: 0, skewX: 0, autoAlpha: 1 });
+		}
 		const open = view === "catalog";
 		gsap.set(elements.cover, { rotateY: open ? -180 : 0 });
 		gsap.set(leftHalfParts(elements.leftHalf), { autoAlpha: open ? 1 : 0 });
@@ -368,6 +425,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		if (elements.preparationPanel) gsap.set(elements.preparationPanel, { autoAlpha: view === "prepare" ? 1 : 0, x: 0 });
 		setCoverLight();
 		if (view === "home") startIdle();
+		return fit !== null;
 	}
 
 	function addCoverSwing(
@@ -426,7 +484,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		const idleStage = Object.entries(stages).find(([stageView]) => stageView !== from && stageView !== view)?.[1];
 		const narrow = window.matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY).matches;
 		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
-		const fit = targetFit(view, elements);
+		const fit = targetFit(view, elements) ?? IDENTITY_FIT;
 		let bookEnd: number = QUEST_MENU_MOTION_TOKENS.durationTurn;
 		const timeline = gsap.timeline({
 			defaults: { ease: QUEST_MENU_MOTION_TOKENS.easeInOut },
@@ -440,17 +498,6 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		if (idleStage) timeline.set(idleStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
 		timeline.set(fromStage, { autoAlpha: 1, pointerEvents: "none" }, 0);
 		timeline.set(toStage, { autoAlpha: 0, visibility: "visible", pointerEvents: "none" }, 0);
-		timeline.to(
-			elements.cover,
-			{
-				"--cover-sheen-x": `${QUEST_MENU_COVER_LIGHT_REST.sheenX}%`,
-				"--cover-sheen-y": `${QUEST_MENU_COVER_LIGHT_REST.sheenY}%`,
-				"--cover-gloss": QUEST_MENU_COVER_LIGHT_REST.gloss,
-				"--cover-shade": QUEST_MENU_COVER_LIGHT_REST.shade,
-				duration: 0.42,
-			},
-			0,
-		);
 		const bookLeaves = view === "catalog" && narrow;
 		const bookReturns = from === "catalog" && narrow;
 		const opening = view === "catalog" && from !== "catalog" && !narrow;
@@ -599,7 +646,7 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		stopIdle();
 	}
 
-	return { settle, interactWithPointer, clearPointerInteraction, transitionView, transitionPage, destroy };
+	return { settle, setAmbientMotionEnabled, interactWithPointer, clearPointerInteraction, transitionView, transitionPage, destroy };
 }
 
 export { gsap };

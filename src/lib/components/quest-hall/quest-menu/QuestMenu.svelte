@@ -67,6 +67,7 @@ let narrowItemKey = $state<QuestMenuItemKey | null>(null);
 let narrowLayout = $state(false);
 let mounted = $state(false);
 let bookReady = $state(false);
+let bookRevealed = $state(false);
 let turning = $state(false);
 let turnPreview = $state<QuestMenuTurnPreview | null>(null);
 let transitionFrom = $state<QuestMenuView | null>(null);
@@ -85,6 +86,7 @@ let resizeFrame = 0;
 let paperTurnSequence = 0;
 let viewTransitionSequence = 0;
 let animator: QuestMenuAnimator | null = null;
+let updateAmbientMotion = () => {};
 let preparationResource: ReturnType<typeof createQuestHallPreparationResource> | null = null;
 let unreadSubscription: ReturnType<typeof createUnreadSubscription> | null = null;
 let editionRefresh: Promise<void> | null = null;
@@ -125,6 +127,8 @@ let unreadCount = $derived(unreadState.total);
 let visibleView: QuestMenuView = $derived(location.view);
 let viewTransitioning = $derived(transitionTo !== null);
 let homePresent = $derived(visibleView === "home" || transitionFrom === "home" || transitionTo === "home");
+// Keep both catalog layouts populated through transitions. CSS switches at the
+// breakpoint before a matchMedia listener can mount the newly visible content.
 let catalogPresent = $derived(visibleView === "catalog" || transitionFrom === "catalog" || transitionTo === "catalog");
 let preparationPresent = $derived(visibleView === "prepare" || transitionFrom === "prepare" || transitionTo === "prepare");
 let ribbons = $derived(
@@ -173,6 +177,7 @@ function motionElements(): QuestMenuMotionElements {
 }
 
 async function applyTransition(event: HallNavigationEvent, selectedElement?: HTMLElement, transitionCatalog = catalog): Promise<void> {
+	if (bookReady) finishBookReveal();
 	const transition = reduceHallLocation(location, event, transitionCatalog);
 	if (transition.historyIntent === "none") return;
 	const previousView = visibleView;
@@ -463,6 +468,11 @@ function handleBookPointerLeave(): void {
 	animator?.clearPointerInteraction(visibleView);
 }
 
+function finishBookReveal(): void {
+	bookRevealed = true;
+	updateAmbientMotion();
+}
+
 onMount(() => {
 	mounted = true;
 	const returnContext = restoreQuestHallReturnContext({
@@ -501,7 +511,7 @@ onMount(() => {
 			[...data.dailyTasks, ...data.weeklyTasks].map((task) => ({
 				taskId: task.id,
 				sessionStatus: task.sessionStatus,
-				unreadCount: task.unreadCount,
+				unreadCount: task.unreadCount ?? 0,
 			})),
 		onchange: (state) => {
 			unreadState = state;
@@ -515,25 +525,49 @@ onMount(() => {
 	}
 	animator = createQuestMenuAnimator(motionElements);
 	const media = matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY);
+	const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+	let homeBookInView = true;
+	updateAmbientMotion = () => {
+		animator?.setAmbientMotionEnabled(bookRevealed && !document.hidden && !media.matches && !reducedMotion.matches && homeBookInView);
+	};
+	const bookVisibility = new IntersectionObserver(([entry]) => {
+		homeBookInView = entry.isIntersecting;
+		updateAmbientMotion();
+	});
+	if (homeSlot) bookVisibility.observe(homeSlot);
 	const updateLayout = () => {
+		// A resize completes the one-time reveal; it must never restart it.
+		if (bookReady) finishBookReveal();
 		// Settling kills the page timeline without invoking its completion callback.
 		// Drop its preview and input lock as well, keeping the last committed spread.
 		paperTurnSequence += 1;
 		turnPreview = null;
 		turning = false;
 		narrowLayout = media.matches;
+		updateAmbientMotion();
 		cancelAnimationFrame(resizeFrame);
 		resizeFrame = requestAnimationFrame(() => {
 			viewTransitionSequence += 1;
 			transitionFrom = null;
 			transitionTo = null;
-			animator?.settle(visibleView);
-			// The server cannot measure the destination slot. Reveal the book only
-			// after its first client-side fit prevents the raw spread from flashing.
-			bookReady = true;
+			const fitted = animator?.settle(visibleView);
+			// A hidden/zero-size book is not a successful fit. Narrow home/catalog
+			// already have a usable 2D surface and do not need a loading handoff.
+			if (!bookReady && (fitted || (media.matches && visibleView !== "prepare"))) {
+				bookReady = true;
+				if (media.matches || reducedMotion.matches) finishBookReveal();
+				initialLayoutObserver.disconnect();
+			}
 		});
 	};
+	// Retry a deferred first fit if its container becomes measurable, without
+	// polling or replaying the initial fade on later resizes.
+	const initialLayoutObserver = new ResizeObserver(updateLayout);
+	for (const element of [bookFrame, homeSlot, catalogSlot, preparationSlot]) {
+		if (element) initialLayoutObserver.observe(element);
+	}
 	const handlePopstate = async () => {
+		if (bookReady) finishBookReveal();
 		const previousView = visibleView;
 		const nextLocation = parseHallLocation(window.location.href, catalog);
 		const nextView = nextLocation.view;
@@ -569,11 +603,16 @@ onMount(() => {
 		}
 	};
 	media.addEventListener("change", updateLayout);
+	const handleReducedMotion = () => {
+		if (bookReady && reducedMotion.matches) finishBookReveal();
+		updateAmbientMotion();
+	};
+	reducedMotion.addEventListener("change", handleReducedMotion);
+	document.addEventListener("visibilitychange", updateAmbientMotion);
 	window.addEventListener("resize", updateLayout);
 	window.addEventListener("popstate", handlePopstate);
 	updateLayout();
 	void tick().then(() => {
-		animator?.settle(visibleView);
 		if (!restoringWorkflow || !returnContext) return;
 		requestAnimationFrame(() => {
 			window.scrollTo({ top: returnContext.scrollOffset, behavior: "auto" });
@@ -583,6 +622,10 @@ onMount(() => {
 	return () => {
 		cancelAnimationFrame(resizeFrame);
 		media.removeEventListener("change", updateLayout);
+		reducedMotion.removeEventListener("change", handleReducedMotion);
+		document.removeEventListener("visibilitychange", updateAmbientMotion);
+		bookVisibility.disconnect();
+		initialLayoutObserver.disconnect();
 		window.removeEventListener("resize", updateLayout);
 		window.removeEventListener("popstate", handlePopstate);
 		preparationResource?.cancel();
@@ -591,6 +634,7 @@ onMount(() => {
 		unreadSubscription = null;
 		animator?.destroy();
 		animator = null;
+		updateAmbientMotion = () => {};
 	};
 });
 </script>
@@ -625,6 +669,7 @@ onMount(() => {
 
 		<QuestMenuCatalog
 			visible={catalogPresent}
+			renderSheet={catalogPresent}
 			interactive={visibleView === "catalog" && !viewTransitioning}
 			section={location.section}
 			sectionLabel={sectionLabel(location.section)}
@@ -664,6 +709,11 @@ onMount(() => {
 
 	<QuestMenuBook
 		ready={bookReady}
+		revealed={bookRevealed}
+		onrevealed={finishBookReveal}
+		renderPages={catalogPresent}
+		interactive={!viewTransitioning}
+		{ribbons}
 		view={visibleView}
 		section={location.section}
 		spread={currentSpread}
@@ -685,6 +735,7 @@ onMount(() => {
 		bind:turnSheet
 		onturn={turn}
 		onmonthchange={changeTranslationMonth}
+		onselectsection={switchSection}
 		onselectitem={selectItem}
 	/>
 </div>

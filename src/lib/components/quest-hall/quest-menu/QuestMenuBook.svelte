@@ -8,6 +8,7 @@ import type { QuestMenuItem, QuestMenuSection, QuestMenuSpread } from "$lib/ques
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
 import QuestMenuMonthFolio from "./QuestMenuMonthFolio.svelte";
+import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
 export interface QuestMenuTurnPreview {
 	direction: -1 | 1;
@@ -21,6 +22,11 @@ export interface QuestMenuTurnPreview {
 
 interface Props {
 	ready: boolean;
+	revealed: boolean;
+	onrevealed: () => void;
+	renderPages: boolean;
+	interactive: boolean;
+	ribbons: QuestMenuRibbon[];
 	view: "home" | "catalog" | "prepare";
 	section: QuestMenuSection;
 	spread: QuestMenuSpread;
@@ -42,11 +48,17 @@ interface Props {
 	turnSheet?: HTMLDivElement | null;
 	onturn: (direction: -1 | 1) => void;
 	onmonthchange: (direction: -1 | 1) => void;
+	onselectsection: (section: QuestMenuSection) => void;
 	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
 	ready,
+	revealed,
+	onrevealed,
+	renderPages,
+	interactive,
+	ribbons,
 	view,
 	section,
 	spread,
@@ -68,6 +80,7 @@ let {
 	turnSheet = $bindable(null),
 	onturn,
 	onmonthchange,
+	onselectsection,
 	onselectitem,
 }: Props = $props();
 
@@ -117,13 +130,24 @@ function sectionLabel(value: QuestMenuSection): string {
 	</div>
 {/snippet}
 
-<div class="book-layer" class:is-ready={ready} class:is-prepare={view === "prepare"} aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
-	<div class="book-frame-shell">
+<div
+	class="book-layer"
+	class:is-ready={ready}
+	class:is-revealing={ready && !revealed}
+	class:is-prepare={view === "prepare"}
+	class:is-home={view === "home"}
+	aria-hidden={!ready || view === "prepare"}
+	inert={!ready || !interactive || view === "prepare"}
+>
+	<div class="book-frame-shell" onanimationend={(event) => { if (event.target === event.currentTarget) onrevealed(); }}>
 		<div class="book-frame" bind:this={bookFrame} aria-busy={turning}>
 			<span class="recto-probe" bind:this={rectoProbe} aria-hidden="true"></span>
 			<div class="book-tilt" bind:this={bookTilt}>
 				<div class="book-solid">
 					<span class="book-shadow" bind:this={bookShadow} aria-hidden="true"></span>
+					<div class="book-ribbons">
+						<QuestMenuRibbonTabs tabs={ribbons} value={section} label={t(lang, "hall.menu.sectionTabs")} onselect={onselectsection} />
+					</div>
 
 					<div class="book-half book-half-left" bind:this={leftHalf} aria-hidden="true">
 						<span class="book-surface book-deck book-deck-blank"></span>
@@ -133,16 +157,20 @@ function sectionLabel(value: QuestMenuSection): string {
 						<span class="book-surface book-board book-board-base"></span>
 					</div>
 
-					<div class="book-half book-half-right">
+					<div class="book-half book-half-right" aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
 						<span class="book-edge book-edge-fore" aria-hidden="true"></span>
 						<span class="book-edge book-edge-head" aria-hidden="true"></span>
 						<span class="book-edge book-edge-tail" aria-hidden="true"></span>
 						<span class="book-edge book-edge-spine" aria-hidden="true"></span>
 						<span class="book-board book-board-base" aria-hidden="true"></span>
-						<div class="page page-right">{@render pageContents(staticRightSection, staticRightSpread, staticRightFolio, "right")}</div>
+						<div class="page page-right">
+							{#if renderPages}
+								{@render pageContents(staticRightSection, staticRightSpread, staticRightFolio, "right")}
+							{/if}
+						</div>
 					</div>
 
-					<div class="turn-controls" bind:this={turnControls}>
+					<div class="turn-controls" bind:this={turnControls} aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
 						<button
 							type="button"
 							class="turn-button turn-previous"
@@ -188,10 +216,12 @@ function sectionLabel(value: QuestMenuSection): string {
 								<strong>{t(lang, "hall.menu.brand")}</strong>
 								<QuestMenuCoverEmblem {unreadCount} />
 								<span class="cover-rule cover-rule-bottom"></span>
-								<span class="cover-sheen"></span>
+								<span class="cover-sheen"><span class="cover-gloss"></span><span class="cover-shade"></span></span>
 							</span>
-							<div class="cover-face cover-face-back page page-left">
-								{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left", !turnPreview)}
+							<div class="cover-face cover-face-back page page-left" aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
+								{#if renderPages}
+									{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left", !turnPreview)}
+								{/if}
 							</div>
 							<span class="book-edge book-edge-board book-edge-fore" aria-hidden="true"></span>
 							<span class="book-edge book-edge-board book-edge-head" aria-hidden="true"></span>
@@ -225,6 +255,31 @@ function sectionLabel(value: QuestMenuSection): string {
 	perspective-origin: 50% 42%;
 }
 
+.book-layer:not(.is-ready) .book-frame-shell {
+	opacity: 0;
+}
+
+.book-layer.is-revealing .book-frame-shell {
+	/* Composite the complete book together, including its cover, lettering,
+	   lighting and shadow. Leave the inner preserve-3d transforms untouched. */
+	animation: book-reveal 200ms ease-out both;
+}
+
+@keyframes book-reveal {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.book-layer.is-revealing .book-frame-shell {
+		animation: none;
+	}
+}
+
 .book-frame {
 	--book-depth: 26px;
 	--cover-depth: 6px;
@@ -253,6 +308,36 @@ function sectionLabel(value: QuestMenuSection): string {
 .book-tilt {
 	transform-origin: 75% 50%;
 	will-change: transform;
+}
+
+.book-ribbons {
+	position: absolute;
+	top: 22%;
+	left: calc(100% - 0.9rem);
+	/* Share the book's fit, sway and reveal. Sit above the page-turn hit area
+	   but below the closed cover, with the tucked-in ends clipped at the edge. */
+	transform: translateZ(calc(var(--book-depth) + 3px));
+	clip-path: inset(-1rem -1rem -1rem 0.95rem);
+	filter: drop-shadow(7px 5px 7px color-mix(in oklab, var(--menu-ink) 14%, transparent));
+	backface-visibility: hidden;
+	pointer-events: auto;
+}
+
+.book-ribbons :global(.ribbon[aria-selected="true"] .ribbon-face) {
+	transform: translateX(var(--menu-ribbon-reach));
+}
+
+.book-ribbons :global(.ribbon-label) {
+	/* Remain readable when the entire closed book is fitted down. */
+	font-size: 0.75rem;
+}
+
+.book-ribbons :global(.ribbon:hover:not([aria-selected="true"]) .ribbon-face) {
+	transform: translateX(0.3rem);
+}
+
+.book-layer.is-home .book-ribbons :global(.ribbon[aria-selected="true"]:not(:hover) .ribbon-face) {
+	transform: none;
 }
 
 .book-shadow {
@@ -647,10 +732,6 @@ function sectionLabel(value: QuestMenuSection): string {
 
 .book-cover {
 	--edge-depth: var(--cover-depth);
-	--cover-sheen-x: 32%;
-	--cover-sheen-y: 26%;
-	--cover-gloss: 1;
-	--cover-shade: 1;
 	position: absolute;
 	inset: 0;
 	transform-origin: left center;
@@ -746,33 +827,39 @@ function sectionLabel(value: QuestMenuSection): string {
 	position: absolute;
 	inset: 0;
 	z-index: 2;
+	overflow: hidden;
 	pointer-events: none;
 }
 
-.cover-sheen::before,
-.cover-sheen::after {
+.cover-gloss,
+.cover-shade {
 	position: absolute;
-	inset: 0;
-	content: "";
 }
 
-.cover-sheen::before {
+.cover-gloss {
+	/* Same 62% x 58% ellipse, centred at 32% x 26%, as the original light.
+	   Its transparent edges can now move without regenerating the gradient. */
+	left: -30%;
+	top: -32%;
+	width: 124%;
+	height: 116%;
 	background: radial-gradient(
-		62% 58% at var(--cover-sheen-x) var(--cover-sheen-y),
+		ellipse 50% 50% at center,
 		color-mix(in oklab, #fff1d4 14%, transparent),
 		color-mix(in oklab, #fff1d4 5%, transparent) 42%,
 		transparent 74%
 	);
-	opacity: var(--cover-gloss);
+	will-change: transform, opacity;
 }
 
-.cover-sheen::after {
+.cover-shade {
+	inset: 0;
 	background: linear-gradient(
 		128deg,
 		transparent 34%,
 		color-mix(in oklab, color-mix(in oklab, var(--menu-ink) 76%, var(--menu-cover)) 15%, transparent)
 	);
-	opacity: var(--cover-shade);
+	will-change: opacity;
 }
 
 @media (max-width: 44rem) {

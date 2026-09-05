@@ -321,6 +321,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 }
 
 .closed-ribbons {
+	display: none;
 	position: absolute;
 	top: 22%;
 	left: calc(100% - 0.9rem);
@@ -344,7 +345,18 @@ function itemObjective(item: QuestMenuItem): string | null {
 	}
 }
 
+@media (44rem < width <= 64rem) {
+	.closed-book-zone {
+		/* Reserve space for tabs that now travel with the book's right edge. */
+		padding-inline-end: 3.5rem;
+	}
+}
+
 @media (max-width: 44rem) {
+	.closed-ribbons {
+		display: block;
+	}
+
 	.mobile-cover {
 		display: flex;
 	}

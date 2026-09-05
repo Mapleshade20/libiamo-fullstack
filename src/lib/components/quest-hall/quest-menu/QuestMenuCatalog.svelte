@@ -3,11 +3,12 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import type { QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
-import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
+import type { QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 import QuestMenuSheet from "./QuestMenuSheet.svelte";
 
 interface Props {
 	visible: boolean;
+	renderSheet: boolean;
 	interactive: boolean;
 	section: QuestMenuSection;
 	sectionLabel: string;
@@ -31,6 +32,7 @@ interface Props {
 
 let {
 	visible,
+	renderSheet,
 	interactive,
 	section,
 	sectionLabel,
@@ -72,26 +74,27 @@ let {
 
 	<div class="catalog-book-stage">
 		<div bind:this={catalogSlot} class="catalog-slot" aria-hidden="true"></div>
-		<div class="catalog-ribbons"><QuestMenuRibbonTabs tabs={ribbons} value={section} label={t(lang, "hall.menu.sectionTabs")} {onselect} /></div>
 	</div>
 
-	<QuestMenuSheet
-		{item}
-		{itemCount}
-		{section}
-		{sectionLabel}
-		folio={folio.current}
-		{ribbons}
-		{canMovePrevious}
-		{canMoveNext}
-		{lang}
-		{translationMonth}
-		bind:paperElement
-		{onselect}
-		{onmove}
-		{onmonthchange}
-		{onselectitem}
-	/>
+	{#if renderSheet}
+		<QuestMenuSheet
+			{item}
+			{itemCount}
+			{section}
+			{sectionLabel}
+			folio={folio.current}
+			{ribbons}
+			{canMovePrevious}
+			{canMoveNext}
+			{lang}
+			{translationMonth}
+			bind:paperElement
+			{onselect}
+			{onmove}
+			{onmonthchange}
+			{onselectitem}
+		/>
+	{/if}
 </section>
 
 <style>
@@ -165,9 +168,6 @@ let {
 
 .catalog-book-stage {
 	--menu-stage-gutter: 3.25rem;
-	--ribbon-tab-width: 4.3rem;
-	--ribbon-tab-offset: -0.15rem;
-	--menu-leaf-bleed: 0.25rem;
 	position: relative;
 	max-width: 74rem;
 	margin: 0 auto;
@@ -177,26 +177,6 @@ let {
 .catalog-slot {
 	width: 100%;
 	aspect-ratio: var(--menu-spread-aspect);
-}
-
-.catalog-ribbons {
-	position: absolute;
-	top: 24%;
-	right: var(--ribbon-tab-offset);
-	z-index: 5;
-	clip-path: inset(
-		-1rem calc(-1 * var(--menu-ribbon-reach) - 0.75rem) -1rem
-			calc(var(--ribbon-tab-width) + var(--ribbon-tab-offset) - var(--menu-stage-gutter) + var(--menu-leaf-bleed))
-	);
-	filter: drop-shadow(7px 5px 7px color-mix(in oklab, var(--menu-ink) 14%, transparent));
-}
-
-.catalog-ribbons :global(.ribbon[aria-selected="true"] .ribbon-face) {
-	transform: translateX(var(--menu-ribbon-reach));
-}
-
-.catalog-ribbons :global(.ribbon:hover:not([aria-selected="true"]) .ribbon-face) {
-	transform: translateX(0.3rem);
 }
 
 @media (max-width: 44rem) {
