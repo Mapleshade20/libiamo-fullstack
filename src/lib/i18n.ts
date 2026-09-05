@@ -347,6 +347,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"task.usefulExpressions.hideTranslation": "Hide Translation",
 		"task.usefulExpressions.translating": "Translating...",
 		"task.usefulExpressions.error": "Failed to generate expressions. Please try again.",
+		"task.usefulExpressions.close": "Close useful expressions",
+		"task.usefulExpressions.instructions": "Translate each expression into your target language, then select Check for feedback.",
+		"task.usefulExpressions.inputLabel": "Your translation for: {expression}",
+		"task.usefulExpressions.inputPlaceholder": "Type your translation…",
+		"task.usefulExpressions.check": "Check",
 
 		// Review
 		"review.title": "Review",
@@ -706,6 +711,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"task.usefulExpressions.hideTranslation": "Ocultar Traducción",
 		"task.usefulExpressions.translating": "Traduciendo...",
 		"task.usefulExpressions.error": "Error al generar expresiones. Inténtalo de nuevo.",
+		"task.usefulExpressions.close": "Cerrar expresiones útiles",
+		"task.usefulExpressions.instructions": "Traduce cada expresión al idioma que estás aprendiendo y selecciona Comprobar para recibir comentarios.",
+		"task.usefulExpressions.inputLabel": "Tu traducción de: {expression}",
+		"task.usefulExpressions.inputPlaceholder": "Escribe tu traducción…",
+		"task.usefulExpressions.check": "Comprobar",
 
 		// Review
 		"review.title": "Repasar",
@@ -1066,6 +1076,12 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"task.usefulExpressions.hideTranslation": "Masquer la Traduction",
 		"task.usefulExpressions.translating": "Traduction en cours...",
 		"task.usefulExpressions.error": "Échec de la génération. Veuillez réessayer.",
+		"task.usefulExpressions.close": "Fermer les expressions utiles",
+		"task.usefulExpressions.instructions":
+			"Traduisez chaque expression dans la langue que vous apprenez, puis sélectionnez Vérifier pour recevoir un retour.",
+		"task.usefulExpressions.inputLabel": "Votre traduction de : {expression}",
+		"task.usefulExpressions.inputPlaceholder": "Saisissez votre traduction…",
+		"task.usefulExpressions.check": "Vérifier",
 
 		// Review
 		"review.title": "Réviser",
@@ -1423,6 +1439,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"task.usefulExpressions.hideTranslation": "翻訳を隠す",
 		"task.usefulExpressions.translating": "翻訳中...",
 		"task.usefulExpressions.error": "生成に失敗しました。もう一度お試しください。",
+		"task.usefulExpressions.close": "便利な表現を閉じる",
+		"task.usefulExpressions.instructions": "各表現を学習中の言語に訳し、「確認」を選ぶとフィードバックが表示されます。",
+		"task.usefulExpressions.inputLabel": "「{expression}」の訳",
+		"task.usefulExpressions.inputPlaceholder": "翻訳を入力…",
+		"task.usefulExpressions.check": "確認",
 
 		// Review
 		"review.title": "復習",

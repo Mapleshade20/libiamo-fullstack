@@ -34,4 +34,15 @@ describe("task UI translations", () => {
 		expect(t(lang as LanguageCode, "hall.unreadLoading")).toBe(loading);
 		expect(t(lang as LanguageCode, "hall.unreadCountMany").replace("{count}", "10")).toBe(count);
 	});
+
+	it.each([
+		["en", "Close useful expressions", "Check"],
+		["es", "Cerrar expresiones útiles", "Comprobar"],
+		["fr", "Fermer les expressions utiles", "Vérifier"],
+		["ja", "便利な表現を閉じる", "確認"],
+	] as const)("localizes useful-expression dialog controls for %s", (lang, close, check) => {
+		expect(t(lang as LanguageCode, "task.usefulExpressions.close")).toBe(close);
+		expect(t(lang as LanguageCode, "task.usefulExpressions.check")).toBe(check);
+		expect(t(lang as LanguageCode, "task.usefulExpressions.inputLabel")).toContain("{expression}");
+	});
 });

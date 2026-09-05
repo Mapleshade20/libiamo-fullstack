@@ -185,6 +185,6 @@ function difficultyLabel(level: number): string {
 }
 
 .is-compact .detail-link {
-	min-height: 36px;
+	min-height: 44px;
 }
 </style>

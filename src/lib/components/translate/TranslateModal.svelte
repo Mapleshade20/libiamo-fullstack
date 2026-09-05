@@ -154,7 +154,10 @@ function handleBackdropClick(e: MouseEvent) {
 
 function handleKeydown(e: KeyboardEvent) {
 	if (e.key === "Escape") {
+		e.preventDefault();
+		e.stopPropagation();
 		handleClose();
+		return;
 	}
 	// Simple focus trap: keep Tab within the dialog
 	if (e.key === "Tab" && dialogEl) {
@@ -226,8 +229,8 @@ $effect(() => {
 				<button
 					type="button"
 					onclick={handleClose}
-					aria-label="Close dialog"
-					class="rounded-lg p-1.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+					aria-label={t(lang, "task.usefulExpressions.close")}
+					class="grid size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
 				>
 					<X size={18} strokeWidth={1.5} />
 				</button>
@@ -246,9 +249,7 @@ $effect(() => {
 						<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
 					</div>
 				{:else if expressions.length > 0}
-					<p class="text-xs text-muted-foreground leading-relaxed">
-						Translate each expression into your target language, then click <strong>Check</strong> for feedback.
-					</p>
+					<p class="text-xs text-muted-foreground leading-relaxed">{t(lang, "task.usefulExpressions.instructions")}</p>
 
 					{#each expressions as expr, idx}
 						{@const feedback = feedbacks[idx]}
@@ -267,8 +268,8 @@ $effect(() => {
 							<div class="mt-3">
 								<textarea
 									class="w-full min-h-[44px] resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/30"
-									aria-label="Your translation for: {expr}"
-									placeholder="Type your translation..."
+									aria-label={t(lang, "task.usefulExpressions.inputLabel").replace("{expression}", expr)}
+									placeholder={t(lang, "task.usefulExpressions.inputPlaceholder")}
 									rows={2}
 									value={userTranslations[idx] ?? ""}
 									maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
@@ -304,10 +305,10 @@ $effect(() => {
 									type="button"
 									onclick={() => handleCheck(idx)}
 									disabled={isChecking || !userTranslations[idx]?.trim()}
-									class="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-foreground/10 text-foreground hover:bg-foreground/20 disabled:opacity-40 transition-colors"
+									class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-foreground/10 px-3 text-xs font-medium text-foreground transition-colors hover:bg-foreground/20 disabled:opacity-40"
 								>
 									<Check size={12} strokeWidth={2} />
-									Check
+									{t(lang, "task.usefulExpressions.check")}
 								</button>
 							</div>
 						</div>

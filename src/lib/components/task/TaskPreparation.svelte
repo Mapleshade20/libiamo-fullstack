@@ -32,6 +32,7 @@ let isAbandoned = $derived(task.sessionStatus === "abandoned");
 let lang = $derived(task.language as LanguageCode);
 let showTranslateModal = $state(false);
 let showNativeLanguagePrompt = $state(false);
+let expressionsTrigger = $state<HTMLButtonElement | null>(null);
 let hasNativeLanguage = $derived(typeof nativeLanguage === "string" && nativeLanguage.trim().length > 0);
 let canShowUsefulExpressions = $derived(!isFinished && (!hasNativeLanguage || nativeLanguage !== task.language));
 let resolvedBackLabel = $derived(backLabel ?? t(lang, "task.returnToHall"));
@@ -45,6 +46,11 @@ function openTranslateModal() {
 	}
 	showNativeLanguagePrompt = false;
 	showTranslateModal = true;
+}
+
+function closeTranslateModal() {
+	showTranslateModal = false;
+	queueMicrotask(() => expressionsTrigger?.focus());
 }
 
 function difficultyLabel(level: number): string {
@@ -90,7 +96,11 @@ function difficultyLabel(level: number): string {
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			<h1 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h1>
+			{#if mode === "pane"}
+				<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
+			{:else}
+				<h1 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h1>
+			{/if}
 		</div>
 
 		{#if task.description}
@@ -99,7 +109,11 @@ function difficultyLabel(level: number): string {
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
-				<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
+				{#if mode === "pane"}
+					<h3 class="mb-2">{t(lang, "task.objectives")}</h3>
+				{:else}
+					<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
+				{/if}
 				<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
@@ -110,9 +124,13 @@ function difficultyLabel(level: number): string {
 
 		{#if task.materialsMd}
 			<div class="mt-10">
-				<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
+				{#if mode === "pane"}
+					<h3 class="mb-2">{t(lang, "task.backgroundMaterial")}</h3>
+				{:else}
+					<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
+				{/if}
 				<div class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 text-base leading-normal shadow-sm">
-					{@html renderMarkdown(task.materialsMd)}
+					{@html renderMarkdown(task.materialsMd, { headingOffset: mode === "pane" ? 2 : 0 })}
 				</div>
 			</div>
 		{/if}
@@ -137,7 +155,7 @@ function difficultyLabel(level: number): string {
 
 				<div class="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
 					{#if canShowUsefulExpressions}
-						<Button variant="outline" class="w-full justify-center sm:w-auto" onclick={openTranslateModal}>
+						<Button bind:ref={expressionsTrigger} variant="outline" class="min-h-11 w-full justify-center sm:w-auto" onclick={openTranslateModal}>
 							<Languages size={14} class="mr-1.5" />
 							{t(lang, "task.usefulExpressions")}
 						</Button>
@@ -145,12 +163,12 @@ function difficultyLabel(level: number): string {
 
 					{#if isFinished}
 						{#if simulated}
-							<Button class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black sm:w-auto sm:px-8" disabled>
+							<Button class="min-h-11 w-full justify-center border border-green-400 bg-green-100 px-4 text-black sm:w-auto sm:px-8" disabled>
 								Bilan simulé
 							</Button>
 						{:else}
 							<Button
-								class="w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
+								class="min-h-11 w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
 								href="{base}/task/{task.id}/feedback"
 							>
 								{t(lang, "hall.reviewReport")}
@@ -159,15 +177,15 @@ function difficultyLabel(level: number): string {
 					{:else if isAbandoned}
 						<!-- Abuse termination ends the session while still delivering the agent's
 					     parting reply, so the transcript must stay reachable to read it. -->
-						<Button variant="outline" class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+						<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
 							{t(lang, "task.viewConversation")}
 						</Button>
 					{:else if isPracticeEnabled}
-						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
 							{t(lang, "task.startPractice")}
 						</Button>
 					{:else}
-						<Button class="w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
+						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
 					{/if}
 				</div>
 			</div>
@@ -235,9 +253,7 @@ function difficultyLabel(level: number): string {
 			targetLanguage={task.language}
 			{generateExpressionsAction}
 			{evaluateTranslationAction}
-			onclose={() => {
-				showTranslateModal = false;
-			}}
+			onclose={closeTranslateModal}
 		/>
 	{/key}
 {/if}

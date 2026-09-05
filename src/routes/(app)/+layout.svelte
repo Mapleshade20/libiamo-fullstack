@@ -6,6 +6,7 @@ import { synchronizeQuestHallReturnAccount } from "$lib/client/quest-hall/return
 import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/client/task-transition";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
+import { isLanguageCode } from "$lib/constants";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
@@ -19,6 +20,7 @@ let quotaNotification = $state<ActionNotificationContent | null>(null);
 $effect(() => {
 	if (!browser) return;
 	synchronizeQuestHallReturnAccount(data.accountScope);
+	document.documentElement.lang = isLanguageCode(data.user.activeLanguage) ? data.user.activeLanguage : "en";
 });
 
 // Check if current route is a session page (fullscreen immersive mode)

@@ -51,4 +51,13 @@ describe("TaskPreparation", () => {
 		expect(body).toContain("Bilan simulé");
 		expect(body).not.toContain('href="/task/42/feedback"');
 	});
+
+	it("uses a nested heading when embedded in the Quest Menu", () => {
+		const { body } = render(TaskPreparation, {
+			props: { task: task(), nativeLanguage: "en", mode: "pane" },
+		});
+
+		expect(body).toContain('<h2 id="task-preparation-title"');
+		expect(body).not.toContain('<h1 id="task-preparation-title"');
+	});
 });

@@ -67,11 +67,10 @@ function handleSubmitCapture(event: SubmitEvent): void {
 <section
 	bind:this={stageElement}
 	class="preparation-stage"
-	aria-labelledby="quest-menu-preparation-heading"
+	aria-label={t(lang, "hall.menu.preparationHeading")}
 	aria-hidden={!visible}
 	inert={!interactive}
 >
-	<h2 id="quest-menu-preparation-heading" class="sr-only">{t(lang, "hall.menu.preparationHeading")}</h2>
 	<div class="preparation-grid">
 		<button bind:this={dockElement} type="button" class="preparation-dock" aria-label={backLabel} onclick={onback}>
 			<span bind:this={bookSlot} class="preparation-book-slot" aria-hidden="true"></span>

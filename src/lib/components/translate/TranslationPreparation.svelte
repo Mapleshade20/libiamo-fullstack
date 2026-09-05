@@ -100,7 +100,11 @@ function difficultyLabel(level: number): string {
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
 				<span class="difficulty">{difficultyLabel(template.difficulty)}</span>
 			</div>
-			<h1 id="translation-preparation-title">{template.title}</h1>
+			{#if mode === "pane"}
+				<h2 id="translation-preparation-title">{template.title}</h2>
+			{:else}
+				<h1 id="translation-preparation-title">{template.title}</h1>
+			{/if}
 		</div>
 
 		{#if template.description}
@@ -134,7 +138,7 @@ function difficultyLabel(level: number): string {
 				</div>
 
 				{#if blockedReason}
-					<Button href={`${base}/profile`} variant="outline" class="w-full justify-center sm:w-auto">
+					<Button href={`${base}/profile`} variant="outline" class="min-h-11 w-full justify-center sm:w-auto">
 						<AlertCircle size={14} aria-hidden="true" />
 						{t(lang, "translate.details.settings")}
 					</Button>
@@ -160,7 +164,7 @@ function difficultyLabel(level: number): string {
 						}}
 						class="w-full sm:w-56"
 					>
-						<Button type="submit" disabled={starting} aria-busy={starting} class="w-full justify-center px-4 sm:px-8">
+						<Button type="submit" disabled={starting} aria-busy={starting} class="min-h-11 w-full justify-center px-4 sm:px-8">
 							{#if starting}
 								<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 							{/if}
@@ -170,7 +174,7 @@ function difficultyLabel(level: number): string {
 					</form>
 				{:else}
 					<div class="continue-actions">
-						<Button href={primaryHref} class="w-full justify-center px-4 sm:w-auto sm:px-8">{primaryLabel}</Button>
+						<Button href={primaryHref} class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8">{primaryLabel}</Button>
 						{#if !isDraft}
 							<form
 								method="POST"
@@ -193,7 +197,7 @@ function difficultyLabel(level: number): string {
 								}}
 								class="w-full sm:w-auto"
 							>
-								<Button type="submit" variant="ghost" disabled={retaking} aria-busy={retaking} class="w-full justify-center sm:w-auto">
+								<Button type="submit" variant="ghost" disabled={retaking} aria-busy={retaking} class="min-h-11 w-full justify-center sm:w-auto">
 									<RotateCcw size={14} aria-hidden="true" />
 									{isComplete ? t(lang, "translate.details.tryAgain") : t(lang, "translate.details.abandon")}
 								</Button>

@@ -77,6 +77,10 @@ export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 
+export function isLanguageCode(value: unknown): value is LanguageCode {
+	return typeof value === "string" && LANGUAGE_CODES.includes(value as LanguageCode);
+}
+
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Español",

@@ -58,4 +58,11 @@ describe("renderMarkdown", () => {
 
 		expect(html).not.toContain("onerror");
 	});
+
+	it("shifts sanitized heading levels for embedded document sections", () => {
+		const html = renderMarkdown("## Materials\n\n### Vocabulary", { headingOffset: 2 });
+
+		expect(html).toContain("<h4>Materials</h4>");
+		expect(html).toContain("<h5>Vocabulary</h5>");
+	});
 });

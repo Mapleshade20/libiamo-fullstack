@@ -1,13 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	createQuestMenuBookCloseTiming,
 	createQuestMenuBookOpenEase,
 	createQuestMenuBookOpenTiming,
 	createQuestMenuCoverLight,
+	prefersReducedQuestMenuMotion,
 	QUEST_MENU_BOOK_SPIN_DURATION,
 } from "$lib/components/quest-hall/quest-menu/motion";
 
 describe("Quest Menu book motion", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it("reads the current reduced-motion preference", () => {
+		vi.stubGlobal("window", { matchMedia: vi.fn(() => ({ matches: true })) });
+
+		expect(prefersReducedQuestMenuMotion()).toBe(true);
+	});
+
 	it("preserves the demo opening handoff at both timing bounds", () => {
 		const earliest = createQuestMenuBookOpenTiming(0);
 		const latest = createQuestMenuBookOpenTiming(1);

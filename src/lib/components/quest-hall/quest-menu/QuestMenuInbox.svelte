@@ -141,7 +141,7 @@ $effect(() => {
 
 .inbox-trigger {
 	display: inline-flex;
-	min-height: 2.4rem;
+	min-height: 44px;
 	align-items: center;
 	gap: 0.48rem;
 	padding: 0.45rem 0.62rem 0.45rem 0.72rem;
@@ -258,8 +258,8 @@ $effect(() => {
 
 .close-button {
 	display: inline-grid;
-	width: 2rem;
-	height: 2rem;
+	width: 44px;
+	height: 44px;
 	place-items: center;
 	padding: 0;
 	border: 0;
