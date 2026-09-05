@@ -15,10 +15,7 @@ const { mockDb, mockGenerateEvaluation, mockVerifyCorrection } = vi.hoisted(() =
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/translation-evaluation/generation", () => ({ generateTranslationEvaluation: mockGenerateEvaluation }));
-vi.mock("$lib/server/translation-evaluation/verifier", async (importOriginal) => ({
-	...(await importOriginal()),
-	verifyCorrection: mockVerifyCorrection,
-}));
+vi.mock("$lib/server/translation-evaluation/verifier", () => ({ verifyCorrection: mockVerifyCorrection }));
 
 import {
 	assertGeneration1CallFitsBudget,

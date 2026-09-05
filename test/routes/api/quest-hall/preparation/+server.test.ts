@@ -1,17 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getQuestHallPreparation, QuestHallPreparationRequestError } from "$lib/server/quest-hall-preparation";
-import { GET } from "$routes/api/quest-hall/preparation/+server";
 
-const { mockGetQuestHallPreparation, mockGetBrowserTimezone } = vi.hoisted(() => ({
-	mockGetQuestHallPreparation: vi.fn(),
-	mockGetBrowserTimezone: vi.fn(() => "Europe/Paris"),
-}));
+const { mockGetQuestHallPreparation, mockGetBrowserTimezone, MockQuestHallPreparationRequestError } = vi.hoisted(() => {
+	class MockQuestHallPreparationRequestError extends Error {
+		constructor(
+			public readonly status: 400 | 409,
+			message: string,
+		) {
+			super(message);
+		}
+	}
+
+	return {
+		mockGetQuestHallPreparation: vi.fn(),
+		mockGetBrowserTimezone: vi.fn(() => "Europe/Paris"),
+		MockQuestHallPreparationRequestError,
+	};
+});
 
 vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: mockGetBrowserTimezone }));
-vi.mock("$lib/server/quest-hall-preparation", async (importOriginal) => {
-	const original = await importOriginal<typeof import("$lib/server/quest-hall-preparation")>();
-	return { ...original, getQuestHallPreparation: mockGetQuestHallPreparation };
-});
+vi.mock("$lib/server/quest-hall-preparation", () => ({
+	getQuestHallPreparation: mockGetQuestHallPreparation,
+	QuestHallPreparationRequestError: MockQuestHallPreparationRequestError,
+}));
+
+import { GET } from "$routes/api/quest-hall/preparation/+server";
 
 function event(user: unknown, query = "task=daily-7&edition=2026-09-04") {
 	return {
@@ -27,7 +39,7 @@ describe("GET /api/quest-hall/preparation", () => {
 	it("requires authentication", async () => {
 		const response = await GET(event(null) as any);
 		expect(response.status).toBe(401);
-		expect(getQuestHallPreparation).not.toHaveBeenCalled();
+		expect(mockGetQuestHallPreparation).not.toHaveBeenCalled();
 	});
 
 	it("returns the validated preparation payload", async () => {
@@ -40,7 +52,7 @@ describe("GET /api/quest-hall/preparation", () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get("cache-control")).toBe("private, no-store");
 		await expect(response.json()).resolves.toEqual({ preparation });
-		expect(getQuestHallPreparation).toHaveBeenCalledWith({
+		expect(mockGetQuestHallPreparation).toHaveBeenCalledWith({
 			user,
 			key: "daily-7",
 			editionDate: "2026-09-04",
@@ -49,7 +61,7 @@ describe("GET /api/quest-hall/preparation", () => {
 	});
 
 	it("preserves safe client error statuses", async () => {
-		mockGetQuestHallPreparation.mockRejectedValueOnce(new QuestHallPreparationRequestError(409, "This Quest Hall edition is no longer current"));
+		mockGetQuestHallPreparation.mockRejectedValueOnce(new MockQuestHallPreparationRequestError(409, "This Quest Hall edition is no longer current"));
 		const response = await GET(event({ id: "u1" }) as any);
 		expect(response.status).toBe(409);
 		await expect(response.json()).resolves.toEqual({ error: "This Quest Hall edition is no longer current" });
