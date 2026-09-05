@@ -12,8 +12,8 @@ import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionP
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
+import type { LanguageCode } from "$lib/constants";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
-import type { LanguageCode } from "$lib/i18n";
 import { parseMarkedText } from "$lib/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";

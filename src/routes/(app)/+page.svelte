@@ -1,6 +1,6 @@
 <script lang="ts">
 import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
-import type { LanguageCode } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
 
 let { data } = $props();
 let lang = $derived(data.activeLanguage as LanguageCode);

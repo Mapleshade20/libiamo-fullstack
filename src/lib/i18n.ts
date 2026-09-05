@@ -1,7 +1,5 @@
 import type { LanguageCode } from "$lib/constants";
 
-export type { LanguageCode };
-
 const translations: Record<LanguageCode, Record<string, string>> = {
 	en: {
 		// Nav

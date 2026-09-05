@@ -13,8 +13,9 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
+import type { LanguageCode } from "$lib/constants";
 import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions, SELF_ASSIGNED_LEVELS } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 
 let { form, data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);

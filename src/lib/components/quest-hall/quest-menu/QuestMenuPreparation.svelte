@@ -7,7 +7,8 @@ import { base } from "$app/paths";
 import type { QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import TaskPreparation from "$lib/components/task/TaskPreparation.svelte";
 import TranslationPreparation from "$lib/components/translate/TranslationPreparation.svelte";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 
 interface Props {
 	visible: boolean;

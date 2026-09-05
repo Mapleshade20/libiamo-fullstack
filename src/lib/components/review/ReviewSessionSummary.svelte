@@ -1,5 +1,6 @@
 <script lang="ts">
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 
 interface Props {
 	cardsReviewed: number;

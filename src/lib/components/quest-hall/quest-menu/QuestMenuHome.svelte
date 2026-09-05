@@ -2,7 +2,8 @@
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Mail from "@lucide/svelte/icons/mail";
 import { base } from "$app/paths";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";

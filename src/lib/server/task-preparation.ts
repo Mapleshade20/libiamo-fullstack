@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { LanguageCode } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
 import type { HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";

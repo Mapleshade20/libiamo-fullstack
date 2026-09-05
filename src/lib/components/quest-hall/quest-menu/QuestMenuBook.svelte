@@ -2,7 +2,8 @@
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Wine from "@lucide/svelte/icons/wine";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { QuestMenuItem, QuestMenuSection, QuestMenuSpread } from "$lib/quest-hall/menu";
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";

@@ -1,6 +1,7 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 import QuestMenuSheet from "./QuestMenuSheet.svelte";

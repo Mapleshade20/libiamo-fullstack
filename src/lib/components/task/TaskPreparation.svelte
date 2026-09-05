@@ -8,8 +8,9 @@ import { isPracticeUiImplemented } from "$lib/components/practice-ui/implemented
 import TranslateModal from "$lib/components/translate/TranslateModal.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
+import type { LanguageCode } from "$lib/constants";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
 import type { TaskPreparationTask } from "$lib/server/task-preparation";
 

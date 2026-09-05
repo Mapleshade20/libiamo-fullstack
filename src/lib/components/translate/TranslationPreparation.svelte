@@ -12,8 +12,9 @@ import { base } from "$app/paths";
 import { handlePreparationActionResult } from "$lib/client/quest-hall/preparation-actions";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
+import type { LanguageCode } from "$lib/constants";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 
 export interface TranslationPreparationTemplate {
 	id: number;

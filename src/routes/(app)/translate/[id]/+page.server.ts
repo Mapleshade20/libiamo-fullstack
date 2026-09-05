@@ -1,7 +1,7 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
+import type { LanguageCode } from "$lib/constants";
 import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
-import type { LanguageCode } from "$lib/i18n";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { getOrCreateTranslationAttempt, getOrCreateTranslationSourceSet } from "$lib/server/translation";

@@ -15,8 +15,9 @@ import {
 	translationDraftStorageKey,
 } from "$lib/client/translation-draft";
 import { Button } from "$lib/components/ui/button";
+import type { LanguageCode } from "$lib/constants";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);

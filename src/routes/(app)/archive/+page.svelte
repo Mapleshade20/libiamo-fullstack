@@ -8,7 +8,8 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { deserialize } from "$app/forms";
 import NoteCard from "$lib/components/note/NoteCard.svelte";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];

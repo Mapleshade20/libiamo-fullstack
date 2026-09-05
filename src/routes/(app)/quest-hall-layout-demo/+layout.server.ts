@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { dev } from "$app/environment";
-import type { LanguageCode } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
 import {
 	applyQuestHallDemoScenario,
 	getQuestHallDemoItems,

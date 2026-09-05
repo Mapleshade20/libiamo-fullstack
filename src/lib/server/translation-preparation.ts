@@ -1,5 +1,5 @@
+import type { LanguageCode } from "$lib/constants";
 import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
-import type { LanguageCode } from "$lib/i18n";
 import { findTranslationAttempt, getTranslationTemplate } from "$lib/server/translation-workflow";
 
 export type TranslationPreparationBlockedReason = "missing-native-language" | "same-language" | null;

@@ -5,8 +5,9 @@ import X from "@lucide/svelte/icons/x";
 import { fade } from "svelte/transition";
 import { base } from "$app/paths";
 import type { UnreadSubscriptionStatus } from "$lib/client/quest-hall/unread-subscription";
+import type { LanguageCode } from "$lib/constants";
 import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 import { formatRelativeAge, formatUnreadBadgeCount, type UnreadInboxItem, unreadTargetHref } from "$lib/unread";
 
 interface Props {

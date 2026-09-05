@@ -23,7 +23,8 @@ import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte
 import TransferPractice from "$lib/components/translate-evaluation/TransferPractice.svelte";
 import type { PracticeGenStatus, TransferNoteFixture } from "$lib/components/translate-evaluation/types";
 import { Button } from "$lib/components/ui/button";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import { randomExampleIndex } from "$lib/note";
 
 let { data } = $props();

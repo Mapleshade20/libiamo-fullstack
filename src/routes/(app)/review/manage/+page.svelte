@@ -4,7 +4,8 @@ import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Search from "@lucide/svelte/icons/search";
 import { base } from "$app/paths";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
 
 let { data } = $props();

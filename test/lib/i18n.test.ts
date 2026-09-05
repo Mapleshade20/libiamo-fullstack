@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 
 describe("task UI translations", () => {
 	it.each([

@@ -1,7 +1,7 @@
 <script lang="ts">
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import TranslationPreparation from "$lib/components/translate/TranslationPreparation.svelte";
-import type { LanguageCode } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
 
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
