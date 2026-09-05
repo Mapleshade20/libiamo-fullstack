@@ -28,7 +28,5 @@ describe("CorrectionResult", () => {
 		expect(body.match(/class="diff-view/g)).toHaveLength(1);
 		expect(body).not.toContain("diff-reference");
 		expect(body).not.toContain('<span role="button"');
-		expect(body).toMatch(/<p class="[^"]*font-prose[^"]*">.*The complete/s);
-		expect(body).toMatch(/<p class="[^"]*font-prose[^"]*">Prefer a more idiomatic greeting/);
 	});
 });

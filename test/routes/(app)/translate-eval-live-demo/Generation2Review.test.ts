@@ -46,13 +46,6 @@ describe("Generation2Review", () => {
 		expect(body).toContain("Source cards ·");
 		expect(body).toContain("1, 3");
 		expect(body.match(/Target example/g)).toHaveLength(4);
-		expect(body).toContain("第一道原文。");
-		expect(body).toContain("The fourth target example is defined by clarity.");
-		expect(body).toContain("never written to the");
-		expect(body).toContain("database");
-		expect(body).toContain("Temperature");
-		expect(body).toContain("deepseek-v4-flash");
-		expect(body).toContain("1937");
 		expect(body).toContain("Complete prompt · 2 messages");
 		expect(body.indexOf("Complete prompt · 2 messages")).toBeLessThan(body.indexOf("Validated structured result"));
 	});

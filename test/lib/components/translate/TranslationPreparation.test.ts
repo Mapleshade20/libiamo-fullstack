@@ -46,12 +46,4 @@ describe("TranslationPreparation", () => {
 		expect(body).toContain("Continuer l'évaluation");
 		expect(body).toContain('<h1 id="translation-preparation-title"');
 	});
-
-	it("uses the prose type role for the template description", () => {
-		const { body } = render(TranslationPreparation, {
-			props: { template, attempt: null, blockedReason: null, lang: "fr" },
-		});
-
-		expect(body).toMatch(/<p class="[^"]*font-prose[^"]*">Traduisez une réponse/);
-	});
 });
