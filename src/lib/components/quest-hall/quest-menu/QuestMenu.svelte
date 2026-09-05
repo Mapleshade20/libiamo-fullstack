@@ -311,11 +311,13 @@ function moveTo(target: { section: QuestMenuSection; leaf: number }, direction: 
 			narrowLayout,
 			direction,
 			() => {
+				if (sequence !== paperTurnSequence) return;
 				if (targetItemKey !== undefined) narrowItemKey = targetItemKey;
 				void applyTransition(event);
 			},
 			() => {
-				if (sequence === paperTurnSequence) turnPreview = null;
+				if (sequence !== paperTurnSequence) return;
+				turnPreview = null;
 				turning = false;
 			},
 		);
@@ -432,6 +434,11 @@ onMount(() => {
 	animator = createQuestMenuAnimator(motionElements);
 	const media = matchMedia("(max-width: 64rem)");
 	const updateLayout = () => {
+		// Settling kills the page timeline without invoking its completion callback.
+		// Drop its preview and input lock as well, keeping the last committed spread.
+		paperTurnSequence += 1;
+		turnPreview = null;
+		turning = false;
 		narrowLayout = media.matches;
 		cancelAnimationFrame(resizeFrame);
 		resizeFrame = requestAnimationFrame(() => {
