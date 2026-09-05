@@ -20,6 +20,7 @@ export interface QuestMenuTurnPreview {
 }
 
 interface Props {
+	ready: boolean;
 	view: "home" | "catalog" | "prepare";
 	section: QuestMenuSection;
 	spread: QuestMenuSpread;
@@ -45,6 +46,7 @@ interface Props {
 }
 
 let {
+	ready,
 	view,
 	section,
 	spread,
@@ -115,7 +117,7 @@ function sectionLabel(value: QuestMenuSection): string {
 	</div>
 {/snippet}
 
-<div class="book-layer" class:is-prepare={view === "prepare"} aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
+<div class="book-layer" class:is-ready={ready} class:is-prepare={view === "prepare"} aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
 	<div class="book-frame-shell">
 		<div class="book-frame" bind:this={bookFrame} aria-busy={turning}>
 			<span class="recto-probe" bind:this={rectoProbe} aria-hidden="true"></span>
@@ -209,6 +211,10 @@ function sectionLabel(value: QuestMenuSection): string {
 	inset: 0;
 	z-index: 3;
 	pointer-events: none;
+}
+
+.book-layer:not(.is-ready) {
+	visibility: hidden;
 }
 
 .book-frame-shell {

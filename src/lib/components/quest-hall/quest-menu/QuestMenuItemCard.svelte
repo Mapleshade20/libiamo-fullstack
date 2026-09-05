@@ -101,7 +101,7 @@ function difficultyLabel(level: number): string {
 
 .task-card h3 {
 	margin: 0.1rem 0 0;
-	font-family: "Newsreader", var(--font-serif);
+	font-family: var(--font-serif);
 	font-size: clamp(1.2rem, 2.15vw, 1.8rem);
 	font-weight: 380;
 	line-height: 1.12;

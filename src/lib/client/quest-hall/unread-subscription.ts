@@ -8,6 +8,12 @@ export interface UnreadSubscriptionState {
 	status: UnreadSubscriptionStatus;
 }
 
+export interface UnreadHallFact {
+	taskId: number;
+	sessionStatus: string | null;
+	unreadCount: number;
+}
+
 interface VisibilitySource {
 	readonly hidden: boolean;
 	addEventListener(type: "visibilitychange", listener: () => void): void;
@@ -22,6 +28,7 @@ interface CreateUnreadSubscriptionOptions {
 	visibilitySource?: VisibilitySource;
 	onchange: (state: UnreadSubscriptionState) => void;
 	onHallFactsChange?: () => void;
+	getHallFacts?: () => readonly UnreadHallFact[];
 }
 
 export function getUnreadTotal(items: readonly Pick<UnreadInboxItem, "unreadCount">[]): number {
@@ -39,6 +46,15 @@ export function unreadHallFactsChanged(previous: readonly UnreadInboxItem[], nex
 	return next.some((item) => previousFacts.get(item.taskId) !== `${item.sessionStatus}:${item.unreadCount}`);
 }
 
+export function unreadHallSnapshotChanged(snapshot: readonly UnreadHallFact[], items: readonly UnreadInboxItem[]): boolean {
+	const itemsByTaskId = new Map(items.map((item) => [item.taskId, item]));
+	return snapshot.some((fact) => {
+		const item = itemsByTaskId.get(fact.taskId);
+		if (!item) return fact.unreadCount !== 0;
+		return item.unreadCount !== fact.unreadCount || item.sessionStatus !== fact.sessionStatus;
+	});
+}
+
 export function createUnreadSubscription({
 	endpoint,
 	initialTotal = 0,
@@ -47,6 +63,7 @@ export function createUnreadSubscription({
 	visibilitySource = document,
 	onchange,
 	onHallFactsChange,
+	getHallFacts,
 }: CreateUnreadSubscriptionOptions) {
 	let state: UnreadSubscriptionState = { items: [], total: initialTotal, status: "loading" };
 	let successfulItems: UnreadInboxItem[] | null = null;
@@ -71,7 +88,9 @@ export function createUnreadSubscription({
 			// The first response may already differ from the server-rendered Hall if a
 			// reply arrived between SSR and subscription startup. Refresh once so cards
 			// and recommendations reconcile with the authoritative inbox facts.
-			const hallFactsChanged = successfulItems === null || unreadHallFactsChanged(successfulItems, items);
+			const hallFactsChanged = getHallFacts
+				? unreadHallSnapshotChanged(getHallFacts(), items)
+				: successfulItems === null || unreadHallFactsChanged(successfulItems, items);
 			successfulItems = items;
 			state = { items, total, status: "ready" };
 			onchange(state);

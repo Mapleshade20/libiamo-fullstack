@@ -4,6 +4,7 @@ import {
 	getUnreadTotal,
 	type UnreadSubscriptionState,
 	unreadHallFactsChanged,
+	unreadHallSnapshotChanged,
 } from "$lib/client/quest-hall/unread-subscription";
 import type { UnreadInboxItem } from "$lib/unread";
 
@@ -114,6 +115,30 @@ describe("Quest Hall unread subscription", () => {
 		subscription.destroy();
 	});
 
+	it("does not invalidate the Hall when the first response matches its SSR task facts", async () => {
+		const current = item(1);
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(response([current, item(99, { title: "Historical task" })]))
+			.mockResolvedValueOnce(response([{ ...current, unreadCount: 2 }, item(99, { title: "Historical task" })]));
+		const onHallFactsChange = vi.fn();
+		const subscription = createUnreadSubscription({
+			endpoint: "/api/unread",
+			fetcher,
+			visibilitySource: visibilitySource(),
+			onchange: vi.fn(),
+			onHallFactsChange,
+			getHallFacts: () => [{ taskId: current.taskId, sessionStatus: current.sessionStatus, unreadCount: current.unreadCount }],
+		});
+
+		await subscription.refresh();
+		expect(onHallFactsChange).not.toHaveBeenCalled();
+
+		await subscription.refresh();
+		expect(onHallFactsChange).toHaveBeenCalledOnce();
+		subscription.destroy();
+	});
+
 	it("polls only while visible, refreshes on visibility return, and cleans up", async () => {
 		vi.useFakeTimers();
 		const source = visibilitySource(true);
@@ -157,5 +182,12 @@ describe("unread Hall fact comparison", () => {
 		expect(unreadHallFactsChanged([first], [{ ...first, unreadCount: 2 }])).toBe(true);
 		expect(unreadHallFactsChanged([first], [{ ...first, sessionStatus: "evaluated" }])).toBe(true);
 		expect(unreadHallFactsChanged([first], [item(3)])).toBe(true);
+	});
+
+	it("compares only tasks represented by the current Hall snapshot", () => {
+		const snapshot = [{ taskId: 1, sessionStatus: "in_progress", unreadCount: 0 }];
+		expect(unreadHallSnapshotChanged(snapshot, [item(99)])).toBe(false);
+		expect(unreadHallSnapshotChanged(snapshot, [item(1)])).toBe(true);
+		expect(unreadHallSnapshotChanged([{ ...snapshot[0], unreadCount: 1 }], [])).toBe(true);
 	});
 });

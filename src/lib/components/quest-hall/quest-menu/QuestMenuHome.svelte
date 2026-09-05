@@ -190,7 +190,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 
 .recommendation-card h2 {
 	margin: 0;
-	font-family: "Newsreader", var(--font-serif);
+	font-family: var(--font-serif);
 	font-size: clamp(1.25rem, 2.8vw, 1.75rem);
 	font-weight: 380;
 	line-height: 1.14;
@@ -300,7 +300,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 }
 
 .mobile-cover > strong {
-	font-family: "Newsreader", var(--font-serif);
+	font-family: var(--font-serif);
 	font-size: clamp(2rem, 5vw, 4.4rem);
 	font-weight: 380;
 	letter-spacing: 0.08em;

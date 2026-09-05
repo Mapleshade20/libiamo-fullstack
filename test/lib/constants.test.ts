@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_SELF_ASSIGNED_LEVELS,
+	getHtmlLanguageTag,
 	getLanguageEnglishName,
 	getSelfAssignedLevel,
 	isLanguageCode,
@@ -8,6 +9,13 @@ import {
 	normalizeSelfAssignedLevels,
 	withSelfAssignedLevel,
 } from "$lib/constants";
+
+describe("getHtmlLanguageTag", () => {
+	it("identifies the generic Chinese native-language code as Simplified Chinese", () => {
+		expect(getHtmlLanguageTag("zh")).toBe("zh-Hans");
+		expect(getHtmlLanguageTag("ja")).toBe("ja");
+	});
+});
 
 describe("getLanguageEnglishName", () => {
 	it("returns English names for learning languages", () => {

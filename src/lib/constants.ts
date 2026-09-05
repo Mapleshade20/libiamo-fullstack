@@ -156,6 +156,10 @@ export const NATIVE_LANGUAGE_CODES = [
 ] as const;
 export type NativeLanguageCode = (typeof NATIVE_LANGUAGE_CODES)[number];
 
+export function getHtmlLanguageTag(language: string): string {
+	return language === "zh" ? "zh-Hans" : language;
+}
+
 export function getNativeLanguageOptions(locale = "en"): { value: NativeLanguageCode; label: string }[] {
 	let displayNames: Intl.DisplayNames | undefined;
 	try {

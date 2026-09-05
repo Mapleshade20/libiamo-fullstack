@@ -126,7 +126,7 @@ let {
 
 .catalog-toolbar h2 {
 	margin: 0.35rem 0 0;
-	font-family: "Newsreader", var(--font-serif);
+	font-family: var(--font-serif);
 	font-size: clamp(1.45rem, 3vw, 2.25rem);
 	font-weight: 380;
 	line-height: 1.08;

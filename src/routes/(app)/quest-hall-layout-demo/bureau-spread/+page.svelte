@@ -1457,7 +1457,6 @@ $effect(() => {
 <svelte:head>
 	<title>Livre de bureau · CARTE · Libiamo</title>
 	<meta name="description" content="Prototype de salle des quêtes en livre de bureau à double page.">
-	<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet">
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -1880,7 +1879,6 @@ $effect(() => {
 
 <style>
 .bureau-demo {
-	--bureau-serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	--bureau-body-size: 1rem;
 	/* A book does not change proportion when it opens: the spread is exactly
 	   two of its pages, so the closed footprint is half of it. */
@@ -1888,14 +1886,13 @@ $effect(() => {
 	--carte-page-aspect: 0.74;
 	/* How far the bookmark of the section you are on slides out of the book. */
 	--ribbon-tab-reach: 0.62rem;
-	--font-serif: var(--bureau-serif);
 	position: relative;
 	min-height: calc(100dvh - 8rem);
 	overflow: clip;
 	padding: clamp(1rem, 2.5vw, 2rem);
 	border: 1px solid color-mix(in oklab, var(--carte-ink) 12%, transparent);
 	border-radius: 0.8rem;
-	font-family: var(--bureau-serif);
+	font-family: var(--font-serif);
 	font-optical-sizing: auto;
 	font-weight: 380;
 	font-kerning: normal;

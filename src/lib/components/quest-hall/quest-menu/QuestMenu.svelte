@@ -66,6 +66,7 @@ let translationMonth = $state(untrack(getInitialTranslationMonth));
 let narrowItemKey = $state<QuestMenuItemKey | null>(null);
 let narrowLayout = $state(false);
 let mounted = $state(false);
+let bookReady = $state(false);
 let turning = $state(false);
 let turnPreview = $state<QuestMenuTurnPreview | null>(null);
 let transitionFrom = $state<QuestMenuView | null>(null);
@@ -496,6 +497,12 @@ onMount(() => {
 	unreadSubscription = createUnreadSubscription({
 		endpoint: `${base}/api/unread`,
 		initialTotal: unreadState.total,
+		getHallFacts: () =>
+			[...data.dailyTasks, ...data.weeklyTasks].map((task) => ({
+				taskId: task.id,
+				sessionStatus: task.sessionStatus,
+				unreadCount: task.unreadCount,
+			})),
 		onchange: (state) => {
 			unreadState = state;
 		},
@@ -521,6 +528,9 @@ onMount(() => {
 			transitionFrom = null;
 			transitionTo = null;
 			animator?.settle(visibleView);
+			// The server cannot measure the destination slot. Reveal the book only
+			// after its first client-side fit prevents the raw spread from flashing.
+			bookReady = true;
 		});
 	};
 	const handlePopstate = async () => {
@@ -653,6 +663,7 @@ onMount(() => {
 	</div>
 
 	<QuestMenuBook
+		ready={bookReady}
 		view={visibleView}
 		section={location.section}
 		spread={currentSpread}
@@ -680,7 +691,6 @@ onMount(() => {
 
 <style>
 .quest-menu {
-	--menu-canvas: #f1ece2;
 	--menu-paper: #f7f1e6;
 	--menu-sheet: #fffaf1;
 	--menu-cover: #6f303a;
@@ -697,14 +707,10 @@ onMount(() => {
 	--menu-spread-aspect: 1.48;
 	--menu-page-aspect: 0.74;
 	--menu-ribbon-reach: 0.62rem;
-	--font-serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	position: relative;
 	min-height: calc(100dvh - 8rem);
 	padding: clamp(1rem, 2.5vw, 2rem);
 	overflow: clip;
-	border: 1px solid color-mix(in oklab, var(--menu-ink) 12%, transparent);
-	border-radius: 0.8rem;
-	background: var(--menu-canvas);
 	color: var(--menu-ink);
 	font-family: var(--font-serif);
 	font-optical-sizing: auto;
@@ -712,17 +718,6 @@ onMount(() => {
 	font-kerning: normal;
 	font-synthesis: none;
 }
-
-.quest-menu::before {
-	position: absolute;
-	inset: 0;
-	background-image:
-		linear-gradient(90deg, transparent 0 49.9%, color-mix(in oklab, var(--menu-ink) 3%, transparent) 50%, transparent 50.1%),
-		repeating-linear-gradient(0deg, transparent 0 34px, color-mix(in oklab, var(--menu-ink) 2%, transparent) 34px 35px);
-	content: "";
-	pointer-events: none;
-}
-
 .hall-heading,
 .stage-stack {
 	position: relative;
