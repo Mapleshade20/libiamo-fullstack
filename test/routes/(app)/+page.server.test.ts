@@ -131,7 +131,7 @@ describe("(app) home +page.server", () => {
 		const cookies = { get: vi.fn() };
 		const url = new URL("https://libiamo.test/?view=prepare&task=daily-7");
 
-		await expect(load({ locals: { user }, cookies, depends: vi.fn(), url } as any)).resolves.toMatchObject({
+		await expect(load({ locals: { user }, cookies, url } as any)).resolves.toMatchObject({
 			hallLocation: { view: "prepare", section: "daily", task: "daily-7" },
 			initialPreparation: preparation,
 		});

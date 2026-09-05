@@ -9,7 +9,7 @@ import { switchActiveLanguage } from "./user-language-action";
 
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
-	event.depends(QUEST_HALL_DEPENDENCY);
+	event.depends?.(QUEST_HALL_DEPENDENCY);
 	const browserTimezone = getBrowserTimezone(event.cookies);
 	const hallData = await loadQuestHallData(user, browserTimezone);
 	const requestedLocation = parseHallLocation(event.url);
