@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { getLanguageEnglishName, isLanguageCode, isSelfAssignedLevel } from "$lib/constants";
+import {
+	DEFAULT_SELF_ASSIGNED_LEVELS,
+	getLanguageEnglishName,
+	getSelfAssignedLevel,
+	isLanguageCode,
+	isSelfAssignedLevel,
+	normalizeSelfAssignedLevels,
+	withSelfAssignedLevel,
+} from "$lib/constants";
 
 describe("getLanguageEnglishName", () => {
 	it("returns English names for learning languages", () => {
@@ -32,5 +40,19 @@ describe("isSelfAssignedLevel", () => {
 		expect(isSelfAssignedLevel(0)).toBe(false);
 		expect(isSelfAssignedLevel(4)).toBe(false);
 		expect(isSelfAssignedLevel("2")).toBe(false);
+	});
+});
+
+describe("self-assigned levels by language", () => {
+	it("fills every supported language while preserving valid stored levels", () => {
+		expect(normalizeSelfAssignedLevels({ en: 1, es: 3, fr: 9 })).toEqual({ en: 1, es: 3, fr: 2, ja: 2 });
+		expect(normalizeSelfAssignedLevels(undefined)).toEqual(DEFAULT_SELF_ASSIGNED_LEVELS);
+	});
+
+	it("reads and updates one language without changing the others", () => {
+		const levels = { en: 1, es: 2, fr: 3, ja: 1 };
+
+		expect(getSelfAssignedLevel(levels, "fr")).toBe(3);
+		expect(withSelfAssignedLevel(levels, "es", 3)).toEqual({ en: 1, es: 3, fr: 3, ja: 1 });
 	});
 });

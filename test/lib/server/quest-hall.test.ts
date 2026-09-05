@@ -44,7 +44,6 @@ vi.mock("$lib/server/db", () => ({
 vi.mock("$lib/server/db/schema", () => ({
 	userLearningProfile: {
 		userId: "userLearningProfile.userId",
-		language: "userLearningProfile.language",
 	},
 	task: {
 		id: "task.id",
@@ -138,7 +137,7 @@ describe("loadQuestHallData", () => {
 
 	it("loads stable, user-scoped Hall facts at the browser-local day and week boundary", async () => {
 		const firstTranslationCreatedAt = new Date("2026-04-30T18:00:00.000Z");
-		mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: 3 });
+		mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 2 } });
 		mockOrderBy
 			.mockResolvedValueOnce([weeklyTask])
 			.mockResolvedValueOnce([dailyTask])

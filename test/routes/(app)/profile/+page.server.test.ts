@@ -40,7 +40,7 @@ vi.mock("$lib/server/db/schema", () => ({
 	userApiKey: { userId: Symbol("userApiKey.userId") },
 	userLearningProfile: {
 		userId: Symbol("userLearningProfile.userId"),
-		language: Symbol("userLearningProfile.language"),
+		levelSelfAssign: Symbol("userLearningProfile.levelSelfAssign"),
 	},
 }));
 
@@ -88,7 +88,7 @@ describe("Profile +page.server", () => {
 		});
 
 		it("returns the active language's saved self-assigned level", async () => {
-			mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: 3 });
+			mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 3 } });
 
 			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "ja" } } } as any)) as {
 				levelSelfAssign: number;
@@ -207,11 +207,14 @@ describe("Profile +page.server", () => {
 			const result = await actions.updateProficiency(event);
 
 			expect(result).toEqual({ success: true, levelSelfAssign: 1 });
-			expect(mockValues).toHaveBeenCalledWith({ userId: "u1", language: "es", levelSelfAssign: 1 });
+			expect(mockValues).toHaveBeenCalledWith({
+				userId: "u1",
+				levelSelfAssign: { en: 2, es: 1, fr: 2, ja: 2 },
+			});
 			expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
 				expect.objectContaining({
-					target: expect.any(Array),
-					set: expect.objectContaining({ levelSelfAssign: 1, updatedAt: expect.any(Date) }),
+					target: expect.anything(),
+					set: expect.objectContaining({ levelSelfAssign: expect.anything(), updatedAt: expect.any(Date) }),
 				}),
 			);
 		});

@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
+	getSelfAssignedLevel,
 	type InteractionType,
-	isSelfAssignedLevel,
 	type LanguageCode,
 	type SelfAssignedLevel,
 	type TranslationWorkflowPhase,
@@ -62,7 +62,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 
 	await ensureTasksForDate(activeLanguage, localDate);
 	const learningProfile = await db.query.userLearningProfile.findFirst({
-		where: (profile, { and, eq }) => and(eq(profile.userId, user.id), eq(profile.language, activeLanguage)),
+		where: (profile, { eq }) => eq(profile.userId, user.id),
 		columns: { levelSelfAssign: true },
 	});
 
@@ -178,7 +178,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 	return {
 		activeLanguage,
 		nativeLanguage: user.nativeLanguage ?? null,
-		levelSelfAssign: isSelfAssignedLevel(learningProfile?.levelSelfAssign) ? learningProfile.levelSelfAssign : 2,
+		levelSelfAssign: getSelfAssignedLevel(learningProfile?.levelSelfAssign, activeLanguage),
 		localDate,
 		localMonday,
 		editionDate: localDate,

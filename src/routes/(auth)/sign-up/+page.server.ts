@@ -42,13 +42,7 @@ export const actions: Actions = {
 			});
 
 			if (res.user) {
-				await db
-					.insert(userLearningProfile)
-					.values({
-						userId: res.user.id,
-						language: result.data.activeLanguage,
-					})
-					.onConflictDoNothing();
+				await db.insert(userLearningProfile).values({ userId: res.user.id }).onConflictDoNothing();
 			}
 		} catch (error) {
 			if (error instanceof APIError) {

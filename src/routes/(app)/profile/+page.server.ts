@@ -1,8 +1,15 @@
 import { fail, redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
-import { getNativeLanguageOptions, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
+import {
+	getNativeLanguageOptions,
+	getSelfAssignedLevel,
+	isLanguageCode,
+	isSelfAssignedLevel,
+	type SelfAssignedLevel,
+	withSelfAssignedLevel,
+} from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
@@ -23,7 +30,7 @@ export const load: PageServerLoad = async (event) => {
 			columns: { userId: true, baseUrl: true, model: true },
 		}),
 		db.query.userLearningProfile.findFirst({
-			where: (t, { and, eq }) => and(eq(t.userId, user.id), eq(t.language, activeLanguage)),
+			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { levelSelfAssign: true },
 		}),
 	]);
@@ -36,7 +43,7 @@ export const load: PageServerLoad = async (event) => {
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
-		levelSelfAssign: isSelfAssignedLevel(learningProfile?.levelSelfAssign) ? learningProfile.levelSelfAssign : 2,
+		levelSelfAssign: getSelfAssignedLevel(learningProfile?.levelSelfAssign, activeLanguage),
 	};
 };
 
@@ -122,10 +129,18 @@ export const actions: Actions = {
 		const levelSelfAssign: SelfAssignedLevel = result.data.levelSelfAssign;
 		await db
 			.insert(userLearningProfile)
-			.values({ userId: user.id, language: activeLanguage, levelSelfAssign })
+			.values({ userId: user.id, levelSelfAssign: withSelfAssignedLevel(undefined, activeLanguage, levelSelfAssign) })
 			.onConflictDoUpdate({
-				target: [userLearningProfile.userId, userLearningProfile.language],
-				set: { levelSelfAssign, updatedAt: new Date() },
+				target: userLearningProfile.userId,
+				set: {
+					levelSelfAssign: sql`jsonb_set(
+						${userLearningProfile.levelSelfAssign},
+						ARRAY[${activeLanguage}]::text[],
+						to_jsonb(${levelSelfAssign}::integer),
+						true
+					)`,
+					updatedAt: new Date(),
+				},
 			});
 
 		return { success: true, levelSelfAssign };

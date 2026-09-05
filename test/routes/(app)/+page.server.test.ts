@@ -11,13 +11,6 @@ const { mockLoadQuestHallData, mockGetBrowserTimezone, mockGetQuestHallPreparati
 	mockGetQuestHallPreparation: vi.fn(),
 }));
 
-const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
-	const mockOnConflictDoNothing = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
-	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockOnConflictDoNothing, mockValues, mockInsert };
-});
-
 vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
@@ -36,16 +29,6 @@ vi.mock("$lib/server/quest-hall", () => ({
 
 vi.mock("$lib/server/quest-hall-preparation", () => ({
 	getQuestHallPreparation: mockGetQuestHallPreparation,
-}));
-
-vi.mock("$lib/server/db", () => ({
-	db: {
-		insert: mockInsert,
-	},
-}));
-
-vi.mock("$lib/server/db/schema", () => ({
-	userLearningProfile: Symbol("userLearningProfile"),
 }));
 
 describe("(app) home +page.server", () => {
@@ -177,9 +160,6 @@ describe("(app) home +page.server", () => {
 	runSwitchLanguageActionSuite({
 		action: actions.switchLanguage,
 		updateUser: auth.api.updateUser as any,
-		mockInsert,
-		mockValues,
-		mockOnConflictDoNothing,
 		successLanguage: "ja",
 	});
 });
