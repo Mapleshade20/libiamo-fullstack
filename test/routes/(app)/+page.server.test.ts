@@ -67,6 +67,7 @@ describe("(app) home +page.server", () => {
 		const hallData = {
 			activeLanguage: "fr",
 			nativeLanguage: "en",
+			levelSelfAssign: 2,
 			localDate: "2026-04-17",
 			localMonday: "2026-04-13",
 			editionDate: "2026-04-17",
@@ -99,6 +100,7 @@ describe("(app) home +page.server", () => {
 		const hallData = {
 			activeLanguage: "fr",
 			nativeLanguage: "en",
+			levelSelfAssign: 2,
 			localDate: "2026-04-17",
 			localMonday: "2026-04-13",
 			editionDate: "2026-04-17",
@@ -146,6 +148,7 @@ describe("(app) home +page.server", () => {
 		const hallData = {
 			activeLanguage: "fr",
 			nativeLanguage: "en",
+			levelSelfAssign: 2,
 			localDate: "2026-09-04",
 			localMonday: "2026-08-31",
 			editionDate: "2026-09-04",

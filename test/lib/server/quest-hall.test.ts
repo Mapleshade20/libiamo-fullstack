@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadQuestHallData } from "$lib/server/quest-hall";
 
-const { mockSelect, mockWhere, mockOrderBy, mockFindMany } = vi.hoisted(() => {
+const { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindLearningProfile } = vi.hoisted(() => {
 	const mockOrderBy = vi.fn();
 	const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
 	const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
 	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
 	const mockSelect = vi.fn(() => ({ from: mockFrom }));
 	const mockFindMany = vi.fn();
-	return { mockSelect, mockWhere, mockOrderBy, mockFindMany };
+	const mockFindLearningProfile = vi.fn();
+	return { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindLearningProfile };
 });
 
 const { mockEnsureTasksForDate, mockGetGreeting, mockGetRandomSubtitle } = vi.hoisted(() => ({
@@ -30,6 +31,9 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		select: mockSelect,
 		query: {
+			userLearningProfile: {
+				findFirst: mockFindLearningProfile,
+			},
 			practiceSession: {
 				findMany: mockFindMany,
 			},
@@ -38,6 +42,10 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
+	userLearningProfile: {
+		userId: "userLearningProfile.userId",
+		language: "userLearningProfile.language",
+	},
 	task: {
 		id: "task.id",
 		title: "task.title",
@@ -121,6 +129,7 @@ describe("loadQuestHallData", () => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-04-19T16:30:00.000Z"));
+		mockFindLearningProfile.mockResolvedValue(undefined);
 	});
 
 	afterEach(() => {
@@ -129,6 +138,7 @@ describe("loadQuestHallData", () => {
 
 	it("loads stable, user-scoped Hall facts at the browser-local day and week boundary", async () => {
 		const firstTranslationCreatedAt = new Date("2026-04-30T18:00:00.000Z");
+		mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: 3 });
 		mockOrderBy
 			.mockResolvedValueOnce([weeklyTask])
 			.mockResolvedValueOnce([dailyTask])
@@ -184,6 +194,7 @@ describe("loadQuestHallData", () => {
 		expect(result).toEqual({
 			activeLanguage: "fr",
 			nativeLanguage: "en",
+			levelSelfAssign: 3,
 			localDate: "2026-04-20",
 			localMonday: "2026-04-20",
 			editionDate: "2026-04-20",
@@ -211,6 +222,7 @@ describe("loadQuestHallData", () => {
 			translationStatusMap: { 41: "completed", 42: "draft" },
 		});
 		expect(() => JSON.stringify(result)).not.toThrow();
+		expect(mockFindLearningProfile).toHaveBeenCalledOnce();
 
 		expect(mockOrderBy.mock.calls[0]).toEqual([{ op: "asc", column: "task.id" }]);
 		expect(mockOrderBy.mock.calls[1]).toEqual([{ op: "asc", column: "task.id" }]);
@@ -250,6 +262,7 @@ describe("loadQuestHallData", () => {
 		const result = await loadQuestHallData({ id: "user-2", name: "Ada", activeLanguage: "ja" }, "UTC");
 
 		expect(result.nativeLanguage).toBeNull();
+		expect(result.levelSelfAssign).toBe(2);
 		expect(result.dailyTasks).toEqual([]);
 		expect(result.weeklyTasks).toEqual([]);
 		expect(result.translationStatusMap).toEqual({});

@@ -234,10 +234,12 @@ function handleRetry() {
 
 	<div class="grid gap-4 sm:grid-cols-[4.75rem_minmax(0,1fr)] sm:gap-5">
 		<p class="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{sourceLabel}</p>
-		<p class="font-serif text-lg leading-relaxed break-words">{card.sourceText}</p>
+		<p class="font-prose text-lg leading-relaxed break-words">{card.sourceText}</p>
 
 		<p class="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{originalLabel}</p>
-		<blockquote class="border-l-2 border-[#c9a4a4] pl-4 text-base leading-relaxed break-words text-foreground/75">{card.originalAnswer}</blockquote>
+		<blockquote class="border-l-2 border-[#c9a4a4] pl-4 font-prose text-base leading-relaxed break-words text-foreground/75">
+			{card.originalAnswer}
+		</blockquote>
 	</div>
 
 	{#if isAccepted}
@@ -260,7 +262,7 @@ function handleRetry() {
 					<AlertCircle class="mt-0.5 size-4 shrink-0 text-red-700" />
 					<div>
 						<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-red-800 uppercase">{feedbackLabel}</p>
-						<p class="text-sm leading-relaxed text-red-950">{local.feedback}</p>
+						<p class="font-prose text-sm leading-relaxed text-red-950">{local.feedback}</p>
 					</div>
 				</div>
 			{/if}
@@ -364,7 +366,7 @@ function handleRetry() {
 								<AlertCircle class="mt-0.5 size-4 shrink-0 text-red-700" />
 								<div>
 									<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-red-800 uppercase">{feedbackLabel}</p>
-									<p class="text-sm leading-relaxed text-red-950">{local.feedback}</p>
+									<p class="font-prose text-sm leading-relaxed text-red-950">{local.feedback}</p>
 								</div>
 							</div>
 						{/if}
@@ -377,14 +379,14 @@ function handleRetry() {
 							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
 							<div class="min-w-0">
 								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{hintLabel}</p>
-								<div class="hint-markdown prose text-sm leading-relaxed text-[#34463a]">{@html initialHintHtml}</div>
+								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-[#34463a]">{@html initialHintHtml}</div>
 							</div>
 						</div>
 						<div class="hint-panel" id="correction-hint-{cardIndex}-deeper" aria-hidden={!hintShowDeeper}>
 							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
 							<div class="min-w-0">
 								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{deeperHintLabel}</p>
-								<div class="hint-markdown prose text-sm leading-relaxed text-[#34463a]">{@html deeperHintHtml}</div>
+								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-[#34463a]">{@html deeperHintHtml}</div>
 							</div>
 						</div>
 					</div>

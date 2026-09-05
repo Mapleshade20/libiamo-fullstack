@@ -60,4 +60,17 @@ describe("TaskPreparation", () => {
 		expect(body).toContain('<h2 id="task-preparation-title"');
 		expect(body).not.toContain('<h1 id="task-preparation-title"');
 	});
+
+	it("uses the prose type role for learner-facing descriptive content", () => {
+		const { body } = render(TaskPreparation, {
+			props: {
+				task: task({ materialsMd: "A short **background** note." }),
+				nativeLanguage: "en",
+			},
+		});
+
+		expect(body).toMatch(/<p class="[^"]*font-prose[^"]*">Ask your neighbour/);
+		expect(body).toMatch(/<ol class="[^"]*font-prose[^"]*">/);
+		expect(body).toMatch(/<div class="task-background-material[^"]*font-prose[^"]*">/);
+	});
 });

@@ -5,13 +5,15 @@ import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(app)/profile/+page.server";
 import { createActionEvent } from "../action-test-helpers";
 
-const { mockFindFirst, mockInsert, mockDelete, mockWhere } = vi.hoisted(() => {
+const { mockFindFirst, mockFindLearningProfile, mockInsert, mockDelete, mockWhere, mockValues, mockOnConflictDoUpdate } = vi.hoisted(() => {
 	const mockFindFirst = vi.fn().mockResolvedValue(undefined);
-	const mockValues = vi.fn(() => ({ onConflictDoUpdate: vi.fn() }));
+	const mockFindLearningProfile = vi.fn().mockResolvedValue(undefined);
+	const mockOnConflictDoUpdate = vi.fn();
+	const mockValues = vi.fn(() => ({ onConflictDoUpdate: mockOnConflictDoUpdate }));
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
 	const mockWhere = vi.fn();
 	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return { mockFindFirst, mockInsert, mockDelete, mockWhere };
+	return { mockFindFirst, mockFindLearningProfile, mockInsert, mockDelete, mockWhere, mockValues, mockOnConflictDoUpdate };
 });
 
 vi.mock("$lib/server/auth/auth", () => ({
@@ -27,12 +29,19 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		insert: mockInsert,
 		delete: mockDelete,
-		query: { userApiKey: { findFirst: mockFindFirst } },
+		query: {
+			userApiKey: { findFirst: mockFindFirst },
+			userLearningProfile: { findFirst: mockFindLearningProfile },
+		},
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
 	userApiKey: { userId: Symbol("userApiKey.userId") },
+	userLearningProfile: {
+		userId: Symbol("userLearningProfile.userId"),
+		language: Symbol("userLearningProfile.language"),
+	},
 }));
 
 const { mockEncryptApiKey, mockGetTrialQuotaBalance, mockVerifyApiKey } = vi.hoisted(() => ({
@@ -54,13 +63,20 @@ describe("Profile +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockFindFirst.mockResolvedValue(undefined);
+		mockFindLearningProfile.mockResolvedValue(undefined);
 	});
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
 		it("returns native languages and hasApiKey", async () => {
-			const event = { locals: { user: { id: "test-user" } } } as any;
-			const result = (await load(event)) as { serverNativeLanguages: any[]; hasApiKey: boolean; apiBaseUrl: string; apiModel: string };
+			const event = { locals: { user: { id: "test-user", activeLanguage: "fr" } } } as any;
+			const result = (await load(event)) as {
+				serverNativeLanguages: any[];
+				hasApiKey: boolean;
+				apiBaseUrl: string;
+				apiModel: string;
+				levelSelfAssign: number;
+			};
 
 			expect(result.serverNativeLanguages).toBeDefined();
 			expect(Array.isArray(result.serverNativeLanguages)).toBe(true);
@@ -68,6 +84,18 @@ describe("Profile +page.server", () => {
 			expect(result.hasApiKey).toBe(false);
 			expect(result.apiBaseUrl).toBe("");
 			expect(result.apiModel).toBe("");
+			expect(result.levelSelfAssign).toBe(2);
+		});
+
+		it("returns the active language's saved self-assigned level", async () => {
+			mockFindLearningProfile.mockResolvedValue({ levelSelfAssign: 3 });
+
+			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "ja" } } } as any)) as {
+				levelSelfAssign: number;
+			};
+
+			expect(result.levelSelfAssign).toBe(3);
+			expect(mockFindLearningProfile).toHaveBeenCalledOnce();
 		});
 
 		it("returns saved BYOK provider and model without exposing the API key", async () => {
@@ -77,7 +105,7 @@ describe("Profile +page.server", () => {
 				model: "Qwen/Qwen3-8B",
 			});
 
-			const result = (await load({ locals: { user: { id: "test-user" } } } as any)) as {
+			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "en" } } } as any)) as {
 				hasApiKey: boolean;
 				apiBaseUrl: string;
 				apiModel: string;
@@ -170,6 +198,32 @@ describe("Profile +page.server", () => {
 			const event = createActionEvent({});
 			await expect(actions.signOut(event)).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 			expect(auth.api.signOut).toHaveBeenCalledWith({ headers: event.request.headers });
+		});
+
+		it("upserts the self-assigned level for only the active target language", async () => {
+			const event = createActionEvent({ levelSelfAssign: "1" });
+			event.locals.user.activeLanguage = "es";
+
+			const result = await actions.updateProficiency(event);
+
+			expect(result).toEqual({ success: true, levelSelfAssign: 1 });
+			expect(mockValues).toHaveBeenCalledWith({ userId: "u1", language: "es", levelSelfAssign: 1 });
+			expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					target: expect.any(Array),
+					set: expect.objectContaining({ levelSelfAssign: 1, updatedAt: expect.any(Date) }),
+				}),
+			);
+		});
+
+		it("rejects an invalid self-assigned level", async () => {
+			const event = createActionEvent({ levelSelfAssign: "4" });
+			event.locals.user.activeLanguage = "fr";
+
+			const result = (await actions.updateProficiency(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(mockInsert).not.toHaveBeenCalled();
 		});
 	});
 

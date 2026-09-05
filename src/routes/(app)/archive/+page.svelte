@@ -161,7 +161,7 @@ function formatDate(d: Date): string {
 					</button>
 
 					{#if !isExpanded && activity.notes.length > 0}
-						<p class="mt-1.5 line-clamp-1 text-sm text-muted-foreground">{activity.notes.map((note) => note.vocab).join(" · ")}</p>
+						<p class="mt-1.5 line-clamp-1 font-prose text-sm text-muted-foreground">{activity.notes.map((note) => note.vocab).join(" · ")}</p>
 					{/if}
 
 					{#if isExpanded}

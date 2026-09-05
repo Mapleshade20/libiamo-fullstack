@@ -104,7 +104,7 @@ function difficultyLabel(level: number): string {
 		</div>
 
 		{#if task.description}
-			<p class="mt-8 text-base leading-relaxed text-muted-foreground">{task.description}</p>
+			<p class="mt-8 font-prose text-base leading-relaxed text-muted-foreground">{task.description}</p>
 		{/if}
 
 		{#if objectives.length > 0}
@@ -114,7 +114,7 @@ function difficultyLabel(level: number): string {
 				{:else}
 					<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
 				{/if}
-				<ol class="list-inside list-decimal space-y-1.5 text-base leading-relaxed text-muted-foreground">
+				<ol class="list-inside list-decimal space-y-1.5 font-prose text-base leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
 					{/each}
@@ -129,7 +129,9 @@ function difficultyLabel(level: number): string {
 				{:else}
 					<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
 				{/if}
-				<div class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 text-base leading-normal shadow-sm">
+				<div
+					class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 font-prose text-base leading-normal shadow-sm"
+				>
 					{@html renderMarkdown(task.materialsMd, { headingOffset: mode === "pane" ? 2 : 0 })}
 				</div>
 			</div>

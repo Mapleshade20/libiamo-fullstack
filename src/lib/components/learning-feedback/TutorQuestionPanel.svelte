@@ -128,7 +128,7 @@ function handleKeydown(event: KeyboardEvent) {
 					{#if isLoading}
 						<div class="space-y-2"><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /><Skeleton class="h-4 w-2/3" /></div>
 					{:else if answer}
-						<div class="prose prose-sm max-w-none">{@html renderMarkdown(answer)}</div>
+						<div class="prose prose-sm max-w-none font-prose">{@html renderMarkdown(answer)}</div>
 					{/if}
 				</div>
 				{#if answer}

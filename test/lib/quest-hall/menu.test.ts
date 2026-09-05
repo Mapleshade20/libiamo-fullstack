@@ -37,6 +37,7 @@ function hallData(overrides: Partial<HallData> = {}): HallData {
 	return {
 		activeLanguage: "en",
 		nativeLanguage: "fr",
+		levelSelfAssign: 2,
 		localDate: "2026-09-04",
 		localMonday: "2026-08-31",
 		editionDate: "2026-09-04",
@@ -143,6 +144,100 @@ describe("Quest menu production adaptation", () => {
 
 		const simultaneous = adaptHallDataToQuestMenu(hallData({ dailyTasks: [quest(1, "in_progress"), quest(2, "in_progress")], weeklyTasks: [] }));
 		expect(simultaneous.recommendations.map((item) => item.key)).toEqual(["daily-1", "daily-2"]);
+	});
+
+	it.each([
+		[1, "daily-1"],
+		[2, "daily-2"],
+		[3, "daily-3"],
+	] as const)("matches ready recommendations to self-assigned level %i", (levelSelfAssign, expectedKey) => {
+		const catalog = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign,
+				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 2 }), quest(3, null, { templateDifficulty: 3 })],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+
+		expect(catalog.recommendations[0]?.key).toBe(expectedKey);
+		expect(catalog.sections.daily.map((item) => item.key)).toEqual(["daily-1", "daily-2", "daily-3"]);
+	});
+
+	it("uses nearest-level and stable-order fallbacks without overriding lifecycle priority", () => {
+		const nearest = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 3,
+				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 2 })],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+		expect(nearest.recommendations.map((item) => item.key)).toEqual(["daily-2", "daily-1"]);
+
+		const stableTie = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 2,
+				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 3 })],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+		expect(stableTie.recommendations.map((item) => item.key)).toEqual(["daily-1", "daily-2"]);
+
+		const lifecycle = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 1,
+				dailyTasks: [
+					quest(1, "in_progress", { templateDifficulty: 3 }),
+					quest(2, null, { unreadCount: 1, hasUnreadReply: true, templateDifficulty: 3 }),
+					quest(3, null, { templateDifficulty: 1 }),
+				],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+		expect(lifecycle.recommendations.map((item) => item.key)).toEqual(["daily-2", "daily-1"]);
+	});
+
+	it("matches informational and stopped candidates within their lifecycle tiers", () => {
+		const catalog = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 3,
+				dailyTasks: [
+					quest(1, null, { templateUi: "translator", templateDifficulty: 1 }),
+					quest(2, null, { templateUi: "translator", templateDifficulty: 3 }),
+					quest(3, "abandoned", { templateDifficulty: 3 }),
+				],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+
+		expect(catalog.recommendations.map((item) => item.key)).toEqual(["daily-2", "daily-1"]);
+
+		const stopped = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 3,
+				dailyTasks: [quest(4, "abandoned", { templateDifficulty: 1 }), quest(5, "abandoned", { templateDifficulty: 3 })],
+				weeklyTasks: [],
+				translationTasks: [],
+			}),
+		);
+		expect(stopped.recommendations.map((item) => item.key)).toEqual(["daily-5", "daily-4"]);
+	});
+
+	it("does not promote stopped work over another unstarted recommendation just to vary sections", () => {
+		const catalog = adaptHallDataToQuestMenu(
+			hallData({
+				levelSelfAssign: 2,
+				dailyTasks: [quest(1, null, { templateDifficulty: 2 }), quest(2, null, { templateDifficulty: 2 })],
+				weeklyTasks: [quest(11, "abandoned", { templateDifficulty: 2 })],
+				translationTasks: [],
+			}),
+		);
+
+		expect(catalog.recommendations.map((item) => item.key)).toEqual(["daily-1", "daily-2"]);
 	});
 
 	it("omits finished work from recommendations unless it has unread replies", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLanguageEnglishName, isLanguageCode } from "$lib/constants";
+import { getLanguageEnglishName, isLanguageCode, isSelfAssignedLevel } from "$lib/constants";
 
 describe("getLanguageEnglishName", () => {
 	it("returns English names for learning languages", () => {
@@ -21,5 +21,16 @@ describe("isLanguageCode", () => {
 		expect(isLanguageCode("ja")).toBe(true);
 		expect(isLanguageCode("pl")).toBe(false);
 		expect(isLanguageCode(null)).toBe(false);
+	});
+});
+
+describe("isSelfAssignedLevel", () => {
+	it("accepts only the three persisted recommendation levels", () => {
+		expect(isSelfAssignedLevel(1)).toBe(true);
+		expect(isSelfAssignedLevel(2)).toBe(true);
+		expect(isSelfAssignedLevel(3)).toBe(true);
+		expect(isSelfAssignedLevel(0)).toBe(false);
+		expect(isSelfAssignedLevel(4)).toBe(false);
+		expect(isSelfAssignedLevel("2")).toBe(false);
 	});
 });

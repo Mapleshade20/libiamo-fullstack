@@ -72,9 +72,9 @@ function actionClasses(tone: StudyCardActionTone) {
 		aria-label={showAnswerLabel}
 	>
 		<section class="relative grid min-h-44 content-center gap-5 px-6 py-8 text-center sm:min-h-48 sm:gap-6 sm:px-12 sm:py-9">
-			<p class="mx-auto max-w-3xl text-xl leading-normal text-foreground sm:text-2xl">{nativeDefinition}</p>
+			<p class="mx-auto max-w-3xl font-prose text-xl leading-normal text-foreground sm:text-2xl">{nativeDefinition}</p>
 			<p
-				class="mx-auto max-w-3xl text-2xl font-semibold leading-tight text-foreground transition-opacity duration-300 sm:text-3xl"
+				class="mx-auto max-w-3xl font-prose text-2xl font-semibold leading-tight text-foreground transition-opacity duration-300 sm:text-3xl"
 				class:invisible={!revealed}
 				class:opacity-0={!revealed}
 				aria-hidden={!revealed}
@@ -85,9 +85,9 @@ function actionClasses(tone: StudyCardActionTone) {
 		</section>
 
 		<section class="grid min-h-44 content-center gap-5 px-6 py-8 text-left sm:min-h-48 sm:gap-6 sm:px-12 sm:py-9">
-			<p class="mx-auto w-full max-w-3xl text-xl leading-relaxed text-muted-foreground sm:text-2xl">{nativeText}</p>
+			<p class="mx-auto w-full max-w-3xl font-prose text-xl leading-relaxed text-muted-foreground sm:text-2xl">{nativeText}</p>
 			<div
-				class="example-quote mx-auto w-full max-w-3xl text-xl text-[#a46042] transition-opacity duration-300 sm:text-2xl"
+				class="example-quote mx-auto w-full max-w-3xl font-prose text-xl text-[#a46042] transition-opacity duration-300 sm:text-2xl"
 				class:invisible={!revealed}
 				class:opacity-0={!revealed}
 				aria-hidden={!revealed}

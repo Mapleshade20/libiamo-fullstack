@@ -172,8 +172,8 @@ function handleCardListKeydown(event: KeyboardEvent) {
 						>
 							<div class="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
 								<div class="min-w-0">
-									<h2 class="line-clamp-1 font-serif text-lg leading-tight">{note.vocab}</h2>
-									<p class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{note.nativeDefinition}</p>
+									<h2 class="line-clamp-1 font-prose text-lg leading-tight">{note.vocab}</h2>
+									<p class="mt-1 line-clamp-2 font-prose text-xs leading-relaxed text-muted-foreground">{note.nativeDefinition}</p>
 								</div>
 								<div class="flex flex-col items-end justify-between gap-3">
 									<span

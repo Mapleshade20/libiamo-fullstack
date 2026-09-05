@@ -43,6 +43,19 @@
 	--color-accent-sage: #8faf8f;
 	--color-accent-rose: #c9a4a4;
 	--font-sans-inter: "Inter Variable", "Inter", ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "Noto Sans", sans-serif;
+	--font-prose: "Newsreader", "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+@layer utilities {
+	.font-prose {
+		font-family: var(--font-prose);
+		font-optical-sizing: auto;
+	}
+
+	:lang(ja) .font-prose {
+		font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif;
+		font-optical-sizing: auto;
+	}
 }
 
 .dark {

@@ -2,13 +2,13 @@ import { fail, redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
-import { getNativeLanguageOptions } from "$lib/constants";
+import { getNativeLanguageOptions, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
-import { profileSchema } from "$lib/schemas";
+import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { userApiKey } from "$lib/server/db/schema";
+import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
@@ -16,10 +16,17 @@ import type { Actions, PageServerLoad } from "./$types";
 export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
-	const row = await db.query.userApiKey.findFirst({
-		where: (t, { eq }) => eq(t.userId, user.id),
-		columns: { userId: true, baseUrl: true, model: true },
-	});
+	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
+	const [row, learningProfile] = await Promise.all([
+		db.query.userApiKey.findFirst({
+			where: (t, { eq }) => eq(t.userId, user.id),
+			columns: { userId: true, baseUrl: true, model: true },
+		}),
+		db.query.userLearningProfile.findFirst({
+			where: (t, { and, eq }) => and(eq(t.userId, user.id), eq(t.language, activeLanguage)),
+			columns: { levelSelfAssign: true },
+		}),
+	]);
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
@@ -29,6 +36,7 @@ export const load: PageServerLoad = async (event) => {
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
+		levelSelfAssign: isSelfAssignedLevel(learningProfile?.levelSelfAssign) ? learningProfile.levelSelfAssign : 2,
 	};
 };
 
@@ -98,6 +106,29 @@ export const actions: Actions = {
 
 		await db.delete(userApiKey).where(eq(userApiKey.userId, user.id));
 		return { success: true };
+	},
+
+	updateProficiency: async (event) => {
+		const user = requireUser(event);
+		const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : null;
+		if (!activeLanguage) return fail(400, { proficiencyError: true });
+
+		const formData = await event.request.formData();
+		const result = selfAssignedLevelSchema.safeParse({ levelSelfAssign: formData.get("levelSelfAssign") });
+		if (!result.success || !isSelfAssignedLevel(result.data.levelSelfAssign)) {
+			return fail(400, { proficiencyError: true });
+		}
+
+		const levelSelfAssign: SelfAssignedLevel = result.data.levelSelfAssign;
+		await db
+			.insert(userLearningProfile)
+			.values({ userId: user.id, language: activeLanguage, levelSelfAssign })
+			.onConflictDoUpdate({
+				target: [userLearningProfile.userId, userLearningProfile.language],
+				set: { levelSelfAssign, updatedAt: new Date() },
+			});
+
+		return { success: true, levelSelfAssign };
 	},
 
 	signOut: async (event) => {

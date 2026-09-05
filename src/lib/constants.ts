@@ -81,6 +81,13 @@ export function isLanguageCode(value: unknown): value is LanguageCode {
 	return typeof value === "string" && LANGUAGE_CODES.includes(value as LanguageCode);
 }
 
+export const SELF_ASSIGNED_LEVELS = [1, 2, 3] as const;
+export type SelfAssignedLevel = (typeof SELF_ASSIGNED_LEVELS)[number];
+
+export function isSelfAssignedLevel(value: unknown): value is SelfAssignedLevel {
+	return typeof value === "number" && SELF_ASSIGNED_LEVELS.includes(value as SelfAssignedLevel);
+}
+
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Español",

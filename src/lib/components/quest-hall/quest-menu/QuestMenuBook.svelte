@@ -6,6 +6,7 @@ import { type LanguageCode, t } from "$lib/i18n";
 import type { QuestMenuItem, QuestMenuSection, QuestMenuSpread } from "$lib/quest-hall/menu";
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
+import QuestMenuMonthFolio from "./QuestMenuMonthFolio.svelte";
 
 export interface QuestMenuTurnPreview {
 	direction: -1 | 1;
@@ -28,6 +29,7 @@ interface Props {
 	canTurnNext: boolean;
 	turning: boolean;
 	lang: LanguageCode;
+	translationMonth: string;
 	bookFrame?: HTMLDivElement | null;
 	bookTilt?: HTMLDivElement | null;
 	rectoProbe?: HTMLSpanElement | null;
@@ -37,6 +39,7 @@ interface Props {
 	turnControls?: HTMLDivElement | null;
 	turnSheet?: HTMLDivElement | null;
 	onturn: (direction: -1 | 1) => void;
+	onmonthchange: (direction: -1 | 1) => void;
 	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
@@ -51,6 +54,7 @@ let {
 	canTurnNext,
 	turning,
 	lang,
+	translationMonth,
 	bookFrame = $bindable(null),
 	bookTilt = $bindable(null),
 	rectoProbe = $bindable(null),
@@ -60,6 +64,7 @@ let {
 	turnControls = $bindable(null),
 	turnSheet = $bindable(null),
 	onturn,
+	onmonthchange,
 	onselectitem,
 }: Props = $props();
 
@@ -81,8 +86,8 @@ function sectionLabel(value: QuestMenuSection): string {
 }
 </script>
 
-{#snippet pageContents(pageSection: QuestMenuSection, pageSpread: QuestMenuSpread, pageFolio: number, side: "left" | "right")}
-	<p class="page-folio" class:page-folio-right={side === "right"}>
+{#snippet pageContents(pageSection: QuestMenuSection, pageSpread: QuestMenuSpread, pageFolio: number, side: "left" | "right", showMonthFolio = false)}
+	<div class="page-folio" class:page-folio-right={side === "right"}>
 		{#if side === "left"}
 			<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
 			<span>{sectionLabel(pageSection)} · {pageNumber(pageFolio, side)}</span>
@@ -90,7 +95,10 @@ function sectionLabel(value: QuestMenuSection): string {
 			<span>{pageNumber(pageFolio, side)} · {t(lang, "hall.menu.brand")}</span>
 			<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
 		{/if}
-	</p>
+		{#if pageSection === "translation" && side === "left" && showMonthFolio}
+			<QuestMenuMonthFolio month={translationMonth} {lang} disabled={turning} onchange={onmonthchange} />
+		{/if}
+	</div>
 	<div class="page-items" class:is-compact={side === "right" || pageSpread.leaf > 1}>
 		{#each (side === "left" ? pageSpread.leftItems : pageSpread.rightItems) as item (item.key)}
 			<QuestMenuItemCard {item} {lang} compact={side === "right" || pageSpread.leaf > 1} onselect={onselectitem} />
@@ -180,7 +188,7 @@ function sectionLabel(value: QuestMenuSection): string {
 								<span class="cover-sheen"></span>
 							</span>
 							<div class="cover-face cover-face-back page page-left">
-								{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left")}
+								{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left", !turnPreview)}
 							</div>
 							<span class="book-edge book-edge-board book-edge-fore" aria-hidden="true"></span>
 							<span class="book-edge book-edge-board book-edge-head" aria-hidden="true"></span>

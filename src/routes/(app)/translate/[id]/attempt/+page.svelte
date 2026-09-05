@@ -115,7 +115,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 						<button
 							type="button"
 							onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
-							class="w-full text-left font-serif text-xl leading-relaxed"
+							class="w-full text-left font-prose text-xl leading-relaxed"
 						>
 							{data.attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
 						</button>
@@ -169,7 +169,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 								<Check size={13} />
 							{/if}</span
 						>
-						<span class="font-serif text-lg leading-relaxed">{candidate}</span>
+						<span class="font-prose text-lg leading-relaxed">{candidate}</span>
 					</button>
 				{/each}
 			</div>

@@ -45,4 +45,17 @@ describe("task UI translations", () => {
 		expect(t(lang as LanguageCode, "task.usefulExpressions.check")).toBe(check);
 		expect(t(lang as LanguageCode, "task.usefulExpressions.inputLabel")).toContain("{expression}");
 	});
+
+	it.each([
+		["en", "Recommended task level", "Level 2"],
+		["es", "Nivel de tareas recomendado", "Nivel 2"],
+		["fr", "Niveau de tâches recommandé", "Niveau 2"],
+		["ja", "おすすめ課題レベル", "レベル2"],
+	] as const)("localizes self-assigned proficiency for %s", (lang, title, level) => {
+		expect(t(lang as LanguageCode, "profile.proficiency")).toBe(title);
+		expect(t(lang as LanguageCode, "profile.proficiency.level2")).toBe(level);
+		expect(t(lang as LanguageCode, "profile.proficiency.range1")).toBe("A2–B1");
+		expect(t(lang as LanguageCode, "profile.proficiency.range2")).toBe("B2–C1");
+		expect(t(lang as LanguageCode, "profile.proficiency.range3")).toBe("C2+");
+	});
 });

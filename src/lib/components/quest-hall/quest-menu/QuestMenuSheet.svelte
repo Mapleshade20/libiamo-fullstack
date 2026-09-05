@@ -5,6 +5,7 @@ import Wine from "@lucide/svelte/icons/wine";
 import { type LanguageCode, t } from "$lib/i18n";
 import type { QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
+import QuestMenuMonthFolio from "./QuestMenuMonthFolio.svelte";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
 interface Props {
@@ -17,9 +18,11 @@ interface Props {
 	canMovePrevious: boolean;
 	canMoveNext: boolean;
 	lang: LanguageCode;
+	translationMonth: string;
 	paperElement?: HTMLDivElement | null;
 	onselect: (section: QuestMenuSection) => void;
 	onmove: (direction: -1 | 1) => void;
+	onmonthchange: (direction: -1 | 1) => void;
 	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
@@ -33,9 +36,11 @@ let {
 	canMovePrevious,
 	canMoveNext,
 	lang,
+	translationMonth,
 	paperElement = $bindable(null),
 	onselect,
 	onmove,
+	onmonthchange,
 	onselectitem,
 }: Props = $props();
 </script>
@@ -53,7 +58,12 @@ let {
 		<span class="stack-sheet stack-sheet-back"></span>
 		<span class="stack-sheet stack-sheet-middle"></span>
 		<div class="mobile-paper" bind:this={paperElement}>
-			<p class="page-folio"><Wine size={14} /> {sectionLabel} · {t(lang, "hall.menu.folio")} {folio}</p>
+			<div class="page-folio">
+				<span><Wine size={14} /> {sectionLabel} · {t(lang, "hall.menu.folio")} {folio}</span>
+				{#if section === "translation"}
+					<QuestMenuMonthFolio month={translationMonth} {lang} onchange={onmonthchange} />
+				{/if}
+			</div>
 			{#if item}
 				<QuestMenuItemCard {item} {lang} onselect={onselectitem} />
 			{:else}
@@ -170,7 +180,8 @@ let {
 	.page-folio {
 		display: flex;
 		align-items: center;
-		gap: 0.4rem;
+		justify-content: space-between;
+		gap: 0.5rem;
 		margin-bottom: 0.8rem;
 		font-family: var(--font-sans);
 		font-size: 0.64rem;
@@ -178,6 +189,13 @@ let {
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--menu-ink-muted);
+	}
+
+	.page-folio > span:first-child {
+		display: inline-flex;
+		min-width: 0;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
 	.blank-page {

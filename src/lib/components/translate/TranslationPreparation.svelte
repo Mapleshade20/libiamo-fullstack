@@ -108,7 +108,7 @@ function difficultyLabel(level: number): string {
 		</div>
 
 		{#if template.description}
-			<p class="description">{template.description}</p>
+			<p class="description font-prose">{template.description}</p>
 		{/if}
 
 		{#if blockedReason}
@@ -280,7 +280,8 @@ function difficultyLabel(level: number): string {
 	color: var(--muted-foreground);
 }
 
-h1 {
+h1,
+h2 {
 	font-family: var(--font-serif);
 	font-size: clamp(1.75rem, 4vw, 2.5rem);
 	font-weight: 500;

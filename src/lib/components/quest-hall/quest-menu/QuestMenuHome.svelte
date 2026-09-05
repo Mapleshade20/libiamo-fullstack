@@ -61,7 +61,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 			{#if recommendations.length === 0}
 				<div class="all-done">
 					<strong>{t(lang, "hall.menu.allDoneTitle")}</strong>
-					<p>{t(lang, "hall.menu.allDoneBody")}</p>
+					<p class="font-prose">{t(lang, "hall.menu.allDoneBody")}</p>
 				</div>
 			{:else}
 				<div class="recommendation-list">
@@ -76,7 +76,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 							{/if}
 							<h2>{itemTitle(item)}</h2>
 							{#if itemObjective(item)}
-								<p>{itemObjective(item)}</p>
+								<p class="font-prose">{itemObjective(item)}</p>
 							{/if}
 							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem(item, event)}>
 								{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />

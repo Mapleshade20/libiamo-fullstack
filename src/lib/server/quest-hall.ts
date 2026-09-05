@@ -1,5 +1,12 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import type { InteractionType, LanguageCode, TranslationWorkflowPhase, UiVariant } from "$lib/constants";
+import {
+	type InteractionType,
+	isSelfAssignedLevel,
+	type LanguageCode,
+	type SelfAssignedLevel,
+	type TranslationWorkflowPhase,
+	type UiVariant,
+} from "$lib/constants";
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
 import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
@@ -25,6 +32,7 @@ export interface HallTranslationTask {
 export interface HallData {
 	activeLanguage: LanguageCode;
 	nativeLanguage: string | null;
+	levelSelfAssign: SelfAssignedLevel;
 	localDate: string;
 	localMonday: string;
 	editionDate: string;
@@ -53,6 +61,10 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 	const localMonday = getMondayOfWeekForDate(localDate);
 
 	await ensureTasksForDate(activeLanguage, localDate);
+	const learningProfile = await db.query.userLearningProfile.findFirst({
+		where: (profile, { and, eq }) => and(eq(profile.userId, user.id), eq(profile.language, activeLanguage)),
+		columns: { levelSelfAssign: true },
+	});
 
 	const weeklyTasks = await db
 		.select({
@@ -166,6 +178,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 	return {
 		activeLanguage,
 		nativeLanguage: user.nativeLanguage ?? null,
+		levelSelfAssign: isSelfAssignedLevel(learningProfile?.levelSelfAssign) ? learningProfile.levelSelfAssign : 2,
 		localDate,
 		localMonday,
 		editionDate: localDate,

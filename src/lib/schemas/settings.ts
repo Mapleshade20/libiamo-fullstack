@@ -36,3 +36,7 @@ export const profileSchema = z
 export const switchLanguageSchema = z.object({
 	language: z.enum(LANGUAGE_CODES, { message: "Invalid language" }),
 });
+
+export const selfAssignedLevelSchema = z.object({
+	levelSelfAssign: z.coerce.number().int().min(1).max(3),
+});

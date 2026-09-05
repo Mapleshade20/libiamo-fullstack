@@ -262,7 +262,7 @@ $effect(() => {
 								: 'bg-background'}"
 						>
 							<!-- Source expression -->
-							<p class="text-sm font-medium text-foreground leading-relaxed">{expr}</p>
+							<p class="font-prose text-sm font-medium text-foreground leading-relaxed">{expr}</p>
 
 							<!-- User's translation input -->
 							<div class="mt-3">
@@ -293,9 +293,9 @@ $effect(() => {
 										</span>
 									{:else if feedback}
 										<div class="space-y-1">
-											<p class="text-xs text-muted-foreground leading-relaxed">{feedback}</p>
+											<p class="font-prose text-xs text-muted-foreground leading-relaxed">{feedback}</p>
 											{#if correction}
-												<p class="text-xs font-medium text-emerald-600 leading-relaxed">→ {correction}</p>
+												<p class="font-prose text-xs font-medium text-emerald-600 leading-relaxed">→ {correction}</p>
 											{/if}
 										</div>
 									{/if}

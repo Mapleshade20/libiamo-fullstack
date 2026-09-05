@@ -13,7 +13,7 @@ import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
-import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions } from "$lib/constants";
+import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions, SELF_ASSIGNED_LEVELS } from "$lib/constants";
 import { type LanguageCode, t } from "$lib/i18n";
 
 let { form, data } = $props();
@@ -248,6 +248,27 @@ function handleNameKeydown(event: KeyboardEvent) {
 				{#if form?.errors?.nativeLanguage}
 					<p class="text-sm text-red-600">{form.errors.nativeLanguage[0]}</p>
 				{/if}
+			</form>
+
+			<form method="POST" action="?/updateProficiency" onchange={autosave} use:enhance={enhanceSilently}>
+				<fieldset class="space-y-2" aria-describedby="proficiency-help">
+					<legend class="text-sm font-medium">{t(lang, "profile.proficiency")}</legend>
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup">
+						{#each SELF_ASSIGNED_LEVELS as level}
+							<label
+								class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-border bg-background px-3 py-2 text-center transition-colors hover:bg-secondary/60 has-[:checked]:border-foreground/35 has-[:checked]:bg-secondary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2"
+							>
+								<input class="sr-only" type="radio" name="levelSelfAssign" value={level} checked={data.levelSelfAssign === level}>
+								<span class="text-xs font-semibold uppercase tracking-wider">{t(lang, `profile.proficiency.level${level}`)}</span>
+								<span class="mt-0.5 text-sm text-muted-foreground">{t(lang, `profile.proficiency.range${level}`)}</span>
+							</label>
+						{/each}
+					</div>
+					<p id="proficiency-help" class="text-xs leading-relaxed text-muted-foreground">{t(lang, "profile.proficiencyHelp")}</p>
+					{#if form?.proficiencyError}
+						<p class="text-sm text-red-600" role="alert">{t(lang, "profile.proficiencyError")}</p>
+					{/if}
+				</fieldset>
 			</form>
 		</Card.Content>
 	</Card.Root>

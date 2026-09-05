@@ -19,6 +19,7 @@ const data = {
 	trialQuota: null,
 	apiBaseUrl: "",
 	apiModel: "",
+	levelSelfAssign: 2 as const,
 };
 
 describe("Profile page", () => {
@@ -53,5 +54,16 @@ describe("Profile page", () => {
 		expect(fieldPosition).toBeGreaterThan(-1);
 		expect(fieldForm).toContain('action="?/updateProfile"');
 		expect(fieldForm).not.toContain("<button");
+	});
+
+	it("shows the three self-assignment ranges and selects the saved active-language level", () => {
+		const { body } = render(ProfilePage, { props: { data: { ...data, levelSelfAssign: 3 }, form: null } });
+
+		expect(body).toContain("Niveau de tâches recommandé");
+		expect(body).toContain("A2–B1");
+		expect(body).toContain("B2–C1");
+		expect(body).toContain("C2+");
+		expect(body).toContain('name="levelSelfAssign" value="3" checked');
+		expect(body).toContain('action="?/updateProficiency"');
 	});
 });

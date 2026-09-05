@@ -1,5 +1,5 @@
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
-import type { TranslationWorkflowPhase } from "$lib/constants";
+import type { SelfAssignedLevel, TranslationWorkflowPhase } from "$lib/constants";
 import { type HallQuest, type HallQuestSessionStatus, isHallQuestFinished } from "$lib/quest-hall";
 import type { HallData, HallTranslationTask } from "$lib/server/quest-hall";
 
@@ -133,14 +133,30 @@ const RECOMMENDATION_RANK: Record<QuestMenuItemState, number> = {
 	finished: Number.POSITIVE_INFINITY,
 };
 
-export function deriveQuestMenuRecommendations(sections: Record<QuestMenuSection, QuestMenuItem[]>): QuestMenuItem[] {
+function itemDifficulty(item: QuestMenuItem): number {
+	return item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty;
+}
+
+function recommendationRank(item: QuestMenuItem): number {
+	return item.hasUnread ? 0 : RECOMMENDATION_RANK[item.state];
+}
+
+export function deriveQuestMenuRecommendations(
+	sections: Record<QuestMenuSection, QuestMenuItem[]>,
+	levelSelfAssign: SelfAssignedLevel = 2,
+): QuestMenuItem[] {
 	const candidates = QUEST_MENU_SECTIONS.flatMap((section) => sections[section])
 		.map((item, stableIndex) => ({ item, stableIndex }))
 		.filter(({ item }) => item.state !== "finished" || item.hasUnread)
 		.sort((left, right) => {
-			const leftRank = left.item.hasUnread ? 0 : RECOMMENDATION_RANK[left.item.state];
-			const rightRank = right.item.hasUnread ? 0 : RECOMMENDATION_RANK[right.item.state];
-			return leftRank - rightRank || left.stableIndex - right.stableIndex;
+			const leftRank = recommendationRank(left.item);
+			const rightRank = recommendationRank(right.item);
+			if (leftRank !== rightRank) return leftRank - rightRank;
+			if (leftRank === RECOMMENDATION_RANK.ready || leftRank === RECOMMENDATION_RANK.stopped) {
+				const distance = Math.abs(itemDifficulty(left.item) - levelSelfAssign) - Math.abs(itemDifficulty(right.item) - levelSelfAssign);
+				if (distance !== 0) return distance;
+			}
+			return left.stableIndex - right.stableIndex;
 		})
 		.map(({ item }) => item);
 
@@ -153,13 +169,14 @@ export function deriveQuestMenuRecommendations(sections: Record<QuestMenuSection
 	if (selected.length === 0) selected.push(first);
 
 	const remaining = candidates.filter((item) => !selected.some((selectedItem) => selectedItem.key === item.key));
-	const second = remaining.find((item) => item.section !== first.section) ?? remaining[0];
+	const bestRemainingRank = remaining[0] ? recommendationRank(remaining[0]) : null;
+	const second = remaining.find((item) => recommendationRank(item) === bestRemainingRank && item.section !== first.section) ?? remaining[0];
 	if (second) selected.push(second);
 	return selected.slice(0, 2);
 }
 
 export function adaptHallDataToQuestMenu(
-	data: Pick<HallData, "dailyTasks" | "weeklyTasks" | "translationTasks" | "translationStatusMap" | "translationMonth">,
+	data: Pick<HallData, "dailyTasks" | "weeklyTasks" | "translationTasks" | "translationStatusMap" | "translationMonth" | "levelSelfAssign">,
 	translationMonth = data.translationMonth,
 ): QuestMenuCatalog {
 	const daily = adaptQuestItems(data.dailyTasks, "daily");
@@ -185,7 +202,7 @@ export function adaptHallDataToQuestMenu(
 			weekly: buildQuestMenuSpreads(sections.weekly),
 			translation: buildQuestMenuSpreads(sections.translation),
 		},
-		recommendations: deriveQuestMenuRecommendations(recommendationSections),
+		recommendations: deriveQuestMenuRecommendations(recommendationSections, data.levelSelfAssign),
 	};
 }
 

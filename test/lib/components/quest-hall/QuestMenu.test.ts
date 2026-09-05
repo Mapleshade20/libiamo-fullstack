@@ -25,6 +25,7 @@ function hallData(overrides: Partial<HallData> = {}): HallData {
 	return {
 		activeLanguage: "en",
 		nativeLanguage: "fr",
+		levelSelfAssign: 2,
 		localDate: "2026-09-04",
 		localMonday: "2026-08-31",
 		editionDate: "2026-09-04",
@@ -109,6 +110,8 @@ describe("QuestMenu", () => {
 		expect(body).toContain('aria-label="Previous month"');
 		expect(body).toContain('aria-label="Next month"');
 		expect(body).toContain("September 2026");
+		expect(body).toContain('class="month-folio');
+		expect(body).not.toContain('class="month-press');
 		expect(body).not.toContain("Archived letter");
 	});
 

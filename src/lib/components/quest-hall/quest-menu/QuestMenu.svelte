@@ -503,12 +503,6 @@ onMount(() => {
 });
 </script>
 
-<svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-	<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet">
-</svelte:head>
-
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="quest-menu" data-view={visibleView}>
@@ -587,6 +581,7 @@ onMount(() => {
 		canTurnNext={nextTarget !== null}
 		{turning}
 		{lang}
+		{translationMonth}
 		bind:bookFrame
 		bind:bookTilt
 		bind:rectoProbe
@@ -596,6 +591,7 @@ onMount(() => {
 		bind:turnControls
 		bind:turnSheet
 		onturn={turn}
+		onmonthchange={changeTranslationMonth}
 		onselectitem={selectItem}
 	/>
 </div>

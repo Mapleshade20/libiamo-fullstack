@@ -266,7 +266,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
 				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative min-w-0 font-inter-stack">
+					<div class="relative min-w-0">
 						<!-- Chain label -->
 						<div class="mb-4 flex items-center gap-3">
 							<div class="h-px flex-1 bg-[#e8e3db]"></div>
@@ -295,6 +295,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 										data-message-id={message.seqId}
 										data-current-context={getMessageContext(message.seqId).currentContext}
 										data-previous-context={getMessageContext(message.seqId).previousContext}
+										class="font-prose"
 									>
 										{#if message.role === "user"}
 											{@const annotation = getAnnotationForMessage(message.seqId)}
@@ -349,7 +350,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 										data-message-id={message.seqId}
 										data-current-context={getCommentContext(message.seqId, comment)}
 										data-previous-context={commentContext.previousContext}
-										class="rounded-lg border border-[#e8e3db] bg-white p-4 shadow-sm [overflow-wrap:anywhere]"
+										class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
 										transition:fade={{ duration: 200 }}
 									>
 										<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
@@ -383,7 +384,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											>
 												{objective.grade}
 											</span>
-											<p class="min-w-0 flex-1 text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
+											<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
 										</div>
 									{/each}
 								</div>
@@ -396,7 +397,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 									data-learning-kind="summary"
 									data-current-context={feedback.summary}
 									data-previous-context={getConversationExcerpt()}
-									class="whitespace-pre-wrap [overflow-wrap:anywhere]"
+									class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
 								>
 									{#each summaryParts as part}
 										{#if part.type === "mark"}

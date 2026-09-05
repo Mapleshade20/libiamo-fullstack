@@ -44,7 +44,7 @@ function difficultyLabel(level: number): string {
 	<QuestMenuStatusMark state={item.state} label={statusLabel(item.state)} variant={item.state === "finished" ? "stamp" : "line"} />
 	<h3>{title}</h3>
 	{#if objective}
-		<p>{objective}</p>
+		<p class="font-prose">{objective}</p>
 	{/if}
 	{#if item.hasUnread}
 		<span class="unread"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>

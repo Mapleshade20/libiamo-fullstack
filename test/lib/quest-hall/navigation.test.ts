@@ -22,6 +22,7 @@ function quest(id: number): HallQuest {
 const data: HallData = {
 	activeLanguage: "en",
 	nativeLanguage: "fr",
+	levelSelfAssign: 2,
 	localDate: "2026-09-04",
 	localMonday: "2026-08-31",
 	editionDate: "2026-09-04",
