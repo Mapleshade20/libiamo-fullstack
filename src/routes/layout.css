@@ -43,31 +43,6 @@
 	--color-accent-sage: #8faf8f;
 	--color-accent-rose: #c9a4a4;
 	--font-sans-inter: "Inter Variable", "Inter", ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "Noto Sans", sans-serif;
-	--font-editorial-serif:
-		"Newsreader", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", "Hiragino Mincho ProN", "Yu Mincho", "Iowan Old Style",
-		"Palatino Linotype", Georgia, serif;
-	--font-prose: var(--font-editorial-serif);
-}
-
-:lang(ja) {
-	--font-editorial-serif: "Hiragino Mincho ProN", "Yu Mincho", serif;
-	--font-prose: var(--font-editorial-serif);
-	--font-serif: var(--font-editorial-serif);
-}
-
-:lang(zh-CN),
-:lang(zh-SG),
-:lang(zh-Hans) {
-	--font-editorial-serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
-	--font-prose: var(--font-editorial-serif);
-	--font-serif: var(--font-editorial-serif);
-}
-
-@layer utilities {
-	.font-prose {
-		font-family: var(--font-prose);
-		font-optical-sizing: auto;
-	}
 }
 
 .dark {
@@ -105,7 +80,7 @@
 }
 
 @theme inline {
-	--font-serif: var(--font-editorial-serif);
+	--font-serif: "Newsreader", Georgia, serif;
 	--font-sans: "Signika", ui-sans-serif, system-ui, sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
