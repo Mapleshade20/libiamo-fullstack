@@ -50,11 +50,5 @@ onNavigate((navigation) => {
 	<meta property="og:type" content="website">
 	<meta name="twitter:card" content="summary">
 	<link rel="icon" href={favicon}>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-	<link
-		href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Noto+Serif+JP:wght@400;500;600&display=swap"
-		rel="stylesheet"
-	>
 </svelte:head>
 {@render children()}
