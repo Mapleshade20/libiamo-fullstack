@@ -200,6 +200,9 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 
 		<!-- Right section -->
 		<div class="flex items-center gap-3">
+			{#if mode === "app"}
+				<div id="hall-nav-inbox" class="empty:hidden"></div>
+			{/if}
 			{#if mode === "app" && trialQuota}
 				<a
 					href="{base}/profile"

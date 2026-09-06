@@ -72,7 +72,6 @@ $effect(() => {
 		<section id={panelId} class="inbox-panel" aria-labelledby={panelTitleId} transition:fade={{ duration: 140 }}>
 			<header class="inbox-header">
 				<div>
-					<p class="inbox-kicker">{t(lang, "hall.unreadTrigger")}</p>
 					<h2 id={panelTitleId}>{t(lang, "hall.unreadInboxTitle")}</h2>
 				</div>
 				<div class="header-actions">
@@ -123,6 +122,13 @@ $effect(() => {
 
 <style>
 .menu-inbox {
+	--menu-ink: var(--foreground);
+	--menu-ink-muted: var(--muted-foreground);
+	--menu-sheet: var(--card);
+	--menu-paper: var(--background);
+	--menu-wine: #803945;
+	--menu-olive: #65705a;
+	--menu-focus: var(--ring);
 	position: relative;
 	flex: 0 0 auto;
 	font-family: var(--font-sans);
@@ -217,25 +223,18 @@ $effect(() => {
 	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
-	padding: 0.85rem 0.9rem 0.75rem 1rem;
+	padding: 0 0.5rem 0 1rem;
 	border-bottom: 1px solid color-mix(in oklab, var(--menu-ink) 12%, transparent);
-}
-
-.inbox-kicker {
-	margin: 0 0 0.16rem;
-	color: var(--menu-wine);
-	font-size: 0.57rem;
-	font-weight: 700;
-	letter-spacing: 0.16em;
-	text-transform: uppercase;
 }
 
 .inbox-header h2 {
 	margin: 0;
-	font-family: var(--font-serif);
-	font-size: 1.12rem;
-	font-weight: 450;
-	line-height: 1.1;
+	color: var(--menu-wine);
+	font-family: var(--font-sans);
+	font-size: 0.57rem;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
 }
 
 .header-actions {
@@ -365,6 +364,15 @@ li:last-child .inbox-item {
 }
 
 @media (max-width: 40rem) {
+	.inbox-panel {
+		position: fixed;
+		top: calc(100% + 0.5rem);
+		left: 1rem;
+		right: 1rem;
+		width: auto;
+		max-height: calc(100dvh - 6rem);
+		overflow-y: auto;
+	}
 	.trigger-label {
 		display: none;
 	}

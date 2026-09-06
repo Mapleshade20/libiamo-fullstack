@@ -1,10 +1,12 @@
 <script lang="ts">
+import { Portal } from "bits-ui";
 import { onMount, tick, untrack } from "svelte";
 import { afterNavigate, invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { createUnreadSubscription, type UnreadSubscriptionState } from "$lib/client/quest-hall/unread-subscription";
+import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { shiftCalendarMonth } from "$lib/month";
@@ -648,7 +650,10 @@ onMount(() => {
 			<h1>{data.greeting}</h1>
 			<p>{data.subtitle}</p>
 		</div>
-		<QuestMenuInbox items={unreadState.items} total={unreadCount} status={unreadState.status} {lang} />
+		<span class="hall-wine" aria-hidden="true"><WineGlassIcon width={52} height={52} /></span>
+		{#if mounted}
+			<Portal to="#hall-nav-inbox"> <QuestMenuInbox items={unreadState.items} total={unreadCount} status={unreadState.status} {lang} /> </Portal>
+		{/if}
 	</header>
 
 	<div class="stage-stack">
@@ -736,6 +741,10 @@ onMount(() => {
 </div>
 
 <style>
+.hall-wine {
+	flex: 0 0 auto;
+}
+
 .quest-menu {
 	--menu-paper: #f7f1e6;
 	--menu-sheet: #fffaf1;

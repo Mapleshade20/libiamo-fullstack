@@ -32,13 +32,13 @@ const data = {
 } as const;
 
 describe("production Quest Hall page", () => {
-	it("mounts translation browsing and the integrated unread trigger inside the Quest Menu", () => {
+	it("mounts translation browsing and the wine emblem in the Quest Menu", () => {
 		const { body } = render(HomePage, { props: { data: data as any } });
 
 		expect(body).toContain("Open menu");
 		expect(body).toContain("Daily quest");
 		expect(body).toContain("Translation task");
-		expect(body).toContain("Replies: 0 unread replies");
+		expect(body).toContain('class="hall-wine');
 		expect(body).not.toContain("legacy-entry-points");
 		expect(body).not.toContain("Translation task month");
 		expect(body).not.toContain('id="translation-index-title"');

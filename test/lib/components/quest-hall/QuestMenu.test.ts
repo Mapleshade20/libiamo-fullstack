@@ -1,6 +1,7 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
+import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
 import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
 import type { HallQuest } from "$lib/quest-hall";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
@@ -70,7 +71,8 @@ describe("QuestMenu", () => {
 			},
 		});
 
-		expect(body).toContain("Replies: 10 unread replies");
+		const inbox = render(QuestMenuInbox, { props: { items: [], total: 10, status: "loading", lang: "en" } });
+		expect(inbox.body).toContain("Replies: 10 unread replies");
 		expect(body).toContain(">9+</span>");
 	});
 
