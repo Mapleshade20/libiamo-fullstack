@@ -2,30 +2,24 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
-import type { QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
+import type { QuestMenuCatalog, QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuSheet from "./QuestMenuSheet.svelte";
 
 interface Props {
 	visible: boolean;
 	renderSheet: boolean;
 	interactive: boolean;
-	section: QuestMenuSection;
 	sectionLabel: string;
 	folio: { current: number; total: number };
-	item: QuestMenuItem | null;
-	itemCount: number;
+	sections: QuestMenuCatalog["sections"];
+	section: QuestMenuSection;
 	translationMonth: string;
-	ribbons: QuestMenuRibbon[];
-	canMovePrevious: boolean;
-	canMoveNext: boolean;
 	lang: LanguageCode;
 	catalogSlot?: HTMLDivElement | null;
 	paperElement?: HTMLDivElement | null;
 	stageElement?: HTMLElement | null;
 	onclose: () => void;
 	onselect: (section: QuestMenuSection) => void;
-	onmove: (direction: -1 | 1) => void;
 	onmonthchange: (direction: -1 | 1) => void;
 	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
 }
@@ -34,22 +28,17 @@ let {
 	visible,
 	renderSheet,
 	interactive,
-	section,
 	sectionLabel,
 	folio,
-	item,
-	itemCount,
+	sections,
+	section,
 	translationMonth,
-	ribbons,
-	canMovePrevious,
-	canMoveNext,
 	lang,
 	catalogSlot = $bindable(null),
 	paperElement = $bindable(null),
 	stageElement = $bindable(null),
 	onclose,
 	onselect,
-	onmove,
 	onmonthchange,
 	onselectitem,
 }: Props = $props();
@@ -77,23 +66,7 @@ let {
 	</div>
 
 	{#if renderSheet}
-		<QuestMenuSheet
-			{item}
-			{itemCount}
-			{section}
-			{sectionLabel}
-			folio={folio.current}
-			{ribbons}
-			{canMovePrevious}
-			{canMoveNext}
-			{lang}
-			{translationMonth}
-			bind:paperElement
-			{onselect}
-			{onmove}
-			{onmonthchange}
-			{onselectitem}
-		/>
+		<QuestMenuSheet {sections} {section} {onselect} {lang} {translationMonth} bind:paperElement {onclose} {onmonthchange} {onselectitem} />
 	{/if}
 </section>
 
@@ -179,31 +152,12 @@ let {
 	aspect-ratio: var(--menu-spread-aspect);
 }
 
-@media (max-width: 44rem) {
+@media (width < 56.25rem) {
 	.catalog-book-stage {
 		display: none;
 	}
-}
-
-@media (max-width: 44rem) {
 	.catalog-toolbar {
-		grid-template-columns: 1fr auto;
-		text-align: left;
-	}
-
-	.catalog-toolbar > div {
-		grid-column: 1 / -1;
-		grid-row: 1;
-	}
-
-	.catalog-toolbar .quiet-button {
-		grid-column: 1;
-		grid-row: 2;
-	}
-
-	.catalog-toolbar > span {
-		grid-column: 2;
-		grid-row: 2;
+		display: none;
 	}
 }
 </style>

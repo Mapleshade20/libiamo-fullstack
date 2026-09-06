@@ -862,8 +862,8 @@ function sectionLabel(value: QuestMenuSection): string {
 	will-change: opacity;
 }
 
-@media (max-width: 44rem) {
-	.book-layer:not(.is-prepare) {
+@media (width < 56.25rem) {
+	.book-layer {
 		display: none;
 	}
 }

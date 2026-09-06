@@ -309,6 +309,12 @@ function handleSubmitCapture(event: SubmitEvent): void {
 	}
 }
 
+@media (width < 56.25rem) {
+	.preparation-dock {
+		display: none;
+	}
+}
+
 @media (max-width: 30rem) {
 	.preparation-panel {
 		padding-inline: 0.9rem;

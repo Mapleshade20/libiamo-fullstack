@@ -1,7 +1,9 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
+import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
 import type { HallQuest } from "$lib/quest-hall";
+import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";
 import type { HallData } from "$lib/server/quest-hall";
 
@@ -139,8 +141,7 @@ describe("QuestMenu", () => {
 			},
 		});
 
-		// One daily quest appears in the spread and in the narrow sheet. Neither
-		// surface depends on a client-side measurement to receive its content.
+		// Both desktop and compact surfaces receive the selected daily category before client measurement.
 		expect(body.match(/class="task-card\b/g)).toHaveLength(2);
 	});
 
@@ -227,5 +228,31 @@ describe("QuestMenu", () => {
 		expect(body).toContain("Prepared quest");
 		expect(body).toContain("Detailed briefing");
 		expect(body).toContain('href="/task/1/session"');
+	});
+});
+
+describe("compact mission catalog", () => {
+	it.each(["daily", "weekly", "translation"] as const)("shows horizontal tabs and every %s card without task pagination", (section) => {
+		const catalog = adaptHallDataToQuestMenu(hallData({ dailyTasks: [quest(1), quest(2), quest(3), quest(4)] }));
+		const { body } = render(QuestMenuSheet, {
+			props: {
+				sections: catalog.sections,
+				section,
+				lang: "en",
+				translationMonth: "2026-09",
+				onclose: () => {},
+				onselect: () => {},
+				onmonthchange: () => {},
+				onselectitem: () => {},
+			},
+		});
+		expect(body.match(/<article\b/g)).toHaveLength(catalog.sections[section].length);
+		for (const item of catalog.sections[section]) expect(body).toContain(`href="/${item.kind === "quest" ? "task" : "translate"}/${item.id}"`);
+		expect(body.match(/role="tab"/g)).toHaveLength(3);
+		expect(body).toContain('aria-orientation="horizontal"');
+		expect(body).toContain(`aria-labelledby="mobile-tab-${section}"`);
+		expect(body).not.toContain("<select");
+		expect(body).not.toContain('aria-label="Previous mission"');
+		expect(body).not.toContain('aria-label="Next mission"');
 	});
 });

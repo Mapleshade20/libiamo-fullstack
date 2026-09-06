@@ -246,6 +246,7 @@ function difficultyLabel(level: number): string {
 {#if hasNativeLanguage && nativeLanguage}
 	{#key task.id}
 		<TranslateModal
+			{lang}
 			show={showTranslateModal}
 			taskTitle={task.title}
 			taskDescription={task.description ?? null}

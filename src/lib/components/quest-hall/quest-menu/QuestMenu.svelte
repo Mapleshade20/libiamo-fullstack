@@ -321,7 +321,14 @@ function saveWorkflowReturnContext(): void {
 
 function focusView(view: QuestMenuView): void {
 	queueMicrotask(() => {
-		const target = view === "prepare" ? preparationPanel : view === "home" ? homeSlot : catalogStage?.querySelector<HTMLElement>(".quiet-button");
+		const target =
+			view === "prepare"
+				? preparationPanel
+				: view === "home"
+					? narrowLayout
+						? homeStage?.querySelector<HTMLElement>(".mobile-catalog-link")
+						: homeSlot
+					: catalogStage?.querySelector<HTMLElement>(narrowLayout ? ".back-button" : ".quiet-button");
 		target?.focus({ preventScroll: true });
 	});
 }
@@ -428,12 +435,6 @@ function changeTranslationMonth(direction: -1 | 1): void {
 	}
 }
 
-function moveNarrow(direction: -1 | 1): void {
-	const target = direction < 0 ? narrowPreviousTarget : narrowNextTarget;
-	if (!target) return;
-	moveTo(target, direction, target.itemKey);
-}
-
 function handleKeydown(event: KeyboardEvent): void {
 	if (event.defaultPrevented) return;
 	if (visibleView === "prepare" && event.key === "Escape") {
@@ -442,11 +443,11 @@ function handleKeydown(event: KeyboardEvent): void {
 		return;
 	}
 	if (visibleView !== "catalog") return;
-	if (event.key === "ArrowLeft" || event.key === "PageUp") {
+	if (!narrowLayout && (event.key === "ArrowLeft" || event.key === "PageUp")) {
 		event.preventDefault();
 		turn(-1);
 	}
-	if (event.key === "ArrowRight" || event.key === "PageDown") {
+	if (!narrowLayout && (event.key === "ArrowRight" || event.key === "PageDown")) {
 		event.preventDefault();
 		turn(1);
 	}
@@ -657,12 +658,11 @@ onMount(() => {
 			recommendations={catalog.recommendations}
 			{ribbons}
 			selectedSection={location.section}
-			{unreadCount}
 			{lang}
 			bind:bookSlot={homeSlot}
 			bind:stageElement={homeStage}
 			bind:recommendationsElement
-			onopen={() => openCatalog()}
+			onopen={() => openCatalog("daily")}
 			onselect={switchSection}
 			onselectitem={selectItem}
 		/>
@@ -671,22 +671,17 @@ onMount(() => {
 			visible={catalogPresent}
 			renderSheet={catalogPresent}
 			interactive={visibleView === "catalog" && !viewTransitioning}
-			section={location.section}
 			sectionLabel={sectionLabel(location.section)}
 			folio={currentFolio}
-			item={currentNarrowItem}
-			itemCount={catalog.sections[location.section].length}
+			sections={catalog.sections}
+			section={location.section}
+			onselect={switchSection}
 			{translationMonth}
-			{ribbons}
-			canMovePrevious={narrowPreviousTarget !== null}
-			canMoveNext={narrowNextTarget !== null}
 			{lang}
 			bind:catalogSlot
 			bind:paperElement={mobilePaper}
 			bind:stageElement={catalogStage}
 			onclose={closeCatalog}
-			onselect={switchSection}
-			onmove={moveNarrow}
 			onmonthchange={changeTranslationMonth}
 			onselectitem={selectItem}
 		/>
@@ -836,9 +831,17 @@ onMount(() => {
 	}
 }
 
-@media (max-width: 30rem) {
+@media (width < 56.25rem) {
 	.quest-menu {
-		padding-inline: 0.75rem;
+		max-width: 42rem;
+		margin-inline: auto;
+		padding: 0;
+	}
+	.heading-copy h1 {
+		font-size: clamp(1.75rem, 4vw, 2.25rem);
+	}
+	.heading-copy > p {
+		font-size: 0.9375rem;
 	}
 }
 </style>

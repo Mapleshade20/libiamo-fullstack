@@ -6,13 +6,14 @@ describe("TranslateModal", () => {
 	it("localizes its visible controls and accessible labels", () => {
 		const { body } = render(TranslateModal, {
 			props: {
+				lang: "fr",
 				show: true,
 				taskTitle: "Réserver une table",
 				taskDescription: "Appelez le restaurant.",
 				taskObjectives: ["Réserver poliment"],
 				taskUi: "mail",
 				taskInteractionType: "chat",
-				nativeLanguage: "fr",
+				nativeLanguage: "zh",
 				targetLanguage: "en",
 				onclose: () => undefined,
 			},

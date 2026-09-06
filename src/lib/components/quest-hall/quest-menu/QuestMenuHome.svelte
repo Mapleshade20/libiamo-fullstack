@@ -5,7 +5,6 @@ import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuSection } from "$lib/quest-hall/menu";
-import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
 interface Props {
@@ -14,7 +13,6 @@ interface Props {
 	recommendations: QuestMenuItem[];
 	ribbons: QuestMenuRibbon[];
 	selectedSection: QuestMenuSection;
-	unreadCount: number;
 	lang: LanguageCode;
 	bookSlot?: HTMLButtonElement | null;
 	stageElement?: HTMLElement | null;
@@ -30,7 +28,6 @@ let {
 	recommendations,
 	ribbons,
 	selectedSection,
-	unreadCount,
 	lang,
 	bookSlot = $bindable(null),
 	stageElement = $bindable(null),
@@ -86,6 +83,9 @@ function itemObjective(item: QuestMenuItem): string | null {
 					{/each}
 				</div>
 			{/if}
+			<button type="button" class="mobile-catalog-link" onclick={onopen}>
+				{t(lang, "hall.menu.browseMissions")} <ArrowRight size={16} aria-hidden="true" />
+			</button>
 		</div>
 
 		<div class="closed-book-zone">
@@ -97,14 +97,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 					aria-label={t(lang, "hall.menu.open")}
 					aria-expanded={!visible}
 					onclick={onopen}
-				>
-					<span class="mobile-cover">
-						<span class="cover-rule"></span>
-						<strong>{t(lang, "hall.menu.brand")}</strong>
-						<QuestMenuCoverEmblem {unreadCount} />
-						<span class="cover-rule cover-rule-bottom"></span>
-					</span>
-				</button>
+				></button>
 				<div class="closed-ribbons">
 					<QuestMenuRibbonTabs tabs={ribbons} value={selectedSection} label={t(lang, "hall.menu.sectionTabs")} {onselect} />
 				</div>
@@ -283,41 +276,8 @@ function itemObjective(item: QuestMenuItem): string | null {
 	cursor: pointer;
 }
 
-.mobile-cover {
-	position: absolute;
-	inset: 0;
+.mobile-catalog-link {
 	display: none;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	border: 1px solid color-mix(in oklab, var(--menu-brass) 58%, transparent);
-	background: var(--menu-cover);
-	box-shadow:
-		inset -3px 0 5px -3px rgb(45 41 36 / 32%),
-		9px 14px 24px rgb(45 41 36 / 18%);
-	color: var(--menu-brass);
-	backface-visibility: hidden;
-}
-
-.mobile-cover > strong {
-	font-family: var(--font-serif);
-	font-size: clamp(2rem, 5vw, 4.4rem);
-	font-weight: 380;
-	letter-spacing: 0.08em;
-}
-
-.cover-rule {
-	position: absolute;
-	top: 10%;
-	right: 12%;
-	left: 12%;
-	height: 1px;
-	background: color-mix(in oklab, var(--menu-brass) 65%, transparent);
-}
-
-.cover-rule-bottom {
-	top: auto;
-	bottom: 10%;
 }
 
 .closed-ribbons {
@@ -345,37 +305,43 @@ function itemObjective(item: QuestMenuItem): string | null {
 	}
 }
 
-@media (44rem < width <= 64rem) {
+@media (56.25rem <= width <= 64rem) {
 	.closed-book-zone {
 		/* Reserve space for tabs that now travel with the book's right edge. */
 		padding-inline-end: 3.5rem;
 	}
 }
 
-@media (max-width: 44rem) {
-	.closed-ribbons {
-		display: block;
+@media (width < 56.25rem) {
+	.closed-book-zone {
+		display: none;
 	}
-
-	.mobile-cover {
-		display: flex;
-	}
-
 	.home-grid {
 		grid-template-columns: 1fr;
-		gap: 1.5rem;
+		gap: 0;
 		min-height: 0;
 		padding-bottom: 1rem;
 	}
-
-	.closed-book-zone {
-		grid-row: 1;
-		width: min(100%, 34rem);
-		margin-inline: auto;
+	.mobile-catalog-link {
+		display: flex;
+		width: 100%;
+		min-height: 44px;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		margin-top: 1rem;
+		padding: 0.65rem 1rem;
+		border: 1px solid color-mix(in oklab, var(--menu-wine) 35%, transparent);
+		border-radius: 0.25rem;
+		color: var(--menu-wine);
+		font-family: var(--font-sans);
+		font-size: 0.875rem;
+		font-weight: 600;
+		cursor: pointer;
 	}
-
-	.closed-book-stack {
-		width: clamp(12rem, 60vw, 14rem);
+	.mobile-catalog-link:focus-visible {
+		outline: 2px solid var(--menu-focus);
+		outline-offset: 3px;
 	}
 }
 

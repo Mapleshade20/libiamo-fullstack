@@ -62,7 +62,7 @@ export interface QuestMenuAnimator {
 const IDENTITY_FIT: QuestMenuFit = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skewX: 0 };
 export const QUEST_MENU_BOOK_SPIN_DURATION = 1.18;
 export const QUEST_MENU_BOOK_FULL_TURN = -360;
-export const QUEST_MENU_NARROW_MEDIA_QUERY = "(max-width: 44rem)";
+export const QUEST_MENU_NARROW_MEDIA_QUERY = "(width < 56.25rem)";
 export const QUEST_MENU_MOTION_TOKENS = {
 	durationTurn: 0.52,
 	easeOut: "power3.out",
@@ -596,21 +596,19 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		turnTimeline?.kill();
 		const elements = getElements();
 		if (narrow && elements.mobilePaper) {
-			const exitX = direction > 0 ? -38 : 38;
-			const enterX = direction > 0 ? 58 : -42;
+			const exitX = -direction * 12;
+			const enterX = direction * 18;
 			turnTimeline = gsap
 				.timeline({ defaults: { ease: QUEST_MENU_MOTION_TOKENS.easeInOut } })
 				.to(elements.mobilePaper, {
 					autoAlpha: 0,
 					x: exitX,
-					scale: 0.975,
-					rotateZ: direction * 0.7,
-					duration: 0.2,
+					duration: 0.12,
 					ease: QUEST_MENU_MOTION_TOKENS.easeExit,
 				})
-				.call(onHandoff, [], 0.2)
-				.set(elements.mobilePaper, { x: enterX, scale: 0.95, rotateZ: direction * -0.8 }, 0.21)
-				.to(elements.mobilePaper, { autoAlpha: 1, x: 0, scale: 1, rotateZ: 0, duration: 0.36, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, 0.22)
+				.call(onHandoff, [], 0.12)
+				.set(elements.mobilePaper, { x: enterX }, 0.13)
+				.to(elements.mobilePaper, { autoAlpha: 1, x: 0, duration: 0.22, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, 0.14)
 				.call(onComplete);
 			return;
 		}
