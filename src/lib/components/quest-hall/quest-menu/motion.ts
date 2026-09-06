@@ -483,6 +483,25 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 		const toStage = stages[view];
 		const idleStage = Object.entries(stages).find(([stageView]) => stageView !== from && stageView !== view)?.[1];
 		const narrow = window.matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY).matches;
+		if (narrow) {
+			const direction = view === "home" || (from === "prepare" && view === "catalog") ? -1 : 1;
+			viewTimeline = gsap.timeline({
+				onComplete: () => {
+					gsap.set([fromStage, toStage], { clearProps: "transform" });
+					settle(view);
+					onComplete();
+				},
+			});
+			if (idleStage) viewTimeline.set(idleStage, { autoAlpha: 0, pointerEvents: "none" }, 0);
+			viewTimeline
+				.set(fromStage, { pointerEvents: "none" }, 0)
+				.set(toStage, { autoAlpha: 0, x: direction * 18, pointerEvents: "none" }, 0)
+				.to(fromStage, { autoAlpha: 0, x: -direction * 10, duration: 0.14, ease: "power2.in" }, 0)
+				.to(toStage, { autoAlpha: 1, x: 0, duration: 0.24, ease: "power3.out" }, 0.1);
+			if (elements.preparationPanel && view === "prepare") viewTimeline.set(elements.preparationPanel, { autoAlpha: 1, x: 0 }, 0);
+			if (elements.recommendationsElement && view === "home") viewTimeline.set(elements.recommendationsElement, { autoAlpha: 1, x: 0 }, 0);
+			return;
+		}
 		const bookLayer = elements.bookFrame.closest<HTMLElement>(".book-layer");
 		const fit = targetFit(view, elements) ?? IDENTITY_FIT;
 		let bookEnd: number = QUEST_MENU_MOTION_TOKENS.durationTurn;

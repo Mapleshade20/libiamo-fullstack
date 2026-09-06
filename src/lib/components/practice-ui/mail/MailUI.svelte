@@ -670,7 +670,7 @@ $effect(() => {
 
 @media (max-width: 860px) {
 	.mail-window {
-		grid-template-columns: minmax(250px, 42vw) 1fr;
+		grid-template-columns: minmax(0, 42vw) minmax(0, 1fr);
 	}
 
 	:global(.mail-sidebar) {
@@ -709,8 +709,8 @@ $effect(() => {
 
 @media (max-width: 640px) {
 	.mail-window {
-		grid-template-columns: 1fr;
-		grid-template-rows: 42dvh 1fr;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, min(28dvh, 240px)) minmax(0, 1fr);
 	}
 
 	:global(.mail-list) {
