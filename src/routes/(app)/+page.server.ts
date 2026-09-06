@@ -1,135 +1,35 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
-import type { LanguageCode } from "$lib/i18n";
+import { adaptHallDataToQuestMenu, getQuestMenuItemId } from "$lib/quest-hall/menu";
+import { parseHallLocation, QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
 import { getBrowserTimezone } from "$lib/server/browser-timezone";
-import { db } from "$lib/server/db";
-import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
-import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
-import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/scheduling/dates";
-import { ensureTasksForDate } from "$lib/server/scheduling/tasks";
+import { loadQuestHallData } from "$lib/server/quest-hall";
+import { getQuestHallPreparation } from "$lib/server/quest-hall-preparation";
 import type { Actions, PageServerLoad } from "./$types";
 import { switchActiveLanguage } from "./user-language-action";
 
 export const load: PageServerLoad = async (event) => {
 	const user = requireUser(event);
-	const language = user.activeLanguage as LanguageCode;
-
-	const userTz = getBrowserTimezone(event.cookies);
-	const userLocalDateStr = getLocalDateString(userTz);
-
-	await ensureTasksForDate(language, userLocalDateStr);
-
-	const mondayStr = getMondayOfWeekForDate(userLocalDateStr);
-	const weeklyTasks = await db
-		.select({
-			id: task.id,
-			title: task.title,
-			shortObjective: task.shortObjective,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			templateInteractionType: template.interactionType,
-			pointReward: template.pointReward,
-		})
-		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, mondayStr), eq(task.cadence, "weekly")));
-
-	const dailyTasks = await db
-		.select({
-			id: task.id,
-			title: task.title,
-			shortObjective: task.shortObjective,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			templateInteractionType: template.interactionType,
-			pointReward: template.pointReward,
-		})
-		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, language), eq(task.date, userLocalDateStr), eq(task.cadence, "daily")));
-
-	const translationTasks = await db
-		.select({
-			id: template.id,
-			titleBase: template.titleBase,
-			descriptionBase: template.descriptionBase,
-			difficulty: template.difficulty,
-			createdAt: template.createdAt,
-		})
-		.from(template)
-		.where(and(eq(template.language, language), eq(template.ui, "translator"), eq(template.isActive, true)));
-
-	const translationAttempts = user.nativeLanguage
-		? await db
-				.select({
-					templateId: translationSourceSet.templateId,
-					status: translationAttempt.workflowPhase,
+	event.depends?.(QUEST_HALL_DEPENDENCY);
+	const browserTimezone = getBrowserTimezone(event.cookies);
+	const hallData = await loadQuestHallData(user, browserTimezone);
+	const requestedLocation = parseHallLocation(event.url);
+	const requestedTranslationId = requestedLocation.section === "translation" ? getQuestMenuItemId(requestedLocation.task) : null;
+	const requestedTranslationMonth =
+		hallData.translationTasks.find((task) => task.id === requestedTranslationId)?.createdMonth ?? hallData.translationMonth;
+	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, requestedTranslationMonth));
+	const initialPreparation =
+		hallLocation.view === "prepare" && hallLocation.task
+			? await getQuestHallPreparation({
+					user,
+					key: hallLocation.task,
+					editionDate: hallData.editionDate,
+					browserTimezone,
 				})
-				.from(translationAttempt)
-				.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
-				.where(and(eq(translationAttempt.userId, user.id), eq(translationSourceSet.promptLanguage, user.nativeLanguage)))
-				.orderBy(desc(translationAttempt.updatedAt))
-		: [];
-
-	const translationStatusByTemplateId = new Map<number, string>();
-	for (const attempt of translationAttempts) {
-		if (!translationStatusByTemplateId.has(attempt.templateId)) {
-			translationStatusByTemplateId.set(attempt.templateId, attempt.status);
-		}
-	}
-
-	const allTaskIds = [...new Set([...weeklyTasks, ...dailyTasks].map((taskItem) => taskItem.id))];
-
-	const relatedSessions =
-		allTaskIds.length > 0
-			? await db.query.practiceSession.findMany({
-					where: and(eq(practiceSession.userId, user.id), inArray(practiceSession.taskId, allTaskIds)),
-					columns: {
-						id: true,
-						taskId: true,
-						status: true,
-						startedAt: true,
-						lastSeenAssistantMessageId: true,
-					},
-					with: {
-						messages: {
-							columns: { id: true, role: true },
-						},
-					},
-					orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
-				})
-			: [];
-
-	const latestSessionByTaskId = new Map<number, (typeof relatedSessions)[number]>();
-	for (const session of relatedSessions) {
-		if (!latestSessionByTaskId.has(session.taskId)) {
-			latestSessionByTaskId.set(session.taskId, session);
-		}
-	}
-	const addSessionState = <T extends { id: number }>(taskItem: T) => {
-		const session = latestSessionByTaskId.get(taskItem.id);
-		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
-		const unreadCount = session?.messages?.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
-		return {
-			...taskItem,
-			sessionStatus: session?.status ?? null,
-			unreadCount,
-			hasUnreadReply: unreadCount > 0,
-		};
-	};
-
+			: null;
 	return {
-		weeklyTasks: weeklyTasks.map(addSessionState),
-		dailyTasks: dailyTasks.map(addSessionState),
-		translationTasks: translationTasks.map(({ createdAt, ...taskItem }) => ({
-			...taskItem,
-			createdMonth: getLocalDateString(userTz, createdAt).slice(0, 7),
-		})),
-		translationStatusMap: Object.fromEntries(translationStatusByTemplateId),
-		translationMonth: userLocalDateStr.slice(0, 7),
-		editionDate: userLocalDateStr,
-		greeting: getGreeting(language, user.name),
-		subtitle: getRandomSubtitle(language),
+		...hallData,
+		hallLocation,
+		initialPreparation,
 	};
 };
 

@@ -4,7 +4,8 @@ import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { LearningSelection, SaveSelectionResult } from "./types";
 
 type CapturedSelection = LearningSelection & {

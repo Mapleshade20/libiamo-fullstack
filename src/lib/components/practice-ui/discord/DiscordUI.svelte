@@ -25,6 +25,7 @@ interface Props {
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
+	returnHref?: string;
 }
 
 let {
@@ -35,6 +36,7 @@ let {
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
+	returnHref = "",
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -192,6 +194,7 @@ $effect(() => {
 		{userName}
 		{avatarUrl}
 		{taskId}
+		{returnHref}
 		{showMobileMenu}
 		{t}
 		onCloseMobileMenu={() => (showMobileMenu = false)}

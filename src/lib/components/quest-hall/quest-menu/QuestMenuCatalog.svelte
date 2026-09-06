@@ -1,0 +1,163 @@
+<script lang="ts">
+import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
+import type { QuestMenuCatalog, QuestMenuItem, QuestMenuSection } from "$lib/quest-hall/menu";
+import QuestMenuSheet from "./QuestMenuSheet.svelte";
+
+interface Props {
+	visible: boolean;
+	renderSheet: boolean;
+	interactive: boolean;
+	sectionLabel: string;
+	folio: { current: number; total: number };
+	sections: QuestMenuCatalog["sections"];
+	section: QuestMenuSection;
+	translationMonth: string;
+	lang: LanguageCode;
+	catalogSlot?: HTMLDivElement | null;
+	paperElement?: HTMLDivElement | null;
+	stageElement?: HTMLElement | null;
+	onclose: () => void;
+	onselect: (section: QuestMenuSection) => void;
+	onmonthchange: (direction: -1 | 1) => void;
+	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+}
+
+let {
+	visible,
+	renderSheet,
+	interactive,
+	sectionLabel,
+	folio,
+	sections,
+	section,
+	translationMonth,
+	lang,
+	catalogSlot = $bindable(null),
+	paperElement = $bindable(null),
+	stageElement = $bindable(null),
+	onclose,
+	onselect,
+	onmonthchange,
+	onselectitem,
+}: Props = $props();
+</script>
+
+<section
+	bind:this={stageElement}
+	class="catalog-stage"
+	id="quest-menu-catalog"
+	aria-labelledby="quest-menu-catalog-title"
+	aria-hidden={!visible}
+	inert={!interactive}
+>
+	<div class="catalog-toolbar">
+		<button type="button" class="quiet-button" onclick={onclose}><ArrowLeft size={17} aria-hidden="true" /> {t(lang, "hall.menu.close")}</button>
+		<div>
+			<p>{sectionLabel}</p>
+			<h2 id="quest-menu-catalog-title">{t(lang, "hall.menu.chooseMission")}</h2>
+		</div>
+		<span>{t(lang, "hall.menu.folio")} {folio.current} / {folio.total}</span>
+	</div>
+
+	<div class="catalog-book-stage">
+		<div bind:this={catalogSlot} class="catalog-slot" aria-hidden="true"></div>
+	</div>
+
+	{#if renderSheet}
+		<QuestMenuSheet {sections} {section} {onselect} {lang} {translationMonth} bind:paperElement {onclose} {onmonthchange} {onselectitem} />
+	{/if}
+</section>
+
+<style>
+.catalog-stage {
+	grid-area: 1 / 1;
+}
+
+.catalog-stage[aria-hidden="true"] {
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.catalog-toolbar {
+	display: grid;
+	grid-template-columns: minmax(9rem, 1fr) auto minmax(9rem, 1fr);
+	align-items: center;
+	gap: 1rem;
+	max-width: 74rem;
+	margin: 0 auto 1rem;
+	text-align: center;
+}
+
+.catalog-toolbar p {
+	font-family: var(--font-sans);
+	font-size: 0.68rem;
+	font-weight: 750;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--menu-wine);
+}
+
+.catalog-toolbar h2 {
+	margin: 0.35rem 0 0;
+	font-family: var(--font-serif);
+	font-size: clamp(1.45rem, 3vw, 2.25rem);
+	font-weight: 380;
+	line-height: 1.08;
+}
+
+.quiet-button {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	gap: 0.35rem;
+	justify-self: start;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid color-mix(in oklab, var(--menu-ink) 23%, transparent);
+	background: transparent;
+	color: var(--menu-ink-muted);
+	font-family: var(--font-sans);
+	font-size: 0.75rem;
+	font-weight: 750;
+}
+
+.quiet-button:focus-visible {
+	border-radius: 0.15rem;
+	outline: 2px solid var(--menu-focus);
+	outline-offset: 3px;
+}
+
+.catalog-toolbar > span {
+	justify-self: end;
+	font-family: var(--font-sans);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--menu-ink-muted);
+}
+
+.catalog-book-stage {
+	--menu-stage-gutter: 3.25rem;
+	position: relative;
+	max-width: 74rem;
+	margin: 0 auto;
+	padding: 1.5rem var(--menu-stage-gutter) 1.5rem 2.5rem;
+}
+
+.catalog-slot {
+	width: 100%;
+	aspect-ratio: var(--menu-spread-aspect);
+}
+
+@media (width < 56.25rem) {
+	.catalog-book-stage {
+		display: none;
+	}
+	.catalog-toolbar {
+		display: none;
+	}
+}
+</style>

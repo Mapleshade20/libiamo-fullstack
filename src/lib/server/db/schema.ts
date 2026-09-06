@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import type { TranslationWorkflowPhase } from "$lib/constants";
+import { DEFAULT_SELF_ASSIGNED_LEVELS, type SelfAssignedLevelsByLanguage, type TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
 import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
@@ -25,17 +25,30 @@ export const userLearningProfile = pgTable(
 	"user_learning_profile",
 	{
 		userId: text("user_id")
+			.primaryKey()
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		language: languageCodeEnum("language").notNull(),
-		levelSelfAssign: integer("level_self_assign").default(2).notNull(),
+		levelSelfAssign: jsonb("level_self_assign").$type<SelfAssignedLevelsByLanguage>().default(DEFAULT_SELF_ASSIGNED_LEVELS).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
 			.$onUpdate(() => new Date())
 			.notNull(),
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.language] }), check("level_check", sql`${t.levelSelfAssign} >= 1 AND ${t.levelSelfAssign} <= 3`)],
+	(t) => [
+		check(
+			"user_learning_profile_level_self_assign_check",
+			sql`
+				jsonb_typeof(${t.levelSelfAssign}) = 'object'
+				AND ${t.levelSelfAssign} ?& ARRAY['en', 'es', 'fr', 'ja']
+				AND (${t.levelSelfAssign} - 'en' - 'es' - 'fr' - 'ja') = '{}'::jsonb
+				AND (${t.levelSelfAssign}->'en') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'es') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'fr') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'ja') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+			`,
+		),
+	],
 );
 
 // ── template ─────────────────────────────────────────────────────────

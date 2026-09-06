@@ -62,10 +62,16 @@ Roles
 - learner: browse tasks, view background materials, and complete sessions
 - admin: create and manage templates and variants, and schedule tasks
 
+Quest Hall
+- The authenticated root `/` presents daily and weekly practice quests, translation templates, and unread replies through the responsive Quest Menu.
+- Task and translation preparation opens inside the menu. When a workflow navigates away, account-scoped return context restores the previous section, page, and item.
+- Translation templates can be browsed by creation month without URL navigation. The `/task` and `/translate` roots redirect to Quest Hall, while their `[id]` routes remain the workflow entry points.
+- Each target language stores a self-assigned proficiency level: level 1 corresponds to A2–B1, level 2 to B2–C1, and level 3 to C2+. Recommendations preserve unread and in-progress work, then prefer tasks closest to the active language's level.
+
 Template vs Template Variant vs Task
 - Template: the reusable content blueprint. Key columns now include:
-  - interactionType (enum: chat, slow, translate)
-  - cadence (enum: weekly, daily)
+  - interactionType (enum: chat, translate)
+  - cadence (enum: weekly, daily, none)
   - objectivesBase (text[] — ordered by array index)
   - materialsMd (Markdown background material)
   - tags
@@ -86,7 +92,7 @@ Persona & agent prompt
 
 Validation and UI
 - Opening state shapes are validated in TypeScript with per-UI Zod schemas. AO3 variants support work metadata plus nested `previousComments` so learners can reply at any thread depth.
-- Practice UI components live under `src/lib/components/practice-ui/`; Discord, iMessage, and AO3 are implemented for active sessions.
+- Practice UI components live under `src/lib/components/practice-ui/`; Reddit, Apple Mail, Discord, iMessage, and AO3 are implemented for active sessions.
 - materialsMd is authored in Markdown and rendered at display time (use a safe renderer / sanitizer in production).
 
 ## Features

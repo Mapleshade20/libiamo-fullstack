@@ -4,7 +4,8 @@ import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Search from "@lucide/svelte/icons/search";
 import { base } from "$app/paths";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
 
 let { data } = $props();
@@ -172,8 +173,8 @@ function handleCardListKeydown(event: KeyboardEvent) {
 						>
 							<div class="grid grid-cols-[minmax(0,1fr)_auto] gap-4">
 								<div class="min-w-0">
-									<h2 class="line-clamp-1 font-serif text-lg leading-tight">{note.vocab}</h2>
-									<p class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{note.nativeDefinition}</p>
+									<h2 class="line-clamp-1 font-prose text-lg leading-tight">{note.vocab}</h2>
+									<p class="mt-1 line-clamp-2 font-prose text-xs leading-relaxed text-muted-foreground">{note.nativeDefinition}</p>
 								</div>
 								<div class="flex flex-col items-end justify-between gap-3">
 									<span

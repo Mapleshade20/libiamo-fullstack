@@ -29,13 +29,12 @@ vi.mock("$lib/server/db", () => ({
 	},
 }));
 
-vi.mock("$lib/server/llm", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("$lib/server/llm")>();
-	return {
-		...actual,
-		chatJson: mockChatJson,
-	};
-});
+vi.mock("$lib/server/llm", () => ({
+	chatJson: mockChatJson,
+	llmErrorStatus: (error: unknown) =>
+		typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : 500,
+	llmErrorMessage: (error: unknown) => (error instanceof Error && error.message.trim() ? error.message : "The AI request failed. Please try again."),
+}));
 
 // ── Helpers ─────────────────────────────────────────────────────────
 function createActionEvent(entries: Record<string, string>, userId = "u1") {

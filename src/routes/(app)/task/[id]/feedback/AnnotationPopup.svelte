@@ -232,7 +232,7 @@ const kindColor = $derived(
 	<div class="p-4 overflow-y-auto flex-1">
 		<!-- Annotated text -->
 		<div class="mb-4 rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-3">
-			<p class="text-sm font-medium text-[#2a2520] [overflow-wrap:anywhere]">"{annotation.text}"</p>
+			<p class="font-prose text-sm font-medium text-[#2a2520] [overflow-wrap:anywhere]">"{annotation.text}"</p>
 		</div>
 
 		<!-- Explanation -->
@@ -245,7 +245,7 @@ const kindColor = $derived(
 		{:else if error}
 			<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
 		{:else if explanation}
-			<div class="prose prose-sm max-w-none text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
+			<div class="prose prose-sm max-w-none font-prose text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
 		{/if}
 	</div>
 

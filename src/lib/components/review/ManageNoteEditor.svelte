@@ -5,8 +5,9 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Save from "@lucide/svelte/icons/save";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import { deserialize } from "$app/forms";
+import type { LanguageCode } from "$lib/constants";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
 
 let {

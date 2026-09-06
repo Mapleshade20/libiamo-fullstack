@@ -58,7 +58,7 @@ onDestroy(() => stopAll(controls));
 		</section>
 		<section data-result-panel class="border-l-2 border-[#8fa3b1] bg-card/55 px-4 py-4">
 			<h2 class="mb-3 font-sans text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{referenceLabel}</h2>
-			<p class="font-inter-stack text-[0.95rem] leading-relaxed break-words text-foreground">
+			<p class="font-prose text-[0.95rem] leading-relaxed break-words text-foreground">
 				{#if referenceMarked}
 					<MarkedText parts={referenceMarked} onMarkClick={() => undefined} />
 				{:else}
@@ -80,7 +80,7 @@ onDestroy(() => stopAll(controls));
 						>
 							{index + 1}
 						</span>
-						<p class="text-base leading-relaxed text-foreground/90">{note}</p>
+						<p class="font-prose text-base leading-relaxed text-foreground/90">{note}</p>
 					</li>
 				{/each}
 			</ol>

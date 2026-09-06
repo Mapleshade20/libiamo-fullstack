@@ -12,8 +12,12 @@ export type UnreadInboxItem = {
  * refuses them, and the reply that made one unread is the agent's parting message
  * after an abuse termination, which only the session view renders.
  */
-export function unreadTargetHref(item: Pick<UnreadInboxItem, "taskId" | "sessionStatus">): string {
-	return `/task/${item.taskId}/${item.sessionStatus === "completed" || item.sessionStatus === "evaluated" ? "feedback" : "session"}`;
+export function unreadTargetHref(item: Pick<UnreadInboxItem, "taskId" | "sessionStatus">, base = ""): string {
+	return `${base}/task/${item.taskId}/${item.sessionStatus === "completed" || item.sessionStatus === "evaluated" ? "feedback" : "session"}`;
+}
+
+export function formatUnreadBadgeCount(count: number): string {
+	return count > 9 ? "9+" : String(count);
 }
 
 /**

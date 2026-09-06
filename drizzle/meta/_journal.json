@@ -127,6 +127,13 @@
       "when": 1787686094160,
       "tag": "0017_drop_task_max_session_age",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788581629844,
+      "tag": "0018_consolidate_user_learning_profiles",
+      "breakpoints": true
     }
   ]
 }

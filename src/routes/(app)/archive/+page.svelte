@@ -8,7 +8,8 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { deserialize } from "$app/forms";
 import NoteCard from "$lib/components/note/NoteCard.svelte";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];
@@ -161,7 +162,7 @@ function formatDate(d: Date): string {
 					</button>
 
 					{#if !isExpanded && activity.notes.length > 0}
-						<p class="mt-1.5 line-clamp-1 text-sm text-muted-foreground">{activity.notes.map((note) => note.vocab).join(" · ")}</p>
+						<p class="mt-1.5 line-clamp-1 font-prose text-sm text-muted-foreground">{activity.notes.map((note) => note.vocab).join(" · ")}</p>
 					{/if}
 
 					{#if isExpanded}

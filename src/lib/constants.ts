@@ -77,6 +77,44 @@ export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 
+export function isLanguageCode(value: unknown): value is LanguageCode {
+	return typeof value === "string" && LANGUAGE_CODES.includes(value as LanguageCode);
+}
+
+export const SELF_ASSIGNED_LEVELS = [1, 2, 3] as const;
+export type SelfAssignedLevel = (typeof SELF_ASSIGNED_LEVELS)[number];
+
+export type SelfAssignedLevelsByLanguage = Record<LanguageCode, SelfAssignedLevel>;
+
+export const DEFAULT_SELF_ASSIGNED_LEVELS: SelfAssignedLevelsByLanguage = {
+	en: 2,
+	es: 2,
+	fr: 2,
+	ja: 2,
+};
+
+export function isSelfAssignedLevel(value: unknown): value is SelfAssignedLevel {
+	return typeof value === "number" && SELF_ASSIGNED_LEVELS.includes(value as SelfAssignedLevel);
+}
+
+export function normalizeSelfAssignedLevels(value: unknown): SelfAssignedLevelsByLanguage {
+	const levels = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+	return {
+		en: isSelfAssignedLevel(levels.en) ? levels.en : DEFAULT_SELF_ASSIGNED_LEVELS.en,
+		es: isSelfAssignedLevel(levels.es) ? levels.es : DEFAULT_SELF_ASSIGNED_LEVELS.es,
+		fr: isSelfAssignedLevel(levels.fr) ? levels.fr : DEFAULT_SELF_ASSIGNED_LEVELS.fr,
+		ja: isSelfAssignedLevel(levels.ja) ? levels.ja : DEFAULT_SELF_ASSIGNED_LEVELS.ja,
+	};
+}
+
+export function getSelfAssignedLevel(value: unknown, language: LanguageCode): SelfAssignedLevel {
+	return normalizeSelfAssignedLevels(value)[language];
+}
+
+export function withSelfAssignedLevel(value: unknown, language: LanguageCode, level: SelfAssignedLevel): SelfAssignedLevelsByLanguage {
+	return { ...normalizeSelfAssignedLevels(value), [language]: level };
+}
+
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Español",
@@ -117,6 +155,10 @@ export const NATIVE_LANGUAGE_CODES = [
 	"th",
 ] as const;
 export type NativeLanguageCode = (typeof NATIVE_LANGUAGE_CODES)[number];
+
+export function getHtmlLanguageTag(language: string): string {
+	return language === "zh" ? "zh-Hans" : language;
+}
 
 export function getNativeLanguageOptions(locale = "en"): { value: NativeLanguageCode; label: string }[] {
 	let displayNames: Intl.DisplayNames | undefined;

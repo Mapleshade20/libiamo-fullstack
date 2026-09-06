@@ -1,33 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth/auth";
+import { loadQuestHallData } from "$lib/server/quest-hall";
+import { getQuestHallPreparation } from "$lib/server/quest-hall-preparation";
 import { actions, load } from "$routes/(app)/+page.server";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
-const { mockWhere, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockOrderBy } = vi.hoisted(() => {
-	const mockWhere = vi.fn();
-	const mockOrderBy = vi.fn();
-	const mockLeftJoin = vi.fn(() => ({ where: mockWhere }));
-	const mockInnerJoin = vi.fn(() => ({ leftJoin: mockLeftJoin, where: mockWhere }));
-	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
-	const mockSelect = vi.fn(() => ({ from: mockFrom }));
-	const mockFindMany = vi.fn();
-	const mockOnConflictDoNothing = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoNothing: mockOnConflictDoNothing }));
-	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockWhere, mockInnerJoin, mockFrom, mockSelect, mockFindMany, mockOnConflictDoNothing, mockValues, mockInsert, mockLeftJoin, mockOrderBy };
-});
-
-const { mockEnsureTasksForDate } = vi.hoisted(() => ({
-	mockEnsureTasksForDate: vi.fn(),
-}));
-
-const { mockGetMondayOfWeekForDate, mockGetLocalDateString } = vi.hoisted(() => ({
-	mockGetMondayOfWeekForDate: vi.fn(() => "2026-04-13"),
-	mockGetLocalDateString: vi.fn((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17"),
-}));
-
-const { mockGetBrowserTimezone } = vi.hoisted(() => ({
-	mockGetBrowserTimezone: vi.fn(() => "UTC"),
+const { mockLoadQuestHallData, mockGetBrowserTimezone, mockGetQuestHallPreparation } = vi.hoisted(() => ({
+	mockLoadQuestHallData: vi.fn(),
+	mockGetBrowserTimezone: vi.fn(() => "Europe/Paris"),
+	mockGetQuestHallPreparation: vi.fn(),
 }));
 
 vi.mock("$lib/server/auth/auth", () => ({
@@ -38,220 +19,147 @@ vi.mock("$lib/server/auth/auth", () => ({
 	},
 }));
 
-vi.mock("$lib/server/db", () => ({
-	db: {
-		select: mockSelect,
-		insert: mockInsert,
-		query: {
-			practiceSession: {
-				findMany: mockFindMany,
-			},
-		},
-	},
-}));
-
-vi.mock("$lib/server/db/schema", () => ({
-	task: {
-		id: "id",
-		title: "title",
-		shortObjective: "shortObjective",
-		description: "description",
-		objectives: "objectives",
-		date: "date",
-		language: "language",
-		templateId: "templateId",
-		cadence: "cadence",
-	},
-	template: {
-		id: "id",
-		titleBase: "titleBase",
-		descriptionBase: "descriptionBase",
-		interactionType: "interactionType",
-		ui: "ui",
-		difficulty: "difficulty",
-		pointReward: "pointReward",
-		cadence: "cadence",
-		language: "template.language",
-		isActive: "isActive",
-		createdAt: "createdAt",
-	},
-	userLearningProfile: Symbol("userLearningProfile"),
-	practiceSession: {
-		status: "status",
-		taskId: "taskId",
-		userId: "userId",
-	},
-	translationAttempt: {
-		sourceSetId: "translationAttempt.sourceSetId",
-		workflowPhase: "workflowPhase",
-		userId: "translationAttempt.userId",
-		updatedAt: "translationAttempt.updatedAt",
-	},
-	translationSourceSet: {
-		id: "translationSourceSet.id",
-		templateId: "translationSourceSet.templateId",
-		promptLanguage: "translationSourceSet.promptLanguage",
-	},
-}));
-
-vi.mock("$lib/server/scheduling/tasks", () => ({
-	ensureTasksForDate: mockEnsureTasksForDate,
-}));
-
 vi.mock("$lib/server/browser-timezone", () => ({
 	getBrowserTimezone: mockGetBrowserTimezone,
 }));
 
-vi.mock("$lib/server/scheduling/dates", () => ({
-	getMondayOfWeekForDate: mockGetMondayOfWeekForDate,
-	getLocalDateString: mockGetLocalDateString,
+vi.mock("$lib/server/quest-hall", () => ({
+	loadQuestHallData: mockLoadQuestHallData,
+}));
+
+vi.mock("$lib/server/quest-hall-preparation", () => ({
+	getQuestHallPreparation: mockGetQuestHallPreparation,
 }));
 
 describe("(app) home +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => date?.toISOString().slice(0, 10) ?? "2026-04-17");
+		mockGetBrowserTimezone.mockReturnValue("Europe/Paris");
 	});
 
-	it("redirects unauthenticated users", async () => {
+	it("redirects unauthenticated users before loading Hall data", async () => {
 		await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({
 			status: 302,
 			location: "/sign-in",
 		});
+		expect(mockLoadQuestHallData).not.toHaveBeenCalled();
 	});
 
-	it("loads weekly and daily tasks for active language", async () => {
-		const weeklyTasks = [{ id: 1, title: "Weekly" }];
-		const dailyTasks = [{ id: 2, title: "Daily" }];
-		const translationTasks = [
-			{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdAt: new Date("2026-04-08T12:00:00.000Z") },
-		];
-		mockWhere.mockResolvedValueOnce(weeklyTasks).mockResolvedValueOnce(dailyTasks).mockResolvedValueOnce(translationTasks);
-		mockFindMany.mockResolvedValueOnce([
-			{
-				id: 1001,
-				taskId: 1,
-				status: "evaluated",
-				startedAt: new Date("2026-04-17T10:00:00.000Z"),
-				lastSeenAssistantMessageId: 6,
-				messages: [{ id: 7, role: "assistant" }],
-			},
-			{ id: 1002, taskId: 2, status: "in_progress", startedAt: new Date("2026-04-17T11:00:00.000Z") },
-		]);
+	it("loads the Hall service for the authenticated user and browser timezone", async () => {
+		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
+		const hallData = {
+			activeLanguage: "fr",
+			nativeLanguage: "en",
+			levelSelfAssign: 2,
+			localDate: "2026-04-17",
+			localMonday: "2026-04-13",
+			editionDate: "2026-04-17",
+			translationMonth: "2026-04",
+			greeting: "Bonjour, Fedor",
+			subtitle: "Choose a quest",
+			dailyTasks: [],
+			weeklyTasks: [],
+			translationTasks: [],
+			translationStatusMap: {},
+		};
+		mockLoadQuestHallData.mockResolvedValue(hallData);
+		const cookies = { get: vi.fn() };
+		const depends = vi.fn();
+		const url = new URL("https://libiamo.test/?view=catalog&section=weekly&leaf=9");
 
-		const user = { id: "u1", activeLanguage: "en" };
-		const result = await load({ locals: { user } } as any);
-
-		expect(mockEnsureTasksForDate).toHaveBeenCalledTimes(1);
-		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", expect.any(String));
-		expect(result).toEqual(
-			expect.objectContaining({
-				weeklyTasks: [{ ...weeklyTasks[0], sessionStatus: "evaluated", unreadCount: 1, hasUnreadReply: true }],
-				dailyTasks: [{ ...dailyTasks[0], sessionStatus: "in_progress", unreadCount: 0, hasUnreadReply: false }],
-				translationTasks: [{ id: 3, titleBase: "Translate a letter", descriptionBase: "Translate a personal letter.", createdMonth: "2026-04" }],
-				translationMonth: "2026-04",
-				editionDate: "2026-04-17",
-			}),
-		);
+		await expect(load({ locals: { user }, cookies, depends, url } as any)).resolves.toEqual({
+			...hallData,
+			hallLocation: { view: "catalog", section: "weekly", leaf: 1, task: null },
+			initialPreparation: null,
+		});
+		expect(depends).toHaveBeenCalledWith("quest-hall:data");
+		expect(mockGetBrowserTimezone).toHaveBeenCalledWith(cookies);
+		expect(loadQuestHallData).toHaveBeenCalledWith(user, "Europe/Paris");
+		expect(getQuestHallPreparation).not.toHaveBeenCalled();
 	});
 
-	it("loads translation tasks from every creation month and keeps the latest attempt status", async () => {
-		mockWhere
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ id: 7, titleBase: "A poem", createdAt: new Date("2025-12-04T12:00:00.000Z") }]);
-		mockWhere.mockReturnValueOnce({ orderBy: mockOrderBy });
-		mockOrderBy.mockResolvedValueOnce([
-			{ templateId: 7, status: "correction" },
-			{ templateId: 7, status: "draft" },
-		]);
+	it("server-loads the selected preparation for a direct Hall URL", async () => {
+		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
+		const hallData = {
+			activeLanguage: "fr",
+			nativeLanguage: "en",
+			levelSelfAssign: 2,
+			localDate: "2026-04-17",
+			localMonday: "2026-04-13",
+			editionDate: "2026-04-17",
+			translationMonth: "2026-04",
+			greeting: "Bonjour, Fedor",
+			subtitle: "Choose a quest",
+			dailyTasks: [
+				{
+					id: 7,
+					title: "Daily quest",
+					shortObjective: null,
+					templateUi: "imessage",
+					templateDifficulty: 1,
+					templateInteractionType: "chat",
+					pointReward: 5,
+					sessionStatus: null,
+					unreadCount: 0,
+					hasUnreadReply: false,
+				},
+			],
+			weeklyTasks: [],
+			translationTasks: [],
+			translationStatusMap: {},
+		};
+		const preparation = { kind: "quest", key: "daily-7", data: { task: { id: 7 }, nativeLanguage: "en" } };
+		mockLoadQuestHallData.mockResolvedValue(hallData);
+		mockGetQuestHallPreparation.mockResolvedValue(preparation);
+		const cookies = { get: vi.fn() };
+		const url = new URL("https://libiamo.test/?view=prepare&task=daily-7");
 
-		const result = await load({
-			locals: { user: { id: "u1", activeLanguage: "en", nativeLanguage: "fr" } },
-		} as any);
-
-		expect(result).toEqual(
-			expect.objectContaining({
-				translationMonth: "2026-04",
-				translationTasks: [{ id: 7, titleBase: "A poem", createdMonth: "2025-12" }],
-				translationStatusMap: { 7: "correction" },
-			}),
-		);
+		await expect(load({ locals: { user }, cookies, url } as any)).resolves.toMatchObject({
+			hallLocation: { view: "prepare", section: "daily", task: "daily-7" },
+			initialPreparation: preparation,
+		});
+		expect(getQuestHallPreparation).toHaveBeenCalledWith({
+			user,
+			key: "daily-7",
+			editionDate: "2026-04-17",
+			browserTimezone: "Europe/Paris",
+		});
 	});
 
-	it("buckets translation templates in the browser timezone", async () => {
-		const createdAt = new Date("2026-08-31T19:00:00.000Z");
-		mockGetBrowserTimezone.mockReturnValue("Pacific/Auckland");
-		mockGetLocalDateString.mockImplementation((_timezone: string, date?: Date) => (date ? "2026-09-01" : "2026-09-01"));
-		mockWhere
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([{ id: 8, titleBase: "A letter", createdAt }]);
-		mockFindMany.mockResolvedValue([]);
+	it("server-loads an older-month translation selected by a workflow return URL", async () => {
+		const user = { id: "u1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" };
+		const hallData = {
+			activeLanguage: "fr",
+			nativeLanguage: "en",
+			levelSelfAssign: 2,
+			localDate: "2026-09-04",
+			localMonday: "2026-08-31",
+			editionDate: "2026-09-04",
+			translationMonth: "2026-09",
+			greeting: "Bonjour, Fedor",
+			subtitle: "Choose a quest",
+			dailyTasks: [],
+			weeklyTasks: [],
+			translationTasks: [
+				{ id: 21, titleBase: "Current", descriptionBase: null, difficulty: 1, createdMonth: "2026-09" },
+				{ id: 22, titleBase: "Older", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+			],
+			translationStatusMap: { "22": "draft" },
+		};
+		const preparation = { kind: "translation", key: "translation-22", data: { template: { id: 22 } } };
+		mockLoadQuestHallData.mockResolvedValue(hallData);
+		mockGetQuestHallPreparation.mockResolvedValue(preparation);
+		const url = new URL("https://libiamo.test/?view=prepare&section=translation&task=translation-22");
 
-		const result = (await load({
-			locals: { user: { id: "u1", activeLanguage: "en" } },
-		} as any)) as any;
-
-		expect(mockGetBrowserTimezone).toHaveBeenCalled();
-		expect(mockGetLocalDateString).toHaveBeenCalledWith("Pacific/Auckland", createdAt);
-		expect(result.translationMonth).toBe("2026-09");
-		expect(result.translationTasks[0]?.createdMonth).toBe("2026-09");
-	});
-
-	describe("browser timezone logic", () => {
-		beforeEach(() => {
-			vi.useFakeTimers();
-			vi.setSystemTime(new Date("2026-04-17T10:00:00Z"));
-		});
-
-		afterEach(() => {
-			vi.useRealTimers();
-		});
-
-		it("should use UTC when the browser timezone cookie is missing", async () => {
-			mockGetBrowserTimezone.mockReturnValue("UTC");
-			mockGetLocalDateString.mockReturnValue("2026-04-17");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
-		});
-
-		it("should calculate local date using the browser timezone", async () => {
-			mockGetBrowserTimezone.mockReturnValue("Asia/Tokyo");
-			mockGetLocalDateString.mockReturnValue("2026-04-18");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("Asia/Tokyo");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-18");
-		});
-
-		it("does not read a timezone from the user profile", async () => {
-			mockGetBrowserTimezone.mockReturnValue("UTC");
-			mockGetLocalDateString.mockReturnValue("2026-04-17");
-			mockWhere.mockResolvedValue([]);
-			const user = { id: "u1", activeLanguage: "en", timezone: "Asia/Tokyo" };
-
-			await load({ locals: { user } } as any);
-
-			expect(mockGetLocalDateString).toHaveBeenCalledWith("UTC");
-			expect(mockEnsureTasksForDate).toHaveBeenCalledWith("en", "2026-04-17");
+		await expect(load({ locals: { user }, cookies: { get: vi.fn() }, depends: vi.fn(), url } as any)).resolves.toMatchObject({
+			hallLocation: { view: "prepare", section: "translation", leaf: 1, task: "translation-22" },
+			initialPreparation: preparation,
 		});
 	});
 
 	runSwitchLanguageActionSuite({
 		action: actions.switchLanguage,
 		updateUser: auth.api.updateUser as any,
-		mockInsert,
-		mockValues,
-		mockOnConflictDoNothing,
 		successLanguage: "ja",
 	});
 });

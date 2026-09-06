@@ -80,7 +80,7 @@
 }
 
 @theme inline {
-	--font-serif: "Playfair Display", Georgia, serif;
+	--font-serif: "Newsreader", Georgia, serif;
 	--font-sans: "Signika", ui-sans-serif, system-ui, sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
