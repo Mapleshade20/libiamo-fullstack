@@ -26,7 +26,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 ## Key areas
 
 - Routes: `(app)/` authenticated learner pages (home, session, feedback, archive, review, translate, contribute, profile), `(auth)/`, `(admin)/`; `/api/review/` exposes Note-based due/stats/rating endpoints.
-- Quest Hall is the authenticated production root `/` and uses the editorial `quest-hall/quest-menu/QuestMenu.svelte` interface. It combines daily and weekly quests, the month-filtered translation catalog, unread replies, and inline preparation in one responsive book/sheet experience. Return context restores the previous menu location after a workflow, and recommendations use the active language's `userLearningProfile.levelSelfAssign` while preserving unread and in-progress continuity. `/translate` plus `/task` roots redirect to `/`; their `[id]` routes remain the task detail/workflow entry points.
+- Quest Hall is the authenticated production root `/` and uses the editorial `quest-hall/quest-menu/QuestMenu.svelte` interface. It combines daily and weekly quests, a year-filtered translation catalog (only populated years are navigable), unread replies, and inline preparation in one responsive book/sheet experience. Current/future month translations receive full pages; earlier months use compact archive pages. Return context retains its `translationMonth` field for compatibility. Recommendations use the active language's `userLearningProfile.levelSelfAssign` while preserving unread and in-progress continuity. `/translate` plus `/task` roots redirect to `/`; their `[id]` routes remain the task detail/workflow entry points.
 - Server: `src/lib/server/` for auth (`auth/`), scheduling (`scheduling/`), db, LLM, sessions, feedback, notes, Note-based review/FSRS, archive, translate. `src/lib/admin/` for template/variant action helpers.
 - Data model: templates are blueprints; template variants store `slotValues` + UI-specific `openingState`; scheduled tasks store resolved template text and a selected `variantId`; practice sessions/messages store chat runtime state; completed session gets feedback; all feedback paths create FSRS Notes with a target-language `vocab`, target/native dictionary definitions, and four natural bilingual examples in one JSON column; reviewLogs reference Notes directly. There is no Note exercise-variant table or persisted example rotation state. Separate things from this main workflow: templateContributions and translation attempts.
 - Scheduling: `src/lib/server/scheduling/tasks.ts` auto-fills 3 weekly + 3 daily non-translation tasks per user language/date; weekly dates normalize to Monday and admin manual weeks use `YYYY-Www`. Cadence values include `weekly`, `daily`, `none`.
@@ -56,6 +56,18 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Base path: `kit.paths.base` comes from the `BASE_PATH` build-time env var (empty by default). Every internal URL must go through `base` from `$app/paths` — `href`, `form action`, client `fetch`, and server `redirect()`. Never write a bare absolute `"/..."` internal URL. Comparisons against `page.url.pathname` must also include `base`, since that value carries it. Better Auth needs the full mount point spelled out (`baseURL: ${ORIGIN}${base}/api/auth` with `basePath: "/"`), because it only appends its default `/api/auth` when `baseURL` has no path of its own.
 
 ## Codebase conventions
+
+## Motion and detail design
+
+- Follow https://transitions.dev interaction ideas using native Svelte/CSS implementations: frosted stacked reply banners below navigation, origin-aware reversible dropdowns, and sliding selection surfaces. Skeletons use a 1s half-opacity pulse, then the shared `LoadingReveal.svelte` overlays outgoing and incoming layers for a 400ms / 2px blur cross-fade. Use this wrapper at loading boundaries rather than replacing skeletons abruptly. Do not import React components into the Svelte application.
+- Keep navigation and language menus on the same neutral paper surface; use local stylized SVG flags rather than remote bitmap flags. Reserve wine/olive accents for meaningful states, not large in-progress fills.
+- Prefer 220–350ms ease-out transitions, small distances, stable loading geometry, and restrained shadows. Avoid flashing content, layout jumps, and arbitrary delays. Separate scroll ownership from focus (use `preventScroll`); forward menu/detail navigation goes smoothly to the top and in-app back must not replay browser-restored offsets.
+- QuestMenu book timelines can be settled by resize without firing completion callbacks. Navigation scrolling must happen independently of timeline completion, or opening menus/details can retain stale offsets.
+- Static book pages and turning copies must render identical page-header geometry, including the 44px translation year controls. Disable controls during turns rather than unmounting them; otherwise card positions jump at the sheet handoff.
+- Honor `prefers-reduced-motion`, retain keyboard focus indicators and 44px interaction targets, and clean up timers/listeners. Typewriter copy must reserve its complete multiline geometry and expose the full sentence to assistive technology.
+- Task cards use balanced serif titles, centered reading hierarchy, restrained metadata, and quiet pill actions; older translations are compact without shrinking their touch targets.
+
+## Implementation conventions
 
 - Use tabs for indentation.
 - Refer to `README.md` for core concepts.

@@ -16,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
 	const requestedTranslationId = requestedLocation.section === "translation" ? getQuestMenuItemId(requestedLocation.task) : null;
 	const requestedTranslationMonth =
 		hallData.translationTasks.find((task) => task.id === requestedTranslationId)?.createdMonth ?? hallData.translationMonth;
-	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, requestedTranslationMonth));
+	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, requestedTranslationMonth, "year"));
 	const initialPreparation =
 		hallLocation.view === "prepare" && hallLocation.task
 			? await getQuestHallPreparation({

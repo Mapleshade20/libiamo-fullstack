@@ -1,6 +1,7 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
+import QuestMenuBook from "$lib/components/quest-hall/quest-menu/QuestMenuBook.svelte";
 import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
 import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
 import type { HallQuest } from "$lib/quest-hall";
@@ -49,6 +50,47 @@ function hallData(overrides: Partial<HallData> = {}): HallData {
 const home: HallLocation = { view: "home", section: "daily", leaf: 1, task: null };
 
 describe("QuestMenu", () => {
+	it.each([-1, 1] as const)("retains the translation year header on static and turning pages (direction: %s)", (direction) => {
+		const catalog = adaptHallDataToQuestMenu(hallData(), "2026-09", "year");
+		const spread = catalog.spreads.translation[0];
+		const noop = () => {};
+		const { body } = render(QuestMenuBook, {
+			props: {
+				ready: true,
+				revealed: true,
+				onrevealed: noop,
+				renderPages: true,
+				interactive: false,
+				ribbons: [],
+				view: "catalog",
+				section: "translation",
+				spread,
+				folio: 1,
+				turnPreview: {
+					direction,
+					fromSection: "translation",
+					toSection: "translation",
+					fromSpread: spread,
+					toSpread: spread,
+					fromFolio: 1,
+					toFolio: 2,
+				},
+				unreadCount: 0,
+				canTurnPrevious: true,
+				canTurnNext: true,
+				turning: true,
+				lang: "en",
+				translationMonth: "2026-09",
+				onturn: noop,
+				onmonthchange: noop,
+				onselectsection: noop,
+				onselectitem: noop,
+			},
+		});
+		// One left page stays underneath, the other travels on the sheet.
+		expect(body.match(/<time datetime="2026"/g)).toHaveLength(2);
+	});
+
 	it("server-renders the personalized home, recommendations, ribbons, and canonical links", () => {
 		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
 
@@ -112,7 +154,7 @@ describe("QuestMenu", () => {
 		expect(body).not.toContain('class="catalog-ribbons');
 	});
 
-	it("server-renders a direct catalog location with localized month controls and current-month production items", () => {
+	it("server-renders a direct catalog location with year controls and current-year production items", () => {
 		const { body } = render(QuestMenu, {
 			props: {
 				data: hallData(),
@@ -125,12 +167,12 @@ describe("QuestMenu", () => {
 		expect(body).toContain("Choose a mission");
 		expect(body).toContain("Current letter");
 		expect(body).toContain('href="/translate/21"');
-		expect(body).toContain('aria-label="Previous month"');
-		expect(body).toContain('aria-label="Next month"');
-		expect(body).toContain("September 2026");
+		expect(body).toContain('datetime="2026"');
+		expect(body).toContain('aria-label="← 2026"');
+		expect(body).toContain('aria-label="2026 →"');
 		expect(body).toContain('class="month-folio');
 		expect(body).not.toContain('class="month-press');
-		expect(body).not.toContain("Archived letter");
+		expect(body).toContain("Archived letter");
 	});
 
 	it("populates both responsive catalog surfaces so CSS can switch layouts without an empty page", () => {
@@ -194,6 +236,21 @@ describe("QuestMenu", () => {
 
 		expect(body).toContain("No quests available yet.");
 		expect(body).toContain("Menu sections");
+	});
+
+	it.each([false, true])("shows translation empty state only for an empty catalog (empty: %s)", (empty) => {
+		const data = hallData();
+		data.translationTasks = empty ? [] : data.translationTasks.slice(0, 1);
+		const { body } = render(QuestMenu, {
+			props: {
+				data,
+				initialLocation: { view: "catalog", section: "translation", leaf: 1, task: null },
+				accountScope: "account-a",
+				lang: "en",
+			},
+		});
+		expect(body.includes("No content available for translation yet.")).toBe(empty);
+		if (!empty) expect(body).toContain("Current letter");
 	});
 
 	it("server-renders a directly selected quest in the preparation pane", () => {

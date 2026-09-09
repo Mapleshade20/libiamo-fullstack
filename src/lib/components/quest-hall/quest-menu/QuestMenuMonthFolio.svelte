@@ -1,9 +1,9 @@
 <script lang="ts">
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
+import { getContext } from "svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { formatCalendarMonth } from "$lib/month";
 
 interface Props {
 	month: string;
@@ -13,20 +13,16 @@ interface Props {
 }
 
 let { month, lang, disabled = false, onchange }: Props = $props();
+const getYears = getContext<(() => string[]) | undefined>("quest-menu-translation-years") ?? (() => []);
+let year = $derived(month.slice(0, 4));
 </script>
 
-<span class="month-folio" role="group" aria-label={t(lang, "translate.month")}>
-	<button
-		type="button"
-		{disabled}
-		aria-label={t(lang, "translate.previousMonth")}
-		title={t(lang, "translate.previousMonth")}
-		onclick={() => onchange(-1)}
-	>
+<span class="month-folio" role="group" aria-label={t(lang, "translate.title")}>
+	<button type="button" disabled={disabled || !getYears().some((value) => value < year)} aria-label={`← ${year}`} onclick={() => onchange(-1)}>
 		<ChevronLeft size={15} strokeWidth={1.5} aria-hidden="true" />
 	</button>
-	<time datetime={`${month}-01`} aria-live="polite">{formatCalendarMonth(month, lang)}</time>
-	<button type="button" {disabled} aria-label={t(lang, "translate.nextMonth")} title={t(lang, "translate.nextMonth")} onclick={() => onchange(1)}>
+	<time datetime={year} aria-live="polite">{year}</time>
+	<button type="button" disabled={disabled || !getYears().some((value) => value > year)} aria-label={`${year} →`} onclick={() => onchange(1)}>
 		<ChevronRight size={15} strokeWidth={1.5} aria-hidden="true" />
 	</button>
 </span>

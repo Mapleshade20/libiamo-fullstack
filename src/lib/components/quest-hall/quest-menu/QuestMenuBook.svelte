@@ -102,7 +102,7 @@ function sectionLabel(value: QuestMenuSection): string {
 }
 </script>
 
-{#snippet pageContents(pageSection: QuestMenuSection, pageSpread: QuestMenuSpread, pageFolio: number, side: "left" | "right", showMonthFolio = false)}
+{#snippet pageContents(pageSection: QuestMenuSection, pageSpread: QuestMenuSpread, pageFolio: number, side: "left" | "right")}
 	<div class="page-folio" class:page-folio-right={side === "right"}>
 		{#if side === "left"}
 			<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
@@ -111,15 +111,25 @@ function sectionLabel(value: QuestMenuSection): string {
 			<span>{pageNumber(pageFolio, side)} · {t(lang, "hall.menu.brand")}</span>
 			<span class="page-wine-mark" aria-hidden="true"><Wine size={15} strokeWidth={1.4} /></span>
 		{/if}
-		{#if pageSection === "translation" && side === "left" && showMonthFolio}
+		{#if pageSection === "translation" && side === "left"}
 			<QuestMenuMonthFolio month={translationMonth} {lang} disabled={turning} onchange={onmonthchange} />
 		{/if}
 	</div>
-	<div class="page-items" class:is-compact={side === "right" || pageSpread.leaf > 1}>
+	<div
+		class="page-items"
+		class:is-compact={pageSection === "translation" ? (side === "left" ? pageSpread.leftItems : pageSpread.rightItems).some((item) => item.archived) : side === "right" || pageSpread.leaf > 1}
+	>
 		{#each (side === "left" ? pageSpread.leftItems : pageSpread.rightItems) as item (item.key)}
-			<QuestMenuItemCard {item} {lang} compact={side === "right" || pageSpread.leaf > 1} onselect={onselectitem} />
+			<QuestMenuItemCard
+				{item}
+				{lang}
+				compact={item.kind === "translation" ? item.archived : side === "right" || pageSpread.leaf > 1}
+				onselect={onselectitem}
+			/>
 		{:else}
-			<p class="blank-page">{t(lang, pageSection === "translation" ? "translate.empty" : "hall.noTasks")}</p>
+			{#if pageSpread.items.length === 0 && side === "left"}
+				<p class="blank-page">{t(lang, pageSection === "translation" ? "translate.empty" : "hall.noTasks")}</p>
+			{/if}
 		{/each}
 	</div>
 {/snippet}
@@ -220,7 +230,7 @@ function sectionLabel(value: QuestMenuSection): string {
 							</span>
 							<div class="cover-face cover-face-back page page-left" aria-hidden={view !== "catalog"} inert={view !== "catalog"}>
 								{#if renderPages}
-									{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left", !turnPreview)}
+									{@render pageContents(staticLeftSection, staticLeftSpread, staticLeftFolio, "left")}
 								{/if}
 							</div>
 							<span class="book-edge book-edge-board book-edge-fore" aria-hidden="true"></span>

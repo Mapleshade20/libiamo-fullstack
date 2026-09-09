@@ -109,6 +109,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 <style>
 .home-stage {
 	grid-area: 1 / 1;
+	align-self: start;
 }
 
 .home-stage[aria-hidden="true"] {
@@ -120,14 +121,15 @@ function itemObjective(item: QuestMenuItem): string | null {
 .home-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 0.95fr) minmax(22rem, 1.05fr);
-	align-items: center;
+	align-items: start;
 	gap: clamp(2.5rem, 7vw, 7rem);
-	min-height: clamp(38rem, 58vw, 47rem);
 	max-width: 74rem;
 	margin: 0 auto;
 }
 
 .section-kicker {
+	margin: 0;
+	line-height: 1.5;
 	font-family: var(--font-sans);
 	font-size: 0.68rem;
 	font-weight: 750;
@@ -256,6 +258,8 @@ function itemObjective(item: QuestMenuItem): string | null {
 
 .closed-book-zone {
 	display: grid;
+	/* Match the kicker line plus the recommendation list's top margin. */
+	padding-top: calc(0.68rem * 1.5 + 1.6rem);
 	justify-items: center;
 	min-width: 0;
 	padding-bottom: 1.5rem;

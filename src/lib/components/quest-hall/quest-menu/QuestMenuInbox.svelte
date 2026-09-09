@@ -50,7 +50,10 @@ $effect(() => {
 });
 </script>
 
-<div class="menu-inbox" bind:this={container}>
+<div class="menu-inbox" class:is-empty={total === 0 && status !== "error"} bind:this={container}>
+	{#each items.slice(1, 3) as item, index (item.taskId)}
+		<span class="stack-preview" style:--depth={index + 1} aria-hidden="true">{item.title}</span>
+	{/each}
 	<span class="status-announcement" role="status" aria-atomic="true">{countLabel}</span>
 	<button
 		bind:this={trigger}
@@ -62,7 +65,7 @@ $effect(() => {
 		onclick={() => (isOpen = !isOpen)}
 	>
 		<Mail size={17} strokeWidth={1.65} aria-hidden="true" />
-		<span class="trigger-label">{t(lang, "hall.unreadTrigger")}</span>
+		<span class="trigger-label">{items[0]?.title ?? countLabel}</span>
 		{#if total > 0}
 			<span class="trigger-count" aria-hidden="true">{formatUnreadBadgeCount(total)}</span>
 		{/if}
@@ -121,6 +124,35 @@ $effect(() => {
 </div>
 
 <style>
+.is-empty {
+	display: none;
+}
+.trigger-label {
+	max-width: min(21rem, 60vw);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.stack-preview {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	padding-inline: 1rem;
+	overflow: hidden;
+	white-space: nowrap;
+	font-size: 0.75rem;
+	border: 1px solid #8b817329;
+	border-radius: 16px;
+	background: #fafaf9ed;
+	backdrop-filter: blur(20px);
+	transform: translateY(calc(var(--depth) * 10px)) scale(calc(1 - var(--depth) * 0.06));
+	opacity: calc(1 - var(--depth) * 0.2);
+	z-index: calc(3 - var(--depth));
+	transition:
+		transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 350ms;
+}
 .menu-inbox {
 	--menu-ink: var(--foreground);
 	--menu-ink-muted: var(--muted-foreground);
@@ -147,19 +179,22 @@ $effect(() => {
 }
 
 .inbox-trigger {
+	position: relative;
+	z-index: 3;
 	display: inline-flex;
 	min-height: 44px;
 	align-items: center;
 	gap: 0.48rem;
 	padding: 0.45rem 0.62rem 0.45rem 0.72rem;
 	border: 1px solid color-mix(in oklab, var(--menu-ink) 18%, transparent);
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--menu-sheet) 48%, transparent);
+	border-radius: 16px;
+	background: #fafaf9ed;
+	backdrop-filter: blur(20px);
 	color: var(--menu-ink-muted);
 	font-size: 0.69rem;
 	font-weight: 650;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	letter-spacing: 0;
+	text-transform: none;
 	cursor: pointer;
 	box-shadow: 0 0.15rem 0.5rem rgb(74 59 43 / 0.035);
 	transition:
@@ -205,15 +240,15 @@ $effect(() => {
 .inbox-panel {
 	position: absolute;
 	top: calc(100% + 0.65rem);
-	right: 0;
+	left: 50%;
+	transform: translateX(-50%);
 	z-index: 60;
 	width: min(23rem, calc(100vw - 3rem));
 	overflow: hidden;
 	border: 1px solid color-mix(in oklab, var(--menu-ink) 18%, transparent);
-	border-radius: 0.55rem;
-	background:
-		linear-gradient(color-mix(in oklab, var(--menu-sheet) 94%, transparent), color-mix(in oklab, var(--menu-paper) 96%, transparent)),
-		var(--menu-paper);
+	border-radius: 16px;
+	background: #fafaf9ed;
+	backdrop-filter: blur(24px);
 	box-shadow: 0 1.1rem 2.8rem rgb(63 48 34 / 0.16);
 	color: var(--menu-ink);
 }
@@ -365,22 +400,34 @@ li:last-child .inbox-item {
 
 @media (max-width: 40rem) {
 	.inbox-panel {
-		position: fixed;
+		position: absolute;
 		top: calc(100% + 0.5rem);
-		left: 1rem;
-		right: 1rem;
-		width: auto;
+		left: 50%;
+		width: calc(100vw - 2rem);
 		max-height: calc(100dvh - 6rem);
 		overflow-y: auto;
 	}
 	.trigger-label {
-		display: none;
+		display: block;
 	}
 
 	.inbox-trigger {
 		min-width: 2.4rem;
 		justify-content: center;
 		padding-inline: 0.62rem;
+	}
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.menu-inbox:not(:has(.inbox-panel)):hover .stack-preview {
+		transform: translateY(calc(var(--depth) * 48px)) scale(1);
+		opacity: 1;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.stack-preview,
+	.inbox-trigger {
+		transition: none;
 	}
 }
 </style>

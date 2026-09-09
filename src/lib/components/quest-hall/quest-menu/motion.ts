@@ -636,6 +636,10 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			onComplete();
 			return;
 		}
+		const front = elements.turnSheet.querySelector<HTMLElement>(".turn-sheet-front");
+		const back = elements.turnSheet.querySelector<HTMLElement>(".turn-sheet-back");
+		if (front) gsap.set(front, { opacity: 1 });
+		if (back) gsap.set(back, { opacity: 0 });
 		gsap.set(elements.turnSheet, {
 			autoAlpha: 1,
 			left: direction > 0 ? "auto" : "0%",
@@ -651,9 +655,21 @@ export function createQuestMenuAnimator(getElements: () => QuestMenuMotionElemen
 			.to(elements.turnSheet, { rotateY: direction * -180, duration: turnDuration }, 0)
 			.to(elements.turnSheet, { z: 12, duration: turnMidpoint, ease: QUEST_MENU_MOTION_TOKENS.easeOut }, 0)
 			.to(elements.turnSheet, { z: 0, duration: turnMidpoint, ease: QUEST_MENU_MOTION_TOKENS.easeExit }, turnMidpoint)
+			.call(
+				() => {
+					// The symmetric rotation ease is edge-on here. Explicitly cull the
+					// old face rather than relying solely on WebKit's 3D backface culling.
+					if (front) gsap.set(front, { opacity: 0 });
+					if (back) gsap.set(back, { opacity: 1 });
+				},
+				[],
+				turnMidpoint,
+			)
 			.call(onHandoff, [], turnMidpoint)
-			.set(elements.turnSheet, { autoAlpha: 0, left: "auto", right: "0%", rotateY: 0, z: 0 }, turnDuration)
-			.call(onComplete, [], turnDuration);
+			// Commit the underlying pages before retiring the composited sheet.
+			// Keep its landed transform; resetting it here can flash its other face.
+			.call(onComplete, [], turnDuration)
+			.set(elements.turnSheet, { autoAlpha: 0 }, turnDuration);
 	}
 
 	function destroy(): void {

@@ -68,8 +68,9 @@ function difficultyLabel(level: number): string {
 	min-width: 0;
 	flex: 1;
 	flex-direction: column;
-	gap: 0.48rem;
-	padding: 0.85rem 0;
+	gap: 0.85rem;
+	padding: 1.25rem 0.8rem;
+	text-align: center;
 	border-block: 1px solid color-mix(in oklab, var(--menu-ink) 14%, transparent);
 }
 
@@ -82,7 +83,13 @@ function difficultyLabel(level: number): string {
 }
 
 .is-active {
-	background: color-mix(in oklab, var(--menu-brass) 8%, transparent);
+	background: transparent;
+}
+
+.task-card :global(.status) {
+	align-self: center;
+	font-size: 0.6rem;
+	letter-spacing: 0.06em;
 }
 
 .task-overline,
@@ -102,7 +109,7 @@ function difficultyLabel(level: number): string {
 .task-card h3 {
 	margin: 0.1rem 0 0;
 	font-family: var(--font-serif);
-	font-size: clamp(1.2rem, 2.15vw, 1.8rem);
+	font-size: clamp(1.2rem, 2.15vw, 1.6rem);
 	font-weight: 380;
 	line-height: 1.12;
 	text-wrap: balance;
@@ -121,7 +128,7 @@ function difficultyLabel(level: number): string {
 }
 
 .meta {
-	justify-content: flex-start;
+	justify-content: center;
 	margin-top: auto;
 	font-size: 0.72rem;
 	letter-spacing: 0;
@@ -147,11 +154,13 @@ function difficultyLabel(level: number): string {
 	display: inline-flex;
 	width: fit-content;
 	min-height: 44px;
+	align-self: center;
 	align-items: center;
 	gap: 0.35rem;
 	margin-top: 0.35rem;
 	padding: 0.48rem 0.68rem;
-	border: 1px solid currentColor;
+	border: 1px solid color-mix(in oklab, var(--menu-wine) 22%, transparent);
+	border-radius: 999px;
 	color: var(--menu-wine);
 	font-family: var(--font-sans);
 	font-size: 0.74rem;
@@ -191,13 +200,11 @@ function difficultyLabel(level: number): string {
 	min-height: 0;
 	gap: 0.3rem;
 	padding-block: 0.55rem;
-	overflow: hidden;
 }
 
 .is-compact h3 {
 	display: -webkit-box;
-	overflow: hidden;
-	font-size: clamp(1.05rem, 1.65vw, 1.4rem);
+	font-size: clamp(1.05rem, 2vw, 1.4rem);
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
 	line-clamp: 2;

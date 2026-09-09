@@ -3,6 +3,7 @@ import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall";
 import {
 	adaptHallDataToQuestMenu,
 	buildQuestMenuSpreads,
+	buildTranslationYearSpreads,
 	deriveQuestMenuRecommendations,
 	getQuestMenuFolio,
 	getQuestMenuItemHref,
@@ -32,6 +33,43 @@ function quest(id: number, sessionStatus: HallQuestSessionStatus = null, overrid
 		...overrides,
 	};
 }
+
+describe("translation year catalog", () => {
+	it("includes the selected year, marks past months and preserves monthly compatibility", () => {
+		const data = hallData({
+			translationTasks: [
+				{ id: 51, titleBase: "Past", descriptionBase: null, difficulty: 1, createdMonth: "2026-01" },
+				{ id: 52, titleBase: "Current", descriptionBase: null, difficulty: 1, createdMonth: "2026-09" },
+				{ id: 53, titleBase: "Future", descriptionBase: null, difficulty: 1, createdMonth: "2026-12" },
+				{ id: 54, titleBase: "Other year", descriptionBase: null, difficulty: 1, createdMonth: "2025-12" },
+			],
+		});
+		const catalog = adaptHallDataToQuestMenu(data, "2026-09", "year");
+		expect(catalog.sections.translation.map(({ id, archived }) => [id, archived])).toEqual([
+			[51, true],
+			[52, false],
+			[53, false],
+		]);
+		expect(catalog.spreads.translation[0].leftItems.map(({ id }) => id)).toEqual([52]);
+		expect(catalog.spreads.translation[0].rightItems.map(({ id }) => id)).toEqual([53]);
+		expect(adaptHallDataToQuestMenu(data).sections.translation.map(({ id }) => id)).toEqual([52]);
+	});
+	it("packs archive pages without dropping items and provides an empty spread", () => {
+		const item = adaptHallDataToQuestMenu(hallData()).sections.translation[0];
+		const items = Array.from({ length: 8 }, (_, index) => ({ ...item, id: index + 1, archived: true }));
+		const spreads = buildTranslationYearSpreads(items);
+		expect(spreads.map(({ leftItems, rightItems }) => [leftItems.length, rightItems.length])).toEqual([
+			[2, 2],
+			[2, 2],
+		]);
+		expect(spreads.flatMap(({ items }) => items.map(({ id }) => id))).toEqual(items.map(({ id }) => id));
+		expect(buildTranslationYearSpreads(items.slice(0, 5)).map(({ leftItems, rightItems }) => [leftItems.length, rightItems.length])).toEqual([
+			[2, 2],
+			[1, 0],
+		]);
+		expect(buildTranslationYearSpreads([])).toEqual([{ leaf: 1, totalLeaves: 1, items: [], leftItems: [], rightItems: [] }]);
+	});
+});
 
 function hallData(overrides: Partial<HallData> = {}): HallData {
 	return {

@@ -44,6 +44,18 @@ describe("Profile page", () => {
 		expect(body).toContain("Déconnexion");
 	});
 
+	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
+		const dialog = body.slice(body.indexOf("<dialog"), body.indexOf("</dialog>") + 9);
+		expect(dialog).toContain('aria-labelledby="name-dialog-title"');
+		expect(dialog.split(">")[0]).not.toMatch(/\sopen(?:\s|=|$)/);
+		expect(dialog).toContain('name="name"');
+		expect(dialog).toContain('maxlength="100"');
+		expect(dialog).toContain("Enregistrer le nom");
+		expect(dialog).toContain('id="name-dialog-error"');
+		expect(body).toContain('aria-haspopup="dialog"');
+	});
+
 	it.each(["feedbackLanguagePreference", "nativeLanguage"])("renders %s without a Save button", (field) => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 		const fieldPosition = body.indexOf(`name="${field}"`);

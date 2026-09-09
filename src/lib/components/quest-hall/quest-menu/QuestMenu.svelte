@@ -1,15 +1,15 @@
 <script lang="ts">
 import { Portal } from "bits-ui";
-import { onMount, tick, untrack } from "svelte";
+import { flushSync, onMount, setContext, tick, untrack } from "svelte";
 import { afterNavigate, invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
 import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import { createUnreadSubscription, type UnreadSubscriptionState } from "$lib/client/quest-hall/unread-subscription";
+import Typewriter from "$lib/components/Typewriter.svelte";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { shiftCalendarMonth } from "$lib/month";
 import {
 	adaptHallDataToQuestMenu,
 	getQuestMenuFolio,
@@ -57,6 +57,8 @@ interface Props {
 }
 
 let { data, initialLocation, initialPreparation = null, accountScope, lang }: Props = $props();
+const translationYears = () => [...new Set(data.translationTasks.map((task) => task.createdMonth.slice(0, 4)))].sort();
+setContext("quest-menu-translation-years", translationYears);
 function getInitialTranslationMonth(): string {
 	const taskId = initialLocation.section === "translation" ? getQuestMenuItemId(initialLocation.task) : null;
 	return data.translationTasks.find((task) => task.id === taskId)?.createdMonth ?? data.translationMonth;
@@ -113,7 +115,7 @@ let cover = $state<HTMLDivElement | null>(null);
 let turnControls = $state<HTMLDivElement | null>(null);
 let turnSheet = $state<HTMLDivElement | null>(null);
 
-let catalog = $derived(adaptHallDataToQuestMenu(data, translationMonth));
+let catalog = $derived(adaptHallDataToQuestMenu(data, translationMonth, "year"));
 let currentSpread = $derived(getQuestMenuSpread(catalog, location.section, location.leaf));
 let currentFolio = $derived(getQuestMenuFolio(catalog, location.section, currentSpread.leaf));
 let previousTarget = $derived(getQuestMenuTurnTarget(catalog, location.section, currentSpread.leaf, -1));
@@ -206,11 +208,14 @@ async function applyTransition(event: HallNavigationEvent, selectedElement?: HTM
 		};
 		if (animator) animator.transitionView(previousView, nextView, finish, selectedElement);
 		else finish();
+		// Resize/reflow may settle the book timeline without invoking its completion.
+		// Scroll belongs to navigation, not to that cancellable visual timeline.
+		if (transition.historyIntent !== "back") window.scrollTo({ top: 0, behavior: prefersReducedQuestMenuMotion() ? "instant" : "smooth" });
 	}
 
 	if (transition.historyIntent === "back" && localHistoryDepth > 0) {
 		localHistoryDepth -= 1;
-		history.back();
+		replaceState(hallLocationUrl(location, base), {});
 		return;
 	}
 	const url = hallLocationUrl(location, base);
@@ -242,7 +247,7 @@ function selectItem(item: QuestMenuItem, event: MouseEvent): void {
 	let transitionCatalog = catalog;
 	if (item.kind === "translation" && item.task.createdMonth !== translationMonth) {
 		translationMonth = item.task.createdMonth;
-		transitionCatalog = adaptHallDataToQuestMenu(data, translationMonth);
+		transitionCatalog = adaptHallDataToQuestMenu(data, translationMonth, "year");
 	}
 	preparationOriginView = visibleView === "home" ? "home" : "catalog";
 	void preparationResource?.load(item.key, data.editionDate);
@@ -394,8 +399,11 @@ function moveTo(target: { section: QuestMenuSection; leaf: number }, direction: 
 			},
 			() => {
 				if (sequence !== paperTurnSequence) return;
-				turnPreview = null;
-				turning = false;
+				// The animator hides the sheet immediately after this callback.
+				flushSync(() => {
+					turnPreview = null;
+					turning = false;
+				});
 			},
 		);
 	});
@@ -426,8 +434,12 @@ function switchSection(section: QuestMenuSection): void {
 
 function changeTranslationMonth(direction: -1 | 1): void {
 	if (turning || viewTransitioning) return;
-	const nextMonth = shiftCalendarMonth(translationMonth, direction);
-	const nextCatalog = adaptHallDataToQuestMenu(data, nextMonth);
+	const year = translationMonth.slice(0, 4);
+	const years = translationYears();
+	const nextYear = direction < 0 ? years.filter((value) => value < year).at(-1) : years.find((value) => value > year);
+	if (!nextYear) return;
+	const nextMonth = `${nextYear}-01`;
+	const nextCatalog = adaptHallDataToQuestMenu(data, nextMonth, "year");
 	translationMonth = nextMonth;
 	if (location.section === "translation") {
 		location = {
@@ -648,7 +660,7 @@ onMount(() => {
 	<header class="hall-heading">
 		<div class="heading-copy">
 			<h1>{data.greeting}</h1>
-			<p>{data.subtitle}</p>
+			<p><Typewriter text={data.subtitle} /></p>
 		</div>
 		<span class="hall-wine" aria-hidden="true"><WineGlassIcon width={52} height={52} /></span>
 		{#if mounted}
@@ -767,11 +779,6 @@ onMount(() => {
 	padding: clamp(1rem, 2.5vw, 2rem);
 	overflow: clip;
 	color: var(--menu-ink);
-	font-family: var(--font-serif);
-	font-optical-sizing: auto;
-	font-weight: 380;
-	font-kerning: normal;
-	font-synthesis: none;
 }
 .hall-heading,
 .stage-stack {
@@ -790,13 +797,13 @@ onMount(() => {
 
 .heading-copy {
 	min-width: 0;
+	font-family: var(--font-serif);
 }
 
 .heading-copy h1 {
 	margin: 0;
-	font-family: var(--font-serif);
 	font-size: clamp(2rem, 4vw, 3.65rem);
-	font-weight: 350;
+	font-weight: 500;
 	letter-spacing: 0.006em;
 	line-height: 1.02;
 	white-space: nowrap;
@@ -805,6 +812,7 @@ onMount(() => {
 .heading-copy > p {
 	margin: 0.65rem 0 0;
 	font-size: 1rem;
+	font-style: italic;
 	line-height: 1.55;
 	color: var(--menu-ink-muted);
 }
@@ -848,9 +856,6 @@ onMount(() => {
 	}
 	.heading-copy h1 {
 		font-size: clamp(1.75rem, 4vw, 2.25rem);
-	}
-	.heading-copy > p {
-		font-size: 0.9375rem;
 	}
 }
 </style>

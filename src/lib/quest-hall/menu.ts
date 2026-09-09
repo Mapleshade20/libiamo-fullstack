@@ -15,6 +15,7 @@ interface QuestMenuItemBase {
 	ordinal: number;
 	state: QuestMenuItemState;
 	hasUnread: boolean;
+	archived?: boolean;
 }
 
 export type QuestMenuItem =
@@ -125,6 +126,22 @@ export function buildQuestMenuSpreads(items: QuestMenuItem[]): QuestMenuSpread[]
 	}));
 }
 
+/** Current/future translations get a page each; archive pages hold three entries. */
+export function buildTranslationYearSpreads(items: QuestMenuItem[]): QuestMenuSpread[] {
+	const pages: QuestMenuItem[][] = [];
+	for (const item of [...items].sort((a, b) => Number(Boolean(a.archived)) - Number(Boolean(b.archived)))) {
+		const last = pages.at(-1);
+		if (item.archived && last?.[0]?.archived && last.length < 2) last.push(item);
+		else pages.push([item]);
+	}
+	const totalLeaves = Math.max(1, Math.ceil(pages.length / 2));
+	return Array.from({ length: totalLeaves }, (_, index) => {
+		const leftItems = pages[index * 2] ?? [];
+		const rightItems = pages[index * 2 + 1] ?? [];
+		return { leaf: index + 1, totalLeaves, leftItems, rightItems, items: [...leftItems, ...rightItems] };
+	});
+}
+
 const RECOMMENDATION_RANK: Record<QuestMenuItemState, number> = {
 	active: 1,
 	ready: 2,
@@ -178,13 +195,16 @@ export function deriveQuestMenuRecommendations(
 export function adaptHallDataToQuestMenu(
 	data: Pick<HallData, "dailyTasks" | "weeklyTasks" | "translationTasks" | "translationStatusMap" | "translationMonth" | "levelSelfAssign">,
 	translationMonth = data.translationMonth,
+	period: "month" | "year" = "month",
 ): QuestMenuCatalog {
 	const daily = adaptQuestItems(data.dailyTasks, "daily");
 	const weekly = adaptQuestItems(data.weeklyTasks, "weekly");
 	const translation = adaptTranslationItems(
 		data,
-		data.translationTasks.filter((task) => task.createdMonth === translationMonth),
-	);
+		data.translationTasks.filter((task) =>
+			period === "year" ? task.createdMonth.slice(0, 4) === translationMonth.slice(0, 4) : task.createdMonth === translationMonth,
+		),
+	).map((item) => ({ ...item, archived: item.kind === "translation" && item.task.createdMonth < data.translationMonth }));
 	const sections: Record<QuestMenuSection, QuestMenuItem[]> = {
 		daily,
 		weekly,
@@ -200,7 +220,7 @@ export function adaptHallDataToQuestMenu(
 		spreads: {
 			daily: buildQuestMenuSpreads(sections.daily),
 			weekly: buildQuestMenuSpreads(sections.weekly),
-			translation: buildQuestMenuSpreads(sections.translation),
+			translation: period === "year" ? buildTranslationYearSpreads(sections.translation) : buildQuestMenuSpreads(sections.translation),
 		},
 		recommendations: deriveQuestMenuRecommendations(recommendationSections, data.levelSelfAssign),
 	};

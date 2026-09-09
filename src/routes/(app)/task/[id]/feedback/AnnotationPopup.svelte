@@ -4,6 +4,7 @@ import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { AnnotationSpan } from "$lib/feedback/types";
@@ -236,17 +237,20 @@ const kindColor = $derived(
 		</div>
 
 		<!-- Explanation -->
-		{#if isLoading}
-			<div class="space-y-2">
-				<Skeleton class="h-4 w-full" />
-				<Skeleton class="h-4 w-5/6" />
-				<Skeleton class="h-4 w-4/6" />
-			</div>
-		{:else if error}
-			<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-		{:else if explanation}
-			<div class="prose prose-sm max-w-none font-prose text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
-		{/if}
+		<LoadingReveal loading={isLoading}>
+			{#snippet placeholder()}
+				<div class="space-y-2">
+					<Skeleton class="h-4 w-full" />
+					<Skeleton class="h-4 w-5/6" />
+					<Skeleton class="h-4 w-4/6" />
+				</div>
+			{/snippet}
+			{#if error}
+				<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+			{:else if explanation}
+				<div class="prose prose-sm max-w-none font-prose text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
+			{/if}
+		</LoadingReveal>
 	</div>
 
 	<!-- Footer -->

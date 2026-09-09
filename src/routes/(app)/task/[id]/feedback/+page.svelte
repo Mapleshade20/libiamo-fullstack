@@ -7,6 +7,7 @@ import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
 import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
@@ -328,43 +329,45 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
 					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
 
-					{#if isGenerating}
-						<div class="min-w-0 space-y-4">
-							{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
-								<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-									<Skeleton class="h-4 w-3/4 mb-2" />
-									<Skeleton class="h-4 w-full mb-2" />
-									<Skeleton class="h-4 w-5/6" />
-								</div>
-							{/each}
-						</div>
-					{:else if feedback}
-						<div class="min-w-0 space-y-4">
-							{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
-								{@const comment = getCommentForMessage(message.seqId)}
-								{#if comment}
-									{@const commentContext = getMessageContext(message.seqId)}
-									<div
-										data-learning-selectable
-										data-learning-kind="comment"
-										data-message-id={message.seqId}
-										data-current-context={getCommentContext(message.seqId, comment)}
-										data-previous-context={commentContext.previousContext}
-										class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
-										transition:fade={{ duration: 200 }}
-									>
-										<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
-										<AnnotatedTutorComment
-											{comment}
-											messageId={message.seqId}
-											onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
-										/>
+					<LoadingReveal loading={isGenerating}>
+						{#snippet placeholder()}
+							<div class="min-w-0 space-y-4">
+								{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
+									<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+										<Skeleton class="h-4 w-3/4 mb-2" />
+										<Skeleton class="h-4 w-full mb-2" />
+										<Skeleton class="h-4 w-5/6" />
 									</div>
-								{/if}
-							{/each}
-						</div>
-					{/if}
-
+								{/each}
+							</div>
+						{/snippet}
+						{#if feedback}
+							<div class="min-w-0 space-y-4">
+								{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
+									{@const comment = getCommentForMessage(message.seqId)}
+									{#if comment}
+										{@const commentContext = getMessageContext(message.seqId)}
+										<div
+											data-learning-selectable
+											data-learning-kind="comment"
+											data-message-id={message.seqId}
+											data-current-context={getCommentContext(message.seqId, comment)}
+											data-previous-context={commentContext.previousContext}
+											class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
+											transition:fade={{ duration: 200 }}
+										>
+											<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+											<AnnotatedTutorComment
+												{comment}
+												messageId={message.seqId}
+												onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
+											/>
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+					</LoadingReveal>
 					<!-- Objectives & Summary -->
 					{#if feedback}
 						<div class="mt-8 space-y-6">

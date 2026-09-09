@@ -71,7 +71,9 @@ function moveTab(event: KeyboardEvent, index: number): void {
 		{/if}
 		<div class="mobile-task-list">
 			{#each sections[section] as item (item.key)}
-				<div class="mobile-paper"><QuestMenuItemCard {item} {lang} onselect={onselectitem} /></div>
+				<div class="mobile-paper" class:archived={item.archived}>
+					<QuestMenuItemCard {item} {lang} compact={item.archived} onselect={onselectitem} />
+				</div>
 			{:else}
 				<div class="mobile-paper"><p class="blank-page">{t(lang, section === "translation" ? "translate.empty" : "hall.noTasks")}</p></div>
 			{/each}
@@ -80,6 +82,9 @@ function moveTab(event: KeyboardEvent, index: number): void {
 </div>
 
 <style>
+.mobile-paper.archived {
+	padding-block: 0.25rem;
+}
 .mobile-book {
 	display: none;
 }
@@ -191,7 +196,7 @@ function moveTab(event: KeyboardEvent, index: number): void {
 		display: none;
 	}
 	.mobile-paper :global(.task-card h3) {
-		font-size: clamp(1.4rem, 6vw, 1.8rem);
+		font-size: clamp(1.3rem, 5vw, 1.6rem);
 		text-wrap: pretty;
 	}
 	.mobile-paper :global(.task-card .meta) {

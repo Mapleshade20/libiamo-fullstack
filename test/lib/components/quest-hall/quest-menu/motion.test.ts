@@ -42,6 +42,53 @@ describe("Quest Menu book motion", () => {
 		expect(prefersReducedQuestMenuMotion()).toBe(true);
 	});
 
+	it.each([-1, 1] as const)("commits the resting pages before hiding the landed sheet, without resetting it (%s)", (direction) => {
+		const front = { opacity: 1 };
+		const back = { opacity: 1 };
+		const sheet = {
+			autoAlpha: 0,
+			left: "auto",
+			right: "0%",
+			rotateY: 0,
+			z: 0,
+			transformOrigin: "left center",
+			querySelector: (selector: string) => (selector === ".turn-sheet-front" ? front : back),
+		};
+		const makeTimeline = gsap.timeline.bind(gsap);
+		let timeline: ReturnType<typeof gsap.timeline> | undefined;
+		vi.spyOn(gsap, "timeline").mockImplementation((options) => {
+			timeline = makeTimeline({ ...options, paused: true });
+			return timeline;
+		});
+		const handoff = vi.fn();
+		const complete = vi.fn(() => {
+			expect(handoff).toHaveBeenCalledOnce();
+			expect(sheet.autoAlpha).toBe(1);
+			expect(sheet.rotateY).toBe(direction * -180);
+			expect(sheet.z).toBe(0);
+		});
+		const animator = createQuestMenuAnimator(() => ({ turnSheet: sheet }) as any);
+		try {
+			animator.transitionPage(false, direction, handoff, complete);
+			expect([front.opacity, back.opacity]).toEqual([1, 0]);
+			timeline?.progress(0.49);
+			expect([front.opacity, back.opacity]).toEqual([1, 0]);
+			timeline?.progress(0.51);
+			expect([front.opacity, back.opacity]).toEqual([0, 1]);
+			timeline?.progress(1);
+			expect([front.opacity, back.opacity]).toEqual([0, 1]);
+			expect(complete).toHaveBeenCalledOnce();
+			expect(sheet.autoAlpha).toBe(0);
+			expect(sheet.rotateY).toBe(direction * -180);
+			animator.transitionPage(false, -direction as -1 | 1, vi.fn(), vi.fn());
+			expect([front.opacity, back.opacity]).toEqual([1, 0]);
+			expect(sheet.rotateY).toBe(0);
+			expect(sheet.autoAlpha).toBe(1);
+		} finally {
+			animator.destroy();
+		}
+	});
+
 	it("preserves the demo opening handoff at both timing bounds", () => {
 		const earliest = createQuestMenuBookOpenTiming(0);
 		const latest = createQuestMenuBookOpenTiming(1);

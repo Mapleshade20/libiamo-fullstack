@@ -53,11 +53,11 @@ onDestroy(() => stopAll(controls));
 <div bind:this={root} class="space-y-5">
 	<div class="grid gap-4 md:grid-cols-2">
 		<section data-result-panel class="border-l-2 border-[#8fa3b1] bg-card/55 px-4 py-4">
-			<h2 class="mb-3 font-sans text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{primaryLabel}</h2>
+			<h2 class="mb-3 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{primaryLabel}</h2>
 			<DiffView parts={primaryDiff} fallbackText={primaryFallback ?? ""} label={primaryLabel} />
 		</section>
 		<section data-result-panel class="border-l-2 border-[#8fa3b1] bg-card/55 px-4 py-4">
-			<h2 class="mb-3 font-sans text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{referenceLabel}</h2>
+			<h2 class="mb-3 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{referenceLabel}</h2>
 			<p class="font-prose text-[0.95rem] leading-relaxed break-words text-foreground">
 				{#if referenceMarked}
 					<MarkedText parts={referenceMarked} onMarkClick={() => undefined} />
@@ -75,7 +75,7 @@ onDestroy(() => stopAll(controls));
 				{#each teacherNotes as note, index (index)}
 					<li class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-3">
 						<span
-							class="mt-0.5 flex size-7 items-center justify-center rounded-full border border-stone-400/40 bg-card font-sans text-xs font-semibold tabular-nums text-foreground/75 shadow-xs"
+							class="mt-0.5 flex size-7 items-center justify-center rounded-full border border-stone-400/40 bg-card text-xs font-semibold tabular-nums text-foreground/75 shadow-xs"
 							aria-hidden="true"
 						>
 							{index + 1}

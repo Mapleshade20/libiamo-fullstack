@@ -5,6 +5,7 @@ import FileText from "@lucide/svelte/icons/file-text";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { base } from "$app/paths";
 import type { QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import TaskPreparation from "$lib/components/task/TaskPreparation.svelte";
 import TranslationPreparation from "$lib/components/translate/TranslationPreparation.svelte";
 import type { LanguageCode } from "$lib/constants";
@@ -86,51 +87,56 @@ function handleSubmitCapture(event: SubmitEvent): void {
 			onclickcapture={handleClickCapture}
 			onsubmitcapture={handleSubmitCapture}
 		>
-			{#if resource.status === "loading"}
-				<div class="resource-state" role="status" aria-live="polite">
-					<LoaderCircle class="loading-icon" size={24} aria-hidden="true" />
-					<strong>{t(lang, "hall.menu.preparationLoading")}</strong>
-					<div class="skeleton-lines" aria-hidden="true"><span></span><span></span><span></span></div>
-				</div>
-			{:else if resource.status === "error"}
-				<div class="resource-state" role="alert">
-					<AlertTriangle size={25} aria-hidden="true" />
-					<strong>{t(lang, "hall.menu.preparationError")}</strong>
-					<p>{t(lang, "hall.menu.preparationErrorHelp")}</p>
-					<div class="resource-actions">
-						<button type="button" class="paper-button" onclick={onretry}>{t(lang, "common.retry")}</button>
-						<button type="button" class="paper-button secondary" onclick={onback}>{backLabel}</button>
+			<LoadingReveal loading={resource.status === "loading"}>
+				{#snippet placeholder()}
+					<div class="resource-state" role="status" aria-live="polite">
+						<LoaderCircle class="loading-icon" size={24} aria-hidden="true" />
+						<strong>{t(lang, "hall.menu.preparationLoading")}</strong>
+						<div class="skeleton-lines" aria-hidden="true">
+							<span data-slot="skeleton"></span><span data-slot="skeleton"></span><span data-slot="skeleton"></span>
+						</div>
 					</div>
-				</div>
-			{:else if resource.status === "ready" && resource.preparation.kind === "quest"}
-				<TaskPreparation
-					task={resource.preparation.data.task}
-					nativeLanguage={resource.preparation.data.nativeLanguage}
-					mode="pane"
-					{backLabel}
-					onback={(event) => {
+				{/snippet}
+				{#if resource.status === "error"}
+					<div class="resource-state" role="alert">
+						<AlertTriangle size={25} aria-hidden="true" />
+						<strong>{t(lang, "hall.menu.preparationError")}</strong>
+						<p>{t(lang, "hall.menu.preparationErrorHelp")}</p>
+						<div class="resource-actions">
+							<button type="button" class="paper-button" onclick={onretry}>{t(lang, "common.retry")}</button>
+							<button type="button" class="paper-button secondary" onclick={onback}>{backLabel}</button>
+						</div>
+					</div>
+				{:else if resource.status === "ready" && resource.preparation.kind === "quest"}
+					<TaskPreparation
+						task={resource.preparation.data.task}
+						nativeLanguage={resource.preparation.data.nativeLanguage}
+						mode="pane"
+						{backLabel}
+						onback={(event) => {
 						event.preventDefault();
 						onback();
 					}}
-				/>
-			{:else if resource.status === "ready" && resource.preparation.kind === "translation"}
-				<TranslationPreparation
-					template={resource.preparation.data.template}
-					attempt={resource.preparation.data.attempt}
-					blockedReason={resource.preparation.data.blockedReason}
-					{lang}
-					mode="pane"
-					{backLabel}
-					{onback}
-				/>
-			{:else}
-				<div class="resource-state" role="alert">
-					<FileText size={28} aria-hidden="true" />
-					<strong>{t(lang, "hall.menu.preparationUnavailable")}</strong>
-					<p>{t(lang, "hall.menu.preparationUnavailableHelp")}</p>
-					<button type="button" class="paper-button secondary" onclick={onback}>{backLabel}</button>
-				</div>
-			{/if}
+					/>
+				{:else if resource.status === "ready" && resource.preparation.kind === "translation"}
+					<TranslationPreparation
+						template={resource.preparation.data.template}
+						attempt={resource.preparation.data.attempt}
+						blockedReason={resource.preparation.data.blockedReason}
+						{lang}
+						mode="pane"
+						{backLabel}
+						{onback}
+					/>
+				{:else}
+					<div class="resource-state" role="alert">
+						<FileText size={28} aria-hidden="true" />
+						<strong>{t(lang, "hall.menu.preparationUnavailable")}</strong>
+						<p>{t(lang, "hall.menu.preparationUnavailableHelp")}</p>
+						<button type="button" class="paper-button secondary" onclick={onback}>{backLabel}</button>
+					</div>
+				{/if}
+			</LoadingReveal>
 		</div>
 	</div>
 </section>

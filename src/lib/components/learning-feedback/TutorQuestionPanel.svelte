@@ -5,6 +5,7 @@ import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
 import { tick } from "svelte";
 import { fly, scale } from "svelte/transition";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import { renderMarkdown } from "$lib/markdown";
@@ -125,11 +126,14 @@ function handleKeydown(event: KeyboardEvent) {
 			{#if answer || isLoading}
 				<div class="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm">{question}</div>
 				<div class="rounded-md border border-border p-4">
-					{#if isLoading}
-						<div class="space-y-2"><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /><Skeleton class="h-4 w-2/3" /></div>
-					{:else if answer}
-						<div class="prose prose-sm max-w-none font-prose">{@html renderMarkdown(answer)}</div>
-					{/if}
+					<LoadingReveal loading={isLoading}>
+						{#snippet placeholder()}
+							<div class="space-y-2"><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /><Skeleton class="h-4 w-2/3" /></div>
+						{/snippet}
+						{#if answer}
+							<div class="prose prose-sm max-w-none font-prose">{@html renderMarkdown(answer)}</div>
+						{/if}
+					</LoadingReveal>
 				</div>
 				{#if answer}
 					<div class="mt-3 flex gap-2">

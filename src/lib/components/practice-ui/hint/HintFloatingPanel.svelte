@@ -5,6 +5,7 @@ import BookA from "@lucide/svelte/icons/book-a";
 import Pilcrow from "@lucide/svelte/icons/pilcrow";
 import X from "@lucide/svelte/icons/x";
 import type { TransitionConfig } from "svelte/transition";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import { getHintLabels } from "./i18n";
 import { isImeKeyboardEvent } from "./keyboard";
@@ -410,13 +411,16 @@ $effect(() => {
 							style:opacity={hasContentHintResult ? 1 : 0}
 						>
 							<div bind:this={contentHintContentEl}>
-								{#if isGettingHint}
-									<div class="flex h-6 items-center"><Skeleton class="h-2.5 w-full bg-[#d8d3cd]/80" /></div>
-								{:else if hintError}
-									<span class="block min-w-0 whitespace-normal leading-5 text-red-600">{hintError}</span>
-								{:else}
-									<span class="block min-w-0 whitespace-normal leading-5 text-[#2f2a25]">{contentHint}</span>
-								{/if}
+								<LoadingReveal loading={isGettingHint}>
+									{#snippet placeholder()}
+										<div class="flex h-6 items-center"><Skeleton class="h-2.5 w-full bg-[#d8d3cd]/80" /></div>
+									{/snippet}
+									{#if hintError}
+										<span class="block min-w-0 whitespace-normal leading-5 text-red-600">{hintError}</span>
+									{:else}
+										<span class="block min-w-0 whitespace-normal leading-5 text-[#2f2a25]">{contentHint}</span>
+									{/if}
+								</LoadingReveal>
 							</div>
 						</div>
 					</div>
@@ -441,20 +445,23 @@ $effect(() => {
 				style:opacity={hasExpressionResult ? 1 : 0}
 			>
 				<div bind:this={resultContentEl} role="status" aria-live="polite" aria-busy={expressionLoading} class="relative px-4 pb-2 pt-0.5">
-					{#if expressionLoading}
-						<div class="grid gap-1.5 py-1">
-							<Skeleton class="h-2.5 w-3/4 bg-[#d8d3cd]/80" />
-							<Skeleton class="h-2.5 w-1/2 bg-[#d8d3cd]/70" />
-						</div>
-					{:else if hintError}
-						<p class="text-xs leading-6 text-red-600">{hintError}</p>
-					{:else if visibleExpressionPhrases.length > 0}
-						<div class="flex flex-wrap gap-2">
-							{#each visibleExpressionPhrases as phrase}
-								<span class="rounded-md border border-[#efe7dc] bg-white/65 px-2.5 py-1 text-xs text-[#2f2a25] shadow-sm">{phrase}</span>
-							{/each}
-						</div>
-					{/if}
+					<LoadingReveal loading={expressionLoading}>
+						{#snippet placeholder()}
+							<div class="grid gap-1.5 py-1">
+								<Skeleton class="h-2.5 w-3/4 bg-[#d8d3cd]/80" />
+								<Skeleton class="h-2.5 w-1/2 bg-[#d8d3cd]/70" />
+							</div>
+						{/snippet}
+						{#if hintError}
+							<p class="text-xs leading-6 text-red-600">{hintError}</p>
+						{:else if visibleExpressionPhrases.length > 0}
+							<div class="flex flex-wrap gap-2">
+								{#each visibleExpressionPhrases as phrase}
+									<span class="rounded-md border border-[#efe7dc] bg-white/65 px-2.5 py-1 text-xs text-[#2f2a25] shadow-sm">{phrase}</span>
+								{/each}
+							</div>
+						{/if}
+					</LoadingReveal>
 				</div>
 			</div>
 		{/if}
