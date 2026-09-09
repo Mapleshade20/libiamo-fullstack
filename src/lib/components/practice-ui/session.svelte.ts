@@ -1,6 +1,7 @@
 import { onMount, tick } from "svelte";
 import { invalidate } from "$app/navigation";
 import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
+import { getDisplayClock } from "$lib/display-clock";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { prepareMarkdownText } from "../utils/markdownUtils";
 import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
@@ -79,6 +80,7 @@ function toAgentWorkDueAt(value: unknown): Date | null {
 }
 
 export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
+	const clock = getDisplayClock();
 	// Use $derived to keep values reactive after targeted invalidation re-runs getOptions().
 	// One-time destructuring would capture stale values and never update.
 	const userName = $derived(getOptions().userName);
@@ -91,7 +93,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const taskId = $derived(getOptions().taskId);
 
 	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
-	const formatTimestamp = $derived(createTimeFormatter());
+	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
 
 	// ── State ──────────────────────────────────────────────────────
 

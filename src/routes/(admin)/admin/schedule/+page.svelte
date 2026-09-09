@@ -18,8 +18,8 @@ let { form, data } = $props();
 let mode = $derived(data.filters.mode);
 let rawDate = $derived(data.filters.rawDate);
 
-// Initialize to empty string to match the placeholder option's value
-let selectedTemplateId = $state<number | string>("");
+// svelte-ignore state_referenced_locally
+let selectedTemplateId = $state<number | string>(data.activeTemplates[0]?.id ?? "");
 let scheduleForm: HTMLFormElement | null = $state(null);
 
 const actionNotification = $derived(

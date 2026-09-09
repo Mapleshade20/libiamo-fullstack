@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import TranslationDetailPage from "$routes/(app)/translate/[id]/+page.svelte";
 
 const data = {
+	displayClock: { now: 1788480000000, timeZone: "UTC" },
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {

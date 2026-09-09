@@ -2,12 +2,11 @@
 import { onMount } from "svelte";
 
 let { text }: { text: string } = $props();
-let count = $state<number | null>(null);
+let count = $state(0);
 onMount(() => {
 	if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-	count = 0;
 	const timer = setInterval(() => {
-		count = (count ?? 0) + 1;
+		count += 1;
 		if (count >= Array.from(text).length) clearInterval(timer);
 	}, 28);
 	return () => clearInterval(timer);
@@ -15,7 +14,7 @@ onMount(() => {
 </script>
 <span class="typewriter" aria-label={text}
 	><span class="reserve" aria-hidden="true">{text}</span
-	><span class="typed" aria-hidden="true">{count === null ? text : Array.from(text).slice(0, count).join('')}</span></span
+	><span class="typed" aria-hidden="true">{Array.from(text).slice(0, count).join('')}</span></span
 >
 <style>
 .typewriter {
@@ -26,5 +25,13 @@ onMount(() => {
 }
 .reserve {
 	visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce), (scripting: none) {
+	.reserve {
+		visibility: visible;
+	}
+	.typed {
+		visibility: hidden;
+	}
 }
 </style>

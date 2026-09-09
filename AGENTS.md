@@ -69,6 +69,8 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 
 ## Implementation conventions
 
+- SSR-visible values must derive from server props synchronously (`$derived` for editable prop-backed defaults, or initialized `$state` for independent drafts). Do not populate them only in `$effect`/`onMount`; those do not run during SSR. Browser-only sessionStorage restoration is separate and must not be mistaken for server-known state.
+- Root `+layout.server.ts` serializes `displayClock` (request time and validated browser-timezone cookie). Root layout exposes it through `src/lib/display-clock.ts`; use this clock for rendered dates/day comparisons and explicit timezones for timestamps, rather than ambient `new Date()` / default locale during rendering. Profile language options are localized on the server, not replaced after hydration.
 - Use tabs for indentation.
 - Refer to `README.md` for core concepts.
 - Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.

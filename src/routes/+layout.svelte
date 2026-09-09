@@ -1,12 +1,14 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onMount, setContext } from "svelte";
 import { onNavigate } from "$app/navigation";
 import "./layout.css";
 import favicon from "$lib/assets/favicon.svg";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { resolvePageTransition } from "$lib/client/page-transition";
+import { DISPLAY_CLOCK_CONTEXT } from "$lib/display-clock";
 
-let { children } = $props();
+let { children, data } = $props();
+setContext(DISPLAY_CLOCK_CONTEXT, () => data.displayClock);
 let transitionSequence = 0;
 
 onMount(() => {

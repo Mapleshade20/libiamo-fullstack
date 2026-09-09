@@ -5,10 +5,12 @@ import Search from "@lucide/svelte/icons/search";
 import { base } from "$app/paths";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
 import type { LanguageCode } from "$lib/constants";
+import { getDisplayClock, isDisplayDay } from "$lib/display-clock";
 import { t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
 
 let { data } = $props();
+const clock = getDisplayClock();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 let notes = $state<ManagedNote[]>((() => data.notes)());
 let selectedNoteId = $state<number | null>((() => data.filters.selectedNoteId ?? data.notes[0]?.id ?? null)());
@@ -56,15 +58,13 @@ function pageHref(page: number) {
 }
 
 function isToday(value: string) {
-	const date = new Date(value);
-	const now = new Date();
-	return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+	return isDisplayDay(value, clock());
 }
 
 function formatDue(value: string) {
 	const date = new Date(value);
 	if (isToday(value)) return t(lang, "review.manage.dueToday");
-	return `${t(lang, "review.manage.duePrefix")} ${date.toLocaleDateString(lang, { month: "short", day: "numeric" })}`;
+	return `${t(lang, "review.manage.duePrefix")} ${date.toLocaleDateString(lang, { month: "short", day: "numeric", timeZone: clock().timeZone })}`;
 }
 
 function handleCardListKeydown(event: KeyboardEvent) {
@@ -182,7 +182,7 @@ function handleCardListKeydown(event: KeyboardEvent) {
 										>{note.language}</span
 									>
 									<span
-										class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-muted-foreground {new Date(note.due) <= new Date() || isToday(note.due) ? 'text-amber-700' : ''}"
+										class="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-muted-foreground {new Date(note.due).getTime() <= clock().now || isToday(note.due) ? 'text-amber-700' : ''}"
 										>{formatDue(note.due)}</span
 									>
 								</div>

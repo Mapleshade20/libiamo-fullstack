@@ -99,6 +99,7 @@ describe("Profile +page.server", () => {
 
 			expect(result.serverNativeLanguages).toBeDefined();
 			expect(Array.isArray(result.serverNativeLanguages)).toBe(true);
+			expect(result.serverNativeLanguages.find((option) => option.value === "en")?.label).toBe("anglais");
 
 			expect(result.hasApiKey).toBe(false);
 			expect(result.apiBaseUrl).toBe("");

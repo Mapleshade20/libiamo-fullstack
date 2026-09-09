@@ -22,7 +22,8 @@ import AnnotationPopup from "./AnnotationPopup.svelte";
 
 let { data } = $props();
 
-let feedback = $state<FeedbackResult | null>(null);
+// svelte-ignore state_referenced_locally
+let feedback = $state<FeedbackResult | null>(data.existingFeedback ?? null);
 let summaryParts = $derived(parseMarkedText(feedback?.summary ?? "").parts);
 let isGenerating = $state(false);
 let generationError = $state<string | null>(null);

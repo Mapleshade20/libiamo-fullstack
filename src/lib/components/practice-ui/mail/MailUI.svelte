@@ -6,6 +6,8 @@ import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
+import { getDisplayClock } from "$lib/display-clock";
+
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction } from "../apiService";
@@ -28,6 +30,8 @@ import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "./pr
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailOpeningState } from "./types";
 import { getMailContact, getMailContactFromOpeningEmails } from "./userPool";
+
+const clock = getDisplayClock();
 
 interface Props {
 	taskId?: string | number;
@@ -89,7 +93,7 @@ let draft = $state<DraftEmail>({ to: "", subject: "", body: "" });
 let toastTimeout: ReturnType<typeof setTimeout>;
 let messageScroll = $state<HTMLElement | null>(null);
 
-const todayLabel = $derived(getTodayDateString(language));
+const todayLabel = $derived(getTodayDateString(language, clock()));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
 const recipient = $derived(getMailContactFromOpeningEmails(openingStateData.emails, getMailContact(taskId || sessionId || userName)));
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
@@ -126,7 +130,7 @@ const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
-const formatTimestamp = $derived(createTimeFormatter());
+const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
 
 function getDefaultDraft(): DraftEmail {
 	return {

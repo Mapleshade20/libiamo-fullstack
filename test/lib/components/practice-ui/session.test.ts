@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("svelte", () => ({
 	onMount: vi.fn(),
 	tick: mocks.tick,
+	getContext: vi.fn(() => () => ({ now: Date.parse("2026-09-04T00:30:00Z"), timeZone: "UTC" })),
 }));
 
 vi.mock("$app/navigation", () => ({

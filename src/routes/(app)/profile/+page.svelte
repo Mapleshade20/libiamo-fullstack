@@ -1,5 +1,4 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { handleInvalidField } from "$lib/client/form-attention";
 import { clearQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
@@ -12,28 +11,17 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
-import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions, SELF_ASSIGNED_LEVELS } from "$lib/constants";
+import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, SELF_ASSIGNED_LEVELS } from "$lib/constants";
 import { t } from "$lib/i18n";
 
 let { form, data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 
-const localeByLanguage = {
-	en: "en-US",
-	es: "es-ES",
-	fr: "fr-FR",
-	ja: "ja-JP",
-} as const;
+const nativeLanguageOptions = $derived(data.serverNativeLanguages ?? []);
 
-let localizedNativeLanguageOptions = $state<{ value: string; label: string }[]>([]);
-
-const nativeLanguageOptions = $derived(
-	localizedNativeLanguageOptions.length > 0 ? localizedNativeLanguageOptions : (data.serverNativeLanguages ?? []),
-);
-
-let nativeLanguageInputValue = $state("");
-let apiBaseUrlValue = $state("");
-let apiModelValue = $state("");
+let nativeLanguageInputValue = $derived(form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "");
+let apiBaseUrlValue = $derived(form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? "");
+let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 
@@ -53,23 +41,6 @@ let trialTone = $derived(!data.trialQuota ? "normal" : data.trialQuota.trialToke
 function formatTokenCount(value: number) {
 	return new Intl.NumberFormat("en-US").format(Math.max(0, value));
 }
-
-$effect(() => {
-	nativeLanguageInputValue = form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "";
-});
-
-$effect(() => {
-	apiBaseUrlValue = form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? "";
-});
-
-$effect(() => {
-	apiModelValue = form?.values?.apiModel ?? data.apiModel ?? "";
-});
-
-onMount(() => {
-	const lang = localeByLanguage[data.user.activeLanguage as keyof typeof localeByLanguage] ?? "en-US";
-	localizedNativeLanguageOptions = getNativeLanguageOptions(lang);
-});
 
 function autosave(event: Event) {
 	(event.currentTarget as HTMLFormElement).requestSubmit();

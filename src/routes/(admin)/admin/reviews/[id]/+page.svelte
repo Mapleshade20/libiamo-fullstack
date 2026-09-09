@@ -7,7 +7,10 @@ import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
 import { LANGUAGE_LABELS, type LanguageCode, type UiVariant } from "$lib/constants";
+import { getDisplayClock } from "$lib/display-clock";
 import { renderMarkdown } from "$lib/markdown";
+
+const clock = getDisplayClock();
 
 let { data } = $props();
 let c = $derived(data.contribution);
@@ -23,7 +26,7 @@ let statusBadge = $derived(
 
 function fmtDate(d: Date | null): string {
 	if (!d) return "";
-	return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+	return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: clock().timeZone });
 }
 </script>
 

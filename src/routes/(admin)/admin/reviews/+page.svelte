@@ -3,12 +3,15 @@ import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import * as Table from "$lib/components/ui/table";
 import { type LanguageCode } from "$lib/constants";
+import { getDisplayClock } from "$lib/display-clock";
+
+const clock = getDisplayClock();
 
 let { data } = $props();
 
 function formatDate(date: Date | null): string {
 	if (!date) return "Unknown";
-	return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: clock().timeZone });
 }
 </script>
 

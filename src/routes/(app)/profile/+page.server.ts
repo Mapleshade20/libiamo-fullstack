@@ -31,7 +31,7 @@ export const load: PageServerLoad = async (event) => {
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
-		serverNativeLanguages: getNativeLanguageOptions("en"),
+		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
 		hasApiKey,
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",

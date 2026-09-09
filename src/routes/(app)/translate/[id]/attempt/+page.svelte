@@ -21,7 +21,8 @@ import { t } from "$lib/i18n";
 
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
-let answers = $state<TranslationDraftAnswer[]>([]);
+// svelte-ignore state_referenced_locally
+let answers = $state<TranslationDraftAnswer[]>(data.attempt.answers.map((answer) => ({ ...answer })));
 let candidatePickerIndex = $state<number | null>(null);
 let initialized = $state(false);
 let submitting = $state(false);
@@ -46,7 +47,7 @@ onMount(() => {
 $effect(() => {
 	if (initialized) return;
 	initialized = true;
-	const fallback = data.attempt.answers.map((answer) => ({ ...answer, translation: "" }));
+	const fallback = data.attempt.answers.map((answer) => ({ ...answer }));
 	try {
 		answers = parseTranslationDraft(
 			sessionStorage.getItem(translationDraftStorageKey(data.attempt.id)),
