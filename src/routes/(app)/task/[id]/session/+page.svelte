@@ -1,11 +1,29 @@
 <script lang="ts">
+import { onMount } from "svelte";
+import { base } from "$app/paths";
+import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
 import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
 import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
 import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
 import MailUI from "$lib/components/practice-ui/mail/MailUI.svelte";
 import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
+import type { LanguageCode } from "$lib/constants";
 
 let { data } = $props();
+// svelte-ignore state_referenced_locally
+let detailsHref = $state(`${base}/task/${data.taskId}`);
+
+onMount(() => {
+	detailsHref = getQuestHallWorkflowReturnHref({
+		destination: "details",
+		accountScope: data.accountScope,
+		activeLanguage: data.user.activeLanguage as LanguageCode,
+		edition: data.questHallEdition,
+		item: { kind: "quest", id: Number(data.taskId) },
+		base,
+		fallbackHref: detailsHref,
+	});
+});
 </script>
 
 <svelte:head>
@@ -22,6 +40,7 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.maxTurns}
+		returnHref={detailsHref}
 	/>
 {:else if data.task.template.ui === "imessage"}
 	<IMessageUI
@@ -32,6 +51,7 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.maxTurns}
+		returnHref={detailsHref}
 	/>
 {:else if data.task.template.ui === "apple_mail"}
 	<MailUI
@@ -42,6 +62,7 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.maxTurns}
+		returnHref={detailsHref}
 	/>
 {:else if data.task.template.ui === "ao3"}
 	<AO3UI
@@ -52,6 +73,7 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.maxTurns}
+		returnHref={detailsHref}
 	/>
 {:else if data.task.template.ui === "reddit"}
 	<RedditUI
@@ -62,6 +84,7 @@ let { data } = $props();
 		existingSession={data.existingSession}
 		openingState={data.task.variant?.openingState}
 		maxTurns={data.maxTurns}
+		returnHref={detailsHref}
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">

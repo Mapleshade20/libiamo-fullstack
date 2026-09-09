@@ -41,7 +41,7 @@ const title = $derived(activeView === "sent" ? t.sent : activeView === "drafts" 
 const draftPreview = $derived(draft.body.trim() || t.composePlaceholder);
 </script>
 
-<section class="mail-list border-r border-black/10 bg-[#F7F7F9]">
+<section class="mail-list min-h-0 min-w-0 overflow-hidden border-r border-black/10 bg-[#F7F7F9]">
 	<header class="toolbar flex h-13 items-center gap-2 border-b border-black/10 px-3">
 		<button type="button" class="icon-button mobile-only" aria-label="Mailboxes" onclick={onOpenSidebar}><PanelLeft size={18} /></button>
 		<div class="relative min-w-0 flex-1">

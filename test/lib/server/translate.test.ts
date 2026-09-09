@@ -7,13 +7,7 @@ const { mockChatJson } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: {} }));
 
-vi.mock("$lib/server/llm", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("$lib/server/llm")>();
-	return {
-		...actual,
-		chatJson: mockChatJson,
-	};
-});
+vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
 const { generateExpressions, evaluateUserTranslation } = await import("$lib/server/translate");
 

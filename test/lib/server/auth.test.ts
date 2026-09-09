@@ -23,6 +23,8 @@ vi.mock("$app/server", () => ({
 	getRequestEvent: vi.fn(),
 }));
 
+vi.mock("$app/paths", () => ({ base: "", assets: "" }));
+
 vi.mock("$env/dynamic/private", () => ({
 	env: {
 		ORIGIN: "http://localhost:5173",

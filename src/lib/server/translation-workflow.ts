@@ -72,7 +72,7 @@ export async function findTranslationAttempt(input: { userId: string; templateId
 		.from(translationAttempt)
 		.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
 		.where(and(...filters))
-		.orderBy(sql`${translationAttempt.workflowPhase} <> 'completed' DESC`, desc(translationAttempt.updatedAt))
+		.orderBy(sql`${translationAttempt.workflowPhase} <> 'completed' DESC`, desc(translationAttempt.updatedAt), desc(translationAttempt.id))
 		.limit(1);
 	return record;
 }

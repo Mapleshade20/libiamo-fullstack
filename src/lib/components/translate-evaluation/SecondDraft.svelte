@@ -161,7 +161,7 @@ $effect(() => {
 			<article class="grid gap-4 border-b border-border pb-6 last:border-0">
 				<div>
 					<p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{sourceLabel} {i + 1}</p>
-					<p class="rounded-xl border border-border/70 bg-muted/35 px-4 py-3 text-[0.95rem] leading-relaxed break-words">{source}</p>
+					<p class="rounded-xl border border-border/70 bg-muted/35 px-4 py-3 font-prose text-[0.95rem] leading-relaxed break-words">{source}</p>
 				</div>
 				<div>
 					<label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground" for="second-draft-{i}">
@@ -222,7 +222,7 @@ $effect(() => {
 									{feedbackLabel}
 								</p>
 								<p
-									class="text-sm leading-relaxed
+									class="font-prose text-sm leading-relaxed
 										{displayTone === 'unresolved' ? 'text-red-950' : 'text-emerald-950'}"
 								>
 									{displayCommentary}

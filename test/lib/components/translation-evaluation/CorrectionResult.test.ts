@@ -16,6 +16,7 @@ describe("CorrectionResult", () => {
 					{ type: "text", content: ", unchanged." },
 				],
 				referenceLabel: "Reference",
+				teacherNotes: ["Prefer a more idiomatic greeting."],
 			},
 		});
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { untrack } from "svelte";
 import { base } from "$app/paths";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
@@ -124,42 +125,42 @@ async function rate(rating: number) {
 </svelte:head>
 
 <div>
-	{#if error}
-		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700">
-			{error}
-			<button type="button" class="ml-2 underline" onclick={() => { error = null; }}>{t(lang, "common.retry")}</button>
-		</div>
-	{:else if sessionComplete}
-		<ReviewSessionSummary {cardsReviewed} timeSpentSeconds={Math.round((Date.now() - sessionStart) / 1000)} {lang} />
-	{:else if data.cards.length === 0}
-		<div class="flex flex-col items-center gap-4 py-12">
-			<p class="text-xl text-muted-foreground">{t(lang, "review.empty")}</p>
-			<p class="text-base text-muted-foreground">{t(lang, "review.emptyHint")}</p>
-		</div>
-	{:else if currentCard}
-		<StudyCard
-			vocab={currentCard.vocab}
-			nativeDefinition={currentCard.nativeDefinition}
-			nativeText={currentCard.nativeText}
-			targetText={currentCard.targetText}
-			{revealed}
-			showAnswerLabel={t(lang, "review.showAnswer")}
-			{counts}
-			{countLabels}
-			{actions}
-			disabled={isSubmitting}
-			onreveal={reveal}
-			onaction={(id) => {
+	<LoadingReveal loading={!error && !sessionComplete && data.cards.length > 0 && !currentCard}>
+		{#snippet placeholder()}
+			<div class="space-y-4"><Skeleton class="mx-auto h-80 w-full max-w-md rounded-2xl" /><Skeleton class="mx-auto h-10 w-64" /></div>
+		{/snippet}
+		{#if error}
+			<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700">
+				{error}
+				<button type="button" class="ml-2 underline" onclick={() => { error = null; }}>{t(lang, "common.retry")}</button>
+			</div>
+		{:else if sessionComplete}
+			<ReviewSessionSummary {cardsReviewed} timeSpentSeconds={Math.round((Date.now() - sessionStart) / 1000)} {lang} />
+		{:else if data.cards.length === 0}
+			<div class="flex flex-col items-center gap-4 py-12">
+				<p class="text-xl text-muted-foreground">{t(lang, "review.empty")}</p>
+				<p class="text-base text-muted-foreground">{t(lang, "review.emptyHint")}</p>
+			</div>
+		{:else if currentCard}
+			<StudyCard
+				vocab={currentCard.vocab}
+				nativeDefinition={currentCard.nativeDefinition}
+				nativeText={currentCard.nativeText}
+				targetText={currentCard.targetText}
+				{revealed}
+				showAnswerLabel={t(lang, "review.showAnswer")}
+				{counts}
+				{countLabels}
+				{actions}
+				disabled={isSubmitting}
+				onreveal={reveal}
+				onaction={(id) => {
 				const action = actions.find((item) => item.id === id);
 				if (action) void rate(action.rating);
 			}}
-		/>
-	{:else}
-		<div class="space-y-4">
-			<Skeleton class="mx-auto h-80 w-full max-w-md rounded-2xl" />
-			<Skeleton class="mx-auto h-10 w-64" />
-		</div>
-	{/if}
+			/>
+		{/if}
+	</LoadingReveal>
 
 	{#if currentCard}
 		<div class="border-t border-border pt-6 text-center">

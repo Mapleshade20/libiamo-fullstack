@@ -45,7 +45,15 @@ async function routeContext(event: { locals: App.Locals; params: { id: string } 
 export const load: PageServerLoad = async (event) => {
 	const { id, template, attempt } = await routeContext(event);
 	if (attempt.workflowPhase !== "draft") throw redirect(303, `${base}/translate/${id}/feedback`);
-	return { template, attempt: { id: attempt.id, candidates: attempt.candidates, answers: await getTranslationAnswers(attempt.id) } };
+	return {
+		template,
+		attempt: {
+			id: attempt.id,
+			promptLanguage: attempt.promptLanguage,
+			candidates: attempt.candidates,
+			answers: await getTranslationAnswers(attempt.id),
+		},
+	};
 };
 
 export const actions: Actions = {

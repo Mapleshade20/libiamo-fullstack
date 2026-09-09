@@ -1,5 +1,4 @@
 import { error, fail } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
 import {
 	INTERACTION_TYPE_LABELS,
 	LANGUAGE_CODES,
@@ -9,10 +8,8 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
-import { db } from "$lib/server/db";
-import { user as authUser } from "$lib/server/db/auth.schema";
-import { practiceSession, task, template } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { getTaskPreparationData } from "$lib/server/task-preparation";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -35,48 +32,13 @@ export const load: PageServerLoad = async (event) => {
 		return error(404, "Task not found");
 	}
 
-	const [result] = await db
-		.select({
-			id: task.id,
-			title: task.title,
-			description: task.description,
-			objectives: task.objectives,
-			language: task.language,
-			templateInteractionType: template.interactionType,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			materialsMd: template.materialsMd,
-			pointReward: template.pointReward,
-		})
-		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(eq(task.id, taskId))
-		.limit(1);
+	const data = await getTaskPreparationData({ userId: user.id, taskId });
 
-	if (!result) {
+	if (!data) {
 		return error(404, "Task not found");
 	}
 
-	const latestSession = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
-		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
-		columns: {
-			status: true,
-		},
-	});
-
-	// Fetch user's native language for translation direction
-	const [userRecord] = await db.select({ nativeLanguage: authUser.nativeLanguage }).from(authUser).where(eq(authUser.id, user.id)).limit(1);
-
-	const nativeLanguage = userRecord?.nativeLanguage ?? null;
-
-	return {
-		task: {
-			...result,
-			sessionStatus: latestSession?.status ?? null,
-		},
-		nativeLanguage,
-	};
+	return data;
 };
 
 export const actions: Actions = {

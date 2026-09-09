@@ -33,7 +33,7 @@ onDestroy(() => stopAll(controls));
 </script>
 
 <div
-	class="diff-view font-inter-stack text-[0.95rem] leading-relaxed break-words text-foreground {className}"
+	class="diff-view font-prose text-[0.95rem] leading-relaxed break-words text-foreground {className}"
 	role="group"
 	aria-label={label}
 	bind:this={rootEl}

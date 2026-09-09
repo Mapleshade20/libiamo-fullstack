@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCalendarMonth, shiftCalendarMonth } from "$lib/month";
+import { formatCalendarMonth, isCalendarMonth, shiftCalendarMonth } from "$lib/month";
 
 describe("calendar month helpers", () => {
 	it("validates YYYY-MM values", () => {
@@ -11,5 +11,11 @@ describe("calendar month helpers", () => {
 	it("shifts across year boundaries", () => {
 		expect(shiftCalendarMonth("2026-01", -1)).toBe("2025-12");
 		expect(shiftCalendarMonth("2026-12", 1)).toBe("2027-01");
+	});
+
+	it("formats a calendar month in the requested locale", () => {
+		expect(formatCalendarMonth("2026-09", "en")).toBe("September 2026");
+		expect(formatCalendarMonth("2026-09", "fr")).toBe("septembre 2026");
+		expect(() => formatCalendarMonth("2026-13", "en")).toThrow("Invalid calendar month");
 	});
 });

@@ -3,9 +3,11 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Send from "@lucide/svelte/icons/send";
+import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
 import { base } from "$app/paths";
+import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
 import {
 	parseTranslationDraft,
 	serializeTranslationDraft,
@@ -13,8 +15,9 @@ import {
 	translationDraftStorageKey,
 } from "$lib/client/translation-draft";
 import { Button } from "$lib/components/ui/button";
-import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { getHtmlLanguageTag, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { t } from "$lib/i18n";
 
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
@@ -23,6 +26,22 @@ let candidatePickerIndex = $state<number | null>(null);
 let initialized = $state(false);
 let submitting = $state(false);
 let allComplete = $derived(answers.length > 0 && answers.every((answer) => answer.translation.trim()));
+let promptLanguageTag = $derived(getHtmlLanguageTag(data.attempt.promptLanguage));
+let targetLanguageTag = $derived(getHtmlLanguageTag(data.template.language));
+// svelte-ignore state_referenced_locally
+let detailsHref = $state(`${base}/translate/${data.template.id}`);
+
+onMount(() => {
+	detailsHref = getQuestHallWorkflowReturnHref({
+		destination: "details",
+		accountScope: data.accountScope,
+		activeLanguage: lang,
+		edition: data.questHallEdition,
+		item: { kind: "translation", id: data.template.id },
+		base,
+		fallbackHref: detailsHref,
+	});
+});
 
 $effect(() => {
 	if (initialized) return;
@@ -53,12 +72,12 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 <svelte:window onkeydown={(event) => { if (event.key === "Escape") candidatePickerIndex = null; }} />
 
 <div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
-	<a href="{base}/translate/{data.template.id}" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+	<a href={detailsHref} class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
 		><ArrowLeft size={15} />{t(lang, "common.back")}</a
 	>
 	<header class="mt-8 border-b border-border pb-7">
 		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t(lang, "translate.draft.title")}</p>
-		<h1 class="font-serif text-3xl tracking-tight">{data.template.title}</h1>
+		<h1 lang={targetLanguageTag} class="font-serif text-3xl tracking-tight">{data.template.title}</h1>
 		<p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">{t(lang, "translate.draft.body")}</p>
 	</header>
 
@@ -98,13 +117,15 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 						</div>
 						<button
 							type="button"
+							lang={promptLanguageTag}
 							onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
-							class="w-full text-left font-serif text-xl leading-relaxed"
+							class="w-full text-left font-prose text-xl leading-relaxed"
 						>
 							{data.attempt.candidates[answer.paragraphIndex][answer.candidateIndex]}
 						</button>
 					</div>
 					<textarea
+						lang={targetLanguageTag}
 						class="min-h-36 w-full resize-y rounded-xl border border-border bg-card/65 px-4 py-3 text-base leading-relaxed outline-none transition-shadow focus:ring-2 focus:ring-foreground/15"
 						placeholder={t(lang, "translate.draft.placeholder")}
 						maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
@@ -153,7 +174,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 								<Check size={13} />
 							{/if}</span
 						>
-						<span class="font-serif text-lg leading-relaxed">{candidate}</span>
+						<span lang={promptLanguageTag} class="font-prose text-lg leading-relaxed">{candidate}</span>
 					</button>
 				{/each}
 			</div>

@@ -125,7 +125,7 @@ onDestroy(() => stopAll(controls));
 			<div bind:this={leftCol} class="order-1 min-w-0 space-y-3">
 				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{yourDraftLabel}</p>
 				<div class="rounded-2xl border border-border bg-card/70 p-4 shadow-xs sm:p-5">
-					<p class="whitespace-pre-wrap break-words font-inter-stack text-[0.95rem] leading-[1.75] text-foreground">
+					<p class="whitespace-pre-wrap break-words font-prose text-[0.95rem] leading-[1.75] text-foreground">
 						{#each segments as seg, i (i)}
 							{#if seg.kind === "highlight"}
 								<mark data-highlight-mark data-highlight-tone={seg.tone} class="overview-highlight overview-highlight--{seg.tone}">{seg.text}</mark>
@@ -141,7 +141,7 @@ onDestroy(() => stopAll(controls));
 			<div bind:this={rightCol} class="order-2 min-w-0 space-y-4">
 				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{overallLabel}</p>
 				<div class="rounded-2xl border border-border bg-card/70 p-4 shadow-xs sm:p-5">
-					<p class="text-[0.95rem] leading-relaxed break-words text-foreground/90">{evaluation.overallCommentary}</p>
+					<p class="font-prose text-[0.95rem] leading-relaxed break-words text-foreground/90">{evaluation.overallCommentary}</p>
 
 					<ul class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
 						{#each RATING_ORDER as key (key)}

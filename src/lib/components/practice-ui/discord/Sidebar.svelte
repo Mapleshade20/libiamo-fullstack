@@ -15,6 +15,7 @@ let {
 	userName = "",
 	avatarUrl = "",
 	taskId = "",
+	returnHref = "",
 	showMobileMenu = false,
 	t = {} as Record<string, string>,
 	onCloseMobileMenu = () => {},
@@ -26,6 +27,7 @@ let {
 	userName?: string;
 	avatarUrl?: string;
 	taskId?: string | number;
+	returnHref?: string;
 	showMobileMenu?: boolean;
 	t?: Record<string, string>;
 	onCloseMobileMenu?: () => void;
@@ -37,7 +39,7 @@ let {
 	<!-- Server Rail Actions -->
 	<div class="z-10 flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-[#1E1F22] py-3 hide-scrollbar">
 		<a
-			href={`${base}/task/${taskId}`}
+			href={returnHref || `${base}/task/${taskId}`}
 			class="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[24px] bg-[#313338] text-[#DBDEE1] shadow-sm transition-all hover:rounded-[16px] hover:bg-[#DA373C] hover:text-white"
 			title={t.returnTask}
 		>

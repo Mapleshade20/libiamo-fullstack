@@ -1,12 +1,14 @@
 <script lang="ts">
 import Menu from "@lucide/svelte/icons/menu";
 import X from "@lucide/svelte/icons/x";
-import { slide } from "svelte/transition";
+import { MediaQuery } from "svelte/reactivity";
+import { scale, slide } from "svelte/transition";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { type NavbarTransitionDirection, setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import LanguageFlag from "./LanguageFlag.svelte";
 import WineGlassIcon from "./WineGlassIcon.svelte";
 
 interface NavItem {
@@ -96,14 +98,8 @@ $effect(() => {
 });
 
 // --- Language switcher ---
-const flagBaseUrl = "https://flagcdn.com/w40/";
-const countryCodeMap: Record<string, string> = { en: "gb", ja: "jp" };
-
-function getFlagCode(lang: string): string {
-	return countryCodeMap[lang] ?? lang;
-}
-
 let langOpen = $state(false);
+const reducedMotion = new MediaQuery("(prefers-reduced-motion: reduce)", true);
 let langTrigger: HTMLButtonElement | undefined = $state();
 
 function clickOutside(node: HTMLElement, params: { onClose: () => void; exclude: (HTMLElement | undefined)[] }) {
@@ -151,6 +147,15 @@ function quotaPercentage(balance: TrialQuotaNavBalance) {
 let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
 let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
 </script>
+
+<svelte:window
+	onkeydown={(event) => {
+	if (event.key === "Escape" && langOpen) {
+		langOpen = false;
+		langTrigger?.focus({ preventScroll: true });
+	}
+}}
+/>
 
 <header
 	class="fixed top-0 w-full z-50 bg-stone-50/80 backdrop-blur-xl shadow-sm shadow-stone-900/5 border-b border-border"
@@ -200,6 +205,9 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 
 		<!-- Right section -->
 		<div class="flex items-center gap-3">
+			{#if mode === "app"}
+				<div id="hall-nav-inbox" class="fixed top-[4.25rem] left-1/2 -translate-x-1/2 empty:hidden"></div>
+			{/if}
 			{#if mode === "app" && trialQuota}
 				<a
 					href="{base}/profile"
@@ -241,13 +249,15 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 						class="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors hover:bg-secondary"
 						aria-expanded={langOpen}
 					>
-						<img src={`${flagBaseUrl}${getFlagCode(user.activeLanguage)}.webp`} alt={user.activeLanguage} class="h-5 w-5 rounded-full object-cover">
+						<LanguageFlag language={user.activeLanguage} />
 						<span>{user.activeLanguage.toUpperCase()}</span>
 					</button>
 
 					{#if langOpen}
 						<div
-							class="absolute right-0 mt-2 w-32 overflow-hidden rounded-md border border-border bg-background shadow-lg z-50"
+							transition:scale={{ start: 0.97, duration: reducedMotion.current ? 0 : 250 }}
+							style="transform-origin: top right"
+							class="absolute right-0 mt-3 w-40 overflow-hidden rounded-xl border border-border bg-stone-50/95 backdrop-blur-xl shadow-lg z-50"
 							use:clickOutside={{ onClose: () => { langOpen = false; }, exclude: [langTrigger] }}
 						>
 							<form
@@ -270,7 +280,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 												? 'bg-primary/10 text-primary font-semibold'
 												: 'text-foreground'}"
 										>
-											<img src={`${flagBaseUrl}${getFlagCode(lang)}.webp`} alt={lang} class="h-4 w-4 rounded-sm object-cover">
+											<LanguageFlag language={lang} />
 											<span>{LANGUAGE_LABELS[lang]}</span>
 										</button>
 									{/each}

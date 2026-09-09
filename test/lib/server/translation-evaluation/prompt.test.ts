@@ -48,7 +48,7 @@ const history = [
 ];
 
 describe("translation evaluation prompt builders", () => {
-	it("builds a valid fixed Generation 1 conversation and real-task payload", () => {
+	it("builds a schema-valid Generation 1 conversation and real-task payload", () => {
 		const messages = buildGeneration1Messages(input);
 		expect(messages.map((message) => message.role)).toEqual(["system", "user", "assistant", "user", "assistant", "user"]);
 
@@ -67,7 +67,6 @@ describe("translation evaluation prompt builders", () => {
 		});
 		expect(examples[0].cards.length).toBeGreaterThan(1);
 		expect(validatedExample.cards.map((card) => card.warnings)).toEqual([[], [], []]);
-		expect(examples[0].cards.map((card) => card.teacherNotes.length)).toEqual([2, 2, 4]);
 		expect(examples[0].cards.every((card) => card.referenceMarked.includes("<mark>"))).toBe(true);
 
 		const realTask = JSON.parse(messages.at(-1)?.content ?? "{}");

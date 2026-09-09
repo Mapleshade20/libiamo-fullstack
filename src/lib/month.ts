@@ -17,3 +17,12 @@ export function shiftCalendarMonth(value: string, amount: number): string {
 	if (shiftedYear < 1 || shiftedYear > 9999) throw new Error("Calendar month is outside the supported range.");
 	return `${String(shiftedYear).padStart(4, "0")}-${String(shiftedMonth).padStart(2, "0")}`;
 }
+
+export function formatCalendarMonth(value: string, locale: string): string {
+	if (!isCalendarMonth(value)) throw new Error("Invalid calendar month.");
+	return new Date(`${value}-01T12:00:00.000Z`).toLocaleDateString(locale, {
+		month: "long",
+		year: "numeric",
+		timeZone: "UTC",
+	});
+}

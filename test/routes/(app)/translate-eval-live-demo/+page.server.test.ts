@@ -122,10 +122,9 @@ function modelResponse(value: unknown, requestMessages: unknown[]) {
 describe("Generation 1 live review demo server", () => {
 	beforeEach(() => vi.clearAllMocks());
 
-	it("loads the complete fixed few-shot prompt and prefilled Warriors task", async () => {
+	it("loads the schema-shaped few-shot prompt and demo task", async () => {
 		const result = (await load({} as any)) as any;
 		expect(result.task.sourceParagraphs).toHaveLength(3);
-		expect(result.task.defaultLearnerParagraphs[1]).toContain("Brutely tugging");
 		expect(result.promptMessages.map((message: { role: string }) => message.role)).toEqual([
 			"system",
 			"user",

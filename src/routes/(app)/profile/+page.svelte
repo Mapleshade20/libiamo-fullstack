@@ -1,19 +1,19 @@
 <script lang="ts">
-import Check from "@lucide/svelte/icons/check";
-import Pencil from "@lucide/svelte/icons/pencil";
-import X from "@lucide/svelte/icons/x";
-import { onMount, tick } from "svelte";
+import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { handleInvalidField } from "$lib/client/form-attention";
+import { clearQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
+import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
-import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import type { LanguageCode } from "$lib/constants";
+import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, getNativeLanguageOptions, SELF_ASSIGNED_LEVELS } from "$lib/constants";
+import { t } from "$lib/i18n";
 
 let { form, data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
@@ -34,12 +34,7 @@ const nativeLanguageOptions = $derived(
 let nativeLanguageInputValue = $state("");
 let apiBaseUrlValue = $state("");
 let apiModelValue = $state("");
-let nameForm: HTMLFormElement | null = $state(null);
-let nameInput: HTMLInputElement | null = $state(null);
 let apiKeyForm: HTMLFormElement | null = $state(null);
-let editingName = $state(false);
-// svelte-ignore state_referenced_locally
-let nameInputValue = $state(data.user.name ?? "");
 let showActionNotification = $state(false);
 
 const actionNotification = $derived(
@@ -86,26 +81,6 @@ function enhanceSilently() {
 		await update({ reset: false });
 	};
 }
-
-async function startEditingName() {
-	nameInputValue = data.user.name ?? "";
-	editingName = true;
-	await tick();
-	nameInput?.focus();
-	nameInput?.select();
-}
-
-function cancelEditingName() {
-	nameInputValue = data.user.name ?? "";
-	editingName = false;
-}
-
-function handleNameKeydown(event: KeyboardEvent) {
-	if (event.key === "Escape") {
-		event.preventDefault();
-		cancelEditingName();
-	}
-}
 </script>
 
 <svelte:head>
@@ -123,67 +98,7 @@ function handleNameKeydown(event: KeyboardEvent) {
 			<div class="flex items-center gap-6">
 				<img src={data.avatarUrl} alt={t(lang, "profile.avatarAlt")} class="h-24 w-24 rounded-full border border-gray-200 object-cover shadow-sm">
 				<div class="min-w-0 flex-1 space-y-1">
-					{#if editingName}
-						<FormErrorFocus formRef={nameForm} errors={form?.errors} fieldOrder={["name"]} />
-						<form
-							bind:this={nameForm}
-							method="POST"
-							action="?/updateProfile"
-							oninvalidcapture={handleInvalidField}
-							use:enhance={() => {
-								showActionNotification = false;
-								return async ({ result, update }) => {
-									await update({ reset: false });
-									if (result.type === "success") editingName = false;
-								};
-							}}
-							class="flex max-w-sm items-center gap-1.5"
-						>
-							<Input
-								id="name"
-								name="name"
-								bind:ref={nameInput}
-								bind:value={nameInputValue}
-								onkeydown={handleNameKeydown}
-								aria-label={t(lang, "profile.name")}
-								aria-invalid={Boolean(form?.errors?.name)}
-								class="h-8 text-base font-semibold"
-							/>
-							<button
-								type="submit"
-								class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-								aria-label={t(lang, "profile.saveName")}
-								title={t(lang, "profile.saveName")}
-							>
-								<Check size={17} />
-							</button>
-							<button
-								type="button"
-								onclick={cancelEditingName}
-								class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-								aria-label={t(lang, "profile.cancelNameEdit")}
-								title={t(lang, "common.cancel")}
-							>
-								<X size={17} />
-							</button>
-						</form>
-						{#if form?.errors?.name}
-							<p class="text-sm text-red-600">{form.errors.name[0]}</p>
-						{/if}
-					{:else}
-						<div class="flex items-center gap-1.5">
-							<h2 class="truncate text-xl font-semibold">{data.user.name}</h2>
-							<button
-								type="button"
-								onclick={startEditingName}
-								class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-								aria-label={t(lang, "profile.editName")}
-								title={t(lang, "profile.editName")}
-							>
-								<Pencil size={15} />
-							</button>
-						</div>
-					{/if}
+					<ProfileNameEditor name={data.user.name ?? ""} {lang} />
 					<p class="text-sm text-muted-foreground">
 						{t(lang, "profile.avatarConnectedBefore")}
 						<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>
@@ -201,8 +116,8 @@ function handleNameKeydown(event: KeyboardEvent) {
 			<form method="POST" action="?/updateProfile" onchange={autosave} use:enhance={enhanceSilently}>
 				<fieldset class="space-y-2">
 					<legend class="text-sm font-medium">{t(lang, "profile.feedbackLanguage")}</legend>
-					<div class="grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1" role="radiogroup">
-						<label class="cursor-pointer rounded-lg px-3 py-2 text-center text-sm has-[:checked]:bg-background has-[:checked]:shadow-sm">
+					<div class="feedback-tabs" role="radiogroup">
+						<label>
 							<input
 								class="sr-only"
 								type="radio"
@@ -212,7 +127,7 @@ function handleNameKeydown(event: KeyboardEvent) {
 							>
 							{t(lang, "profile.feedbackNative")}
 						</label>
-						<label class="cursor-pointer rounded-lg px-3 py-2 text-center text-sm has-[:checked]:bg-background has-[:checked]:shadow-sm">
+						<label>
 							<input
 								class="sr-only"
 								type="radio"
@@ -247,6 +162,27 @@ function handleNameKeydown(event: KeyboardEvent) {
 				{#if form?.errors?.nativeLanguage}
 					<p class="text-sm text-red-600">{form.errors.nativeLanguage[0]}</p>
 				{/if}
+			</form>
+
+			<form method="POST" action="?/updateProficiency" onchange={autosave} use:enhance={enhanceSilently}>
+				<fieldset class="space-y-2" aria-describedby="proficiency-help">
+					<legend class="text-sm font-medium">{t(lang, "profile.proficiency")}</legend>
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup">
+						{#each SELF_ASSIGNED_LEVELS as level}
+							<label
+								class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-border bg-background px-3 py-2 text-center transition-colors hover:bg-secondary/60 has-[:checked]:border-foreground/35 has-[:checked]:bg-secondary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2"
+							>
+								<input class="sr-only" type="radio" name="levelSelfAssign" value={level} checked={data.levelSelfAssign === level}>
+								<span class="text-xs font-semibold uppercase tracking-wider">{t(lang, `profile.proficiency.level${level}`)}</span>
+								<span class="mt-0.5 text-sm text-muted-foreground">{t(lang, `profile.proficiency.range${level}`)}</span>
+							</label>
+						{/each}
+					</div>
+					<p id="proficiency-help" class="text-xs leading-relaxed text-muted-foreground">{t(lang, "profile.proficiencyHelp")}</p>
+					{#if form?.proficiencyError}
+						<p class="text-sm text-red-600" role="alert">{t(lang, "profile.proficiencyError")}</p>
+					{/if}
+				</fieldset>
 			</form>
 		</Card.Content>
 	</Card.Root>
@@ -368,5 +304,58 @@ function handleNameKeydown(event: KeyboardEvent) {
 
 	<Separator />
 
-	<form method="POST" action="?/signOut" use:enhance><Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button></form>
+	<form method="POST" action="?/signOut" onsubmit={() => clearQuestHallReturnContext(undefined, { clearAccount: true })} use:enhance>
+		<Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button>
+	</form>
 </div>
+
+<style>
+.feedback-tabs {
+	position: relative;
+	isolation: isolate;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: #eae7e2;
+}
+.feedback-tabs::before {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	left: 4px;
+	top: 4px;
+	bottom: 4px;
+	width: calc(50% - 4px);
+	border-radius: 10px;
+	background: #fafaf9;
+	box-shadow: 0 2px 6px #302a2015;
+	transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.feedback-tabs:has(input[value="target"]:checked)::before {
+	transform: translateX(100%);
+}
+.feedback-tabs label {
+	cursor: pointer;
+	padding: 12px 8px;
+	text-align: center;
+	font-size: 0.875rem;
+	color: #625c56;
+	transition: color 220ms;
+}
+.feedback-tabs label:has(:checked) {
+	color: #642f3a;
+	font-weight: 600;
+}
+.feedback-tabs label:has(:focus-visible) {
+	outline: 2px solid var(--ring);
+	border-radius: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.feedback-tabs::before,
+	.feedback-tabs label {
+		transition: none;
+	}
+}
+</style>

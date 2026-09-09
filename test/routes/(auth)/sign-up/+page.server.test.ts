@@ -126,7 +126,6 @@ describe("Sign-up +page.server", () => {
 			expect(mockInsert).toHaveBeenCalled();
 			expect(mockValues).toHaveBeenCalledWith({
 				userId: "new-user-id",
-				language: "en",
 			});
 			expect(mockOnConflictDoNothing).toHaveBeenCalled();
 		});

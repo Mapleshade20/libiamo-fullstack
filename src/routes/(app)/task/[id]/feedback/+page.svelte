@@ -6,13 +6,15 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
+import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
+import type { LanguageCode } from "$lib/constants";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
-import type { LanguageCode } from "$lib/i18n";
 import { parseMarkedText } from "$lib/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
@@ -34,6 +36,8 @@ let activeAnnotation = $state<{
 } | null>(null);
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
+// svelte-ignore state_referenced_locally
+let detailsHref = $state(`${base}/task/${data.taskId}`);
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
@@ -45,6 +49,15 @@ $effect(() => {
 // Trigger client-only generation after mount. Calling fetch from an eager
 // reactive effect can run during SSR and causes SvelteKit warnings.
 onMount(() => {
+	detailsHref = getQuestHallWorkflowReturnHref({
+		destination: "details",
+		accountScope: data.accountScope,
+		activeLanguage: data.user.activeLanguage as LanguageCode,
+		edition: data.questHallEdition,
+		item: { kind: "quest", id: Number(data.taskId) },
+		base,
+		fallbackHref: detailsHref,
+	});
 	if (data.existingFeedback) {
 		feedback = data.existingFeedback;
 		return;
@@ -217,7 +230,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
-				<a href="{base}/task/{data.taskId}" class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
+				<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
 					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
 					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
 				</a>
@@ -254,7 +267,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
 				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative min-w-0 font-inter-stack">
+					<div class="relative min-w-0">
 						<!-- Chain label -->
 						<div class="mb-4 flex items-center gap-3">
 							<div class="h-px flex-1 bg-[#e8e3db]"></div>
@@ -283,6 +296,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 										data-message-id={message.seqId}
 										data-current-context={getMessageContext(message.seqId).currentContext}
 										data-previous-context={getMessageContext(message.seqId).previousContext}
+										class="font-prose"
 									>
 										{#if message.role === "user"}
 											{@const annotation = getAnnotationForMessage(message.seqId)}
@@ -315,43 +329,45 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
 					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
 
-					{#if isGenerating}
-						<div class="min-w-0 space-y-4">
-							{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
-								<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-									<Skeleton class="h-4 w-3/4 mb-2" />
-									<Skeleton class="h-4 w-full mb-2" />
-									<Skeleton class="h-4 w-5/6" />
-								</div>
-							{/each}
-						</div>
-					{:else if feedback}
-						<div class="min-w-0 space-y-4">
-							{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
-								{@const comment = getCommentForMessage(message.seqId)}
-								{#if comment}
-									{@const commentContext = getMessageContext(message.seqId)}
-									<div
-										data-learning-selectable
-										data-learning-kind="comment"
-										data-message-id={message.seqId}
-										data-current-context={getCommentContext(message.seqId, comment)}
-										data-previous-context={commentContext.previousContext}
-										class="rounded-lg border border-[#e8e3db] bg-white p-4 shadow-sm [overflow-wrap:anywhere]"
-										transition:fade={{ duration: 200 }}
-									>
-										<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
-										<AnnotatedTutorComment
-											{comment}
-											messageId={message.seqId}
-											onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
-										/>
+					<LoadingReveal loading={isGenerating}>
+						{#snippet placeholder()}
+							<div class="min-w-0 space-y-4">
+								{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
+									<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+										<Skeleton class="h-4 w-3/4 mb-2" />
+										<Skeleton class="h-4 w-full mb-2" />
+										<Skeleton class="h-4 w-5/6" />
 									</div>
-								{/if}
-							{/each}
-						</div>
-					{/if}
-
+								{/each}
+							</div>
+						{/snippet}
+						{#if feedback}
+							<div class="min-w-0 space-y-4">
+								{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
+									{@const comment = getCommentForMessage(message.seqId)}
+									{#if comment}
+										{@const commentContext = getMessageContext(message.seqId)}
+										<div
+											data-learning-selectable
+											data-learning-kind="comment"
+											data-message-id={message.seqId}
+											data-current-context={getCommentContext(message.seqId, comment)}
+											data-previous-context={commentContext.previousContext}
+											class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
+											transition:fade={{ duration: 200 }}
+										>
+											<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+											<AnnotatedTutorComment
+												{comment}
+												messageId={message.seqId}
+												onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
+											/>
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+					</LoadingReveal>
 					<!-- Objectives & Summary -->
 					{#if feedback}
 						<div class="mt-8 space-y-6">
@@ -371,7 +387,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 											>
 												{objective.grade}
 											</span>
-											<p class="min-w-0 flex-1 text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
+											<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
 										</div>
 									{/each}
 								</div>
@@ -384,7 +400,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 									data-learning-kind="summary"
 									data-current-context={feedback.summary}
 									data-previous-context={getConversationExcerpt()}
-									class="whitespace-pre-wrap [overflow-wrap:anywhere]"
+									class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
 								>
 									{#each summaryParts as part}
 										{#if part.type === "mark"}

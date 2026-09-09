@@ -6,6 +6,7 @@ import Search from "@lucide/svelte/icons/search";
 import EmojiConvertor from "emoji-js";
 import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
+import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
@@ -26,6 +27,7 @@ interface Props {
 	existingSession?: any;
 	openingState?: unknown;
 	maxTurns?: number;
+	returnHref?: string;
 }
 
 let {
@@ -36,6 +38,7 @@ let {
 	existingSession = null,
 	openingState = null,
 	maxTurns = 0,
+	returnHref = "",
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
@@ -186,7 +189,7 @@ function handleFinishCancel() {
 }
 
 function getTaskHref() {
-	return `/task/${taskId}`;
+	return returnHref || `${base}/task/${taskId}`;
 }
 
 function getBubbleClasses(message: (typeof renderableMessages)[0], index: number) {

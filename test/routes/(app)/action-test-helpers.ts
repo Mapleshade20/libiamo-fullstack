@@ -19,20 +19,10 @@ export function createActionEvent(entries: Record<string, string>, userId = "u1"
 type SwitchLanguageSuiteOptions = {
 	action: (event: any) => any;
 	updateUser: (...args: any[]) => unknown;
-	mockInsert: { mock: { calls: unknown[] } };
-	mockValues: { mock: { calls: unknown[] } };
-	mockOnConflictDoNothing: { mock: { calls: unknown[] } };
 	successLanguage: string;
 };
 
-export function runSwitchLanguageActionSuite({
-	action,
-	updateUser,
-	mockInsert,
-	mockValues,
-	mockOnConflictDoNothing,
-	successLanguage,
-}: SwitchLanguageSuiteOptions) {
+export function runSwitchLanguageActionSuite({ action, updateUser, successLanguage }: SwitchLanguageSuiteOptions) {
 	describe("switchLanguage action", () => {
 		it("returns 400 for invalid language", async () => {
 			const result = (await action(createActionEvent({ language: "de" }))) as ActionFailure<any>;
@@ -57,7 +47,7 @@ export function runSwitchLanguageActionSuite({
 			expect(updateUser).not.toHaveBeenCalled();
 		});
 
-		it("updates language, ensures profile, and redirects", async () => {
+		it("updates the active language and redirects", async () => {
 			const event = createActionEvent({ language: successLanguage }, "user-1");
 
 			try {
@@ -72,9 +62,6 @@ export function runSwitchLanguageActionSuite({
 				body: { activeLanguage: successLanguage },
 				headers: event.request.headers,
 			});
-			expect(mockInsert).toHaveBeenCalled();
-			expect(mockValues).toHaveBeenCalledWith({ userId: "user-1", language: successLanguage });
-			expect(mockOnConflictDoNothing).toHaveBeenCalled();
 		});
 	});
 }

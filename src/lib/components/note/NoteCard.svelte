@@ -65,9 +65,9 @@ async function submitAsk(q: string) {
 <div class="rounded-lg border border-border bg-card p-4">
 	<div class="flex flex-col sm:flex-row sm:items-start gap-3">
 		<div class="min-w-0 flex-1">
-			<h3 class="font-serif text-lg leading-snug text-foreground">{note.vocab}</h3>
-			<p class="mt-2 text-sm leading-relaxed text-foreground/80">{note.nativeDefinition}</p>
-			<p class="mt-1 text-xs leading-relaxed text-muted-foreground">{note.targetDefinition}</p>
+			<h3 class="font-prose text-lg leading-snug text-foreground">{note.vocab}</h3>
+			<p class="mt-2 font-prose text-sm leading-relaxed text-foreground/80">{note.nativeDefinition}</p>
+			<p class="mt-1 font-prose text-xs leading-relaxed text-muted-foreground">{note.targetDefinition}</p>
 		</div>
 		<div class="shrink-0 flex flex-row sm:flex-col items-center gap-0.5">
 			<button type="button" class="rounded p-1 text-muted-foreground hover:text-red-600 transition-colors" onclick={ondelete} title="Delete">
@@ -88,7 +88,7 @@ async function submitAsk(q: string) {
 		<div class="mt-3 rounded-md border border-border bg-muted/40 p-3">
 			{#if askAnswer}
 				<div class="flex items-start gap-2">
-					<p class="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{askAnswer}</p>
+					<p class="flex-1 whitespace-pre-wrap font-prose text-sm leading-relaxed text-foreground">{askAnswer}</p>
 					<button type="button" class="mt-0.5 text-muted-foreground hover:text-foreground" onclick={toggleAsk} title="Dismiss">
 						<X size={14} />
 					</button>

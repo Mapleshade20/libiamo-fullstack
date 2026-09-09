@@ -3,11 +3,9 @@ import { base } from "$app/paths";
 import { switchLanguageSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
-import { db } from "$lib/server/db";
-import { userLearningProfile } from "$lib/server/db/schema";
 
 export async function switchActiveLanguage(event: { locals: App.Locals; request: Request }) {
-	const user = requireUser(event);
+	requireUser(event);
 	const formData = await event.request.formData();
 	const raw = { language: formData.get("language")?.toString() ?? "" };
 
@@ -20,14 +18,6 @@ export async function switchActiveLanguage(event: { locals: App.Locals; request:
 		body: { activeLanguage: result.data.language },
 		headers: event.request.headers,
 	});
-
-	await db
-		.insert(userLearningProfile)
-		.values({
-			userId: user.id,
-			language: result.data.language,
-		})
-		.onConflictDoNothing();
 
 	return redirect(302, `${base}/`);
 }

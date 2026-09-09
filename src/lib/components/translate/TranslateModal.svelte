@@ -3,13 +3,16 @@ import Check from "@lucide/svelte/icons/check";
 import Loader from "@lucide/svelte/icons/loader-circle";
 import Sparkles from "@lucide/svelte/icons/sparkles";
 import X from "@lucide/svelte/icons/x";
+import { Portal } from "bits-ui";
 import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
 import { Button } from "$lib/components/ui/button";
+import type { LanguageCode } from "$lib/constants";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 
 interface Props {
+	lang: LanguageCode;
 	show: boolean;
 	taskTitle: string;
 	taskDescription: string | null;
@@ -18,12 +21,25 @@ interface Props {
 	taskInteractionType: string;
 	nativeLanguage: string;
 	targetLanguage: string;
+	generateExpressionsAction?: string;
+	evaluateTranslationAction?: string;
 	onclose: () => void;
 }
 
-let { show, taskTitle, taskDescription, taskObjectives, taskUi, taskInteractionType, nativeLanguage, targetLanguage, onclose }: Props = $props();
-
-let lang = $derived(nativeLanguage as LanguageCode);
+let {
+	lang,
+	show,
+	taskTitle,
+	taskDescription,
+	taskObjectives,
+	taskUi,
+	taskInteractionType,
+	nativeLanguage,
+	targetLanguage,
+	generateExpressionsAction = "?/generateExpressions",
+	evaluateTranslationAction = "?/evaluateTranslation",
+	onclose,
+}: Props = $props();
 
 let expressions = $state<string[]>([]);
 let userTranslations = $state<Record<number, string>>({});
@@ -37,6 +53,28 @@ let hasGenerated = $state(false);
 
 let dialogEl = $state<HTMLDivElement>();
 let mounted = $state(false);
+let closing = false;
+
+function smoothDialogHeight(node: HTMLDivElement) {
+	const header = node.firstElementChild as HTMLElement;
+	const content = node.querySelector<HTMLElement>(".expressions-content");
+	if (!content) return;
+	const resize = () => {
+		const height = Math.min(header.offsetHeight + content.offsetHeight + 2, window.innerHeight * 0.85);
+		node.style.height = `${height}px`;
+	};
+	resize();
+	const observer = new ResizeObserver(resize);
+	observer.observe(header);
+	observer.observe(content);
+	window.addEventListener("resize", resize);
+	return {
+		destroy() {
+			observer.disconnect();
+			window.removeEventListener("resize", resize);
+		},
+	};
+}
 
 onMount(() => {
 	mounted = true;
@@ -62,7 +100,7 @@ async function handleGenerate() {
 		f.set("nativeLanguage", nativeLanguage);
 		f.set("targetLanguage", targetLanguage);
 
-		const res = await fetch("?/generateExpressions", { method: "POST", body: f });
+		const res = await fetch(generateExpressionsAction, { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { expressions?: string[]; error?: string };
@@ -99,7 +137,7 @@ async function handleCheck(idx: number) {
 		f.set("nativeLanguage", nativeLanguage);
 		f.set("targetLanguage", targetLanguage);
 
-		const res = await fetch("?/evaluateTranslation", { method: "POST", body: f });
+		const res = await fetch(evaluateTranslationAction, { method: "POST", body: f });
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { feedback?: string; correction?: string; error?: string };
@@ -128,8 +166,28 @@ function handleUserTranslationInput(idx: number, event: Event) {
 	userTranslations = { ...userTranslations, [idx]: value };
 }
 
-function handleClose() {
-	onclose();
+async function handleClose() {
+	if (closing) return;
+	if (!dialogEl || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		onclose();
+		return;
+	}
+	closing = true;
+	const options: KeyframeAnimationOptions = { duration: 140, easing: "ease-in", fill: "forwards" };
+	const animations = [
+		dialogEl.animate(
+			[
+				{ opacity: 1, transform: "translateY(0) scale(1)" },
+				{ opacity: 0, transform: "translateY(8px) scale(0.985)" },
+			],
+			options,
+		),
+		dialogEl.parentElement?.animate([{ opacity: 1 }, { opacity: 0 }], options),
+	];
+	await Promise.allSettled(animations.map((animation) => animation?.finished));
+	if (mounted) onclose();
+	for (const animation of animations) animation?.cancel();
+	closing = false;
 }
 
 function handleBackdropClick(e: MouseEvent) {
@@ -140,7 +198,10 @@ function handleBackdropClick(e: MouseEvent) {
 
 function handleKeydown(e: KeyboardEvent) {
 	if (e.key === "Escape") {
+		e.preventDefault();
+		e.stopPropagation();
 		handleClose();
+		return;
 	}
 	// Simple focus trap: keep Tab within the dialog
 	if (e.key === "Tab" && dialogEl) {
@@ -186,129 +247,135 @@ $effect(() => {
 </script>
 
 {#if show}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
-		onclick={handleBackdropClick}
-		onkeydown={handleKeydown}
-	>
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<Portal disabled={!mounted}>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
-			bind:this={dialogEl}
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="translate-modal-title"
-			tabindex="-1"
-			class="relative w-full max-w-lg mx-4 max-h-[85vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl animate-in zoom-in-95 outline-none"
+			class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
+			onclick={handleBackdropClick}
 			onkeydown={handleKeydown}
 		>
-			<!-- Header -->
-			<div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-				<div class="flex items-center gap-2">
-					<Sparkles size={18} strokeWidth={1.5} class="text-foreground/70" />
-					<h2 id="translate-modal-title" class="text-base font-semibold text-foreground">{t(lang, "task.usefulExpressions.title")}</h2>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div
+				bind:this={dialogEl}
+				use:smoothDialogHeight
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="translate-modal-title"
+				tabindex="-1"
+				class="expressions-dialog relative w-full max-w-lg mx-4 max-h-[85dvh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl animate-in zoom-in-95 outline-none"
+				onkeydown={handleKeydown}
+			>
+				<!-- Header -->
+				<div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+					<div class="flex items-center gap-2">
+						<Sparkles size={18} strokeWidth={1.5} class="text-foreground/70" />
+						<h2 id="translate-modal-title" class="text-base font-semibold text-foreground">{t(lang, "task.usefulExpressions.title")}</h2>
+					</div>
+					<button
+						type="button"
+						onclick={handleClose}
+						aria-label={t(lang, "task.usefulExpressions.close")}
+						class="grid size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+					>
+						<X size={18} strokeWidth={1.5} />
+					</button>
 				</div>
-				<button
-					type="button"
-					onclick={handleClose}
-					aria-label="Close dialog"
-					class="rounded-lg p-1.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
-				>
-					<X size={18} strokeWidth={1.5} />
-				</button>
-			</div>
 
-			<!-- Body -->
-			<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-				{#if generating}
-					<div class="flex items-center gap-3 py-8 justify-center">
-						<Loader size={20} strokeWidth={1.5} class="animate-spin text-muted-foreground" />
-						<span class="text-sm text-muted-foreground">{t(lang, "task.usefulExpressions.generating")}</span>
-					</div>
-				{:else if generateError}
-					<div class="py-6 text-center">
-						<p class="text-sm text-red-500">{generateError}</p>
-						<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
-					</div>
-				{:else if expressions.length > 0}
-					<p class="text-xs text-muted-foreground leading-relaxed">
-						Translate each expression into your target language, then click <strong>Check</strong> for feedback.
-					</p>
+				<!-- Body -->
+				<div class="min-h-0 flex-1 overflow-y-auto">
+					<div class="expressions-content px-5 py-4 space-y-4">
+						{#if generating}
+							<div class="flex items-center gap-3 py-8 justify-center">
+								<Loader size={20} strokeWidth={1.5} class="animate-spin text-muted-foreground" />
+								<span class="text-sm text-muted-foreground">{t(lang, "task.usefulExpressions.generating")}</span>
+							</div>
+						{:else if generateError}
+							<div class="py-6 text-center">
+								<p class="text-sm text-red-500">{generateError}</p>
+								<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
+							</div>
+						{:else if expressions.length > 0}
+							<p class="text-xs text-muted-foreground leading-relaxed">{t(lang, "task.usefulExpressions.instructions")}</p>
 
-					{#each expressions as expr, idx}
-						{@const feedback = feedbacks[idx]}
-						{@const correction = corrections[idx]}
-						{@const isChecking = checking[idx]}
+							{#each expressions as expr, idx}
+								{@const feedback = feedbacks[idx]}
+								{@const correction = corrections[idx]}
+								{@const isChecking = checking[idx]}
 
-						<div
-							class="rounded-xl border border-border p-4 transition-colors {feedback
+								<div
+									class="rounded-xl border border-border p-4 transition-colors {feedback
 								? 'bg-foreground/5'
 								: 'bg-background'}"
-						>
-							<!-- Source expression -->
-							<p class="text-sm font-medium text-foreground leading-relaxed">{expr}</p>
+								>
+									<!-- Source expression -->
+									<p class="font-prose text-sm font-medium text-foreground leading-relaxed">{expr}</p>
 
-							<!-- User's translation input -->
-							<div class="mt-3">
-								<textarea
-									class="w-full min-h-[44px] resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/30"
-									aria-label="Your translation for: {expr}"
-									placeholder="Type your translation..."
-									rows={2}
-									value={userTranslations[idx] ?? ""}
-									maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
-									oninput={(e) => handleUserTranslationInput(idx, e)}
-									onkeydown={(e) => {
+									<!-- User's translation input -->
+									<div class="mt-3">
+										<textarea
+											class="w-full min-h-[44px] resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/30"
+											aria-label={t(lang, "task.usefulExpressions.inputLabel").replace("{expression}", expr)}
+											placeholder={t(lang, "task.usefulExpressions.inputPlaceholder")}
+											rows={2}
+											value={userTranslations[idx] ?? ""}
+											maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
+											oninput={(e) => handleUserTranslationInput(idx, e)}
+											onkeydown={(e) => {
 										if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
 											e.preventDefault();
 											handleCheck(idx);
 										}
 									}}
-								></textarea>
-							</div>
+										></textarea>
+									</div>
 
-							<!-- Actions -->
-							<div class="mt-2 flex items-center justify-between">
-								<div class="flex-1">
-									{#if isChecking}
-										<span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-											<Loader size={12} strokeWidth={1.5} class="animate-spin" />
-											{t(lang, "task.usefulExpressions.translating")}
-										</span>
-									{:else if feedback}
-										<div class="space-y-1">
-											<p class="text-xs text-muted-foreground leading-relaxed">{feedback}</p>
-											{#if correction}
-												<p class="text-xs font-medium text-emerald-600 leading-relaxed">→ {correction}</p>
+									<!-- Actions -->
+									<div class="mt-2 flex items-center justify-between">
+										<div class="flex-1">
+											{#if isChecking}
+												<span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+													<Loader size={12} strokeWidth={1.5} class="animate-spin" />
+													{t(lang, "task.usefulExpressions.translating")}
+												</span>
+											{:else if feedback}
+												<div class="space-y-1">
+													<p class="font-prose text-xs text-muted-foreground leading-relaxed">{feedback}</p>
+													{#if correction}
+														<p class="font-prose text-xs font-medium text-emerald-600 leading-relaxed">→ {correction}</p>
+													{/if}
+												</div>
 											{/if}
 										</div>
-									{/if}
-								</div>
 
-								<button
-									type="button"
-									onclick={() => handleCheck(idx)}
-									disabled={isChecking || !userTranslations[idx]?.trim()}
-									class="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-foreground/10 text-foreground hover:bg-foreground/20 disabled:opacity-40 transition-colors"
-								>
-									<Check size={12} strokeWidth={2} />
-									Check
-								</button>
+										<button
+											type="button"
+											onclick={() => handleCheck(idx)}
+											disabled={isChecking || !userTranslations[idx]?.trim()}
+											class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-foreground/10 px-3 text-xs font-medium text-foreground transition-colors hover:bg-foreground/20 disabled:opacity-40"
+										>
+											<Check size={12} strokeWidth={2} />
+											{t(lang, "task.usefulExpressions.check")}
+										</button>
+									</div>
+								</div>
+							{/each}
+						{:else}
+							<div class="py-6 text-center">
+								<p class="text-sm text-muted-foreground">{t(lang, "task.usefulExpressions.error")}</p>
 							</div>
-						</div>
-					{/each}
-				{:else}
-					<div class="py-6 text-center">
-						<p class="text-sm text-muted-foreground">{t(lang, "task.usefulExpressions.error")}</p>
+						{/if}
 					</div>
-				{/if}
+				</div>
 			</div>
 		</div>
-	</div>
+	</Portal>
 {/if}
 
 <style>
+.expressions-dialog {
+	transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 @keyframes fade-in {
 	from {
 		opacity: 0;
@@ -320,15 +387,16 @@ $effect(() => {
 @keyframes zoom-in-95 {
 	from {
 		opacity: 0;
-		transform: scale(0.95);
+		transform: translateY(12px) scale(0.985);
 	}
 	to {
 		opacity: 1;
-		transform: scale(1);
+		transform: translateY(0) scale(1);
 	}
 }
 .animate-in {
-	animation-duration: 0.2s;
+	animation-duration: 0.24s;
+	animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 	animation-fill-mode: both;
 }
 .fade-in {
@@ -336,5 +404,13 @@ $effect(() => {
 }
 .zoom-in-95 {
 	animation-name: zoom-in-95;
+}
+@media (prefers-reduced-motion: reduce) {
+	.expressions-dialog {
+		transition: none;
+	}
+	.animate-in {
+		animation: none;
+	}
 }
 </style>

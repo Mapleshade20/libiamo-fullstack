@@ -1,9 +1,11 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
+import type { LanguageCode } from "$lib/constants";
 import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { getOrCreateTranslationAttempt, getOrCreateTranslationSourceSet } from "$lib/server/translation";
+import { getTranslationPreparationData } from "$lib/server/translation-preparation";
 import {
 	abandonTranslationAttempt,
 	findTranslationAttempt,
@@ -50,17 +52,17 @@ async function prepareAttempt(input: {
 }
 
 export const load: PageServerLoad = async (event) => {
-	const { user, templateId, template } = await context(event);
-	const promptLanguage = user.nativeLanguage;
-	let blockedReason: "missing-native-language" | "same-language" | null = null;
-	if (!validPromptLanguage(promptLanguage)) blockedReason = "missing-native-language";
-	else if (promptLanguage === template.language) blockedReason = "same-language";
-	const attempt = blockedReason || !promptLanguage ? null : await findTranslationAttempt({ userId: user.id, templateId, promptLanguage });
-	return {
-		template,
-		blockedReason,
-		attempt: attempt ? { id: attempt.id, workflowPhase: attempt.workflowPhase } : null,
-	};
+	const user = requireUser(event);
+	const templateId = parseTemplateId(event.params.id);
+	if (!templateId) throw error(404, "Template not found");
+	const data = await getTranslationPreparationData({
+		userId: user.id,
+		templateId,
+		activeLanguage: user.activeLanguage as LanguageCode,
+		nativeLanguage: user.nativeLanguage,
+	});
+	if (!data) throw error(404, "Translation template not found");
+	return data;
 };
 
 export const actions: Actions = {

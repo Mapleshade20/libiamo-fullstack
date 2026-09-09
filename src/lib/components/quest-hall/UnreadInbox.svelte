@@ -4,8 +4,9 @@ import Mail from "@lucide/svelte/icons/mail";
 import { fade } from "svelte/transition";
 import { base } from "$app/paths";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
+import type { LanguageCode } from "$lib/constants";
 import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
-import { type LanguageCode, t } from "$lib/i18n";
+import { t } from "$lib/i18n";
 import { formatRelativeAge, type UnreadInboxItem, unreadTargetHref } from "$lib/unread";
 
 let { lang }: { lang: LanguageCode } = $props();
