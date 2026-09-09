@@ -111,10 +111,6 @@ export function getSelfAssignedLevel(value: unknown, language: LanguageCode): Se
 	return normalizeSelfAssignedLevels(value)[language];
 }
 
-export function withSelfAssignedLevel(value: unknown, language: LanguageCode, level: SelfAssignedLevel): SelfAssignedLevelsByLanguage {
-	return { ...normalizeSelfAssignedLevels(value), [language]: level };
-}
-
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 	en: "English",
 	es: "Español",

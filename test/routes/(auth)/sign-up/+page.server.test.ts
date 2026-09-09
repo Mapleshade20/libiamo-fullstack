@@ -11,27 +11,6 @@ vi.mock("$lib/server/auth/auth", () => ({
 	},
 }));
 
-const { mockOnConflictDoNothing, mockValues, mockInsert } = vi.hoisted(() => {
-	const mockOnConflictDoNothing = vi.fn();
-	const mockValues = vi.fn(() => ({
-		onConflictDoNothing: mockOnConflictDoNothing,
-	}));
-	const mockInsert = vi.fn(() => ({
-		values: mockValues,
-	}));
-	return { mockOnConflictDoNothing, mockValues, mockInsert };
-});
-
-vi.mock("$lib/server/db", () => ({
-	db: {
-		insert: mockInsert,
-	},
-}));
-
-vi.mock("$lib/server/db/schema", () => ({
-	userLearningProfile: Symbol("userLearningProfile"),
-}));
-
 vi.mock("better-auth/api", () => {
 	class MockAPIError extends Error {
 		constructor(code: string, opts?: { message: string }) {
@@ -98,7 +77,7 @@ describe("Sign-up +page.server", () => {
 			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
 		});
 
-		it("should successfully sign up and insert profile, then redirect", async () => {
+		it("should successfully sign up, then redirect", async () => {
 			const validData = {
 				email: "test@example.com",
 				name: "Test User",
@@ -122,12 +101,6 @@ describe("Sign-up +page.server", () => {
 				},
 				headers: event.request.headers,
 			});
-
-			expect(mockInsert).toHaveBeenCalled();
-			expect(mockValues).toHaveBeenCalledWith({
-				userId: "new-user-id",
-			});
-			expect(mockOnConflictDoNothing).toHaveBeenCalled();
 		});
 
 		it("should return 400 on APIError from auth service", async () => {
@@ -147,7 +120,6 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toBe("Email already in use");
-			expect(mockInsert).not.toHaveBeenCalled();
 		});
 
 		it("should return 500 on unexpected error", async () => {
@@ -165,7 +137,6 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(500);
 			expect(result.data?.message).toBe("Unexpected error");
-			expect(mockInsert).not.toHaveBeenCalled();
 		});
 		it("should return 400 with a generic message on APIError without message", async () => {
 			const validData = {
@@ -184,25 +155,6 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toBe("Registration failed");
-			expect(mockInsert).not.toHaveBeenCalled();
-		});
-
-		it("should handle auth API returning successfully but missing user data", async () => {
-			const validData = {
-				email: "test-nouser@example.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "en",
-			};
-			const event = createEvent(validData);
-
-			vi.mocked(auth.api.signUpEmail).mockResolvedValueOnce({
-				user: null,
-			} as any);
-
-			await expect(actions.default(event)).rejects.toMatchObject({ status: 302, location: "/verify?pending=1" });
-
-			expect(mockInsert).not.toHaveBeenCalled();
 		});
 
 		it("should handle empty form data correctly", async () => {

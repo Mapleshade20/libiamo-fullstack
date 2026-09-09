@@ -4,8 +4,6 @@ import { z } from "zod";
 import { base } from "$app/paths";
 import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
-import { db } from "$lib/server/db";
-import { userLearningProfile } from "$lib/server/db/schema";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -31,7 +29,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			const res = await auth.api.signUpEmail({
+			await auth.api.signUpEmail({
 				body: {
 					email: result.data.email,
 					password: result.data.password,
@@ -40,10 +38,6 @@ export const actions: Actions = {
 				},
 				headers: event.request.headers,
 			});
-
-			if (res.user) {
-				await db.insert(userLearningProfile).values({ userId: res.user.id }).onConflictDoNothing();
-			}
 		} catch (error) {
 			if (error instanceof APIError) {
 				return fail(400, { message: error.message || "Registration failed", values: raw });

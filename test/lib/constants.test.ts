@@ -7,7 +7,6 @@ import {
 	isLanguageCode,
 	isSelfAssignedLevel,
 	normalizeSelfAssignedLevels,
-	withSelfAssignedLevel,
 } from "$lib/constants";
 
 describe("getHtmlLanguageTag", () => {
@@ -57,10 +56,7 @@ describe("self-assigned levels by language", () => {
 		expect(normalizeSelfAssignedLevels(undefined)).toEqual(DEFAULT_SELF_ASSIGNED_LEVELS);
 	});
 
-	it("reads and updates one language without changing the others", () => {
-		const levels = { en: 1, es: 2, fr: 3, ja: 1 };
-
-		expect(getSelfAssignedLevel(levels, "fr")).toBe(3);
-		expect(withSelfAssignedLevel(levels, "es", 3)).toEqual({ en: 1, es: 3, fr: 3, ja: 1 });
+	it("reads the level of a single language", () => {
+		expect(getSelfAssignedLevel({ en: 1, es: 2, fr: 3, ja: 1 }, "fr")).toBe(3);
 	});
 });

@@ -134,6 +134,13 @@
       "when": 1788581629844,
       "tag": "0018_consolidate_user_learning_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788945986088,
+      "tag": "0019_consolidate_learning_profile_into_user",
+      "breakpoints": true
     }
   ]
 }
