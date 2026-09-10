@@ -1,7 +1,11 @@
 <script lang="ts">
+import KeyRound from "@lucide/svelte/icons/key-round";
+import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
+import type { SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
+import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -23,13 +27,22 @@ let apiBaseUrlValue = $derived(form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? ""
 let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
+let accountPending = $state<SocialProviderId | null>(null);
+let accountFormResult = $derived((form as { accountResult?: "connected" | "disconnected" | "error" } | null | undefined)?.accountResult);
+let accountResult = $derived(accountFormResult ?? (data.accountError ? "error" : data.accountResult));
 
 const actionNotification = $derived(
-	showActionNotification && form?.success
-		? { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") }
-		: showActionNotification && form?.message
-			? { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message }
-			: null,
+	accountResult === "connected"
+		? { variant: "success" as const, title: t(lang, "profile.methodConnectedTitle"), message: t(lang, "profile.methodConnectedMessage") }
+		: accountResult === "disconnected"
+			? { variant: "success" as const, title: t(lang, "profile.methodDisconnectedTitle"), message: t(lang, "profile.methodDisconnectedMessage") }
+			: accountResult === "error"
+				? { variant: "error" as const, title: t(lang, "profile.methodErrorTitle"), message: t(lang, "profile.methodErrorMessage") }
+				: showActionNotification && form?.success
+					? { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") }
+					: showActionNotification && form?.message
+						? { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message }
+						: null,
 );
 
 let trialPercent = $derived(
@@ -49,6 +62,17 @@ function enhanceSilently() {
 	showActionNotification = false;
 	return async ({ update }: { update: (options?: { reset?: boolean }) => Promise<void> }) => {
 		await update({ reset: false });
+	};
+}
+
+function enhanceLoginMethod(provider: SocialProviderId) {
+	return () => {
+		accountPending = provider;
+		showActionNotification = true;
+		return async ({ update }: { update: (options?: { reset?: boolean }) => Promise<void> }) => {
+			await update({ reset: false });
+			accountPending = null;
+		};
 	};
 }
 </script>
@@ -154,6 +178,65 @@ function enhanceSilently() {
 					{/if}
 				</fieldset>
 			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header class="space-y-1">
+			<Card.Title>{t(lang, "profile.loginMethods")}</Card.Title>
+			<Card.Description>{t(lang, "profile.loginMethodsHelp")}</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			<div class="flex min-h-14 items-center gap-3 rounded-xl border border-border/80 bg-background/70 px-4 py-2.5">
+				<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
+					<KeyRound class="size-4" />
+				</span>
+				<span class="min-w-0 flex-1 font-medium">{t(lang, "profile.passwordMethod")}</span>
+				<span class="text-xs font-medium text-muted-foreground">
+					{data.credentialConnected ? t(lang, "profile.connected") : t(lang, "profile.unavailable")}
+				</span>
+			</div>
+
+			{#each data.socialLoginMethods as method}
+				<div class="flex min-h-14 items-center gap-3 rounded-xl border border-border/80 bg-background/70 px-4 py-2.5">
+					<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
+						<SocialProviderIcon provider={method.id} />
+					</span>
+					<span class="min-w-0 flex-1 font-medium">{method.label}</span>
+
+					{#if method.connected}
+						<form method="POST" action="?/unlinkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
+							<input type="hidden" name="provider" value={method.id}>
+							<Button
+								type="submit"
+								variant="outline"
+								class="min-h-11 min-w-24"
+								disabled={accountPending !== null || data.loginMethodCount <= 1}
+								title={data.loginMethodCount <= 1 ? t(lang, "profile.lastMethodHelp") : undefined}
+							>
+								{#if accountPending === method.id}
+									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+								{/if}
+								{t(lang, "profile.disconnect")}
+							</Button>
+						</form>
+					{:else if method.configured}
+						<form method="POST" action="?/linkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
+							<input type="hidden" name="provider" value={method.id}>
+							<Button type="submit" variant="outline" class="min-h-11 min-w-24" disabled={accountPending !== null}>
+								{#if accountPending === method.id}
+									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+								{/if}
+								{t(lang, "profile.connect")}
+							</Button>
+						</form>
+					{:else}
+						<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.unavailable")}</span>
+					{/if}
+				</div>
+			{/each}
+
+			<p class="text-xs text-muted-foreground">{t(lang, "profile.lastMethodHelp")}</p>
 		</Card.Content>
 	</Card.Root>
 

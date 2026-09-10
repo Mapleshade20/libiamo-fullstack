@@ -1,12 +1,16 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { APIError } from "better-auth/api";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
+import { env } from "$env/dynamic/private";
+import { isSocialProviderId, SOCIAL_PROVIDERS } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
+import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
@@ -17,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
-	const [row, learner] = await Promise.all([
+	const [row, learner, accounts] = await Promise.all([
 		db.query.userApiKey.findFirst({
 			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { userId: true, baseUrl: true, model: true },
@@ -26,9 +30,13 @@ export const load: PageServerLoad = async (event) => {
 			where: (t, { eq }) => eq(t.id, user.id),
 			columns: { levelSelfAssign: true },
 		}),
+		auth.api.listUserAccounts({ headers: event.request.headers }),
 	]);
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
+	const configuredProviders = configuredSocialProviderIds(env);
+	const connectedProviders = new Set(accounts.map(({ providerId }) => providerId));
+	const linkedProvider = event.url.searchParams.get("linked");
 
 	return {
 		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
@@ -37,10 +45,69 @@ export const load: PageServerLoad = async (event) => {
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
+		credentialConnected: connectedProviders.has("credential"),
+		loginMethodCount: connectedProviders.size,
+		socialLoginMethods: SOCIAL_PROVIDERS.map((provider) => ({
+			...provider,
+			configured: configuredProviders.includes(provider.id),
+			connected: connectedProviders.has(provider.id),
+		})),
+		accountResult: isSocialProviderId(linkedProvider) && connectedProviders.has(linkedProvider) ? "connected" : null,
+		accountError: event.url.searchParams.has("error"),
 	};
 };
 
 export const actions: Actions = {
+	linkSocialAccount: async (event) => {
+		requireUser(event);
+		const formData = await event.request.formData();
+		const provider = formData.get("provider")?.toString();
+
+		if (!isSocialProviderId(provider) || !configuredSocialProviderIds(env).includes(provider)) {
+			return fail(400, { accountResult: "error" });
+		}
+
+		let authorizationURL: string | undefined;
+		try {
+			const result = await auth.api.linkSocialAccount({
+				body: {
+					provider,
+					callbackURL: `${base}/profile?linked=${provider}`,
+					errorCallbackURL: `${base}/profile`,
+					disableRedirect: true,
+				},
+				headers: event.request.headers,
+			});
+			authorizationURL = result.url;
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { accountResult: "error" });
+			return fail(500, { accountResult: "error" });
+		}
+
+		if (!authorizationURL) return fail(500, { accountResult: "error" });
+		return redirect(303, authorizationURL);
+	},
+
+	unlinkSocialAccount: async (event) => {
+		requireUser(event);
+		const formData = await event.request.formData();
+		const provider = formData.get("provider")?.toString();
+
+		if (!isSocialProviderId(provider)) return fail(400, { accountResult: "error" });
+
+		try {
+			await auth.api.unlinkAccount({
+				body: { providerId: provider },
+				headers: event.request.headers,
+			});
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { accountResult: "error" });
+			return fail(500, { accountResult: "error" });
+		}
+
+		return { accountResult: "disconnected" };
+	},
+
 	updateProfile: async (event) => {
 		const user = requireUser(event);
 

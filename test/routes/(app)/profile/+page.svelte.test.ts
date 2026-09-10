@@ -22,6 +22,14 @@ const data = {
 	apiBaseUrl: "",
 	apiModel: "",
 	levelSelfAssign: 2 as const,
+	credentialConnected: true,
+	loginMethodCount: 2,
+	socialLoginMethods: [
+		{ id: "google" as const, label: "Google" as const, configured: true, connected: true },
+		{ id: "github" as const, label: "GitHub" as const, configured: true, connected: false },
+	],
+	accountResult: null,
+	accountError: false,
 };
 
 describe("Profile page", () => {
@@ -56,6 +64,32 @@ describe("Profile page", () => {
 		expect(body).toContain("Saisissez votre clé API");
 		expect(body).toContain("Enregistrer la clé API");
 		expect(body).toContain("Déconnexion");
+	});
+
+	it("renders connected and available social login methods", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
+
+		expect(body).toContain("Méthodes de connexion");
+		expect(body).toContain('action="?/unlinkSocialAccount"');
+		expect(body).toContain('action="?/linkSocialAccount"');
+		expect(body).toContain("Dissocier");
+		expect(body).toContain("Associer");
+	});
+
+	it("disables disconnecting the last login method", () => {
+		const lastMethodData = {
+			...data,
+			credentialConnected: false,
+			loginMethodCount: 1,
+			socialLoginMethods: [
+				{ id: "google" as const, label: "Google" as const, configured: true, connected: true },
+				{ id: "github" as const, label: "GitHub" as const, configured: true, connected: false },
+			],
+		};
+		const { body } = render(ProfilePage, { props: { data: lastMethodData, form: null } });
+
+		expect(body).toMatch(/action="\?\/unlinkSocialAccount"[\s\S]*?<button[^>]*disabled/);
+		expect(body).toContain("Conservez au moins une méthode de connexion associée.");
 	});
 
 	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {

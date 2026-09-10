@@ -39,7 +39,19 @@ vi.mock("$lib/server/auth/auth", () => ({
 		api: {
 			updateUser: vi.fn(),
 			signOut: vi.fn(),
+			listUserAccounts: vi.fn(),
+			linkSocialAccount: vi.fn(),
+			unlinkAccount: vi.fn(),
 		},
+	},
+}));
+
+vi.mock("$env/dynamic/private", () => ({
+	env: {
+		GOOGLE_CLIENT_ID: "google-id",
+		GOOGLE_CLIENT_SECRET: "google-secret",
+		GITHUB_CLIENT_ID: "github-id",
+		GITHUB_CLIENT_SECRET: "github-secret",
 	},
 }));
 
@@ -83,12 +95,22 @@ describe("Profile +page.server", () => {
 		vi.clearAllMocks();
 		mockFindFirst.mockResolvedValue(undefined);
 		mockFindUser.mockResolvedValue(undefined);
+		vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+			{ id: "credential-account", providerId: "credential", accountId: "test-user", userId: "test-user" },
+		] as never);
 	});
+
+	const createLoadEvent = (activeLanguage: string, query = "") =>
+		({
+			locals: { user: { id: "test-user", activeLanguage } },
+			request: { headers: new Headers() },
+			url: new URL(`https://example.com/profile${query}`),
+		}) as any;
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
 		it("returns native languages and hasApiKey", async () => {
-			const event = { locals: { user: { id: "test-user", activeLanguage: "fr" } } } as any;
+			const event = createLoadEvent("fr");
 			const result = (await load(event)) as {
 				serverNativeLanguages: any[];
 				hasApiKey: boolean;
@@ -110,7 +132,7 @@ describe("Profile +page.server", () => {
 		it("returns the active language's saved self-assigned level", async () => {
 			mockFindUser.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 3 } });
 
-			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "ja" } } } as any)) as {
+			const result = (await load(createLoadEvent("ja"))) as {
 				levelSelfAssign: number;
 			};
 
@@ -125,7 +147,7 @@ describe("Profile +page.server", () => {
 				model: "Qwen/Qwen3-8B",
 			});
 
-			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "en" } } } as any)) as {
+			const result = (await load(createLoadEvent("en"))) as {
 				hasApiKey: boolean;
 				apiBaseUrl: string;
 				apiModel: string;
@@ -139,10 +161,68 @@ describe("Profile +page.server", () => {
 			expect(result.apiKey).toBeUndefined();
 			expect(result.encryptedKey).toBeUndefined();
 		});
+
+		it("returns connected and available login methods", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+				{ id: "credential-account", providerId: "credential" },
+				{ id: "github-account", providerId: "github" },
+			] as never);
+
+			const result = (await load(createLoadEvent("fr", "?linked=github"))) as any;
+
+			expect(result.credentialConnected).toBe(true);
+			expect(result.loginMethodCount).toBe(2);
+			expect(result.socialLoginMethods).toEqual([
+				{ id: "google", label: "Google", configured: true, connected: false },
+				{ id: "github", label: "GitHub", configured: true, connected: true },
+			]);
+			expect(result.accountResult).toBe("connected");
+			expect(auth.api.listUserAccounts).toHaveBeenCalledWith({ headers: expect.any(Headers) });
+		});
 	});
 
 	// ── Actions ────────────────────────────────────────────────────────
 	describe("Actions", () => {
+		it("starts the official provider-linking flow", async () => {
+			const event = createActionEvent({ provider: "google" });
+			vi.mocked(auth.api.linkSocialAccount).mockResolvedValue({
+				url: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+				redirect: false,
+			} as never);
+
+			await expect(actions.linkSocialAccount(event)).rejects.toMatchObject({
+				status: 303,
+				location: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+			});
+			expect(auth.api.linkSocialAccount).toHaveBeenCalledWith({
+				body: {
+					provider: "google",
+					callbackURL: "/profile?linked=google",
+					errorCallbackURL: "/profile",
+					disableRedirect: true,
+				},
+				headers: event.request.headers,
+			});
+		});
+
+		it("disconnects a provider through Better Auth", async () => {
+			const event = createActionEvent({ provider: "github" });
+
+			await expect(actions.unlinkSocialAccount(event)).resolves.toEqual({ accountResult: "disconnected" });
+			expect(auth.api.unlinkAccount).toHaveBeenCalledWith({
+				body: { providerId: "github" },
+				headers: event.request.headers,
+			});
+		});
+
+		it("rejects unsupported provider account actions", async () => {
+			const result = (await actions.linkSocialAccount(createActionEvent({ provider: "microsoft" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
+			expect(auth.api.linkSocialAccount).not.toHaveBeenCalled();
+		});
+
 		it("updateProfile returns 400 for invalid payload", async () => {
 			const result = (await actions.updateProfile(
 				createActionEvent({
