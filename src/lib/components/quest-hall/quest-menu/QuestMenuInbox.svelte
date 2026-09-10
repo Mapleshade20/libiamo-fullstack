@@ -1,5 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
+import { hoverMarquee } from "$lib/client/hover-marquee";
 import type { UnreadSubscriptionStatus } from "$lib/client/quest-hall/unread-subscription";
 import { type LanguageCode, UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
@@ -50,6 +51,7 @@ function close() {
 						pointerType = "";
 					}}
 					onkeydown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); expanded = true; } }}
+					use:hoverMarquee
 				>
 					<span class="icon"><NotificationIcon ui={item.ui} /></span>
 					<span class="copy">
@@ -59,7 +61,7 @@ function close() {
 								<span>{formatRelativeAge(item.latestAgeSeconds, lang)}</span>
 							{/if}
 						</span>
-						<span class="title">{item.title}</span>
+						<span class="title" data-marquee><span class="title-text">{item.title}</span></span>
 						<span class="reply">{t(lang, "hall.unreadReply")}{item.unreadCount > 1 ? ` × ${item.unreadCount}` : ""}</span>
 					</span>
 				</a>
@@ -165,8 +167,18 @@ function close() {
 	font-size: 0.8rem;
 	font-weight: 550;
 	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+.title-text {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* While the title scrolls, the full text is on its way into view — no ellipsis to trim it. */
+.title:global([data-marquee-active]) .title-text {
+	width: max-content;
+	overflow: visible;
+	text-overflow: clip;
 }
 .reply {
 	font-size: 0.68rem;
