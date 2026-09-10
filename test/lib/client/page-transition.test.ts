@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePageTransition, setNavbarTransitionIntent } from "$lib/client/page-transition";
+import { isQuestMenuPath, resolvePageTransition, setNavbarTransitionIntent } from "$lib/client/page-transition";
 
 const now = new Date(2025, 5, 11, 12, 0, 0).getTime();
 
@@ -8,6 +8,28 @@ function url(path: string) {
 }
 
 describe("page transition intent", () => {
+	it.each([
+		["/?view=catalog", "/translate/17"],
+		["/task/123", "/?view=catalog&section=weekly"],
+		["/", "/task/123"],
+		["/translate/17", "/"],
+	])("leaves %s → %s to the persistent book animator", (from, to) => {
+		setNavbarTransitionIntent(url(to), "backward", now);
+		expect(resolvePageTransition(url(from), url(to), now)).toBe("none");
+	});
+
+	it.each([
+		"/task/123/session",
+		"/translate/17/attempt",
+		"/translate/17/feedback",
+		"/task",
+		"/task/0",
+		"/task/abc",
+		"/review",
+	])("does not classify workflow or unrelated route %s as a book view", (path) => {
+		expect(isQuestMenuPath(path)).toBe(false);
+		expect(resolvePageTransition(url("/translate/17"), url(path), now)).toBe("fade");
+	});
 	it.each([
 		["forward", "navbar-forward"],
 		["backward", "navbar-backward"],

@@ -1,6 +1,7 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
-import HomePage from "$routes/(app)/+page.svelte";
+import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
+import { hallData } from "../../fixtures/quest-hall";
 
 const data = {
 	activeLanguage: "en",
@@ -33,7 +34,20 @@ const data = {
 
 describe("production Quest Hall page", () => {
 	it("mounts translation browsing and the wine emblem in the Quest Menu", () => {
-		const { body } = render(HomePage, { props: { data: data as any } });
+		const { body } = render(QuestMenuRoute, {
+			props: {
+				route: {
+					hall: hallData({
+						greeting: data.greeting,
+						dailyTasks: [...data.dailyTasks],
+						weeklyTasks: [],
+						translationTasks: [...data.translationTasks],
+					}),
+					hallLocation: data.hallLocation,
+					initialPreparation: null,
+				},
+			},
+		});
 
 		expect(body).toContain("Open menu");
 		expect(body).toContain("Daily quest");

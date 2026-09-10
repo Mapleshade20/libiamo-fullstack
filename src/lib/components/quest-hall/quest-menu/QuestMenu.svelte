@@ -1,10 +1,9 @@
 <script lang="ts">
 import { Portal } from "bits-ui";
 import { flushSync, onMount, setContext, tick, untrack } from "svelte";
-import { afterNavigate, invalidate, pushState, replaceState } from "$app/navigation";
+import { afterNavigate, disableScrollHandling, goto, invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
-import { createQuestHallPreparationResource, type QuestHallPreparationResourceState } from "$lib/client/quest-hall/preparation-resource";
-import { restoreQuestHallReturnContext, saveQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
+import { isQuestMenuPath } from "$lib/client/page-transition";
 import { createUnreadSubscription, type UnreadSubscriptionState } from "$lib/client/quest-hall/unread-subscription";
 import Typewriter from "$lib/components/Typewriter.svelte";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
@@ -31,8 +30,8 @@ import {
 	QUEST_HALL_DEPENDENCY,
 	reduceHallLocation,
 } from "$lib/quest-hall/navigation";
+import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
 import type { HallData } from "$lib/server/quest-hall";
-import type { QuestHallPreparation } from "$lib/server/quest-hall-preparation";
 import {
 	createQuestMenuAnimator,
 	prefersReducedQuestMenuMotion,
@@ -52,11 +51,21 @@ interface Props {
 	data: HallData;
 	initialLocation: HallLocation;
 	initialPreparation?: QuestHallPreparation | null;
-	accountScope: string;
 	lang: LanguageCode;
+	form?: { error?: string } | null;
 }
 
-let { data, initialLocation, initialPreparation = null, accountScope, lang }: Props = $props();
+let { data, initialLocation, initialPreparation = null, lang, form = null }: Props = $props();
+// Loaders randomize this copy; route data refreshes must not restart the typewriter.
+const subtitle = untrack(() => data.subtitle);
+// Keep the outgoing sheet populated until the reverse timeline releases it.
+let displayedPreparation = $state(untrack(() => initialPreparation));
+let preparationOrigin = $state<HallLocation | null>(null);
+let selectedElement: HTMLElement | undefined;
+
+$effect(() => {
+	if (initialPreparation) displayedPreparation = initialPreparation;
+});
 const translationYears = () => [...new Set(data.translationTasks.map((task) => task.createdMonth.slice(0, 4)))].sort();
 setContext("quest-menu-translation-years", translationYears);
 function getInitialTranslationMonth(): string {
@@ -76,25 +85,13 @@ let turning = $state(false);
 let turnPreview = $state<QuestMenuTurnPreview | null>(null);
 let transitionFrom = $state<QuestMenuView | null>(null);
 let transitionTo = $state<QuestMenuView | null>(null);
-let preparationOriginView = $state<"home" | "catalog">("catalog");
-// svelte-ignore state_referenced_locally
-let preparationState = $state<QuestHallPreparationResourceState>(
-	initialLocation.view === "prepare" && initialPreparation
-		? { status: "ready", key: initialPreparation.key, preparation: initialPreparation, error: null }
-		: initialLocation.view === "prepare" && initialLocation.task
-			? { status: "error", key: initialLocation.task, preparation: null, error: "Preparation is unavailable" }
-			: { status: "idle", key: null, preparation: null, error: null },
-);
 let localHistoryDepth = 0;
 let resizeFrame = 0;
 let paperTurnSequence = 0;
 let viewTransitionSequence = 0;
 let animator: QuestMenuAnimator | null = null;
 let updateAmbientMotion = () => {};
-let preparationResource: ReturnType<typeof createQuestHallPreparationResource> | null = null;
 let unreadSubscription: ReturnType<typeof createUnreadSubscription> | null = null;
-let editionRefresh: Promise<void> | null = null;
-let observedEditionDate = untrack(() => data.editionDate);
 
 let homeStage = $state<HTMLElement | null>(null);
 let catalogStage = $state<HTMLElement | null>(null);
@@ -180,16 +177,19 @@ function motionElements(): QuestMenuMotionElements {
 	};
 }
 
-async function applyTransition(event: HallNavigationEvent, selectedElement?: HTMLElement, transitionCatalog = catalog): Promise<void> {
+async function applyTransition(event: HallNavigationEvent): Promise<void> {
 	if (bookReady) finishBookReveal();
-	const transition = reduceHallLocation(location, event, transitionCatalog);
+	const transition = reduceHallLocation(location, event, catalog);
 	if (transition.historyIntent === "none") return;
+	if (initialLocation.view === "prepare") {
+		await goto(catalogUrl(transition.location));
+		return;
+	}
 	const previousView = visibleView;
 	const nextView = transition.location.view;
 	const changesView = previousView !== nextView;
 	const sequence = changesView ? ++viewTransitionSequence : viewTransitionSequence;
 	if (changesView) {
-		if (previousView === "prepare" && nextView !== "prepare") preparationResource?.cancel();
 		paperTurnSequence += 1;
 		turnPreview = null;
 		turning = false;
@@ -203,10 +203,9 @@ async function applyTransition(event: HallNavigationEvent, selectedElement?: HTM
 			if (sequence !== viewTransitionSequence) return;
 			transitionFrom = null;
 			transitionTo = null;
-			if (previousView === "prepare" && nextView !== "prepare") preparationResource?.cancel(true);
 			focusView(nextView);
 		};
-		if (animator) animator.transitionView(previousView, nextView, finish, selectedElement);
+		if (animator) animator.transitionView(previousView, nextView, finish);
 		else finish();
 		// Resize/reflow may settle the book timeline without invoking its completion.
 		// Scroll belongs to navigation, not to that cancellable visual timeline.
@@ -215,10 +214,10 @@ async function applyTransition(event: HallNavigationEvent, selectedElement?: HTM
 
 	if (transition.historyIntent === "back" && localHistoryDepth > 0) {
 		localHistoryDepth -= 1;
-		replaceState(hallLocationUrl(location, base), {});
+		replaceState(catalogUrl(location), {});
 		return;
 	}
-	const url = hallLocationUrl(location, base);
+	const url = catalogUrl(location);
 	if (transition.historyIntent === "push") {
 		localHistoryDepth += 1;
 		pushState(url, {});
@@ -227,54 +226,40 @@ async function applyTransition(event: HallNavigationEvent, selectedElement?: HTM
 	}
 }
 
-function isPlainPrimaryActivation(event: MouseEvent): boolean {
-	const anchor = event.currentTarget as HTMLAnchorElement;
-	return (
-		!event.defaultPrevented &&
-		event.button === 0 &&
-		!event.metaKey &&
-		!event.ctrlKey &&
-		!event.shiftKey &&
-		!event.altKey &&
-		(!anchor.target || anchor.target === "_self") &&
-		!anchor.hasAttribute("download")
-	);
-}
-
-function selectItem(item: QuestMenuItem, event: MouseEvent): void {
-	if (!isPlainPrimaryActivation(event) || viewTransitioning) return;
-	event.preventDefault();
-	let transitionCatalog = catalog;
-	if (item.kind === "translation" && item.task.createdMonth !== translationMonth) {
-		translationMonth = item.task.createdMonth;
-		transitionCatalog = adaptHallDataToQuestMenu(data, translationMonth, "year");
-	}
-	preparationOriginView = visibleView === "home" ? "home" : "catalog";
-	void preparationResource?.load(item.key, data.editionDate);
-	void applyTransition({ type: "select-item", task: item.key }, event.currentTarget as HTMLElement, transitionCatalog);
+function catalogUrl(value: HallLocation): string {
+	const url = hallLocationUrl(value, base);
+	return value.view === "catalog" && value.section === "translation"
+		? `${url}${url.includes("?") ? "&" : "?"}year=${translationMonth.slice(0, 4)}`
+		: url;
 }
 
 function returnFromPreparation(): void {
-	void applyTransition({ type: "return-from-prepare", destination: preparationOriginView });
+	void goto(catalogUrl(preparationOrigin ?? { ...location, view: "catalog", task: null }), { noScroll: true, keepFocus: true });
 }
 
-function retryPreparation(): void {
-	if (location.task) void preparationResource?.load(location.task, data.editionDate);
+function rememberSelection(_item: QuestMenuItem, event: MouseEvent): void {
+	if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.defaultPrevented) return;
+	selectedElement = event.currentTarget as HTMLElement;
 }
 
 function sameLocation(left: HallLocation, right: HallLocation): boolean {
 	return left.view === right.view && left.section === right.section && left.leaf === right.leaf && left.task === right.task;
 }
 
-async function synchronizeServerLocation(nextLocation: HallLocation, nextPreparation: QuestHallPreparation | null): Promise<void> {
+async function synchronizeServerLocation(nextLocation: HallLocation): Promise<void> {
+	if (bookReady) finishBookReveal();
 	const previousView = visibleView;
+	const nextView = nextLocation.view;
+	const source = selectedElement;
+	selectedElement = undefined;
+	if (nextView === "prepare" && previousView !== "prepare") preparationOrigin = { ...location };
 	localHistoryDepth = 0;
-	viewTransitionSequence += 1;
+	const sequence = ++viewTransitionSequence;
 	paperTurnSequence += 1;
 	turnPreview = null;
 	turning = false;
-	transitionFrom = null;
-	transitionTo = null;
+	transitionFrom = previousView !== nextView ? previousView : null;
+	transitionTo = previousView !== nextView ? nextView : null;
 
 	if (nextLocation.section === "translation") {
 		const taskId = getQuestMenuItemId(nextLocation.task);
@@ -282,48 +267,21 @@ async function synchronizeServerLocation(nextLocation: HallLocation, nextPrepara
 	}
 	location = { ...nextLocation };
 
-	if (nextLocation.view === "prepare" && nextLocation.task) {
-		if (previousView !== "prepare") preparationOriginView = previousView === "home" ? "home" : "catalog";
-		if (nextPreparation?.key === nextLocation.task) {
-			preparationResource?.cancel();
-			preparationState = { status: "ready", key: nextLocation.task, preparation: nextPreparation, error: null };
-		} else {
-			void preparationResource?.load(nextLocation.task, data.editionDate);
-		}
-	} else {
-		preparationResource?.cancel(true);
-	}
-
 	await tick();
-	animator?.settle(nextLocation.view);
-	focusView(nextLocation.view);
-}
-
-function refreshExpiredEdition(): void {
-	if (editionRefresh) return;
-	editionRefresh = invalidate(QUEST_HALL_DEPENDENCY)
-		.catch(() => undefined)
-		.finally(() => {
-			editionRefresh = null;
-		});
-}
-
-function saveWorkflowReturnContext(): void {
-	if (!location.task) return;
-	const sectionKeys = new Set(catalog.sections[location.section].map((item) => item.key));
-	saveQuestHallReturnContext({
-		accountScope,
-		activeLanguage: data.activeLanguage,
-		edition: data.editionDate,
-		origin: preparationOriginView,
-		section: location.section,
-		spread: location.leaf,
-		narrowItemKey: narrowItemKey && sectionKeys.has(narrowItemKey) ? narrowItemKey : null,
-		selectedKey: location.task,
-		translationMonth,
-		scrollOffset: window.scrollY,
-		focusTarget: "preparation",
-	});
+	if (sequence !== viewTransitionSequence) return;
+	const finish = () => {
+		if (sequence !== viewTransitionSequence) return;
+		transitionFrom = null;
+		transitionTo = null;
+		if (nextView !== "prepare") displayedPreparation = null;
+		focusView(nextView);
+	};
+	if (animator && previousView !== nextView) animator.transitionView(previousView, nextView, finish, source);
+	else {
+		animator?.settle(nextView);
+		finish();
+	}
+	window.scrollTo({ top: 0, behavior: prefersReducedQuestMenuMotion() ? "instant" : "smooth" });
 }
 
 function focusView(view: QuestMenuView): void {
@@ -340,16 +298,12 @@ function focusView(view: QuestMenuView): void {
 	});
 }
 
-afterNavigate(() => {
+afterNavigate((navigation) => {
+	if (mounted && navigation.from && isQuestMenuPath(navigation.from.url.pathname) && navigation.to && isQuestMenuPath(navigation.to.url.pathname)) {
+		disableScrollHandling();
+	}
 	if (!mounted || sameLocation(initialLocation, location)) return;
-	void synchronizeServerLocation(initialLocation, initialPreparation);
-});
-
-$effect(() => {
-	const nextEditionDate = data.editionDate;
-	if (!mounted || nextEditionDate === observedEditionDate) return;
-	observedEditionDate = nextEditionDate;
-	void synchronizeServerLocation(initialLocation, initialPreparation);
+	void synchronizeServerLocation(initialLocation);
 });
 
 function openCatalog(section: QuestMenuSection = location.section): void {
@@ -447,6 +401,7 @@ function changeTranslationMonth(direction: -1 | 1): void {
 			leaf: getQuestMenuSpread(nextCatalog, "translation", location.leaf).leaf,
 		};
 	}
+	replaceState(catalogUrl(location), {});
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -490,35 +445,6 @@ function finishBookReveal(): void {
 
 onMount(() => {
 	mounted = true;
-	const returnContext = restoreQuestHallReturnContext({
-		accountScope,
-		activeLanguage: data.activeLanguage,
-		edition: data.editionDate,
-		translationMonths: new Set([data.translationMonth, ...data.translationTasks.map((task) => task.createdMonth)]),
-		itemKeys: new Set([
-			...QUEST_MENU_SECTIONS.flatMap((section) => catalog.sections[section].map((item) => item.key)),
-			...data.translationTasks.map((task) => `translation-${task.id}`),
-		]),
-		translationItemMonths: new Map(data.translationTasks.map((task) => [`translation-${task.id}`, task.createdMonth])),
-		spreadCounts: Object.fromEntries(QUEST_MENU_SECTIONS.map((section) => [section, catalog.spreads[section].length])) as Record<
-			QuestMenuSection,
-			number
-		>,
-	});
-	const restoringWorkflow = returnContext !== null && initialLocation.view === "prepare" && initialLocation.task === returnContext.selectedKey;
-	if (restoringWorkflow) {
-		preparationOriginView = returnContext.origin === "home" ? "home" : "catalog";
-		translationMonth = returnContext.translationMonth;
-		narrowItemKey = returnContext.narrowItemKey;
-	}
-	preparationResource = createQuestHallPreparationResource({
-		endpoint: `${base}/api/quest-hall/preparation`,
-		onchange: (state) => {
-			preparationState = state;
-			if (state.status === "error") void tick().then(() => preparationPanel?.focus());
-		},
-		onEditionExpired: refreshExpiredEdition,
-	});
 	unreadSubscription = createUnreadSubscription({
 		endpoint: `${base}/api/unread`,
 		initialTotal: unreadState.total,
@@ -535,9 +461,6 @@ onMount(() => {
 			void invalidate(QUEST_HALL_DEPENDENCY);
 		},
 	});
-	if (initialLocation.view === "prepare" && initialLocation.task && !initialPreparation) {
-		void preparationResource.load(initialLocation.task, data.editionDate);
-	}
 	animator = createQuestMenuAnimator(motionElements);
 	const media = matchMedia(QUEST_MENU_NARROW_MEDIA_QUERY);
 	const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -565,6 +488,7 @@ onMount(() => {
 			viewTransitionSequence += 1;
 			transitionFrom = null;
 			transitionTo = null;
+			if (visibleView !== "prepare") displayedPreparation = null;
 			const fitted = animator?.settle(visibleView);
 			// A hidden/zero-size book is not a successful fit. Narrow home/catalog
 			// already have a usable 2D surface and do not need a loading handoff.
@@ -582,18 +506,15 @@ onMount(() => {
 		if (element) initialLayoutObserver.observe(element);
 	}
 	const handlePopstate = async () => {
+		// Cross-route history is handled after server data has arrived.
+		if (initialLocation.view === "prepare" || window.location.pathname !== `${base}/`) return;
 		if (bookReady) finishBookReveal();
 		const previousView = visibleView;
+		const year = new URL(window.location.href).searchParams.get("year");
+		if (year && translationYears().includes(year)) translationMonth = `${year}-01`;
 		const nextLocation = parseHallLocation(window.location.href, catalog);
 		const nextView = nextLocation.view;
-		if (nextView === "prepare" && nextLocation.task) {
-			preparationOriginView = previousView === "home" ? "home" : "catalog";
-			if (preparationState.status !== "ready" || preparationState.key !== nextLocation.task) {
-				void preparationResource?.load(nextLocation.task, data.editionDate);
-			}
-		} else if (previousView === "prepare") {
-			preparationResource?.cancel();
-		}
+
 		const changesView = previousView !== nextView;
 		const sequence = changesView ? ++viewTransitionSequence : viewTransitionSequence;
 		if (changesView) {
@@ -610,7 +531,6 @@ onMount(() => {
 				if (sequence !== viewTransitionSequence) return;
 				transitionFrom = null;
 				transitionTo = null;
-				if (previousView === "prepare" && nextView !== "prepare") preparationResource?.cancel(true);
 				focusView(nextView);
 			};
 			if (animator) animator.transitionView(previousView, nextView, finish);
@@ -627,13 +547,6 @@ onMount(() => {
 	window.addEventListener("resize", updateLayout);
 	window.addEventListener("popstate", handlePopstate);
 	updateLayout();
-	void tick().then(() => {
-		if (!restoringWorkflow || !returnContext) return;
-		requestAnimationFrame(() => {
-			window.scrollTo({ top: returnContext.scrollOffset, behavior: "auto" });
-			if (returnContext.focusTarget === "preparation") preparationPanel?.focus({ preventScroll: true });
-		});
-	});
 	return () => {
 		cancelAnimationFrame(resizeFrame);
 		media.removeEventListener("change", updateLayout);
@@ -643,8 +556,6 @@ onMount(() => {
 		initialLayoutObserver.disconnect();
 		window.removeEventListener("resize", updateLayout);
 		window.removeEventListener("popstate", handlePopstate);
-		preparationResource?.cancel();
-		preparationResource = null;
 		unreadSubscription?.destroy();
 		unreadSubscription = null;
 		animator?.destroy();
@@ -660,7 +571,7 @@ onMount(() => {
 	<header class="hall-heading">
 		<div class="heading-copy">
 			<h1>{data.greeting}</h1>
-			<p><Typewriter text={data.subtitle} /></p>
+			<p><Typewriter text={subtitle} /></p>
 		</div>
 		<span class="hall-wine" aria-hidden="true"><WineGlassIcon width={52} height={52} /></span>
 		{#if mounted}
@@ -681,7 +592,7 @@ onMount(() => {
 			bind:recommendationsElement
 			onopen={() => openCatalog("daily")}
 			onselect={switchSection}
-			onselectitem={selectItem}
+			onselectitem={rememberSelection}
 		/>
 
 		<QuestMenuCatalog
@@ -700,22 +611,21 @@ onMount(() => {
 			bind:stageElement={catalogStage}
 			onclose={closeCatalog}
 			onmonthchange={changeTranslationMonth}
-			onselectitem={selectItem}
+			onselectitem={rememberSelection}
 		/>
 
 		<QuestMenuPreparation
 			visible={preparationPresent}
 			interactive={visibleView === "prepare" && !viewTransitioning}
-			resource={preparationState}
-			returnView={preparationOriginView}
+			preparation={displayedPreparation}
+			returnView={preparationOrigin?.view === "home" ? "home" : "catalog"}
+			{form}
 			{lang}
 			bind:stageElement={preparationStage}
 			bind:bookSlot={preparationSlot}
 			bind:dockElement={preparationDock}
 			bind:panelElement={preparationPanel}
 			onback={returnFromPreparation}
-			onretry={retryPreparation}
-			onworkflowentry={saveWorkflowReturnContext}
 		/>
 	</div>
 
@@ -748,7 +658,7 @@ onMount(() => {
 		onturn={turn}
 		onmonthchange={changeTranslationMonth}
 		onselectsection={switchSection}
-		onselectitem={selectItem}
+		onselectitem={rememberSelection}
 	/>
 </div>
 

@@ -2,14 +2,16 @@
 import { tick } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/state";
-import { synchronizeQuestHallReturnAccount } from "$lib/client/quest-hall/return-context";
+import { isQuestMenuPath } from "$lib/client/page-transition";
 import { clearTaskEnterTransition, markTaskEnterAnimating, taskEnterTransition } from "$lib/client/task-transition";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
+import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
 import { isLanguageCode } from "$lib/constants";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
+let questMenuRoute = $derived(isQuestMenuPath(page.url.pathname) ? page.data.questMenu : null);
 let overlayStyle = $state("");
 let overlayOpacity = $state(0);
 let overlayVisible = $state(false);
@@ -19,7 +21,6 @@ let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 $effect(() => {
 	if (!browser) return;
-	synchronizeQuestHallReturnAccount(data.accountScope);
 	document.documentElement.lang = isLanguageCode(data.user.activeLanguage) ? data.user.activeLanguage : "en";
 });
 
@@ -145,7 +146,12 @@ $effect(() => {
 		<main class="h-screen w-full">{@render children()}</main>
 	{:else}
 		<div class="min-h-screen" style="view-transition-name: page-content">
-			<main class="mx-auto max-w-5xl px-4 py-8 pt-24">{@render children()}</main>
+			<main class="mx-auto max-w-5xl px-4 py-8 pt-24">
+				{#if questMenuRoute}
+					<QuestMenuRoute route={questMenuRoute} form={page.form} />
+				{/if}
+				{@render children()}
+			</main>
 		</div>
 	{/if}
 </div>

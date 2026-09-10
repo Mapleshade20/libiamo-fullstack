@@ -32,8 +32,6 @@ function close() {
 		class="notifications"
 		class:expanded
 		aria-label={t(lang, "hall.unreadTrigger")}
-		data-sveltekit-preload-data="off"
-		data-sveltekit-preload-code="off"
 		onpointerenter={(event) => { if (event.pointerType === "mouse") expanded = true; }}
 		onpointerleave={(event) => { if (event.pointerType === "mouse" && !container?.contains(document.activeElement)) close(); }}
 		onfocusout={(event) => { if (!container?.contains(event.relatedTarget as Node)) close(); }}

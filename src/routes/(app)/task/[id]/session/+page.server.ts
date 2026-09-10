@@ -27,7 +27,6 @@ import {
 	startSession,
 	submitMessage,
 } from "$lib/server/session";
-import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -157,9 +156,6 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
 		0,
 	);
-	if (existingSession && latestAssistantMessageId) {
-		await markAssistantMessagesSeen(existingSession.id, user.id, latestAssistantMessageId);
-	}
 
 	// Earliest outstanding agent work for this session (batches still composing or
 	// pacing out deliveries). The client keeps polling while work is due soon and
@@ -178,6 +174,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 
 	return {
 		task: taskData,
+		readReceipt: existingSession && latestAssistantMessageId ? { sessionId: existingSession.id, messageId: latestAssistantMessageId } : null,
 		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
 		taskId: taskIdStr,
 		maxTurns: resolveSessionMaxTurns(existingSession?.maxTurnsSnapshot, taskData.template.maxTurns),

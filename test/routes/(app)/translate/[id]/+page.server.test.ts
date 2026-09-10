@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { hallData } from "../../../../fixtures/quest-hall";
 
 const { mockGetTemplate, mockFindAttempt, mockAbandon, mockGetSourceSet, mockGetAttempt } = vi.hoisted(() => ({
 	mockGetTemplate: vi.fn(),
@@ -100,3 +101,6 @@ describe("translation detail page", () => {
 		expect(mockGetSourceSet).not.toHaveBeenCalled();
 	});
 });
+
+vi.mock("$lib/server/quest-hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
+vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: vi.fn(() => "UTC") }));

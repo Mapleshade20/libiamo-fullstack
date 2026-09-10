@@ -20,11 +20,10 @@ interface Props {
 	backHref?: string;
 	backLabel?: string;
 	onback?: (event: MouseEvent) => void;
-	mode?: "page" | "pane";
 	simulated?: boolean;
 }
 
-let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, mode = "page", simulated = false }: Props = $props();
+let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, simulated = false }: Props = $props();
 
 let objectives = $derived(task.objectives ?? []);
 let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
@@ -62,7 +61,7 @@ function difficultyLabel(level: number): string {
 }
 </script>
 
-<section class="task-preparation" class:is-pane={mode === "pane"} aria-labelledby="task-preparation-title">
+<section class="task-preparation" aria-labelledby="task-preparation-title">
 	{#if onback}
 		<button
 			type="button"
@@ -97,11 +96,8 @@ function difficultyLabel(level: number): string {
 				</Badge>
 				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
 			</div>
-			{#if mode === "pane"}
-				<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
-			{:else}
-				<h1 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h1>
-			{/if}
+
+			<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
 		</div>
 
 		{#if task.description}
@@ -110,11 +106,8 @@ function difficultyLabel(level: number): string {
 
 		{#if objectives.length > 0}
 			<div class="mt-8">
-				{#if mode === "pane"}
-					<h3 class="mb-2">{t(lang, "task.objectives")}</h3>
-				{:else}
-					<h2 class="mb-2">{t(lang, "task.objectives")}</h2>
-				{/if}
+				<h3 class="mb-2">{t(lang, "task.objectives")}</h3>
+
 				<ol class="list-inside list-decimal space-y-1.5 font-prose text-base leading-relaxed text-muted-foreground">
 					{#each objectives as obj}
 						<li>{obj}</li>
@@ -125,15 +118,12 @@ function difficultyLabel(level: number): string {
 
 		{#if task.materialsMd}
 			<div class="mt-10">
-				{#if mode === "pane"}
-					<h3 class="mb-2">{t(lang, "task.backgroundMaterial")}</h3>
-				{:else}
-					<h2 class="mb-2">{t(lang, "task.backgroundMaterial")}</h2>
-				{/if}
+				<h3 class="mb-2">{t(lang, "task.backgroundMaterial")}</h3>
+
 				<div
 					class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 font-prose text-base leading-normal shadow-sm"
 				>
-					{@html renderMarkdown(task.materialsMd, { headingOffset: mode === "pane" ? 2 : 0 })}
+					{@html renderMarkdown(task.materialsMd, { headingOffset: 2 })}
 				</div>
 			</div>
 		{/if}
@@ -204,11 +194,11 @@ function difficultyLabel(level: number): string {
 	flex-direction: column;
 }
 
-.task-preparation.is-pane {
+.task-preparation {
 	min-height: clamp(30rem, 64vh, 42rem);
 }
 
-.task-preparation.is-pane .task-preparation-body {
+.task-preparation .task-preparation-body {
 	margin-top: clamp(1.75rem, 5vw, 3rem);
 }
 

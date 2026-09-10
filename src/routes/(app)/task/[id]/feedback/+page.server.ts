@@ -10,7 +10,6 @@ import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExi
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
-import { markAssistantMessagesSeen } from "$lib/server/unread";
 import type { Actions, PageServerLoad } from "./$types";
 
 function hasOversizedUserText(values: string[]) {
@@ -85,15 +84,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw redirect(303, `${base}/task/${taskId}/session`);
 	}
 
-	// Visiting the feedback page reads the conversation: advance the seen-watermark
-	// so late-delivered replies stop counting as unread on the home page.
 	const latestAssistantMessageId = session.messages.reduce(
 		(latest, message) => (message.role === "assistant" ? Math.max(latest, message.id) : latest),
 		0,
 	);
-	if (latestAssistantMessageId) {
-		await markAssistantMessagesSeen(session.id, user.id, latestAssistantMessageId);
-	}
 
 	// Get task data
 	const taskData = session.task;
@@ -126,6 +120,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		sessionId: session.id,
+		readReceipt: latestAssistantMessageId ? { sessionId: session.id, messageId: latestAssistantMessageId } : null,
 		taskId: taskIdStr,
 		taskTitle: taskData.title,
 		conversation,

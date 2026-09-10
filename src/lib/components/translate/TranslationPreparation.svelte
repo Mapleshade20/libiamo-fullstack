@@ -32,7 +32,6 @@ interface Props {
 	blockedReason: "missing-native-language" | "same-language" | null;
 	lang: LanguageCode;
 	form?: { error?: string } | null;
-	mode?: "page" | "pane";
 	backHref?: string;
 	backLabel?: string;
 	onback?: () => void;
@@ -44,7 +43,6 @@ let {
 	blockedReason,
 	lang,
 	form = null,
-	mode = "page",
 	backHref = `${base}/`,
 	backLabel = t(lang, "task.returnToHall"),
 	onback,
@@ -76,7 +74,7 @@ function difficultyLabel(level: number): string {
 }
 </script>
 
-<section class="translation-preparation" class:is-pane={mode === "pane"} aria-labelledby="translation-preparation-title">
+<section class="translation-preparation" aria-labelledby="translation-preparation-title">
 	{#if onback}
 		<button type="button" class="back-link" onclick={onback}>
 			<ArrowLeft size={18} strokeWidth={1.5} aria-hidden="true" />
@@ -101,11 +99,8 @@ function difficultyLabel(level: number): string {
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
 				<span class="difficulty">{difficultyLabel(template.difficulty)}</span>
 			</div>
-			{#if mode === "pane"}
-				<h2 id="translation-preparation-title">{template.title}</h2>
-			{:else}
-				<h1 id="translation-preparation-title">{template.title}</h1>
-			{/if}
+
+			<h2 id="translation-preparation-title">{template.title}</h2>
 		</div>
 
 		{#if template.description}
@@ -156,8 +151,7 @@ function difficultyLabel(level: number): string {
 							starting = true;
 							return async ({ result, update }) => {
 								try {
-									if (mode === "pane") embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
-									else await update();
+									embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
 								} finally {
 									starting = false;
 								}
@@ -189,8 +183,7 @@ function difficultyLabel(level: number): string {
 									retaking = true;
 									return async ({ result, update }) => {
 										try {
-											if (mode === "pane") embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
-											else await update();
+											embeddedError = await handlePreparationActionResult(result, update, t(lang, "hall.menu.preparationError"));
 										} finally {
 											retaking = false;
 										}
@@ -210,7 +203,7 @@ function difficultyLabel(level: number): string {
 		</div>
 	</div>
 
-	{#if isComplete && mode === "pane"}
+	{#if isComplete}
 		<div class="completion-watermark" aria-hidden="true"><CheckCircle2 size={280} strokeWidth={1} /></div>
 	{/if}
 </section>
@@ -225,7 +218,7 @@ function difficultyLabel(level: number): string {
 	flex-direction: column;
 }
 
-.translation-preparation.is-pane {
+.translation-preparation {
 	min-height: clamp(32rem, 68vh, 44rem);
 	overflow: hidden;
 	padding: clamp(1.1rem, 3vw, 2rem);
@@ -281,7 +274,6 @@ function difficultyLabel(level: number): string {
 	color: var(--muted-foreground);
 }
 
-h1,
 h2 {
 	font-family: var(--font-serif);
 	font-size: clamp(1.75rem, 4vw, 2.5rem);

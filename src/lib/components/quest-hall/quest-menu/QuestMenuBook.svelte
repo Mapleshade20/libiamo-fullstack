@@ -49,7 +49,7 @@ interface Props {
 	onturn: (direction: -1 | 1) => void;
 	onmonthchange: (direction: -1 | 1) => void;
 	onselectsection: (section: QuestMenuSection) => void;
-	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+	onselectitem?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {

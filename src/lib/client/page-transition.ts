@@ -13,6 +13,12 @@ interface NavbarTransitionIntent {
 
 let navbarTransitionIntent: NavbarTransitionIntent | null = null;
 
+export function isQuestMenuPath(pathname: string): boolean {
+	if (pathname === `${base}/`) return true;
+	if (!pathname.startsWith(`${base}/`)) return false;
+	return /^(?:task|translate)\/[1-9]\d*$/.test(pathname.slice(base.length + 1));
+}
+
 function destinationKey(url: URL) {
 	return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -33,6 +39,9 @@ export function setNavbarTransitionIntent(destination: URL, direction: NavbarTra
 export function resolvePageTransition(from: URL | null, destination: URL, now = Date.now()): PageTransitionKind {
 	const intent = navbarTransitionIntent;
 	navbarTransitionIntent = null;
+
+	// The persistent book owns these transitions, not document snapshots.
+	if (from && isQuestMenuPath(from.pathname) && isQuestMenuPath(destination.pathname)) return "none";
 
 	if (intent && now >= intent.createdAt && now - intent.createdAt <= NAVBAR_INTENT_TTL_MS && intent.destination === destinationKey(destination)) {
 		return intent.direction === "forward" ? "navbar-forward" : "navbar-backward";

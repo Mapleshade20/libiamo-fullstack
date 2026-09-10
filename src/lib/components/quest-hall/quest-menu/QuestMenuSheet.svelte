@@ -15,7 +15,7 @@ interface Props {
 	onclose: () => void;
 	onselect: (section: QuestMenuSection) => void;
 	onmonthchange: (direction: -1 | 1) => void;
-	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+	onselectitem?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let { sections, section, lang, translationMonth, paperElement = $bindable(null), onclose, onselect, onmonthchange, onselectitem }: Props = $props();

@@ -21,7 +21,7 @@ interface Props {
 	recommendationsElement?: HTMLDivElement | null;
 	onopen: () => void;
 	onselect: (section: QuestMenuSection) => void;
-	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+	onselectitem?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -73,7 +73,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 							{#if itemObjective(item)}
 								<p class="font-prose">{itemObjective(item)}</p>
 							{/if}
-							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem(item, event)}>
+							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem?.(item, event)}>
 								{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
 							</a>
 						</article>

@@ -7,8 +7,12 @@ import {
 	UI_VARIANT_LABELS,
 	USER_LONG_TEXT_MAX_LENGTH,
 } from "$lib/constants";
+import { QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { loadQuestHallData } from "$lib/server/quest-hall";
+import { questHallDetails } from "$lib/server/quest-hall-details";
 import { getTaskPreparationData } from "$lib/server/task-preparation";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/translate";
 import type { Actions, PageServerLoad } from "./$types";
@@ -25,10 +29,11 @@ function validateLanguageCode(code: unknown): LanguageCode {
 }
 
 export const load: PageServerLoad = async (event) => {
+	event.depends?.(QUEST_HALL_DEPENDENCY);
 	const user = requireUser(event);
 	const taskId = Number(event.params.id);
 
-	if (Number.isNaN(taskId)) {
+	if (!Number.isSafeInteger(taskId) || taskId <= 0) {
 		return error(404, "Task not found");
 	}
 
@@ -38,7 +43,8 @@ export const load: PageServerLoad = async (event) => {
 		return error(404, "Task not found");
 	}
 
-	return data;
+	const hall = await loadQuestHallData(user, getBrowserTimezone(event.cookies));
+	return { ...data, ...questHallDetails(hall, { kind: "quest", key: `daily-${taskId}`, data }) };
 };
 
 export const actions: Actions = {

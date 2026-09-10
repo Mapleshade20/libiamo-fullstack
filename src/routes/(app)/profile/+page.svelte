@@ -1,7 +1,6 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
 import { handleInvalidField } from "$lib/client/form-attention";
-import { clearQuestHallReturnContext } from "$lib/client/quest-hall/return-context";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
@@ -275,9 +274,7 @@ function enhanceSilently() {
 
 	<Separator />
 
-	<form method="POST" action="?/signOut" onsubmit={() => clearQuestHallReturnContext(undefined, { clearAccount: true })} use:enhance>
-		<Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button>
-	</form>
+	<form method="POST" action="?/signOut" use:enhance><Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button></form>
 </div>
 
 <style>

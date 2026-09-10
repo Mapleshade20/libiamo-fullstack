@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
+import { hallData } from "../../../../fixtures/quest-hall";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
 const { mockLimit, mockSelect, mockFindFirst, mockChatJson } = vi.hoisted(() => {
@@ -99,7 +100,7 @@ describe("Task detail +page.server", () => {
 
 			expect(mockSelect).toHaveBeenCalled();
 			expect(mockFindFirst).toHaveBeenCalledTimes(1);
-			expect(result).toEqual({
+			expect(result).toMatchObject({
 				task: {
 					...row,
 					sessionStatus: "evaluated",
@@ -125,7 +126,7 @@ describe("Task detail +page.server", () => {
 				params: { id: "42" },
 			} as any);
 
-			expect(result).toEqual({
+			expect(result).toMatchObject({
 				task: {
 					...row,
 					sessionStatus: null,
@@ -150,7 +151,7 @@ describe("Task detail +page.server", () => {
 				params: { id: "42" },
 			} as any);
 
-			expect(result).toEqual({
+			expect(result).toMatchObject({
 				task: {
 					...row,
 					sessionStatus: null,
@@ -442,3 +443,6 @@ describe("Task detail +page.server", () => {
 		});
 	});
 });
+
+vi.mock("$lib/server/quest-hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
+vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: vi.fn(() => "UTC") }));

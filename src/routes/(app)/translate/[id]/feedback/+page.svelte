@@ -2,11 +2,9 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Home from "@lucide/svelte/icons/home";
-import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
-import { clearQuestHallReturnContext, getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
 import {
 	advanceTranslationTransferQueue,
 	clearTranslationFeedbackSnapshot,
@@ -41,20 +39,7 @@ let workflowError = $state<string | null>(null);
 let transferStartedAt = $state(0);
 let completingTransfer = $state(false);
 let lastFocusKey = $state("");
-// svelte-ignore state_referenced_locally
-let detailsHref = $state(`${base}/translate/${data.template.id}`);
-
-onMount(() => {
-	detailsHref = getQuestHallWorkflowReturnHref({
-		destination: "details",
-		accountScope: data.accountScope,
-		activeLanguage: lang,
-		edition: data.questHallEdition,
-		item: { kind: "translation", id: data.template.id },
-		base,
-		fallbackHref: detailsHref,
-	});
-});
+let detailsHref = $derived(`${base}/translate/${data.template.id}`);
 
 const ratingLabels = $derived({
 	"eval.rating.accuracy": t(lang, "eval.rating.accuracy"),
@@ -587,12 +572,7 @@ function updateCardInput(index: number, value: string) {
 		<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(lang, "eval.complete.body")}</p>
 		<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
 			<Button href={detailsHref} variant="outline"><ArrowLeft aria-hidden="true" />{t(lang, "hall.menu.viewDetails")}</Button>
-			<Button
-				href="{base}/"
-				size="icon"
-				class="size-12 rounded-full"
-				aria-label={t(lang, "eval.complete.homeAria")}
-				onclick={() => clearQuestHallReturnContext()}
+			<Button href="{base}/" size="icon" class="size-12 rounded-full" aria-label={t(lang, "eval.complete.homeAria")}
 				><Home aria-hidden="true" /></Button
 			>
 		</div>

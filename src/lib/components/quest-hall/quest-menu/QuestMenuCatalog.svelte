@@ -21,7 +21,7 @@ interface Props {
 	onclose: () => void;
 	onselect: (section: QuestMenuSection) => void;
 	onmonthchange: (direction: -1 | 1) => void;
-	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+	onselectitem?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {

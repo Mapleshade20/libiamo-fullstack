@@ -1,5 +1,5 @@
 import type { QuestMenuCatalog, QuestMenuItemKey, QuestMenuSection } from "$lib/quest-hall/menu";
-import { getQuestMenuItemSection, getQuestMenuSpread } from "$lib/quest-hall/menu";
+import { getQuestMenuItemId, getQuestMenuItemSection, getQuestMenuSpread } from "$lib/quest-hall/menu";
 
 export const QUEST_HALL_DEPENDENCY = "quest-hall:data";
 export const HALL_VIEWS = ["home", "catalog", "prepare"] as const;
@@ -71,8 +71,12 @@ export function parseHallLocation(input: SearchParamsInput, catalog?: QuestMenuC
 
 export function hallLocationUrl(location: HallLocation, base: string): string {
 	const normalized = normalizeHallLocation(location);
+	if (normalized.view === "home") return `${base}/`;
+	if (normalized.view === "prepare" && normalized.task) {
+		return `${base}/${normalized.section === "translation" ? "translate" : "task"}/${getQuestMenuItemId(normalized.task)}`;
+	}
 	const params = new URLSearchParams();
-	if (normalized.view !== "home") params.set("view", normalized.view);
+	params.set("view", normalized.view);
 	if (normalized.section !== "daily") params.set("section", normalized.section);
 	if (normalized.leaf !== 1) params.set("leaf", String(normalized.leaf));
 	if (normalized.task) params.set("task", normalized.task);
@@ -85,9 +89,7 @@ export type HallNavigationEvent =
 	| { type: "open-catalog"; section?: QuestMenuSection }
 	| { type: "close-catalog" }
 	| { type: "switch-section"; section: QuestMenuSection; leaf?: number }
-	| { type: "turn-leaf"; section: QuestMenuSection; leaf: number }
-	| { type: "select-item"; task: QuestMenuItemKey }
-	| { type: "return-from-prepare"; destination?: "home" | "catalog" };
+	| { type: "turn-leaf"; section: QuestMenuSection; leaf: number };
 
 export interface HallNavigationTransition {
 	location: HallLocation;
@@ -128,14 +130,5 @@ export function reduceHallLocation(current: HallLocation, event: HallNavigationE
 			return transition(current, { view: "catalog", section: event.section, leaf: event.leaf ?? 1, task: null }, "replace", catalog);
 		case "turn-leaf":
 			return transition(current, { view: "catalog", section: event.section, leaf: event.leaf, task: null }, "replace", catalog);
-		case "select-item":
-			return transition(
-				current,
-				{ view: "prepare", section: getQuestMenuItemSection(event.task) ?? current.section, task: event.task },
-				"push",
-				catalog,
-			);
-		case "return-from-prepare":
-			return transition(current, { view: event.destination ?? "catalog", task: null }, "back", catalog);
 	}
 }

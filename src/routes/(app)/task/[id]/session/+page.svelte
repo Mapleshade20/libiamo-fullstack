@@ -1,7 +1,6 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import { base } from "$app/paths";
-import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
+import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
 import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
 import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
 import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
@@ -10,21 +9,10 @@ import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
 import type { LanguageCode } from "$lib/constants";
 
 let { data } = $props();
-// svelte-ignore state_referenced_locally
-let detailsHref = $state(`${base}/task/${data.taskId}`);
-
-onMount(() => {
-	detailsHref = getQuestHallWorkflowReturnHref({
-		destination: "details",
-		accountScope: data.accountScope,
-		activeLanguage: data.user.activeLanguage as LanguageCode,
-		edition: data.questHallEdition,
-		item: { kind: "quest", id: Number(data.taskId) },
-		base,
-		fallbackHref: detailsHref,
-	});
-});
+let detailsHref = $derived(`${base}/task/${data.taskId}`);
 </script>
+
+<ConversationReadReceipt receipt={data.readReceipt} />
 
 <svelte:head>
 	<title>{data.task.title} · Practice · Libiamo</title>
