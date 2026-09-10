@@ -1,13 +1,14 @@
 <script lang="ts">
 import Award from "@lucide/svelte/icons/award";
 import Wine from "@lucide/svelte/icons/wine";
+import { formatUnreadBadgeCount } from "$lib/unread";
 
 interface Props {
 	unreadCount: number;
 }
 
 let { unreadCount }: Props = $props();
-let visibleCount = $derived(unreadCount > 9 ? "9+" : String(unreadCount));
+let visibleCount = $derived(formatUnreadBadgeCount(unreadCount));
 </script>
 
 <span class="emblem" aria-hidden="true">

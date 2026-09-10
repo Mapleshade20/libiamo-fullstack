@@ -23,7 +23,6 @@ import {
 	templateSchema,
 	translatorOpeningStateSchema,
 	validateOpeningState,
-	variantSchema,
 } from "$lib/schemas";
 
 describe("schemas", () => {
@@ -146,25 +145,6 @@ describe("schemas", () => {
 	it("returns error for invalid cadence enum value", () => {
 		const result = templateSchema.safeParse({ ...baseTemplate, cadence: "monthly" });
 		expect(result.success).toBe(false);
-	});
-
-	// ── variantSchema ─────────────────────────────────────────────────
-
-	it("variantSchema parses valid variant data", () => {
-		const result = variantSchema.parse({
-			slotValues: { name: "Lina", topic: "music" },
-			openingState: { serverName: "Test", channelName: "general", previousMessages: [] },
-			isActive: true,
-		});
-		expect(result.slotValues).toEqual({ name: "Lina", topic: "music" });
-		expect(result.isActive).toBe(true);
-	});
-
-	it("variantSchema applies defaults for missing optional fields", () => {
-		const result = variantSchema.parse({});
-		expect(result.slotValues).toEqual({});
-		expect(result.openingState).toEqual({});
-		expect(result.isActive).toBe(true);
 	});
 
 	// ── templateContributionSchema ─────────────────────────────────────

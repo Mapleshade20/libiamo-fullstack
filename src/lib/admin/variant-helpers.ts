@@ -92,16 +92,6 @@ export function getMissingSlots(slotValues: Record<string, string>, requiredSlot
 	return missing.sort((a, b) => a.localeCompare(b));
 }
 
-export function getUnusedSlots(slotValues: Record<string, string>, requiredSlots: Set<string>): string[] {
-	const unused: string[] = [];
-	for (const slot of Object.keys(slotValues)) {
-		if (!requiredSlots.has(slot)) {
-			unused.push(slot);
-		}
-	}
-	return unused.sort((a, b) => a.localeCompare(b));
-}
-
 // ── Opening State Defaults ───────────────────────────────────────────
 
 export function getDefaultOpeningState(ui: UiVariant): OpeningState {

@@ -4,24 +4,9 @@ const emojiConvertor = new EmojiConvertor();
 emojiConvertor.replace_mode = "unified";
 emojiConvertor.allow_native = true;
 
-export function unicodeEmojiToShortcode(text: string): string {
-	if (!text) return "";
-	return emojiConvertor.replace_unified(text);
-}
-
-export function shortcodeToUnicodeEmoji(text: string): string {
-	if (!text) return "";
-	return emojiConvertor.replace_colons(text);
-}
-
-export function normalizeEmojiTextForStorage(text: string): string {
-	if (!text) return "";
-	return unicodeEmojiToShortcode(text);
-}
-
 export function normalizeEmojiTextForDisplay(text: string): string {
 	if (!text) return "";
-	return shortcodeToUnicodeEmoji(text);
+	return emojiConvertor.replace_colons(text);
 }
 
 export function extractEmojiFromPickerEvent(event: CustomEvent | Event): string {
@@ -44,19 +29,4 @@ export function extractEmojiFromPickerEvent(event: CustomEvent | Event): string 
 	if (detail.skinToneEmoji) return detail.skinToneEmoji;
 
 	return "";
-}
-
-export function emojiToStorageValue(emoji: string): string {
-	if (!emoji) return "";
-	return normalizeEmojiTextForStorage(emoji);
-}
-
-export function hasEmojiShortcode(text: string): boolean {
-	if (!text) return false;
-	return /:[a-z0-9_+-]+:/i.test(text);
-}
-
-export function normalizeMixedEmojiText(text: string): string {
-	if (!text) return "";
-	return normalizeEmojiTextForStorage(text);
 }

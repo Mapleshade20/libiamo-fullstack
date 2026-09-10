@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import {
-	buildRedditCommentTree,
-	countRedditComments,
-	flattenRedditComments,
-	getRedditCommentVotes,
-} from "$lib/components/practice-ui/reddit/helpers";
+import { buildRedditCommentTree, countRedditComments, getRedditCommentVotes } from "$lib/components/practice-ui/reddit/helpers";
 
 describe("Reddit comment-thread helpers", () => {
 	const openingState = {
@@ -19,13 +14,6 @@ describe("Reddit comment-thread helpers", () => {
 			},
 		],
 	};
-
-	it("flattens nested opening comments with stable ids", () => {
-		const result = flattenRedditComments(openingState.previousComments);
-
-		expect(result.map((comment) => comment.id)).toEqual(["c1", "opening-0-0"]);
-		expect(result[1]).toMatchObject({ username: "OriginalPoster", depth: 1, parentId: "c1" });
-	});
 
 	it("attaches session comments under their Reddit targets using generic thread metadata", () => {
 		const messages: ChatMessage[] = [

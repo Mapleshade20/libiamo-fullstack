@@ -98,25 +98,6 @@ export type JsonChatResponse<T> = ChatResponse & {
 
 export type ChatTool = ChatCompletionTool;
 
-export type ChatToolCall = {
-	id: string;
-	name: string;
-	argumentsText: string;
-	arguments: unknown;
-	raw: unknown;
-};
-
-export type ToolChatResponse = ChatResponse & {
-	toolCalls: ChatToolCall[];
-};
-
-export type ToolChatRequest = ChatRequest & {
-	tools: ChatTool[];
-	options?: ChatOptions & {
-		toolChoice?: ChatCompletionToolChoiceOption;
-	};
-};
-
 // ── API key encryption and verification ──────────────────────────────
 
 const ALGORITHM = "aes-256-gcm";
@@ -562,26 +543,6 @@ function completionUsage(completion: ChatCompletion): ChatUsage | undefined {
 	};
 }
 
-function parseToolArguments(args: string) {
-	try {
-		return JSON.parse(args) as unknown;
-	} catch {
-		return args;
-	}
-}
-
-function completionToolCalls(completion: ChatCompletion): ChatToolCall[] {
-	return (completion.choices[0]?.message.tool_calls ?? [])
-		.filter((toolCall) => toolCall.type === "function")
-		.map((toolCall) => ({
-			id: toolCall.id,
-			name: toolCall.function.name,
-			argumentsText: toolCall.function.arguments,
-			arguments: parseToolArguments(toolCall.function.arguments),
-			raw: toolCall,
-		}));
-}
-
 function normalizeOpenAIError(error: unknown): Error {
 	if (error instanceof OpenAI.APIConnectionError) {
 		return new LlmProviderError("Could not connect to the AI provider. Please try again.", 503);
@@ -693,25 +654,5 @@ export async function chatJson<T extends z.ZodType>({
 		value: repairedParse.value,
 		requestMessages: repairMessages,
 		repair: { initialContent: first.content, initialRaw: first.raw, errors: firstParse.errors },
-	};
-}
-
-export async function chatTools({ messages, tools, options = {}, userId }: ToolChatRequest): Promise<ToolChatResponse> {
-	if (!Array.isArray(tools) || tools.length === 0) {
-		throw new Error("tools must contain at least one item");
-	}
-
-	const result = await callChatCompletion(messages, { ...options, tools, toolChoice: options.toolChoice }, userId);
-	const response = completionResponse(result.completion);
-	const toolCalls = completionToolCalls(result.completion);
-
-	if (!response.content && toolCalls.length === 0) {
-		throw new LlmProviderError("The AI provider returned an empty response. Please try again.", 502);
-	}
-
-	return {
-		...response,
-		quota: result.quota,
-		toolCalls,
 	};
 }

@@ -9,8 +9,6 @@ import {
 	countThreadComments,
 	findOpeningCommentTarget,
 	findTargetInMessages,
-	flattenOpeningComments,
-	getTargetsFromMessages,
 	normalizeThreadText,
 } from "../commentThread";
 import type { RedditComment, RedditOpeningState } from "./types";
@@ -54,31 +52,14 @@ export function getRedditPostAuthor(openingState: RedditOpeningState, fallback =
 	return normalizeRedditText(openingState.post?.author, fallback);
 }
 
-export function flattenRedditComments(
-	comments: RedditComment[] = [],
-	depth = 0,
-	parentId: string | null = null,
-	path: number[] = [],
-): RedditTarget[] {
-	return flattenOpeningComments(comments, redditThreadConfig, depth, parentId, path).map(toRedditTarget);
-}
-
 export function findRedditTarget(openingState: RedditOpeningState, targetCommentId: string | null | undefined): RedditTarget | null {
 	const target = findOpeningCommentTarget(openingState.previousComments ?? [], redditThreadConfig, targetCommentId);
 	return target ? toRedditTarget(target) : null;
 }
 
-export function getRedditTargetsFromMessages(messages: ChatMessage[]): RedditTarget[] {
-	return getTargetsFromMessages(messages, redditThreadConfig).map(toRedditTarget);
-}
-
 export function findRedditTargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): RedditTarget | null {
 	const target = findTargetInMessages(messages, redditThreadConfig, targetCommentId);
 	return target ? toRedditTarget(target) : null;
-}
-
-export function resolveRedditResponder(openingState: RedditOpeningState, target: RedditTarget | null): string {
-	return target?.username || getRedditPostAuthor(openingState);
 }
 
 export function buildRedditUserPrompt(params: {

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
-	appendPlainTextToDraftHtml,
 	ensureReplySubject,
 	formatDraftMessage,
 	getMailBodyHtmlFromMessage,
@@ -25,18 +24,6 @@ describe("mailUtils", () => {
 
 		it("returns an empty string for empty input", () => {
 			expect(plainTextToDraftHtml("")).toBe("");
-		});
-	});
-
-	describe("appendPlainTextToDraftHtml", () => {
-		it("returns new html when there is no existing html", () => {
-			expect(appendPlainTextToDraftHtml("   ", "Hello")).toBe("<div>Hello</div>");
-			expect(appendPlainTextToDraftHtml(undefined, "Hello")).toBe("<div>Hello</div>");
-		});
-
-		it("can append with or without a separating blank line", () => {
-			expect(appendPlainTextToDraftHtml("<div>Hello</div>", "Thanks")).toBe("<div>Hello</div><div><br></div><div>Thanks</div>");
-			expect(appendPlainTextToDraftHtml("<div>Hello</div>", "Thanks", false)).toBe("<div>Hello</div><div>Thanks</div>");
 		});
 	});
 

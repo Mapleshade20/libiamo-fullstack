@@ -26,25 +26,6 @@ export function stopAll(controls: Array<AnimationPlaybackControls | Cancelable |
  * Animate SVG path drawing via pathLength.
  * Returns controls so the caller can cancel on destroy / scene change.
  */
-export function drawPath(
-	el: SVGPathElement | SVGGeometryElement,
-	opts: { duration?: number; delay?: number; reduced?: boolean } = {},
-): AnimationPlaybackControls {
-	const reduced = opts.reduced ?? prefersReducedMotion();
-	if (reduced) {
-		el.style.strokeDasharray = "none";
-		el.style.strokeDashoffset = "0";
-		el.style.opacity = "1";
-		return animate(el, { opacity: [0.4, 1] }, { duration: 0.2 });
-	}
-	// pathLength is a Motion SVG attribute; cast keeps TS happy across Element/SVG unions.
-	return animate(el, { pathLength: [0, 1], opacity: [0, 1] } as Record<string, number[]>, {
-		duration: opts.duration ?? MOTION_TOKENS.durationSlow,
-		delay: opts.delay ?? 0,
-		ease: [...MOTION_TOKENS.easeInOut] as [number, number, number, number],
-	});
-}
-
 /**
  * Fade + slight rise enter for result panels.
  */

@@ -17,7 +17,6 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 	mockClient: {
 		chatText: vi.fn(),
 		chatJson: vi.fn(),
-		chatTools: vi.fn(),
 	},
 }));
 

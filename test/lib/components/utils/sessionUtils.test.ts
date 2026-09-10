@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateCurrentTurns, getTurnLimitMessage, isTurnLimitReached } from "$lib/components/utils/sessionUtils";
+import { calculateCurrentTurns, isTurnLimitReached } from "$lib/components/utils/sessionUtils";
 
 describe("sessionUtils", () => {
 	const mockMessages = [
@@ -26,10 +26,5 @@ describe("sessionUtils", () => {
 		expect(isTurnLimitReached(5, 5)).toBe(true);
 		expect(isTurnLimitReached(4, 5)).toBe(false);
 		expect(isTurnLimitReached(10, 0)).toBe(false);
-	});
-
-	it("returns formatted turn limit message", () => {
-		expect(getTurnLimitMessage(10)).toBe("This session has reached the maximum turn limit (10).");
-		expect(getTurnLimitMessage(0)).toBe("");
 	});
 });
