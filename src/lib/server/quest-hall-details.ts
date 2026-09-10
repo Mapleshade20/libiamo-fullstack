@@ -18,6 +18,7 @@ export function questHallDetails(hall: HallData, preparation: QuestHallPreparati
 	const route = {
 		hall,
 		hallLocation: { view: "prepare", section, leaf, task: key } satisfies HallLocation,
+		catalogMonth: month,
 		initialPreparation: { ...preparation, key },
 	};
 	return { ...route, questMenu: route };

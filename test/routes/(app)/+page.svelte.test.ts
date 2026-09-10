@@ -44,6 +44,7 @@ describe("production Quest Hall page", () => {
 						translationTasks: [...data.translationTasks],
 					}),
 					hallLocation: data.hallLocation,
+					catalogMonth: "2026-09",
 					initialPreparation: null,
 				},
 			},

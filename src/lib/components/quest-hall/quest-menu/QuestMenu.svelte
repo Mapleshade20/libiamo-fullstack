@@ -50,12 +50,14 @@ import type { QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 interface Props {
 	data: HallData;
 	initialLocation: HallLocation;
+	/** Year the translation catalog opens on; `data.translationMonth` stays the real current month. */
+	catalogMonth?: string;
 	initialPreparation?: QuestHallPreparation | null;
 	lang: LanguageCode;
 	form?: { error?: string } | null;
 }
 
-let { data, initialLocation, initialPreparation = null, lang, form = null }: Props = $props();
+let { data, initialLocation, catalogMonth = data.translationMonth, initialPreparation = null, lang, form = null }: Props = $props();
 // Loaders randomize this copy; route data refreshes must not restart the typewriter.
 const subtitle = untrack(() => data.subtitle);
 // Keep the outgoing sheet populated until the reverse timeline releases it.
@@ -70,7 +72,7 @@ const translationYears = () => [...new Set(data.translationTasks.map((task) => t
 setContext("quest-menu-translation-years", translationYears);
 function getInitialTranslationMonth(): string {
 	const taskId = initialLocation.section === "translation" ? getQuestMenuItemId(initialLocation.task) : null;
-	return data.translationTasks.find((task) => task.id === taskId)?.createdMonth ?? data.translationMonth;
+	return data.translationTasks.find((task) => task.id === taskId)?.createdMonth ?? catalogMonth;
 }
 // svelte-ignore state_referenced_locally
 let location = $state<HallLocation>({ ...initialLocation });

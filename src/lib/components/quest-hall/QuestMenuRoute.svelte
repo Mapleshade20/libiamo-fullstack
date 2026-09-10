@@ -9,6 +9,7 @@ let { route, form = null }: { route: QuestMenuRouteData; form?: { error?: string
 	<QuestMenu
 		data={route.hall}
 		initialLocation={route.hallLocation}
+		catalogMonth={route.catalogMonth}
 		initialPreparation={route.initialPreparation}
 		lang={route.hall.activeLanguage}
 		{form}

@@ -19,17 +19,17 @@ export const load: PageServerLoad = async (event) => {
 	const browserTimezone = getBrowserTimezone(event.cookies);
 	const hallData = await loadQuestHallData(user, browserTimezone);
 	const year = event.url.searchParams.get("year");
-	if (year && hallData.translationTasks.some((task) => task.createdMonth.startsWith(`${year}-`))) {
-		hallData.translationMonth = `${year}-01`;
-	}
-	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, hallData.translationMonth, "year"));
+	const catalogMonth =
+		year && hallData.translationTasks.some((task) => task.createdMonth.startsWith(`${year}-`)) ? `${year}-01` : hallData.translationMonth;
+	const hallLocation = parseHallLocation(event.url, adaptHallDataToQuestMenu(hallData, catalogMonth, "year"));
 
 	return {
 		...hallData,
 		hall: hallData,
 		hallLocation,
+		catalogMonth,
 		initialPreparation: null,
-		questMenu: { hall: hallData, hallLocation, initialPreparation: null },
+		questMenu: { hall: hallData, hallLocation, catalogMonth, initialPreparation: null },
 	};
 };
 

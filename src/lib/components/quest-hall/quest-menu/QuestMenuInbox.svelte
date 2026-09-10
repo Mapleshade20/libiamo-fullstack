@@ -3,7 +3,7 @@ import { base } from "$app/paths";
 import type { UnreadSubscriptionStatus } from "$lib/client/quest-hall/unread-subscription";
 import { type LanguageCode, UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { formatRelativeAge, type UnreadInboxItem } from "$lib/unread";
+import { formatRelativeAge, type UnreadInboxItem, unreadTargetHref } from "$lib/unread";
 import NotificationIcon from "./NotificationIcon.svelte";
 
 let { items, total, status, lang }: { items: UnreadInboxItem[]; total: number; status: UnreadSubscriptionStatus; lang: LanguageCode } = $props();
@@ -39,7 +39,7 @@ function close() {
 		<div class="cards" style:--count={items.length}>
 			{#each items as item, index (item.taskId)}
 				<a
-					href={`${base}/task/${item.taskId}/session`}
+					href={unreadTargetHref(item, base)}
 					class="notification"
 					style:--index={index}
 					style:--depth={Math.min(index, 2)}

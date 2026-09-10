@@ -79,6 +79,25 @@ describe("QuestMenu", () => {
 		expect(body).toContain(">9+</span>");
 	});
 
+	// Finished conversations belong on the report, not the transcript; sending them to
+	// /session also burns the read receipt, so the report loses its only entry point.
+	it.each([
+		["in_progress", "/task/1/session"],
+		["abandoned", "/task/1/session"],
+		["completed", "/task/1/feedback"],
+		["evaluated", "/task/1/feedback"],
+	] as const)("routes an unread %s conversation to %s", (sessionStatus, href) => {
+		const { body } = render(QuestMenuInbox, {
+			props: {
+				items: [{ taskId: 1, title: "Quest 1", ui: "imessage", sessionStatus, unreadCount: 1, latestAgeSeconds: 60 }],
+				total: 1,
+				status: "ready",
+				lang: "en",
+			},
+		});
+		expect(body).toContain(`href="${href}"`);
+	});
+
 	it.each([
 		["en", "MENU"],
 		["es", "CARTA"],

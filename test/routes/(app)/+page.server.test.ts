@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import { auth } from "$lib/server/auth/auth";
 import { loadQuestHallData } from "$lib/server/quest-hall";
 import { actions, load } from "$routes/(app)/+page.server";
@@ -31,10 +32,27 @@ describe("Quest Hall routing", () => {
 			cookies: {},
 			url: new URL(`https://libiamo.test/?view=catalog&section=translation&leaf=999&year=${year}`),
 		} as any)) as any;
-		expect(result.translationMonth).toBe(year === "2026" ? "2026-01" : "2026-09");
+		expect(result.catalogMonth).toBe(year === "2026" ? "2026-01" : "2026-09");
+		// The selected year must not overwrite the real current month, which is the
+		// baseline `adaptHallDataToQuestMenu` compares against to flag archived entries.
+		expect(result.translationMonth).toBe("2026-09");
+		expect(result.hall.translationMonth).toBe("2026-09");
 		expect(result.hallLocation).toMatchObject({ view: "catalog", section: "translation", task: null });
 		expect(result.hallLocation.leaf).toBeLessThan(999);
 		expect(loadQuestHallData).toHaveBeenCalledWith({ id: "u1" }, "UTC");
+	});
+
+	it("keeps past months archived when the catalog opens on the current year", async () => {
+		const result = (await load({
+			locals: { user: { id: "u1" } },
+			cookies: {},
+			url: new URL("https://libiamo.test/?view=catalog&section=translation&year=2026"),
+		} as any)) as any;
+		const catalog = adaptHallDataToQuestMenu(result.hall, result.catalogMonth, "year");
+		expect(catalog.sections.translation.map((item: any) => [item.id, item.archived])).toEqual([
+			[21, false],
+			[22, true],
+		]);
 	});
 	runSwitchLanguageActionSuite({ action: actions.switchLanguage, updateUser: auth.api.updateUser as any, successLanguage: "ja" });
 });

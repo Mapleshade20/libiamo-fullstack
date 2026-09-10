@@ -11,5 +11,11 @@ export type QuestHallPreparation =
 export interface QuestMenuRouteData {
 	hall: HallData;
 	hallLocation: HallLocation;
+	/**
+	 * Which year the translation catalog opens on. Kept separate from
+	 * `hall.translationMonth`, which must stay the real current month because
+	 * `adaptHallDataToQuestMenu` classifies archived entries against it.
+	 */
+	catalogMonth: string;
 	initialPreparation: QuestHallPreparation | null;
 }

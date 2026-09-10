@@ -64,5 +64,8 @@ describe("canonical detail catalog context", () => {
 		const result = questHallDetails(hall, preparation);
 		expect(result.hallLocation).toEqual({ view: "prepare", section: "translation", leaf: 1, task: "translation-3" });
 		expect(result.initialPreparation).toEqual(preparation);
+		// The catalog opens on the task's own year without rewriting the current month.
+		expect(result.catalogMonth).toBe("2024-03");
+		expect(result.hall.translationMonth).toBe("2026-09");
 	});
 });
