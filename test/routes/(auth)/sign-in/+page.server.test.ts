@@ -7,7 +7,17 @@ vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
 			signInEmail: vi.fn(),
+			signInSocial: vi.fn(),
 		},
+	},
+}));
+
+vi.mock("$env/dynamic/private", () => ({
+	env: {
+		GOOGLE_CLIENT_ID: "google-id",
+		GOOGLE_CLIENT_SECRET: "google-secret",
+		GITHUB_CLIENT_ID: "github-id",
+		GITHUB_CLIENT_SECRET: "github-secret",
 	},
 }));
 
@@ -50,17 +60,25 @@ describe("Sign-in +page.server", () => {
 			} as any;
 
 			const result = await load(event);
-			expect(result).toEqual({ resetSuccess: true });
+			expect(result).toEqual({
+				resetSuccess: true,
+				socialProviders: ["google", "github"],
+				socialAuthError: null,
+			});
 		});
 
-		it("returns resetSuccess false when reset query is missing", async () => {
+		it("returns configured providers and maps an OAuth error", async () => {
 			const event = {
 				locals: { user: null },
-				url: new URL("https://example.com/sign-in"),
+				url: new URL("https://example.com/sign-in?error=access_denied"),
 			} as any;
 
 			const result = await load(event);
-			expect(result).toEqual({ resetSuccess: false });
+			expect(result).toEqual({
+				resetSuccess: false,
+				socialProviders: ["google", "github"],
+				socialAuthError: "Sign-in was canceled. You can try again when you’re ready.",
+			});
 		});
 	});
 
@@ -176,6 +194,46 @@ describe("Sign-in +page.server", () => {
 				email: "user@example.com",
 				password: "secure-pass",
 			});
+		});
+	});
+
+	describe("social action", () => {
+		const createEvent = (provider: string) => {
+			const formData = new FormData();
+			formData.set("provider", provider);
+			return {
+				request: { formData: async () => formData, headers: new Headers({ origin: "https://example.com" }) },
+			} as any;
+		};
+
+		it("starts provider sign-in without requesting sign-up", async () => {
+			const event = createEvent("google");
+			vi.mocked(auth.api.signInSocial).mockResolvedValueOnce({
+				url: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+				redirect: false,
+			} as never);
+
+			await expect(actions.default(event)).rejects.toMatchObject({
+				status: 303,
+				location: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+			});
+			expect(auth.api.signInSocial).toHaveBeenCalledWith({
+				body: {
+					provider: "google",
+					callbackURL: "/",
+					errorCallbackURL: "/sign-in",
+					disableRedirect: true,
+				},
+				headers: event.request.headers,
+			});
+		});
+
+		it("rejects an unavailable provider", async () => {
+			const result = (await actions.default(createEvent("microsoft"))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.message).toBe("This sign-in method is unavailable.");
+			expect(auth.api.signInSocial).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -1,9 +1,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import { APIError, getOAuthState } from "better-auth/api";
+import { SOCIAL_PROVIDER_IDS, type SocialProviderId } from "$lib/auth/social";
 import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-
-export const SOCIAL_PROVIDER_IDS = ["google", "github"] as const;
-export type SocialProviderId = (typeof SOCIAL_PROVIDER_IDS)[number];
 
 type Environment = Record<string, string | undefined>;
 type SocialProviders = NonNullable<BetterAuthOptions["socialProviders"]>;

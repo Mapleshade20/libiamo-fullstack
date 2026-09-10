@@ -7,7 +7,17 @@ vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
 			signUpEmail: vi.fn(),
+			signInSocial: vi.fn(),
 		},
+	},
+}));
+
+vi.mock("$env/dynamic/private", () => ({
+	env: {
+		GOOGLE_CLIENT_ID: "google-id",
+		GOOGLE_CLIENT_SECRET: "google-secret",
+		GITHUB_CLIENT_ID: "github-id",
+		GITHUB_CLIENT_SECRET: "github-secret",
 	},
 }));
 
@@ -38,10 +48,14 @@ describe("Sign-up +page.server", () => {
 		it("should return empty object if user is not logged in", async () => {
 			const event = {
 				locals: { user: null },
+				url: new URL("https://example.com/sign-up"),
 			} as any;
 
 			const result = await load(event);
-			expect(result).toEqual({});
+			expect(result).toEqual({
+				socialProviders: ["google", "github"],
+				socialAuthError: null,
+			});
 		});
 	});
 
@@ -220,6 +234,40 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.message).toBe("Registration failed");
+		});
+	});
+
+	describe("social action", () => {
+		it("requires a supported learning language", async () => {
+			const result = (await actions.default(createEvent({ provider: "google", activeLanguage: "" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.activeLanguage).toEqual(["Choose a language before continuing."]);
+			expect(auth.api.signInSocial).not.toHaveBeenCalled();
+		});
+
+		it("starts explicit OAuth sign-up with the selected language", async () => {
+			const event = createEvent({ provider: "github", activeLanguage: "ja" });
+			vi.mocked(auth.api.signInSocial).mockResolvedValueOnce({
+				url: "https://github.com/login/oauth/authorize?state=test",
+				redirect: false,
+			} as never);
+
+			await expect(actions.default(event)).rejects.toMatchObject({
+				status: 303,
+				location: "https://github.com/login/oauth/authorize?state=test",
+			});
+			expect(auth.api.signInSocial).toHaveBeenCalledWith({
+				body: {
+					provider: "github",
+					callbackURL: "/",
+					errorCallbackURL: "/sign-up",
+					disableRedirect: true,
+					requestSignUp: true,
+					additionalData: { activeLanguage: "ja" },
+				},
+				headers: event.request.headers,
+			});
 		});
 	});
 });
