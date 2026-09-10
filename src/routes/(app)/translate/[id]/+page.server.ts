@@ -2,8 +2,12 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
 import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
+import { QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { loadQuestHallData } from "$lib/server/quest-hall";
+import { questHallDetails } from "$lib/server/quest-hall-details";
 import { getOrCreateTranslationAttempt, getOrCreateTranslationSourceSet } from "$lib/server/translation";
 import { getTranslationPreparationData } from "$lib/server/translation-preparation";
 import {
@@ -52,6 +56,7 @@ async function prepareAttempt(input: {
 }
 
 export const load: PageServerLoad = async (event) => {
+	event.depends?.(QUEST_HALL_DEPENDENCY);
 	const user = requireUser(event);
 	const templateId = parseTemplateId(event.params.id);
 	if (!templateId) throw error(404, "Template not found");
@@ -62,7 +67,8 @@ export const load: PageServerLoad = async (event) => {
 		nativeLanguage: user.nativeLanguage,
 	});
 	if (!data) throw error(404, "Translation template not found");
-	return data;
+	const hall = await loadQuestHallData(user, getBrowserTimezone(event.cookies));
+	return { ...data, ...questHallDetails(hall, { kind: "translation", key: `translation-${templateId}`, data }) };
 };
 
 export const actions: Actions = {

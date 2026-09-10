@@ -9,6 +9,8 @@ import { fade } from "svelte/transition";
 import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
+import { getDisplayClock } from "$lib/display-clock";
+
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { requestHint } from "../hint/api";
@@ -18,6 +20,8 @@ import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
+
+const clock = getDisplayClock();
 
 interface Props {
 	taskId?: string | number;
@@ -299,7 +303,7 @@ function showIncomingSender(index: number) {
 				<div bind:this={session.chatContainer} class="flex-1 overflow-y-auto px-3 py-4 md:bg-[#F9F9FB] md:px-8 md:py-6">
 					<div class="mb-4 flex items-center justify-center md:hidden">
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
-						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language)}</span>
+						<span class="px-2 text-[11px] text-[#8E8E93]">{getTodayDateString(language, clock())}</span>
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 					</div>
 

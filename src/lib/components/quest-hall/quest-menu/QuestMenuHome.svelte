@@ -5,6 +5,8 @@ import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuSection } from "$lib/quest-hall/menu";
+import QuestMenuItemIndicator from "./QuestMenuItemIndicator.svelte";
+import "./difficulty.css";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
 interface Props {
@@ -19,7 +21,7 @@ interface Props {
 	recommendationsElement?: HTMLDivElement | null;
 	onopen: () => void;
 	onselect: (section: QuestMenuSection) => void;
-	onselectitem: (item: QuestMenuItem, event: MouseEvent) => void;
+	onselectitem?: (item: QuestMenuItem, event: MouseEvent) => void;
 }
 
 let {
@@ -36,12 +38,6 @@ let {
 	onselect,
 	onselectitem,
 }: Props = $props();
-
-function sectionLabel(section: QuestMenuSection): string {
-	if (section === "daily") return t(lang, "hall.today");
-	if (section === "weekly") return t(lang, "hall.thisWeek");
-	return t(lang, "translate.title");
-}
 
 function itemTitle(item: QuestMenuItem): string {
 	return item.kind === "quest" ? item.task.title : item.task.titleBase;
@@ -63,12 +59,13 @@ function itemObjective(item: QuestMenuItem): string | null {
 				</div>
 			{:else}
 				<div class="recommendation-list">
-					{#each recommendations as item, index (item.key)}
-						<article class="recommendation-card" class:is-primary={index === 0} class:is-unread={item.hasUnread}>
-							<div class="recommendation-overline">
-								<span>{t(lang, index === 0 ? "hall.menu.primaryRecommendation" : "hall.menu.otherRecommendation")}</span>
-								<span>{sectionLabel(item.section)}</span>
-							</div>
+					{#each recommendations as item (item.key)}
+						<article
+							class="recommendation-card quest-difficulty-tone"
+							data-level={item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty}
+							class:is-unread={item.hasUnread}
+						>
+							<QuestMenuItemIndicator {item} {lang} />
 							{#if item.hasUnread}
 								<span class="unread-mark"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
 							{/if}
@@ -76,7 +73,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 							{#if itemObjective(item)}
 								<p class="font-prose">{itemObjective(item)}</p>
 							{/if}
-							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem(item, event)}>
+							<a href={getQuestMenuItemHref(item, base)} onclick={(event) => onselectitem?.(item, event)}>
 								{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
 							</a>
 						</article>
@@ -138,15 +135,6 @@ function itemObjective(item: QuestMenuItem): string | null {
 	color: var(--menu-wine);
 }
 
-.recommendation-overline {
-	font-family: var(--font-sans);
-	font-size: 0.64rem;
-	font-weight: 750;
-	letter-spacing: 0.09em;
-	text-transform: uppercase;
-	color: var(--menu-ink-muted);
-}
-
 .recommendation-list {
 	display: grid;
 	gap: 0.85rem;
@@ -166,21 +154,14 @@ function itemObjective(item: QuestMenuItem): string | null {
 	box-shadow: 0 10px 22px color-mix(in oklab, var(--menu-ink) 7%, transparent);
 }
 
-.recommendation-card.is-primary {
-	border-left-color: var(--menu-wine);
+.recommendation-card {
+	border-left-color: var(--quest-difficulty-color);
 }
 
 .recommendation-card.is-unread {
 	box-shadow:
 		0 0 0 1px color-mix(in oklab, var(--menu-wine) 30%, transparent),
 		0 12px 26px rgb(45 41 36 / 8%);
-}
-
-.recommendation-overline {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.5rem;
 }
 
 .recommendation-card h2 {

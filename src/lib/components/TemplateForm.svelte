@@ -324,7 +324,7 @@ function updateDraftOpeningState(id: number, state: Record<string, unknown>) {
 
 // ── Create mode: first variant state ─────────────────────────────
 let firstVariantSlots = $state(untrack(() => initialSlotValues ?? {}));
-let firstVariantOpeningState = $state(untrack(() => initialOpeningState ?? {}));
+let firstVariantOpeningState = $state(untrack(() => initialOpeningState ?? (getDefaultOpeningState(selectedUi) as Record<string, unknown>)));
 
 // Reset opening state when UI changes in create mode
 $effect(() => {

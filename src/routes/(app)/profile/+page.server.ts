@@ -2,20 +2,13 @@ import { fail, redirect } from "@sveltejs/kit";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
-import {
-	getNativeLanguageOptions,
-	getSelfAssignedLevel,
-	isLanguageCode,
-	isSelfAssignedLevel,
-	type SelfAssignedLevel,
-	withSelfAssignedLevel,
-} from "$lib/constants";
+import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { userApiKey, userLearningProfile } from "$lib/server/db/schema";
+import { userApiKey, user as userTable } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
@@ -24,13 +17,13 @@ export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
-	const [row, learningProfile] = await Promise.all([
+	const [row, learner] = await Promise.all([
 		db.query.userApiKey.findFirst({
 			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { userId: true, baseUrl: true, model: true },
 		}),
-		db.query.userLearningProfile.findFirst({
-			where: (t, { eq }) => eq(t.userId, user.id),
+		db.query.user.findFirst({
+			where: (t, { eq }) => eq(t.id, user.id),
 			columns: { levelSelfAssign: true },
 		}),
 	]);
@@ -38,12 +31,12 @@ export const load: PageServerLoad = async (event) => {
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 
 	return {
-		serverNativeLanguages: getNativeLanguageOptions("en"),
+		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
 		hasApiKey,
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
-		levelSelfAssign: getSelfAssignedLevel(learningProfile?.levelSelfAssign, activeLanguage),
+		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
 	};
 };
 
@@ -128,20 +121,17 @@ export const actions: Actions = {
 
 		const levelSelfAssign: SelfAssignedLevel = result.data.levelSelfAssign;
 		await db
-			.insert(userLearningProfile)
-			.values({ userId: user.id, levelSelfAssign: withSelfAssignedLevel(undefined, activeLanguage, levelSelfAssign) })
-			.onConflictDoUpdate({
-				target: userLearningProfile.userId,
-				set: {
-					levelSelfAssign: sql`jsonb_set(
-						${userLearningProfile.levelSelfAssign},
-						ARRAY[${activeLanguage}]::text[],
-						to_jsonb(${levelSelfAssign}::integer),
-						true
-					)`,
-					updatedAt: new Date(),
-				},
-			});
+			.update(userTable)
+			.set({
+				levelSelfAssign: sql`jsonb_set(
+					${userTable.levelSelfAssign},
+					ARRAY[${activeLanguage}]::text[],
+					to_jsonb(${levelSelfAssign}::integer),
+					true
+				)`,
+				updatedAt: new Date(),
+			})
+			.where(eq(userTable.id, user.id));
 
 		return { success: true, levelSelfAssign };
 	},

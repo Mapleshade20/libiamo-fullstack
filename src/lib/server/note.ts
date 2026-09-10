@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
 import { NOTE_EXAMPLE_COUNT, type NoteContent } from "$lib/note";
@@ -215,10 +215,6 @@ export async function createNoteFromSelectionQA(input: {
 	if (generated.length === 0) return { success: true as const, note: null };
 	const [created] = await createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
 	return { success: true as const, note: created };
-}
-
-export async function listNotes(userId: string) {
-	return db.select().from(note).where(eq(note.userId, userId)).orderBy(desc(note.id));
 }
 
 export async function getNote(noteId: number, userId: string) {

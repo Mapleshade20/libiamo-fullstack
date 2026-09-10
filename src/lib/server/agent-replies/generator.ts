@@ -163,10 +163,6 @@ export function normalizeReplyTargets(
 	return { decision: { ...decision, deliveries }, warnings };
 }
 
-export function validateReplyTargets(decision: AgentResponseDecision, ui: UiVariant, history: AgentHistoryMessage[]): AgentResponseDecision {
-	return normalizeReplyTargets(decision, ui, history).decision;
-}
-
 function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentGenerationFailureArtifacts {
 	const details = (error as { details?: StructuredOutputErrorDetails } | null)?.details;
 	const attempts = details

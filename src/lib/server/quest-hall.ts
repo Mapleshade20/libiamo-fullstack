@@ -61,8 +61,8 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 	const localMonday = getMondayOfWeekForDate(localDate);
 
 	await ensureTasksForDate(activeLanguage, localDate);
-	const learningProfile = await db.query.userLearningProfile.findFirst({
-		where: (profile, { eq }) => eq(profile.userId, user.id),
+	const learner = await db.query.user.findFirst({
+		where: (u, { eq }) => eq(u.id, user.id),
 		columns: { levelSelfAssign: true },
 	});
 
@@ -178,7 +178,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 	return {
 		activeLanguage,
 		nativeLanguage: user.nativeLanguage ?? null,
-		levelSelfAssign: getSelfAssignedLevel(learningProfile?.levelSelfAssign, activeLanguage),
+		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
 		localDate,
 		localMonday,
 		editionDate: localDate,

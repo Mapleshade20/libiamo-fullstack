@@ -1,8 +1,10 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
+import { t } from "$lib/i18n";
 import ProfilePage from "$routes/(app)/profile/+page.svelte";
 
 const data = {
+	displayClock: { now: 1788480000000, timeZone: "UTC" },
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {
@@ -23,6 +25,18 @@ const data = {
 };
 
 describe("Profile page", () => {
+	it.each(["en", ""])("renders the native-language warning correctly before hydration (%s)", (nativeLanguage) => {
+		const { body } = render(ProfilePage, { props: { data: { ...data, user: { ...data.user, nativeLanguage } }, form: null } });
+		expect(body.includes(t("fr", "profile.feedbackMissingNative"))).toBe(!nativeLanguage);
+	});
+
+	it("renders saved provider and model values in SSR", () => {
+		const { body } = render(ProfilePage, {
+			props: { data: { ...data, apiBaseUrl: "https://api.deepseek.com", apiModel: "saved-model" }, form: null },
+		});
+		expect(body).toContain('value="saved-model"');
+		expect(body).toMatch(/<option[^>]*value="https:\/\/api.deepseek.com"[^>]*selected/);
+	});
 	it("keeps name editing in the avatar card and omits the duplicate language switcher", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 

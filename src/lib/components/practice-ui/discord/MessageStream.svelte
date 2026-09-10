@@ -1,10 +1,14 @@
 <script lang="ts">
 import CheckCircle from "@lucide/svelte/icons/check-circle";
+import { getDisplayClock } from "$lib/display-clock";
+
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { normalizeEmojiTextForDisplay } from "../../utils/emojiUtils";
 import { getTodayDateString } from "../../utils/messageUtils";
 import type { ChatMessage } from "../chatMessages";
 import type { ChatUser } from "./types";
+
+const clock = getDisplayClock();
 
 let {
 	chatContainer = $bindable(null as HTMLElement | null),
@@ -36,7 +40,7 @@ let visibleMessages = $derived(messages.filter((message) => !message.isHidden &&
 <div bind:this={chatContainer} class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
 	<div class="my-4 mt-auto flex items-center justify-center">
 		<div class="h-px flex-1 bg-[#404249]"></div>
-		<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language)}</span>
+		<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language, clock())}</span>
 		<div class="h-px flex-1 bg-[#404249]"></div>
 	</div>
 

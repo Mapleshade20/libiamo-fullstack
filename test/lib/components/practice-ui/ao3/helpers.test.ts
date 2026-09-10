@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	type Ao3RenderableComment,
 	buildAo3CommentTree,
 	findAo3Target,
-	flattenAo3Comments,
 	getAo3AdditionalTags,
 	getAo3AuthorName,
 } from "$lib/components/practice-ui/ao3/helpers";
@@ -27,13 +27,6 @@ describe("AO3 helpers", () => {
 			},
 		],
 	};
-
-	it("flattens nested opening comments with stable ids", () => {
-		const result = flattenAo3Comments(openingState.previousComments);
-
-		expect(result.map((comment) => comment.id)).toEqual(["c1", "c1-r1", "opening-0-1"]);
-		expect(result[2]).toMatchObject({ username: "Ranjira", depth: 1, parentId: "c1" });
-	});
 
 	it("finds targets and resolves author/tag defaults", () => {
 		expect(getAo3AuthorName(openingState)).toBe("HikariKitsune02");
@@ -140,7 +133,7 @@ describe("AO3 helpers", () => {
 		];
 
 		const tree = buildAo3CommentTree({ openingState, messages });
-		const flattened = flattenAo3Comments(tree).map((comment) => comment.id);
-		expect(flattened).not.toContain("a-pending");
+		const collectIds = (nodes: Ao3RenderableComment[]): string[] => nodes.flatMap((node) => [node.id, ...collectIds(node.replies)]);
+		expect(collectIds(tree)).not.toContain("a-pending");
 	});
 });

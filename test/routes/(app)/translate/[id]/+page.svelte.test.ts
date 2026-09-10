@@ -1,8 +1,11 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
-import TranslationDetailPage from "$routes/(app)/translate/[id]/+page.svelte";
+import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
+import { questHallDetails } from "$lib/server/quest-hall-details";
+import { hallData } from "../../../../fixtures/quest-hall";
 
 const data = {
+	displayClock: { now: 1788480000000, timeZone: "UTC" },
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {
@@ -35,12 +38,17 @@ const data = {
 };
 
 describe("translation detail page", () => {
-	it("uses the ordinary task detail shell without unsupported content", () => {
-		const { body } = render(TranslationDetailPage, { props: { data, form: null } });
+	it("server-renders the canonical detail in the catalog-side preparation shell", () => {
+		const { body } = render(QuestMenuRoute, {
+			props: {
+				route: questHallDetails(hallData({ activeLanguage: "fr" }), { kind: "translation", key: "translation-12", data }),
+				form: null,
+			},
+		});
 
-		expect(body).toContain("task-stagger");
-		expect(body).toContain("max-w-2xl");
-		expect(body).toContain("Retour à la Salle des Quêtes");
+		expect(body).toContain('data-view="prepare"');
+		expect(body).toContain("preparation-dock");
+		expect(body).not.toContain("task-stagger");
 		expect(body).toContain("A letter");
 		expect(body).toContain("Translate a personal letter.");
 		expect(body).not.toContain("This must not be displayed");

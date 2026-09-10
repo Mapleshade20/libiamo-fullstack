@@ -7,6 +7,9 @@ import TemplateForm from "$lib/components/TemplateForm.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
+import { getDisplayClock } from "$lib/display-clock";
+
+const clock = getDisplayClock();
 
 let { data, form } = $props();
 
@@ -53,7 +56,7 @@ const actionNotification = $derived(
 
 function formatDate(d: Date | null): string {
 	if (!d) return "";
-	return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+	return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: clock().timeZone });
 }
 
 function fillFromJson() {

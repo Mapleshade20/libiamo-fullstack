@@ -8,10 +8,8 @@ import {
 	countThreadComments,
 	findOpeningCommentTarget,
 	findTargetInMessages,
-	flattenOpeningComments,
 	getCommentIdForMessage,
 	getParentCommentIdForMessage,
-	getTargetsFromMessages,
 	normalizeThreadText,
 } from "../commentThread";
 
@@ -97,26 +95,14 @@ export function getAo3AdditionalTags(openingState: Ao3OpeningState): string[] {
 	);
 }
 
-export function flattenAo3Comments(comments: Ao3CommentNode[] = [], depth = 0, parentId: string | null = null, path: number[] = []): Ao3Target[] {
-	return flattenOpeningComments(comments, ao3ThreadConfig, depth, parentId, path).map(toAo3Target);
-}
-
 export function findAo3Target(openingState: Ao3OpeningState, targetCommentId: string | null | undefined): Ao3Target | null {
 	const target = findOpeningCommentTarget(openingState.previousComments ?? [], ao3ThreadConfig, targetCommentId);
 	return target ? toAo3Target(target) : null;
 }
 
-export function getAo3TargetsFromMessages(messages: ChatMessage[]): Ao3Target[] {
-	return getTargetsFromMessages(messages, ao3ThreadConfig).map(toAo3Target);
-}
-
 export function findAo3TargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): Ao3Target | null {
 	const target = findTargetInMessages(messages, ao3ThreadConfig, targetCommentId);
 	return target ? toAo3Target(target) : null;
-}
-
-export function resolveAo3Responder(openingState: Ao3OpeningState, target: Ao3Target | null): string {
-	return target?.username || getAo3AuthorName(openingState);
 }
 
 export function buildAo3UserPrompt(params: {

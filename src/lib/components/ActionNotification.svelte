@@ -9,20 +9,14 @@ interface Props {
 
 let { notification = null, durationMs = 4000 }: Props = $props();
 
-let isOpen = $state(false);
-let activeKey = $state("");
+let dismissedKey = $state<string | null>(null);
+const activeKey = $derived(
+	notification ? `${notification.variant}:${notification.title ?? ""}:${notification.message}:${notification.key ?? ""}` : "",
+);
+const isOpen = $derived(Boolean(activeKey) && activeKey !== dismissedKey);
 
 $effect(() => {
-	const nextKey = notification ? `${notification.variant}:${notification.title ?? ""}:${notification.message}:${notification.key ?? ""}` : "";
-	if (!nextKey) {
-		isOpen = false;
-		activeKey = "";
-		return;
-	}
-	if (nextKey !== activeKey) {
-		activeKey = nextKey;
-		isOpen = true;
-	}
+	if (!notification) dismissedKey = null;
 });
 </script>
 
@@ -32,5 +26,5 @@ $effect(() => {
 	title={notification?.title}
 	message={notification?.message ?? ""}
 	{durationMs}
-	onClose={() => (isOpen = false)}
+	onClose={() => (dismissedKey = activeKey)}
 />

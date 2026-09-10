@@ -32,10 +32,3 @@ export const COMMUNITY_RULES = [
 	"No doxxing or sharing personal info",
 	"Follow Reddit's site-wide content policy",
 ];
-
-export const NAV_ITEMS = [
-	{ icon: "home", key: "home" },
-	{ icon: "trending-up", key: "popular" },
-	{ icon: "layers", key: "all" },
-	{ icon: "search", key: "explore" },
-] as const;

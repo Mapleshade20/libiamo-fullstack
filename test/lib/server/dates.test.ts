@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getLocalDateString, toSafeUtcDate } from "$lib/server/scheduling/dates";
+import { getLocalDateString } from "$lib/server/scheduling/dates";
 
 describe("getLocalDateString", () => {
 	let originalTz: string | undefined;
@@ -25,28 +25,5 @@ describe("getLocalDateString", () => {
 
 	it("formats an explicit instant in the requested timezone", () => {
 		expect(getLocalDateString("Pacific/Auckland", new Date("2026-08-31T19:00:00.000Z"))).toBe("2026-09-01");
-	});
-});
-
-describe("toSafeUtcDate", () => {
-	it("returns a Date object from a YYYY-MM-DD string", () => {
-		const result = toSafeUtcDate("2026-01-15");
-		expect(result).toBeInstanceOf(Date);
-		expect(result.getUTCHours()).toBe(12);
-		expect(result.getUTCMinutes()).toBe(0);
-		expect(result.getUTCSeconds()).toBe(0);
-	});
-
-	it("handles month boundaries correctly", () => {
-		const result = toSafeUtcDate("2026-12-31");
-		expect(result.getUTCFullYear()).toBe(2026);
-		expect(result.getUTCMonth()).toBe(11); // December = 11
-		expect(result.getUTCDate()).toBe(31);
-	});
-
-	it("handles leap year date", () => {
-		const result = toSafeUtcDate("2024-02-29");
-		expect(result.getUTCMonth()).toBe(1); // February = 1
-		expect(result.getUTCDate()).toBe(29);
 	});
 });

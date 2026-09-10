@@ -4,48 +4,10 @@ import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
 import QuestMenuBook from "$lib/components/quest-hall/quest-menu/QuestMenuBook.svelte";
 import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
 import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
-import type { HallQuest } from "$lib/quest-hall";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";
-import type { HallData } from "$lib/server/quest-hall";
 
-function quest(id: number, overrides: Partial<HallQuest> = {}): HallQuest {
-	return {
-		id,
-		title: `Quest ${id}`,
-		shortObjective: `Objective ${id}`,
-		templateUi: "imessage",
-		templateDifficulty: 2,
-		templateInteractionType: "chat",
-		pointReward: 10,
-		sessionStatus: null,
-		unreadCount: 0,
-		hasUnreadReply: false,
-		...overrides,
-	};
-}
-
-function hallData(overrides: Partial<HallData> = {}): HallData {
-	return {
-		activeLanguage: "en",
-		nativeLanguage: "fr",
-		levelSelfAssign: 2,
-		localDate: "2026-09-04",
-		localMonday: "2026-08-31",
-		editionDate: "2026-09-04",
-		translationMonth: "2026-09",
-		greeting: "Good morning, Fedor",
-		subtitle: "A few thoughtful missions are waiting.",
-		dailyTasks: [quest(1, { unreadCount: 2, hasUnreadReply: true })],
-		weeklyTasks: [quest(11)],
-		translationTasks: [
-			{ id: 21, titleBase: "Current letter", descriptionBase: "Translate a short letter.", difficulty: 1, createdMonth: "2026-09" },
-			{ id: 22, titleBase: "Archived letter", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
-		],
-		translationStatusMap: {},
-		...overrides,
-	};
-}
+import { hallData, quest } from "../../../fixtures/quest-hall";
 
 const home: HallLocation = { view: "home", section: "daily", leaf: 1, task: null };
 
@@ -92,7 +54,7 @@ describe("QuestMenu", () => {
 	});
 
 	it("server-renders the personalized home, recommendations, ribbons, and canonical links", () => {
-		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
+		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
 
 		expect(body).toContain("Good morning, Fedor");
 		expect(body).toContain("Recommended");
@@ -108,7 +70,6 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData({ dailyTasks: [quest(1, { unreadCount: 10, hasUnreadReply: true })] }),
 				initialLocation: home,
-				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -118,6 +79,25 @@ describe("QuestMenu", () => {
 		expect(body).toContain(">9+</span>");
 	});
 
+	// Finished conversations belong on the report, not the transcript; sending them to
+	// /session also burns the read receipt, so the report loses its only entry point.
+	it.each([
+		["in_progress", "/task/1/session"],
+		["abandoned", "/task/1/session"],
+		["completed", "/task/1/feedback"],
+		["evaluated", "/task/1/feedback"],
+	] as const)("routes an unread %s conversation to %s", (sessionStatus, href) => {
+		const { body } = render(QuestMenuInbox, {
+			props: {
+				items: [{ taskId: 1, title: "Quest 1", ui: "imessage", sessionStatus, unreadCount: 1, latestAgeSeconds: 60 }],
+				total: 1,
+				status: "ready",
+				lang: "en",
+			},
+		});
+		expect(body).toContain(`href="${href}"`);
+	});
+
 	it.each([
 		["en", "MENU"],
 		["es", "CARTA"],
@@ -125,14 +105,14 @@ describe("QuestMenu", () => {
 		["ja", "メニュー"],
 	] as const)("server-renders the localized menu title for %s", (lang, title) => {
 		const { body } = render(QuestMenu, {
-			props: { data: hallData({ activeLanguage: lang }), initialLocation: home, accountScope: "account-a", lang },
+			props: { data: hallData({ activeLanguage: lang }), initialLocation: home, lang },
 		});
 
 		expect(body).toContain(`>${title}</strong>`);
 	});
 
 	it("renders the closed book shell without mounting hidden catalog cards", () => {
-		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, accountScope: "account-a", lang: "en" } });
+		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
 
 		expect(body).toContain('class="cover-face cover-face-back page page-left ');
 		expect(body).toContain('class="book-surface book-deck book-deck-blank ');
@@ -146,7 +126,7 @@ describe("QuestMenu", () => {
 
 	it.each(["home", "catalog"] as const)("keeps the three desktop section tabs inside the animated book in %s", (view) => {
 		const { body } = render(QuestMenu, {
-			props: { data: hallData(), initialLocation: { ...home, view }, accountScope: "account-a", lang: "en" },
+			props: { data: hallData(), initialLocation: { ...home, view }, lang: "en" },
 		});
 		const bookMarkup = body.slice(body.indexOf('class="book-layer'));
 		expect(bookMarkup).toContain('class="book-ribbons');
@@ -159,7 +139,6 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData(),
 				initialLocation: { view: "catalog", section: "translation", leaf: 1, task: null },
-				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -180,7 +159,6 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData(),
 				initialLocation: { view: "catalog", section: "daily", leaf: 1, task: null },
-				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -195,7 +173,6 @@ describe("QuestMenu", () => {
 			props: {
 				data,
 				initialLocation: { view: "prepare", section: "translation", leaf: 1, task: "translation-22" },
-				accountScope: "account-a",
 				initialPreparation: {
 					kind: "translation",
 					key: "translation-22",
@@ -229,7 +206,6 @@ describe("QuestMenu", () => {
 			props: {
 				data: hallData({ dailyTasks: [], weeklyTasks: [], translationTasks: [] }),
 				initialLocation: { view: "catalog", section: "daily", leaf: 1, task: null },
-				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -245,7 +221,6 @@ describe("QuestMenu", () => {
 			props: {
 				data,
 				initialLocation: { view: "catalog", section: "translation", leaf: 1, task: null },
-				accountScope: "account-a",
 				lang: "en",
 			},
 		});
@@ -259,7 +234,6 @@ describe("QuestMenu", () => {
 			props: {
 				data,
 				initialLocation: { view: "prepare", section: "daily", leaf: 1, task: "daily-1" },
-				accountScope: "account-a",
 				initialPreparation: {
 					kind: "quest",
 					key: "daily-1",

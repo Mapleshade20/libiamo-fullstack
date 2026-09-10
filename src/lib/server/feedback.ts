@@ -114,11 +114,6 @@ export function stripAllTags(text: string): string {
 	return text.replace(/<\/?(?:grammar|vocab|delete|mark)>/g, "");
 }
 
-/** Get plain text from annotated text (for display comparison) */
-export function getPlainText(annotatedText: string): string {
-	return stripAllTags(annotatedText);
-}
-
 // ── Main parser ──────────────────────────────────────────────────────
 
 export function parseFeedbackXml(xmlResponse: string): FeedbackResult {

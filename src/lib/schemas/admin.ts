@@ -161,13 +161,6 @@ export const templateContributionSchema = z
 	.transform(normalizeTranslationContent)
 	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
 
-// ── Variant ───────────────────────────────────────────────────────────
-export const variantSchema = z.object({
-	slotValues: z.record(z.string(), z.string()).default({}),
-	openingState: z.record(z.string(), z.unknown()).default({}),
-	isActive: z.boolean().default(true),
-});
-
 // ── openingState per-UI schemas ───────────────────────────────────────
 const uiText = z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH);
 const mailText = z.string().max(MAIL_TEXT_MAX_LENGTH);

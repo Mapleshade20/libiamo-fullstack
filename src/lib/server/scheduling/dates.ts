@@ -55,12 +55,3 @@ export function getLocalDateString(tz: string, date = new Date()): string {
 		return dayjs(date).utc().format("YYYY-MM-DD");
 	}
 }
-
-/**
- * Build a "safe" Date object anchored at 12:00 UTC from a YYYY-MM-DD string.
- * Prevents timezone-induced day shifts in downstream logic.
- */
-export function toSafeUtcDate(dateStr: string): Date {
-	const d = dayjs(dateStr, "YYYY-MM-DD");
-	return new Date(Date.UTC(d.year(), d.month(), d.date(), 12, 0, 0));
-}

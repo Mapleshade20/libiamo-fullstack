@@ -54,7 +54,7 @@ describe("TaskPreparation", () => {
 
 	it("uses a nested heading when embedded in the Quest Menu", () => {
 		const { body } = render(TaskPreparation, {
-			props: { task: task(), nativeLanguage: "en", mode: "pane" },
+			props: { task: task(), nativeLanguage: "en" },
 		});
 
 		expect(body).toContain('<h2 id="task-preparation-title"');

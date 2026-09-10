@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { DEFAULT_SELF_ASSIGNED_LEVELS, type SelfAssignedLevelsByLanguage, type TranslationWorkflowPhase } from "$lib/constants";
+import type { TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
 import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
@@ -19,37 +19,6 @@ import {
 	uiVariantEnum,
 	urgencyEnum,
 } from "./enums";
-
-// ── userLearningProfile ──────────────────────────────────────────────
-export const userLearningProfile = pgTable(
-	"user_learning_profile",
-	{
-		userId: text("user_id")
-			.primaryKey()
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		levelSelfAssign: jsonb("level_self_assign").$type<SelfAssignedLevelsByLanguage>().default(DEFAULT_SELF_ASSIGNED_LEVELS).notNull(),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(t) => [
-		check(
-			"user_learning_profile_level_self_assign_check",
-			sql`
-				jsonb_typeof(${t.levelSelfAssign}) = 'object'
-				AND ${t.levelSelfAssign} ?& ARRAY['en', 'es', 'fr', 'ja']
-				AND (${t.levelSelfAssign} - 'en' - 'es' - 'fr' - 'ja') = '{}'::jsonb
-				AND (${t.levelSelfAssign}->'en') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
-				AND (${t.levelSelfAssign}->'es') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
-				AND (${t.levelSelfAssign}->'fr') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
-				AND (${t.levelSelfAssign}->'ja') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
-			`,
-		),
-	],
-);
 
 // ── template ─────────────────────────────────────────────────────────
 export const template = pgTable(
@@ -447,13 +416,6 @@ export const reviewLog = pgTable(
 );
 
 // ── Relations ────────────────────────────────────────────────────────
-export const userLearningProfileRelations = relations(userLearningProfile, ({ one }) => ({
-	user: one(user, {
-		fields: [userLearningProfile.userId],
-		references: [user.id],
-	}),
-}));
-
 export const templateRelations = relations(template, ({ one, many }) => ({
 	createdByUser: one(user, {
 		fields: [template.createdBy],

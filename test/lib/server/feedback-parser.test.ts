@@ -8,7 +8,7 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
-import { getPlainText, isFeedbackResultValid, parseAnnotationSpans, parseFeedbackXml, stripAllTags } from "$lib/server/feedback";
+import { isFeedbackResultValid, parseAnnotationSpans, parseFeedbackXml, stripAllTags } from "$lib/server/feedback";
 
 describe("stripAllTags", () => {
 	it("removes annotation and semantic mark tags, leaving content", () => {
@@ -24,12 +24,6 @@ describe("stripAllTags", () => {
 
 	it("handles nested tags", () => {
 		expect(stripAllTags("<grammar><vocab>nested</vocab></grammar>")).toBe("nested");
-	});
-});
-
-describe("getPlainText", () => {
-	it("returns text with all tags stripped", () => {
-		expect(getPlainText("I <grammar>goed</grammar> to the <vocab>tienda</vocab>")).toBe("I goed to the tienda");
 	});
 });
 

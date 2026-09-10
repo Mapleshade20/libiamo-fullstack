@@ -6,7 +6,7 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
-import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
+import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
@@ -22,7 +22,8 @@ import AnnotationPopup from "./AnnotationPopup.svelte";
 
 let { data } = $props();
 
-let feedback = $state<FeedbackResult | null>(null);
+// svelte-ignore state_referenced_locally
+let feedback = $state<FeedbackResult | null>(data.existingFeedback ?? null);
 let summaryParts = $derived(parseMarkedText(feedback?.summary ?? "").parts);
 let isGenerating = $state(false);
 let generationError = $state<string | null>(null);
@@ -36,8 +37,7 @@ let activeAnnotation = $state<{
 } | null>(null);
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
-// svelte-ignore state_referenced_locally
-let detailsHref = $state(`${base}/task/${data.taskId}`);
+let detailsHref = $derived(`${base}/task/${data.taskId}`);
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
@@ -49,15 +49,6 @@ $effect(() => {
 // Trigger client-only generation after mount. Calling fetch from an eager
 // reactive effect can run during SSR and causes SvelteKit warnings.
 onMount(() => {
-	detailsHref = getQuestHallWorkflowReturnHref({
-		destination: "details",
-		accountScope: data.accountScope,
-		activeLanguage: data.user.activeLanguage as LanguageCode,
-		edition: data.questHallEdition,
-		item: { kind: "quest", id: Number(data.taskId) },
-		base,
-		fallbackHref: detailsHref,
-	});
 	if (data.existingFeedback) {
 		feedback = data.existingFeedback;
 		return;
@@ -219,6 +210,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	return grade === "A" ? "bg-green-500" : grade === "B" ? "bg-amber-500" : "bg-red-500";
 }
 </script>
+
+<ConversationReadReceipt receipt={data.readReceipt} />
 
 <svelte:head>
 	<title>{data.taskTitle} · Feedback · Libiamo</title>

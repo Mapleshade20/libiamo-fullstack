@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { DEFAULT_SELF_ASSIGNED_LEVELS, type SelfAssignedLevelsByLanguage } from "$lib/constants";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
 export const user = pgTable(
@@ -15,6 +16,7 @@ export const user = pgTable(
 		feedbackLanguagePreference: text("feedback_language_preference").$type<"native" | "target">().default("native").notNull(),
 		gemsBalance: integer("gems_balance").default(0).notNull(),
 		activeLanguage: languageCodeEnum("active_language").notNull(),
+		levelSelfAssign: jsonb("level_self_assign").$type<SelfAssignedLevelsByLanguage>().default(DEFAULT_SELF_ASSIGNED_LEVELS).notNull(),
 		deletedAt: timestamp("deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -22,7 +24,21 @@ export const user = pgTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(t) => [check("user_feedback_language_preference_check", sql`${t.feedbackLanguagePreference} IN ('native', 'target')`)],
+	(t) => [
+		check("user_feedback_language_preference_check", sql`${t.feedbackLanguagePreference} IN ('native', 'target')`),
+		check(
+			"user_level_self_assign_check",
+			sql`
+				jsonb_typeof(${t.levelSelfAssign}) = 'object'
+				AND ${t.levelSelfAssign} ?& ARRAY['en', 'es', 'fr', 'ja']
+				AND (${t.levelSelfAssign} - 'en' - 'es' - 'fr' - 'ja') = '{}'::jsonb
+				AND (${t.levelSelfAssign}->'en') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'es') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'fr') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+				AND (${t.levelSelfAssign}->'ja') IN ('1'::jsonb, '2'::jsonb, '3'::jsonb)
+			`,
+		),
+	],
 );
 
 export const session = pgTable(

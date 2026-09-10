@@ -64,8 +64,8 @@ Roles
 
 Quest Hall
 - The authenticated root `/` presents daily and weekly practice quests, translation templates, and unread replies through the responsive Quest Menu.
-- Task and translation preparation opens inside the menu. When a workflow navigates away, account-scoped return context restores the previous section, page, and item.
-- Translation templates can be browsed by creation month without URL navigation. The `/task` and `/translate` roots redirect to Quest Hall, while their `[id]` routes remain the workflow entry points.
+- Task and translation details use the book-beside-sheet Quest Menu presentation at their canonical `/task/[id]` and `/translate/[id]` URLs. Workflow exits always return to that resource; there is no storage-dependent detail routing or persisted scroll position.
+- Catalog section, page, and translation year are URL state. Detail-to-catalog navigation derives the selected task's catalog position. The `/task` and `/translate` roots redirect to Quest Hall; legacy root preparation queries redirect to canonical details.
 - Each target language stores a self-assigned proficiency level: level 1 corresponds to A2–B1, level 2 to B2–C1, and level 3 to C2+. Recommendations preserve unread and in-progress work, then prefer tasks closest to the active language's level.
 
 Template vs Template Variant vs Task

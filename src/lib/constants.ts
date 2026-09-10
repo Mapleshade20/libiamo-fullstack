@@ -12,7 +12,6 @@ export const USER_TEXT_MAX_LENGTH = 10000;
 export const USER_LONG_TEXT_MAX_LENGTH = 50000;
 export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
-export const BYOK_BASE_URL_MAX_LENGTH = 2048;
 export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;
 export const REVIEW_MAXIMUM_INTERVAL_DAYS = 36_500;
 
@@ -109,10 +108,6 @@ export function normalizeSelfAssignedLevels(value: unknown): SelfAssignedLevelsB
 
 export function getSelfAssignedLevel(value: unknown, language: LanguageCode): SelfAssignedLevel {
 	return normalizeSelfAssignedLevels(value)[language];
-}
-
-export function withSelfAssignedLevel(value: unknown, language: LanguageCode, level: SelfAssignedLevel): SelfAssignedLevelsByLanguage {
-	return { ...normalizeSelfAssignedLevels(value), [language]: level };
 }
 
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {

@@ -18,13 +18,6 @@ export function plainTextToDraftHtml(value: string) {
 		.join("");
 }
 
-export function appendPlainTextToDraftHtml(existingHtml: string | undefined, text: string, separate = true) {
-	const trimmedExistingHtml = existingHtml?.trim() ?? "";
-	const nextHtml = plainTextToDraftHtml(text);
-	if (!trimmedExistingHtml) return nextHtml;
-	return `${trimmedExistingHtml}${separate ? "<div><br></div>" : ""}${nextHtml}`;
-}
-
 export function sanitizeDraftBodyHtml(value: string | undefined, maxLength = mailBodyHtmlMaxLength) {
 	const trimmed = value?.trim() ?? "";
 	if (!trimmed) return "";

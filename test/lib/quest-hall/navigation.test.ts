@@ -37,6 +37,9 @@ const data: HallData = {
 const catalog = adaptHallDataToQuestMenu(data);
 
 describe("production Hall navigation", () => {
+	it("omits catalog context from home URLs", () => {
+		expect(hallLocationUrl({ view: "home", section: "translation", leaf: 3, task: null }, "/learn")).toBe("/learn/");
+	});
 	it("uses deterministic defaults and accepts full URLs", () => {
 		expect(parseHallLocation("")).toEqual(DEFAULT_HALL_LOCATION);
 		expect(parseHallLocation("https://example.test/?view=catalog&section=weekly&leaf=2")).toEqual({
@@ -82,13 +85,9 @@ describe("production Hall navigation", () => {
 		});
 	});
 
-	it("infers the preparation section and returns none for a no-op", () => {
-		const selected = reduceHallLocation({ ...DEFAULT_HALL_LOCATION }, { type: "select-item", task: "weekly-11" }, catalog);
-		expect(selected).toMatchObject({ location: { view: "prepare", section: "weekly", task: "weekly-11" }, historyIntent: "push" });
-		expect(reduceHallLocation(selected.location, { type: "return-from-prepare", destination: "home" }, catalog)).toMatchObject({
-			location: { view: "home", task: null },
-			historyIntent: "back",
-		});
+	it("serializes preparation only as a canonical resource URL", () => {
+		expect(hallLocationUrl({ view: "prepare", section: "weekly", leaf: 2, task: "weekly-11" }, "/libiamo")).toBe("/libiamo/task/11");
+		expect(hallLocationUrl({ view: "prepare", section: "translation", leaf: 1, task: "translation-22" }, "/libiamo")).toBe("/libiamo/translate/22");
 		const unchanged = reduceHallLocation({ ...DEFAULT_HALL_LOCATION }, { type: "close-catalog" }, catalog);
 		expect(unchanged.historyIntent).toBe("none");
 	});

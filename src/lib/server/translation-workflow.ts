@@ -77,34 +77,6 @@ export async function findTranslationAttempt(input: { userId: string; templateId
 	return record;
 }
 
-export async function getOwnedTranslationAttempt(attemptId: number, userId: string, templateId: number) {
-	const [record] = await db
-		.select({
-			id: translationAttempt.id,
-			userId: translationAttempt.userId,
-			sourceSetId: translationAttempt.sourceSetId,
-			workflowPhase: translationAttempt.workflowPhase,
-			evaluation: translationAttempt.evaluation,
-			generation1Messages: translationAttempt.generation1Messages,
-			feedbackLanguage: translationAttempt.feedbackLanguage,
-			submittedAt: translationAttempt.submittedAt,
-			evaluatedAt: translationAttempt.evaluatedAt,
-			practiceGeneratedAt: translationAttempt.practiceGeneratedAt,
-			completedAt: translationAttempt.completedAt,
-			updatedAt: translationAttempt.updatedAt,
-			candidates: translationSourceSet.candidates,
-			referenceParagraphs: translationSourceSet.referenceParagraphs,
-			context: translationSourceSet.context,
-			targetLanguage: translationSourceSet.sourceLanguage,
-			promptLanguage: translationSourceSet.promptLanguage,
-		})
-		.from(translationAttempt)
-		.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
-		.where(and(eq(translationAttempt.id, attemptId), eq(translationAttempt.userId, userId), eq(translationSourceSet.templateId, templateId)))
-		.limit(1);
-	return record;
-}
-
 export async function getTranslationAnswers(attemptId: number) {
 	return db
 		.select({

@@ -3,11 +3,9 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Send from "@lucide/svelte/icons/send";
-import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
 import { base } from "$app/paths";
-import { getQuestHallWorkflowReturnHref } from "$lib/client/quest-hall/return-context";
 import {
 	parseTranslationDraft,
 	serializeTranslationDraft,
@@ -21,32 +19,20 @@ import { t } from "$lib/i18n";
 
 let { data, form } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
-let answers = $state<TranslationDraftAnswer[]>([]);
+// svelte-ignore state_referenced_locally
+let answers = $state<TranslationDraftAnswer[]>(data.attempt.answers.map((answer) => ({ ...answer })));
 let candidatePickerIndex = $state<number | null>(null);
 let initialized = $state(false);
 let submitting = $state(false);
 let allComplete = $derived(answers.length > 0 && answers.every((answer) => answer.translation.trim()));
 let promptLanguageTag = $derived(getHtmlLanguageTag(data.attempt.promptLanguage));
 let targetLanguageTag = $derived(getHtmlLanguageTag(data.template.language));
-// svelte-ignore state_referenced_locally
-let detailsHref = $state(`${base}/translate/${data.template.id}`);
-
-onMount(() => {
-	detailsHref = getQuestHallWorkflowReturnHref({
-		destination: "details",
-		accountScope: data.accountScope,
-		activeLanguage: lang,
-		edition: data.questHallEdition,
-		item: { kind: "translation", id: data.template.id },
-		base,
-		fallbackHref: detailsHref,
-	});
-});
+let detailsHref = $derived(`${base}/translate/${data.template.id}`);
 
 $effect(() => {
 	if (initialized) return;
 	initialized = true;
-	const fallback = data.attempt.answers.map((answer) => ({ ...answer, translation: "" }));
+	const fallback = data.attempt.answers.map((answer) => ({ ...answer }));
 	try {
 		answers = parseTranslationDraft(
 			sessionStorage.getItem(translationDraftStorageKey(data.attempt.id)),

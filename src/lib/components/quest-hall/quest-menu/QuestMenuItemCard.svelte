@@ -1,13 +1,11 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
-import Gauge from "@lucide/svelte/icons/gauge";
 import Mail from "@lucide/svelte/icons/mail";
-import Star from "@lucide/svelte/icons/star";
 import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
-import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuItemState } from "$lib/quest-hall/menu";
+import QuestMenuItemIndicator from "./QuestMenuItemIndicator.svelte";
 import QuestMenuStatusMark from "./QuestMenuStatusMark.svelte";
 
 interface Props {
@@ -20,42 +18,25 @@ interface Props {
 let { item, lang, compact = false, onselect }: Props = $props();
 let title = $derived(item.kind === "quest" ? item.task.title : item.task.titleBase);
 let objective = $derived(item.kind === "quest" ? item.task.shortObjective : item.task.descriptionBase);
-let difficulty = $derived(item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty);
-let channel = $derived(
-	item.kind === "quest" ? (UI_VARIANT_LABELS[item.task.templateUi as UiVariant] ?? item.task.templateUi) : t(lang, "translate.title"),
-);
 
 function statusLabel(state: QuestMenuItemState): string {
 	return t(lang, `hall.menu.status.${state}`);
 }
-
-function difficultyLabel(level: number): string {
-	if (level === 1) return t(lang, "task.difficulty.beginner");
-	if (level === 2) return t(lang, "task.difficulty.intermediate");
-	if (level === 3) return t(lang, "task.difficulty.advanced");
-	return String(level);
-}
 </script>
 
 <article class="task-card" class:is-compact={compact} class:is-finished={item.state === "finished"} class:is-active={item.state === "active"}>
-	<div class="task-overline">
-		<span>{String(item.ordinal).padStart(2, "0")}</span>
-		<span>{channel}</span>
+	<div class="task-overline"><span>{String(item.ordinal).padStart(2, "0")}</span></div>
+	<div class="status-row">
+		<QuestMenuStatusMark state={item.state} label={statusLabel(item.state)} variant={item.state === "finished" ? "stamp" : "line"} />
+		{#if item.hasUnread}
+			<span class="unread"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
+		{/if}
 	</div>
-	<QuestMenuStatusMark state={item.state} label={statusLabel(item.state)} variant={item.state === "finished" ? "stamp" : "line"} />
 	<h3>{title}</h3>
 	{#if objective}
 		<p class="font-prose">{objective}</p>
 	{/if}
-	{#if item.hasUnread}
-		<span class="unread"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
-	{/if}
-	<div class="meta">
-		<span><Gauge size={14} aria-hidden="true" /> {difficultyLabel(difficulty)}</span>
-		{#if item.kind === "quest"}
-			<span><Star size={14} aria-hidden="true" /> {item.task.pointReward} {t(lang, "task.points")}</span>
-		{/if}
-	</div>
+	<div class="meta"><QuestMenuItemIndicator {item} {lang} /></div>
 	<a class="detail-link" href={getQuestMenuItemHref(item, base)} onclick={(event) => onselect?.(item, event)}>
 		{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
 	</a>
@@ -135,7 +116,13 @@ function difficultyLabel(level: number): string {
 	text-transform: none;
 }
 
-.meta span,
+.status-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.65rem;
+}
+
 .unread {
 	display: inline-flex;
 	align-items: center;

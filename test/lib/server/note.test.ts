@@ -31,7 +31,6 @@ import {
 	createNotesFromSelectionBatch,
 	deleteNote,
 	getNote,
-	listNotes,
 	updateNote,
 } from "$lib/server/note";
 
@@ -172,12 +171,8 @@ describe("generated Note entry points", () => {
 });
 
 describe("Note CRUD", () => {
-	it("lists and loads owned Notes", async () => {
-		const rows = [{ id: 3 }, { id: 1 }];
-		const orderBy = vi.fn().mockResolvedValue(rows);
-		mockDb.select.mockReturnValue({ from: () => ({ where: () => ({ orderBy }) }) });
+	it("loads an owned Note", async () => {
 		mockDb.query.note.findFirst.mockResolvedValue({ id: 3, examples: [] });
-		expect(await listNotes(USER_ID)).toEqual(rows);
 		expect(await getNote(3, USER_ID)).toEqual({ id: 3, examples: [] });
 	});
 
