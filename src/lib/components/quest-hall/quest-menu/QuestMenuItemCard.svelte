@@ -3,10 +3,9 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Mail from "@lucide/svelte/icons/mail";
 import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
-import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuItemState } from "$lib/quest-hall/menu";
-import NotificationIcon from "./NotificationIcon.svelte";
+import QuestMenuItemIndicator from "./QuestMenuItemIndicator.svelte";
 import QuestMenuStatusMark from "./QuestMenuStatusMark.svelte";
 
 interface Props {
@@ -19,10 +18,6 @@ interface Props {
 let { item, lang, compact = false, onselect }: Props = $props();
 let title = $derived(item.kind === "quest" ? item.task.title : item.task.titleBase);
 let objective = $derived(item.kind === "quest" ? item.task.shortObjective : item.task.descriptionBase);
-let difficulty = $derived(item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty);
-let channel = $derived(
-	item.kind === "quest" ? (UI_VARIANT_LABELS[item.task.templateUi as UiVariant] ?? item.task.templateUi) : t(lang, "translate.title"),
-);
 
 function statusLabel(state: QuestMenuItemState): string {
 	return t(lang, `hall.menu.status.${state}`);
@@ -41,21 +36,7 @@ function statusLabel(state: QuestMenuItemState): string {
 	{#if objective}
 		<p class="font-prose">{objective}</p>
 	{/if}
-	<div class="meta" data-level={difficulty}>
-		<span class="channel-icon" role="img" aria-label={channel} title={channel}>
-			<NotificationIcon ui={item.kind === "quest" ? item.task.templateUi : "translator"} />
-		</span>
-		<span
-			class="difficulty"
-			role="img"
-			aria-label={`${t(lang, "hall.difficulty")}: ${difficulty}/3`}
-			title={`${t(lang, "hall.difficulty")}: ${difficulty}/3`}
-		>
-			{#each [1, 2, 3] as level}
-				<span class="difficulty-dot" class:is-filled={level <= difficulty} aria-hidden="true"></span>
-			{/each}
-		</span>
-	</div>
+	<div class="meta"><QuestMenuItemIndicator {item} {lang} /></div>
 	<a class="detail-link" href={getQuestMenuItemHref(item, base)} onclick={(event) => onselect?.(item, event)}>
 		{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
 	</a>
@@ -142,37 +123,10 @@ function statusLabel(state: QuestMenuItemState): string {
 	gap: 0.65rem;
 }
 
-.meta > span,
 .unread {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.3rem;
-}
-
-.channel-icon :global(svg) {
-	width: 19px;
-	height: 19px;
-}
-
-.meta[data-level="1"] {
-	color: #238064;
-}
-.meta[data-level="2"] {
-	color: #b07818;
-}
-.meta[data-level="3"] {
-	color: #b44357;
-}
-
-.difficulty-dot {
-	width: 8px;
-	height: 8px;
-	border: 1px solid currentColor;
-	border-radius: 50%;
-}
-
-.difficulty-dot.is-filled {
-	background: currentColor;
 }
 
 .unread {

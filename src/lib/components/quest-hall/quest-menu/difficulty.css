@@ -1,0 +1,9 @@
+.quest-difficulty-tone[data-level="1"] {
+	--quest-difficulty-color: #238064;
+}
+.quest-difficulty-tone[data-level="2"] {
+	--quest-difficulty-color: #b07818;
+}
+.quest-difficulty-tone[data-level="3"] {
+	--quest-difficulty-color: #b44357;
+}

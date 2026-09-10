@@ -66,6 +66,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Static book pages and turning copies must render identical page-header geometry, including the 44px translation year controls. Disable controls during turns rather than unmounting them; otherwise card positions jump at the sheet handoff.
 - Honor `prefers-reduced-motion`, retain keyboard focus indicators and 44px interaction targets, and clean up timers/listeners. Typewriter copy must reserve its complete multiline geometry and expose the full sentence to assistive technology.
 - Task cards use balanced serif titles, centered reading hierarchy, restrained metadata, and quiet pill actions; older translations are compact without shrinking their touch targets.
+- Catalog and home recommendation cards share `QuestMenuItemIndicator.svelte` for platform icons and three difficulty dots; `difficulty.css` owns their level colors, also used by recommendation left borders. Recommendation cards omit rank/cadence labels.
 
 ## Implementation conventions
 
