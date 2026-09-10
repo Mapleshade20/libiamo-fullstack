@@ -5,6 +5,7 @@ import { base } from "$app/paths";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
+import { configuredSocialProviders, prepareOAuthUser } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 
 export const auth = betterAuth({
@@ -21,6 +22,17 @@ export const auth = betterAuth({
 	},
 	secret: env.BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: "pg" }),
+	socialProviders: configuredSocialProviders(env),
+	account: {
+		encryptOAuthTokens: true,
+	},
+	databaseHooks: {
+		user: {
+			create: {
+				before: prepareOAuthUser,
+			},
+		},
+	},
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,

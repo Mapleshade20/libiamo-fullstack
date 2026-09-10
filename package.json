@@ -22,10 +22,9 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:migrate:prod": "drizzle-kit migrate --config=drizzle.prod.config.ts",
 		"db:studio": "drizzle-kit studio",
-		"auth:schema": "better-auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes"
+		"auth:schema": "auth generate --config src/lib/server/auth/auth.ts --output src/lib/server/db/auth.schema.ts --yes"
 	},
 	"devDependencies": {
-		"@better-auth/cli": "latest",
 		"@biomejs/biome": "2.4.10",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@internationalized/date": "^3.12.0",
@@ -38,7 +37,8 @@
 		"@types/node": "^24",
 		"@types/nodemailer": "^7.0.11",
 		"@vitest/coverage-v8": "^4.1.2",
-		"better-auth": "~1.4.21",
+		"auth": "1.6.31",
+		"better-auth": "1.6.31",
 		"bits-ui": "^2.16.4",
 		"clsx": "^2.1.1",
 		"dayjs": "^1.11.20",

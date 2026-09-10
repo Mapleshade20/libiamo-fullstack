@@ -29,6 +29,10 @@ vi.mock("$env/dynamic/private", () => ({
 	env: {
 		ORIGIN: "http://localhost:5173",
 		BETTER_AUTH_SECRET: "test-secret",
+		GOOGLE_CLIENT_ID: "google-id",
+		GOOGLE_CLIENT_SECRET: "google-secret",
+		GITHUB_CLIENT_ID: "github-id",
+		GITHUB_CLIENT_SECRET: "github-secret",
 	},
 }));
 
@@ -67,6 +71,22 @@ describe("auth server configuration", () => {
 		expect(config.emailAndPassword.minPasswordLength).toBe(8);
 		expect(config.emailVerification.sendOnSignUp).toBe(true);
 		expect(config.emailVerification.autoSignInAfterVerification).toBe(true);
+		expect(config.account.encryptOAuthTokens).toBe(true);
+		expect(config.socialProviders).toMatchObject({
+			google: {
+				clientId: "google-id",
+				clientSecret: "google-secret",
+				disableImplicitSignUp: true,
+				mapProfileToUser: expect.any(Function),
+			},
+			github: {
+				clientId: "github-id",
+				clientSecret: "github-secret",
+				disableImplicitSignUp: true,
+				mapProfileToUser: expect.any(Function),
+			},
+		});
+		expect(config.databaseHooks.user.create.before).toEqual(expect.any(Function));
 		expect(config.plugins).toEqual(["cookie-plugin"]);
 	});
 
