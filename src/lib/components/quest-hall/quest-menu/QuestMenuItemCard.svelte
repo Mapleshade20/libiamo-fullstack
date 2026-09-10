@@ -1,13 +1,12 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
-import Gauge from "@lucide/svelte/icons/gauge";
 import Mail from "@lucide/svelte/icons/mail";
-import Star from "@lucide/svelte/icons/star";
 import { base } from "$app/paths";
 import type { LanguageCode } from "$lib/constants";
 import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuItemState } from "$lib/quest-hall/menu";
+import NotificationIcon from "./NotificationIcon.svelte";
 import QuestMenuStatusMark from "./QuestMenuStatusMark.svelte";
 
 interface Props {
@@ -28,33 +27,34 @@ let channel = $derived(
 function statusLabel(state: QuestMenuItemState): string {
 	return t(lang, `hall.menu.status.${state}`);
 }
-
-function difficultyLabel(level: number): string {
-	if (level === 1) return t(lang, "task.difficulty.beginner");
-	if (level === 2) return t(lang, "task.difficulty.intermediate");
-	if (level === 3) return t(lang, "task.difficulty.advanced");
-	return String(level);
-}
 </script>
 
 <article class="task-card" class:is-compact={compact} class:is-finished={item.state === "finished"} class:is-active={item.state === "active"}>
-	<div class="task-overline">
-		<span>{String(item.ordinal).padStart(2, "0")}</span>
-		<span>{channel}</span>
+	<div class="task-overline"><span>{String(item.ordinal).padStart(2, "0")}</span></div>
+	<div class="status-row">
+		<QuestMenuStatusMark state={item.state} label={statusLabel(item.state)} variant={item.state === "finished" ? "stamp" : "line"} />
+		{#if item.hasUnread}
+			<span class="unread"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
+		{/if}
 	</div>
-	<QuestMenuStatusMark state={item.state} label={statusLabel(item.state)} variant={item.state === "finished" ? "stamp" : "line"} />
 	<h3>{title}</h3>
 	{#if objective}
 		<p class="font-prose">{objective}</p>
 	{/if}
-	{#if item.hasUnread}
-		<span class="unread"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
-	{/if}
-	<div class="meta">
-		<span><Gauge size={14} aria-hidden="true" /> {difficultyLabel(difficulty)}</span>
-		{#if item.kind === "quest"}
-			<span><Star size={14} aria-hidden="true" /> {item.task.pointReward} {t(lang, "task.points")}</span>
-		{/if}
+	<div class="meta" data-level={difficulty}>
+		<span class="channel-icon" role="img" aria-label={channel} title={channel}>
+			<NotificationIcon ui={item.kind === "quest" ? item.task.templateUi : "translator"} />
+		</span>
+		<span
+			class="difficulty"
+			role="img"
+			aria-label={`${t(lang, "hall.difficulty")}: ${difficulty}/3`}
+			title={`${t(lang, "hall.difficulty")}: ${difficulty}/3`}
+		>
+			{#each [1, 2, 3] as level}
+				<span class="difficulty-dot" class:is-filled={level <= difficulty} aria-hidden="true"></span>
+			{/each}
+		</span>
 	</div>
 	<a class="detail-link" href={getQuestMenuItemHref(item, base)} onclick={(event) => onselect?.(item, event)}>
 		{t(lang, "hall.menu.viewDetails")} <ArrowRight size={16} aria-hidden="true" />
@@ -135,11 +135,44 @@ function difficultyLabel(level: number): string {
 	text-transform: none;
 }
 
-.meta span,
+.status-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.65rem;
+}
+
+.meta > span,
 .unread {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.3rem;
+}
+
+.channel-icon :global(svg) {
+	width: 19px;
+	height: 19px;
+}
+
+.meta[data-level="1"] {
+	color: #238064;
+}
+.meta[data-level="2"] {
+	color: #b07818;
+}
+.meta[data-level="3"] {
+	color: #b44357;
+}
+
+.difficulty-dot {
+	width: 8px;
+	height: 8px;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+}
+
+.difficulty-dot.is-filled {
+	background: currentColor;
 }
 
 .unread {

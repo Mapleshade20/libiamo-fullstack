@@ -1,432 +1,190 @@
 <script lang="ts">
-import ChevronRight from "@lucide/svelte/icons/chevron-right";
-import Mail from "@lucide/svelte/icons/mail";
-import X from "@lucide/svelte/icons/x";
-import { fade } from "svelte/transition";
 import { base } from "$app/paths";
 import type { UnreadSubscriptionStatus } from "$lib/client/quest-hall/unread-subscription";
-import type { LanguageCode } from "$lib/constants";
-import { UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
+import { type LanguageCode, UI_VARIANT_LABELS, type UiVariant } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { formatRelativeAge, formatUnreadBadgeCount, type UnreadInboxItem, unreadTargetHref } from "$lib/unread";
+import { formatRelativeAge, type UnreadInboxItem } from "$lib/unread";
+import NotificationIcon from "./NotificationIcon.svelte";
 
-interface Props {
-	items: UnreadInboxItem[];
-	total: number;
-	status: UnreadSubscriptionStatus;
-	lang: LanguageCode;
+let { items, total, status, lang }: { items: UnreadInboxItem[]; total: number; status: UnreadSubscriptionStatus; lang: LanguageCode } = $props();
+let expanded = $state(false);
+let container = $state<HTMLElement>();
+let pointerType = "";
+
+function close() {
+	expanded = false;
 }
-
-let { items, total, status, lang }: Props = $props();
-let isOpen = $state(false);
-let container = $state<HTMLElement | null>(null);
-let trigger = $state<HTMLButtonElement | null>(null);
-
-const panelId = "quest-menu-unread-panel";
-const panelTitleId = "quest-menu-unread-title";
-let countLabel = $derived(t(lang, total === 1 ? "hall.unreadCountOne" : "hall.unreadCountMany").replace("{count}", String(total)));
-
-function close(restoreFocus = false): void {
-	if (!isOpen) return;
-	isOpen = false;
-	if (restoreFocus) queueMicrotask(() => trigger?.focus());
-}
-
-$effect(() => {
-	const onKeydown = (event: KeyboardEvent) => {
-		if (event.key !== "Escape" || !isOpen) return;
-		event.preventDefault();
-		close(true);
-	};
-	const onPointerdown = (event: PointerEvent) => {
-		if (container && !container.contains(event.target as Node)) close();
-	};
-	window.addEventListener("keydown", onKeydown);
-	document.addEventListener("pointerdown", onPointerdown);
-	return () => {
-		window.removeEventListener("keydown", onKeydown);
-		document.removeEventListener("pointerdown", onPointerdown);
-	};
-});
 </script>
 
-<div class="menu-inbox" class:is-empty={total === 0 && status !== "error"} bind:this={container}>
-	{#each items.slice(1, 3) as item, index (item.taskId)}
-		<span class="stack-preview" style:--depth={index + 1} aria-hidden="true">{item.title}</span>
-	{/each}
-	<span class="status-announcement" role="status" aria-atomic="true">{countLabel}</span>
-	<button
-		bind:this={trigger}
-		type="button"
-		class="inbox-trigger"
-		aria-label={`${t(lang, "hall.unreadTrigger")}: ${countLabel}`}
-		aria-expanded={isOpen}
-		aria-controls={panelId}
-		onclick={() => (isOpen = !isOpen)}
+<svelte:document
+	onpointerdown={(event) => { if (!container?.contains(event.target as Node)) close(); }}
+	onkeydown={(event) => {
+	if (event.key === "Escape" && expanded) { close(); container?.querySelector("a")?.focus({ preventScroll: true }); }
+}}
+/>
+
+<span class="sr-only" role="status"
+	>{t(lang, "hall.unreadTrigger")}: {t(lang, total === 1 ? "hall.unreadCountOne" : "hall.unreadCountMany").replace("{count}", String(total))}</span
+>
+{#if items.length > 0}
+	<section
+		bind:this={container}
+		class="notifications"
+		class:expanded
+		aria-label={t(lang, "hall.unreadTrigger")}
+		data-sveltekit-preload-data="off"
+		data-sveltekit-preload-code="off"
+		onpointerenter={(event) => { if (event.pointerType === "mouse") expanded = true; }}
+		onpointerleave={(event) => { if (event.pointerType === "mouse" && !container?.contains(document.activeElement)) close(); }}
+		onfocusout={(event) => { if (!container?.contains(event.relatedTarget as Node)) close(); }}
 	>
-		<Mail size={17} strokeWidth={1.65} aria-hidden="true" />
-		<span class="trigger-label">{items[0]?.title ?? countLabel}</span>
-		{#if total > 0}
-			<span class="trigger-count" aria-hidden="true">{formatUnreadBadgeCount(total)}</span>
+		<div class="cards" style:--count={items.length}>
+			{#each items as item, index (item.taskId)}
+				<a
+					href={`${base}/task/${item.taskId}/session`}
+					class="notification"
+					style:--index={index}
+					style:--depth={Math.min(index, 2)}
+					inert={!expanded && index > 0}
+					onpointerdown={(event) => { pointerType = event.pointerType; }}
+					onclick={(event) => {
+						if (!expanded && (pointerType !== "mouse" || event.detail === 0)) { event.preventDefault(); expanded = true; }
+						pointerType = "";
+					}}
+					onkeydown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); expanded = true; } }}
+				>
+					<span class="icon"><NotificationIcon ui={item.ui} /></span>
+					<span class="copy">
+						<span class="meta"
+							><span>{UI_VARIANT_LABELS[item.ui as UiVariant] ?? item.ui}</span>
+							{#if item.latestAgeSeconds !== null}
+								<span>{formatRelativeAge(item.latestAgeSeconds, lang)}</span>
+							{/if}
+						</span>
+						<span class="title">{item.title}</span>
+						<span class="reply">{t(lang, "hall.unreadReply")}{item.unreadCount > 1 ? ` × ${item.unreadCount}` : ""}</span>
+					</span>
+				</a>
+			{/each}
+		</div>
+		<span class="sr-only" role="status">{total}</span>
+		{#if status === "error"}
+			<p class="notice">{t(lang, "hall.unreadError")}</p>
 		{/if}
-	</button>
-
-	{#if isOpen}
-		<section id={panelId} class="inbox-panel" aria-labelledby={panelTitleId} transition:fade={{ duration: 140 }}>
-			<header class="inbox-header">
-				<div>
-					<h2 id={panelTitleId}>{t(lang, "hall.unreadInboxTitle")}</h2>
-				</div>
-				<div class="header-actions">
-					{#if total > 0}
-						<span class="inbox-total">{total}</span>
-					{/if}
-					<button type="button" class="close-button" aria-label={t(lang, "hall.unreadClose")} onclick={() => close(true)}>
-						<X size={16} strokeWidth={1.75} aria-hidden="true" />
-					</button>
-				</div>
-			</header>
-
-			{#if status === "error"}
-				<p class="inbox-notice">{t(lang, "hall.unreadError")}</p>
-			{/if}
-
-			{#if status === "loading" && items.length === 0}
-				<p class="inbox-empty">{t(lang, "hall.unreadLoading")}</p>
-			{:else if items.length === 0}
-				<p class="inbox-empty">{t(lang, "hall.unreadEmpty")}</p>
-			{:else}
-				<ul>
-					{#each items as item (item.taskId)}
-						<li>
-							<a href={unreadTargetHref(item, base)} class="inbox-item" onclick={() => close()}>
-								<span class="item-meta">
-									<span class="item-channel">{UI_VARIANT_LABELS[item.ui as UiVariant] ?? item.ui}</span>
-									{#if item.latestAgeSeconds !== null}
-										<span class="item-age">{formatRelativeAge(item.latestAgeSeconds, lang)}</span>
-									{/if}
-								</span>
-								<span class="item-title">{item.title}</span>
-								<span class="item-row">
-									<span class="item-count">
-										<Mail size={12} strokeWidth={1.75} aria-hidden="true" />
-										{t(lang, "hall.unreadReply")}{item.unreadCount > 1 ? ` × ${item.unreadCount}` : ""}
-									</span>
-									<span class="item-chevron"><ChevronRight size={15} strokeWidth={1.5} aria-hidden="true" /></span>
-								</span>
-							</a>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
-	{/if}
-</div>
+	</section>
+{:else if status === "error"}
+	<p class="notice" role="status">{t(lang, "hall.unreadError")}</p>
+{/if}
 
 <style>
-.is-empty {
-	display: none;
+.notifications {
+	width: min(20rem, calc(100vw - 2rem));
+	font-family: var(--font-sans);
 }
-.trigger-label {
-	max-width: min(21rem, 60vw);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+.cards {
+	position: relative;
+	height: 86px;
+	transition: height 300ms cubic-bezier(0.32, 0, 0.2, 1);
 }
-.stack-preview {
+.expanded .cards {
+	height: min(calc(var(--count) * 76px), 65dvh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	transition: height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.notification {
 	position: absolute;
-	inset: 0;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 68px;
 	display: flex;
 	align-items: center;
-	padding-inline: 1rem;
-	overflow: hidden;
-	white-space: nowrap;
-	font-size: 0.75rem;
+	gap: 10px;
+	padding: 8px 12px;
 	border: 1px solid #8b817329;
 	border-radius: 16px;
 	background: #fafaf9ed;
 	backdrop-filter: blur(20px);
-	transform: translateY(calc(var(--depth) * 10px)) scale(calc(1 - var(--depth) * 0.06));
-	opacity: calc(1 - var(--depth) * 0.2);
-	z-index: calc(3 - var(--depth));
-	transition:
-		transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
-		opacity 350ms;
-}
-.menu-inbox {
-	--menu-ink: var(--foreground);
-	--menu-ink-muted: var(--muted-foreground);
-	--menu-sheet: var(--card);
-	--menu-paper: var(--background);
-	--menu-wine: #803945;
-	--menu-olive: #65705a;
-	--menu-focus: var(--ring);
-	position: relative;
-	flex: 0 0 auto;
-	font-family: var(--font-sans);
-}
-
-.status-announcement {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border: 0;
-}
-
-.inbox-trigger {
-	position: relative;
-	z-index: 3;
-	display: inline-flex;
-	min-height: 44px;
-	align-items: center;
-	gap: 0.48rem;
-	padding: 0.45rem 0.62rem 0.45rem 0.72rem;
-	border: 1px solid color-mix(in oklab, var(--menu-ink) 18%, transparent);
-	border-radius: 16px;
-	background: #fafaf9ed;
-	backdrop-filter: blur(20px);
-	color: var(--menu-ink-muted);
-	font-size: 0.69rem;
-	font-weight: 650;
-	letter-spacing: 0;
-	text-transform: none;
-	cursor: pointer;
 	box-shadow: 0 0.15rem 0.5rem rgb(74 59 43 / 0.035);
+	color: var(--foreground);
+	text-decoration: none;
+	transform-origin: top center;
+	transform: translateY(calc(var(--depth) * 9px)) scale(calc(1 - var(--depth) * 0.045));
+	z-index: calc(var(--count) - var(--index));
+	opacity: 0;
 	transition:
-		background-color 160ms ease,
-		border-color 160ms ease,
-		color 160ms ease,
-		transform 160ms ease;
+		transform 300ms cubic-bezier(0.32, 0, 0.2, 1),
+		opacity 220ms ease-out,
+		background 220ms ease-out;
 }
-
-.inbox-trigger:hover,
-.inbox-trigger[aria-expanded="true"] {
-	border-color: color-mix(in oklab, var(--menu-wine) 42%, transparent);
-	background: color-mix(in oklab, var(--menu-sheet) 78%, transparent);
-	color: var(--menu-wine);
+.notification:nth-child(-n + 3) {
+	opacity: 1;
 }
-
-.inbox-trigger:active {
-	transform: translateY(1px);
+.expanded .notification {
+	transform: translateY(calc(var(--index) * 76px));
+	opacity: 1;
+	/* Depth changes settling time, not start time, so quick reversals stay responsive. */
+	transition:
+		transform calc(380ms + var(--depth) * 35ms) cubic-bezier(0.22, 1.12, 0.36, 1),
+		opacity 260ms ease-out,
+		background 220ms ease-out;
 }
-
-.inbox-trigger:focus-visible,
-.close-button:focus-visible,
-.inbox-item:focus-visible {
-	outline: 2px solid var(--menu-focus);
-	outline-offset: 2px;
+.notification:hover {
+	background: #fafaf9;
 }
-
-.trigger-count {
-	display: inline-grid;
-	min-width: 1.28rem;
-	height: 1.28rem;
+.notification:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -3px;
+}
+.icon {
+	display: grid;
 	place-items: center;
-	padding-inline: 0.24rem;
-	border-radius: 999px;
-	background: var(--menu-wine);
-	color: #fffaf1;
-	font-size: 0.64rem;
-	font-weight: 750;
-	letter-spacing: 0;
-	line-height: 1;
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+	color: var(--muted-foreground);
 }
-
-.inbox-panel {
-	position: absolute;
-	top: calc(100% + 0.65rem);
-	left: 50%;
-	transform: translateX(-50%);
-	z-index: 60;
-	width: min(23rem, calc(100vw - 3rem));
-	overflow: hidden;
-	border: 1px solid color-mix(in oklab, var(--menu-ink) 18%, transparent);
-	border-radius: 16px;
-	background: #fafaf9ed;
-	backdrop-filter: blur(24px);
-	box-shadow: 0 1.1rem 2.8rem rgb(63 48 34 / 0.16);
-	color: var(--menu-ink);
+.icon :global(svg) {
+	width: 20px;
+	height: 20px;
 }
-
-.inbox-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 0 0.5rem 0 1rem;
-	border-bottom: 1px solid color-mix(in oklab, var(--menu-ink) 12%, transparent);
-}
-
-.inbox-header h2 {
-	margin: 0;
-	color: var(--menu-wine);
-	font-family: var(--font-sans);
-	font-size: 0.57rem;
-	font-weight: 700;
-	letter-spacing: 0.16em;
-	text-transform: uppercase;
-}
-
-.header-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.45rem;
-}
-
-.inbox-total {
-	display: inline-grid;
-	min-width: 1.45rem;
-	height: 1.45rem;
-	place-items: center;
-	padding-inline: 0.25rem;
-	border: 1px solid color-mix(in oklab, var(--menu-wine) 32%, transparent);
-	border-radius: 999px;
-	color: var(--menu-wine);
-	font-size: 0.67rem;
-	font-weight: 720;
-}
-
-.close-button {
-	display: inline-grid;
-	width: 44px;
-	height: 44px;
-	place-items: center;
-	padding: 0;
-	border: 0;
-	border-radius: 999px;
-	background: transparent;
-	color: var(--menu-ink-muted);
-	cursor: pointer;
-}
-
-.close-button:hover {
-	background: color-mix(in oklab, var(--menu-ink) 7%, transparent);
-	color: var(--menu-ink);
-}
-
-.inbox-notice,
-.inbox-empty {
-	margin: 0;
-	padding: 0.85rem 1rem;
-	color: var(--menu-ink-muted);
-	font-size: 0.78rem;
-	line-height: 1.5;
-}
-
-.inbox-notice {
-	border-bottom: 1px solid color-mix(in oklab, var(--menu-wine) 13%, transparent);
-	background: color-mix(in oklab, var(--menu-wine) 5%, transparent);
-	color: color-mix(in oklab, var(--menu-wine) 70%, var(--menu-ink));
-}
-
-.inbox-panel ul {
-	max-height: min(24rem, 62vh);
-	margin: 0;
-	padding: 0;
-	overflow-y: auto;
-	list-style: none;
-}
-
-.inbox-item {
+.copy {
+	flex: 1;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 0.22rem;
-	padding: 0.72rem 1rem 0.78rem;
-	border-bottom: 1px solid color-mix(in oklab, var(--menu-ink) 10%, transparent);
-	text-decoration: none;
-	transition: background-color 150ms ease;
+	gap: 1px;
 }
-
-li:last-child .inbox-item {
-	border-bottom: 0;
-}
-
-.inbox-item:hover {
-	background: color-mix(in oklab, var(--menu-wine) 5%, transparent);
-}
-
-.item-meta,
-.item-row {
+.meta {
 	display: flex;
-	align-items: baseline;
 	justify-content: space-between;
-	gap: 0.75rem;
+	gap: 8px;
+	font-size: 0.62rem;
+	color: var(--muted-foreground);
 }
-
-.item-channel {
-	color: var(--menu-olive);
-	font-size: 0.57rem;
-	font-weight: 720;
-	letter-spacing: 0.13em;
-	text-transform: uppercase;
+.title {
+	font-size: 0.8rem;
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
-
-.item-age {
-	flex: 0 0 auto;
-	color: var(--menu-ink-muted);
-	font-size: 0.64rem;
+.reply {
+	font-size: 0.68rem;
+	color: var(--muted-foreground);
 }
-
-.item-title {
-	color: var(--menu-ink);
-	font-family: var(--font-serif);
-	font-size: 0.95rem;
-	font-weight: 430;
-	line-height: 1.25;
-}
-
-.item-row {
-	margin-top: 0.1rem;
-}
-
-.item-count {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.32rem;
-	color: var(--menu-wine);
-	font-size: 0.67rem;
-	font-weight: 650;
-}
-
-.item-chevron {
-	flex: 0 0 auto;
-	color: var(--menu-ink-muted);
-}
-
-@media (max-width: 40rem) {
-	.inbox-panel {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		left: 50%;
-		width: calc(100vw - 2rem);
-		max-height: calc(100dvh - 6rem);
-		overflow-y: auto;
-	}
-	.trigger-label {
-		display: block;
-	}
-
-	.inbox-trigger {
-		min-width: 2.4rem;
-		justify-content: center;
-		padding-inline: 0.62rem;
-	}
-}
-
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-	.menu-inbox:not(:has(.inbox-panel)):hover .stack-preview {
-		transform: translateY(calc(var(--depth) * 48px)) scale(1);
-		opacity: 1;
-	}
+.notice {
+	padding: 12px;
+	border-radius: 12px;
+	background: #fafaf9ed;
+	font-size: 0.75rem;
 }
 @media (prefers-reduced-motion: reduce) {
-	.stack-preview,
-	.inbox-trigger {
+	.cards,
+	.expanded .cards,
+	.notification,
+	.expanded .notification {
 		transition: none;
 	}
 }
