@@ -3,6 +3,7 @@ import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
+import { base } from "$app/paths";
 import type { AccountActionResult, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
@@ -212,9 +213,14 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 					<KeyRound class="size-4" />
 				</span>
 				<span class="min-w-0 flex-1 font-medium">{t(lang, "profile.passwordMethod")}</span>
-				<span class="text-xs font-medium text-muted-foreground">
-					{data.credentialConnected ? t(lang, "profile.connected") : t(lang, "profile.unavailable")}
-				</span>
+				{#if data.credentialConnected}
+					<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.connected")}</span>
+				{:else}
+					<!-- Better Auth's reset flow creates the credential account when one is
+					     missing, so this is how an account created through Google or GitHub
+					     adds a password. Without the link there is nothing to discover. -->
+					<a href="{base}/forgot-password" class="text-xs font-medium text-primary hover:underline">{t(lang, "profile.setPassword")}</a>
+				{/if}
 			</div>
 
 			{#each data.socialLoginMethods as method}

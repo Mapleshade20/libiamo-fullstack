@@ -88,7 +88,7 @@ const TEST_ENV = {
 async function createAuthTestInstance(
 	googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true },
 	accountStore: AuthAccountStore = createTestAccountStore(() => testInstanceDb),
-	overrides: { deleteUser?: boolean } = {},
+	overrides: { deleteUser?: boolean; onResetPasswordToken?: (token: string) => void } = {},
 ) {
 	const options = createAuthOptions(TEST_ENV, { accountStore });
 	const google = options.socialProviders.google;
@@ -119,6 +119,11 @@ async function createAuthTestInstance(
 			user: {
 				...options.user,
 				deleteUser: { enabled: overrides.deleteUser === true },
+			},
+			emailAndPassword: {
+				...options.emailAndPassword,
+				// The production callback hands the token to SMTP; capture it instead.
+				sendResetPassword: async ({ token }) => overrides.onResetPasswordToken?.(token),
 			},
 		},
 		{ disableTestUser: true },
@@ -465,6 +470,36 @@ describe("Better Auth social authentication lifecycle", () => {
 		await expect(auth.api.deleteUser({ body: { password }, headers: sessionHeaders })).resolves.toMatchObject({ success: true });
 
 		await expect(db.findMany({ model: "user", where: [{ field: "id", value: signup.user.id }] })).resolves.toHaveLength(0);
+	});
+
+	// Profile links a credential-less account at the reset flow as the way to add a
+	// password; losing the provider account is otherwise losing the Libiamo account.
+	// That only works because Better Auth creates the missing credential row itself.
+	it("lets an account created through GitHub add a password through the reset flow", async () => {
+		let resetToken: string | undefined;
+		const { auth, db } = await createAuthTestInstance(undefined, undefined, {
+			onResetPasswordToken: (token) => {
+				resetToken = token;
+			},
+		});
+		mockGithub({ id: "github-passwordless", email: "passwordless@example.com", verified: true });
+		expect(
+			(await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "fr", requestSignUp: true }))).status,
+		).toBe(302);
+		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "passwordless@example.com" }] });
+		if (!user) throw new Error("Expected the GitHub sign-up to create a user");
+		const initial = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: user.id }] });
+		expect(initial.map(({ providerId }) => providerId)).toEqual(["github"]);
+
+		await auth.api.requestPasswordReset({ body: { email: "passwordless@example.com", redirectTo: `${APP_URL}/reset-password` } });
+		expect(resetToken).toBeTruthy();
+		await auth.api.resetPassword({ body: { newPassword: "correct-horse-battery-staple", token: resetToken as string } });
+
+		const accounts = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: user.id }] });
+		expect(accounts.map(({ providerId }) => providerId).sort()).toEqual(["credential", "github"]);
+		await expect(
+			auth.api.signInEmail({ body: { email: "passwordless@example.com", password: "correct-horse-battery-staple" } }),
+		).resolves.toMatchObject({ user: { id: user.id } });
 	});
 
 	// The app configures no `account.accountLinking.trustedProviders`, so Better Auth

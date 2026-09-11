@@ -92,6 +92,21 @@ describe("Profile page", () => {
 		expect(body).toContain("Conservez au moins une méthode de connexion associée.");
 	});
 
+	// An account created through Google or GitHub has no credential row. Better Auth's
+	// reset flow creates one, so this link is the only way such a user can add a
+	// password — and losing the provider account is otherwise losing the account.
+	it("offers a way to set a password when the account has none", () => {
+		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected: false }, form: null } });
+
+		expect(body).toMatch(/href="[^"]*\/forgot-password"[^>]*>\s*Définir un mot de passe/);
+	});
+
+	it("does not offer to set a password when one already exists", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
+
+		expect(body).not.toContain("Définir un mot de passe");
+	});
+
 	// The OAuth callback lands on `/profile?linked=<provider>`, and `use:enhance`
 	// never clears it. Reading it after a form action reported back made every
 	// later save announce a login-method change instead of its own result.
