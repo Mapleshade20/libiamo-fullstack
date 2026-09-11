@@ -7,6 +7,7 @@ import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
+import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -46,6 +47,12 @@ let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
 let passwordSetupPending = $state(false);
+// The confirmation dialog drives the unlink forms rather than owning the POST, so
+// disconnecting still runs through the same `use:enhance` path as every other action.
+let disconnectForms = $state<Partial<Record<SocialProviderId, HTMLFormElement>>>({});
+let confirmOpen = $state(false);
+let confirmingProvider = $state<SocialProviderId | null>(null);
+let confirmingMethod = $derived(data.socialLoginMethods.find((method: { id: SocialProviderId }) => method.id === confirmingProvider));
 let accountFormResult = $derived((form as { accountResult?: AccountActionResult } | null | undefined)?.accountResult);
 
 // `?linked=` / `?error=` describe the OAuth round-trip that just landed on this
@@ -100,6 +107,18 @@ function formatConnectedAt(isoDate: string) {
 	return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeZone: clock().timeZone }).format(new Date(isoDate));
 }
 
+/**
+ * Every method keeps the same frame and height, so the list reads as one column
+ * whether or not a row carries a second line. The ones not in use recede into a
+ * lighter shell, leaving the methods that actually guard the account in front.
+ */
+function methodRowClass(connected: boolean) {
+	return [
+		"flex min-h-16 items-center gap-3 rounded-xl border px-4 py-2.5",
+		connected ? "border-border/80 bg-background/70" : "border-border/40 bg-background/30 text-muted-foreground",
+	].join(" ");
+}
+
 let trialPercent = $derived(
 	data.trialQuota ? Math.max(0, Math.min(100, Math.round((data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal) * 100))) : 0,
 );
@@ -127,8 +146,21 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 		return async ({ update }: { update: (options?: { reset?: boolean }) => Promise<void> }) => {
 			await update({ reset: false });
 			accountPending = null;
+			// Whether the unlink went through or failed, the answer is in the
+			// notification above the card, so the dialog steps out of the way.
+			confirmOpen = false;
 		};
 	};
+}
+
+/** Names the method the dialog is about; the row's form does the actual work. */
+function askDisconnect(provider: SocialProviderId) {
+	confirmingProvider = provider;
+	confirmOpen = true;
+}
+
+function confirmDisconnect() {
+	if (confirmingProvider) disconnectForms[confirmingProvider]?.requestSubmit();
 }
 
 function enhancePasswordSetup() {
@@ -251,37 +283,48 @@ function enhancePasswordSetup() {
 			<Card.Description>{t(lang, "profile.loginMethodsHelp")}</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-3">
-			<div class="flex min-h-14 items-center gap-3 rounded-xl border border-border/80 bg-background/70 px-4 py-2.5">
-				<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
+			<div class={methodRowClass(data.credentialConnected)}>
+				<span
+					class="flex size-9 shrink-0 items-center justify-center rounded-full {data.credentialConnected ? 'bg-muted text-foreground' : 'bg-muted/40'}"
+					aria-hidden="true"
+				>
 					<KeyRound class="size-4" />
 				</span>
-				<span class="min-w-0 flex-1 font-medium">{t(lang, "profile.passwordMethod")}</span>
-				{#if data.credentialConnected}
-					<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.connected")}</span>
-				{:else if form?.passwordSetupSent}
-					<!-- The link is in their inbox and pressing again only sends a second one,
-					     so the button stands down. It returns on the next load, in case the
-					     mail never arrived. -->
-					<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.passwordSetupSent")}</span>
-				{:else}
-					<!-- Mails the reset link — which creates the missing credential row — to
-					     the address on the session, so an account made through Google or
-					     GitHub can add a password without retyping an address it may not
-					     share with the provider. -->
-					<form method="POST" action="?/sendPasswordSetup" use:enhance={enhancePasswordSetup}>
-						<Button type="submit" variant="outline" class="min-h-11 min-w-24" disabled={passwordSetupPending}>
-							{#if passwordSetupPending}
-								<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-							{/if}
-							{t(lang, "profile.setPassword")}
-						</Button>
-					</form>
+				<span class="min-w-0 flex-1">
+					<span class="block font-medium">{t(lang, "profile.passwordMethod")}</span>
+					{#if data.credentialConnected}
+						<span class="block text-xs text-muted-foreground">{t(lang, "profile.connected")}</span>
+					{/if}
+				</span>
+				{#if !data.credentialConnected}
+					{#if form?.passwordSetupSent}
+						<!-- The link is in their inbox and pressing again only sends a second one,
+						     so the button stands down. It returns on the next load, in case the
+						     mail never arrived. -->
+						<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.passwordSetupSent")}</span>
+					{:else}
+						<!-- Mails the reset link — which creates the missing credential row — to
+						     the address on the session, so an account made through Google or
+						     GitHub can add a password without retyping an address it may not
+						     share with the provider. -->
+						<form method="POST" action="?/sendPasswordSetup" use:enhance={enhancePasswordSetup}>
+							<Button type="submit" variant="outline" class="min-h-11 min-w-24 text-foreground" disabled={passwordSetupPending}>
+								{#if passwordSetupPending}
+									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+								{/if}
+								{t(lang, "profile.setPassword")}
+							</Button>
+						</form>
+					{/if}
 				{/if}
 			</div>
 
 			{#each data.socialLoginMethods as method}
-				<div class="flex min-h-14 items-center gap-3 rounded-xl border border-border/80 bg-background/70 px-4 py-2.5">
-					<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
+				<div class={methodRowClass(method.connected)}>
+					<span
+						class="flex size-9 shrink-0 items-center justify-center rounded-full {method.connected ? 'bg-muted text-foreground' : 'bg-muted/40'}"
+						aria-hidden="true"
+					>
 						<SocialProviderIcon provider={method.id} />
 					</span>
 					<span class="min-w-0 flex-1">
@@ -294,14 +337,18 @@ function enhancePasswordSetup() {
 					</span>
 
 					{#if method.connected}
-						<form method="POST" action="?/unlinkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
+						<!-- The button only asks; the dialog submits this form once the user
+						     confirms, so an accidental tap cannot strip a login method. -->
+						<form method="POST" action="?/unlinkSocialAccount" use:enhance={enhanceLoginMethod(method.id)} bind:this={disconnectForms[method.id]}>
 							<input type="hidden" name="provider" value={method.id}>
 							<Button
-								type="submit"
+								type="button"
 								variant="outline"
 								class="min-h-11 min-w-24"
 								disabled={accountPending !== null || data.loginMethodCount <= 1}
 								title={data.loginMethodCount <= 1 ? t(lang, "profile.lastMethodHelp") : undefined}
+								aria-haspopup="dialog"
+								onclick={() => askDisconnect(method.id)}
 							>
 								{#if accountPending === method.id}
 									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -312,7 +359,7 @@ function enhancePasswordSetup() {
 					{:else if method.configured}
 						<form method="POST" action="?/linkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
 							<input type="hidden" name="provider" value={method.id}>
-							<Button type="submit" variant="outline" class="min-h-11 min-w-24" disabled={accountPending !== null}>
+							<Button type="submit" variant="outline" class="min-h-11 min-w-24 text-foreground" disabled={accountPending !== null}>
 								{#if accountPending === method.id}
 									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 								{/if}
@@ -324,6 +371,16 @@ function enhancePasswordSetup() {
 					{/if}
 				</div>
 			{/each}
+
+			<ConfirmDialog
+				bind:open={confirmOpen}
+				busy={accountPending !== null}
+				title={t(lang, "profile.disconnectConfirmTitle").replace("{provider}", confirmingMethod?.label ?? "")}
+				message={t(lang, "profile.disconnectConfirmMessage").replace(/\{provider\}/g, confirmingMethod?.label ?? "")}
+				cancelLabel={t(lang, "common.cancel")}
+				confirmLabel={t(lang, "profile.disconnect")}
+				onconfirm={confirmDisconnect}
+			/>
 		</Card.Content>
 	</Card.Root>
 

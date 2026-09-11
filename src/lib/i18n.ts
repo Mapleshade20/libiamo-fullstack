@@ -150,6 +150,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.disconnect": "Disconnect",
 		"profile.unavailable": "Unavailable",
 		"profile.lastMethodHelp": "Keep at least one login method connected.",
+		"profile.disconnectConfirmTitle": "Disconnect {provider}?",
+		"profile.disconnectConfirmMessage":
+			"You will no longer be able to sign in with {provider}. Your other login methods keep working, and you can connect it again later.",
 		"profile.methodConnectedTitle": "Login method connected",
 		"profile.methodConnectedMessage": "You can now use it to sign in to this account.",
 		"profile.methodDisconnectedTitle": "Login method disconnected",
@@ -556,6 +559,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.disconnect": "Desconectar",
 		"profile.unavailable": "No disponible",
 		"profile.lastMethodHelp": "Mantén conectado al menos un método de inicio de sesión.",
+		"profile.disconnectConfirmTitle": "¿Desconectar {provider}?",
+		"profile.disconnectConfirmMessage":
+			"Ya no podrás entrar con {provider}. Tus demás métodos de inicio de sesión seguirán funcionando y podrás volver a conectarlo más adelante.",
 		"profile.methodConnectedTitle": "Método conectado",
 		"profile.methodConnectedMessage": "Ya puedes usarlo para entrar en esta cuenta.",
 		"profile.methodDisconnectedTitle": "Método desconectado",
@@ -962,6 +968,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.disconnect": "Dissocier",
 		"profile.unavailable": "Indisponible",
 		"profile.lastMethodHelp": "Conservez au moins une méthode de connexion associée.",
+		"profile.disconnectConfirmTitle": "Dissocier {provider} ?",
+		"profile.disconnectConfirmMessage":
+			"Vous ne pourrez plus vous connecter avec {provider}. Vos autres méthodes de connexion restent actives et vous pourrez l’associer à nouveau plus tard.",
 		"profile.methodConnectedTitle": "Méthode de connexion associée",
 		"profile.methodConnectedMessage": "Vous pouvez maintenant l’utiliser pour accéder à ce compte.",
 		"profile.methodDisconnectedTitle": "Méthode de connexion dissociée",
@@ -1366,6 +1375,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.disconnect": "連携を解除",
 		"profile.unavailable": "利用できません",
 		"profile.lastMethodHelp": "ログイン方法を1つ以上残してください。",
+		"profile.disconnectConfirmTitle": "{provider} の連携を解除しますか？",
+		"profile.disconnectConfirmMessage":
+			"{provider} ではログインできなくなります。他のログイン方法はそのまま使え、あとでもう一度連携することもできます。",
 		"profile.methodConnectedTitle": "ログイン方法を連携しました",
 		"profile.methodConnectedMessage": "この方法でアカウントにログインできます。",
 		"profile.methodDisconnectedTitle": "ログイン方法の連携を解除しました",
