@@ -80,6 +80,18 @@ describe("Sign-in +page.server", () => {
 				socialAuthError: "Sign-in was canceled. You can try again when you’re ready.",
 			});
 		});
+
+		it("directs a new OAuth user to Sign Up", async () => {
+			const event = {
+				locals: { user: null },
+				url: new URL("https://example.com/sign-in?error=signup_disabled"),
+			} as any;
+
+			const result = await load(event);
+			expect(result).toMatchObject({
+				socialAuthError: "To create a new Libiamo account, choose Sign Up below and select a learning language.",
+			});
+		});
 	});
 
 	describe("default action", () => {

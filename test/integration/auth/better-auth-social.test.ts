@@ -1,5 +1,6 @@
 import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
 import { mapOAuthProfileToUser, prepareOAuthUser } from "$lib/server/auth/social";
 
 const AUTH_BASE_URL = "http://localhost:3000/api/auth";
@@ -60,7 +61,10 @@ function mockGoogle() {
 	);
 }
 
-async function createAuthTestInstance(googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true }) {
+async function createAuthTestInstance(
+	googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true },
+	accountDeleteHook?: ReturnType<typeof createAccountDeleteHook>,
+) {
 	return getTestInstance(
 		{
 			socialProviders: {
@@ -93,6 +97,13 @@ async function createAuthTestInstance(googleIdentity: GithubIdentity = { id: "go
 				encryptOAuthTokens: true,
 			},
 			databaseHooks: {
+				...(accountDeleteHook
+					? {
+							account: {
+								delete: { before: accountDeleteHook },
+							},
+						}
+					: {}),
 				user: {
 					create: {
 						before: prepareOAuthUser,
@@ -155,7 +166,11 @@ async function finishSocialFlow(
 	);
 }
 
-async function startGithubLink(auth: Awaited<ReturnType<typeof createAuthTestInstance>>["auth"], sessionHeaders: Headers) {
+async function startSocialLink(
+	auth: Awaited<ReturnType<typeof createAuthTestInstance>>["auth"],
+	provider: "github" | "google",
+	sessionHeaders: Headers,
+) {
 	const requestHeaders = new Headers(sessionHeaders);
 	requestHeaders.set("content-type", "application/json");
 	requestHeaders.set("origin", APP_URL);
@@ -164,7 +179,7 @@ async function startGithubLink(auth: Awaited<ReturnType<typeof createAuthTestIns
 			method: "POST",
 			headers: requestHeaders,
 			body: JSON.stringify({
-				provider: "github",
+				provider,
 				callbackURL: `${APP_URL}/profile`,
 				errorCallbackURL: `${APP_URL}/profile`,
 				disableRedirect: true,
@@ -180,6 +195,57 @@ async function startGithubLink(auth: Awaited<ReturnType<typeof createAuthTestIns
 	const callbackHeaders = new Headers(sessionHeaders);
 	callbackHeaders.set("cookie", `${sessionHeaders.get("cookie")}; ${stateHeaders.get("cookie")}`);
 	return { state: state as string, headers: callbackHeaders };
+}
+
+function createControlledTestAccountStore(getDb: () => any): AuthAccountStore {
+	let arrivals = 0;
+	let releaseBarrier = () => {};
+	const barrier = new Promise<void>((resolve) => {
+		releaseBarrier = resolve;
+	});
+	const tails = new Map<string, Promise<void>>();
+
+	return {
+		withUserLock: async (userId, operation) => {
+			arrivals += 1;
+			if (arrivals === 2) releaseBarrier();
+			await barrier;
+
+			const previous = tails.get(userId) ?? Promise.resolve();
+			let release = () => {};
+			const current = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			tails.set(
+				userId,
+				previous.then(() => current),
+			);
+			await previous;
+
+			try {
+				return await operation({
+					listAccountIds: async (ownerId) => {
+						const accounts = await getDb().findMany({ model: "account", where: [{ field: "userId", value: ownerId }] });
+						return accounts.map(({ id }: { id: string }) => id);
+					},
+					deleteAccount: async (ownerId, accountId) => {
+						const account = await getDb().findOne({
+							model: "account",
+							where: [
+								{ field: "userId", value: ownerId },
+								{ field: "id", value: accountId },
+							],
+						});
+						if (!account) return false;
+						await getDb().delete({ model: "account", where: [{ field: "id", value: accountId }] });
+						return true;
+					},
+				});
+			} finally {
+				release();
+			}
+		},
+	};
 }
 
 describe("Better Auth social authentication lifecycle", () => {
@@ -304,7 +370,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const { headers: sessionHeaders } = await signInWithUser("profile@example.com", password);
 		mockGithub({ id: "github-profile-user", email: "profile@example.com", verified: true });
 
-		const flow = await startGithubLink(auth, sessionHeaders);
+		const flow = await startSocialLink(auth, "github", sessionHeaders);
 		const callback = await finishSocialFlow(auth, "github", flow);
 		expect(callback.status).toBe(302);
 		expect(callback.headers.get("location")).toBe(`${APP_URL}/profile`);
@@ -316,6 +382,48 @@ describe("Better Auth social authentication lifecycle", () => {
 			where: [{ field: "userId", value: signup.user.id }],
 		});
 		expect(remainingAccounts.map((account) => account.providerId)).toEqual(["credential"]);
+	});
+
+	it("serializes concurrent direct unlink requests so one login method remains", async () => {
+		let testDb: any;
+		const deleteHook = createAccountDeleteHook(createControlledTestAccountStore(() => testDb));
+		const instance = await createAuthTestInstance({ id: "google-concurrent-user", email: "concurrent@example.com", verified: true }, deleteHook);
+		const { auth, db } = instance;
+		testDb = db;
+		mockGithub({ id: "github-concurrent-user", email: "concurrent@example.com", verified: true });
+
+		const signupFlow = await startSocialFlow(auth, "github", { activeLanguage: "es", requestSignUp: true });
+		const signupCallback = await finishSocialFlow(auth, "github", signupFlow);
+		const callbackCookies = convertSetCookieToCookie(new Headers(signupCallback.headers));
+		const sessionCookie = callbackCookies
+			.get("cookie")
+			?.split("; ")
+			.find((cookie) => cookie.startsWith("better-auth.session_token="));
+		expect(sessionCookie).toBeTruthy();
+		const sessionHeaders = new Headers({ cookie: sessionCookie as string });
+
+		mockGoogle();
+		const linkFlow = await startSocialLink(auth, "google", sessionHeaders);
+		const linkCallback = await finishSocialFlow(auth, "google", linkFlow);
+		expect(linkCallback.status).toBe(302);
+
+		const results = await Promise.allSettled([
+			auth.api.unlinkAccount({ body: { providerId: "github" }, headers: sessionHeaders }),
+			auth.api.unlinkAccount({ body: { providerId: "google" }, headers: sessionHeaders }),
+		]);
+
+		expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+		const rejected = results.find(({ status }) => status === "rejected");
+		expect(rejected).toMatchObject({
+			status: "rejected",
+			reason: { body: { code: "FAILED_TO_UNLINK_LAST_ACCOUNT" } },
+		});
+
+		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "concurrent@example.com" }] });
+		expect(user).not.toBeNull();
+		if (!user) throw new Error("Expected the concurrent unlink user to exist");
+		const remainingAccounts = await db.findMany({ model: "account", where: [{ field: "userId", value: user.id }] });
+		expect(remainingAccounts).toHaveLength(1);
 	});
 
 	it("rejects linking a verified GitHub identity with a different email", async () => {
@@ -337,7 +445,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const { headers: sessionHeaders } = await signInWithUser("profile@example.com", password);
 		mockGithub({ id: "github-different-email", email: "different@example.com", verified: true });
 
-		const flow = await startGithubLink(auth, sessionHeaders);
+		const flow = await startSocialLink(auth, "github", sessionHeaders);
 		const callback = await finishSocialFlow(auth, "github", flow);
 		const location = callback.headers.get("location");
 

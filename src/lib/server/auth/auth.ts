@@ -4,6 +4,7 @@ import { sveltekitCookies } from "better-auth/svelte-kit";
 import { base } from "$app/paths";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
+import { deleteAccountWithLoginMethodGuard } from "$lib/server/auth/account-deletion.postgres";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
 import { configuredSocialProviders, prepareOAuthUser } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
@@ -27,6 +28,11 @@ export const auth = betterAuth({
 		encryptOAuthTokens: true,
 	},
 	databaseHooks: {
+		account: {
+			delete: {
+				before: deleteAccountWithLoginMethodGuard,
+			},
+		},
 		user: {
 			create: {
 				before: prepareOAuthUser,
