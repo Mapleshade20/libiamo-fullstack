@@ -2,6 +2,7 @@
 import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
+import { afterNavigate, replaceState } from "$app/navigation";
 import type { AccountActionResult, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
@@ -29,7 +30,24 @@ let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
 let accountFormResult = $derived((form as { accountResult?: AccountActionResult } | null | undefined)?.accountResult);
-let accountResult = $derived(accountFormResult ?? (data.accountError ? "error" : data.accountResult));
+
+// `?linked=` / `?error=` describe the OAuth round-trip that just landed on this
+// page, nothing after it. `use:enhance` never rewrites the URL, so once any form
+// action has reported back we must stop consulting them — otherwise a saved
+// profile keeps announcing "login method connected", and a single failed link
+// turns every later save into "login method unchanged".
+let landedAccountResult = $derived(data.accountError ? "error" : data.accountResult);
+let accountResult = $derived(form ? accountFormResult : landedAccountResult);
+
+// Drop the parameters once consumed so a reload does not replay the notification.
+// `replaceState` leaves `data` untouched, so the notice still shows this time.
+afterNavigate(() => {
+	const url = new URL(location.href);
+	if (!url.searchParams.has("linked") && !url.searchParams.has("error")) return;
+	url.searchParams.delete("linked");
+	url.searchParams.delete("error");
+	replaceState(`${url.pathname}${url.search}${url.hash}`, {});
+});
 
 const actionNotification = $derived(
 	accountResult === "connected"

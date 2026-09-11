@@ -92,6 +92,29 @@ describe("Profile page", () => {
 		expect(body).toContain("Conservez au moins une méthode de connexion associée.");
 	});
 
+	// The OAuth callback lands on `/profile?linked=<provider>`, and `use:enhance`
+	// never clears it. Reading it after a form action reported back made every
+	// later save announce a login-method change instead of its own result.
+	it("stops replaying the OAuth landing notice once a form action reports back", () => {
+		const landed = { ...data, accountResult: "connected" as const };
+
+		const onLanding = render(ProfilePage, { props: { data: landed, form: null } });
+		expect(onLanding.body).toContain("Méthode de connexion associée");
+
+		const afterSave = render(ProfilePage, { props: { data: landed, form: { success: true } } });
+		expect(afterSave.body).not.toContain("Méthode de connexion associée");
+	});
+
+	it("stops replaying a failed OAuth link once a form action reports back", () => {
+		const landed = { ...data, accountError: true };
+
+		const onLanding = render(ProfilePage, { props: { data: landed, form: null } });
+		expect(onLanding.body).toContain("Méthode de connexion inchangée");
+
+		const afterSave = render(ProfilePage, { props: { data: landed, form: { success: true } } });
+		expect(afterSave.body).not.toContain("Méthode de connexion inchangée");
+	});
+
 	it("asks the user to sign in again when the session is too old to change login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: { accountResult: "stale-session" } } });
 
