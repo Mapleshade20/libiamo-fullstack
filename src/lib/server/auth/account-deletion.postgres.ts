@@ -3,7 +3,7 @@ import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth
 import { db } from "$lib/server/db";
 import { account, user } from "$lib/server/db/schema";
 
-const postgresAuthAccountStore: AuthAccountStore = {
+export const postgresAuthAccountStore: AuthAccountStore = {
 	withUserLock: (userId, operation) =>
 		db.transaction(async (transaction) => {
 			const [lockedUser] = await transaction.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
