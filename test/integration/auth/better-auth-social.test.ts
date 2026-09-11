@@ -1,6 +1,6 @@
 import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
+import { type AuthAccountStore, createAccountDeleteHook, type LockedAuthAccountTransaction } from "$lib/server/auth/account-deletion";
 import { mapOAuthProfileToUser, prepareOAuthUser } from "$lib/server/auth/social";
 
 const AUTH_BASE_URL = "http://localhost:3000/api/auth";
@@ -64,6 +64,7 @@ function mockGoogle() {
 async function createAuthTestInstance(
 	googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true },
 	accountDeleteHook?: ReturnType<typeof createAccountDeleteHook>,
+	overrides: { deleteUser?: boolean } = {},
 ) {
 	return getTestInstance(
 		{
@@ -111,6 +112,7 @@ async function createAuthTestInstance(
 				},
 			},
 			user: {
+				...(overrides.deleteUser ? { deleteUser: { enabled: true } } : {}),
 				additionalFields: {
 					activeLanguage: { type: "string", required: true, input: true },
 				},
@@ -197,6 +199,32 @@ async function startSocialLink(
 	return { state: state as string, headers: callbackHeaders };
 }
 
+function createTestAccountTransaction(getDb: () => any): LockedAuthAccountTransaction {
+	return {
+		listAccountIds: async (ownerId) => {
+			const accounts = await getDb().findMany({ model: "account", where: [{ field: "userId", value: ownerId }] });
+			return accounts.map(({ id }: { id: string }) => id);
+		},
+		deleteAccount: async (ownerId, accountId) => {
+			const account = await getDb().findOne({
+				model: "account",
+				where: [
+					{ field: "userId", value: ownerId },
+					{ field: "id", value: accountId },
+				],
+			});
+			if (!account) return false;
+			await getDb().delete({ model: "account", where: [{ field: "id", value: accountId }] });
+			return true;
+		},
+	};
+}
+
+/** The store's reads and writes without any locking, for tests that are not about concurrency. */
+function createTestAccountStore(getDb: () => any): AuthAccountStore {
+	return { withUserLock: (_userId, operation) => operation(createTestAccountTransaction(getDb)) };
+}
+
 function createControlledTestAccountStore(getDb: () => any): AuthAccountStore {
 	let arrivals = 0;
 	let releaseBarrier = () => {};
@@ -223,24 +251,7 @@ function createControlledTestAccountStore(getDb: () => any): AuthAccountStore {
 			await previous;
 
 			try {
-				return await operation({
-					listAccountIds: async (ownerId) => {
-						const accounts = await getDb().findMany({ model: "account", where: [{ field: "userId", value: ownerId }] });
-						return accounts.map(({ id }: { id: string }) => id);
-					},
-					deleteAccount: async (ownerId, accountId) => {
-						const account = await getDb().findOne({
-							model: "account",
-							where: [
-								{ field: "userId", value: ownerId },
-								{ field: "id", value: accountId },
-							],
-						});
-						if (!account) return false;
-						await getDb().delete({ model: "account", where: [{ field: "id", value: accountId }] });
-						return true;
-					},
-				});
+				return await operation(createTestAccountTransaction(getDb));
 			} finally {
 				release();
 			}
@@ -424,6 +435,31 @@ describe("Better Auth social authentication lifecycle", () => {
 		if (!user) throw new Error("Expected the concurrent unlink user to exist");
 		const remainingAccounts = await db.findMany({ model: "account", where: [{ field: "userId", value: user.id }] });
 		expect(remainingAccounts).toHaveLength(1);
+	});
+
+	// `deleteUser` bulk-deletes a user's accounts before the user row, firing the same
+	// `account.delete.before` hook. A guard that does not distinguish the two endpoints
+	// rejects the deletion of a user whose only login method is the one it is protecting.
+	it("lets a user with a single login method delete their account", async () => {
+		let testDb: any;
+		const deleteHook = createAccountDeleteHook(createTestAccountStore(() => testDb));
+		const instance = await createAuthTestInstance({ id: "google-deleted-user", email: "deleted@example.com", verified: true }, deleteHook, {
+			deleteUser: true,
+		});
+		const { auth, db, signInWithUser } = instance;
+		testDb = db;
+
+		const password = "correct-horse-battery-staple";
+		const signup = await auth.api.signUpEmail({
+			body: { name: "Deleted User", email: "deleted@example.com", password, activeLanguage: "ja" },
+		});
+		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+		const { headers: sessionHeaders } = await signInWithUser("deleted@example.com", password);
+		await expect(db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] })).resolves.toHaveLength(1);
+
+		await expect(auth.api.deleteUser({ body: { password }, headers: sessionHeaders })).resolves.toMatchObject({ success: true });
+
+		await expect(db.findMany({ model: "user", where: [{ field: "id", value: signup.user.id }] })).resolves.toHaveLength(0);
 	});
 
 	it("rejects linking a verified GitHub identity with a different email", async () => {
