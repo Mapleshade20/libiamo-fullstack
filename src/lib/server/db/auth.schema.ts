@@ -82,7 +82,6 @@ export const account = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		index("account_userId_idx").on(table.userId),
 		uniqueIndex("account_provider_account_unique").on(table.providerId, table.accountId),
 		uniqueIndex("account_user_provider_unique").on(table.userId, table.providerId),
 	],
