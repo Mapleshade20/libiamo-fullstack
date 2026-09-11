@@ -216,6 +216,19 @@ describe("Profile +page.server", () => {
 			});
 		});
 
+		it("refuses to start a second link for an already connected provider", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+				{ id: "credential-account", providerId: "credential" },
+				{ id: "google-account", providerId: "google" },
+			] as never);
+
+			const result = (await actions.linkSocialAccount(createActionEvent({ provider: "google" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
+			expect(auth.api.linkSocialAccount).not.toHaveBeenCalled();
+		});
+
 		it("rejects unsupported provider account actions", async () => {
 			const result = (await actions.linkSocialAccount(createActionEvent({ provider: "microsoft" }))) as ActionFailure<any>;
 

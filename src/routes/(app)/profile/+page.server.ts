@@ -67,6 +67,16 @@ export const actions: Actions = {
 			return fail(400, { accountResult: "error" });
 		}
 
+		// `account_user_provider_unique` allows one account per provider per user, and
+		// nothing below this point would report a violation as anything but a 500 — the
+		// insert happens inside Better Auth's OAuth callback. The button is hidden once a
+		// provider is connected, so this only catches a hand-rolled POST, but it keeps the
+		// rule the index enforces stated where a reader of this action can see it.
+		const accounts = await auth.api.listUserAccounts({ headers: event.request.headers });
+		if (accounts.some(({ providerId }) => providerId === provider)) {
+			return fail(400, { accountResult: "error" });
+		}
+
 		let authorizationURL: string | undefined;
 		try {
 			const result = await auth.api.linkSocialAccount({
