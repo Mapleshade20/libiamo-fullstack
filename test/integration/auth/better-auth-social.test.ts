@@ -124,7 +124,7 @@ async function startSocialFlow(
 			body: JSON.stringify({
 				provider,
 				callbackURL: APP_URL,
-				errorCallbackURL: `${APP_URL}/signin`,
+				errorCallbackURL: `${APP_URL}/sign-in`,
 				disableRedirect: true,
 				requestSignUp: options.requestSignUp,
 				additionalData: options.activeLanguage ? { activeLanguage: options.activeLanguage } : undefined,
@@ -318,6 +318,42 @@ describe("Better Auth social authentication lifecycle", () => {
 		expect(remainingAccounts.map((account) => account.providerId)).toEqual(["credential"]);
 	});
 
+	it("rejects linking a verified GitHub identity with a different email", async () => {
+		const { auth, db, signInWithUser } = await createAuthTestInstance();
+		const password = "correct-horse-battery-staple";
+		const signup = await auth.api.signUpEmail({
+			body: {
+				name: "Profile User",
+				email: "profile@example.com",
+				password,
+				activeLanguage: "fr",
+			},
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: signup.user.id }],
+			update: { emailVerified: true },
+		});
+		const { headers: sessionHeaders } = await signInWithUser("profile@example.com", password);
+		mockGithub({ id: "github-different-email", email: "different@example.com", verified: true });
+
+		const flow = await startGithubLink(auth, sessionHeaders);
+		const callback = await finishSocialFlow(auth, "github", flow);
+		const location = callback.headers.get("location");
+
+		expect(callback.status).toBe(302);
+		expect(location).not.toBeNull();
+		expect(new URL(location as string).pathname).toBe("/profile");
+		expect(new URL(location as string).searchParams.get("error")).toBe("email_doesn't_match");
+
+		const accounts = await db.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: signup.user.id }],
+		});
+		expect(accounts.map((account) => account.providerId)).toEqual(["credential"]);
+		await expect(db.findMany({ model: "account", where: [{ field: "providerId", value: "github" }] })).resolves.toHaveLength(0);
+	});
+
 	it("does not create an account when GitHub does not verify the email", async () => {
 		const { auth, db } = await createAuthTestInstance();
 		mockGithub({ id: "github-unverified-user", email: "unverified@example.com", verified: false });
@@ -326,7 +362,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const callback = await finishSocialFlow(auth, "github", flow);
 
 		expect(callback.status).toBe(302);
-		expect(callback.headers.get("location")).toContain("/signin?error=");
+		expect(callback.headers.get("location")).toContain("/sign-in?error=");
 		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "unverified@example.com" }] })).resolves.toBeNull();
 	});
 
@@ -338,7 +374,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const callback = await finishSocialFlow(auth, "github", flow);
 
 		expect(callback.status).toBe(302);
-		expect(callback.headers.get("location")).toContain("/signin?error=signup_disabled");
+		expect(callback.headers.get("location")).toContain("/sign-in?error=signup_disabled");
 		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "sign-in-only@example.com" }] })).resolves.toBeNull();
 	});
 
