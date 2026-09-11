@@ -1,10 +1,14 @@
 import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type AuthAccountStore, createAccountDeleteHook, type LockedAuthAccountTransaction } from "$lib/server/auth/account-deletion";
-import { mapOAuthProfileToUser, prepareOAuthUser } from "$lib/server/auth/social";
+import type { AuthAccountStore, LockedAuthAccountTransaction } from "$lib/server/auth/account-deletion";
+import { createAuthOptions } from "$lib/server/auth/options";
+import { mapOAuthProfileToUser } from "$lib/server/auth/social";
 
 const AUTH_BASE_URL = "http://localhost:3000/api/auth";
 const APP_URL = "http://localhost:3000";
+
+/** Set by `createAuthTestInstance`; the default account store reads through it. */
+let testInstanceDb: any;
 
 type GithubIdentity = {
 	id: string;
@@ -61,24 +65,42 @@ function mockGoogle() {
 	);
 }
 
+const TEST_ENV = {
+	ORIGIN: APP_URL,
+	BETTER_AUTH_SECRET: "test-secret-value-for-better-auth-instance",
+	GOOGLE_CLIENT_ID: "google-client-id",
+	GOOGLE_CLIENT_SECRET: "google-client-secret",
+	GITHUB_CLIENT_ID: "github-client-id",
+	GITHUB_CLIENT_SECRET: "github-client-secret",
+};
+
+/**
+ * Builds the instance from the options the app actually ships, so this file
+ * exercises the production configuration rather than a second copy of it — the
+ * security of these flows rests on options that are absent from it (there is no
+ * `account.accountLinking.trustedProviders`, so a provider must have verified the
+ * address before Better Auth will attach it to an existing user).
+ *
+ * Only what cannot exist outside a running app is substituted: the account store
+ * behind the unlink guard, and Google's `getUserInfo`, which would otherwise need
+ * a signed id_token. The GitHub provider runs unmodified against a stubbed fetch.
+ */
 async function createAuthTestInstance(
 	googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true },
-	accountDeleteHook?: ReturnType<typeof createAccountDeleteHook>,
+	accountStore: AuthAccountStore = createTestAccountStore(() => testInstanceDb),
 	overrides: { deleteUser?: boolean } = {},
 ) {
-	return getTestInstance(
+	const options = createAuthOptions(TEST_ENV, { accountStore });
+	const google = options.socialProviders.google;
+	if (!google || typeof google === "function") throw new Error("TEST_ENV should configure Google as a static provider");
+
+	const instance = await getTestInstance(
 		{
+			...options,
 			socialProviders: {
-				github: {
-					clientId: "github-client-id",
-					clientSecret: "github-client-secret",
-					disableImplicitSignUp: true,
-					mapProfileToUser: mapOAuthProfileToUser,
-				},
+				...options.socialProviders,
 				google: {
-					clientId: "google-client-id",
-					clientSecret: "google-client-secret",
-					disableImplicitSignUp: true,
+					...google,
 					getUserInfo: async () => {
 						const additionalUser = await mapOAuthProfileToUser();
 						return {
@@ -94,32 +116,16 @@ async function createAuthTestInstance(
 					},
 				},
 			},
-			account: {
-				encryptOAuthTokens: true,
-			},
-			databaseHooks: {
-				...(accountDeleteHook
-					? {
-							account: {
-								delete: { before: accountDeleteHook },
-							},
-						}
-					: {}),
-				user: {
-					create: {
-						before: prepareOAuthUser,
-					},
-				},
-			},
 			user: {
-				...(overrides.deleteUser ? { deleteUser: { enabled: true } } : {}),
-				additionalFields: {
-					activeLanguage: { type: "string", required: true, input: true },
-				},
+				...options.user,
+				deleteUser: { enabled: overrides.deleteUser === true },
 			},
 		},
 		{ disableTestUser: true },
 	);
+
+	testInstanceDb = instance.db;
+	return instance;
 }
 
 async function startSocialFlow(
@@ -396,11 +402,11 @@ describe("Better Auth social authentication lifecycle", () => {
 	});
 
 	it("serializes concurrent direct unlink requests so one login method remains", async () => {
-		let testDb: any;
-		const deleteHook = createAccountDeleteHook(createControlledTestAccountStore(() => testDb));
-		const instance = await createAuthTestInstance({ id: "google-concurrent-user", email: "concurrent@example.com", verified: true }, deleteHook);
+		const instance = await createAuthTestInstance(
+			{ id: "google-concurrent-user", email: "concurrent@example.com", verified: true },
+			createControlledTestAccountStore(() => testInstanceDb),
+		);
 		const { auth, db } = instance;
-		testDb = db;
 		mockGithub({ id: "github-concurrent-user", email: "concurrent@example.com", verified: true });
 
 		const signupFlow = await startSocialFlow(auth, "github", { activeLanguage: "es", requestSignUp: true });
@@ -441,13 +447,12 @@ describe("Better Auth social authentication lifecycle", () => {
 	// `account.delete.before` hook. A guard that does not distinguish the two endpoints
 	// rejects the deletion of a user whose only login method is the one it is protecting.
 	it("lets a user with a single login method delete their account", async () => {
-		let testDb: any;
-		const deleteHook = createAccountDeleteHook(createTestAccountStore(() => testDb));
-		const instance = await createAuthTestInstance({ id: "google-deleted-user", email: "deleted@example.com", verified: true }, deleteHook, {
-			deleteUser: true,
-		});
+		const instance = await createAuthTestInstance(
+			{ id: "google-deleted-user", email: "deleted@example.com", verified: true },
+			createTestAccountStore(() => testInstanceDb),
+			{ deleteUser: true },
+		);
 		const { auth, db, signInWithUser } = instance;
-		testDb = db;
 
 		const password = "correct-horse-battery-staple";
 		const signup = await auth.api.signUpEmail({
@@ -460,6 +465,43 @@ describe("Better Auth social authentication lifecycle", () => {
 		await expect(auth.api.deleteUser({ body: { password }, headers: sessionHeaders })).resolves.toMatchObject({ success: true });
 
 		await expect(db.findMany({ model: "user", where: [{ field: "id", value: signup.user.id }] })).resolves.toHaveLength(0);
+	});
+
+	// The app configures no `account.accountLinking.trustedProviders`, so Better Auth
+	// demands a provider-verified address before attaching an identity to an account
+	// that already exists. Adding a provider to that list — an innocuous-looking change
+	// — would let anyone who registers an unverified provider account under someone
+	// else's address sign straight into it. These two cases pin that default down.
+	it("refuses to sign an unverified GitHub identity into a matching existing account", async () => {
+		const { auth, db } = await createAuthTestInstance();
+		const signup = await auth.api.signUpEmail({
+			body: { name: "Target User", email: "target@example.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
+		});
+		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+		mockGithub({ id: "github-impostor", email: "target@example.com", verified: false });
+
+		const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"));
+
+		expect(callback.status).toBe(302);
+		expect(new URL(callback.headers.get("location") as string).searchParams.get("error")).toBe("account_not_linked");
+		await expect(db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] })).resolves.toHaveLength(1);
+	});
+
+	it("refuses to link an unverified GitHub identity from an authenticated session", async () => {
+		const { auth, db, signInWithUser } = await createAuthTestInstance();
+		const password = "correct-horse-battery-staple";
+		const signup = await auth.api.signUpEmail({
+			body: { name: "Target User", email: "target@example.com", password, activeLanguage: "en" },
+		});
+		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+		const { headers: sessionHeaders } = await signInWithUser("target@example.com", password);
+		mockGithub({ id: "github-impostor", email: "target@example.com", verified: false });
+
+		const callback = await finishSocialFlow(auth, "github", await startSocialLink(auth, "github", sessionHeaders));
+
+		expect(callback.status).toBe(302);
+		expect(new URL(callback.headers.get("location") as string).searchParams.get("error")).toBe("unable_to_link_account");
+		await expect(db.findMany({ model: "account", where: [{ field: "providerId", value: "github" }] })).resolves.toHaveLength(0);
 	});
 
 	it("rejects linking a verified GitHub identity with a different email", async () => {

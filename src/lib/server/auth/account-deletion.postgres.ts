@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
+import type { AuthAccountStore } from "$lib/server/auth/account-deletion";
 import { db } from "$lib/server/db";
 import { account, user } from "$lib/server/db/schema";
 
@@ -30,5 +30,3 @@ export const postgresAuthAccountStore: AuthAccountStore = {
 			});
 		}),
 };
-
-export const deleteAccountWithLoginMethodGuard = createAccountDeleteHook(postgresAuthAccountStore);
