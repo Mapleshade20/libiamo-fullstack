@@ -54,11 +54,6 @@ const actionNotification = $derived(
 			class="space-y-4"
 			oninvalidcapture={handleInvalidField}
 		>
-			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
-			{#if data.socialProviders.length > 0}
-				<div class="border-t border-border/70" aria-hidden="true"></div>
-			{/if}
-
 			<div class="space-y-2">
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
@@ -91,6 +86,11 @@ const actionNotification = $derived(
 			</div>
 
 			<Button type="submit" class="w-full">Sign In</Button>
+
+			{#if data.socialProviders.length > 0}
+				<div class="border-t border-border/70" aria-hidden="true"></div>
+			{/if}
+			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
 		</form>
 	</Card.Content>
 	<Card.Footer class="flex flex-col gap-2 text-sm">

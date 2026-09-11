@@ -101,11 +101,6 @@ $effect(() => {
 				{/if}
 			</div>
 
-			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
-			{#if data.socialProviders.length > 0}
-				<div class="border-t border-border/70" aria-hidden="true"></div>
-			{/if}
-
 			<div class="space-y-2">
 				<Label for="name">Name</Label>
 				<Input id="name" name="name" value={formState?.values?.name ?? ""} required aria-invalid={Boolean(formState?.errors?.name)} />
@@ -153,6 +148,11 @@ $effect(() => {
 			</div>
 
 			<Button type="submit" class="w-full">Sign Up</Button>
+
+			{#if data.socialProviders.length > 0}
+				<div class="border-t border-border/70" aria-hidden="true"></div>
+			{/if}
+			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
 		</form>
 	</Card.Content>
 	<Card.Footer class="text-sm">
