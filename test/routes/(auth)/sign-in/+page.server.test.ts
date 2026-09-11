@@ -77,7 +77,7 @@ describe("Sign-in +page.server", () => {
 			expect(result).toEqual({
 				resetSuccess: false,
 				socialProviders: ["google", "github"],
-				socialAuthError: "Sign-in was canceled. You can try again when you’re ready.",
+				socialAuthError: "Authentication was canceled. You can try again when you’re ready.",
 			});
 		});
 

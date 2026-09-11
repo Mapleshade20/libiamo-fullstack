@@ -14,10 +14,10 @@ export function socialAuthErrorMessage(code: string | null): string | null {
 	if (!code) return null;
 	const normalizedCode = code.toLowerCase();
 	if (["access_denied", "user_cancelled", "cancelled"].includes(normalizedCode)) {
-		return "Sign-in was canceled. You can try again when you’re ready.";
+		return "Authentication was canceled. You can try again when you’re ready.";
 	}
 	if (normalizedCode === "signup_disabled") {
 		return "To create a new Libiamo account, choose Sign Up below and select a learning language.";
 	}
-	return "Google or GitHub sign-in could not be completed. Please try again.";
+	return "Google or GitHub authentication could not be completed. Please try again.";
 }

@@ -57,6 +57,18 @@ describe("Sign-up +page.server", () => {
 				socialAuthError: null,
 			});
 		});
+
+		it("uses neutral wording for a canceled OAuth sign-up", async () => {
+			const event = {
+				locals: { user: null },
+				url: new URL("https://example.com/sign-up?error=access_denied"),
+			} as any;
+
+			const result = await load(event);
+			expect(result).toMatchObject({
+				socialAuthError: "Authentication was canceled. You can try again when you’re ready.",
+			});
+		});
 	});
 
 	const createEvent = (formDataEntries: Record<string, string>) => {
