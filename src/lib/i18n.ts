@@ -153,6 +153,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.methodDisconnectedMessage": "The other login methods remain available.",
 		"profile.methodErrorTitle": "Login method unchanged",
 		"profile.methodErrorMessage": "The request could not be completed. Please try again.",
+		"profile.methodStaleSessionTitle": "Sign in again to continue",
+		"profile.methodStaleSessionMessage": "For your security, changing login methods needs a recent sign-in. Sign out, sign back in, and try again.",
 
 		// Admin
 		"admin.templates": "Templates",
@@ -544,6 +546,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.methodDisconnectedMessage": "Los demás métodos de inicio de sesión siguen disponibles.",
 		"profile.methodErrorTitle": "El método no cambió",
 		"profile.methodErrorMessage": "No se pudo completar la solicitud. Inténtalo de nuevo.",
+		"profile.methodStaleSessionTitle": "Vuelve a iniciar sesión para continuar",
+		"profile.methodStaleSessionMessage":
+			"Por seguridad, cambiar los métodos de inicio de sesión requiere haber entrado hace poco. Cierra sesión, vuelve a entrar e inténtalo de nuevo.",
 
 		"admin.templates": "Plantillas",
 		"admin.schedule": "Calendario",
@@ -934,6 +939,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.methodDisconnectedMessage": "Les autres méthodes de connexion restent disponibles.",
 		"profile.methodErrorTitle": "Méthode de connexion inchangée",
 		"profile.methodErrorMessage": "La demande n’a pas abouti. Réessayez.",
+		"profile.methodStaleSessionTitle": "Reconnectez-vous pour continuer",
+		"profile.methodStaleSessionMessage":
+			"Par sécurité, modifier les méthodes de connexion exige une connexion récente. Déconnectez-vous, reconnectez-vous, puis réessayez.",
 
 		"admin.templates": "Modèles",
 		"admin.schedule": "Calendrier",
@@ -1322,6 +1330,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.methodDisconnectedMessage": "ほかのログイン方法は引き続き利用できます。",
 		"profile.methodErrorTitle": "ログイン方法は変更されませんでした",
 		"profile.methodErrorMessage": "処理を完了できませんでした。もう一度お試しください。",
+		"profile.methodStaleSessionTitle": "もう一度ログインしてください",
+		"profile.methodStaleSessionMessage": "安全のため、ログイン方法の変更には最近のログインが必要です。一度ログアウトしてから、再度お試しください。",
 
 		"admin.templates": "テンプレート",
 		"admin.schedule": "スケジュール",

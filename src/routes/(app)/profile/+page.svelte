@@ -2,7 +2,7 @@
 import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
-import type { SocialProviderId } from "$lib/auth/social";
+import type { AccountActionResult, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
@@ -28,7 +28,7 @@ let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
-let accountFormResult = $derived((form as { accountResult?: "connected" | "disconnected" | "error" } | null | undefined)?.accountResult);
+let accountFormResult = $derived((form as { accountResult?: AccountActionResult } | null | undefined)?.accountResult);
 let accountResult = $derived(accountFormResult ?? (data.accountError ? "error" : data.accountResult));
 
 const actionNotification = $derived(
@@ -36,13 +36,15 @@ const actionNotification = $derived(
 		? { variant: "success" as const, title: t(lang, "profile.methodConnectedTitle"), message: t(lang, "profile.methodConnectedMessage") }
 		: accountResult === "disconnected"
 			? { variant: "success" as const, title: t(lang, "profile.methodDisconnectedTitle"), message: t(lang, "profile.methodDisconnectedMessage") }
-			: accountResult === "error"
-				? { variant: "error" as const, title: t(lang, "profile.methodErrorTitle"), message: t(lang, "profile.methodErrorMessage") }
-				: showActionNotification && form?.success
-					? { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") }
-					: showActionNotification && form?.message
-						? { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message }
-						: null,
+			: accountResult === "stale-session"
+				? { variant: "error" as const, title: t(lang, "profile.methodStaleSessionTitle"), message: t(lang, "profile.methodStaleSessionMessage") }
+				: accountResult === "error"
+					? { variant: "error" as const, title: t(lang, "profile.methodErrorTitle"), message: t(lang, "profile.methodErrorMessage") }
+					: showActionNotification && form?.success
+						? { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") }
+						: showActionNotification && form?.message
+							? { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message }
+							: null,
 );
 
 let trialPercent = $derived(

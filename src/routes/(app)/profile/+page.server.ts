@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
-import { isSocialProviderId, SOCIAL_PROVIDERS } from "$lib/auth/social";
+import { accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
@@ -80,7 +80,7 @@ export const actions: Actions = {
 			});
 			authorizationURL = result.url;
 		} catch (error) {
-			if (error instanceof APIError) return fail(400, { accountResult: "error" });
+			if (error instanceof APIError) return fail(400, { accountResult: accountActionErrorResult(error.body?.code) });
 			return fail(500, { accountResult: "error" });
 		}
 
@@ -101,7 +101,7 @@ export const actions: Actions = {
 				headers: event.request.headers,
 			});
 		} catch (error) {
-			if (error instanceof APIError) return fail(400, { accountResult: "error" });
+			if (error instanceof APIError) return fail(400, { accountResult: accountActionErrorResult(error.body?.code) });
 			return fail(500, { accountResult: "error" });
 		}
 

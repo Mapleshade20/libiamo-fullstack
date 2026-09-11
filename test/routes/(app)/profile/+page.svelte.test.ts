@@ -92,6 +92,13 @@ describe("Profile page", () => {
 		expect(body).toContain("Conservez au moins une méthode de connexion associée.");
 	});
 
+	it("asks the user to sign in again when the session is too old to change login methods", () => {
+		const { body } = render(ProfilePage, { props: { data, form: { accountResult: "stale-session" } } });
+
+		expect(body).toContain("Reconnectez-vous pour continuer");
+		expect(body).not.toContain("La demande n’a pas abouti. Réessayez.");
+	});
+
 	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 		const dialog = body.slice(body.indexOf("<dialog"), body.indexOf("</dialog>") + 9);

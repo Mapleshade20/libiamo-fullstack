@@ -1,4 +1,5 @@
 import type { ActionFailure } from "@sveltejs/kit";
+import { APIError } from "better-auth/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BYOK_API_BASE_URLS, BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth/auth";
@@ -221,6 +222,31 @@ describe("Profile +page.server", () => {
 			expect(result.status).toBe(400);
 			expect(result.data?.accountResult).toBe("error");
 			expect(auth.api.linkSocialAccount).not.toHaveBeenCalled();
+		});
+
+		// Better Auth guards `/unlink-account` with a freshness check against
+		// `session.createdAt`, which session renewal never advances. Reporting that
+		// as a generic "please try again" leaves the user retrying forever.
+		it("tells the user to sign in again when the session is not fresh enough to unlink", async () => {
+			vi.mocked(auth.api.unlinkAccount).mockRejectedValueOnce(
+				new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Session is not fresh" }),
+			);
+
+			const result = (await actions.unlinkSocialAccount(createActionEvent({ provider: "github" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("stale-session");
+		});
+
+		it("reports other Better Auth unlink failures as a generic error", async () => {
+			vi.mocked(auth.api.unlinkAccount).mockRejectedValueOnce(
+				new APIError("BAD_REQUEST", { code: "FAILED_TO_UNLINK_LAST_ACCOUNT", message: "You cannot unlink your last login method" }),
+			);
+
+			const result = (await actions.unlinkSocialAccount(createActionEvent({ provider: "github" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
 		});
 
 		it("updateProfile returns 400 for invalid payload", async () => {
