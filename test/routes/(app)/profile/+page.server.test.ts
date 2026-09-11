@@ -43,6 +43,7 @@ vi.mock("$lib/server/auth/auth", () => ({
 			listUserAccounts: vi.fn(),
 			linkSocialAccount: vi.fn(),
 			unlinkAccount: vi.fn(),
+			changeEmail: vi.fn(),
 		},
 	},
 }));
@@ -198,6 +199,30 @@ describe("Profile +page.server", () => {
 
 	// ── Actions ────────────────────────────────────────────────────────
 	describe("Actions", () => {
+		it("normalizes a new account email and passes the authenticated request to Better Auth", async () => {
+			const event = createActionEvent({ newEmail: " NEW@example.com " });
+			event.locals.user.email = "old@example.com";
+			expect(await actions.changeEmail(event)).toEqual({ emailChange: "sent" });
+			expect(auth.api.changeEmail).toHaveBeenCalledWith({
+				headers: event.request.headers,
+				body: { newEmail: "new@example.com", callbackURL: "/verify?emailChange=1" },
+			});
+		});
+
+		it.each(["invalid", "OLD@example.com"])("rejects invalid or unchanged email %s", async (newEmail) => {
+			const event = createActionEvent({ newEmail });
+			event.locals.user.email = "old@example.com";
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "invalid" } });
+			expect(auth.api.changeEmail).not.toHaveBeenCalled();
+		});
+
+		it("explains when email change requires signing in again", async () => {
+			const event = createActionEvent({ newEmail: "new@example.com" });
+			event.locals.user.email = "old@example.com";
+			vi.mocked(auth.api.changeEmail).mockRejectedValueOnce(new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again" }));
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "stale" } });
+		});
+
 		it("starts the official provider-linking flow", async () => {
 			const event = createActionEvent({ provider: "google" });
 			vi.mocked(auth.api.linkSocialAccount).mockResolvedValue({

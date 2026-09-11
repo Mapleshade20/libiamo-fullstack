@@ -8,6 +8,13 @@ import { mapOAuthProfileToUser } from "$lib/server/auth/social";
 const AUTH_BASE_URL = "http://localhost:3000/api/auth";
 const APP_URL = "http://localhost:3000";
 
+const { sentMail } = vi.hoisted(() => ({ sentMail: vi.fn() }));
+vi.mock("$lib/server/auth/email", () => ({
+	sendEmail: sentMail,
+	emailVerificationHtml: (_email: string, url: string) => url,
+	resetPasswordHtml: (_email: string, url: string) => url,
+}));
+
 /** Set by `createAuthTestInstance`; the default account store reads through it. */
 let testInstanceDb: any;
 
@@ -475,6 +482,66 @@ describe("Better Auth social authentication lifecycle", () => {
 	// Profile links a credential-less account at the reset flow as the way to add a
 	// password; losing the provider account is otherwise losing the Libiamo account.
 	// That only works because Better Auth creates the missing credential row itself.
+	it("verifies a new primary email before changing password login and preserves OAuth identity", async () => {
+		const { auth, db, signInWithUser } = await createAuthTestInstance();
+		const password = "correct-horse-battery-staple";
+		const signup = await auth.api.signUpEmail({ body: { name: "Email User", email: "old@example.com", password, activeLanguage: "fr" } });
+		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+		const { headers } = await signInWithUser("old@example.com", password);
+		mockGithub({ id: "email-change-github", email: "different@example.com", verified: true });
+		await finishSocialFlow(auth, "github", await startSocialLink(auth, "github", headers));
+		const accountsBefore = await db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] });
+		sentMail.mockClear();
+		await auth.api.changeEmail({ headers, body: { newEmail: "new@example.com", callbackURL: "/verify?emailChange=1" } });
+		expect(sentMail).toHaveBeenCalledTimes(1);
+		const mail = sentMail.mock.calls[0][0];
+		expect(mail.to).toBe("new@example.com");
+		const verification = new URL(mail.html);
+		expect(verification.searchParams.get("callbackURL")).toBe("/verify?success=1&emailChange=1");
+		expect(await db.findOne({ model: "user", where: [{ field: "id", value: signup.user.id }] })).toMatchObject({
+			email: "old@example.com",
+			emailVerified: true,
+		});
+		const token = verification.searchParams.get("token") as string;
+		await auth.api.verifyEmail({ query: { token }, headers });
+		expect(await db.findOne({ model: "user", where: [{ field: "id", value: signup.user.id }] })).toMatchObject({
+			email: "new@example.com",
+			emailVerified: true,
+			activeLanguage: "fr",
+		});
+		expect(await db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] })).toEqual(accountsBefore);
+		await expect(auth.api.signInEmail({ body: { email: "new@example.com", password } })).resolves.toMatchObject({ user: { id: signup.user.id } });
+		await expect(auth.api.signInEmail({ body: { email: "old@example.com", password } })).rejects.toThrow();
+		await expect(auth.api.verifyEmail({ query: { token } })).rejects.toThrow();
+		expect((await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"))).status).toBe(302);
+		expect(await db.findMany({ model: "user" })).toHaveLength(1);
+	});
+
+	it("rejects stale direct email-change calls and does not send mail for occupied addresses", async () => {
+		const { auth, db, signInWithUser } = await createAuthTestInstance();
+		const password = "correct-horse-battery-staple";
+		for (const email of ["first@example.com", "occupied@example.com"]) {
+			const signup = await auth.api.signUpEmail({ body: { name: "User", email, password, activeLanguage: "en" } });
+			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+		}
+		const { headers } = await signInWithUser("first@example.com", password);
+		sentMail.mockClear();
+		await expect(auth.api.changeEmail({ headers, body: { newEmail: "occupied@example.com" } })).resolves.toEqual({ status: true });
+		expect(sentMail).not.toHaveBeenCalled();
+		const session = await auth.api.getSession({ headers });
+		if (!session) throw new Error("Expected an authenticated session");
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: session.session.id }],
+			update: { createdAt: new Date("2025-01-01T00:00:00Z") },
+		});
+		await expect(auth.api.changeEmail({ headers, body: { newEmail: "available@example.com" } })).rejects.toMatchObject({
+			body: { code: "SESSION_NOT_FRESH" },
+		});
+		expect(sentMail).not.toHaveBeenCalled();
+		await expect(auth.api.changeEmail({ body: { newEmail: "available@example.com" } })).rejects.toThrow();
+	});
+
 	it("lets an account created through GitHub add a password through the reset flow", async () => {
 		let resetToken: string | undefined;
 		const { auth, db } = await createAuthTestInstance(undefined, undefined, {

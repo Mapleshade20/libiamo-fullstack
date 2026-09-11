@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "better-auth";
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from "better-auth/api";
 import { base } from "$app/paths";
 import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
@@ -35,6 +36,18 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			defaultCookieAttributes: { path: base || "/" },
 		},
 		secret: env.BETTER_AUTH_SECRET,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path !== "/change-email") return;
+				// The built-in change-email endpoint checks authentication, not freshness.
+				// Guard the API itself, not only the Profile action.
+				const session = await getAuthoritativeSessionFromCtx(ctx);
+				if (!session) throw new APIError("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Sign in first." });
+				if (Date.now() - new Date(session.session.createdAt).getTime() >= 10 * 60 * 1000) {
+					throw new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again before changing your email." });
+				}
+			}),
+		},
 		// `errorCallbackURL` travels inside the OAuth state, so a state that cannot be
 		// parsed — the common case being one the user left sitting until it expired —
 		// has nowhere to send them but this fallback. Without it they land on Better
@@ -85,7 +98,8 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			expiresIn: 3600,
 			sendVerificationEmail: async ({ user, url }) => {
 				const urlObj = new URL(url);
-				urlObj.searchParams.set("callbackURL", `${base}/verify?success=1`);
+				const changingEmail = urlObj.searchParams.get("callbackURL") === `${base}/verify?emailChange=1`;
+				urlObj.searchParams.set("callbackURL", `${base}/verify?success=1${changingEmail ? "&emailChange=1" : ""}`);
 				urlObj.searchParams.set("errorURL", `${base}/verify`); // back to verify page when error
 				void sendEmail({
 					to: user.email,
@@ -96,6 +110,9 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			},
 		},
 		user: {
+			// Verify the new mailbox without requiring access to the old mailbox.
+			// Better Auth keeps the current email until the verification succeeds.
+			changeEmail: { enabled: true, updateEmailWithoutVerification: false },
 			additionalFields: {
 				role: { type: "string", defaultValue: "learner", input: false },
 				activeLanguage: { type: "string", required: true, input: true },

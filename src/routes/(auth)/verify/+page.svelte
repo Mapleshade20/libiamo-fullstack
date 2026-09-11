@@ -11,10 +11,18 @@ const actionNotification = $derived(
 		? {
 				variant: "error" as const,
 				title: "Verification failed",
-				message: "The link may have expired. Please sign in to receive a new verification email.",
+				message: data.emailChange
+					? "The link could not be used. Return to Profile to request another email change."
+					: "The link may have expired. Please sign in to receive a new verification email.",
 			}
 		: data.success
-			? { variant: "success" as const, title: "Email verified", message: "You're ready to begin your journey." }
+			? {
+					variant: "success" as const,
+					title: "Email verified",
+					message: data.emailChange
+						? "Your account email has changed. Your password and connected login methods are unchanged."
+						: "You're ready to begin your journey.",
+				}
 			: null,
 );
 </script>
@@ -37,12 +45,16 @@ const actionNotification = $derived(
 		{:else if data.error}
 			<div class="space-y-3 text-center">
 				<p class="text-muted-foreground">The verification link may have expired.</p>
-				<Button href="{base}/sign-in" variant="default">Sign In</Button>
+				<Button href={data.emailChange ? `${base}/profile` : `${base}/sign-in`} variant="default"
+					>{data.emailChange ? "Return to Profile" : "Sign In"}</Button
+				>
 			</div>
 		{:else if data.success}
 			<div class="space-y-3 text-center">
 				<p class="text-muted-foreground">Email verified.</p>
-				<Button href="{base}/" variant="default">Begin Your Journey</Button>
+				<Button href={data.emailChange ? `${base}/profile` : `${base}/`} variant="default"
+					>{data.emailChange ? "Return to Profile" : "Begin Your Journey"}</Button
+				>
 			</div>
 		{:else}
 			<p class="text-center text-muted-foreground">

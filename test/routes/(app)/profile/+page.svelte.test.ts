@@ -33,6 +33,17 @@ const data = {
 };
 
 describe("Profile page", () => {
+	it.each([true, false])("renders a concise password row and change form before hydration (connected: %s)", (credentialConnected) => {
+		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected }, form: null } });
+		expect(body).toContain(t("fr", "profile.passwordMethod"));
+		expect(body).toMatch(/<span[^>]*class="block truncate text-xs text-muted-foreground"[^>]*>alice@example.com<\/span>/);
+		expect(body).not.toContain(`>${t("fr", "profile.connected")}</span>`);
+		expect(body).toContain('action="?/changeEmail"');
+		expect(body).toContain('<dialog aria-labelledby="email-dialog-title"');
+		expect(body).not.toContain("<summary");
+		expect(body).toMatch(/<input[^>]*name="newEmail"[^>]*required/);
+	});
+
 	it.each(["en", ""])("renders the native-language warning correctly before hydration (%s)", (nativeLanguage) => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, user: { ...data.user, nativeLanguage } }, form: null } });
 		expect(body.includes(t("fr", "profile.feedbackMissingNative"))).toBe(!nativeLanguage);

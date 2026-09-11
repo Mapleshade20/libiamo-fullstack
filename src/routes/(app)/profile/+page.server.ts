@@ -66,6 +66,27 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+	changeEmail: async (event) => {
+		const user = requireUser(event);
+		const data = await event.request.formData();
+		const result = z.email().safeParse(data.get("newEmail")?.toString().trim().toLowerCase());
+		if (!result.success || result.data === user.email.toLowerCase()) {
+			return fail(400, { emailChange: "invalid" as const });
+		}
+		try {
+			await auth.api.changeEmail({
+				headers: event.request.headers,
+				body: { newEmail: result.data, callbackURL: `${base}/verify?emailChange=1` },
+			});
+		} catch (error) {
+			return fail(error instanceof APIError ? 400 : 500, {
+				emailChange: error instanceof APIError && error.body?.code === "SESSION_NOT_FRESH" ? ("stale" as const) : ("error" as const),
+			});
+		}
+		// Better Auth deliberately gives the same response for an occupied address.
+		return { emailChange: "sent" as const };
+	},
+
 	linkSocialAccount: async (event) => {
 		requireUser(event);
 		const formData = await event.request.formData();

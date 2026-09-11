@@ -9,6 +9,7 @@ import ActionNotification from "$lib/components/ActionNotification.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
 import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
+import ModalDialog from "$lib/components/ModalDialog.svelte";
 import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -34,6 +35,9 @@ const FAILURE_NOTICE_KEYS: Record<SocialAuthFailure, string> = {
 	error: "profile.methodError",
 };
 
+const methodActionClass =
+	"min-h-11 min-w-32 shrink-0 rounded-xl px-3 font-medium text-foreground shadow-none transition-colors duration-200 motion-reduce:transition-none";
+
 let { form, data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 const clock = getDisplayClock();
@@ -47,6 +51,9 @@ let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
 let passwordSetupPending = $state(false);
+let emailChangePending = $state(false);
+let emailChangeForm = $state<HTMLFormElement | null>(null);
+let emailDialogOpen = $state(false);
 // The confirmation dialog drives the unlink forms rather than owning the POST, so
 // disconnecting still runs through the same `use:enhance` path as every other action.
 let disconnectForms = $state<Partial<Record<SocialProviderId, HTMLFormElement>>>({});
@@ -283,7 +290,59 @@ function enhancePasswordSetup() {
 			<Card.Description>{t(lang, "profile.loginMethodsHelp")}</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-3">
-			<div class={methodRowClass(data.credentialConnected)}>
+			<ModalDialog bind:open={emailDialogOpen} busy={emailChangePending} labelledby="email-dialog-title">
+				<h2 id="email-dialog-title" class="mb-2 font-serif text-2xl font-medium">{t(lang, "profile.changeEmail")}</h2>
+				<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.changeEmailHelp")}</p>
+				<form
+					bind:this={emailChangeForm}
+					method="POST"
+					action="?/changeEmail"
+					class="space-y-4"
+					oninvalidcapture={handleInvalidField}
+					use:enhance={() => {
+							emailChangePending = true;
+							return async ({ update }) => {
+								try { await update({ reset: false }); } finally { emailChangePending = false; }
+							};
+						}}
+				>
+					<Label for="newEmail">{t(lang, "profile.newEmail")}</Label>
+					<Input
+						id="newEmail"
+						class="min-h-12 rounded-xl bg-background px-3 shadow-none"
+						name="newEmail"
+						type="email"
+						autocomplete="email"
+						required
+						readonly={emailChangePending}
+						aria-invalid={form?.emailChange === "invalid"}
+					/>
+					<FormErrorFocus
+						formRef={emailChangeForm}
+						errors={form?.emailChange === "invalid" ? { newEmail: [t(lang, "profile.emailChangeInvalid")] } : {}}
+						fieldOrder={["newEmail"]}
+					/>
+					<div class="flex flex-wrap justify-end gap-2 pt-2">
+						<Button type="button" variant="ghost" class="min-h-11 rounded-xl" disabled={emailChangePending} onclick={() => (emailDialogOpen = false)}
+							>{t(lang, "common.cancel")}</Button
+						>
+						<Button type="submit" class="min-h-11 rounded-xl bg-[#38362f] px-4 text-[#faf8f4] hover:bg-[#4b483e]" disabled={emailChangePending}>
+							{#if emailChangePending}
+								<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+							{/if}
+							{t(lang, "profile.changeEmail")}
+						</Button>
+					</div>
+					<ActionNotification
+						notification={form?.emailChange ? {
+							variant: form.emailChange === "sent" ? "success" : "error",
+							title: t(lang, "profile.changeEmail"),
+							message: t(lang, form.emailChange === "sent" ? "profile.emailChangeSent" : form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "invalid" ? "profile.emailChangeInvalid" : "profile.emailChangeError"),
+						} : null}
+					/>
+				</form>
+			</ModalDialog>
+			<div class={`${methodRowClass(data.credentialConnected)} flex-wrap`}>
 				<span
 					class="flex size-9 shrink-0 items-center justify-center rounded-full {data.credentialConnected ? 'bg-muted text-foreground' : 'bg-muted/40'}"
 					aria-hidden="true"
@@ -292,10 +351,11 @@ function enhancePasswordSetup() {
 				</span>
 				<span class="min-w-0 flex-1">
 					<span class="block font-medium">{t(lang, "profile.passwordMethod")}</span>
-					{#if data.credentialConnected}
-						<span class="block text-xs text-muted-foreground">{t(lang, "profile.connected")}</span>
-					{/if}
+					<span class="block truncate text-xs text-muted-foreground" title={data.user.email}>{data.user.email}</span>
 				</span>
+				<Button type="button" variant="outline" class={methodActionClass} aria-haspopup="dialog" onclick={() => (emailDialogOpen = true)}
+					>{t(lang, "profile.changeEmail")}</Button
+				>
 				{#if !data.credentialConnected}
 					{#if form?.passwordSetupSent}
 						<!-- The link is in their inbox and pressing again only sends a second one,
@@ -308,7 +368,7 @@ function enhancePasswordSetup() {
 						     GitHub can add a password without retyping an address it may not
 						     share with the provider. -->
 						<form method="POST" action="?/sendPasswordSetup" use:enhance={enhancePasswordSetup}>
-							<Button type="submit" variant="outline" class="min-h-11 min-w-24 text-foreground" disabled={passwordSetupPending}>
+							<Button type="submit" variant="outline" class={methodActionClass} disabled={passwordSetupPending}>
 								{#if passwordSetupPending}
 									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 								{/if}
@@ -344,7 +404,7 @@ function enhancePasswordSetup() {
 							<Button
 								type="button"
 								variant="outline"
-								class="min-h-11 min-w-24"
+								class={`${methodActionClass} border-[#e3c9cc] bg-[#f3e5e6] text-[#713b46] hover:border-[#d6b5bb] hover:bg-[#ecd9dc] hover:text-[#60323c]`}
 								disabled={accountPending !== null || data.loginMethodCount <= 1}
 								title={data.loginMethodCount <= 1 ? t(lang, "profile.lastMethodHelp") : undefined}
 								aria-haspopup="dialog"
@@ -359,7 +419,7 @@ function enhancePasswordSetup() {
 					{:else if method.configured}
 						<form method="POST" action="?/linkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
 							<input type="hidden" name="provider" value={method.id}>
-							<Button type="submit" variant="outline" class="min-h-11 min-w-24 text-foreground" disabled={accountPending !== null}>
+							<Button type="submit" variant="outline" class={methodActionClass} disabled={accountPending !== null}>
 								{#if accountPending === method.id}
 									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 								{/if}
