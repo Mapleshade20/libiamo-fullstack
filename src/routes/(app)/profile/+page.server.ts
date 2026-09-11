@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
-import { accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS } from "$lib/auth/social";
+import { type AccountActionResult, accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS, socialAuthFailure } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
@@ -35,8 +35,9 @@ export const load: PageServerLoad = async (event) => {
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 	const configuredProviders = configuredSocialProviderIds(env);
-	const connectedProviders = new Set(accounts.map(({ providerId }) => providerId));
+	const connectedProviders = new Map(accounts.map(({ providerId, createdAt }) => [providerId, createdAt]));
 	const linkedProvider = event.url.searchParams.get("linked");
+	const accountResult: AccountActionResult | null = isSocialProviderId(linkedProvider) && connectedProviders.has(linkedProvider) ? "connected" : null;
 
 	return {
 		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
@@ -51,9 +52,16 @@ export const load: PageServerLoad = async (event) => {
 			...provider,
 			configured: configuredProviders.includes(provider.id),
 			connected: connectedProviders.has(provider.id),
+			// A provider account may now carry a different address than the Libiamo
+			// account, so "Connected" alone leaves nobody able to tell which account
+			// they attached. The row's age is the cheapest thing that distinguishes it
+			// without storing anything new.
+			connectedAt: connectedProviders.get(provider.id)?.toISOString() ?? null,
 		})),
-		accountResult: isSocialProviderId(linkedProvider) && connectedProviders.has(linkedProvider) ? "connected" : null,
-		accountError: event.url.searchParams.has("error"),
+		accountResult,
+		// Better Auth reports why it refused in the parameter's value; collapsing that
+		// to a boolean is what left every failure sharing one unhelpful notice.
+		accountFailure: socialAuthFailure(event.url.searchParams.get("error")),
 	};
 };
 
@@ -116,6 +124,27 @@ export const actions: Actions = {
 		}
 
 		return { accountResult: "disconnected" };
+	},
+
+	// An account created through Google or GitHub has no credential row, and Better
+	// Auth exposes no way to add one from a session: `changePassword` requires the
+	// password that does not exist yet, and `setPassword` only ships in the admin
+	// plugin. Its reset flow does create the missing row, so this sends that mail —
+	// addressed from the session rather than from something the user retypes, which
+	// is what made the public forgot-password form fail silently for these accounts.
+	sendPasswordSetup: async (event) => {
+		const user = requireUser(event);
+
+		try {
+			await auth.api.requestPasswordReset({
+				body: { email: user.email, redirectTo: `${base}/forgot-password` },
+			});
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { passwordSetupSent: false });
+			return fail(500, { passwordSetupSent: false });
+		}
+
+		return { passwordSetupSent: true };
 	},
 
 	updateProfile: async (event) => {

@@ -275,7 +275,9 @@ describe("Sign-up +page.server", () => {
 					callbackURL: "/",
 					errorCallbackURL: "/sign-up",
 					disableRedirect: true,
-					requestSignUp: true,
+					// No `requestSignUp`: sign-up is no longer the only entry that may
+					// create an account, so this call differs from Sign In only in the
+					// language it carries.
 					additionalData: { activeLanguage: "ja" },
 				},
 				headers: event.request.headers,

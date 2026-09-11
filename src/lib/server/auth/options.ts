@@ -35,9 +35,22 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			defaultCookieAttributes: { path: base || "/" },
 		},
 		secret: env.BETTER_AUTH_SECRET,
+		// `errorCallbackURL` travels inside the OAuth state, so a state that cannot be
+		// parsed — the common case being one the user left sitting until it expired —
+		// has nowhere to send them but this fallback. Without it they land on Better
+		// Auth's own bare error page instead of ours.
+		onAPIError: { errorURL: `${base}/sign-in` },
 		socialProviders: configuredSocialProviders(env),
 		account: {
 			encryptOAuthTokens: true,
+			accountLinking: {
+				// Only relaxes linking that an authenticated session asked for, where the
+				// user has already proved they hold both identities. Implicit linking on
+				// sign-in never consults this: it finds the account by email in the first
+				// place, and still requires `requireLocalEmailVerified` plus a
+				// provider-verified address, since there `trustedProviders` stays empty.
+				allowDifferentEmails: true,
+			},
 		},
 		databaseHooks: {
 			account: {

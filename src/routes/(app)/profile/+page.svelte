@@ -3,8 +3,7 @@ import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
-import { base } from "$app/paths";
-import type { AccountActionResult, SocialProviderId } from "$lib/auth/social";
+import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
@@ -17,10 +16,26 @@ import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
 import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, SELF_ASSIGNED_LEVELS } from "$lib/constants";
+import { getDisplayClock } from "$lib/display-clock";
 import { t } from "$lib/i18n";
+
+/**
+ * Which notice each refusal gets. The cases a user cannot respond to differently
+ * share the generic one rather than each earning a string in four languages.
+ */
+const FAILURE_NOTICE_KEYS: Record<SocialAuthFailure, string> = {
+	cancelled: "profile.methodCancelled",
+	"already-linked-elsewhere": "profile.methodAlreadyLinked",
+	"provider-email-unverified": "profile.methodUnverified",
+	"stale-session": "profile.methodStaleSession",
+	// Reachable only when signed out, where the sign-in page explains it instead.
+	"account-exists": "profile.methodError",
+	error: "profile.methodError",
+};
 
 let { form, data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
+const clock = getDisplayClock();
 
 const nativeLanguageOptions = $derived(data.serverNativeLanguages ?? []);
 
@@ -30,6 +45,7 @@ let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
+let passwordSetupPending = $state(false);
 let accountFormResult = $derived((form as { accountResult?: AccountActionResult } | null | undefined)?.accountResult);
 
 // `?linked=` / `?error=` describe the OAuth round-trip that just landed on this
@@ -37,8 +53,8 @@ let accountFormResult = $derived((form as { accountResult?: AccountActionResult 
 // action has reported back we must stop consulting them — otherwise a saved
 // profile keeps announcing "login method connected", and a single failed link
 // turns every later save into "login method unchanged".
-let landedAccountResult = $derived(data.accountError ? "error" : data.accountResult);
-let accountResult = $derived(form ? accountFormResult : landedAccountResult);
+let landedAccountResult = $derived(data.accountFailure ?? data.accountResult);
+let accountResult: AccountActionResult | null | undefined = $derived(form ? accountFormResult : landedAccountResult);
 
 // Drop the parameters once consumed so a reload does not replay the notification.
 // `replaceState` leaves `data` untouched, so the notice still shows this time.
@@ -50,21 +66,39 @@ afterNavigate(() => {
 	replaceState(`${url.pathname}${url.search}${url.hash}`, {});
 });
 
-const actionNotification = $derived(
-	accountResult === "connected"
-		? { variant: "success" as const, title: t(lang, "profile.methodConnectedTitle"), message: t(lang, "profile.methodConnectedMessage") }
-		: accountResult === "disconnected"
-			? { variant: "success" as const, title: t(lang, "profile.methodDisconnectedTitle"), message: t(lang, "profile.methodDisconnectedMessage") }
-			: accountResult === "stale-session"
-				? { variant: "error" as const, title: t(lang, "profile.methodStaleSessionTitle"), message: t(lang, "profile.methodStaleSessionMessage") }
-				: accountResult === "error"
-					? { variant: "error" as const, title: t(lang, "profile.methodErrorTitle"), message: t(lang, "profile.methodErrorMessage") }
-					: showActionNotification && form?.success
-						? { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") }
-						: showActionNotification && form?.message
-							? { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message }
-							: null,
-);
+const actionNotification = $derived.by(() => {
+	if (accountResult === "connected") {
+		return { variant: "success" as const, title: t(lang, "profile.methodConnectedTitle"), message: t(lang, "profile.methodConnectedMessage") };
+	}
+	if (accountResult === "disconnected") {
+		return { variant: "success" as const, title: t(lang, "profile.methodDisconnectedTitle"), message: t(lang, "profile.methodDisconnectedMessage") };
+	}
+	if (accountResult) {
+		const key = FAILURE_NOTICE_KEYS[accountResult];
+		return { variant: "error" as const, title: t(lang, `${key}Title`), message: t(lang, `${key}Message`) };
+	}
+	// Not gated on `showActionNotification`: only one action ever sets this key, so
+	// unlike `success` there is no autosave whose result it could be mistaken for —
+	// and gating it would swallow the notice entirely on a scriptless form post.
+	if (form?.passwordSetupSent) {
+		return {
+			variant: "success" as const,
+			title: t(lang, "profile.passwordSetupSentTitle"),
+			message: t(lang, "profile.passwordSetupSentMessage").replace("{email}", data.user.email),
+		};
+	}
+	if (form?.passwordSetupSent === false) {
+		return { variant: "error" as const, title: t(lang, "profile.passwordSetupFailedTitle"), message: t(lang, "profile.passwordSetupFailedMessage") };
+	}
+	if (!showActionNotification) return null;
+	if (form?.success) return { variant: "success" as const, title: t(lang, "profile.updatedTitle"), message: t(lang, "profile.updatedMessage") };
+	if (form?.message) return { variant: "error" as const, title: t(lang, "profile.unableSave"), message: form.message };
+	return null;
+});
+
+function formatConnectedAt(isoDate: string) {
+	return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeZone: clock().timeZone }).format(new Date(isoDate));
+}
 
 let trialPercent = $derived(
 	data.trialQuota ? Math.max(0, Math.min(100, Math.round((data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal) * 100))) : 0,
@@ -94,6 +128,15 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 			await update({ reset: false });
 			accountPending = null;
 		};
+	};
+}
+
+function enhancePasswordSetup() {
+	passwordSetupPending = true;
+	showActionNotification = true;
+	return async ({ update }: { update: (options?: { reset?: boolean }) => Promise<void> }) => {
+		await update({ reset: false });
+		passwordSetupPending = false;
 	};
 }
 </script>
@@ -215,11 +258,24 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 				<span class="min-w-0 flex-1 font-medium">{t(lang, "profile.passwordMethod")}</span>
 				{#if data.credentialConnected}
 					<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.connected")}</span>
+				{:else if form?.passwordSetupSent}
+					<!-- The link is in their inbox and pressing again only sends a second one,
+					     so the button stands down. It returns on the next load, in case the
+					     mail never arrived. -->
+					<span class="text-xs font-medium text-muted-foreground">{t(lang, "profile.passwordSetupSent")}</span>
 				{:else}
-					<!-- Better Auth's reset flow creates the credential account when one is
-					     missing, so this is how an account created through Google or GitHub
-					     adds a password. Without the link there is nothing to discover. -->
-					<a href="{base}/forgot-password" class="text-xs font-medium text-primary hover:underline">{t(lang, "profile.setPassword")}</a>
+					<!-- Mails the reset link — which creates the missing credential row — to
+					     the address on the session, so an account made through Google or
+					     GitHub can add a password without retyping an address it may not
+					     share with the provider. -->
+					<form method="POST" action="?/sendPasswordSetup" use:enhance={enhancePasswordSetup}>
+						<Button type="submit" variant="outline" class="min-h-11 min-w-24" disabled={passwordSetupPending}>
+							{#if passwordSetupPending}
+								<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+							{/if}
+							{t(lang, "profile.setPassword")}
+						</Button>
+					</form>
 				{/if}
 			</div>
 
@@ -228,7 +284,14 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 					<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
 						<SocialProviderIcon provider={method.id} />
 					</span>
-					<span class="min-w-0 flex-1 font-medium">{method.label}</span>
+					<span class="min-w-0 flex-1">
+						<span class="block font-medium">{method.label}</span>
+						{#if method.connectedAt}
+							<span class="block text-xs text-muted-foreground">
+								{t(lang, "profile.connectedSince").replace("{date}", formatConnectedAt(method.connectedAt))}
+							</span>
+						{/if}
+					</span>
 
 					{#if method.connected}
 						<form method="POST" action="?/unlinkSocialAccount" use:enhance={enhanceLoginMethod(method.id)}>
@@ -261,8 +324,6 @@ function enhanceLoginMethod(provider: SocialProviderId) {
 					{/if}
 				</div>
 			{/each}
-
-			<p class="text-xs text-muted-foreground">{t(lang, "profile.lastMethodHelp")}</p>
 		</Card.Content>
 	</Card.Root>
 

@@ -81,15 +81,19 @@ describe("Sign-in +page.server", () => {
 			});
 		});
 
-		it("directs a new OAuth user to Sign Up", async () => {
+		// Implicit linking is refused while the Libiamo account that owns the address
+		// has not confirmed it. "Try again" is useless advice there; the user has to
+		// sign in with their password first.
+		it("explains that the address already belongs to an unconfirmed account", async () => {
 			const event = {
 				locals: { user: null },
-				url: new URL("https://example.com/sign-in?error=signup_disabled"),
+				url: new URL("https://example.com/sign-in?error=account_not_linked"),
 			} as any;
 
 			const result = await load(event);
 			expect(result).toMatchObject({
-				socialAuthError: "To create a new Libiamo account, choose Sign Up below and select a learning language.",
+				socialAuthError:
+					"An account already uses this email address. Sign in with your password, confirm your email, then connect Google or GitHub from your profile.",
 			});
 		});
 	});

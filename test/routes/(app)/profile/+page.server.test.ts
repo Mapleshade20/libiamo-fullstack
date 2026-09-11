@@ -165,8 +165,8 @@ describe("Profile +page.server", () => {
 
 		it("returns connected and available login methods", async () => {
 			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
-				{ id: "credential-account", providerId: "credential" },
-				{ id: "github-account", providerId: "github" },
+				{ id: "credential-account", providerId: "credential", createdAt: new Date("2026-03-14T09:00:00.000Z") },
+				{ id: "github-account", providerId: "github", createdAt: new Date("2026-04-02T12:30:00.000Z") },
 			] as never);
 
 			const result = (await load(createLoadEvent("fr", "?linked=github"))) as any;
@@ -174,11 +174,25 @@ describe("Profile +page.server", () => {
 			expect(result.credentialConnected).toBe(true);
 			expect(result.loginMethodCount).toBe(2);
 			expect(result.socialLoginMethods).toEqual([
-				{ id: "google", label: "Google", configured: true, connected: false },
-				{ id: "github", label: "GitHub", configured: true, connected: true },
+				{ id: "google", label: "Google", configured: true, connected: false, connectedAt: null },
+				// Provider accounts may carry an address the Libiamo account does not,
+				// so the page needs something beyond "Connected" to tell them apart.
+				{ id: "github", label: "GitHub", configured: true, connected: true, connectedAt: "2026-04-02T12:30:00.000Z" },
 			]);
 			expect(result.accountResult).toBe("connected");
+			expect(result.accountFailure).toBeNull();
 			expect(auth.api.listUserAccounts).toHaveBeenCalledWith({ headers: expect.any(Headers) });
+		});
+
+		// The value said why the link was refused; reducing it to a boolean is what left
+		// every distinct failure sharing one "please try again".
+		it("classifies the reason an OAuth link came back rejected", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([{ id: "credential-account", providerId: "credential" }] as never);
+
+			const result = (await load(createLoadEvent("fr", "?error=account_already_linked_to_different_user"))) as any;
+
+			expect(result.accountFailure).toBe("already-linked-elsewhere");
+			expect(result.accountResult).toBeNull();
 		});
 	});
 

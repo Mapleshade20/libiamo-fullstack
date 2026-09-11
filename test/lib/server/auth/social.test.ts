@@ -26,10 +26,12 @@ describe("social authentication configuration", () => {
 			google: {
 				clientId: "google-id",
 				clientSecret: "google-secret",
-				disableImplicitSignUp: true,
 				mapProfileToUser: expect.any(Function),
 			},
 		});
+		// Sign In creates the account itself rather than sending a first-time visitor
+		// back through Sign Up to repeat the round-trip.
+		expect(configuredSocialProviders(env).google).not.toHaveProperty("disableImplicitSignUp");
 	});
 
 	it("maps the selected learning language into a new OAuth user", async () => {
@@ -42,6 +44,16 @@ describe("social authentication configuration", () => {
 		getOAuthState.mockResolvedValue({ activeLanguage: "fr" });
 
 		await expect(prepareOAuthUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "fr" } });
+	});
+
+	// Only Sign Up asks for a language, so arriving from Sign In there is nothing to
+	// carry. `activeLanguage` is NOT NULL with no database default, and refusing
+	// instead would break "Continue with Google" for exactly the people it serves.
+	it("falls back to English when the flow carried no learning language", async () => {
+		getOAuthState.mockResolvedValue({});
+
+		await expect(mapOAuthProfileToUser()).resolves.toEqual({ activeLanguage: "en" });
+		await expect(prepareOAuthUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "en" } });
 	});
 
 	it("rejects OAuth user creation without a verified email", async () => {

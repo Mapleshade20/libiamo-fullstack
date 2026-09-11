@@ -46,7 +46,6 @@ export const actions: Actions = {
 						callbackURL: `${base}/`,
 						errorCallbackURL: `${base}/sign-up`,
 						disableRedirect: true,
-						requestSignUp: true,
 						additionalData: { activeLanguage },
 					},
 					headers: event.request.headers,

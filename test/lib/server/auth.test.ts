@@ -72,20 +72,31 @@ describe("auth server configuration", () => {
 		expect(config.emailVerification.sendOnSignUp).toBe(true);
 		expect(config.emailVerification.autoSignInAfterVerification).toBe(true);
 		expect(config.account.encryptOAuthTokens).toBe(true);
+		// Relaxes only the linking an authenticated session asked for. Implicit linking
+		// on sign-in never reads it, so the signed-out path is untouched.
+		expect(config.account.accountLinking.allowDifferentEmails).toBe(true);
+		// The per-request `errorCallbackURL` travels inside the OAuth state, so a state
+		// that will not parse — an expired one, usually — has only this to fall back on.
+		expect(config.onAPIError.errorURL).toBe("/sign-in");
 		expect(config.socialProviders).toMatchObject({
 			google: {
 				clientId: "google-id",
 				clientSecret: "google-secret",
-				disableImplicitSignUp: true,
 				mapProfileToUser: expect.any(Function),
 			},
 			github: {
 				clientId: "github-id",
 				clientSecret: "github-secret",
-				disableImplicitSignUp: true,
 				mapProfileToUser: expect.any(Function),
 			},
 		});
+		// Absent, so an identity arriving at Sign In for the first time is signed up
+		// there instead of being sent to Sign Up to repeat the round-trip.
+		expect(config.socialProviders.google).not.toHaveProperty("disableImplicitSignUp");
+		expect(config.socialProviders.github).not.toHaveProperty("disableImplicitSignUp");
+		// No `trustedProviders`: a provider must have verified an address before Better
+		// Auth will attach that identity to an account that already exists.
+		expect(config.account.accountLinking).not.toHaveProperty("trustedProviders");
 		expect(config.databaseHooks.user.create.before).toEqual(expect.any(Function));
 		expect(config.plugins).toEqual(["cookie-plugin"]);
 	});

@@ -101,58 +101,77 @@ $effect(() => {
 				{/if}
 			</div>
 
-			<div class="space-y-2">
-				<Label for="name">Name</Label>
-				<Input id="name" name="name" value={formState?.values?.name ?? ""} required aria-invalid={Boolean(formState?.errors?.name)} />
-				{#if formState?.errors?.name}
-					<p class="text-sm text-red-600">{formState.errors.name[0]}</p>
-				{/if}
+			<!-- Everything below stays collapsed until a language is chosen. The state
+			     lives entirely in CSS (see the `:has(option[value=""]:checked)` rule) so
+			     the form still works with scripting off, and `visibility: hidden` keeps
+			     the collapsed fields out of the tab order without an `inert` attribute.
+			     They keep their `required` attributes: the select is required too and
+			     comes first in tree order, so it is what the browser reports on. -->
+			<div class="reveal">
+				<div class="reveal-inner">
+					<div class="space-y-4 pt-4">
+						<div class="space-y-2">
+							<Label for="name">Name</Label>
+							<Input id="name" name="name" value={formState?.values?.name ?? ""} required aria-invalid={Boolean(formState?.errors?.name)} />
+							{#if formState?.errors?.name}
+								<p class="text-sm text-red-600">{formState.errors.name[0]}</p>
+							{/if}
+						</div>
+
+						<div class="space-y-2">
+							<Label for="email">Email</Label>
+							<Input
+								id="email"
+								name="email"
+								type="email"
+								value={formState?.values?.email ?? ""}
+								required
+								aria-invalid={Boolean(formState?.errors?.email)}
+							/>
+							{#if formState?.errors?.email}
+								<p class="text-sm text-red-600">{formState.errors.email[0]}</p>
+							{/if}
+						</div>
+
+						<div class="space-y-2">
+							<Label for="password">Password</Label>
+							<Input
+								id="password"
+								name="password"
+								type="password"
+								bind:value={password}
+								required
+								aria-invalid={Boolean(formState?.errors?.password)}
+							/>
+							{#if formState?.errors?.password}
+								<p class="text-sm text-red-600">{formState.errors.password[0]}</p>
+							{/if}
+						</div>
+
+						<div class="space-y-2">
+							<Label for="confirmPassword">Confirm Password</Label>
+							<Input
+								id="confirmPassword"
+								bind:ref={confirmPasswordInput}
+								type="password"
+								bind:value={confirmPassword}
+								required
+								aria-invalid={Boolean(confirmPasswordError)}
+							/>
+							{#if confirmPasswordError}
+								<p class="text-sm text-red-600">{confirmPasswordError}</p>
+							{/if}
+						</div>
+
+						<Button type="submit" class="w-full">Sign Up</Button>
+
+						{#if data.socialProviders.length > 0}
+							<div class="border-t border-border/70" aria-hidden="true"></div>
+						{/if}
+						<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
+					</div>
+				</div>
 			</div>
-
-			<div class="space-y-2">
-				<Label for="email">Email</Label>
-				<Input
-					id="email"
-					name="email"
-					type="email"
-					value={formState?.values?.email ?? ""}
-					required
-					aria-invalid={Boolean(formState?.errors?.email)}
-				/>
-				{#if formState?.errors?.email}
-					<p class="text-sm text-red-600">{formState.errors.email[0]}</p>
-				{/if}
-			</div>
-
-			<div class="space-y-2">
-				<Label for="password">Password</Label>
-				<Input id="password" name="password" type="password" bind:value={password} required aria-invalid={Boolean(formState?.errors?.password)} />
-				{#if formState?.errors?.password}
-					<p class="text-sm text-red-600">{formState.errors.password[0]}</p>
-				{/if}
-			</div>
-
-			<div class="space-y-2">
-				<Label for="confirmPassword">Confirm Password</Label>
-				<Input
-					id="confirmPassword"
-					bind:ref={confirmPasswordInput}
-					type="password"
-					bind:value={confirmPassword}
-					required
-					aria-invalid={Boolean(confirmPasswordError)}
-				/>
-				{#if confirmPasswordError}
-					<p class="text-sm text-red-600">{confirmPasswordError}</p>
-				{/if}
-			</div>
-
-			<Button type="submit" class="w-full">Sign Up</Button>
-
-			{#if data.socialProviders.length > 0}
-				<div class="border-t border-border/70" aria-hidden="true"></div>
-			{/if}
-			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
 		</form>
 	</Card.Content>
 	<Card.Footer class="text-sm">
@@ -162,3 +181,39 @@ $effect(() => {
 		</p>
 	</Card.Footer>
 </Card.Root>
+
+<style>
+/* `0fr` → `1fr` is the only way to animate to a height nobody has measured, and
+   unlike a `max-height` guess it lands exactly on the content's own height. */
+.reveal {
+	display: grid;
+	grid-template-rows: 1fr;
+	transition: grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal-inner {
+	overflow: hidden;
+	/* Transitioned discretely: applies at once when revealing, and waits for the
+	   row to finish collapsing when hiding. Also drops the fields from the tab
+	   order while they are clipped, which `overflow: hidden` alone does not. */
+	visibility: visible;
+	transition: visibility 320ms;
+}
+
+/* The placeholder `<option value="">` stays `:checked` until a language is picked,
+   so the whole reveal is driven by the select itself — no JavaScript, and a server
+   render that echoes a chosen language back comes out expanded on the first paint
+   rather than flashing shut. */
+form:has(#activeLanguage option[value=""]:checked) .reveal {
+	grid-template-rows: 0fr;
+}
+form:has(#activeLanguage option[value=""]:checked) .reveal-inner {
+	visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal,
+	.reveal-inner {
+		transition: none;
+	}
+}
+</style>

@@ -1,5 +1,6 @@
 import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { socialAuthFailure } from "$lib/auth/social";
 import type { AuthAccountStore, LockedAuthAccountTransaction } from "$lib/server/auth/account-deletion";
 import { createAuthOptions } from "$lib/server/auth/options";
 import { mapOAuthProfileToUser } from "$lib/server/auth/social";
@@ -136,7 +137,7 @@ async function createAuthTestInstance(
 async function startSocialFlow(
 	auth: Awaited<ReturnType<typeof createAuthTestInstance>>["auth"],
 	provider: "github" | "google",
-	options: { activeLanguage?: string; requestSignUp?: boolean } = {},
+	options: { activeLanguage?: string } = {},
 ) {
 	const response = await auth.handler(
 		new Request(`${AUTH_BASE_URL}/sign-in/social`, {
@@ -150,7 +151,6 @@ async function startSocialFlow(
 				callbackURL: APP_URL,
 				errorCallbackURL: `${APP_URL}/sign-in`,
 				disableRedirect: true,
-				requestSignUp: options.requestSignUp,
 				additionalData: options.activeLanguage ? { activeLanguage: options.activeLanguage } : undefined,
 			}),
 		}),
@@ -279,7 +279,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const { auth, db } = await createAuthTestInstance();
 		mockGithub({ id: "github-new-user", email: "new@example.com", verified: true });
 
-		const flow = await startSocialFlow(auth, "github", { activeLanguage: "fr", requestSignUp: true });
+		const flow = await startSocialFlow(auth, "github", { activeLanguage: "fr" });
 		const callback = await finishSocialFlow(auth, "github", flow);
 
 		expect(callback.status).toBe(302);
@@ -318,7 +318,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		});
 		mockGoogle();
 
-		const flow = await startSocialFlow(auth, "google", { activeLanguage: "ja", requestSignUp: true });
+		const flow = await startSocialFlow(auth, "google", { activeLanguage: "ja" });
 		const callback = await finishSocialFlow(auth, "google", flow);
 
 		expect(callback.status, await callback.clone().text()).toBe(302);
@@ -414,7 +414,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const { auth, db } = instance;
 		mockGithub({ id: "github-concurrent-user", email: "concurrent@example.com", verified: true });
 
-		const signupFlow = await startSocialFlow(auth, "github", { activeLanguage: "es", requestSignUp: true });
+		const signupFlow = await startSocialFlow(auth, "github", { activeLanguage: "es" });
 		const signupCallback = await finishSocialFlow(auth, "github", signupFlow);
 		const callbackCookies = convertSetCookieToCookie(new Headers(signupCallback.headers));
 		const sessionCookie = callbackCookies
@@ -483,9 +483,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			},
 		});
 		mockGithub({ id: "github-passwordless", email: "passwordless@example.com", verified: true });
-		expect(
-			(await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "fr", requestSignUp: true }))).status,
-		).toBe(302);
+		expect((await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "fr" }))).status).toBe(302);
 		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "passwordless@example.com" }] });
 		if (!user) throw new Error("Expected the GitHub sign-up to create a user");
 		const initial = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: user.id }] });
@@ -539,7 +537,11 @@ describe("Better Auth social authentication lifecycle", () => {
 		await expect(db.findMany({ model: "account", where: [{ field: "providerId", value: "github" }] })).resolves.toHaveLength(0);
 	});
 
-	it("rejects linking a verified GitHub identity with a different email", async () => {
+	// Requiring the two addresses to match locked out anyone whose provider account
+	// uses a different one — a work address here and a personal GitHub is ordinary.
+	// The session already proves they hold this account and the round-trip proves
+	// they hold the provider's, so there is nothing left for the equality to protect.
+	it("links a verified GitHub identity that uses a different email", async () => {
 		const { auth, db, signInWithUser } = await createAuthTestInstance();
 		const password = "correct-horse-battery-staple";
 		const signup = await auth.api.signUpEmail({
@@ -563,40 +565,93 @@ describe("Better Auth social authentication lifecycle", () => {
 		const location = callback.headers.get("location");
 
 		expect(callback.status).toBe(302);
-		expect(location).not.toBeNull();
-		expect(new URL(location as string).pathname).toBe("/profile");
-		expect(new URL(location as string).searchParams.get("error")).toBe("email_doesn't_match");
+		expect(location).toBe(`${APP_URL}/profile`);
 
 		const accounts = await db.findMany<{ providerId: string }>({
 			model: "account",
 			where: [{ field: "userId", value: signup.user.id }],
 		});
-		expect(accounts.map((account) => account.providerId)).toEqual(["credential"]);
-		await expect(db.findMany({ model: "account", where: [{ field: "providerId", value: "github" }] })).resolves.toHaveLength(0);
+		expect(accounts.map((account) => account.providerId).sort()).toEqual(["credential", "github"]);
+
+		// The Libiamo account keeps its own address: linking is not a merge.
+		const user = await db.findOne<{ email: string }>({ model: "user", where: [{ field: "id", value: signup.user.id }] });
+		expect(user?.email).toBe("profile@example.com");
+		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "different@example.com" }] })).resolves.toHaveLength(0);
 	});
 
+	// `allowDifferentEmails` governs linking that a session asked for. The signed-out
+	// path finds the account by address in the first place, so it can only ever merge
+	// matching addresses — and it still demands the local account confirmed its own,
+	// which is what stops someone registering under a victim's address, leaving it
+	// unconfirmed, and waiting to inherit the account the victim signs in to create.
+	it("refuses to merge into an account that has not confirmed its own email", async () => {
+		const { auth, db } = await createAuthTestInstance();
+		const signup = await auth.api.signUpEmail({
+			body: { name: "Unconfirmed User", email: "unconfirmed@example.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
+		});
+		mockGithub({ id: "github-unconfirmed", email: "unconfirmed@example.com", verified: true });
+
+		const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"));
+
+		expect(callback.status).toBe(302);
+		expect(new URL(callback.headers.get("location") as string).searchParams.get("error")).toBe("account_not_linked");
+		const accounts = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: signup.user.id }] });
+		expect(accounts.map(({ providerId }) => providerId)).toEqual(["credential"]);
+	});
+
+	// Letting this through would hand the address — and `user.email` is unique — to
+	// whoever claimed it at the provider without proving anything, locking out its
+	// actual owner. `requireEmailVerification` cannot help: the provider account is
+	// attached, so they would sign in through it regardless.
 	it("does not create an account when GitHub does not verify the email", async () => {
 		const { auth, db } = await createAuthTestInstance();
 		mockGithub({ id: "github-unverified-user", email: "unverified@example.com", verified: false });
 
-		const flow = await startSocialFlow(auth, "github", { activeLanguage: "ja", requestSignUp: true });
+		const flow = await startSocialFlow(auth, "github", { activeLanguage: "ja" });
 		const callback = await finishSocialFlow(auth, "github", flow);
 
 		expect(callback.status).toBe(302);
-		expect(callback.headers.get("location")).toContain("/sign-in?error=");
+		// Better Auth discards the APIError code the `user.create.before` hook threw
+		// and forwards the message with its spaces underscored; `socialAuthFailure`
+		// reads it back from the same constant.
+		const error = new URL(callback.headers.get("location") as string).searchParams.get("error");
+		expect(socialAuthFailure(error)).toBe("provider-email-unverified");
 		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "unverified@example.com" }] })).resolves.toBeNull();
 	});
 
-	it("does not implicitly create an account from the Sign In flow", async () => {
+	// Sign In carries no language — nobody chose one — so an unrecognised identity
+	// arriving here is signed up on the default rather than bounced to Sign Up to
+	// repeat the whole round-trip. The profile page can change it afterwards.
+	it("creates an account from the Sign In flow using the default language", async () => {
 		const { auth, db } = await createAuthTestInstance();
 		mockGithub({ id: "github-sign-in-only", email: "sign-in-only@example.com", verified: true });
 
-		const flow = await startSocialFlow(auth, "github", { activeLanguage: "fr" });
+		const flow = await startSocialFlow(auth, "github");
 		const callback = await finishSocialFlow(auth, "github", flow);
 
-		expect(callback.status).toBe(302);
-		expect(callback.headers.get("location")).toContain("/sign-in?error=signup_disabled");
-		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "sign-in-only@example.com" }] })).resolves.toBeNull();
+		expect(callback.status, await callback.clone().text()).toBe(302);
+		expect(callback.headers.get("location")).toBe(APP_URL);
+		const user = await db.findOne<{ id: string; activeLanguage: string; emailVerified: boolean }>({
+			model: "user",
+			where: [{ field: "email", value: "sign-in-only@example.com" }],
+		});
+		expect(user).toMatchObject({ activeLanguage: "en", emailVerified: true });
+	});
+
+	// A language that is present but unsupported is different from Sign In having
+	// nothing to send: both entry points validate before they hand anything to
+	// `signInSocial`, so it can only arrive from a request made by hand. This one
+	// surfaces as a plain 400 rather than a redirect, because `mapProfileToUser`
+	// runs during `getUserInfo`, outside the block whose rejections become redirects.
+	it("rejects a social flow carrying an unsupported language", async () => {
+		const { auth, db } = await createAuthTestInstance();
+		mockGithub({ id: "github-bad-language", email: "bad-language@example.com", verified: true });
+
+		const flow = await startSocialFlow(auth, "github", { activeLanguage: "klingon" });
+		const callback = await finishSocialFlow(auth, "github", flow);
+
+		expect(callback.status).toBe(400);
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "bad-language@example.com" }] })).resolves.toBeNull();
 	});
 
 	it("rejects email sign-up when the learning language is missing", async () => {
