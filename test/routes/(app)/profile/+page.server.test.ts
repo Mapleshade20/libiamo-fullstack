@@ -1,4 +1,5 @@
 import type { ActionFailure } from "@sveltejs/kit";
+import { APIError } from "better-auth/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BYOK_API_BASE_URLS, BYOK_API_KEY_MAX_LENGTH, BYOK_MODEL_MAX_LENGTH, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { auth } from "$lib/server/auth/auth";
@@ -39,7 +40,20 @@ vi.mock("$lib/server/auth/auth", () => ({
 		api: {
 			updateUser: vi.fn(),
 			signOut: vi.fn(),
+			listUserAccounts: vi.fn(),
+			linkSocialAccount: vi.fn(),
+			unlinkAccount: vi.fn(),
+			changeEmail: vi.fn(),
 		},
+	},
+}));
+
+vi.mock("$env/dynamic/private", () => ({
+	env: {
+		GOOGLE_CLIENT_ID: "google-id",
+		GOOGLE_CLIENT_SECRET: "google-secret",
+		GITHUB_CLIENT_ID: "github-id",
+		GITHUB_CLIENT_SECRET: "github-secret",
 	},
 }));
 
@@ -83,12 +97,22 @@ describe("Profile +page.server", () => {
 		vi.clearAllMocks();
 		mockFindFirst.mockResolvedValue(undefined);
 		mockFindUser.mockResolvedValue(undefined);
+		vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+			{ id: "credential-account", providerId: "credential", accountId: "test-user", userId: "test-user" },
+		] as never);
 	});
+
+	const createLoadEvent = (activeLanguage: string, query = "") =>
+		({
+			locals: { user: { id: "test-user", activeLanguage } },
+			request: { headers: new Headers() },
+			url: new URL(`https://example.com/profile${query}`),
+		}) as any;
 
 	// ── Load Function ──────────────────────────────────────────────────
 	describe("load function", () => {
 		it("returns native languages and hasApiKey", async () => {
-			const event = { locals: { user: { id: "test-user", activeLanguage: "fr" } } } as any;
+			const event = createLoadEvent("fr");
 			const result = (await load(event)) as {
 				serverNativeLanguages: any[];
 				hasApiKey: boolean;
@@ -110,7 +134,7 @@ describe("Profile +page.server", () => {
 		it("returns the active language's saved self-assigned level", async () => {
 			mockFindUser.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 3 } });
 
-			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "ja" } } } as any)) as {
+			const result = (await load(createLoadEvent("ja"))) as {
 				levelSelfAssign: number;
 			};
 
@@ -125,7 +149,7 @@ describe("Profile +page.server", () => {
 				model: "Qwen/Qwen3-8B",
 			});
 
-			const result = (await load({ locals: { user: { id: "test-user", activeLanguage: "en" } } } as any)) as {
+			const result = (await load(createLoadEvent("en"))) as {
 				hasApiKey: boolean;
 				apiBaseUrl: string;
 				apiModel: string;
@@ -139,10 +163,144 @@ describe("Profile +page.server", () => {
 			expect(result.apiKey).toBeUndefined();
 			expect(result.encryptedKey).toBeUndefined();
 		});
+
+		it("returns connected and available login methods", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+				{ id: "credential-account", providerId: "credential", createdAt: new Date("2026-03-14T09:00:00.000Z") },
+				{ id: "github-account", providerId: "github", createdAt: new Date("2026-04-02T12:30:00.000Z") },
+			] as never);
+
+			const result = (await load(createLoadEvent("fr", "?linked=github"))) as any;
+
+			expect(result.credentialConnected).toBe(true);
+			expect(result.loginMethodCount).toBe(2);
+			expect(result.socialLoginMethods).toEqual([
+				{ id: "google", label: "Google", configured: true, connected: false, connectedAt: null },
+				// Provider accounts may carry an address the Libiamo account does not,
+				// so the page needs something beyond "Connected" to tell them apart.
+				{ id: "github", label: "GitHub", configured: true, connected: true, connectedAt: "2026-04-02T12:30:00.000Z" },
+			]);
+			expect(result.accountResult).toBe("connected");
+			expect(result.accountFailure).toBeNull();
+			expect(auth.api.listUserAccounts).toHaveBeenCalledWith({ headers: expect.any(Headers) });
+		});
+
+		// The value said why the link was refused; reducing it to a boolean is what left
+		// every distinct failure sharing one "please try again".
+		it("classifies the reason an OAuth link came back rejected", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([{ id: "credential-account", providerId: "credential" }] as never);
+
+			const result = (await load(createLoadEvent("fr", "?error=account_already_linked_to_different_user"))) as any;
+
+			expect(result.accountFailure).toBe("already-linked-elsewhere");
+			expect(result.accountResult).toBeNull();
+		});
 	});
 
 	// ── Actions ────────────────────────────────────────────────────────
 	describe("Actions", () => {
+		it("normalizes a new account email and passes the authenticated request to Better Auth", async () => {
+			const event = createActionEvent({ newEmail: " NEW@example.com " });
+			event.locals.user.email = "old@example.com";
+			expect(await actions.changeEmail(event)).toEqual({ emailChange: "sent" });
+			expect(auth.api.changeEmail).toHaveBeenCalledWith({
+				headers: event.request.headers,
+				body: { newEmail: "new@example.com", callbackURL: "/verify?emailChange=1" },
+			});
+		});
+
+		it.each(["invalid", "OLD@example.com"])("rejects invalid or unchanged email %s", async (newEmail) => {
+			const event = createActionEvent({ newEmail });
+			event.locals.user.email = "old@example.com";
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "invalid" } });
+			expect(auth.api.changeEmail).not.toHaveBeenCalled();
+		});
+
+		it("explains when email change requires signing in again", async () => {
+			const event = createActionEvent({ newEmail: "new@example.com" });
+			event.locals.user.email = "old@example.com";
+			vi.mocked(auth.api.changeEmail).mockRejectedValueOnce(new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again" }));
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "stale" } });
+		});
+
+		it("starts the official provider-linking flow", async () => {
+			const event = createActionEvent({ provider: "google" });
+			vi.mocked(auth.api.linkSocialAccount).mockResolvedValue({
+				url: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+				redirect: false,
+			} as never);
+
+			await expect(actions.linkSocialAccount(event)).rejects.toMatchObject({
+				status: 303,
+				location: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
+			});
+			expect(auth.api.linkSocialAccount).toHaveBeenCalledWith({
+				body: {
+					provider: "google",
+					callbackURL: "/profile?linked=google",
+					errorCallbackURL: "/profile",
+					disableRedirect: true,
+				},
+				headers: event.request.headers,
+			});
+		});
+
+		it("disconnects a provider through Better Auth", async () => {
+			const event = createActionEvent({ provider: "github" });
+
+			await expect(actions.unlinkSocialAccount(event)).resolves.toEqual({ accountResult: "disconnected" });
+			expect(auth.api.unlinkAccount).toHaveBeenCalledWith({
+				body: { providerId: "github" },
+				headers: event.request.headers,
+			});
+		});
+
+		it("refuses to start a second link for an already connected provider", async () => {
+			vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
+				{ id: "credential-account", providerId: "credential" },
+				{ id: "google-account", providerId: "google" },
+			] as never);
+
+			const result = (await actions.linkSocialAccount(createActionEvent({ provider: "google" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
+			expect(auth.api.linkSocialAccount).not.toHaveBeenCalled();
+		});
+
+		it("rejects unsupported provider account actions", async () => {
+			const result = (await actions.linkSocialAccount(createActionEvent({ provider: "microsoft" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
+			expect(auth.api.linkSocialAccount).not.toHaveBeenCalled();
+		});
+
+		// Better Auth guards `/unlink-account` with a freshness check against
+		// `session.createdAt`, which session renewal never advances. Reporting that
+		// as a generic "please try again" leaves the user retrying forever.
+		it("tells the user to sign in again when the session is not fresh enough to unlink", async () => {
+			vi.mocked(auth.api.unlinkAccount).mockRejectedValueOnce(
+				new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Session is not fresh" }),
+			);
+
+			const result = (await actions.unlinkSocialAccount(createActionEvent({ provider: "github" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("stale-session");
+		});
+
+		it("reports other Better Auth unlink failures as a generic error", async () => {
+			vi.mocked(auth.api.unlinkAccount).mockRejectedValueOnce(
+				new APIError("BAD_REQUEST", { code: "FAILED_TO_UNLINK_LAST_ACCOUNT", message: "You cannot unlink your last login method" }),
+			);
+
+			const result = (await actions.unlinkSocialAccount(createActionEvent({ provider: "github" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.accountResult).toBe("error");
+		});
+
 		it("updateProfile returns 400 for invalid payload", async () => {
 			const result = (await actions.updateProfile(
 				createActionEvent({

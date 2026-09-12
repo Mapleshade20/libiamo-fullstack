@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { DEFAULT_SELF_ASSIGNED_LEVELS, type SelfAssignedLevelsByLanguage } from "$lib/constants";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
@@ -81,7 +81,10 @@ export const account = pgTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(table) => [index("account_userId_idx").on(table.userId)],
+	(table) => [
+		uniqueIndex("account_provider_account_unique").on(table.providerId, table.accountId),
+		uniqueIndex("account_user_provider_unique").on(table.userId, table.providerId),
+	],
 );
 
 export const verification = pgTable(

@@ -6,24 +6,26 @@ import { handleInvalidField } from "$lib/client/form-attention";
 import { type LanguageCode, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
 import FormErrorFocus from "./FormErrorFocus.svelte";
+import ModalDialog from "./ModalDialog.svelte";
 
 let { name, lang }: { name: string; lang: LanguageCode } = $props();
-let dialog: HTMLDialogElement;
 let input: HTMLInputElement;
-let trigger: HTMLButtonElement;
 let formElement = $state<HTMLFormElement | null>(null);
+let dialogOpen = $state(false);
 let value = $state("");
 let saving = $state(false);
 let errors = $state<{ name?: string[] }>({});
 let failure = $state("");
 
 function open() {
+	// Flushing first mounts the dialog with the current name already in place, so
+	// the field can be focused and selected in the same tick it appears.
 	flushSync(() => {
 		value = name;
 		errors = {};
 		failure = "";
+		dialogOpen = true;
 	});
-	dialog.showModal();
 	input.focus({ preventScroll: true });
 	input.select();
 }
@@ -32,7 +34,6 @@ function open() {
 <div class="name-display">
 	<h2>{name}</h2>
 	<button
-		bind:this={trigger}
 		type="button"
 		class="edit-trigger"
 		onclick={open}
@@ -44,15 +45,10 @@ function open() {
 	</button>
 </div>
 
-<dialog
-	bind:this={dialog}
-	class="name-dialog"
-	aria-labelledby="name-dialog-title"
-	oncancel={(event) => { if (saving) event.preventDefault(); }}
-	onclose={() => trigger.focus({ preventScroll: true })}
->
+<ModalDialog bind:open={dialogOpen} busy={saving} labelledby="name-dialog-title">
 	<form
 		bind:this={formElement}
+		class="name-form"
 		method="POST"
 		action="?/updateProfile"
 		oninvalidcapture={handleInvalidField}
@@ -64,7 +60,7 @@ function open() {
 				try {
 					if (result.type === "success") {
 						await update({ reset: false });
-						dialog.close();
+						dialogOpen = false;
 					} else if (result.type === "failure") {
 						errors = result.data?.errors ?? {};
 						failure = typeof result.data?.message === "string" ? result.data.message : (errors.name ? "" : t(lang, "profile.unableSave"));
@@ -96,11 +92,11 @@ function open() {
 		>
 		<p id="name-dialog-error" class="error" role="status">{errors.name?.[0] ?? failure}</p>
 		<div class="actions">
-			<button type="button" disabled={saving} onclick={() => dialog.close()}>{t(lang, "common.cancel")}</button>
+			<button type="button" disabled={saving} onclick={() => (dialogOpen = false)}>{t(lang, "common.cancel")}</button>
 			<button type="submit" class="save" disabled={saving || value === name}>{t(lang, "profile.saveName")}</button>
 		</div>
 	</form>
-</dialog>
+</ModalDialog>
 
 <style>
 .name-display {
@@ -134,63 +130,20 @@ function open() {
 	background: #eeeae4;
 	color: #713b46;
 }
-.name-dialog {
-	margin: auto;
-	width: min(26rem, calc(100vw - 2rem));
-	max-height: calc(100dvh - 2rem);
-	padding: 1.75rem;
-	border: 1px solid #ded7cd;
-	border-radius: 20px;
-	background: #faf8f4;
-	color: #302c28;
-	box-shadow: 0 24px 80px #241b2033;
-	opacity: 0;
-	transform: translateY(8px) scale(0.98);
-	transition:
-		opacity 220ms ease,
-		transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-		display 220ms allow-discrete,
-		overlay 220ms allow-discrete;
-}
-.name-dialog[open] {
-	opacity: 1;
-	transform: none;
-}
-.name-dialog::backdrop {
-	background: #28232a33;
-	backdrop-filter: blur(4px);
-	opacity: 0;
-	transition:
-		opacity 220ms,
-		display 220ms allow-discrete,
-		overlay 220ms allow-discrete;
-}
-.name-dialog[open]::backdrop {
-	opacity: 1;
-}
-@starting-style {
-	.name-dialog[open] {
-		opacity: 0;
-		transform: translateY(8px) scale(0.98);
-	}
-	.name-dialog[open]::backdrop {
-		opacity: 0;
-	}
-}
-.name-dialog h2 {
+.name-form h2 {
 	margin: 0 0 1.75rem;
 	font-family: var(--font-serif);
 	font-size: 1.75rem;
 	font-weight: 500;
 }
-.name-dialog label {
+.name-form label {
 	display: block;
 	margin-bottom: 0.5rem;
 	font-size: 0.8rem;
 	font-weight: 600;
 	color: #655d55;
 }
-.name-dialog input {
+.name-form input {
 	width: 100%;
 	min-height: 48px;
 	padding: 0.65rem 0.85rem;
@@ -241,8 +194,6 @@ input:focus-visible {
 	outline-offset: 3px;
 }
 @media (prefers-reduced-motion: reduce) {
-	.name-dialog,
-	.name-dialog::backdrop,
 	.edit-trigger,
 	.actions button {
 		transition: none;

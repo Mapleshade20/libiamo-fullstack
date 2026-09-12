@@ -1,12 +1,16 @@
 import { fail, redirect } from "@sveltejs/kit";
+import { APIError } from "better-auth/api";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
+import { env } from "$env/dynamic/private";
+import { type AccountActionResult, accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS, socialAuthFailure } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
+import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
 import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
@@ -17,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
-	const [row, learner] = await Promise.all([
+	const [row, learner, accounts] = await Promise.all([
 		db.query.userApiKey.findFirst({
 			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { userId: true, baseUrl: true, model: true },
@@ -26,9 +30,14 @@ export const load: PageServerLoad = async (event) => {
 			where: (t, { eq }) => eq(t.id, user.id),
 			columns: { levelSelfAssign: true },
 		}),
+		auth.api.listUserAccounts({ headers: event.request.headers }),
 	]);
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
+	const configuredProviders = configuredSocialProviderIds(env);
+	const connectedProviders = new Map(accounts.map(({ providerId, createdAt }) => [providerId, createdAt]));
+	const linkedProvider = event.url.searchParams.get("linked");
+	const accountResult: AccountActionResult | null = isSocialProviderId(linkedProvider) && connectedProviders.has(linkedProvider) ? "connected" : null;
 
 	return {
 		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
@@ -37,10 +46,128 @@ export const load: PageServerLoad = async (event) => {
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
+		credentialConnected: connectedProviders.has("credential"),
+		loginMethodCount: connectedProviders.size,
+		socialLoginMethods: SOCIAL_PROVIDERS.map((provider) => ({
+			...provider,
+			configured: configuredProviders.includes(provider.id),
+			connected: connectedProviders.has(provider.id),
+			// A provider account may now carry a different address than the Libiamo
+			// account, so "Connected" alone leaves nobody able to tell which account
+			// they attached. The row's age is the cheapest thing that distinguishes it
+			// without storing anything new.
+			connectedAt: connectedProviders.get(provider.id)?.toISOString() ?? null,
+		})),
+		accountResult,
+		// Better Auth reports why it refused in the parameter's value; collapsing that
+		// to a boolean is what left every failure sharing one unhelpful notice.
+		accountFailure: socialAuthFailure(event.url.searchParams.get("error")),
 	};
 };
 
 export const actions: Actions = {
+	changeEmail: async (event) => {
+		const user = requireUser(event);
+		const data = await event.request.formData();
+		const result = z.email().safeParse(data.get("newEmail")?.toString().trim().toLowerCase());
+		if (!result.success || result.data === user.email.toLowerCase()) {
+			return fail(400, { emailChange: "invalid" as const });
+		}
+		try {
+			await auth.api.changeEmail({
+				headers: event.request.headers,
+				body: { newEmail: result.data, callbackURL: `${base}/verify?emailChange=1` },
+			});
+		} catch (error) {
+			return fail(error instanceof APIError ? 400 : 500, {
+				emailChange: error instanceof APIError && error.body?.code === "SESSION_NOT_FRESH" ? ("stale" as const) : ("error" as const),
+			});
+		}
+		// Better Auth deliberately gives the same response for an occupied address.
+		return { emailChange: "sent" as const };
+	},
+
+	linkSocialAccount: async (event) => {
+		requireUser(event);
+		const formData = await event.request.formData();
+		const provider = formData.get("provider")?.toString();
+
+		if (!isSocialProviderId(provider) || !configuredSocialProviderIds(env).includes(provider)) {
+			return fail(400, { accountResult: "error" });
+		}
+
+		// `account_user_provider_unique` allows one account per provider per user, and
+		// nothing below this point would report a violation as anything but a 500 — the
+		// insert happens inside Better Auth's OAuth callback. The button is hidden once a
+		// provider is connected, so this only catches a hand-rolled POST, but it keeps the
+		// rule the index enforces stated where a reader of this action can see it.
+		const accounts = await auth.api.listUserAccounts({ headers: event.request.headers });
+		if (accounts.some(({ providerId }) => providerId === provider)) {
+			return fail(400, { accountResult: "error" });
+		}
+
+		let authorizationURL: string | undefined;
+		try {
+			const result = await auth.api.linkSocialAccount({
+				body: {
+					provider,
+					callbackURL: `${base}/profile?linked=${provider}`,
+					errorCallbackURL: `${base}/profile`,
+					disableRedirect: true,
+				},
+				headers: event.request.headers,
+			});
+			authorizationURL = result.url;
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { accountResult: accountActionErrorResult(error.body?.code) });
+			return fail(500, { accountResult: "error" });
+		}
+
+		if (!authorizationURL) return fail(500, { accountResult: "error" });
+		return redirect(303, authorizationURL);
+	},
+
+	unlinkSocialAccount: async (event) => {
+		requireUser(event);
+		const formData = await event.request.formData();
+		const provider = formData.get("provider")?.toString();
+
+		if (!isSocialProviderId(provider)) return fail(400, { accountResult: "error" });
+
+		try {
+			await auth.api.unlinkAccount({
+				body: { providerId: provider },
+				headers: event.request.headers,
+			});
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { accountResult: accountActionErrorResult(error.body?.code) });
+			return fail(500, { accountResult: "error" });
+		}
+
+		return { accountResult: "disconnected" };
+	},
+
+	// An account created through Google or GitHub has no credential row, and Better
+	// Auth exposes no way to add one from a session: `changePassword` requires the
+	// password that does not exist yet, and `setPassword` only ships in the admin
+	// plugin. Its reset flow does create the missing row, so this sends that mail —
+	// addressed from the session rather than from something the user retypes, which
+	// is what made the public forgot-password form fail silently for these accounts.
+	sendPasswordSetup: async (event) => {
+		const user = requireUser(event);
+
+		try {
+			await auth.api.requestPasswordReset({
+				body: { email: user.email, redirectTo: `${base}/forgot-password` },
+			});
+		} catch (error) {
+			if (error instanceof APIError) return fail(400, { passwordSetupSent: false });
+			return fail(500, { passwordSetupSent: false });
+		}
+
+		return { passwordSetupSent: true };
+	},
+
 	updateProfile: async (event) => {
 		const user = requireUser(event);
 

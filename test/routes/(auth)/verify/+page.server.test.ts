@@ -14,6 +14,7 @@ describe("Verify page +page.server", () => {
 			pending: false,
 			error: null,
 			success: false,
+			emailChange: false,
 		});
 	});
 
@@ -24,6 +25,7 @@ describe("Verify page +page.server", () => {
 			pending: true,
 			error: null,
 			success: true,
+			emailChange: false,
 		});
 	});
 
@@ -34,6 +36,7 @@ describe("Verify page +page.server", () => {
 			pending: false,
 			error: "token_expired",
 			success: false,
+			emailChange: false,
 		});
 	});
 });

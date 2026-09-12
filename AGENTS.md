@@ -42,6 +42,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Correction Verifier uses only the current card's trusted context; Second Draft Verifier instead appends to the successful Generation 1 history. Keep these context strategies separate.
 - Detailed translation-evaluation protocol decisions and implementation history belong in `docs/plans/2026-07-15-redesign-translate-eval.md`, not this file.
 - Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
+- Account email: Profile manages one primary email for password login/recovery, independent of OAuth emails. Better Auth verifies the new mailbox before changing it; `auth/options.ts` guards `/change-email` with an authoritative session younger than ten minutes (the built-in endpoint does not check freshness). Keep occupied-email responses non-enumerating and never enable unverified immediate changes.
 - i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
 - Validation: Zod schemas live in `src/lib/schemas/` with `index.ts` re-exporting the public API. Admin variant helpers validate slot coverage for `{{slot}}` placeholders.
 - Constants: `src/lib/constants.ts` — single source of truth for enum values/types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`), labels, and language display-name helpers. Do not inline enum unions or duplicate language-name maps/helpers elsewhere.

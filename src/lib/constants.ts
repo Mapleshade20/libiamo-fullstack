@@ -37,15 +37,6 @@ export const BYOK_API_BASE_URLS = [
 	"https://api.siliconflow.com/v1",
 	"https://api-inference.modelscope.cn/v1",
 	"https://api.stepfun.com/v1",
-	"https://api.baichuan-ai.com/v1",
-	"https://api.sensenova.cn/compatible-mode/v2",
-	"https://spark-api-open.xf-yun.com/v1",
-	"https://api.modelverse.cn/v1",
-	"https://api.modelarts-maas.com/v1",
-	"https://api.ppio.com/openai/v1",
-	"https://cloud.infini-ai.com/maas/v1",
-	"https://openai.qiniu.com/v1",
-	"https://api.scnet.cn/api/llm/v1",
 ] as const;
 export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
 
@@ -62,15 +53,6 @@ export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
 	"https://api.siliconflow.com/v1": "SiliconFlow",
 	"https://api-inference.modelscope.cn/v1": "ModelScope",
 	"https://api.stepfun.com/v1": "StepFun",
-	"https://api.baichuan-ai.com/v1": "Baichuan AI",
-	"https://api.sensenova.cn/compatible-mode/v2": "SenseNova",
-	"https://spark-api-open.xf-yun.com/v1": "iFlytek Spark",
-	"https://api.modelverse.cn/v1": "UCloud ModelVerse",
-	"https://api.modelarts-maas.com/v1": "Huawei Cloud ModelArts MaaS",
-	"https://api.ppio.com/openai/v1": "PPIO",
-	"https://cloud.infini-ai.com/maas/v1": "Infini-AI",
-	"https://openai.qiniu.com/v1": "Qiniu AI",
-	"https://api.scnet.cn/api/llm/v1": "SCNet",
 };
 
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;

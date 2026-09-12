@@ -95,5 +95,10 @@ export function focusFirstFormError(form: HTMLFormElement | null, errors?: Field
 export function handleInvalidField(event: Event) {
 	const field = event.target as HTMLElement | null;
 	if (!field) return;
+	// `invalid` fires on every failing control before the browser reports any of
+	// them, so a hidden one further down the form would otherwise win the scroll and
+	// strand the user somewhere blank. Skipping them leaves the first *visible*
+	// control — which is what the browser attaches its own message to.
+	if (typeof field.checkVisibility === "function" && !field.checkVisibility({ visibilityProperty: true })) return;
 	focusAndHighlightField(field);
 }
