@@ -1,0 +1,180 @@
+html {
+	scroll-behavior: smooth;
+}
+
+.skip-link {
+	position: fixed;
+	top: 0.75rem;
+	left: 0.75rem;
+	z-index: 100;
+	padding: 0.65rem 0.9rem;
+	border-radius: 0.2rem;
+	background: #fffaf1;
+	color: #2d2924;
+	font-weight: 700;
+	transform: translateY(-180%);
+}
+
+.skip-link:focus {
+	transform: translateY(0);
+}
+
+.landing-shell {
+	--landing-paper: #f7f1e6;
+	--landing-sheet: #fffaf1;
+	--landing-ink: #2d2924;
+	--landing-muted: #6d665d;
+	--landing-wine: #803945;
+	--landing-cover: #6f303a;
+	--landing-olive: #65705a;
+	--landing-blue: #526878;
+	--landing-green: #416c55;
+	--landing-brass: #b39150;
+	--landing-focus: #305f89;
+	--font-script: "Italianno", "Snell Roundhand", "Segoe Script", cursive;
+	--font-japanese-script: "Yomogi", "Yu Kyokasho", serif;
+	min-height: 100dvh;
+	overflow: clip;
+	background:
+		radial-gradient(circle at 12% 9%, rgb(255 250 241 / 92%), transparent 28rem),
+		radial-gradient(circle at 91% 28%, rgb(179 145 80 / 8%), transparent 34rem), var(--landing-paper);
+	color: var(--landing-ink);
+}
+
+.landing-shell .site-header {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	border-bottom: 1px solid rgb(45 41 36 / 13%);
+	background: rgb(247 241 230 / 88%);
+	backdrop-filter: blur(18px);
+}
+
+.landing-shell .header-inner,
+.landing-shell .footer-inner {
+	display: flex;
+	width: min(100% - 2rem, 78rem);
+	min-height: 4.6rem;
+	margin-inline: auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: 2rem;
+}
+
+.landing-shell .brand {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--landing-ink);
+	font-family: var(--font-serif);
+	font-size: 1.25rem;
+	font-weight: 400;
+	letter-spacing: -0.025em;
+	line-height: 1;
+	text-decoration: none;
+}
+
+.landing-shell .section-nav,
+.landing-shell .account-links,
+.landing-shell .footer-links {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.landing-shell .section-nav a,
+.landing-shell .sign-in-link,
+.landing-shell .footer-links a {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	padding-inline: 0.8rem;
+	color: var(--landing-muted);
+	font-size: 0.75rem;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+	text-decoration: none;
+	text-transform: uppercase;
+	transition: color 200ms ease;
+}
+
+.landing-shell .section-nav a:hover,
+.landing-shell .sign-in-link:hover,
+.landing-shell .footer-links a:hover {
+	color: var(--landing-wine);
+}
+
+.landing-shell .header-cta,
+.landing-shell .primary-cta {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	border: 1px solid var(--landing-cover);
+	background: var(--landing-cover);
+	box-shadow: 0 8px 20px rgb(111 48 58 / 14%);
+	color: var(--landing-sheet);
+	font-size: 0.78rem;
+	font-weight: 720;
+	letter-spacing: 0.035em;
+	text-decoration: none;
+	transition:
+		background-color 220ms ease,
+		box-shadow 220ms ease,
+		color 220ms ease,
+		transform 220ms ease;
+}
+
+.landing-shell .header-cta {
+	padding: 0.65rem 1rem;
+}
+
+.landing-shell .primary-cta {
+	padding: 0.75rem 1.1rem;
+}
+
+.landing-shell .header-cta:hover,
+.landing-shell .primary-cta:hover {
+	background: var(--landing-wine);
+	box-shadow: 0 12px 26px rgb(111 48 58 / 20%);
+	transform: translateY(-2px);
+}
+
+.landing-shell .brand:focus-visible,
+.landing-shell .section-nav a:focus-visible,
+.landing-shell .sign-in-link:focus-visible,
+.landing-shell .header-cta:focus-visible,
+.landing-shell .primary-cta:focus-visible,
+.landing-shell .text-cta:focus-visible,
+.landing-shell .footer-links a:focus-visible {
+	border-radius: 0.2rem;
+	outline: 2px solid var(--landing-focus);
+	outline-offset: 3px;
+}
+
+.landing-shell .site-footer {
+	border-top: 1px solid rgb(45 41 36 / 14%);
+}
+
+.landing-shell .footer-inner {
+	min-height: 9rem;
+}
+
+.landing-shell .footer-brand p {
+	margin: 0.15rem 0 0;
+	color: var(--landing-muted);
+	font-family: var(--font-serif);
+	font-size: 0.8rem;
+	font-style: italic;
+}
+
+.landing-shell .footer-note {
+	max-width: 13rem;
+	margin: 0;
+	color: var(--landing-muted);
+	font-size: 0.62rem;
+	line-height: 1.5;
+	text-align: right;
+}

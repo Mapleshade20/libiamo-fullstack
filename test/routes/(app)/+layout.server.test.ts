@@ -10,8 +10,15 @@ const ALICE_EMAIL_MD5 = "c160f8cc69a4f0bf2b0362752353d060";
 const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";
 
 describe("(app) layout +layout.server", () => {
+	it("redirects signed-out root visits to the public homepage", async () => {
+		await expect(load({ locals: { user: null }, url: new URL("https://libiamo.test/") } as any)).rejects.toMatchObject({
+			status: 302,
+			location: "/welcome",
+		});
+	});
+
 	it("redirects to sign-in when user is missing", async () => {
-		await expect(load({ locals: { user: null } } as any)).rejects.toMatchObject({
+		await expect(load({ locals: { user: null }, url: new URL("https://libiamo.test/archive") } as any)).rejects.toMatchObject({
 			status: 302,
 			location: "/sign-in",
 		});

@@ -1,0 +1,250 @@
+@media (max-width: 64rem) {
+	.landing-shell .section-nav {
+		display: none;
+	}
+
+	.landing-shell .hero {
+		grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.82fr);
+		gap: 3rem;
+	}
+
+	.landing-shell .hero h1 {
+		font-size: clamp(6.8rem, 11vw, 8.8rem);
+	}
+
+	.landing-shell .feature {
+		gap: 3rem;
+	}
+}
+
+@media (max-width: 50rem) {
+	.landing-shell .hero,
+	.landing-shell .manifesto-grid,
+	.landing-shell .feature,
+	.landing-shell .feature-feedback {
+		grid-template-columns: 1fr;
+	}
+
+	.landing-shell .hero {
+		min-height: auto;
+		padding-top: 4.5rem;
+		grid-template-rows: auto;
+		gap: 3rem;
+	}
+
+	.landing-shell .hero-copy,
+	.landing-shell .hero-artifact {
+		grid-column: 1;
+		grid-row: auto;
+	}
+
+	.landing-shell .hero-lyric {
+		margin-top: 1.5rem;
+	}
+
+	.landing-shell .hero h1 {
+		font-size: clamp(7rem, 18vw, 10rem);
+	}
+
+	.landing-shell .hero-artifact {
+		width: min(90%, 31rem);
+		margin-top: 1.5rem;
+	}
+
+	.landing-shell .manifesto-grid {
+		gap: 2rem;
+	}
+
+	.landing-shell .manifesto h2,
+	.landing-shell .feature-copy h2 {
+		max-width: 16ch;
+	}
+
+	.landing-shell .feature-feedback .feedback-stage {
+		order: 2;
+	}
+
+	.landing-shell .scenario-stage {
+		width: min(100%, 35rem);
+		margin-inline: auto;
+	}
+
+	.landing-shell .review-stage {
+		margin-block: 1rem;
+	}
+
+	.landing-shell .footer-inner {
+		flex-wrap: wrap;
+		padding-block: 2rem;
+	}
+
+	.landing-shell .footer-note {
+		width: 100%;
+		max-width: none;
+		text-align: left;
+	}
+}
+
+@media (max-width: 38rem) {
+	.landing-shell .header-inner {
+		width: min(100% - 1.25rem, 78rem);
+		gap: 0.6rem;
+	}
+
+	.landing-shell .sign-in-link {
+		display: none;
+	}
+
+	.landing-shell .header-cta {
+		padding-inline: 0.75rem;
+		font-size: 0.7rem;
+	}
+
+	.landing-shell .hero,
+	.landing-shell .manifesto,
+	.landing-shell .feature,
+	.landing-shell .closing {
+		width: min(100% - 1.25rem, 78rem);
+	}
+
+	.landing-shell .hero h1 {
+		font-size: clamp(6.2rem, 28vw, 8.25rem);
+	}
+
+	.landing-shell .hero-actions {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+
+	.landing-shell .hero-lyric {
+		width: 100%;
+		padding: 0.85rem 0.35rem 0;
+	}
+
+	.landing-shell .lyric-button {
+		min-height: 4.8rem;
+		font-size: clamp(1.85rem, 9vw, 2.35rem);
+	}
+
+	.landing-shell .lyric-sentence {
+		white-space: normal;
+		text-wrap: balance;
+	}
+
+	.landing-shell .primary-cta,
+	.landing-shell .text-cta {
+		width: 100%;
+	}
+
+	.landing-shell .hero-artifact {
+		width: calc(100% - 0.8rem);
+	}
+
+	.landing-shell .practice-card {
+		padding: 1.15rem;
+	}
+
+	.landing-shell .brief-heading {
+		min-height: 5.75rem;
+	}
+
+	.landing-shell .dialogue {
+		min-height: 12.75rem;
+	}
+
+	.landing-shell .brief-heading h2 {
+		font-size: 1.4rem;
+	}
+
+	.landing-shell .message p {
+		max-width: 88%;
+		font-size: 0.75rem;
+	}
+
+	.landing-shell .scenario-stage {
+		display: grid;
+		min-height: 0;
+		gap: 0.8rem;
+	}
+
+	.landing-shell .scenario-card {
+		position: relative;
+		top: auto;
+		right: auto;
+		bottom: auto;
+		left: auto;
+		width: 100%;
+		transform: none;
+	}
+
+	.landing-shell .feature-feedback .feedback-stage {
+		padding: 0.4rem;
+	}
+
+	.landing-shell .margin-note {
+		display: none;
+	}
+
+	.landing-shell .study-card footer {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.landing-shell .closing {
+		min-height: 30rem;
+	}
+
+	.landing-shell .closing h2 {
+		font-size: clamp(3rem, 15vw, 4.6rem);
+	}
+
+	.landing-shell .closing .eyebrow {
+		text-align: left;
+	}
+
+	.landing-shell .footer-links {
+		order: 3;
+		width: 100%;
+		flex-wrap: wrap;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	.landing-shell .header-cta,
+	.landing-shell .primary-cta,
+	.landing-shell .section-nav a,
+	.landing-shell .sign-in-link,
+	.landing-shell .footer-links a {
+		transition: none;
+	}
+
+	.landing-shell .hero-lyric,
+	.landing-shell .lyric-sentence {
+		opacity: 1;
+		animation: none;
+	}
+
+	.landing-shell .lyric-sentence {
+		transition: none;
+	}
+
+	.landing-shell .typewriter-caret {
+		display: none;
+	}
+
+	.landing-shell .practice-card-back,
+	.landing-shell .practice-card-underlay,
+	.landing-shell .practice-card-underlay > *,
+	.landing-shell .practice-brief {
+		transition: none;
+	}
+
+	.landing-shell .practice-brief-cycling {
+		animation: none;
+	}
+}

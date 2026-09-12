@@ -6,6 +6,7 @@ const sourceRoot = resolve("src");
 const mainOwners = new Map([
 	["routes/(admin)/+layout.svelte", 1],
 	["routes/(app)/+layout.svelte", 2],
+	["routes/welcome/+layout.svelte", 1],
 ]);
 
 async function findSvelteFiles(directory: string): Promise<string[]> {

@@ -1,0 +1,430 @@
+.landing-shell .hero {
+	display: grid;
+	width: min(100% - 2rem, 78rem);
+	min-height: calc(100dvh - 4.6rem);
+	margin-inline: auto;
+	padding-block: clamp(4rem, 10vw, 8.5rem);
+	grid-template-columns: minmax(0, 1.03fr) minmax(25rem, 0.97fr);
+	grid-template-rows: auto;
+	align-items: center;
+	column-gap: clamp(3rem, 8vw, 7rem);
+}
+
+.landing-shell .hero-copy {
+	position: relative;
+	z-index: 2;
+	grid-column: 1;
+	grid-row: 1;
+	align-self: end;
+}
+
+.landing-shell .eyebrow,
+.landing-shell .section-index,
+.landing-shell .section-kicker,
+.landing-shell .study-kicker,
+.landing-shell .review-label,
+.landing-shell .practice-card-label,
+.landing-shell .scenario-label,
+.landing-shell .footer-note {
+	font-family: var(--font-sans);
+	font-size: 0.69rem;
+	font-weight: 720;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+}
+
+.landing-shell .eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	margin: 0 0 1.35rem;
+	color: var(--landing-wine);
+}
+
+.landing-shell .eyebrow span {
+	display: inline-block;
+	width: 2.2rem;
+	height: 1px;
+	background: currentColor;
+}
+
+.landing-shell .hero h1 {
+	width: max-content;
+	max-width: 100%;
+	margin: 0 0 0 -0.035em;
+	color: var(--landing-ink);
+	font-family: var(--font-script);
+	font-size: clamp(8rem, 11.5vw, 11.5rem);
+	font-weight: 400;
+	letter-spacing: 0.005em;
+	line-height: 0.7;
+}
+
+.landing-shell .manifesto h2 em {
+	color: var(--landing-wine);
+	font-weight: 360;
+}
+
+.landing-shell .hero-intro {
+	max-width: 32rem;
+	margin: 1.9rem 0 0;
+	color: var(--landing-muted);
+	font-size: clamp(1rem, 1.45vw, 1.12rem);
+	line-height: 1.62;
+}
+
+.landing-shell .hero-actions {
+	display: flex;
+	align-items: center;
+	gap: 1.25rem;
+	margin-top: 2rem;
+}
+
+.landing-shell .text-cta {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	gap: 0.45rem;
+	color: var(--landing-ink);
+	font-size: 0.82rem;
+	font-weight: 680;
+	text-decoration-color: rgb(45 41 36 / 35%);
+	text-underline-offset: 0.32rem;
+}
+
+.landing-shell .text-cta span {
+	color: var(--landing-wine);
+}
+
+.landing-shell .hero-lyric {
+	position: relative;
+	width: min(92%, 33rem);
+	margin: 1.5rem 0 0 auto;
+	padding: 1rem 1.4rem 0 0;
+	border-top: 1px solid rgb(128 57 69 / 28%);
+	color: var(--landing-wine);
+	transform: rotate(-0.65deg);
+}
+
+.landing-shell .lyric-button {
+	display: grid;
+	width: 100%;
+	min-height: 5.25rem;
+	padding: 0.25rem 0.25rem 0.45rem;
+	place-items: center;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font-family: var(--font-script);
+	font-size: clamp(2rem, 3vw, 2.75rem);
+	font-weight: 400;
+	letter-spacing: 0.01em;
+	line-height: 0.96;
+	text-align: center;
+}
+
+.landing-shell .lyric-sentence {
+	display: block;
+	max-width: 100%;
+	white-space: nowrap;
+	transition: color 220ms ease;
+}
+
+.landing-shell .lyric-japanese {
+	max-width: 18ch;
+	font-family: var(--font-japanese-script);
+	font-size: 0.68em;
+	letter-spacing: 0.05em;
+	line-height: 1.45;
+}
+
+.landing-shell .lyric-button:hover .lyric-sentence {
+	color: var(--landing-cover);
+}
+
+.landing-shell .lyric-button:focus-visible {
+	border-radius: 0.2rem;
+	outline: 2px solid var(--landing-focus);
+	outline-offset: 4px;
+}
+
+.landing-shell .typewriter-caret {
+	display: inline-block;
+	width: 1px;
+	height: 0.72em;
+	margin-left: 0.08em;
+	background: currentColor;
+	vertical-align: -0.02em;
+	animation: typewriter-caret 700ms step-end infinite;
+}
+
+@keyframes typewriter-caret {
+	50% {
+		opacity: 0;
+	}
+}
+
+.landing-shell .hero-artifact {
+	position: relative;
+	z-index: 1;
+	width: min(100%, 31rem);
+	margin: 0 auto;
+	perspective: 1000px;
+	grid-column: 2;
+	grid-row: 1 / span 2;
+}
+
+.landing-shell .practice-stack {
+	position: relative;
+}
+
+.landing-shell .practice-card {
+	position: relative;
+	box-sizing: border-box;
+	min-height: 31rem;
+	padding: clamp(1.3rem, 4vw, 2.15rem);
+	border: 1px solid rgb(45 41 36 / 18%);
+	background: linear-gradient(120deg, rgb(255 255 255 / 38%), transparent 26%), var(--landing-sheet);
+	box-shadow: inset 0 0 24px rgb(179 145 80 / 5%);
+}
+
+.landing-shell .practice-card-back,
+.landing-shell .practice-card-underlay {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	transform-origin: 70% 100%;
+	transition:
+		transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
+		box-shadow 480ms ease;
+}
+
+.landing-shell .practice-card-back {
+	z-index: 0;
+	box-shadow:
+		0 18px 38px rgb(45 41 36 / 7%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+	transform: translate3d(0.5rem, 0.8rem, 0) rotate(3.2deg) scale(0.97);
+}
+
+.landing-shell .practice-card-underlay {
+	z-index: 1;
+	box-shadow:
+		0 23px 48px rgb(45 41 36 / 10%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+	transform: translate3d(-0.4rem, 0.35rem, 0) rotate(-1.8deg) scale(0.985);
+}
+
+.landing-shell .practice-card-back > *,
+.landing-shell .practice-card-underlay > * {
+	opacity: 0;
+}
+
+.landing-shell .practice-card-underlay > * {
+	transition: opacity 180ms ease 80ms;
+}
+
+.landing-shell .practice-brief {
+	z-index: 2;
+	box-shadow:
+		0 28px 58px rgb(45 41 36 / 15%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+	cursor: pointer;
+	touch-action: manipulation;
+	transform: rotate(0.8deg);
+	transform-origin: 70% 100%;
+	transition: box-shadow 220ms ease;
+}
+
+.landing-shell .practice-stack-cycling .practice-card-underlay {
+	box-shadow:
+		0 28px 58px rgb(45 41 36 / 15%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+	transform: translate3d(0, 0, 0) rotate(0.8deg) scale(1);
+}
+
+.landing-shell .practice-stack-cycling .practice-card-underlay > * {
+	opacity: 1;
+}
+
+.landing-shell .practice-stack-cycling .practice-card-back {
+	box-shadow:
+		0 23px 48px rgb(45 41 36 / 10%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+	transform: translate3d(-0.4rem, 0.35rem, 0) rotate(-1.8deg) scale(0.985);
+}
+
+.landing-shell .practice-brief-cycling {
+	pointer-events: none;
+	animation: practice-card-cycle 480ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes practice-card-cycle {
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0) rotate(0.8deg) scale(1);
+	}
+
+	52% {
+		transform: translate3d(36%, -0.7rem, 0) rotate(5deg) scale(0.985);
+	}
+
+	100% {
+		transform: translate3d(112%, 0.45rem, 0) rotate(8deg) scale(0.96);
+	}
+}
+
+.landing-shell .practice-brief:hover {
+	box-shadow:
+		0 32px 66px rgb(45 41 36 / 19%),
+		inset 0 0 24px rgb(179 145 80 / 5%);
+}
+
+.landing-shell .practice-brief:focus-visible {
+	outline: 2px solid var(--landing-focus);
+	outline-offset: 5px;
+}
+
+.landing-shell .brief-heading {
+	display: flex;
+	box-sizing: border-box;
+	min-height: 7rem;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-bottom: 1.25rem;
+	border-bottom: 1px solid rgb(45 41 36 / 18%);
+}
+
+.landing-shell .practice-card-label {
+	margin: 0 0 0.5rem;
+	color: var(--landing-wine);
+}
+
+.landing-shell .brief-heading h2 {
+	max-width: 21ch;
+	margin: 0;
+	font-family: var(--font-serif);
+	font-size: clamp(1.5rem, 3.4vw, 2.05rem);
+	font-weight: 430;
+	line-height: 1.08;
+	text-wrap: balance;
+}
+
+.landing-shell .brief-number {
+	flex: 0 0 auto;
+	color: var(--landing-muted);
+	font-family: var(--font-serif);
+	font-size: 0.8rem;
+	font-style: italic;
+}
+
+.landing-shell .brief-context {
+	display: flex;
+	gap: 1.25rem;
+	padding-block: 0.9rem;
+	color: var(--landing-muted);
+	font-size: 0.74rem;
+}
+
+.landing-shell .brief-context span {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.landing-shell .brief-stage {
+	position: relative;
+	min-height: 17rem;
+}
+
+.landing-shell .dialogue {
+	display: grid;
+	box-sizing: border-box;
+	min-height: 11.5rem;
+	gap: 0.85rem;
+	padding: 1.2rem 0;
+}
+
+.landing-shell .message {
+	display: flex;
+	align-items: flex-end;
+	gap: 0.6rem;
+}
+
+.landing-shell .message p {
+	max-width: 83%;
+	margin: 0;
+	padding: 0.72rem 0.85rem;
+	border-radius: 1.1rem 1.1rem 1.1rem 0.2rem;
+	background: #e9e5df;
+	font-size: 0.84rem;
+	line-height: 1.48;
+}
+
+.landing-shell .message.outgoing {
+	justify-content: flex-end;
+}
+
+.landing-shell .message.outgoing p {
+	border-radius: 1.1rem 1.1rem 0.2rem 1.1rem;
+	background: var(--landing-blue);
+	color: white;
+}
+
+.landing-shell .avatar,
+.landing-shell .mini-avatar {
+	display: grid;
+	flex: 0 0 auto;
+	width: 1.8rem;
+	height: 1.8rem;
+	place-items: center;
+	border-radius: 999px;
+	background: var(--landing-olive);
+	color: white;
+	font-family: var(--font-serif);
+	font-size: 0.75rem;
+}
+
+.landing-shell .brief-feedback {
+	display: flex;
+	gap: 0.7rem;
+	padding: 0.85rem 0.95rem;
+	border-left: 3px solid var(--landing-green);
+	background: rgb(65 108 85 / 8%);
+}
+
+.landing-shell .feedback-mark {
+	display: grid;
+	flex: 0 0 auto;
+	width: 1.5rem;
+	height: 1.5rem;
+	place-items: center;
+	border-radius: 999px;
+	background: var(--landing-green);
+	color: white;
+}
+
+.landing-shell .brief-feedback strong {
+	font-size: 0.78rem;
+}
+
+.landing-shell .brief-feedback p {
+	margin: 0.2rem 0 0;
+	color: var(--landing-muted);
+	font-size: 0.73rem;
+	line-height: 1.45;
+}
+
+.landing-shell .hero-artifact figcaption {
+	max-width: 26rem;
+	margin: 1.8rem auto 0;
+	color: var(--landing-muted);
+	font-family: var(--font-serif);
+	font-size: 0.78rem;
+	font-style: italic;
+	line-height: 1.5;
+	text-align: center;
+}
