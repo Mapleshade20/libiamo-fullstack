@@ -46,4 +46,10 @@ describe("root error page", () => {
 		expect(fallback).toContain('href="%libiamo.base%/"');
 		expect(fallback).toContain('role="alert"');
 	});
+
+	it("marks routed errors as English documents", () => {
+		const { head } = render(ErrorPage);
+
+		expect(head).toContain('<meta name="libiamo-document-language" content="en"');
+	});
 });

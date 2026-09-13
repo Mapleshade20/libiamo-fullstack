@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/document-language";
+import { applyDocumentLanguageToHtml, resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/document-language";
 
 describe("document language", () => {
 	it("normalizes the learner language", () => {
@@ -9,19 +9,20 @@ describe("document language", () => {
 	});
 
 	it("keeps ordinary learner pages in the active language", () => {
-		expect(resolvePageDocumentLanguage({ routeId: "/(app)/review", isErrorPage: false, learnerDocumentLanguage: "fr" })).toBe("fr");
+		expect(resolvePageDocumentLanguage({ routeId: "/(app)/review", learnerDocumentLanguage: "fr" })).toBe("fr");
 	});
 
-	it.each([
-		{ routeId: "/welcome", isErrorPage: false },
-		{ routeId: "/welcome/example", isErrorPage: false },
-		{ routeId: null, isErrorPage: true },
-		{ routeId: "/(app)/review", isErrorPage: true },
-	])("uses English for public and error pages: $routeId", ({ routeId, isErrorPage }) => {
-		expect(resolvePageDocumentLanguage({ routeId, isErrorPage, learnerDocumentLanguage: "ja" })).toBe("en");
+	it.each(["/welcome", "/welcome/example", null])("uses English for public and unmatched pages: %s", (routeId) => {
+		expect(resolvePageDocumentLanguage({ routeId, learnerDocumentLanguage: "ja" })).toBe("en");
 	});
 
-	it("does not mistake an action failure for an error page", () => {
-		expect(resolvePageDocumentLanguage({ routeId: "/(app)/profile", isErrorPage: false, learnerDocumentLanguage: "es" })).toBe("es");
+	it("uses the routed error marker when transforming SSR HTML", () => {
+		const html = '<html lang="en"><head><meta name="libiamo-document-language" content="en"></head></html>';
+
+		expect(applyDocumentLanguageToHtml(html, "ja")).toContain('<html lang="en">');
+	});
+
+	it("applies the learner language to ordinary SSR HTML", () => {
+		expect(applyDocumentLanguageToHtml('<html lang="en"><head></head></html>', "es")).toContain('<html lang="es">');
 	});
 });

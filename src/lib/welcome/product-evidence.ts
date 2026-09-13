@@ -1,4 +1,45 @@
+import type { UiVariant } from "$lib/constants";
+
 export type WelcomeFeedbackPart = { type: "text"; content: string } | { type: "mark"; content: string; annotation: "01" | "02" | "03" };
+
+type WelcomeConversationCase = {
+	title: string;
+	ui: UiVariant;
+	maxTurns: number;
+	seedMessage: string;
+};
+
+export const WELCOME_DISCORD_CASE = {
+	title: "Weekend planning",
+	ui: "discord",
+	maxTurns: 4,
+	seedMessage: "Are you free on Saturday? We could finally try that new café.",
+} satisfies WelcomeConversationCase;
+
+export const WELCOME_REDDIT_CASE = {
+	title: "Advice thread",
+	ui: "reddit",
+	maxTurns: 3,
+	seedMessage: "How do I politely tell my flatmate that late-night calls keep waking me up?",
+} satisfies WelcomeConversationCase;
+
+const firstDraftParts = [
+	{ type: "mark", content: "People", annotation: "01" },
+	{ type: "text", content: " are born free, " },
+	{ type: "mark", content: "but", annotation: "02" },
+	{ type: "text", content: " everywhere they " },
+	{ type: "mark", content: "live under restraints", annotation: "03" },
+	{ type: "text", content: "." },
+] satisfies WelcomeFeedbackPart[];
+
+const referenceParts = [
+	{ type: "mark", content: "Man", annotation: "01" },
+	{ type: "text", content: " is born free, " },
+	{ type: "mark", content: "and", annotation: "02" },
+	{ type: "text", content: " everywhere he " },
+	{ type: "mark", content: "is in chains", annotation: "03" },
+	{ type: "text", content: "." },
+] satisfies WelcomeFeedbackPart[];
 
 export const WELCOME_TRANSLATION_CASE = {
 	title: "Man is born free",
@@ -6,24 +47,9 @@ export const WELCOME_TRANSLATION_CASE = {
 	platform: "Chinese → English",
 	scope: "1 sentence",
 	source: "人生而自由，却无往不在枷锁之中。",
-	firstDraft: "People are born free, but everywhere they live under restraints.",
-	firstDraftParts: [
-		{ type: "mark", content: "People", annotation: "01" },
-		{ type: "text", content: " are born free, " },
-		{ type: "mark", content: "but", annotation: "02" },
-		{ type: "text", content: " everywhere they " },
-		{ type: "mark", content: "live under restraints", annotation: "03" },
-		{ type: "text", content: "." },
-	] satisfies WelcomeFeedbackPart[],
-	referenceRevision: "Man is born free, and everywhere he is in chains.",
-	referenceParts: [
-		{ type: "mark", content: "Man", annotation: "01" },
-		{ type: "text", content: " is born free, " },
-		{ type: "mark", content: "and", annotation: "02" },
-		{ type: "text", content: " everywhere he " },
-		{ type: "mark", content: "is in chains", annotation: "03" },
-		{ type: "text", content: "." },
-	] satisfies WelcomeFeedbackPart[],
+	firstDraft: firstDraftParts.map((part) => part.content).join(""),
+	firstDraftParts,
+	referenceParts,
 	annotations: [
 		{ id: "01", label: "subject", note: "Preserve the aphorism’s singular, universal subject." },
 		{ id: "02", label: "connection", note: "The established wording joins freedom and constraint with “and.”" },

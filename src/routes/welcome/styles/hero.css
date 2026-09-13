@@ -109,7 +109,9 @@
 .landing-shell .lyric-button {
 	display: grid;
 	width: 100%;
+	min-width: 0;
 	min-height: 5.25rem;
+	grid-template-columns: minmax(0, 1fr);
 	padding: 0.25rem 0.25rem 0.45rem;
 	place-items: center;
 	border: 0;
@@ -124,10 +126,21 @@
 	text-align: center;
 }
 
+.landing-shell .lyric-reserve,
 .landing-shell .lyric-sentence {
 	display: block;
+	width: 100%;
+	min-width: 0;
 	max-width: 100%;
+	grid-area: 1 / 1;
 	white-space: nowrap;
+}
+
+.landing-shell .lyric-reserve {
+	visibility: hidden;
+}
+
+.landing-shell .lyric-sentence {
 	transition: color 220ms ease;
 }
 

@@ -50,6 +50,7 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 <svelte:head>
 	<title>{page.status} · {copy.label} · Libiamo</title>
 	<meta name="robots" content="noindex, nofollow">
+	<meta name="libiamo-document-language" content="en">
 </svelte:head>
 
 <div class="error-shell" lang="en">
@@ -90,6 +91,7 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 	--error-wine: #803945;
 	--error-olive: #65705a;
 	min-height: 100svh;
+	isolation: isolate;
 	background:
 		radial-gradient(circle at 14% 12%, rgb(255 250 241 / 94%), transparent 27rem),
 		radial-gradient(circle at 87% 75%, rgb(179 145 80 / 11%), transparent 30rem), var(--error-paper);

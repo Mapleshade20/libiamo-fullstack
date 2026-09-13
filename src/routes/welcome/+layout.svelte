@@ -10,10 +10,9 @@ import Sparkles from "@lucide/svelte/icons/sparkles";
 import { onMount } from "svelte";
 import { afterNavigate } from "$app/navigation";
 import { base } from "$app/paths";
-import { AGENT_REPLY_DEMO_TASKS } from "$lib/agent-replies/live-demo";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import { UI_VARIANT_LABELS } from "$lib/constants";
-import { WELCOME_TRANSLATION_CASE } from "$lib/welcome/product-evidence";
+import { WELCOME_DISCORD_CASE, WELCOME_REDDIT_CASE, WELCOME_TRANSLATION_CASE } from "$lib/welcome/product-evidence";
 import "./styles/shell.css";
 import "./styles/hero.css";
 import "./styles/sections.css";
@@ -47,12 +46,7 @@ const sentenceSets = [
 		{ code: "ja", name: "日本語", text: "ぴったりの言葉を見つけよう。" },
 	],
 ] as const;
-
-function requiredAgentCase(id: string) {
-	const task = AGENT_REPLY_DEMO_TASKS.find((candidate) => candidate.id === id);
-	if (!task) throw new Error(`Welcome demo case is missing: ${id}`);
-	return task;
-}
+const lyricReservations = sentenceSets.flat();
 
 function firstItem<T>(items: readonly T[], label: string): T {
 	const item = items[0];
@@ -60,39 +54,39 @@ function firstItem<T>(items: readonly T[], label: string): T {
 	return item;
 }
 
-const discordCase = requiredAgentCase("discord-planning");
-const redditCase = requiredAgentCase("reddit-advice");
+const discordCase = WELCOME_DISCORD_CASE;
+const redditCase = WELCOME_REDDIT_CASE;
 const translationCase = WELCOME_TRANSLATION_CASE;
 const reviewNote = translationCase.reviewNote;
 const translationRatings = translationCase.ratings;
-const discordSeedMessage = firstItem(discordCase.seedMessages, "Discord seed message");
-const redditSeedMessage = firstItem(redditCase.seedMessages, "Reddit seed message");
+const discordSeedMessage = discordCase.seedMessage;
+const redditSeedMessage = redditCase.seedMessage;
 const reviewExample = firstItem(reviewNote.examples, "review example");
 
 const practiceCards = [
 	{
 		kind: "discord",
 		label: "Discord conversation",
-		title: discordCase.title.replace("Discord · ", ""),
+		title: discordCase.title,
 		number: "01 / 03",
 		platform: UI_VARIANT_LABELS[discordCase.ui],
 		scope: `${discordCase.maxTurns} turns maximum`,
 		surfaceLabel: "# weekend-plans",
 		messageLabel: "You · now",
-		message: discordSeedMessage.content,
+		message: discordSeedMessage,
 		statusTitle: "Waiting for Sam",
 		status: "New replies remain visibly unread if you leave the page and return through Quest Hall.",
 	},
 	{
 		kind: "reddit",
 		label: "Reddit post",
-		title: redditCase.title.replace("Reddit · ", ""),
+		title: redditCase.title,
 		number: "02 / 03",
 		platform: UI_VARIANT_LABELS[redditCase.ui],
 		scope: `${redditCase.maxTurns} turns maximum`,
 		surfaceLabel: "r/Advice",
 		messageLabel: "Original post · You",
-		message: redditSeedMessage.content,
+		message: redditSeedMessage,
 		statusTitle: "Thread-aware replies",
 		status: "Reply to the post or target an individual comment; responses stay attached to their branch.",
 	},
@@ -123,8 +117,9 @@ let reducedMotion = $state(false);
 let activePracticeIndex = $state(0);
 let practiceCardAnimating = $state(false);
 let practiceCardTimer: number | undefined;
-let lyricTranslation = $derived(sentenceSets[activeSentenceIndex][activeLanguageIndex]);
-let nextLyricTranslation = $derived(sentenceSets[activeSentenceIndex][(activeLanguageIndex + 1) % sentenceSets[0].length]);
+let activeSentenceSet = $derived(sentenceSets[activeSentenceIndex]);
+let lyricTranslation = $derived(activeSentenceSet[activeLanguageIndex]);
+let nextLyricTranslation = $derived(activeSentenceSet[(activeLanguageIndex + 1) % activeSentenceSet.length]);
 let activePractice = $derived(practiceCards[activePracticeIndex]);
 let nextPractice = $derived(practiceCards[(activePracticeIndex + 1) % practiceCards.length]);
 let followingPractice = $derived(practiceCards[(activePracticeIndex + 2) % practiceCards.length]);
@@ -134,7 +129,7 @@ afterNavigate(() => {
 });
 
 function cycleLyricLanguage() {
-	activeLanguageIndex = (activeLanguageIndex + 1) % sentenceSets[0].length;
+	activeLanguageIndex = (activeLanguageIndex + 1) % activeSentenceSet.length;
 	typewriterText = reducedMotion ? sentenceSets[activeSentenceIndex][activeLanguageIndex].text : "";
 	typewriterPhase = reducedMotion ? "idle" : "typing";
 }
@@ -230,7 +225,7 @@ $effect(() => {
 		if (visibleCharacters.length > 0) {
 			typewriterText = visibleCharacters.slice(0, -1).join("");
 		} else {
-			activeLanguageIndex = (activeLanguageIndex + 1) % sentenceSets[0].length;
+			activeLanguageIndex = (activeLanguageIndex + 1) % activeSentenceSet.length;
 			typewriterPhase = "typing";
 		}
 	}, delay);
@@ -345,6 +340,11 @@ $effect(() => {
 						onclick={cycleLyricLanguage}
 						aria-label={`${lyricTranslation.text} ${lyricTranslation.name}. Change to ${nextLyricTranslation.name}.`}
 					>
+						{#each lyricReservations as translation}
+							<span class:lyric-japanese={translation.code === "ja"} class="lyric-reserve" lang={translation.code} aria-hidden="true">
+								{translation.text}
+							</span>
+						{/each}
 						<span class:lyric-japanese={lyricTranslation.code === "ja"} class="lyric-sentence" lang={lyricTranslation.code} aria-hidden="true">
 							{typewriterText}<span class="typewriter-caret" aria-hidden="true"></span>
 						</span>
@@ -414,15 +414,15 @@ $effect(() => {
 				<article class="scenario-card scenario-mail">
 					<header><MessagesSquare size={17} aria-hidden="true" /><span>Discord</span><small>Medium urgency</small></header>
 					<p class="scenario-label">Sam · weekend planning</p>
-					<h3>{discordCase.title.replace("Discord · ", "")}</h3>
-					<p>{discordSeedMessage.content}</p>
+					<h3>{discordCase.title}</h3>
+					<p>{discordSeedMessage}</p>
 				</article>
 
 				<article class="scenario-card scenario-chat">
 					<header><MessageCircle size={17} aria-hidden="true" /><span>Reddit</span><small>High urgency</small></header>
 					<div class="mini-chat">
 						<span class="mini-avatar">OP</span>
-						<p><strong>Advice thread</strong> {redditSeedMessage.content}</p>
+						<p><strong>Advice thread</strong> {redditSeedMessage}</p>
 					</div>
 					<div class="mini-reply">Reply to the post or to a specific comment in its branch.</div>
 				</article>

@@ -18,6 +18,10 @@ describe("fatal error template", () => {
 		expect(renderErrorTemplate(source, '/review&"<>')).toContain('href="/review&amp;&quot;&lt;&gt;/"');
 	});
 
+	it("treats dollar replacement tokens as literal base-path characters", () => {
+		expect(renderErrorTemplate(source, "/a$&b")).toContain('href="/a$&amp;b/"');
+	});
+
 	it.each(["<p>No placeholder</p>", `${source}${source}`])("rejects a missing or repeated placeholder", (template) => {
 		expect(() => renderErrorTemplate(template, "/review-base")).toThrow(/exactly once/);
 	});

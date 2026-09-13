@@ -19,7 +19,7 @@ export function renderErrorTemplate(source, base) {
 		throw new Error(`Error template must contain ${BASE_PATH_PLACEHOLDER} exactly once; found ${occurrences}.`);
 	}
 
-	return source.replace(BASE_PATH_PLACEHOLDER, escapeHtmlAttribute(base));
+	return source.replace(BASE_PATH_PLACEHOLDER, () => escapeHtmlAttribute(base));
 }
 
 /**

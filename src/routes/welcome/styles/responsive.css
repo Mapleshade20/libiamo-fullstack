@@ -127,6 +127,7 @@
 		font-size: clamp(1.85rem, 9vw, 2.35rem);
 	}
 
+	.landing-shell .lyric-reserve,
 	.landing-shell .lyric-sentence {
 		white-space: normal;
 		text-wrap: balance;
