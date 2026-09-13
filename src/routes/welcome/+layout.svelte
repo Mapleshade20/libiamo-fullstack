@@ -13,11 +13,7 @@ import { base } from "$app/paths";
 import { AGENT_REPLY_DEMO_TASKS } from "$lib/agent-replies/live-demo";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 import { UI_VARIANT_LABELS } from "$lib/constants";
-import {
-	TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS,
-	TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE,
-	TRANSLATION_EVALUATION_LIVE_DEMO_TASK,
-} from "$lib/translation-evaluation/live-demo-fixture";
+import { WELCOME_TRANSLATION_CASE } from "$lib/welcome/product-evidence";
 import "./styles/shell.css";
 import "./styles/hero.css";
 import "./styles/sections.css";
@@ -66,21 +62,12 @@ function firstItem<T>(items: readonly T[], label: string): T {
 
 const discordCase = requiredAgentCase("discord-planning");
 const redditCase = requiredAgentCase("reddit-advice");
-const translationCase = TRANSLATION_EVALUATION_LIVE_DEMO_TASK;
-const reviewNote = TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE;
-const translationRatings = TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS;
+const translationCase = WELCOME_TRANSLATION_CASE;
+const reviewNote = translationCase.reviewNote;
+const translationRatings = translationCase.ratings;
 const discordSeedMessage = firstItem(discordCase.seedMessages, "Discord seed message");
 const redditSeedMessage = firstItem(redditCase.seedMessages, "Reddit seed message");
 const reviewExample = firstItem(reviewNote.examples, "review example");
-
-function excerptFrom(text: string, opening: string): string {
-	const index = text.indexOf(opening);
-	return index >= 0 ? text.slice(index) : text;
-}
-
-const translationSourceExcerpt = excerptFrom(firstItem(translationCase.sourceParagraphs, "translation source"), "它还削弱了");
-const translationDraftExcerpt = excerptFrom(firstItem(translationCase.defaultLearnerParagraphs, "translation first draft"), "It also weakens");
-const translationReferenceExcerpt = excerptFrom(firstItem(translationCase.referenceParagraphs, "translation reference"), "It also undermines");
 
 const practiceCards = [
 	{
@@ -114,10 +101,10 @@ const practiceCards = [
 		label: "Translation workflow",
 		title: translationCase.title,
 		number: "03 / 03",
-		platform: "Chinese → English",
-		scope: `${translationCase.sourceParagraphs.length} paragraphs`,
-		source: translationSourceExcerpt,
-		draft: translationDraftExcerpt,
+		platform: translationCase.platform,
+		scope: translationCase.scope,
+		source: translationCase.source,
+		draft: translationCase.firstDraft,
 		statusTitle: `Evaluation · ${translationRatings.overall}`,
 		status: "Correction cards lead into a second draft, then transfer practice for useful expressions.",
 	},
@@ -443,36 +430,64 @@ $effect(() => {
 				<article class="scenario-card scenario-forum">
 					<header><Languages size={17} aria-hidden="true" /><span>Translator</span><small>Chinese → English</small></header>
 					<p class="scenario-label">{translationCase.title}</p>
-					<p lang="zh">{translationSourceExcerpt}</p>
+					<p lang="zh">{translationCase.source}</p>
 				</article>
 			</div>
 		</section>
 
 		<section id="feedback" class="feature feature-feedback" aria-labelledby="feedback-title">
-			<div class="feedback-stage" aria-label="Translation evaluation from the Crowfeather and Tawnypelt case">
-				<div class="margin-note margin-note-one" aria-hidden="true">collocation</div>
-				<div class="margin-note margin-note-two" aria-hidden="true">lore</div>
+			<div class="feedback-stage" aria-label="Annotated translation evaluation of Rousseau’s Man is born free">
+				<div class="margin-note margin-note-one" aria-hidden="true">subject</div>
+				<div class="margin-note margin-note-two" aria-hidden="true">idiom</div>
 				<article class="editorial-review">
 					<header>
 						<div>
-							<p>{translationCase.title}</p>
+							<p>{translationCase.attribution}</p>
 							<h3>Evaluation overview</h3>
 						</div>
 						<Sparkles size={22} aria-hidden="true" />
 					</header>
 					<div class="review-block">
 						<p class="review-label">Learner’s first draft</p>
-						<p class="review-text" lang="en">“{translationDraftExcerpt}”</p>
+						<p class="review-text" lang="en">
+							“
+							{#each translationCase.firstDraftParts as part}
+								{#if part.type === "mark"}
+									<mark class="feedback-annotation feedback-annotation-draft"
+										>{part.content}<sup aria-label="annotation {part.annotation}">{part.annotation}</sup></mark
+									>
+								{:else}
+									{part.content}
+								{/if}
+							{/each}
+							”
+						</p>
 					</div>
 					<div class="review-rule" aria-hidden="true"></div>
 					<div class="review-block">
 						<p class="review-label">Reference revision</p>
-						<p class="review-text suggestion" lang="en">“{translationReferenceExcerpt}”</p>
+						<p class="review-text suggestion" lang="en">
+							“
+							{#each translationCase.referenceParts as part}
+								{#if part.type === "mark"}
+									<mark class="feedback-annotation feedback-annotation-reference"
+										>{part.content}<sup aria-label="annotation {part.annotation}">{part.annotation}</sup></mark
+									>
+								{:else}
+									{part.content}
+								{/if}
+							{/each}
+							”
+						</p>
 					</div>
-					<blockquote>
-						The correction changes “parts in” to “parts of,” uses “relationships” for the characters’ connections, and replaces the literal backstory
-						phrase with “years of lore.”
-					</blockquote>
+					<ol class="feedback-annotation-list" aria-label="Feedback annotations">
+						{#each translationCase.annotations as annotation}
+							<li>
+								<span>{annotation.id}</span>
+								<p><strong>{annotation.label}</strong> {annotation.note}</p>
+							</li>
+						{/each}
+					</ol>
 					<footer>
 						<span><Check size={15} aria-hidden="true" /> Accuracy · {translationRatings.accuracy}</span>
 						<span><Check size={15} aria-hidden="true" /> Naturalness · {translationRatings.naturalness}</span>

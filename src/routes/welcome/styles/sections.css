@@ -289,6 +289,34 @@
 	color: var(--landing-green);
 }
 
+.landing-shell .feedback-annotation {
+	padding-inline: 0.08em;
+	border-radius: 0.12em;
+	background: transparent;
+	box-decoration-break: clone;
+	color: inherit;
+	-webkit-box-decoration-break: clone;
+}
+
+.landing-shell .feedback-annotation-draft {
+	border-bottom: 1px solid rgb(128 57 69 / 62%);
+	background: linear-gradient(transparent 64%, rgb(128 57 69 / 14%) 64%);
+}
+
+.landing-shell .feedback-annotation-reference {
+	box-shadow: inset 0 -0.42em rgb(65 108 85 / 13%);
+}
+
+.landing-shell .feedback-annotation sup {
+	margin-left: 0.12rem;
+	color: var(--landing-wine);
+	font-family: var(--font-sans);
+	font-size: 0.42em;
+	font-weight: 750;
+	letter-spacing: 0;
+	vertical-align: super;
+}
+
 .landing-shell .review-rule {
 	position: relative;
 	height: 1px;
@@ -307,13 +335,43 @@
 	content: "";
 }
 
-.landing-shell .editorial-review blockquote {
+.landing-shell .feedback-annotation-list {
+	display: grid;
+	gap: 0.6rem;
 	margin: 0.2rem 0 1.2rem;
-	padding: 0.9rem 0 0.9rem 1rem;
+	padding: 0.85rem 0 0.85rem 1rem;
 	border-left: 2px solid var(--landing-wine);
+	list-style: none;
+}
+
+.landing-shell .feedback-annotation-list li {
+	display: grid;
+	grid-template-columns: 1.45rem minmax(0, 1fr);
+	align-items: start;
+	gap: 0.45rem;
+}
+
+.landing-shell .feedback-annotation-list li > span {
+	padding-top: 0.08rem;
+	color: var(--landing-wine);
+	font-size: 0.58rem;
+	font-weight: 750;
+	letter-spacing: 0.08em;
+}
+
+.landing-shell .feedback-annotation-list p {
+	margin: 0;
 	color: var(--landing-muted);
 	font-size: 0.78rem;
-	line-height: 1.6;
+	line-height: 1.5;
+}
+
+.landing-shell .feedback-annotation-list strong {
+	margin-right: 0.22rem;
+	color: var(--landing-ink);
+	font-size: 0.64rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
 
 .landing-shell .editorial-review footer {
