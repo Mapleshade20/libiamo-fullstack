@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import Generation2Review from "$routes/(app)/translate-eval-live-demo/Generation2Review.svelte";
 
 describe("Generation2Review", () => {
-	it("shows source-card coverage, bilingual definitions, and all generated examples", () => {
+	it("shows generated notes and the exact model artifacts", () => {
 		const { body } = render(Generation2Review, {
 			props: {
 				result: {
@@ -43,10 +43,9 @@ describe("Generation2Review", () => {
 
 		expect(body).toContain("be defined by");
 		expect(body).toContain("以……为主要特征");
-		expect(body).toContain("Source cards ·");
 		expect(body).toContain("1, 3");
 		expect(body.match(/Target example/g)).toHaveLength(4);
-		expect(body).toContain("Complete prompt · 2 messages");
-		expect(body.indexOf("Complete prompt · 2 messages")).toBeLessThan(body.indexOf("Validated structured result"));
+		expect(body).toContain("Generation 2 contract");
+		expect(body).toMatch(/"notes"\s*:\s*\[\]/);
 	});
 });

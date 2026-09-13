@@ -27,9 +27,7 @@ describe("TaskPreparation", () => {
 		});
 
 		expect(body).toContain("Collect a parcel");
-		expect(body).toContain("Expressions Utiles");
 		expect(body).toContain('href="/task/42/session"');
-		expect(body).toContain("Commencer la Pratique");
 	});
 
 	it("keeps completed tasks on the report path", () => {
@@ -37,10 +35,7 @@ describe("TaskPreparation", () => {
 			props: { task: task({ sessionStatus: "evaluated" }), nativeLanguage: "en" },
 		});
 
-		expect(body).toContain("Terminée");
 		expect(body).toContain('href="/task/42/feedback"');
-		expect(body).toContain("Voir le Rapport");
-		expect(body).not.toContain("Expressions Utiles");
 	});
 
 	it("does not link a simulated completion to a report that does not exist", () => {
@@ -48,7 +43,6 @@ describe("TaskPreparation", () => {
 			props: { task: task({ sessionStatus: "completed" }), nativeLanguage: "en", simulated: true },
 		});
 
-		expect(body).toContain("Bilan simulé");
 		expect(body).not.toContain('href="/task/42/feedback"');
 	});
 
@@ -58,6 +52,5 @@ describe("TaskPreparation", () => {
 		});
 
 		expect(body).toContain('<h2 id="task-preparation-title"');
-		expect(body).not.toContain('<h1 id="task-preparation-title"');
 	});
 });

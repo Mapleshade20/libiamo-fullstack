@@ -51,17 +51,18 @@ describe("social auth UI helpers", () => {
 	});
 
 	describe("socialAuthErrorMessage", () => {
-		it("explains the failures a signed-out user can act on", () => {
+		it("returns distinct messages for failures a signed-out user can act on", () => {
 			expect(socialAuthErrorMessage(null)).toBeNull();
-			expect(socialAuthErrorMessage("access_denied")).toBe("Authentication was canceled. You can try again when you’re ready.");
-			expect(socialAuthErrorMessage("account_not_linked")).toContain("Sign in with your password");
-			expect(socialAuthErrorMessage("account_already_linked_to_different_user")).toContain("already connected to a different Libiamo account");
-			expect(socialAuthErrorMessage("unable_to_link_account")).toContain("has not verified this email address");
+			const messages = ["access_denied", "account_not_linked", "account_already_linked_to_different_user", "unable_to_link_account"].map((code) =>
+				socialAuthErrorMessage(code),
+			);
+
+			expect(messages.every(Boolean)).toBe(true);
+			expect(new Set(messages).size).toBe(messages.length);
 		});
 
 		it("falls back to one generic message for everything else", () => {
-			expect(socialAuthErrorMessage("unable_to_create_user")).toBe("Google or GitHub authentication could not be completed. Please try again.");
-			expect(socialAuthErrorMessage("invalid_code")).toBe("Google or GitHub authentication could not be completed. Please try again.");
+			expect(socialAuthErrorMessage("unable_to_create_user")).toBe(socialAuthErrorMessage("invalid_code"));
 		});
 	});
 

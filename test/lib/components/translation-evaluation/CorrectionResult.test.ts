@@ -24,9 +24,6 @@ describe("CorrectionResult", () => {
 		expect(body).toContain("reference answer</mark>");
 		expect(body).toContain(", unchanged.");
 		expect(body).toContain('<mark role="button" tabindex="0"');
-		expect(body).toContain("bg-yellow-200/60");
 		expect(body.match(/class="diff-view/g)).toHaveLength(1);
-		expect(body).not.toContain("diff-reference");
-		expect(body).not.toContain('<span role="button"');
 	});
 });

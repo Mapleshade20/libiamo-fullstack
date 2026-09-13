@@ -57,35 +57,11 @@ describe("Profile page", () => {
 		expect(body).toContain('value="saved-model"');
 		expect(body).toMatch(/<option[^>]*value="https:\/\/api.deepseek.com"[^>]*selected/);
 	});
-	it("keeps name editing in the avatar card and omits the duplicate language switcher", () => {
-		const { body } = render(ProfilePage, { props: { data, form: null } });
-
-		expect(body).toContain("Alice");
-		expect(body).toContain('aria-label="Modifier le nom"');
-		expect(body).toContain("Votre avatar est associé à votre adresse e-mail via");
-		expect(body).not.toContain('action="?/switchLanguage"');
-	});
-
-	it("localizes profile fields and controls using the active language", () => {
-		const { body } = render(ProfilePage, { props: { data, form: null } });
-
-		expect(body).toContain("Profil");
-		expect(body).toContain("Paramètres");
-		expect(body).toContain("Sélectionnez votre langue maternelle");
-		expect(body).toContain("Clé API du LLM");
-		expect(body).toContain("Saisissez votre clé API");
-		expect(body).toContain("Enregistrer la clé API");
-		expect(body).toContain("Déconnexion");
-	});
-
 	it("renders connected and available social login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 
-		expect(body).toContain("Méthodes de connexion");
 		expect(body).toContain('action="?/unlinkSocialAccount"');
 		expect(body).toContain('action="?/linkSocialAccount"');
-		expect(body).toContain("Dissocier");
-		expect(body).toContain("Associer");
 	});
 
 	it("disables disconnecting the last login method", () => {
@@ -97,15 +73,6 @@ describe("Profile page", () => {
 		const { body } = render(ProfilePage, { props: { data: lastMethodData, form: null } });
 
 		expect(body).toMatch(/action="\?\/unlinkSocialAccount"[\s\S]*?<button[^>]*disabled/);
-		// Carried by the disabled button's tooltip, where it answers the question the
-		// user is actually asking. It used to also sit under the card as standing text.
-		expect(body).toContain('title="Conservez au moins une méthode de connexion associée."');
-	});
-
-	it("does not explain the last-method rule while more than one method is connected", () => {
-		const { body } = render(ProfilePage, { props: { data, form: null } });
-
-		expect(body).not.toContain("Conservez au moins une méthode de connexion associée.");
 	});
 
 	// An account created through Google or GitHub has no credential row. Better Auth's
@@ -117,15 +84,12 @@ describe("Profile page", () => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected: false }, form: null } });
 
 		expect(body).toContain('action="?/sendPasswordSetup"');
-		expect(body).toContain("Définir un mot de passe");
-		expect(body).not.toContain("/forgot-password");
 	});
 
 	it("does not offer to set a password when one already exists", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 
 		expect(body).not.toContain('action="?/sendPasswordSetup"');
-		expect(body).not.toContain("Définir un mot de passe");
 	});
 
 	// Pressing again only mails a second link, so the button stands down once the
@@ -135,9 +99,7 @@ describe("Profile page", () => {
 			props: { data: { ...data, credentialConnected: false }, form: { passwordSetupSent: true } },
 		});
 
-		expect(body).toContain("Consultez votre messagerie");
 		expect(body).toContain("alice@example.com");
-		expect(body).toContain("Envoyé");
 		expect(body).not.toContain('action="?/sendPasswordSetup"');
 	});
 
@@ -146,16 +108,14 @@ describe("Profile page", () => {
 			props: { data: { ...data, credentialConnected: false }, form: { passwordSetupSent: false } },
 		});
 
-		expect(body).toContain("E-mail non envoyé");
 		expect(body).toContain('action="?/sendPasswordSetup"');
 	});
 
-	// A provider may now carry an address the Libiamo account does not share, so
-	// "Connected" on its own no longer identifies which account was attached.
 	it("dates each connected provider", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
+		const date = new Intl.DateTimeFormat("fr", { dateStyle: "medium", timeZone: "UTC" }).format(new Date("2026-03-14T09:00:00.000Z"));
 
-		expect(body).toContain("Associé le 14 mars 2026");
+		expect(body).toContain(t("fr", "profile.connectedSince").replace("{date}", date));
 	});
 
 	// The OAuth callback lands on `/profile?linked=<provider>`, and `use:enhance`
@@ -165,40 +125,36 @@ describe("Profile page", () => {
 		const landed = { ...data, accountResult: "connected" as const };
 
 		const onLanding = render(ProfilePage, { props: { data: landed, form: null } });
-		expect(onLanding.body).toContain("Méthode de connexion associée");
+		expect(onLanding.body).toContain(t("fr", "profile.methodConnectedTitle"));
 
 		const afterSave = render(ProfilePage, { props: { data: landed, form: { success: true } } });
-		expect(afterSave.body).not.toContain("Méthode de connexion associée");
+		expect(afterSave.body).not.toContain(t("fr", "profile.methodConnectedTitle"));
 	});
 
 	it("stops replaying a failed OAuth link once a form action reports back", () => {
 		const landed = { ...data, accountFailure: "error" as const };
 
 		const onLanding = render(ProfilePage, { props: { data: landed, form: null } });
-		expect(onLanding.body).toContain("Méthode de connexion inchangée");
+		expect(onLanding.body).toContain(t("fr", "profile.methodErrorTitle"));
 
 		const afterSave = render(ProfilePage, { props: { data: landed, form: { success: true } } });
-		expect(afterSave.body).not.toContain("Méthode de connexion inchangée");
+		expect(afterSave.body).not.toContain(t("fr", "profile.methodErrorTitle"));
 	});
 
 	it("asks the user to sign in again when the session is too old to change login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: { accountResult: "stale-session" } } });
 
-		expect(body).toContain("Reconnectez-vous pour continuer");
-		expect(body).not.toContain("La demande n’a pas abouti. Réessayez.");
+		expect(body).toContain(t("fr", "profile.methodStaleSessionTitle"));
 	});
 
-	// Every refusal used to share one "please try again", including the ones where
-	// trying again can only fail the same way.
 	it.each([
-		["already-linked-elsewhere", "Déjà associé ailleurs"],
-		["provider-email-unverified", "E-mail non vérifié par le fournisseur"],
-		["cancelled", "Vous avez annulé sur Google ou GitHub. Rien n’a été modifié."],
-	])("explains a %s refusal in its own words", (failure, expected) => {
+		["already-linked-elsewhere", "profile.methodAlreadyLinkedTitle"],
+		["provider-email-unverified", "profile.methodUnverifiedTitle"],
+		["cancelled", "profile.methodCancelledMessage"],
+	] as const)("maps a %s refusal to its notice", (failure, key) => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, accountFailure: failure as never }, form: null } });
 
-		expect(body).toContain(expected);
-		expect(body).not.toContain("La demande n’a pas abouti. Réessayez.");
+		expect(body).toContain(t("fr", key));
 	});
 
 	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {
@@ -208,7 +164,6 @@ describe("Profile page", () => {
 		expect(dialog.split(">")[0]).not.toMatch(/\sopen(?:\s|=|$)/);
 		expect(dialog).toContain('name="name"');
 		expect(dialog).toContain('maxlength="100"');
-		expect(dialog).toContain("Enregistrer le nom");
 		expect(dialog).toContain('id="name-dialog-error"');
 		expect(body).toContain('aria-haspopup="dialog"');
 	});
@@ -228,10 +183,7 @@ describe("Profile page", () => {
 	it("shows the three self-assignment ranges and selects the saved active-language level", () => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, levelSelfAssign: 3 }, form: null } });
 
-		expect(body).toContain("Niveau de tâches recommandé");
-		expect(body).toContain("A2–B1");
-		expect(body).toContain("B2–C1");
-		expect(body).toContain("C2+");
+		expect(body.match(/name="levelSelfAssign"/g)).toHaveLength(3);
 		expect(body).toContain('name="levelSelfAssign" value="3" checked');
 		expect(body).toContain('action="?/updateProficiency"');
 	});

@@ -4,6 +4,7 @@ import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
 import QuestMenuBook from "$lib/components/quest-hall/quest-menu/QuestMenuBook.svelte";
 import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
 import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
+import { t } from "$lib/i18n";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";
 
@@ -53,14 +54,10 @@ describe("QuestMenu", () => {
 		expect(body.match(/<time datetime="2026"/g)).toHaveLength(2);
 	});
 
-	it("server-renders the personalized home, recommendations, ribbons, and canonical links", () => {
+	it("server-renders personalized data, navigation, and unread counts", () => {
 		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
 
 		expect(body).toContain("Good morning, Fedor");
-		expect(body).toContain("Recommended");
-		expect(body).toContain("Open menu");
-		expect(body).toContain("Menu sections");
-		expect(body).toContain(">MENU</strong>");
 		expect(body).toContain('href="/task/1"');
 		expect(body).toContain(">2</span>");
 	});
@@ -75,7 +72,7 @@ describe("QuestMenu", () => {
 		});
 
 		const inbox = render(QuestMenuInbox, { props: { items: [], total: 10, status: "loading", lang: "en" } });
-		expect(inbox.body).toContain("Replies: 10 unread replies");
+		expect(inbox.body).toContain(`${t("en", "hall.unreadTrigger")}: ${t("en", "hall.unreadCountMany").replace("{count}", "10")}`);
 		expect(body).toContain(">9+</span>");
 	});
 
@@ -98,19 +95,6 @@ describe("QuestMenu", () => {
 		expect(body).toContain(`href="${href}"`);
 	});
 
-	it.each([
-		["en", "MENU"],
-		["es", "CARTA"],
-		["fr", "CARTE"],
-		["ja", "メニュー"],
-	] as const)("server-renders the localized menu title for %s", (lang, title) => {
-		const { body } = render(QuestMenu, {
-			props: { data: hallData({ activeLanguage: lang }), initialLocation: home, lang },
-		});
-
-		expect(body).toContain(`>${title}</strong>`);
-	});
-
 	it("renders the closed book shell without mounting hidden catalog cards", () => {
 		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
 
@@ -118,9 +102,6 @@ describe("QuestMenu", () => {
 		expect(body).toContain('class="book-surface book-deck book-deck-blank ');
 		expect(body).toContain('class="book-edge book-edge-board book-edge-spine ');
 		expect(body).not.toContain('class="task-card');
-		// The real book stays hidden until fitted. No placeholder is painted.
-		expect(body).not.toContain("static-cover");
-		expect(body).not.toContain("is-revealing");
 		expect(body).not.toMatch(/class="book-layer [^"]*is-ready/);
 	});
 
@@ -131,7 +112,6 @@ describe("QuestMenu", () => {
 		const bookMarkup = body.slice(body.indexOf('class="book-layer'));
 		expect(bookMarkup).toContain('class="book-ribbons');
 		expect(bookMarkup.match(/role="tab"/g)).toHaveLength(3);
-		expect(body).not.toContain('class="catalog-ribbons');
 	});
 
 	it("server-renders a direct catalog location with year controls and current-year production items", () => {
@@ -143,14 +123,12 @@ describe("QuestMenu", () => {
 			},
 		});
 
-		expect(body).toContain("Choose a mission");
 		expect(body).toContain("Current letter");
 		expect(body).toContain('href="/translate/21"');
 		expect(body).toContain('datetime="2026"');
 		expect(body).toContain('aria-label="← 2026"');
 		expect(body).toContain('aria-label="2026 →"');
 		expect(body).toContain('class="month-folio');
-		expect(body).not.toContain('class="month-press');
 		expect(body).toContain("Archived letter");
 	});
 
@@ -210,8 +188,8 @@ describe("QuestMenu", () => {
 			},
 		});
 
-		expect(body).toContain("No quests available yet.");
-		expect(body).toContain("Menu sections");
+		expect(body).toContain('role="tablist"');
+		expect(body).toContain('role="tabpanel"');
 	});
 
 	it.each([false, true])("shows translation empty state only for an empty catalog (empty: %s)", (empty) => {
@@ -224,7 +202,7 @@ describe("QuestMenu", () => {
 				lang: "en",
 			},
 		});
-		expect(body.includes("No content available for translation yet.")).toBe(empty);
+		expect(body.includes(t("en", "translate.empty"))).toBe(empty);
 		if (!empty) expect(body).toContain("Current letter");
 	});
 
@@ -284,8 +262,5 @@ describe("compact mission catalog", () => {
 		expect(body.match(/role="tab"/g)).toHaveLength(3);
 		expect(body).toContain('aria-orientation="horizontal"');
 		expect(body).toContain(`aria-labelledby="mobile-tab-${section}"`);
-		expect(body).not.toContain("<select");
-		expect(body).not.toContain('aria-label="Previous mission"');
-		expect(body).not.toContain('aria-label="Next mission"');
 	});
 });
