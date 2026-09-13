@@ -348,6 +348,118 @@
 	padding: 1.2rem 0;
 }
 
+.landing-shell .surface-preview,
+.landing-shell .translation-preview {
+	box-sizing: border-box;
+	min-height: 11.5rem;
+	padding: 1.2rem 0;
+}
+
+.landing-shell .surface-preview {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.landing-shell .preview-label {
+	margin: 0 0 0.55rem;
+	color: var(--landing-muted);
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.landing-shell .surface-message {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.7rem;
+	padding: 0.85rem;
+}
+
+.landing-shell .discord-preview .surface-message {
+	border-left: 3px solid var(--landing-blue);
+	background: rgb(55 82 112 / 7%);
+}
+
+.landing-shell .reddit-preview .surface-message {
+	border: 1px solid rgb(45 41 36 / 16%);
+	border-radius: 0.35rem;
+	background: rgb(255 255 255 / 40%);
+}
+
+.landing-shell .surface-avatar {
+	display: grid;
+	width: 1.8rem;
+	height: 1.8rem;
+	place-items: center;
+	border-radius: 999px;
+	background: var(--landing-blue);
+	color: white;
+	font-family: var(--font-serif);
+	font-size: 0.72rem;
+}
+
+.landing-shell .vote-rail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	color: var(--landing-wine);
+	font-size: 0.9rem;
+	line-height: 1;
+}
+
+.landing-shell .vote-rail small {
+	margin-top: 0.25rem;
+	color: var(--landing-muted);
+	font-size: 0.62rem;
+}
+
+.landing-shell .surface-author,
+.landing-shell .surface-copy {
+	margin: 0;
+}
+
+.landing-shell .surface-author {
+	color: var(--landing-muted);
+	font-size: 0.65rem;
+	font-weight: 700;
+}
+
+.landing-shell .surface-copy {
+	margin-top: 0.3rem;
+	font-size: 0.82rem;
+	line-height: 1.48;
+}
+
+.landing-shell .translation-preview {
+	display: grid;
+	align-content: center;
+	gap: 0.65rem;
+}
+
+.landing-shell .translation-preview section {
+	padding: 0.65rem 0.75rem;
+	border-left: 2px solid var(--landing-wine);
+	background: rgb(124 45 58 / 5%);
+}
+
+.landing-shell .translation-preview .translation-draft {
+	border-left-color: var(--landing-green);
+	background: rgb(65 108 85 / 6%);
+}
+
+.landing-shell .translation-preview .preview-label {
+	margin-bottom: 0.3rem;
+}
+
+.landing-shell .translation-preview section > p:last-child {
+	margin: 0;
+	font-family: var(--font-serif);
+	font-size: 0.74rem;
+	line-height: 1.42;
+}
+
 .landing-shell .message {
 	display: flex;
 	align-items: flex-end;
@@ -405,6 +517,10 @@
 	border-radius: 999px;
 	background: var(--landing-green);
 	color: white;
+}
+
+.landing-shell .feedback-mark-pending {
+	background: var(--landing-olive);
 }
 
 .landing-shell .brief-feedback strong {

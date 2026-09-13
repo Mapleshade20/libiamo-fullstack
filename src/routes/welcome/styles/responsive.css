@@ -149,7 +149,9 @@
 		min-height: 5.75rem;
 	}
 
-	.landing-shell .dialogue {
+	.landing-shell .dialogue,
+	.landing-shell .surface-preview,
+	.landing-shell .translation-preview {
 		min-height: 12.75rem;
 	}
 

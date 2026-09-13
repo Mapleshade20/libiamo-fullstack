@@ -1,17 +1,22 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
-import BookOpen from "@lucide/svelte/icons/book-open";
 import Check from "@lucide/svelte/icons/check";
 import Clock3 from "@lucide/svelte/icons/clock-3";
 import Languages from "@lucide/svelte/icons/languages";
-import Mail from "@lucide/svelte/icons/mail";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessagesSquare from "@lucide/svelte/icons/messages-square";
 import Repeat2 from "@lucide/svelte/icons/repeat-2";
 import Sparkles from "@lucide/svelte/icons/sparkles";
 import { onMount } from "svelte";
 import { base } from "$app/paths";
+import { AGENT_REPLY_DEMO_TASKS } from "$lib/agent-replies/live-demo";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
+import { UI_VARIANT_LABELS } from "$lib/constants";
+import {
+	TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS,
+	TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE,
+	TRANSLATION_EVALUATION_LIVE_DEMO_TASK,
+} from "$lib/translation-evaluation/live-demo-fixture";
 import "./styles/shell.css";
 import "./styles/hero.css";
 import "./styles/sections.css";
@@ -46,42 +51,74 @@ const sentenceSets = [
 	],
 ] as const;
 
+function requiredAgentCase(id: string) {
+	const task = AGENT_REPLY_DEMO_TASKS.find((candidate) => candidate.id === id);
+	if (!task) throw new Error(`Welcome demo case is missing: ${id}`);
+	return task;
+}
+
+function firstItem<T>(items: readonly T[], label: string): T {
+	const item = items[0];
+	if (item === undefined) throw new Error(`Welcome demo content is missing: ${label}`);
+	return item;
+}
+
+const discordCase = requiredAgentCase("discord-planning");
+const redditCase = requiredAgentCase("reddit-advice");
+const translationCase = TRANSLATION_EVALUATION_LIVE_DEMO_TASK;
+const reviewNote = TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE;
+const translationRatings = TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS;
+const discordSeedMessage = firstItem(discordCase.seedMessages, "Discord seed message");
+const redditSeedMessage = firstItem(redditCase.seedMessages, "Reddit seed message");
+const reviewExample = firstItem(reviewNote.examples, "review example");
+
+function excerptFrom(text: string, opening: string): string {
+	const index = text.indexOf(opening);
+	return index >= 0 ? text.slice(index) : text;
+}
+
+const translationSourceExcerpt = excerptFrom(firstItem(translationCase.sourceParagraphs, "translation source"), "它还削弱了");
+const translationDraftExcerpt = excerptFrom(firstItem(translationCase.defaultLearnerParagraphs, "translation first draft"), "It also weakens");
+const translationReferenceExcerpt = excerptFrom(firstItem(translationCase.referenceParagraphs, "translation reference"), "It also undermines");
+
 const practiceCards = [
 	{
-		label: "Today",
-		title: "An invitation you can’t accept",
+		kind: "discord",
+		label: "Discord conversation",
+		title: discordCase.title.replace("Discord · ", ""),
 		number: "01 / 03",
-		platform: "iMessage",
-		duration: "4 min",
-		avatar: "M",
-		incoming: "Would you come to dinner tonight? I’d really love you to meet everyone.",
-		outgoing: "I’d love to, but I promised my sister I’d help her move. Could we plan something next week?",
-		feedbackTitle: "Warm, clear, specific",
-		feedback: "You declined without sounding distant and kept the connection open.",
+		platform: UI_VARIANT_LABELS[discordCase.ui],
+		scope: `${discordCase.maxTurns} turns maximum`,
+		surfaceLabel: "# weekend-plans",
+		messageLabel: "You · now",
+		message: discordSeedMessage.content,
+		statusTitle: "Waiting for Sam",
+		status: "New replies remain visibly unread if you leave the page and return through Quest Hall.",
 	},
 	{
-		label: "This week",
-		title: "Make your case without closing the door",
+		kind: "reddit",
+		label: "Reddit post",
+		title: redditCase.title.replace("Reddit · ", ""),
 		number: "02 / 03",
-		platform: "Discussion",
-		duration: "8 min",
-		avatar: "A",
-		incoming: "The team is leaning toward Monday. Why do you still think we should launch on Friday?",
-		outgoing: "Friday gives us time to watch the rollout, but I’m open to Monday if support coverage is the concern.",
-		feedbackTitle: "Confident, not combative",
-		feedback: "You made the case directly while leaving room for the group to decide.",
+		platform: UI_VARIANT_LABELS[redditCase.ui],
+		scope: `${redditCase.maxTurns} turns maximum`,
+		surfaceLabel: "r/Advice",
+		messageLabel: "Original post · You",
+		message: redditSeedMessage.content,
+		statusTitle: "Thread-aware replies",
+		status: "Reply to the post or target an individual comment; responses stay attached to their branch.",
 	},
 	{
-		label: "Translation",
-		title: "A note that still sounds like you",
+		kind: "translation",
+		label: "Translation workflow",
+		title: translationCase.title,
 		number: "03 / 03",
-		platform: "Translation",
-		duration: "6 min",
-		avatar: "T",
-		incoming: "I didn’t mean to put you on the spot. Take whatever time you need.",
-		outgoing: "Je ne voulais pas te mettre mal à l’aise. Prends tout le temps qu’il te faut.",
-		feedbackTitle: "Natural, considerate phrasing",
-		feedback: "The translation keeps the reassurance without sounding literal or stiff.",
+		platform: "Chinese → English",
+		scope: `${translationCase.sourceParagraphs.length} paragraphs`,
+		source: translationSourceExcerpt,
+		draft: translationDraftExcerpt,
+		statusTitle: `Evaluation · ${translationRatings.overall}`,
+		status: "Correction cards lead into a second draft, then transfer practice for useful expressions.",
 	},
 ] as const;
 
@@ -220,31 +257,55 @@ $effect(() => {
 	<div class="brief-stage">
 		<div class="brief-context">
 			<span>
-				{#if card.label === "Translation"}
+				{#if card.kind === "translation"}
 					<Languages size={15} aria-hidden="true" />
 				{:else}
 					<MessageCircle size={15} aria-hidden="true" />
 				{/if}
 				{card.platform}
 			</span>
-			<span><Clock3 size={15} aria-hidden="true" /> {card.duration}</span>
+			<span><Repeat2 size={15} aria-hidden="true" /> {card.scope}</span>
 		</div>
 
-		<div class="dialogue">
-			<div class="message incoming">
-				<span class="avatar">{card.avatar}</span>
-				<p>{card.incoming}</p>
+		{#if card.kind === "translation"}
+			<div class="translation-preview">
+				<section class="translation-source">
+					<p class="preview-label">Source · 中文</p>
+					<p lang="zh">{card.source}</p>
+				</section>
+				<section class="translation-draft">
+					<p class="preview-label">First draft · English</p>
+					<p lang="en">{card.draft}</p>
+				</section>
 			</div>
-			<div class="message outgoing">
-				<p>{card.outgoing}</p>
+		{:else}
+			<div class="surface-preview {card.kind}-preview">
+				<p class="preview-label">{card.surfaceLabel}</p>
+				<div class="surface-message">
+					{#if card.kind === "discord"}
+						<span class="surface-avatar" aria-hidden="true">Y</span>
+					{:else}
+						<span class="vote-rail" aria-hidden="true">↑<small>1</small></span>
+					{/if}
+					<div>
+						<p class="surface-author">{card.messageLabel}</p>
+						<p class="surface-copy">{card.message}</p>
+					</div>
+				</div>
 			</div>
-		</div>
+		{/if}
 
 		<div class="brief-feedback">
-			<span class="feedback-mark"><Check size={16} strokeWidth={2.4} aria-hidden="true" /></span>
+			<span class:feedback-mark-pending={card.kind !== "translation"} class="feedback-mark">
+				{#if card.kind === "translation"}
+					<Check size={16} strokeWidth={2.4} aria-hidden="true" />
+				{:else}
+					<Clock3 size={15} strokeWidth={2.2} aria-hidden="true" />
+				{/if}
+			</span>
 			<div>
-				<strong>{card.feedbackTitle}</strong>
-				<p>{card.feedback}</p>
+				<strong>{card.statusTitle}</strong>
+				<p>{card.status}</p>
 			</div>
 		</div>
 	</div>
@@ -291,8 +352,8 @@ $effect(() => {
 					</button>
 				</blockquote>
 				<p class="hero-intro">
-					Step into the conversations textbooks leave out, with thoughtful feedback on how your words land and a memory system that helps the right
-					expressions become your own.
+					Choose a daily, weekly, or translation quest. Prepare with objectives and background material, respond in the interface where the situation
+					belongs, then carry useful feedback into scheduled review.
 				</p>
 				<div class="hero-actions">
 					<a class="primary-cta" href={`${base}/sign-up`}>Begin a conversation <ArrowRight size={18} aria-hidden="true" /></a>
@@ -315,20 +376,20 @@ $effect(() => {
 						{@render practiceCardContent(activePractice)}
 					</div>
 				</div>
-				<figcaption>A realistic prompt, your response, and feedback on what the words actually do.</figcaption>
+				<figcaption>Discord weekend planning, a Reddit advice thread, and one complete Chinese-to-English translation.</figcaption>
 			</figure>
 		</section>
 
 		<section class="manifesto" aria-labelledby="manifesto-title">
-			<p class="section-index">The missing middle · 01</p>
+			<p class="section-index">The learning path · 01</p>
 			<div class="manifesto-grid">
-				<h2 id="manifesto-title">Vocabulary gets you to the sentence. <em>Judgment gets you through the room.</em></h2>
+				<h2 id="manifesto-title">A prompt alone is not practice. <em>The setting changes the answer.</em></h2>
 				<div class="manifesto-copy">
 					<p>
-						Real fluency lives in the choices around the words: how direct to be, what the setting expects, and when a technically correct sentence
-						still feels wrong.
+						A Discord exchange, an email, and a public comment thread ask for different language choices. Libiamo gives each quest objectives,
+						background material, and the interface where that conversation belongs.
 					</p>
-					<p>Libiamo gives you a safe place to rehearse those choices before you need them in real life.</p>
+					<p>After the exchange, feedback stays attached to the message that prompted it, and useful expressions can move into Review.</p>
 				</div>
 			</div>
 		</section>
@@ -336,97 +397,97 @@ $effect(() => {
 		<section id="practice" class="feature feature-practice" aria-labelledby="practice-title">
 			<div class="feature-copy">
 				<p class="section-kicker"><span>01</span> Practice in context</p>
-				<h2 id="practice-title">Step into the conversation, not another exercise.</h2>
+				<h2 id="practice-title">Open the quest where the conversation happens.</h2>
 				<p>
-					Every quest gives you a person, a purpose, and a real social surface. Write the message, hold the boundary, make the case, or translate the
-					thought in the language you are learning.
+					Quest Hall recommends daily and weekly scenarios for your active language and level. Conversation quests then open in one of five working
+					interfaces; translation quests follow their own draft-and-revision workflow.
 				</p>
 				<ul class="feature-points">
-					<li><Check size={17} aria-hidden="true" /> Daily and weekly scenarios matched to your level</li>
-					<li><Check size={17} aria-hidden="true" /> Distinct personalities that respond naturally</li>
-					<li><Check size={17} aria-hidden="true" /> Email, chat, forums, fiction comments, and translation</li>
+					<li><Check size={17} aria-hidden="true" /> Objectives, background material, and useful expressions before practice</li>
+					<li><Check size={17} aria-hidden="true" /> Discord, iMessage, Apple Mail, AO3, and Reddit interfaces</li>
+					<li><Check size={17} aria-hidden="true" /> Daily, weekly, and translation catalogs in Quest Hall</li>
 				</ul>
 			</div>
 
-			<div class="scenario-stage" aria-label="Examples of Libiamo practice scenarios">
+			<div class="scenario-stage" aria-label="Working Libiamo practice cases">
 				<article class="scenario-card scenario-mail">
-					<header><Mail size={17} aria-hidden="true" /><span>New message</span><small>Formal</small></header>
-					<p class="scenario-label">To · Sofia Laurent</p>
-					<h3>Re: Project timeline</h3>
-					<p>Thanks for the update. Friday may be difficult on our side; could we agree on Monday morning instead?</p>
+					<header><MessagesSquare size={17} aria-hidden="true" /><span>Discord</span><small>Medium urgency</small></header>
+					<p class="scenario-label">Sam · weekend planning</p>
+					<h3>{discordCase.title.replace("Discord · ", "")}</h3>
+					<p>{discordSeedMessage.content}</p>
 				</article>
 
 				<article class="scenario-card scenario-chat">
-					<header><MessagesSquare size={17} aria-hidden="true" /><span># weekend-plans</span><small>Casual</small></header>
+					<header><MessageCircle size={17} aria-hidden="true" /><span>Reddit</span><small>High urgency</small></header>
 					<div class="mini-chat">
-						<span class="mini-avatar">A</span>
-						<p><strong>Alex</strong> You’re still coming tomorrow, right?</p>
+						<span class="mini-avatar">OP</span>
+						<p><strong>Advice thread</strong> {redditSeedMessage.content}</p>
 					</div>
-					<div class="mini-reply">I might be late, but save me a seat.</div>
+					<div class="mini-reply">Reply to the post or to a specific comment in its branch.</div>
 				</article>
 
 				<article class="scenario-card scenario-forum">
-					<header><BookOpen size={17} aria-hidden="true" /><span>Reading circle</span><small>Thoughtful</small></header>
-					<p class="scenario-label">Reply to a reader</p>
-					<p>“I read the ending differently. To me, her silence feels more protective than uncertain…”</p>
+					<header><Languages size={17} aria-hidden="true" /><span>Translator</span><small>Chinese → English</small></header>
+					<p class="scenario-label">{translationCase.title}</p>
+					<p lang="zh">{translationSourceExcerpt}</p>
 				</article>
 			</div>
 		</section>
 
 		<section id="feedback" class="feature feature-feedback" aria-labelledby="feedback-title">
-			<div class="feedback-stage" aria-label="Example of contextual language feedback">
-				<div class="margin-note margin-note-one" aria-hidden="true">tone</div>
-				<div class="margin-note margin-note-two" aria-hidden="true">register</div>
+			<div class="feedback-stage" aria-label="Translation evaluation from the Crowfeather and Tawnypelt case">
+				<div class="margin-note margin-note-one" aria-hidden="true">collocation</div>
+				<div class="margin-note margin-note-two" aria-hidden="true">lore</div>
 				<article class="editorial-review">
 					<header>
 						<div>
-							<p>Conversation review</p>
-							<h3>Your meaning, made clearer</h3>
+							<p>{translationCase.title}</p>
+							<h3>Evaluation overview</h3>
 						</div>
 						<Sparkles size={22} aria-hidden="true" />
 					</header>
 					<div class="review-block">
-						<p class="review-label">You wrote</p>
-						<p class="review-text">“Send me the file when you finish.”</p>
+						<p class="review-label">Learner’s first draft</p>
+						<p class="review-text" lang="en">“{translationDraftExcerpt}”</p>
 					</div>
 					<div class="review-rule" aria-hidden="true"></div>
 					<div class="review-block">
-						<p class="review-label">A better fit here</p>
-						<p class="review-text suggestion">“Could you send me the file when you’re finished?”</p>
+						<p class="review-label">Reference revision</p>
+						<p class="review-text suggestion" lang="en">“{translationReferenceExcerpt}”</p>
 					</div>
 					<blockquote>
-						The original is grammatical, but it sounds like an order in this workplace conversation. The question form keeps the request clear while
-						softening the power difference.
+						The correction changes “parts in” to “parts of,” uses “relationships” for the characters’ connections, and replaces the literal backstory
+						phrase with “years of lore.”
 					</blockquote>
 					<footer>
-						<span><Check size={15} aria-hidden="true" /> Meaning kept</span>
-						<span><Check size={15} aria-hidden="true" /> Tone adjusted</span>
+						<span><Check size={15} aria-hidden="true" /> Accuracy · {translationRatings.accuracy}</span>
+						<span><Check size={15} aria-hidden="true" /> Naturalness · {translationRatings.naturalness}</span>
 					</footer>
 				</article>
 			</div>
 
 			<div class="feature-copy">
-				<p class="section-kicker"><span>02</span> Understand the effect</p>
-				<h2 id="feedback-title">Feedback that reads the room.</h2>
+				<p class="section-kicker"><span>02</span> Inspect the response</p>
+				<h2 id="feedback-title">Feedback stays attached to the work.</h2>
 				<p>
-					Libiamo looks beyond grammar. It explains how your response may land, points to the exact language choice, and offers an alternative without
-					sanding away your voice.
+					Conversation review comments on the learner’s exact messages, grades the quest objectives, and closes with a summary. Translation review
+					keeps the source, first draft, correction cards, and second draft together.
 				</p>
 				<ul class="feature-points">
-					<li><Check size={17} aria-hidden="true" /> Clear notes on tone, politeness, and intent</li>
-					<li><Check size={17} aria-hidden="true" /> Examples in your target and native languages</li>
-					<li><Check size={17} aria-hidden="true" /> Follow-up questions when you want the reason</li>
+					<li><Check size={17} aria-hidden="true" /> Message-level annotations, objective grades, and a summary</li>
+					<li><Check size={17} aria-hidden="true" /> First draft, correction cards, and a verified second draft</li>
+					<li><Check size={17} aria-hidden="true" /> Follow-up questions on selected feedback</li>
 				</ul>
 			</div>
 		</section>
 
 		<section id="remember" class="feature feature-remember" aria-labelledby="remember-title">
 			<div class="feature-copy">
-				<p class="section-kicker"><span>03</span> Remember naturally</p>
-				<h2 id="remember-title">Keep the phrases worth keeping.</h2>
+				<p class="section-kicker"><span>03</span> Return in review</p>
+				<h2 id="remember-title">A correction becomes something you can recall.</h2>
 				<p>
-					Useful language from your own conversations becomes a personal review deck. Revisit it in natural examples at the moment your memory needs
-					it, then carry it into the next quest.
+					Saved expressions and feedback become Notes with definitions in both languages and four bilingual examples. Review presents one example at a
+					time, then schedules the next encounter from Again, Hard, Good, or Easy.
 				</p>
 				<div class="loop-line" aria-label="Libiamo learning loop">
 					<span>Practice</span><ArrowRight size={16} aria-hidden="true" /><span>Understand</span><ArrowRight size={16} aria-hidden="true" />
@@ -438,19 +499,19 @@ $effect(() => {
 				<div class="review-card-back" aria-hidden="true"></div>
 				<article class="study-card">
 					<header>
-						<span><Languages size={17} aria-hidden="true" /> From your last conversation</span>
+						<span><Languages size={17} aria-hidden="true" /> From translation feedback</span>
 						<Repeat2 size={18} aria-hidden="true" />
 					</header>
 					<p class="study-kicker">English · expression</p>
-					<h3>to keep someone in the loop</h3>
-					<p class="definition">to continue giving someone the information they need</p>
+					<h3>{reviewNote.vocab}</h3>
+					<p class="definition"><span lang="zh">{reviewNote.nativeDefinition}</span><br>{reviewNote.targetDefinition}</p>
 					<div class="example">
 						<span>“</span>
-						<p>I’ll keep you in the loop as soon as the schedule changes.</p>
+						<p><span lang="zh">{reviewExample.nativeText}</span><br>{reviewExample.targetText}</p>
 					</div>
 					<footer>
-						<span><Clock3 size={15} aria-hidden="true" /> Next review · 4 days</span>
-						<span class="mastery">Growing</span>
+						<span><Clock3 size={15} aria-hidden="true" /> Scheduled review</span>
+						<span class="mastery">{reviewNote.examples.length} examples</span>
 					</footer>
 				</article>
 			</div>
@@ -460,7 +521,7 @@ $effect(() => {
 			<div class="closing-mark" aria-hidden="true"><WineGlassIcon width={88} height={88} /></div>
 			<p class="eyebrow"><span></span> Your next conversation starts here</p>
 			<h2 id="closing-title">Raise your next sentence.</h2>
-			<p>Practice with purpose, understand the response, and speak with more of yourself each time.</p>
+			<p>Choose a daily or weekly conversation quest, or work through a complete translation and revision cycle.</p>
 			<a class="primary-cta" href={`${base}/sign-up`}>Start learning <ArrowRight size={18} aria-hidden="true" /></a>
 		</section>
 	</main>
@@ -472,7 +533,7 @@ $effect(() => {
 					<WineGlassIcon width={30} height={30} />
 					<span>Libiamo</span>
 				</a>
-				<p>Language through living conversation.</p>
+				<p>Conversation quests, translation practice, and scheduled review.</p>
 			</div>
 			<div class="footer-links">
 				<a href="#practice">Practice</a>
@@ -480,7 +541,7 @@ $effect(() => {
 				<a href="#remember">Remember</a>
 				<a href={`${base}/sign-in`}>Sign in</a>
 			</div>
-			<p class="footer-note">Made for the conversations that matter.</p>
+			<p class="footer-note">English · Español · Français · 日本語</p>
 		</div>
 	</footer>
 </div>
