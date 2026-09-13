@@ -17,8 +17,8 @@ describe("(app) layout +layout.server", () => {
 		});
 	});
 
-	it("redirects to sign-in when user is missing", async () => {
-		await expect(load({ locals: { user: null }, url: new URL("https://libiamo.test/archive") } as any)).rejects.toMatchObject({
+	it.each(["/archive", "/review", "/profile", "/task/1", "/translate/1"])("redirects signed-out visits to %s through sign-in", async (path) => {
+		await expect(load({ locals: { user: null }, url: new URL(`https://libiamo.test${path}`) } as any)).rejects.toMatchObject({
 			status: 302,
 			location: "/sign-in",
 		});

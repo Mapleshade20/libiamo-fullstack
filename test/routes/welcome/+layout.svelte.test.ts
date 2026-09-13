@@ -10,9 +10,11 @@ import {
 import WelcomeLayout from "$routes/welcome/+layout.svelte";
 
 describe("welcome homepage", () => {
+	const displayClock = { now: 1_757_736_000_000, timeZone: "UTC" };
+
 	it("keeps the Libiamo lyric hero and renders maintained product cases", () => {
 		const children = createRawSnippet(() => ({ render: () => "" }));
-		const { body } = render(WelcomeLayout, { props: { children } });
+		const { body } = render(WelcomeLayout, { props: { children, data: { displayClock } } });
 		const conversationPrompts = AGENT_REPLY_DEMO_TASKS.flatMap((task) => task.seedMessages.map((message) => message.content));
 
 		expect(body).toContain('<h1 id="hero-title">Libiamo</h1>');
@@ -27,5 +29,19 @@ describe("welcome homepage", () => {
 		expect(body).toContain(TRANSLATION_EVALUATION_LIVE_DEMO_TASK.title);
 		expect(body).toContain(TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE.vocab);
 		expect(body).toContain(`Accuracy · ${TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS.accuracy}`);
+	});
+
+	it("sends signed-in homepage actions to the learner app", () => {
+		const children = createRawSnippet(() => ({ render: () => "" }));
+		const { body } = render(WelcomeLayout, {
+			props: { children, data: { displayClock, viewer: { name: "Alice" } } },
+		});
+
+		expect(body).toContain('href="/profile">Profile</a>');
+		expect(body).toContain('href="/">Quest Hall</a>');
+		expect(body).toContain("Open Quest Hall");
+		expect(body).toContain("Return to Quest Hall");
+		expect(body).not.toContain('href="/sign-in"');
+		expect(body).not.toContain('href="/sign-up"');
 	});
 });

@@ -48,7 +48,7 @@ services:
       TZ: "${TZ:-Asia/Shanghai}"
 
       # adapter-node builds every request URL from ORIGIN. Bare origin, no path.
-      ORIGIN: "${ORIGIN:?ORIGIN is required, e.g. https://app.libiamo.net}"
+      ORIGIN: "${ORIGIN:?ORIGIN is required, e.g. https://libiamo.net}"
 
       # Set explicitly in .env.docker: either the bundled database (host
       # `database`) or an external Postgres.

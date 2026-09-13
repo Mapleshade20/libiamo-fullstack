@@ -22,7 +22,7 @@ import "./styles/hero.css";
 import "./styles/sections.css";
 import "./styles/responsive.css";
 
-let { children } = $props();
+let { children, data } = $props();
 
 const sentenceSets = [
 	[
@@ -328,8 +328,13 @@ $effect(() => {
 			</nav>
 
 			<div class="account-links">
-				<a class="sign-in-link" href={`${base}/sign-in`}>Sign in</a>
-				<a class="header-cta" href={`${base}/sign-up`}>Start learning</a>
+				{#if data.viewer}
+					<a class="sign-in-link" href={`${base}/profile`}>Profile</a>
+					<a class="header-cta" href={`${base}/`}>Quest Hall</a>
+				{:else}
+					<a class="sign-in-link" href={`${base}/sign-in`}>Sign in</a>
+					<a class="header-cta" href={`${base}/sign-up`}>Start learning</a>
+				{/if}
 			</div>
 		</div>
 	</header>
@@ -356,7 +361,9 @@ $effect(() => {
 					belongs, then carry useful feedback into scheduled review.
 				</p>
 				<div class="hero-actions">
-					<a class="primary-cta" href={`${base}/sign-up`}>Begin a conversation <ArrowRight size={18} aria-hidden="true" /></a>
+					<a class="primary-cta" href={data.viewer ? `${base}/` : `${base}/sign-up`}>
+						{data.viewer ? "Open Quest Hall" : "Begin a conversation"} <ArrowRight size={18} aria-hidden="true" />
+					</a>
 					<a class="text-cta" href="#practice">See how it works <span aria-hidden="true">↓</span></a>
 				</div>
 			</div>
@@ -522,7 +529,9 @@ $effect(() => {
 			<p class="eyebrow"><span></span> Your next conversation starts here</p>
 			<h2 id="closing-title">Raise your next sentence.</h2>
 			<p>Choose a daily or weekly conversation quest, or work through a complete translation and revision cycle.</p>
-			<a class="primary-cta" href={`${base}/sign-up`}>Start learning <ArrowRight size={18} aria-hidden="true" /></a>
+			<a class="primary-cta" href={data.viewer ? `${base}/` : `${base}/sign-up`}>
+				{data.viewer ? "Return to Quest Hall" : "Start learning"} <ArrowRight size={18} aria-hidden="true" />
+			</a>
 		</section>
 	</main>
 
@@ -539,7 +548,12 @@ $effect(() => {
 				<a href="#practice">Practice</a>
 				<a href="#feedback">Feedback</a>
 				<a href="#remember">Remember</a>
-				<a href={`${base}/sign-in`}>Sign in</a>
+				{#if data.viewer}
+					<a href={`${base}/`}>Quest Hall</a>
+					<a href={`${base}/profile`}>Profile</a>
+				{:else}
+					<a href={`${base}/sign-in`}>Sign in</a>
+				{/if}
 			</div>
 			<p class="footer-note">English · Español · Français · 日本語</p>
 		</div>

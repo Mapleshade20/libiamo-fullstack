@@ -41,6 +41,7 @@ const appItems: NavItem[] = $derived([
 	{ href: `${base}/review`, label: "Review" },
 	{ href: `${base}/`, label: "Quests", exact: true, sectionPaths: [`${base}/task`, `${base}/translate`] },
 	{ href: `${base}/archive`, label: "Archive" },
+	{ href: `${base}/welcome`, label: "About" },
 	...(user.role !== "admin" ? [{ href: `${base}/contribute`, label: "Contribute" }] : []),
 	...(user.role === "admin" ? [{ href: `${base}/admin/templates`, label: "Admin" }] : []),
 ]);
