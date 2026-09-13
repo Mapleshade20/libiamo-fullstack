@@ -61,7 +61,7 @@ unit.
 It then stops and lists whatever still says `CHANGE_ME`. Fill those in:
 
 ```sh
-$EDITOR ~/.config/libiamo/app.env    # ORIGIN, SMTP_*, OPENAI_API_KEY
+$EDITOR ~/.config/libiamo/app.env    # ORIGIN, OAuth, SMTP_*, OPENAI_API_KEY
 systemctl --user start libiamo-app
 ```
 
@@ -346,6 +346,8 @@ database.
 | `POSTGRES_PASSWORD` | yes | **secret.** Must match `DATABASE_URL`. |
 | `RUN_MIGRATIONS` | – | Default `true`. Set `false` to migrate out of band. |
 | `BETTER_AUTH_SECRET` | yes | **secret.** Changing it logs everyone out. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
 | `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. |
 | `OPENAI_API_KEY` | yes | **secret.** |
 | `OPENAI_BASE_URL` / `OPENAI_MODEL` | yes | OpenAI-compatible endpoint. |
