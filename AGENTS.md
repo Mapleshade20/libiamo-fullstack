@@ -80,6 +80,7 @@ The interface should feel refined, calm, tactile, and highly polished, with appr
 - Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
 - Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
     - Time-dependent tests: use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
+    - Do not assert that rendered pages contain or omit specific editorial or UI copy solely to freeze wording. Test semantic structure, navigation targets, accessibility attributes, state-dependent behavior, and data relationships instead. Assert exact text only when the wording is itself a product or protocol contract.
     - Do not build prompt tests from piles of `toContain()` assertions against fixed prose. Test message roles/order, structured JSON payloads, schemas, and behavioral invariants instead; review qualitative wording through the live-model harness.
     - Do not assert that prompts contain arbitrary individual words; prompt tests should verify structure, serialized inputs, and behavioral contracts rather than brittle wording.
 - Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).

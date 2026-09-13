@@ -1,10 +1,16 @@
 import crypto from "node:crypto";
+import { redirect } from "@sveltejs/kit";
+import { base } from "$app/paths";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
+	if (!event.locals.user && event.url.pathname === `${base}/`) {
+		throw redirect(302, `${base}/welcome`);
+	}
+
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 

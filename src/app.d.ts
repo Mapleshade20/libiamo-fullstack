@@ -5,6 +5,7 @@ declare global {
 	namespace App {
 		interface PageData {
 			questMenu?: QuestMenuRouteData;
+			viewer?: { name: string } | null;
 		}
 		interface Locals {
 			user?: typeof auth.$Infer.Session.user;

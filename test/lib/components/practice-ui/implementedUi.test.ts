@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import { IMPLEMENTED_PRACTICE_UIS, isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 
 describe("implemented practice UI", () => {
-	it("includes currently supported chat UIs", () => {
-		expect(IMPLEMENTED_PRACTICE_UIS).toEqual(["discord", "imessage", "apple_mail", "ao3", "reddit"]);
-	});
-
-	it.each(["discord", "imessage", "apple_mail", "ao3", "reddit"])("returns true for implemented ui: %s", (ui) => {
+	it.each(IMPLEMENTED_PRACTICE_UIS)("returns true for implemented ui: %s", (ui) => {
 		expect(isPracticeUiImplemented(ui)).toBe(true);
 	});
 

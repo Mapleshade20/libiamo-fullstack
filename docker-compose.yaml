@@ -48,13 +48,19 @@ services:
       TZ: "${TZ:-Asia/Shanghai}"
 
       # adapter-node builds every request URL from ORIGIN. Bare origin, no path.
-      ORIGIN: "${ORIGIN:?ORIGIN is required, e.g. https://app.libiamo.net}"
+      ORIGIN: "${ORIGIN:?ORIGIN is required, e.g. https://libiamo.net}"
 
       # Set explicitly in .env.docker: either the bundled database (host
       # `database`) or an external Postgres.
       DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
 
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}"
+
+      # Each provider stays disabled unless both its ID and secret are set.
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID:-}"
+      GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET:-}"
 
       SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
       SMTP_PORT: "${SMTP_PORT:-465}"

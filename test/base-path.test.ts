@@ -28,6 +28,7 @@ interface Rule {
 }
 
 const isSvelte = (file: string) => file.endsWith(".svelte");
+const isMarkup = (file: string) => isSvelte(file) || file.endsWith(".html");
 const isScript = (file: string) => file.endsWith(".ts");
 const isAny = () => true;
 
@@ -36,7 +37,7 @@ const RULES: Rule[] = [
 		name: "href",
 		// href="/x" but not href="{base}/x". Also catches href="/".
 		pattern: /\bhref="\/(?!\/)/g,
-		appliesTo: isSvelte,
+		appliesTo: isMarkup,
 		hint: 'use href="{base}/..."',
 	},
 	{
@@ -49,13 +50,13 @@ const RULES: Rule[] = [
 	{
 		name: "form action",
 		pattern: /\baction="\/(?!\/)/g,
-		appliesTo: isSvelte,
+		appliesTo: isMarkup,
 		hint: 'use action="{base}/..."',
 	},
 	{
 		name: "asset src",
 		pattern: /\bsrc="\/(?!\/)/g,
-		appliesTo: isSvelte,
+		appliesTo: isMarkup,
 		hint: 'use src="{base}/..." for app-served files',
 	},
 	{
@@ -84,7 +85,7 @@ async function findSourceFiles(directory: string): Promise<string[]> {
 		entries.map((entry) => {
 			const path = resolve(directory, entry.name);
 			if (entry.isDirectory()) return findSourceFiles(path);
-			return entry.name.endsWith(".svelte") || entry.name.endsWith(".ts") ? [path] : [];
+			return entry.name.endsWith(".svelte") || entry.name.endsWith(".ts") || entry.name.endsWith(".html") ? [path] : [];
 		}),
 	);
 	return files.flat();
@@ -132,6 +133,8 @@ describe("base path discipline", () => {
 		it.each([
 			['<a href="/review">x</a>', "svelte", true],
 			['<a href="/">x</a>', "svelte", true],
+			['<a href="/">x</a>', "html", true],
+			['<img src="/logo.svg" alt="">', "html", true],
 			["<a href={`/task/${id}`}>x</a>", "svelte", true],
 			['<form action="/?/switchLanguage">', "svelte", true],
 			['await fetch("/api/unread")', "svelte", true],
@@ -139,12 +142,13 @@ describe("base path discipline", () => {
 			['redirect(302, "/sign-in")', "ts", true],
 			["redirect(303, `/translate/${id}`)", "ts", true],
 		])("flags %j", (line, kind, expected) => {
-			const file = kind === "svelte" ? "routes/x/+page.svelte" : "routes/x/+page.server.ts";
+			const file = kind === "svelte" ? "routes/x/+page.svelte" : kind === "html" ? "error.html" : "routes/x/+page.server.ts";
 			expect(findViolations(file, line).length > 0).toBe(expected);
 		});
 
 		it.each([
 			['<a href="{base}/review">x</a>', "svelte"],
+			['<a href="%libiamo.base%/">x</a>', "html"],
 			["<a href={`${base}/task/${id}`}>x</a>", "svelte"],
 			['<a href="https://example.com">x</a>', "svelte"],
 			['<a href="#section">x</a>', "svelte"],
@@ -158,7 +162,7 @@ describe("base path discipline", () => {
 			// Cookie paths are not navigation targets.
 			['defaultCookieAttributes: { path: "/" }', "ts"],
 		])("allows %j", (line, kind) => {
-			const file = kind === "svelte" ? "routes/x/+page.svelte" : "routes/x/+page.server.ts";
+			const file = kind === "svelte" ? "routes/x/+page.svelte" : kind === "html" ? "error.html" : "routes/x/+page.server.ts";
 			expect(findViolations(file, line)).toEqual([]);
 		});
 

@@ -1,15 +1,27 @@
 <script lang="ts">
 import { onMount, setContext } from "svelte";
 import { onNavigate } from "$app/navigation";
+import { page } from "$app/state";
 import "./layout.css";
 import favicon from "$lib/assets/favicon.svg";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { resolvePageTransition } from "$lib/client/page-transition";
 import { DISPLAY_CLOCK_CONTEXT } from "$lib/display-clock";
+import { resolvePageDocumentLanguage } from "$lib/document-language";
 
 let { children, data } = $props();
 setContext(DISPLAY_CLOCK_CONTEXT, () => data.displayClock);
 let transitionSequence = 0;
+let documentLanguage = $derived(
+	resolvePageDocumentLanguage({
+		routeId: page.error === null ? page.route.id : null,
+		learnerDocumentLanguage: data.learnerDocumentLanguage,
+	}),
+);
+
+$effect(() => {
+	document.documentElement.lang = documentLanguage;
+});
 
 onMount(() => {
 	void syncBrowserTimeZone();

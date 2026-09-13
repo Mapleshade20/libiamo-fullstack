@@ -4,6 +4,10 @@
  */
 
 import type { CorrectionCardData, DiffPart, EvaluationData, LocalCardState, TransferNoteFixture } from "$lib/components/translate-evaluation/types";
+import {
+	TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS,
+	TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE,
+} from "$lib/translation-evaluation/live-demo-fixture";
 
 const ANSWER_0 =
 	"It also weakens the crucial parts in their existing stories and bonds, rewriting the whole backstory going for years, for a ship we have never asked for.";
@@ -220,12 +224,7 @@ export const DEMO_CARDS_WITH_WARNING: CorrectionCardData[] = [
 export const DEMO_EVALUATION: EvaluationData = {
 	overallCommentary:
 		"整体来看，您的译文准确传达了原文的批判性和略带激动的语气，核心意思都表达到位了。但存在几处中式英语痕迹、一处拼写错误以及少数搭配不当，使得行文不够地道。重点注意：避免直译中文的主谓结构（如「XX的特点是……」），多积累英文中「人/角色作主语 + 被动/动态动词」的表达习惯。",
-	ratings: {
-		accuracy: "A",
-		naturalness: "B",
-		grammar: "B",
-		overall: "B",
-	},
+	ratings: TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS,
 	cards: DEMO_CARDS,
 	firstDraft: [DRAFT_P0, DRAFT_P1, DRAFT_P2].join("\n\n"),
 	firstDraftParagraphs: [DRAFT_P0, DRAFT_P1, DRAFT_P2],
@@ -320,16 +319,8 @@ export const DEMO_TRANSFER_NOTES: TransferNoteFixture[] = [
 	},
 	{
 		id: 2,
-		vocab: "lore",
-		targetDefinition: "traditional knowledge and stories about a subject, especially a fictional world",
-		nativeDefinition: "（尤指虚构世界的）背景知识、传说与设定",
+		...TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE,
 		queueKind: "review",
-		examples: [
-			{ nativeText: "他们重写了多年积累的世界观设定。", targetText: "They rewrote years of lore." },
-			{ nativeText: "这款游戏有丰富而复杂的背景设定。", targetText: "The game has rich and complicated lore." },
-			{ nativeText: "粉丝们喜欢讨论这个系列的设定。", targetText: "Fans love discussing the lore of the series." },
-			{ nativeText: "我需要先补一下背景设定。", targetText: "I need to catch up on the lore first." },
-		],
 	},
 ];
 

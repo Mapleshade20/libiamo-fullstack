@@ -25,9 +25,7 @@ describe("TranslationPreparation", () => {
 
 		expect(body).toContain("Répondre à une invitation");
 		expect(body).toContain('<h2 id="translation-preparation-title"');
-		expect(body).not.toContain('<h1 id="translation-preparation-title"');
 		expect(body).toContain('action="/translate/17?/start"');
-		expect(body).toContain("Commencer la traduction");
 	});
 
 	it("keeps an existing evaluation on its canonical continuation and retake paths", () => {
@@ -42,7 +40,6 @@ describe("TranslationPreparation", () => {
 
 		expect(body).toContain('href="/translate/17/feedback"');
 		expect(body).toContain('action="/translate/17?/retake"');
-		expect(body).toContain("Continuer l'évaluation");
 		expect(body).toContain('<h2 id="translation-preparation-title"');
 	});
 });

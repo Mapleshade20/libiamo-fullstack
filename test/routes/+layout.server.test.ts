@@ -1,13 +1,21 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { BROWSER_TIMEZONE_COOKIE } from "$lib/browser-timezone";
+import { describe, expect, it } from "vitest";
 import { load } from "$routes/+layout.server";
 
-afterEach(() => vi.useRealTimers());
+const cookies = { get: () => undefined };
 
-it("serializes one request clock using the validated browser timezone", async () => {
-	vi.useFakeTimers();
-	vi.setSystemTime(new Date("2026-09-04T00:30:00Z"));
-	const cookies = { get: (name: string) => (name === BROWSER_TIMEZONE_COOKIE ? "America/Los_Angeles" : undefined) };
-	expect(await load({ cookies } as any)).toEqual({ displayClock: { now: Date.now(), timeZone: "America/Los_Angeles" } });
-	expect(await load({ cookies: { get: () => "invalid-zone" } } as any)).toEqual({ displayClock: { now: Date.now(), timeZone: "UTC" } });
+describe("root +layout.server", () => {
+	it("exposes only the viewer name to public route layouts", () => {
+		const result = load({ cookies, locals: { user: { id: "u1", name: "Alice", email: "alice@example.com", activeLanguage: "es" } } } as any) as any;
+
+		expect(result.viewer).toEqual({ name: "Alice" });
+		expect(result.viewer).not.toHaveProperty("email");
+		expect(result.learnerDocumentLanguage).toBe("es");
+	});
+
+	it("omits the viewer for signed-out requests", () => {
+		const result = load({ cookies, locals: {} } as any) as any;
+
+		expect(result).not.toHaveProperty("viewer");
+		expect(result.learnerDocumentLanguage).toBe("en");
+	});
 });

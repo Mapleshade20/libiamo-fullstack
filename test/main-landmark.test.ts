@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const sourceRoot = resolve("src");
 const mainOwners = new Map([
+	["routes/+error.svelte", 1],
 	["routes/(admin)/+layout.svelte", 1],
 	["routes/(app)/+layout.svelte", 2],
+	["routes/welcome/+layout.svelte", 1],
 ]);
 
 async function findSvelteFiles(directory: string): Promise<string[]> {
@@ -21,7 +23,7 @@ async function findSvelteFiles(directory: string): Promise<string[]> {
 }
 
 describe("main landmark ownership", () => {
-	it("only lets route layouts render main landmarks", async () => {
+	it("only lets route shells render main landmarks", async () => {
 		const actualOwners = new Map<string, number>();
 
 		for (const file of await findSvelteFiles(sourceRoot)) {

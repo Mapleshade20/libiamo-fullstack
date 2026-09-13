@@ -2,7 +2,7 @@ import type { Handle } from "@sveltejs/kit";
 import { sequence } from "@sveltejs/kit/hooks";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { isLanguageCode } from "$lib/constants";
+import { applyDocumentLanguageToHtml, resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/document-language";
 import { ensureAgentReplyWorker } from "$lib/server/agent-replies/boot";
 import { auth } from "$lib/server/auth/auth";
 import { sql } from "$lib/server/db";
@@ -30,10 +30,13 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 };
 
 const handleDocumentLanguage: Handle = ({ event, resolve }) => {
-	const activeLanguage = event.locals.user?.activeLanguage;
-	const documentLanguage = isLanguageCode(activeLanguage) ? activeLanguage : "en";
+	const learnerDocumentLanguage = resolveLearnerDocumentLanguage(event.locals.user?.activeLanguage);
+	const documentLanguage = resolvePageDocumentLanguage({
+		routeId: event.route.id,
+		learnerDocumentLanguage,
+	});
 	return resolve(event, {
-		transformPageChunk: ({ html }) => html.replace('<html lang="en">', `<html lang="${documentLanguage}">`),
+		transformPageChunk: ({ html }) => applyDocumentLanguageToHtml(html, documentLanguage),
 	});
 };
 

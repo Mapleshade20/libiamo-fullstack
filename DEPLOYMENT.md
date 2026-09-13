@@ -61,11 +61,11 @@ unit.
 It then stops and lists whatever still says `CHANGE_ME`. Fill those in:
 
 ```sh
-$EDITOR ~/.config/libiamo/app.env    # ORIGIN, SMTP_*, OPENAI_API_KEY
+$EDITOR ~/.config/libiamo/app.env    # ORIGIN, OAuth, SMTP_*, OPENAI_API_KEY
 systemctl --user start libiamo-app
 ```
 
-`ORIGIN` must be your real public URL (`https://app.libiamo.net`) before you
+`ORIGIN` must be your real public URL (`https://libiamo.net`) before you
 expose the app — auth and email links are built from it.
 
 ### Operating
@@ -135,7 +135,7 @@ are too small here, so these need setting explicitly.
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name app.libiamo.net;
+    server_name libiamo.net;
 
     # ssl_certificate ... ;
 
@@ -161,7 +161,7 @@ server {
 ### Caddy
 
 ```caddy
-app.libiamo.net {
+libiamo.net {
     reverse_proxy 127.0.0.1:3000
 }
 ```
@@ -174,6 +174,50 @@ not otherwise exist, which is the opposite of what long LLM calls need.
 
 `ORIGIN` must match the public URL exactly (bare origin, no trailing path). A
 mismatch shows up as rejected form posts and broken email links.
+
+### Canonical-host cutover
+
+To move production from `app.libiamo.net` to `libiamo.net`, change the systems
+that identify or terminate the public origin in this order:
+
+1. Add the apex DNS record or Cloudflare Tunnel public hostname for
+   `libiamo.net`, provision its TLS certificate, and make the reverse proxy serve
+   the app for that host. Keep `BASE_PATH` empty.
+2. Before switching traffic, add the new OAuth callbacks:
+   `https://libiamo.net/api/auth/callback/google` and
+   `https://libiamo.net/api/auth/callback/github`. Update the providers' homepage
+   or application URL to `https://libiamo.net/welcome`, and add
+   `https://libiamo.net` as a Google authorized JavaScript origin if that field is
+   in use. Google redirect URIs are exact matches; GitHub OAuth Apps support
+   several callback URLs, so the old one can remain during the transition.
+3. Set the runtime `ORIGIN=https://libiamo.net` and restart the app. This changes
+   Better Auth's own origin, callback URLs, and verification/reset links. Keep the
+   existing `BETTER_AUTH_SECRET`, OAuth client IDs/secrets, and database.
+4. Keep a proxied DNS record for `app.libiamo.net` and add a permanent Cloudflare
+   redirect to `https://libiamo.net`, preserving the path and query string. Remove
+   the old OAuth callbacks only after the redirect has been verified.
+
+Better Auth cookies are host-only in this project. A cookie issued by
+`app.libiamo.net` is therefore not sent to `libiamo.net`; existing users will sign
+in once on the new host. Do not enable cross-subdomain cookies just for this
+one-time move.
+
+Google's production OAuth policy expects the public homepage to describe the app
+and link to its privacy policy and terms. `/welcome` supplies the product
+description, but this repository does not yet have public privacy or terms
+routes. Publish those pages and set their consent-screen URLs before requesting
+or renewing Google production verification.
+
+SMTP settings do not change when `SMTP_FROM` already uses a verified sender such
+as `@libiamo.net` (or an unrelated mail subdomain). If it uses
+`@app.libiamo.net`, register the replacement sender in Alibaba DirectMail first
+and publish the SPF, DKIM, DMARC, ownership, and MX records it provides. Never
+replace an existing SPF record with a second one; merge authorized senders.
+
+After the cutover, test password sign-in, both OAuth providers, email
+verification, password reset, direct protected-route redirects, and the old-host
+redirect. Also update uptime checks, analytics, search-console properties, and
+any external allowlists that explicitly contain the old hostname.
 
 ---
 
@@ -302,6 +346,8 @@ database.
 | `POSTGRES_PASSWORD` | yes | **secret.** Must match `DATABASE_URL`. |
 | `RUN_MIGRATIONS` | – | Default `true`. Set `false` to migrate out of band. |
 | `BETTER_AUTH_SECRET` | yes | **secret.** Changing it logs everyone out. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
 | `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. |
 | `OPENAI_API_KEY` | yes | **secret.** |
 | `OPENAI_BASE_URL` / `OPENAI_MODEL` | yes | OpenAI-compatible endpoint. |
