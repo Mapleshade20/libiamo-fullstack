@@ -5,17 +5,11 @@ import { isQuestMenuPath } from "$lib/client/page-transition";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
 import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
-import { isLanguageCode } from "$lib/constants";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
 let questMenuRoute = $derived(isQuestMenuPath(page.url.pathname) ? page.data.questMenu : null);
 let quotaNotification = $state<ActionNotificationContent | null>(null);
-
-$effect(() => {
-	if (!browser) return;
-	document.documentElement.lang = isLanguageCode(data.user.activeLanguage) ? data.user.activeLanguage : "en";
-});
 
 // Check if current route is a session page (fullscreen immersive mode)
 let isSessionPage = $derived(page.url.pathname.includes("/session"));

@@ -52,7 +52,7 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 	<meta name="robots" content="noindex, nofollow">
 </svelte:head>
 
-<div class="error-shell">
+<div class="error-shell" lang="en">
 	<header class="error-header">
 		<a href={`${base}/welcome`} aria-label="Libiamo homepage">
 			<WineGlassIcon width={32} height={32} />

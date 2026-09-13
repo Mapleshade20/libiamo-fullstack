@@ -213,7 +213,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	html {
+	html.welcome-scroll-active {
 		scroll-behavior: auto;
 	}
 

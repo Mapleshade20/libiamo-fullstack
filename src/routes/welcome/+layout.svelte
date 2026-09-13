@@ -8,6 +8,7 @@ import MessagesSquare from "@lucide/svelte/icons/messages-square";
 import Repeat2 from "@lucide/svelte/icons/repeat-2";
 import Sparkles from "@lucide/svelte/icons/sparkles";
 import { onMount } from "svelte";
+import { afterNavigate } from "$app/navigation";
 import { base } from "$app/paths";
 import { AGENT_REPLY_DEMO_TASKS } from "$lib/agent-replies/live-demo";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
@@ -125,6 +126,7 @@ const practiceCards = [
 type PracticeCard = (typeof practiceCards)[number];
 
 const practiceCardTransitionMs = 480;
+const welcomeScrollClass = "welcome-scroll-active";
 
 let activeSentenceIndex = $state(0);
 let activeLanguageIndex = $state(0);
@@ -139,6 +141,10 @@ let nextLyricTranslation = $derived(sentenceSets[activeSentenceIndex][(activeLan
 let activePractice = $derived(practiceCards[activePracticeIndex]);
 let nextPractice = $derived(practiceCards[(activePracticeIndex + 1) % practiceCards.length]);
 let followingPractice = $derived(practiceCards[(activePracticeIndex + 2) % practiceCards.length]);
+
+afterNavigate(() => {
+	document.documentElement.classList.add(welcomeScrollClass);
+});
 
 function cycleLyricLanguage() {
 	activeLanguageIndex = (activeLanguageIndex + 1) % sentenceSets[0].length;
@@ -207,6 +213,7 @@ onMount(() => {
 	};
 	motionQuery.addEventListener("change", handleMotionChange);
 	return () => {
+		document.documentElement.classList.remove(welcomeScrollClass);
 		motionQuery.removeEventListener("change", handleMotionChange);
 		if (practiceCardTimer !== undefined) window.clearTimeout(practiceCardTimer);
 	};
@@ -311,9 +318,9 @@ $effect(() => {
 	</div>
 {/snippet}
 
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" href="#main-content" lang="en">Skip to content</a>
 
-<div class="landing-shell">
+<div class="landing-shell" lang="en">
 	<header class="site-header">
 		<div class="header-inner">
 			<a class="brand" href={`${base}/welcome`} aria-label="Libiamo home">

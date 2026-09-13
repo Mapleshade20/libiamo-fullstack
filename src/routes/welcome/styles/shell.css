@@ -1,4 +1,4 @@
-html {
+html.welcome-scroll-active {
 	scroll-behavior: smooth;
 }
 

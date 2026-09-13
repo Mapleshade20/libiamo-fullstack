@@ -23,6 +23,7 @@ describe("root error page", () => {
 		const { body, head } = render(ErrorPage);
 
 		expect(head).toContain("404 · Page not found · Libiamo");
+		expect(body).toMatch(/<div class="error-shell[^"]*" lang="en">/);
 		expect(body).toContain("This page has left the table.");
 		expect(body).toContain('href="/welcome">Go to the homepage');
 		expect(body).toContain('href="/sign-in">Sign in</a>');
@@ -46,6 +47,7 @@ describe("root error page", () => {
 
 		expect(fallback).toContain("%sveltekit.status%");
 		expect(fallback).toContain("%sveltekit.error.message%");
+		expect(fallback).toContain('href="%libiamo.base%/"');
 		expect(fallback).toContain('role="alert"');
 	});
 });

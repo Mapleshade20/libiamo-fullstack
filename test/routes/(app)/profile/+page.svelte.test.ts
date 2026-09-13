@@ -5,6 +5,7 @@ import ProfilePage from "$routes/(app)/profile/+page.svelte";
 
 const data = {
 	displayClock: { now: 1788480000000, timeZone: "UTC" },
+	learnerDocumentLanguage: "fr",
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {

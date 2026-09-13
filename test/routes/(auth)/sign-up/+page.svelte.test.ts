@@ -4,6 +4,7 @@ import SignUpPage from "$routes/(auth)/sign-up/+page.svelte";
 
 const data = {
 	displayClock: { now: 1788480000000, timeZone: "UTC" },
+	learnerDocumentLanguage: "en",
 	socialProviders: ["google" as const, "github" as const],
 	socialAuthError: null,
 };
