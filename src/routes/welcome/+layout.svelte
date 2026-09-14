@@ -567,15 +567,9 @@ $effect(() => {
 				<p>Conversation quests, translation practice, and scheduled review.</p>
 			</div>
 			<div class="footer-links">
-				<a href="#practice">Practice</a>
-				<a href="#feedback">Feedback</a>
-				<a href="#remember">Remember</a>
-				{#if data.viewer}
-					<a href={`${base}/`}>Quest Hall</a>
-					<a href={`${base}/profile`}>Profile</a>
-				{:else}
-					<a href={`${base}/sign-in`}>Sign in</a>
-				{/if}
+				<a href={`${base}/terms`}>Terms</a>
+				<a href={`${base}/privacy`}>Privacy</a>
+				<a href={`${base}/changelog`}>Changelog</a>
 			</div>
 			<p class="footer-note">English · Español · Français · 日本語</p>
 		</div>
