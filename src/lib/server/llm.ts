@@ -482,26 +482,21 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 
 	debugLog("response", { url, status: response.status, body: completion });
 
-	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractVisibleOutputTokenUsage(completion)) : undefined;
+	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractOutputTokenUsage(completion)) : undefined;
 
 	return { completion, quota };
 }
 
-function extractVisibleOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {
+function extractOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {
 	const usage = completion.usage as
 		| {
 				completion_tokens?: unknown;
-				completion_tokens_details?: { reasoning_tokens?: unknown };
 		  }
 		| null
 		| undefined;
 
 	if (typeof usage?.completion_tokens === "number" && Number.isFinite(usage.completion_tokens)) {
-		const reasoningTokens =
-			typeof usage.completion_tokens_details?.reasoning_tokens === "number" && Number.isFinite(usage.completion_tokens_details.reasoning_tokens)
-				? usage.completion_tokens_details.reasoning_tokens
-				: 0;
-		return [Math.max(0, usage.completion_tokens - reasoningTokens), false];
+		return [Math.max(0, usage.completion_tokens), false];
 	}
 
 	const text = completionOutputTextForEstimate(completion);

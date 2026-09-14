@@ -171,7 +171,7 @@ describe("chatText", () => {
 		expect(mockDbUpdate).not.toHaveBeenCalled();
 	});
 
-	it("falls back to env config when user has no BYOK row and debits visible output tokens", async () => {
+	it("falls back to env config when user has no BYOK row and debits all output tokens, including reasoning tokens", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
 		const fetchMock = vi.fn<FetchLike>(async () =>
@@ -185,7 +185,7 @@ describe("chatText", () => {
 		const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://example.com/v1/chat/completions");
 		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
-		expect(result.quota).toMatchObject({ trialTokensUsed: 10, trialUsageEstimated: false });
+		expect(result.quota).toMatchObject({ trialTokensUsed: 12, trialUsageEstimated: false });
 	});
 
 	it("estimates non-BYOK output usage from response text when provider usage is missing", async () => {
