@@ -42,12 +42,33 @@ html.welcome-scroll-active {
 }
 
 .landing-shell .site-header {
-	position: sticky;
+	position: fixed;
 	top: 0;
+	right: 0;
+	left: 0;
 	z-index: 50;
 	border-bottom: 1px solid rgb(45 41 36 / 13%);
 	background: rgb(247 241 230 / 88%);
 	backdrop-filter: blur(18px);
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-0.75rem);
+	transition:
+		opacity 300ms ease,
+		transform 300ms ease,
+		visibility 300ms;
+	visibility: hidden;
+}
+
+.landing-shell .site-header-revealed {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+	visibility: visible;
+}
+
+.landing-shell main section[id] {
+	scroll-margin-top: 5.6rem;
 }
 
 .landing-shell .header-inner,
@@ -67,11 +88,6 @@ html.welcome-scroll-active {
 	align-items: center;
 	gap: 0.5rem;
 	color: var(--landing-ink);
-	font-family: var(--font-serif);
-	font-size: 1.25rem;
-	font-weight: 400;
-	letter-spacing: -0.025em;
-	line-height: 1;
 	text-decoration: none;
 }
 
@@ -160,6 +176,7 @@ html.welcome-scroll-active {
 
 .landing-shell .footer-inner {
 	min-height: 9rem;
+	gap: 1.5rem;
 }
 
 .landing-shell .footer-brand p {
@@ -168,13 +185,4 @@ html.welcome-scroll-active {
 	font-family: var(--font-serif);
 	font-size: 0.8rem;
 	font-style: italic;
-}
-
-.landing-shell .footer-note {
-	max-width: 13rem;
-	margin: 0;
-	color: var(--landing-muted);
-	font-size: 0.62rem;
-	line-height: 1.5;
-	text-align: right;
 }

@@ -57,7 +57,7 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 	<header class="error-header">
 		<a href={`${base}/welcome`} aria-label="Libiamo homepage">
 			<WineGlassIcon width={32} height={32} />
-			<span>Libiamo</span>
+			<span class="wordmark">Libiamo</span>
 		</a>
 		<span>{copy.label}</span>
 	</header>
@@ -114,8 +114,6 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 	align-items: center;
 	gap: 0.55rem;
 	color: inherit;
-	font-family: var(--font-serif);
-	font-size: 1.2rem;
 	text-decoration: none;
 }
 

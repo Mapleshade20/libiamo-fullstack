@@ -77,12 +77,6 @@
 		flex-wrap: wrap;
 		padding-block: 2rem;
 	}
-
-	.landing-shell .footer-note {
-		width: 100%;
-		max-width: none;
-		text-align: left;
-	}
 }
 
 @media (max-width: 38rem) {
@@ -199,15 +193,10 @@
 	}
 
 	.landing-shell .closing h2 {
-		font-size: clamp(3rem, 15vw, 4.6rem);
-	}
-
-	.landing-shell .closing .eyebrow {
-		text-align: left;
+		font-size: clamp(2.7rem, 13vw, 4.1rem);
 	}
 
 	.landing-shell .footer-links {
-		order: 3;
 		width: 100%;
 		flex-wrap: wrap;
 	}
@@ -224,6 +213,13 @@
 	.landing-shell .sign-in-link,
 	.landing-shell .footer-links a {
 		transition: none;
+	}
+
+	.landing-shell .site-header {
+		transform: none;
+		transition:
+			opacity 200ms ease,
+			visibility 200ms;
 	}
 
 	.landing-shell .hero-lyric,
