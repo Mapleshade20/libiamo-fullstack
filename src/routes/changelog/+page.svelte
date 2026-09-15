@@ -66,14 +66,14 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 		<div class="divide-y divide-border">
 			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
 				<header>
-					<p class="font-serif text-xl text-foreground">Unreleased</p>
-					<p class="mt-1 text-sm text-muted-foreground">In development</p>
+					<p class="font-serif text-xl text-foreground">v0.3.2</p>
+					<p class="mt-1 text-sm text-muted-foreground">September 15, 2026</p>
 				</header>
 				<div>
-					<h2 class="font-serif text-2xl text-foreground">Public information</h2>
+					<h2 class="font-serif text-2xl text-foreground">More public pages</h2>
 					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
-						<li>Added public Terms of Service and Privacy Policy pages.</li>
-						<li>Added this user-facing changelog and connected all three pages from the welcome footer.</li>
+						<li>Added Terms of Service and Privacy Policy pages.</li>
+						<li>Added user-facing changelog and connected all three pages from the welcome footer and the profile page.</li>
 					</ul>
 				</div>
 			</article>
@@ -84,7 +84,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 					<time datetime="2026-09-13" class="mt-1 block text-sm text-muted-foreground">September 13, 2026</time>
 				</header>
 				<div>
-					<h2 class="font-serif text-2xl text-foreground">A public home and social sign-in</h2>
+					<h2 class="font-serif text-2xl text-foreground">Homepage and social sign-in</h2>
 					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
 						<li>Added the public welcome page and improved fatal-error recovery.</li>
 						<li>Added Google and GitHub authentication alongside email sign-in.</li>
@@ -99,9 +99,9 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 					<time datetime="2026-09-10" class="mt-1 block text-sm text-muted-foreground">September 10, 2026</time>
 				</header>
 				<div>
-					<h2 class="font-serif text-2xl text-foreground">Quest Hall</h2>
+					<h2 class="font-serif text-2xl text-foreground">Quest hall</h2>
 					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
-						<li>Redesigned the production Quest Hall for daily, weekly, and translation work.</li>
+						<li>Redesigned the Quest Hall for daily, weekly, and translation work.</li>
 						<li>Unified task and translation navigation around canonical detail routes.</li>
 					</ul>
 				</div>
