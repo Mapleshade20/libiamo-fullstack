@@ -1,5 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
+import PublicPageSwitcher from "$lib/components/PublicPageSwitcher.svelte";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 </script>
 
@@ -21,7 +22,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 			<a href="{base}/welcome" class="inline-flex min-h-11 items-center gap-2 rounded-sm focus-visible:ring-2 focus-visible:ring-ring">
 				<WineGlassIcon width={32} height={32} />
-				<span class="font-serif text-xl tracking-tight">Libiamo</span>
+				<span class="wordmark">Libiamo</span>
 			</a>
 			<a
 				href="{base}/sign-in"
@@ -34,7 +35,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 
 	<main id="privacy-content" class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-20">
 		<header class="border-b border-border pb-8">
-			<p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Legal</p>
+			<PublicPageSwitcher current="privacy" />
 			<h1 class="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">Privacy Policy</h1>
 			<p class="mt-4 text-sm text-muted-foreground">Effective September 14, 2026</p>
 		</header>
@@ -144,8 +145,8 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 					consent.
 				</p>
 				<p class="mt-3">
-					To start a request, use the contact method below without posting personal information publicly. Libiamo may need to verify that you control
-					the relevant account before acting on the request.
+					To start a request, use the contact address below. Libiamo may need to verify that you control the relevant account before acting on the
+					request.
 				</p>
 			</section>
 
@@ -176,13 +177,13 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 			<section aria-labelledby="privacy-contact">
 				<h2 id="privacy-contact" class="font-serif text-2xl text-foreground">13. Contact</h2>
 				<p class="mt-3">
-					Contact the Libiamo project maintainers through the
+					Contact the Libiamo project maintainers at
 					<a
-						href="https://github.com/Mapleshade20/libiamo-fullstack/issues"
+						href="mailto:admin@libiamo.net"
 						class="rounded-sm font-medium underline decoration-border underline-offset-4 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-						>Libiamo issue tracker</a
-					>. Ask the maintainers to arrange a private channel and do not place account details, credentials, private conversations, or other sensitive
-					personal information in a public issue.
+						>admin@libiamo.net</a
+					>. Write from the email address on your account where possible, and do not include passwords, API keys, or other credentials in your
+					message.
 				</p>
 			</section>
 		</article>

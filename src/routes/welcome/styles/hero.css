@@ -1,7 +1,7 @@
 .landing-shell .hero {
 	display: grid;
 	width: min(100% - 2rem, 78rem);
-	min-height: calc(100dvh - 4.6rem);
+	min-height: 100dvh;
 	margin-inline: auto;
 	padding-block: clamp(4rem, 10vw, 8.5rem);
 	grid-template-columns: minmax(0, 1.03fr) minmax(25rem, 0.97fr);
@@ -18,34 +18,17 @@
 	align-self: end;
 }
 
-.landing-shell .eyebrow,
 .landing-shell .section-index,
 .landing-shell .section-kicker,
 .landing-shell .study-kicker,
 .landing-shell .review-label,
 .landing-shell .practice-card-label,
-.landing-shell .scenario-label,
-.landing-shell .footer-note {
+.landing-shell .scenario-label {
 	font-family: var(--font-sans);
 	font-size: 0.69rem;
 	font-weight: 720;
 	letter-spacing: 0.13em;
 	text-transform: uppercase;
-}
-
-.landing-shell .eyebrow {
-	display: flex;
-	align-items: center;
-	gap: 0.65rem;
-	margin: 0 0 1.35rem;
-	color: var(--landing-wine);
-}
-
-.landing-shell .eyebrow span {
-	display: inline-block;
-	width: 2.2rem;
-	height: 1px;
-	background: currentColor;
 }
 
 .landing-shell .hero h1 {

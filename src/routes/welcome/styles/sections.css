@@ -20,9 +20,9 @@
 	max-width: 18ch;
 	margin: 0;
 	font-family: var(--font-serif);
-	font-size: clamp(2.6rem, 5.3vw, 4.9rem);
+	font-size: clamp(2.6rem, 5.3vw, 4.5rem);
 	font-weight: 390;
-	letter-spacing: -0.045em;
+	letter-spacing: -0.025em;
 	line-height: 1;
 	text-wrap: balance;
 }
@@ -79,9 +79,9 @@
 	max-width: 13ch;
 	margin: 0 0 1.5rem;
 	font-family: var(--font-serif);
-	font-size: clamp(2.6rem, 4.7vw, 4.6rem);
+	font-size: clamp(2.6rem, 4.7vw, 4.25rem);
 	font-weight: 390;
-	letter-spacing: -0.045em;
+	letter-spacing: -0.025em;
 	line-height: 0.98;
 	text-wrap: balance;
 }
@@ -586,11 +586,6 @@
 	border-bottom: 1px solid;
 }
 
-.landing-shell .closing .eyebrow {
-	margin: 0;
-	color: #ead9b5;
-}
-
 .landing-shell .closing-mark {
 	height: 5rem;
 	margin-bottom: 0.7rem;
@@ -600,13 +595,13 @@
 .landing-shell .closing h2 {
 	margin: 0.75rem 0 0;
 	font-family: var(--font-serif);
-	font-size: clamp(3.2rem, 7vw, 6.4rem);
+	font-size: clamp(2.9rem, 6.2vw, 5.5rem);
 	font-weight: 360;
-	letter-spacing: -0.055em;
+	letter-spacing: -0.02em;
 	line-height: 0.95;
 }
 
-.landing-shell .closing > p:not(.eyebrow) {
+.landing-shell .closing > p {
 	max-width: 34rem;
 	margin: 1.25rem 0 1.6rem;
 	color: rgb(255 250 241 / 76%);

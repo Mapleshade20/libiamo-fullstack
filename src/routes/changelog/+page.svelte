@@ -1,5 +1,8 @@
 <script lang="ts">
+import ArrowRight from "@lucide/svelte/icons/arrow-right";
+import Mail from "@lucide/svelte/icons/mail";
 import { base } from "$app/paths";
+import PublicPageSwitcher from "$lib/components/PublicPageSwitcher.svelte";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 </script>
 
@@ -21,7 +24,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 			<a href="{base}/welcome" class="inline-flex min-h-11 items-center gap-2 rounded-sm focus-visible:ring-2 focus-visible:ring-ring">
 				<WineGlassIcon width={32} height={32} />
-				<span class="font-serif text-xl tracking-tight">Libiamo</span>
+				<span class="wordmark">Libiamo</span>
 			</a>
 			<a
 				href="{base}/sign-in"
@@ -34,9 +37,30 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 
 	<main id="changelog-content" class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-20">
 		<header class="border-b border-border pb-8">
-			<p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Product record</p>
+			<PublicPageSwitcher current="changelog" />
 			<h1 class="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">Changelog</h1>
 			<p class="mt-4 max-w-2xl leading-7 text-foreground/75">Notable improvements to Libiamo, listed from newest to oldest.</p>
+
+			<a
+				href="mailto:admin@libiamo.net?subject=Libiamo%20feedback"
+				class="group mt-8 flex items-center gap-4 rounded-2xl border border-border bg-gradient-to-br from-muted/70 via-background to-background p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/25 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring sm:gap-5 sm:p-6"
+			>
+				<span
+					class="grid size-12 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground transition-colors group-hover:border-foreground/30 group-hover:bg-muted/60"
+				>
+					<Mail size={20} strokeWidth={1.6} aria-hidden="true" />
+				</span>
+				<span class="min-w-0 flex-1">
+					<span class="block font-serif text-xl leading-snug text-foreground">Tell us what to build next</span>
+					<span class="mt-0.5 block text-sm text-muted-foreground">admin@libiamo.net</span>
+				</span>
+				<ArrowRight
+					size={18}
+					strokeWidth={1.6}
+					aria-hidden="true"
+					class="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1"
+				/>
+			</a>
 		</header>
 
 		<div class="divide-y divide-border">

@@ -82,6 +82,7 @@
 @theme inline {
 	--font-serif: "Playfair Display", Georgia, serif;
 	--font-sans: "Finlandica Text", ui-sans-serif, system-ui, sans-serif;
+	--font-wordmark: "Italianno", "Snell Roundhand", "Segoe Script", cursive;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -464,6 +465,23 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 .font-inter-stack {
 	font-family: var(--font-sans-inter);
 	font-weight: 400;
+}
+
+/*
+ * The "Libiamo" wordmark. Italianno reserves room for swashes it never uses here:
+ * its letters reach 0.61em above the baseline inside a 1.25em content box, which
+ * both makes it read small for its point size and leaves it sitting about 0.12em
+ * high in the line box. The size and the nudge put it on the same optical line as
+ * the sans text beside it, so every header sets the wordmark through this class.
+ */
+.wordmark {
+	position: relative;
+	top: 0.12em;
+	font-family: var(--font-wordmark);
+	font-size: 2rem;
+	font-weight: 400;
+	letter-spacing: normal;
+	line-height: 1;
 }
 
 @utility task-stagger {

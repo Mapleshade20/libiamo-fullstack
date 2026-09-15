@@ -3,6 +3,7 @@ import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
+import { base } from "$app/paths";
 import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
@@ -561,7 +562,38 @@ function enhancePasswordSetup() {
 
 	<Separator />
 
-	<form method="POST" action="?/signOut" use:enhance><Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button></form>
+	<div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+		<nav aria-label={t(lang, "profile.linksLabel")} class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+			<a
+				class="inline-flex min-h-11 items-center rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				href="{base}/welcome"
+			>
+				{t(lang, "profile.linkHomepage")}
+			</a>
+			<a
+				class="inline-flex min-h-11 items-center rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				href="{base}/terms"
+			>
+				{t(lang, "profile.linkTerms")}
+			</a>
+			<a
+				class="inline-flex min-h-11 items-center rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				href="{base}/privacy"
+			>
+				{t(lang, "profile.linkPrivacy")}
+			</a>
+			<a
+				class="inline-flex min-h-11 items-center rounded-sm underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				href="{base}/changelog"
+			>
+				{t(lang, "profile.linkChangelog")}
+			</a>
+		</nav>
+
+		<form method="POST" action="?/signOut" class="ml-auto" use:enhance>
+			<Button type="submit" variant="outline">{t(lang, "nav.signOut")}</Button>
+		</form>
+	</div>
 </div>
 
 <style>

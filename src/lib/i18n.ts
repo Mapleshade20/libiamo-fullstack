@@ -179,6 +179,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.passwordSetupSentMessage": "We sent a link to {email}. Open it to choose a password for this account.",
 		"profile.passwordSetupFailedTitle": "Email not sent",
 		"profile.passwordSetupFailedMessage": "The link could not be sent. Please try again in a moment.",
+		"profile.linksLabel": "About Libiamo",
+		"profile.linkHomepage": "Homepage",
+		"profile.linkTerms": "Terms of Service",
+		"profile.linkPrivacy": "Privacy Policy",
+		"profile.linkChangelog": "Changelog",
 
 		// Admin
 		"admin.templates": "Templates",
@@ -597,6 +602,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.passwordSetupSentMessage": "Enviamos un enlace a {email}. Ábrelo para elegir una contraseña para esta cuenta.",
 		"profile.passwordSetupFailedTitle": "No se envió el correo",
 		"profile.passwordSetupFailedMessage": "No se pudo enviar el enlace. Inténtalo de nuevo en un momento.",
+		"profile.linksLabel": "Acerca de Libiamo",
+		"profile.linkHomepage": "Página principal",
+		"profile.linkTerms": "Términos del Servicio",
+		"profile.linkPrivacy": "Política de Privacidad",
+		"profile.linkChangelog": "Registro de Cambios",
 
 		"admin.templates": "Plantillas",
 		"admin.schedule": "Calendario",
@@ -1014,6 +1024,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.passwordSetupSentMessage": "Nous avons envoyé un lien à {email}. Ouvrez-le pour choisir un mot de passe pour ce compte.",
 		"profile.passwordSetupFailedTitle": "E-mail non envoyé",
 		"profile.passwordSetupFailedMessage": "Le lien n’a pas pu être envoyé. Réessayez dans un instant.",
+		"profile.linksLabel": "À propos de Libiamo",
+		"profile.linkHomepage": "Page d’accueil",
+		"profile.linkTerms": "Conditions d’utilisation",
+		"profile.linkPrivacy": "Politique de confidentialité",
+		"profile.linkChangelog": "Journal des modifications",
 
 		"admin.templates": "Modèles",
 		"admin.schedule": "Calendrier",
@@ -1429,6 +1444,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.passwordSetupSentMessage": "{email} にリンクを送信しました。開いてこのアカウントのパスワードを設定してください。",
 		"profile.passwordSetupFailedTitle": "メールを送信できませんでした",
 		"profile.passwordSetupFailedMessage": "リンクを送信できませんでした。しばらくしてからもう一度お試しください。",
+		"profile.linksLabel": "Libiamo について",
+		"profile.linkHomepage": "ホームページ",
+		"profile.linkTerms": "利用規約",
+		"profile.linkPrivacy": "プライバシーポリシー",
+		"profile.linkChangelog": "変更履歴",
 
 		"admin.templates": "テンプレート",
 		"admin.schedule": "スケジュール",

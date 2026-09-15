@@ -114,6 +114,7 @@ let activeLanguageIndex = $state(0);
 let typewriterText = $state<string>(sentenceSets[0][0].text);
 let typewriterPhase = $state<"idle" | "typing" | "holding" | "deleting">("idle");
 let reducedMotion = $state(false);
+let headerRevealed = $state(false);
 let activePracticeIndex = $state(0);
 let practiceCardAnimating = $state(false);
 let practiceCardTimer: number | undefined;
@@ -154,6 +155,17 @@ function cyclePracticeCard() {
 	}, practiceCardTransitionMs);
 }
 
+// The header stays out of the way over the first screen, then fades in once the hero is behind the reader.
+// The two thresholds keep it from flickering while scrolling around the reveal point.
+function syncHeaderReveal() {
+	const scrolled = window.scrollY;
+	if (headerRevealed) {
+		headerRevealed = scrolled > window.innerHeight * 0.5;
+		return;
+	}
+	headerRevealed = scrolled > window.innerHeight * 0.66;
+}
+
 function handlePracticeCardKeydown(event: KeyboardEvent) {
 	if (event.key !== "Enter" && event.key !== " ") return;
 	event.preventDefault();
@@ -182,6 +194,18 @@ onMount(() => {
 	typewriterText = reducedMotion ? sentenceSets[nextSentenceIndex][0].text : "";
 	typewriterPhase = reducedMotion ? "idle" : "typing";
 
+	let headerFrame: number | undefined;
+	const handleScroll = () => {
+		if (headerFrame !== undefined) return;
+		headerFrame = window.requestAnimationFrame(() => {
+			headerFrame = undefined;
+			syncHeaderReveal();
+		});
+	};
+	syncHeaderReveal();
+	window.addEventListener("scroll", handleScroll, { passive: true });
+	window.addEventListener("resize", handleScroll, { passive: true });
+
 	const handleMotionChange = (event: MediaQueryListEvent) => {
 		reducedMotion = event.matches;
 		typewriterText = event.matches ? lyricTranslation.text : "";
@@ -197,6 +221,9 @@ onMount(() => {
 	return () => {
 		document.documentElement.classList.remove(welcomeScrollClass);
 		motionQuery.removeEventListener("change", handleMotionChange);
+		window.removeEventListener("scroll", handleScroll);
+		window.removeEventListener("resize", handleScroll);
+		if (headerFrame !== undefined) window.cancelAnimationFrame(headerFrame);
 		if (practiceCardTimer !== undefined) window.clearTimeout(practiceCardTimer);
 	};
 });
@@ -300,14 +327,19 @@ $effect(() => {
 	</div>
 {/snippet}
 
+<svelte:head>
+	<!-- The rotating lyric is the only Japanese script in the product, so Yomogi loads here rather than site-wide. -->
+	<link href="https://fonts.googleapis.com/css2?family=Yomogi&display=swap" rel="stylesheet">
+</svelte:head>
+
 <a class="skip-link" href="#main-content" lang="en">Skip to content</a>
 
 <div class="landing-shell" lang="en">
-	<header class="site-header">
+	<header class:site-header-revealed={headerRevealed} class="site-header">
 		<div class="header-inner">
 			<a class="brand" href={`${base}/welcome`} aria-label="Libiamo home">
 				<WineGlassIcon width={34} height={34} />
-				<span>Libiamo</span>
+				<span class="wordmark">Libiamo</span>
 			</a>
 
 			<nav class="section-nav" aria-label="Homepage sections">
@@ -318,7 +350,6 @@ $effect(() => {
 
 			<div class="account-links">
 				{#if data.viewer}
-					<a class="sign-in-link" href={`${base}/profile`}>Profile</a>
 					<a class="header-cta" href={`${base}/`}>Quest Hall</a>
 				{:else}
 					<a class="sign-in-link" href={`${base}/sign-in`}>Sign in</a>
@@ -548,9 +579,8 @@ $effect(() => {
 
 		<section class="closing" aria-labelledby="closing-title">
 			<div class="closing-mark" aria-hidden="true"><WineGlassIcon width={88} height={88} /></div>
-			<p class="eyebrow"><span></span> Your next conversation starts here</p>
 			<h2 id="closing-title">Raise your next sentence.</h2>
-			<p>Choose a daily or weekly conversation quest, or work through a complete translation and revision cycle.</p>
+			<p>Now supporting English, Spanish, French and Japanese</p>
 			<a class="primary-cta" href={data.viewer ? `${base}/` : `${base}/sign-up`}>
 				{data.viewer ? "Return to Quest Hall" : "Start learning"} <ArrowRight size={18} aria-hidden="true" />
 			</a>
@@ -562,7 +592,7 @@ $effect(() => {
 			<div class="footer-brand">
 				<a class="brand" href={`${base}/welcome`} aria-label="Libiamo home">
 					<WineGlassIcon width={30} height={30} />
-					<span>Libiamo</span>
+					<span class="wordmark">Libiamo</span>
 				</a>
 				<p>Conversation quests, translation practice, and scheduled review.</p>
 			</div>
@@ -571,7 +601,6 @@ $effect(() => {
 				<a href={`${base}/privacy`}>Privacy</a>
 				<a href={`${base}/changelog`}>Changelog</a>
 			</div>
-			<p class="footer-note">English · Español · Français · 日本語</p>
 		</div>
 	</footer>
 </div>

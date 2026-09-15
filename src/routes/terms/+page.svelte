@@ -1,5 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
+import PublicPageSwitcher from "$lib/components/PublicPageSwitcher.svelte";
 import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 </script>
 
@@ -21,7 +22,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 			<a href="{base}/welcome" class="inline-flex min-h-11 items-center gap-2 rounded-sm focus-visible:ring-2 focus-visible:ring-ring">
 				<WineGlassIcon width={32} height={32} />
-				<span class="font-serif text-xl tracking-tight">Libiamo</span>
+				<span class="wordmark">Libiamo</span>
 			</a>
 			<a
 				href="{base}/sign-in"
@@ -34,7 +35,7 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 
 	<main id="terms-content" class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-20">
 		<header class="border-b border-border pb-8">
-			<p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Legal</p>
+			<PublicPageSwitcher current="terms" />
 			<h1 class="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">Terms of Service</h1>
 			<p class="mt-4 text-sm text-muted-foreground">Effective September 14, 2026</p>
 		</header>
@@ -144,12 +145,12 @@ import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
 			<section aria-labelledby="contact">
 				<h2 id="contact" class="font-serif text-2xl text-foreground">12. Contact</h2>
 				<p class="mt-3">
-					Questions about these Terms may be raised through the
+					Questions about these Terms may be sent to
 					<a
-						href="https://github.com/Mapleshade20/libiamo-fullstack/issues"
+						href="mailto:admin@libiamo.net"
 						class="rounded-sm font-medium underline decoration-border underline-offset-4 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-						>Libiamo issue tracker</a
-					>. Do not post passwords, API keys, private conversations, or other sensitive personal information in a public issue.
+						>admin@libiamo.net</a
+					>. Do not include passwords, API keys, or other credentials in your message.
 				</p>
 			</section>
 		</article>

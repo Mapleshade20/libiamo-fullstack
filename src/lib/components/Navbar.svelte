@@ -166,7 +166,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 		<!-- Left: Logo -->
 		<a href="{base}/" class="flex items-center gap-2">
 			<WineGlassIcon />
-			<span class="font-serif text-xl font-normal tracking-tight text-foreground">Libiamo</span>
+			<span class="wordmark text-foreground">Libiamo</span>
 			{#if mode === "admin"}
 				<span class="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
 					>Admin</span
