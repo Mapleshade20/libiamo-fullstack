@@ -3,24 +3,22 @@ import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import Search from "@lucide/svelte/icons/search";
-import EmojiConvertor from "emoji-js";
 import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
 import { base } from "$app/paths";
-import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
-import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
-import { requestHint } from "../hint/api";
+import FinishSessionSheet from "../FinishSessionSheet.svelte";
+import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import type { PracticeUiRootProps } from "../types";
 import { createIMessagePresentationAdapter } from "./adapter";
+import ConversationMessageList from "./ConversationMessageList.svelte";
 import { i18n } from "./i18n";
-import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
+import { getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
 const clock = getDisplayClock();
 
@@ -53,10 +51,6 @@ const session = createPracticeSession(() => ({
 	taskId,
 }));
 
-const emojiConv = new EmojiConvertor();
-emojiConv.replace_mode = "unified";
-emojiConv.allow_native = true;
-
 const contactName = $derived(session.agentName);
 const contactInitial = $derived(contactName.charAt(0).toUpperCase());
 const renderableMessages = $derived(getRenderableMessages(session.messages));
@@ -64,16 +58,11 @@ const lastOutgoingMessageId = $derived(getLastOutgoingMessageId(renderableMessag
 const lastOutgoingRead = $derived(isLastOutgoingMessageRead(renderableMessages, session.agentReadUpToMessageId));
 const latestPreviewText = $derived(normalizeText(renderableMessages.at(-1)?.text, t.startConversation));
 
-let showHintMenu = $state(false);
 let showFinishConfirm = $state(false);
-let contentHint = $state("");
-let expressionQuery = $state("");
-let expressionPhrases = $state<string[]>([]);
-let hintError = $state<string | null>(null);
-let isGettingHint = $state(false);
-const hintRequests = createHintRequestLifecycle();
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
-let hintMotionOrigin = $state<HTMLElement | null>(null);
+const hint = createHintController({
+	getContext: () => ({ sessionId: session.sessionId, language, draft: session.inputText, disabled: session.disabled }),
+});
 
 function handleInputKeydown(event: KeyboardEvent) {
 	if (event.key === "Enter" && !event.shiftKey) {
@@ -89,77 +78,20 @@ function handleInputKeydown(event: KeyboardEvent) {
 	}
 }
 
-async function handleGetHint() {
-	if (!session.sessionId || session.isCompleted || session.disabled) return;
-	if (isGettingHint) return;
-	const request = hintRequests.begin("content");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const result = await requestHint({ sessionId: session.sessionId, mode: "content", draft: session.inputText });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		contentHint = result.contentHint ?? "";
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get hints:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-async function handleExpressionHelp() {
-	if (session.disabled || isGettingHint || !expressionQuery.trim()) return;
-	const request = hintRequests.begin("expression");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		if (!session.sessionId) return;
-		const result = await requestHint({ sessionId: session.sessionId, mode: "expression", draft: session.inputText, expression: expressionQuery });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		expressionPhrases = result.phrases ?? [];
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get expression help:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
 function openHintMenu(trigger: HTMLElement) {
-	if (!session.sessionId || session.isCompleted || session.disabled) return;
-	hintMotionOrigin = trigger;
-	showHintMenu = true;
-	hintError = null;
-	contentHint = "";
-	expressionPhrases = [];
+	hint.open(trigger);
 }
 
 function closeHintMenu() {
-	hintRequests.invalidate();
-	showHintMenu = false;
-	hintError = null;
-	isGettingHint = false;
-	contentHint = "";
-	expressionQuery = "";
-	expressionPhrases = [];
+	hint.dismiss();
 }
 
-onDestroy(() => hintRequests.invalidate());
+onDestroy(() => hint.destroy());
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
 	if (!target.closest(".hint-container-wrapper") && !target.closest(".hint-bubble")) {
-		if (showHintMenu) closeHintMenu();
+		if (hint.isOpen) closeHintMenu();
 	}
 }
 
@@ -168,37 +100,20 @@ function handleFinishClick() {
 }
 
 function handleFinishConfirm() {
-	showFinishConfirm = false;
-	void session.handleCompleteAndNavigate(String(taskId));
+	void session.handleCompleteAndNavigate();
 }
 
 function handleFinishCancel() {
 	showFinishConfirm = false;
+	session.clearCompletionError();
 }
+
+$effect(() => {
+	if (session.completionError !== null) showFinishConfirm = true;
+});
 
 function getTaskHref() {
 	return returnHref || `${base}/task/${taskId}`;
-}
-
-function getBubbleClasses(message: (typeof renderableMessages)[0], index: number) {
-	const position = getBubbleGroupPosition(renderableMessages, index);
-	if (message.role === "user") {
-		if (position === "start") return "rounded-[20px] rounded-br-md bg-[#0A84FF] text-white md:bg-[#34C759]";
-		if (position === "middle") return "rounded-[20px] rounded-tr-md rounded-br-md bg-[#0A84FF] text-white md:bg-[#34C759]";
-		if (position === "end") return "rounded-[20px] rounded-tr-md bg-[#0A84FF] text-white md:bg-[#34C759]";
-		return "rounded-[20px] bg-[#0A84FF] text-white md:bg-[#34C759]";
-	}
-
-	if (position === "start") return "rounded-[20px] rounded-bl-md bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]";
-	if (position === "middle") return "rounded-[20px] rounded-tl-md rounded-bl-md bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]";
-	if (position === "end") return "rounded-[20px] rounded-tl-md bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]";
-	return "rounded-[20px] bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]";
-}
-
-function showIncomingSender(index: number) {
-	const current = renderableMessages[index];
-	const prev = index > 0 ? renderableMessages[index - 1] : null;
-	return current?.role === "agent" && prev?.role !== "agent";
 }
 </script>
 
@@ -291,28 +206,16 @@ function showIncomingSender(index: number) {
 						<div class="h-px flex-1 bg-[#E5E5EA]"></div>
 					</div>
 
-					{#each renderableMessages as msg, index (msg.id)}
-						<div class="mb-1.5 flex flex-col {msg.role === 'user' ? 'items-end' : 'items-start'}">
-							{#if showIncomingSender(index)}
-								<span class="mb-1 ml-2 hidden text-[11px] text-[#8E8E93] md:block">{contactName}</span>
-							{/if}
-							<div class="max-w-[82%] px-3 py-2 text-[15px] leading-5 shadow-sm md:max-w-[68%] {getBubbleClasses(msg, index)}">
-								<MarkdownRenderer content={emojiConv.replace_colons(msg.text)} />
-							</div>
-							{#if msg.role === "agent" && msg.deliveryState === "failed"}
-								<button
-									type="button"
-									class="mt-1 ml-1 rounded-full border border-[#0A84FF] px-2 py-0.5 text-[11px] font-semibold text-[#0A84FF] hover:bg-[#EAF2FF]"
-									onclick={() => session.handleRetry(msg.id)}
-								>
-									{t.retry}
-								</button>
-							{/if}
-							{#if msg.role === "user" && msg.id === lastOutgoingMessageId}
-								<span class="mt-1 mr-1 text-[11px] text-[#8E8E93]">{lastOutgoingRead ? t.read : t.delivered}</span>
-							{/if}
-						</div>
-					{/each}
+					<ConversationMessageList
+						messages={renderableMessages}
+						{contactName}
+						readLabel={t.read}
+						deliveredLabel={t.delivered}
+						{lastOutgoingMessageId}
+						{lastOutgoingRead}
+						retryLabel={t.retry}
+						onRetry={(id) => session.handleRetry(id)}
+					/>
 
 					{#if (session.isTyping && lastOutgoingRead) || session.hasPendingReveals}
 						<div class="mt-3 flex items-center">
@@ -354,7 +257,7 @@ function showIncomingSender(index: number) {
 									aria-label={t.getHint}
 									onclick={(event) => {
 										event.stopPropagation();
-										if (showHintMenu) {
+										if (hint.isOpen) {
 											closeHintMenu();
 										} else {
 											openHintMenu(event.currentTarget);
@@ -362,7 +265,7 @@ function showIncomingSender(index: number) {
 									}}
 									disabled={!session.sessionId || session.disabled}
 								>
-									<Lightbulb size={16} class={isGettingHint ? "animate-pulse text-[#FF9F0A]" : ""} />
+									<Lightbulb size={16} class={hint.isLoading ? "animate-pulse text-[#FF9F0A]" : ""} />
 								</button>
 							</div>
 							<button
@@ -382,20 +285,23 @@ function showIncomingSender(index: number) {
 							</button>
 						</div>
 					</div>
-					{#if showHintMenu}
+					{#if hint.isOpen}
 						<HintFloatingPanel
 							anchorName="--libiamo-imessage-hint-anchor"
 							layoutReference={hintLayoutReference}
-							motionOrigin={hintMotionOrigin}
+							motionOrigin={hint.motionOrigin}
 							{language}
-							bind:expressionQuery
-							{expressionPhrases}
-							{contentHint}
-							{hintError}
-							{isGettingHint}
+							bind:expressionQuery={hint.expressionQuery}
+							bind:activeMode={hint.mode}
+							bind:submittedExpressionQuery={hint.submittedQuery}
+							expressionPhrases={hint.phrases}
+							contentHint={hint.contentHint}
+							hintError={hint.error}
+							isGettingHint={hint.isLoading}
 							disabled={session.disabled}
-							onExpressionSubmit={handleExpressionHelp}
-							onContentHint={handleGetHint}
+							onExpressionSubmit={hint.requestExpression}
+							onContentHint={hint.requestContent}
+							onReset={hint.reset}
 							onClose={closeHintMenu}
 						/>
 					{/if}
@@ -405,12 +311,11 @@ function showIncomingSender(index: number) {
 	</div>
 </div>
 
-<BottomSheet
+<FinishSessionSheet
 	show={showFinishConfirm}
-	title="Finish Task"
-	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
-	confirmLabel="Finish & Review"
-	cancelLabel="Keep Practicing"
+	{language}
+	pending={session.isCompleting}
+	error={session.completionError}
 	onConfirm={handleFinishConfirm}
 	onCancel={handleFinishCancel}
 />
