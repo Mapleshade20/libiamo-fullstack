@@ -1,6 +1,8 @@
-import type { PracticeOpeningState, PracticeParticipant } from "../types";
+import type { PracticeOpeningState } from "../types";
+import type { i18n } from "./i18n";
 
-export type ChatUser = PracticeParticipant;
+export type ChatUser = { id: string; name: string; status: string; color: string; isAgent: boolean };
+export type DiscordLabels = { [Key in keyof typeof i18n.en]: string };
 
 export type ChatOpeningState = PracticeOpeningState & {
 	serverName?: string;

@@ -4,6 +4,7 @@ import Plus from "@lucide/svelte/icons/plus";
 import Send from "@lucide/svelte/icons/send";
 import Smile from "@lucide/svelte/icons/smile";
 import { onDestroy } from "svelte";
+import { prefersReducedMotion } from "svelte/motion";
 import { fade } from "svelte/transition";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import EmojiPicker from "../../EmojiPicker.svelte";
@@ -11,7 +12,8 @@ import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";
 import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import type { ChatUser } from "./types";
+import { i18n } from "./i18n";
+import type { ChatUser, DiscordLabels } from "./types";
 
 let {
 	inputText = $bindable(""),
@@ -24,7 +26,7 @@ let {
 	messagePlaceholder = "",
 	language = "en",
 	sessionId = null as number | null,
-	t = {} as Record<string, string>,
+	t = i18n.en,
 	allUsers = [] as ChatUser[],
 	onSend = (_text: string) => {},
 }: {
@@ -38,7 +40,7 @@ let {
 	messagePlaceholder?: string;
 	language?: string;
 	sessionId?: number | null;
-	t?: Record<string, string>;
+	t?: DiscordLabels;
 	allUsers?: ChatUser[];
 	onSend?: (text: string) => void;
 } = $props();
@@ -208,9 +210,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		<div class="relative min-w-0 flex-1 rounded-lg bg-[#383A40]">
 			<div class="flex items-center px-2 md:px-4 {disabled ? 'opacity-50' : ''}">
 				<div class="mr-4 hidden h-[44px] shrink-0 items-center justify-center md:flex">
-					<button type="button" class="rounded-full bg-[#B5BAC1] p-1 text-[#383A40] transition-colors hover:bg-[#DBDEE1]" {disabled}>
-						<Plus size={16} strokeWidth={3} />
-					</button>
+					<span aria-hidden="true" class="rounded-full bg-[#B5BAC1] p-1 text-[#383A40]"> <Plus size={16} strokeWidth={3} /> </span>
 				</div>
 
 				<div class="flex-1 min-w-0">
@@ -255,6 +255,8 @@ function handleKeyDown(e: KeyboardEvent) {
 						<button
 							type="button"
 							class="transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+							aria-label="Emoji"
+							aria-expanded={showEmojiPicker}
 							onclick={(e) => {
 								e.stopPropagation();
 								if (disabled) return;
@@ -267,7 +269,7 @@ function handleKeyDown(e: KeyboardEvent) {
 						{#if showEmojiPicker}
 							<div
 								class="fixed inset-x-3 bottom-24 z-[1002] overflow-hidden rounded-lg border border-[#1E1F22] bg-[#232428] shadow-xl md:absolute md:inset-auto md:bottom-full md:right-0 md:mb-4 md:w-[360px]"
-								transition:fade={{ duration: 100 }}
+								transition:fade={{ duration: prefersReducedMotion.current ? 0 : 100 }}
 							>
 								<div class="max-h-[300px] overflow-y-auto custom-scrollbar"><EmojiPicker onEmojiSelected={handleEmojiSelected} /></div>
 							</div>

@@ -1,14 +1,24 @@
 import { normalizeText } from "../../utils/messageUtils";
-import { getOpeningStateMessages, normalizeOpeningState } from "../messageTransformer";
-import { createParticipantResolver, resolveAgentPresentation } from "../presentationAdapter";
+import { getOpeningStateMessages, normalizeOpeningState, resolveAgentName } from "../messageTransformer";
 import type { PracticePresentationAdapter } from "../types";
 import type { ChatOpeningState } from "./types";
-import type { initUserPool } from "./userPool";
+import { initUserPool } from "./userPool";
 
 export type DiscordPresentationContext = ReturnType<typeof initUserPool>;
 
 export function createDiscordPresentationAdapter(): PracticePresentationAdapter<ChatOpeningState, DiscordPresentationContext> {
-	const resolvePool = createParticipantResolver();
+	let cachedId: number | null = null;
+	let cachedPool: DiscordPresentationContext | undefined;
+	let resolvedPool: DiscordPresentationContext | undefined;
+	let resolvedSeed: DiscordPresentationContext | undefined;
+	function resolvePool(id: number | null) {
+		if (id === null) return undefined;
+		if (!cachedPool || cachedId !== id) {
+			cachedId = id;
+			cachedPool = initUserPool(id);
+		}
+		return cachedPool;
+	}
 	return {
 		normalizeOpeningState(value) {
 			const state = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -19,11 +29,24 @@ export function createDiscordPresentationAdapter(): PracticePresentationAdapter<
 			};
 		},
 		resolvePresentation({ sessionId, openingState, userName }) {
-			const pool = resolvePool(sessionId);
+			const seeded = resolvePool(sessionId);
+			const name = resolveAgentName(openingState, userName, seeded?.agentUser.name ?? "Agent");
+			if (seeded !== resolvedSeed || resolvedPool?.agentUser.name !== name) {
+				resolvedSeed = seeded;
+				resolvedPool = seeded
+					? {
+							...seeded,
+							agentUser: { ...seeded.agentUser, name },
+							onlineUsers: seeded.onlineUsers.filter((user) => user.name !== name),
+							offlineUsers: seeded.offlineUsers.filter((user) => user.name !== name),
+						}
+					: undefined;
+			}
+			const pool = resolvedPool;
 			return {
-				agent: resolveAgentPresentation(openingState, userName, pool),
+				agent: { name, accentClass: pool?.agentUser.color ?? "bg-[#5865F2]" },
 				context: pool ?? {
-					agentUser: { id: "agent", name: "Agent", status: "Online", color: "bg-[#5865F2]", isAgent: true },
+					agentUser: { id: "agent", name, status: "Online", color: "bg-[#5865F2]", isAgent: true },
 					onlineUsers: [],
 					offlineUsers: [],
 				},

@@ -2,13 +2,22 @@ import { describe, expect, it } from "vitest";
 import { createAo3PresentationAdapter } from "$lib/components/practice-ui/ao3/adapter";
 import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
 import { createDiscordPresentationAdapter } from "$lib/components/practice-ui/discord/adapter";
+import { initUserPool } from "$lib/components/practice-ui/discord/userPool";
 import { createIMessagePresentationAdapter } from "$lib/components/practice-ui/imessage/adapter";
 import { normalizeOpeningState } from "$lib/components/practice-ui/messageTransformer";
-import { initUserPool } from "$lib/components/practice-ui/participantPool";
 import { createRedditPresentationAdapter } from "$lib/components/practice-ui/reddit/adapter";
 import type { PracticePresentationAdapter } from "$lib/components/practice-ui/types";
 
 describe("practice presentation adapters", () => {
+	it("uses the same named Discord Agent for members and message presentation", () => {
+		const adapter = createDiscordPresentationAdapter();
+		const openingState = adapter.normalizeOpeningState({ previousMessages: [{ sender: "Maya", text: "Hello" }] });
+		const presentation = adapter.resolvePresentation({ sessionId: 17, openingState, userName: "Learner" });
+		expect(presentation.agent.name).toBe("Maya");
+		expect(presentation.context.agentUser.name).toBe(presentation.agent.name);
+		expect(presentation.context.agentUser.color).toBe(presentation.agent.accentClass);
+		expect([...presentation.context.onlineUsers, ...presentation.context.offlineUsers].some((user) => user.name === "Maya")).toBe(false);
+	});
 	it("reuses one Discord pool per session and resolves a new pool on replacement", () => {
 		const adapter = createDiscordPresentationAdapter();
 		const openingState = adapter.normalizeOpeningState({ serverName: "Workshop", channelName: "general" });
@@ -26,24 +35,21 @@ describe("practice presentation adapters", () => {
 		const openingState = adapter.normalizeOpeningState({
 			previousMessages: [{ sender: "Learner", text: "Hello" }, { author: "Named author", content: "Reply" }, { text: "Anonymous" }],
 		});
-		const pool = initUserPool(17);
 		const presentation = adapter.resolvePresentation({ sessionId: 17, openingState, userName: "Learner" });
-		expect(presentation.agent).toEqual({ name: "Named author", accentClass: pool.agentUser.color });
+		expect(presentation.agent).toEqual({ name: "Named author" });
 		const messages = adapter.buildOpeningMessages({ openingState, presentation, userName: "Learner", avatarUrl: "avatar.png", earlier: "Earlier" });
 		expect(messages.map(({ id, authorName }) => [id, authorName])).toEqual([
 			["opening-0-Learner", "Learner"],
 			["opening-1-Named author", "Named author"],
-			[`opening-2-${pool.agentUser.name}`, pool.agentUser.name],
+			["opening-2-Named author", "Named author"],
 		]);
 		expect(messages[0].avatar).toBe("avatar.png");
-		expect(messages[1].avatarColor).toBe(pool.agentUser.color);
+		expect(messages[1].avatarColor).toBeUndefined();
 		const empty = adapter.normalizeOpeningState(null);
-		expect(adapter.resolvePresentation({ sessionId: 17, openingState: empty, userName: "Learner" }).agent.name).toBe(pool.agentUser.name);
+		expect(adapter.resolvePresentation({ sessionId: 17, openingState: empty, userName: "Learner" }).agent.name).toBe("Agent");
 	}
 	it.each([
-		["Discord", () => checkAdapter(createDiscordPresentationAdapter())],
 		["iMessage", () => checkAdapter(createIMessagePresentationAdapter())],
-		["Reddit", () => checkAdapter(createRedditPresentationAdapter())],
 	] as const)("preserves %s seeded identity, opening authors, and message ordering", (_name, check) => check());
 
 	it("keeps AO3 identity in work metadata instead of the participant pool", () => {

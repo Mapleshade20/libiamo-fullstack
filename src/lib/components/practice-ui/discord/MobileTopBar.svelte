@@ -11,7 +11,12 @@ let {
 </script>
 
 <div class="flex h-12 w-full shrink-0 items-center justify-between border-b border-[#1F2023] bg-[#2B2D31] px-4 md:hidden">
-	<button type="button" onclick={onToggleMenu} class="text-[#B5BAC1] hover:text-white">
+	<button
+		type="button"
+		onclick={onToggleMenu}
+		aria-label="Open channels"
+		class="flex h-11 w-11 items-center justify-center text-[#B5BAC1] hover:text-white"
+	>
 		<Menu size={24} />
 	</button>
 	<span class="font-bold text-white truncate px-4">{serverName}</span>

@@ -1,5 +1,7 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
+import { onDestroy } from "svelte";
+import { prefersReducedMotion } from "svelte/motion";
 import { fade } from "svelte/transition";
 import { normalizeText } from "../../utils/messageUtils";
 import FinishSessionSheet from "../FinishSessionSheet.svelte";
@@ -75,6 +77,7 @@ let allUsers = $derived([session.presentationContext.agentUser, ...onlineUsers, 
 
 let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
+onDestroy(() => clearTimeout(toastTimeout));
 let showMembers = $state(false);
 let showFinishConfirm = $state(false);
 
@@ -97,6 +100,13 @@ function handleContextMenu(e: MouseEvent, user: ChatUser) {
 		y: e.clientY,
 		targetUser: user,
 	};
+}
+
+function handleEscape(event: KeyboardEvent) {
+	if (event.key !== "Escape") return;
+	contextMenu.show = false;
+	showMembers = false;
+	showMobileMenu = false;
 }
 
 function handleContextMenuMention() {
@@ -135,14 +145,17 @@ function handleMockAction() {
 
 <!--===================================================-->
 
-<svelte:window onclick={handleWindowClick} />
+<svelte:window onclick={handleWindowClick} onkeydown={handleEscape} />
 
 {#if session.isEntering}
-	<div class="fixed inset-0 z-[3000] flex flex-col items-center justify-center bg-[#313338]" out:fade={{ duration: 200 }}>
+	<div
+		class="fixed inset-0 z-[3000] flex flex-col items-center justify-center bg-[#313338]"
+		out:fade={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+	>
 		<div class="flex items-center gap-2">
-			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]"></span>
-			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]" style="animation-delay: 0.2s"></span>
-			<span class="h-3 w-3 animate-bounce rounded-full bg-[#5865F2]" style="animation-delay: 0.4s"></span>
+			<span class="h-3 w-3 animate-bounce motion-reduce:animate-none rounded-full bg-[#5865F2]"></span>
+			<span class="h-3 w-3 animate-bounce motion-reduce:animate-none rounded-full bg-[#5865F2]" style="animation-delay: 0.2s"></span>
+			<span class="h-3 w-3 animate-bounce motion-reduce:animate-none rounded-full bg-[#5865F2]" style="animation-delay: 0.4s"></span>
 		</div>
 		<p class="mt-4 text-sm font-bold text-[#80848E] uppercase tracking-wider">Connecting...</p>
 	</div>

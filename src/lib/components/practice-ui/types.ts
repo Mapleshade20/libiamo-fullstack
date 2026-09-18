@@ -76,14 +76,6 @@ export interface PracticeOpeningState {
 	previousMessages?: PracticeOpeningMessage[];
 }
 
-export interface PracticeParticipant {
-	id: string;
-	name: string;
-	status: string;
-	color: string;
-	isAgent: boolean;
-}
-
 export interface PracticePresentation<Context> {
 	agent: PracticeAgentPresentation;
 	context: Context;

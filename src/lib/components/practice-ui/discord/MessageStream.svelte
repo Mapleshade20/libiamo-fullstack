@@ -110,16 +110,16 @@ let visibleMessages = $derived(messages.filter((message) => !message.isHidden &&
 	{/each}
 
 	{#if isTyping}
-		<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group items-center gap-3">
+		<div role="status" class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group items-center gap-3">
 			<div class="mr-1 h-10 w-10 shrink-0 rounded-full {agentUser.color} flex items-center justify-center text-white font-bold overflow-hidden">
 				{agentUser.name.charAt(0).toUpperCase()}
 			</div>
 
 			<div class="flex-1 flex items-center gap-3">
 				<div class="flex gap-1">
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce"></span>
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.2s"></span>
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.4s"></span>
+					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce motion-reduce:animate-none"></span>
+					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce motion-reduce:animate-none" style="animation-delay: 0.2s"></span>
+					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce motion-reduce:animate-none" style="animation-delay: 0.4s"></span>
 				</div>
 				<span class="text-xs font-semibold text-[#80848E]">
 					{isInitializing

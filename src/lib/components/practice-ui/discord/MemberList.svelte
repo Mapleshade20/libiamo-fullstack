@@ -1,4 +1,5 @@
 <script lang="ts">
+import { prefersReducedMotion } from "svelte/motion";
 import { fade, fly } from "svelte/transition";
 import type { ChatUser } from "./types";
 
@@ -26,12 +27,18 @@ let {
 </script>
 
 <!-- Overlay for mobile view -->
-<div role="none" class="fixed inset-0 z-[1001] bg-black/40 xl:hidden" onclick={onCloseMembers} transition:fade={{ duration: 150 }}></div>
+<button
+	type="button"
+	aria-label="Close members"
+	class="fixed inset-0 z-[1001] bg-black/40 xl:hidden"
+	onclick={onCloseMembers}
+	transition:fade={{ duration: prefersReducedMotion.current ? 0 : 150 }}
+></button>
 
 <!-- Sidebar container -->
 <div
 	class="fixed inset-y-0 right-0 z-[1002] flex w-60 flex-col bg-[#2B2D31] border-l border-[#26272B] shadow-2xl xl:shadow-none xl:static xl:z-0 xl:translate-x-0"
-	transition:fly={{ x: 240, duration: 250 }}
+	transition:fly={{ x: 240, duration: prefersReducedMotion.current ? 0 : 250 }}
 >
 	<div class="flex-1 overflow-y-auto px-2 py-4 hide-scrollbar">
 		<!-- Online Header -->

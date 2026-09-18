@@ -5,8 +5,11 @@ import LogOut from "@lucide/svelte/icons/log-out";
 import Mic from "@lucide/svelte/icons/mic";
 import Plus from "@lucide/svelte/icons/plus";
 import Settings from "@lucide/svelte/icons/settings";
+import { prefersReducedMotion } from "svelte/motion";
 import { fade, fly } from "svelte/transition";
 import { base } from "$app/paths";
+import { i18n } from "./i18n";
+import type { DiscordLabels } from "./types";
 
 let {
 	serverName = "",
@@ -17,7 +20,7 @@ let {
 	taskId = "",
 	returnHref = "",
 	showMobileMenu = false,
-	t = {} as Record<string, string>,
+	t = i18n.en,
 	onCloseMobileMenu = () => {},
 	onMockAction = () => {},
 }: {
@@ -29,7 +32,7 @@ let {
 	taskId?: string | number;
 	returnHref?: string;
 	showMobileMenu?: boolean;
-	t?: Record<string, string>;
+	t?: DiscordLabels;
 	onCloseMobileMenu?: () => void;
 	onMockAction?: () => void;
 } = $props();
@@ -115,10 +118,12 @@ let {
 		class="fixed inset-0 z-[1001] bg-black/60 md:hidden"
 		onclick={onCloseMobileMenu}
 		onkeydown={(e) => e.key === "Escape" && onCloseMobileMenu()}
-		transition:fade={{ duration: 150 }}
+		transition:fade={{ duration: prefersReducedMotion.current ? 0 : 150 }}
 	></div>
 
-	<div class="fixed inset-y-0 left-0 z-[1002] flex h-full md:hidden" transition:fly={{ x: -312, duration: 250 }}>{@render sidebarContent()}</div>
+	<div class="fixed inset-y-0 left-0 z-[1002] flex h-full md:hidden" transition:fly={{ x: -312, duration: prefersReducedMotion.current ? 0 : 250 }}>
+		{@render sidebarContent()}
+	</div>
 {/if}
 
 <div class="hidden h-full md:flex">{@render sidebarContent()}</div>

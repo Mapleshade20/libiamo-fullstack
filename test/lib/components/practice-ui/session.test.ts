@@ -43,7 +43,7 @@ vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
 	submitPracticeMessage: mocks.submitPracticeMessage,
 }));
 
-vi.mock("$lib/components/practice-ui/participantPool", () => ({
+vi.mock("$lib/components/practice-ui/discord/userPool", () => ({
 	initUserPool: mocks.initUserPool,
 }));
 
@@ -201,7 +201,7 @@ describe("createPracticeSession", () => {
 
 		expect(session.sessionId).toBe(101);
 		expect(session.agentPresentation.name).toBe("Roddy");
-		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
+		expect(mocks.initUserPool).not.toHaveBeenCalled();
 		expect(session.messages.length).toBeGreaterThan(0);
 	});
 
@@ -366,7 +366,7 @@ describe("createPracticeSession", () => {
 		session.hydrateFromExistingSession(existingSession);
 		session.hydrateFromExistingSession(existingSession);
 
-		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
+		expect(mocks.initUserPool).not.toHaveBeenCalled();
 	});
 
 	it("rehydrates when metadata changes even if message content is stable", async () => {
@@ -398,7 +398,7 @@ describe("createPracticeSession", () => {
 		session.hydrateFromExistingSession(existingSession);
 		session.hydrateFromExistingSession(updatedSession);
 
-		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
+		expect(mocks.initUserPool).not.toHaveBeenCalled();
 		expect(session.isCompleted).toBe(true);
 		expect(session.messages[0].isHidden).toBe(true);
 		expect(session.messages[1].deliveryState).toBe("failed");

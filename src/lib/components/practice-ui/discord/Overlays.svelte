@@ -1,17 +1,19 @@
 <script lang="ts">
 import Info from "@lucide/svelte/icons/info";
+import { prefersReducedMotion } from "svelte/motion";
 import { fade } from "svelte/transition";
-import type { ChatUser } from "./types";
+import { i18n } from "./i18n";
+import type { ChatUser, DiscordLabels } from "./types";
 
 let {
 	contextMenu = { show: false, x: 0, y: 0, targetUser: null as ChatUser | null },
 	showToast = false,
-	t = {} as Record<string, string>,
+	t = i18n.en,
 	onContextMenuMention = () => {},
 }: {
 	contextMenu?: { show: boolean; x: number; y: number; targetUser: ChatUser | null };
 	showToast?: boolean;
-	t?: Record<string, string>;
+	t?: DiscordLabels;
 	onContextMenuMention?: () => void;
 } = $props();
 </script>
@@ -29,7 +31,7 @@ let {
 
 {#if showToast}
 	<div
-		transition:fade={{ duration: 150 }}
+		transition:fade={{ duration: prefersReducedMotion.current ? 0 : 150 }}
 		class="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-md bg-[#111214] px-4 py-3 text-sm font-medium text-white shadow-xl border border-[#1E1F22] z-[1000]"
 	>
 		<Info size={18} class="text-[#5865F2]" />

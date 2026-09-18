@@ -64,6 +64,7 @@ let {
 				type="button"
 				class="flex items-center gap-2 rounded bg-[#23A559] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#1D8749] disabled:opacity-50"
 				onclick={onComplete}
+				aria-label={isCompleting ? evaluatingLabel : finishTaskLabel}
 				disabled={isCompleting || isSubmitting || isInitializing}
 			>
 				<CheckCircle size={16} />
@@ -76,6 +77,8 @@ let {
 				? 'text-white'
 				: 'hover:text-[#DBDEE1]'}"
 			onclick={onToggleMembers}
+			aria-label="Members"
+			aria-pressed={showMembers}
 		>
 			<Users size={20} />
 		</button>
