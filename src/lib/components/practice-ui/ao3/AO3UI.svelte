@@ -3,27 +3,26 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onDestroy } from "svelte";
 import { fade } from "svelte/transition";
 import { base } from "$app/paths";
-import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import MarkdownRenderer from "../../MarkdownRenderer.svelte";
-import { requestHint } from "../hint/api";
+import FinishSessionSheet from "../FinishSessionSheet.svelte";
+import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import type { PracticeUiRootProps } from "../types";
 import { createAo3PresentationAdapter } from "./adapter";
+import CommentTree from "./CommentTree.svelte";
 import {
 	type Ao3OpeningState,
 	type Ao3RenderableComment,
 	buildAo3CommentTree,
 	countAo3Comments,
-	DEFAULT_AO3_ICON,
 	getAo3AdditionalTags,
 	getAo3AuthorName,
 	normalizeAo3Text,
 } from "./helpers";
 import { i18n } from "./i18n";
+import WorkMetadata from "./WorkMetadata.svelte";
 
 let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref, feedbackHref }: PracticeUiRootProps = $props();
 
@@ -67,31 +66,29 @@ const categories = $derived(opening.categories?.filter(Boolean) ?? []);
 const relationships = $derived(opening.relationships?.filter(Boolean) ?? []);
 const characters = $derived(opening.characters?.filter(Boolean) ?? []);
 const additionalTags = $derived(getAo3AdditionalTags(opening));
-const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl }));
+const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl, basePath: base }));
 const commentCount = $derived(countAo3Comments(commentTree));
 const characterLimit = PRACTICE_UI_TEXT_MAX_LENGTH;
 
 let commentText = $state("");
 let replyTarget = $state<Ao3RenderableComment | null>(null);
-let showHintMenu = $state(false);
-let showFinishConfirm = $state(false);
-let contentHint = $state("");
-let expressionQuery = $state("");
-let expressionPhrases = $state<string[]>([]);
-let hintError = $state<string | null>(null);
-let isGettingHint = $state(false);
-const hintRequests = createHintRequestLifecycle();
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
-let hintMotionOrigin = $state<HTMLElement | null>(null);
+let showFinishConfirm = $state(false);
 let scrollContainer: HTMLDivElement;
-
 const disabled = $derived(session.disabled);
+
+const hint = createHintController({
+	getContext: () => ({
+		sessionId: session.sessionId,
+		language,
+		draft: commentText,
+		disabled,
+		contextPath: replyTarget ? [{ author: replyTarget.username, text: replyTarget.comment }] : undefined,
+	}),
+});
+
 const remainingCharacters = $derived(Math.max(0, characterLimit - commentText.length));
 const formPlaceholder = $derived(session.isCompleted ? t.sessionEnded : session.limitReached ? t.turnLimitReached : t.leaveComment);
-
-function tagList(values: string[]) {
-	return values.filter(Boolean);
-}
 
 function scrollToForm() {
 	setTimeout(() => document.getElementById("ao3-comment-form")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -147,83 +144,17 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 	}
 }
 
-async function handleGetHint() {
-	if (!session.sessionId || session.isCompleted || disabled || isGettingHint) return;
-	const request = hintRequests.begin("content");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const contextPath = replyTarget ? [{ author: replyTarget.username, text: replyTarget.comment }] : undefined;
-		const result = await requestHint({ sessionId: session.sessionId, mode: "content", draft: commentText, contextPath });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		contentHint = result.contentHint ?? "";
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get hints:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-async function handleExpressionHelp() {
-	if (disabled || isGettingHint || !expressionQuery.trim()) return;
-	const request = hintRequests.begin("expression");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		if (!session.sessionId) return;
-		const contextPath = replyTarget ? [{ author: replyTarget.username, text: replyTarget.comment }] : undefined;
-		const result = await requestHint({
-			sessionId: session.sessionId,
-			mode: "expression",
-			draft: commentText,
-			expression: expressionQuery,
-			contextPath,
-		});
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		expressionPhrases = result.phrases ?? [];
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get expression help:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
 function openHintMenu(trigger: HTMLElement) {
-	if (!session.sessionId || session.isCompleted || disabled) return;
-	hintMotionOrigin = trigger;
-	showHintMenu = true;
-	hintError = null;
-	contentHint = "";
-	expressionPhrases = [];
+	hint.open(trigger);
 }
-
 function closeHintMenu() {
-	hintRequests.invalidate();
-	showHintMenu = false;
-	hintError = null;
-	isGettingHint = false;
-	contentHint = "";
-	expressionQuery = "";
-	expressionPhrases = [];
+	hint.dismiss();
 }
-
-onDestroy(() => hintRequests.invalidate());
+onDestroy(() => hint.destroy());
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
-	if (!target.closest(".ao3-hint-wrapper") && !target.closest(".hint-bubble") && showHintMenu) closeHintMenu();
+	if (!target.closest(".ao3-hint-wrapper") && !target.closest(".hint-bubble") && hint.isOpen) closeHintMenu();
 }
 
 function scrollToTop() {
@@ -235,12 +166,12 @@ function handleFinishClick() {
 }
 
 function handleFinishConfirm() {
-	showFinishConfirm = false;
-	void session.handleCompleteAndNavigate(String(taskId));
+	void session.handleCompleteAndNavigate();
 }
 
 function handleFinishCancel() {
 	showFinishConfirm = false;
+	session.clearCompletionError();
 }
 </script>
 
@@ -286,48 +217,20 @@ function handleFinishCancel() {
 			{/if}
 		</div>
 
-		<section class="mb-8 border border-[#ccc] bg-[#eee] p-2.5">
-			<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1 md:grid-cols-[150px_1fr]">
-				<dt class="pt-1 text-right font-bold">Rating:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><span class="ao3-tag-link">{rating}</span></dd>
-				<dt class="pt-1 text-right font-bold">Archive Warning:</dt>
-				<dd class="border-b border-[#ddd] pb-1"><span class="ao3-tag-link">{warning}</span></dd>
-				{#if tagList(categories).length}
-					<dt class="pt-1 text-right font-bold">Category:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(categories))}</dd>
-				{/if}
-				<dt class="pt-1 text-right font-bold">Fandoms:</dt>
-				<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(fandoms))}</dd>
-				{#if tagList(relationships).length}
-					<dt class="pt-1 text-right font-bold">Relationships:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(relationships))}</dd>
-				{/if}
-				{#if tagList(characters).length}
-					<dt class="pt-1 text-right font-bold">Characters:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(characters))}</dd>
-				{/if}
-				{#if tagList(additionalTags).length}
-					<dt class="pt-1 text-right font-bold">Additional Tags:</dt>
-					<dd class="border-b border-[#ddd] pb-1">{@render renderTagList(tagList(additionalTags))}</dd>
-				{/if}
-			</dl>
-		</section>
-
-		<section class="mb-8 border-b border-[#ccc] pb-4 text-center">
-			<h2 class="m-0 font-[Georgia,serif] text-3xl">{workTitle}</h2>
-			<h3 class="m-0 mt-1 text-lg font-normal"><span class="ao3-byline-link">{authorName}</span></h3>
-			{#if summary}
-				<div class="mx-auto mt-4 max-w-[800px] border border-[#ccc] bg-[#fdfdfd] p-4 text-left">
-					<p class="font-bold">Summary:</p>
-					<blockquote class="m-0"><MarkdownRenderer content={summary} /></blockquote>
-				</div>
-			{/if}
-		</section>
-
-		<section class="min-h-[220px] py-4 text-[15px]">
-			<h3 class="mb-4 text-center font-[Georgia,serif] text-xl font-normal">{chapterTitle}</h3>
-			<div class="mx-auto max-w-3xl leading-6"><MarkdownRenderer content={excerpt} /></div>
-		</section>
+		<WorkMetadata
+			title={workTitle}
+			author={authorName}
+			{summary}
+			{rating}
+			{warning}
+			{fandoms}
+			{categories}
+			{relationships}
+			{characters}
+			{additionalTags}
+			{chapterTitle}
+			{excerpt}
+		/>
 
 		<ul class="my-6 flex list-none flex-wrap justify-center gap-2 p-0">
 			<li><button type="button" class="ao3-action" onclick={scrollToTop}>↑ Top</button></li>
@@ -373,11 +276,11 @@ function handleFinishCancel() {
 								class="ao3-action inline-flex items-center gap-1 whitespace-nowrap"
 								onclick={(event) => {
 									event.stopPropagation();
-									showHintMenu ? closeHintMenu() : openHintMenu(event.currentTarget);
+								hint.isOpen ? closeHintMenu() : openHintMenu(event.currentTarget);
 								}}
 								disabled={!session.sessionId || disabled}
 							>
-								<Lightbulb size={14} class={isGettingHint ? "animate-pulse text-[#900]" : ""} /> {t.getHint}
+								<Lightbulb size={14} class={hint.isLoading ? "animate-pulse text-[#900]" : ""} /> {t.getHint}
 							</button>
 						</div>
 						<button type="button" class="ao3-action" onclick={submitComment} disabled={!commentText.trim() || disabled}>
@@ -386,97 +289,53 @@ function handleFinishCancel() {
 					</div>
 				</div>
 			</div>
-			{#if showHintMenu}
+			{#if hint.isOpen}
 				<HintFloatingPanel
 					anchorName="--libiamo-ao3-hint-anchor"
 					layoutReference={hintLayoutReference}
-					motionOrigin={hintMotionOrigin}
+					motionOrigin={hint.motionOrigin}
 					{language}
-					bind:expressionQuery
-					{expressionPhrases}
-					{contentHint}
-					{hintError}
-					{isGettingHint}
+					bind:expressionQuery={hint.expressionQuery}
+					bind:activeMode={hint.mode}
+					bind:submittedExpressionQuery={hint.submittedQuery}
+					expressionPhrases={hint.phrases}
+					contentHint={hint.contentHint}
+					hintError={hint.error}
+					isGettingHint={hint.isLoading}
 					{disabled}
-					onExpressionSubmit={handleExpressionHelp}
-					onContentHint={handleGetHint}
+					onExpressionSubmit={hint.requestExpression}
+					onContentHint={hint.requestContent}
+					onReset={hint.reset}
 					onClose={closeHintMenu}
 				/>
 			{/if}
 
 			<ol class="m-0 list-none p-0">
 				{#each commentTree as comment (comment.id)}
-					{@render renderComment(comment)}
+					<CommentTree
+						{comment}
+						{chapterTitle}
+						earlier={t.earlier}
+						retryLabel={t.retry}
+						replyLabel={t.reply}
+						{disabled}
+						onRetry={(id) => session.handleRetry(id)}
+						onReply={selectReplyTarget}
+					/>
 				{/each}
 			</ol>
 		</section>
 	</div>
 </div>
 
-<BottomSheet
+<FinishSessionSheet
 	show={showFinishConfirm}
-	title="Finish Task"
-	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
-	confirmLabel="Finish & Review"
-	cancelLabel="Keep Practicing"
+	{language}
+	pending={session.isCompleting}
+	error={session.completionError}
 	onConfirm={handleFinishConfirm}
 	onCancel={handleFinishCancel}
 />
-
-{#snippet renderTagList(values: string[])}
-	<ul class="ao3-commas m-0 list-none p-0">
-		{#each values as value}
-			<li><span class="ao3-tag-link">{value}</span></li>
-		{/each}
-	</ul>
-{/snippet}
-
-{#snippet renderComment(comment: Ao3RenderableComment)}
-	<li class="mb-4" style={`margin-left: ${Math.min(comment.depth, 5) * 2}%`}>
-		<article class="rounded border border-[#ddd] bg-white shadow-sm">
-			<div class="flex items-center justify-between border-b border-[#ddd] bg-[#eee] px-4 py-2 text-[13px]">
-				<span
-					><span class="ao3-comment-link">{comment.username}</span>
-					on {comment.chapterTitle ?? chapterTitle}</span
-				>
-				<span class="text-[#666]">{comment.timestamp ?? t.earlier}</span>
-			</div>
-			<div class="flex min-h-[100px] gap-4 p-4">
-				<img
-					class="h-[72px] w-[72px] shrink-0 border border-[#ccc] object-cover p-0.5 md:h-[100px] md:w-[100px]"
-					alt=""
-					src={comment.iconUrl || DEFAULT_AO3_ICON}
-				>
-				<div class="min-w-0 flex-1 break-words leading-6">
-					<MarkdownRenderer content={comment.comment} />
-					{#if comment.deliveryState === "failed" && comment.messageId}
-						<button type="button" class="ao3-action mt-2" onclick={() => session.handleRetry(comment.messageId ?? "")}>{t.retry}</button>
-					{/if}
-				</div>
-			</div>
-			<ul class="m-0 flex list-none justify-end gap-2 border-t border-dotted border-[#ddd] bg-[#fdfdfd] px-4 py-2">
-				<li>
-					<button
-						type="button"
-						class="text-[#900] hover:border-b hover:border-dotted hover:border-[#900]"
-						onclick={() => selectReplyTarget(comment)}
-						{disabled}
-					>
-						{t.reply}
-					</button>
-				</li>
-			</ul>
-		</article>
-		{#if comment.replies.length > 0}
-			<ol class="mt-4 list-none border-l border-[#ddd] pl-[3%]">
-				{#each comment.replies as reply (reply.id)}
-					{@render renderComment(reply)}
-				{/each}
-			</ol>
-		{/if}
-	</li>
-{/snippet}
-
 <style>
 .ao3-root {
 	font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Helvetica, sans-serif;
@@ -487,57 +346,57 @@ function handleFinishCancel() {
 .ao3-root :global(a:focus) {
 	border-bottom: 1px dotted #900;
 }
-.ao3-link,
-.ao3-comment-link,
-.ao3-byline-link,
-.ao3-tag-link,
-.ao3-site-title {
+.ao3-root :global(.ao3-link),
+.ao3-root :global(.ao3-comment-link),
+.ao3-root :global(.ao3-byline-link),
+.ao3-root :global(.ao3-tag-link),
+.ao3-root :global(.ao3-site-title) {
 	display: inline;
 	text-decoration: none;
 }
-.ao3-link,
-.ao3-comment-link {
+.ao3-root :global(.ao3-link),
+.ao3-root :global(.ao3-comment-link) {
 	border-bottom: 1px solid currentColor;
 	color: #111;
 }
-.ao3-link:hover,
-.ao3-comment-link:hover,
-.ao3-byline-link:hover {
+.ao3-root :global(.ao3-link:hover),
+.ao3-root :global(.ao3-comment-link:hover),
+.ao3-root :global(.ao3-byline-link:hover) {
 	color: #999;
 }
-.ao3-tag-link {
+.ao3-root :global(.ao3-tag-link) {
 	border-bottom: 1px dotted currentColor;
 	color: #111;
 	line-height: 1.5;
 	padding: 0;
 }
-.ao3-tag-link:hover {
+.ao3-root :global(.ao3-tag-link:hover) {
 	border-color: #fff;
 	background: #900;
 	color: #fff;
 }
-.ao3-commas li {
+.ao3-root :global(.ao3-commas li) {
 	display: inline;
 }
-.ao3-commas li::after {
+.ao3-root :global(.ao3-commas li::after) {
 	content: ", ";
 }
-.ao3-commas li:last-child::after,
-.ao3-commas li:only-child::after {
+.ao3-root :global(.ao3-commas li:last-child::after),
+.ao3-root :global(.ao3-commas li:only-child::after) {
 	content: none;
 }
-.ao3-byline-link {
+.ao3-root :global(.ao3-byline-link) {
 	border: 0;
 	color: #111;
 }
-.ao3-site-title {
+.ao3-root :global(.ao3-site-title) {
 	border: 0;
 	color: #fff;
 }
-.ao3-site-title:hover {
+.ao3-root :global(.ao3-site-title:hover) {
 	border-bottom: 1px dotted currentColor;
 }
-.ao3-action {
+.ao3-root :global(.ao3-action) {
 	display: inline-block;
 	border: 1px solid #ccc;
 	border-radius: 4px;
@@ -550,13 +409,13 @@ function handleFinishCancel() {
 	padding: 0.35em 0.75em;
 	text-decoration: none;
 }
-.ao3-action:hover:not(:disabled) {
+.ao3-root :global(.ao3-action:hover:not(:disabled)) {
 	border-color: #bbb;
 	background: #e0e0e0;
 	box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.15);
 	color: #900;
 }
-.ao3-action:disabled {
+.ao3-root :global(.ao3-action:disabled) {
 	cursor: not-allowed;
 	opacity: 0.55;
 }

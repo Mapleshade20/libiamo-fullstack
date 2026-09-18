@@ -44,8 +44,18 @@ describe("practice presentation adapters", () => {
 		["Discord", () => checkAdapter(createDiscordPresentationAdapter())],
 		["iMessage", () => checkAdapter(createIMessagePresentationAdapter())],
 		["Reddit", () => checkAdapter(createRedditPresentationAdapter())],
-		["AO3", () => checkAdapter(createAo3PresentationAdapter())],
 	] as const)("preserves %s seeded identity, opening authors, and message ordering", (_name, check) => check());
+
+	it("keeps AO3 identity in work metadata instead of the participant pool", () => {
+		const adapter = createAo3PresentationAdapter();
+		const openingState = adapter.normalizeOpeningState({ authorName: "Fic Author", previousComments: [{ username: "Reader", text: "Hello" }] });
+		const presentation = adapter.resolvePresentation({ sessionId: 17, openingState, userName: "Learner" });
+		expect(presentation.agent.name).toBe("Fic Author");
+		expect(presentation.context).toBeUndefined();
+		expect(adapter.buildOpeningMessages({ openingState, presentation, userName: "Learner", avatarUrl: "avatar.png", earlier: "Earlier" })).toEqual(
+			[],
+		);
+	});
 
 	it.each([
 		createRedditPresentationAdapter,

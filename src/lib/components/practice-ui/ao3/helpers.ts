@@ -130,7 +130,9 @@ export function buildAo3CommentTree(params: {
 	messages: ChatMessage[];
 	userAvatarUrl?: string;
 	agentIconUrl?: string;
+	basePath?: string;
 }): Ao3RenderableComment[] {
+	const defaultIcon = `${params.basePath ?? ""}${DEFAULT_AO3_ICON}`;
 	return buildCommentThreadTree<Ao3CommentNode, Ao3RenderableComment>({
 		openingComments: params.openingState.previousComments ?? [],
 		// Pending placeholders are polling triggers only: real AO3 shows nothing
@@ -141,12 +143,12 @@ export function buildAo3CommentTree(params: {
 			username: base.author,
 			comment: base.text,
 			chapterTitle: normalizeAo3Text(comment.chapterTitle) || undefined,
-			iconUrl: normalizeAo3Text(comment.iconUrl, DEFAULT_AO3_ICON),
+			iconUrl: normalizeAo3Text(comment.iconUrl, defaultIcon),
 		}),
 		mapMessageComment: (message, base) => ({
 			username: base.author,
 			comment: base.text,
-			iconUrl: message.role === "user" ? params.userAvatarUrl || DEFAULT_AO3_ICON : params.agentIconUrl || DEFAULT_AO3_ICON,
+			iconUrl: message.role === "user" ? params.userAvatarUrl || defaultIcon : params.agentIconUrl || defaultIcon,
 		}),
 	});
 }
