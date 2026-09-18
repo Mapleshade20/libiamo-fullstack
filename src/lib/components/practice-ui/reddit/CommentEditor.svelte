@@ -4,9 +4,9 @@ import Image from "@lucide/svelte/icons/image";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import { onDestroy } from "svelte";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { requestHint } from "../hint/api";
+import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import { createHintRequestLifecycle } from "../hint/requestLifecycle";
+import type { createHintOwnership } from "../hint/ownership";
 import type { ContextComment } from "./types";
 
 let {
@@ -22,6 +22,7 @@ let {
 	activeHintEditorId = null as string | null,
 	onHintActivate = (_editorId: string) => {},
 	onHintDeactivate = (_editorId: string) => {},
+	hintOwnership,
 	onSubmit,
 	sessionId = null as number | null,
 	contextPath = [] as ContextComment[],
@@ -38,6 +39,7 @@ let {
 	activeHintEditorId?: string | null;
 	onHintActivate?: (editorId: string) => void;
 	onHintDeactivate?: (editorId: string) => void;
+	hintOwnership?: ReturnType<typeof createHintOwnership>;
 	onSubmit: (text: string) => void;
 	sessionId?: number | null;
 	contextPath?: ContextComment[];
@@ -46,98 +48,35 @@ let {
 let isExpanded = $state(false);
 let textareaEl = $state<HTMLTextAreaElement | null>(null);
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
-let hintMotionOrigin = $state<HTMLElement | null>(null);
-
-// ── Hint state ───────────────────────────────────────────────────────
-let showHintMenu = $state(false);
-let contentHint = $state("");
-let expressionQuery = $state("");
-let expressionPhrases = $state<string[]>([]);
-let hintError = $state<string | null>(null);
-let isGettingHint = $state(false);
-const hintRequests = createHintRequestLifecycle();
+const hint = createHintController({
+	getContext: () => ({ sessionId, language, draft: inputText, disabled, contextPath }),
+});
 const hintAnchorName = $derived(`--libiamo-reddit-hint-${hintEditorId.replace(/[^a-zA-Z0-9_-]/g, "-")}`);
 
 function openHintMenu(trigger: HTMLElement) {
 	if (disabled) return;
 	onHintActivate(hintEditorId);
-	hintMotionOrigin = trigger;
-	showHintMenu = true;
-	hintError = null;
-	contentHint = "";
-	expressionPhrases = [];
-}
-
-async function handleGetHint() {
-	if (disabled || isGettingHint) return;
-	if (!sessionId) return;
-	const request = hintRequests.begin("content");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const result = await requestHint({ sessionId, mode: "content", draft: inputText, contextPath });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		contentHint = result.contentHint ?? "";
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get hints:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-async function handleExpressionHelp() {
-	if (disabled || isGettingHint || !expressionQuery.trim()) return;
-	const request = hintRequests.begin("expression");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		if (!sessionId) return;
-		const result = await requestHint({ sessionId, mode: "expression", draft: inputText, expression: expressionQuery, contextPath });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		expressionPhrases = result.phrases ?? [];
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get expression help:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
+	hint.open(trigger);
 }
 
 function closeHintMenu(notifyParent = true) {
-	hintRequests.invalidate();
-	showHintMenu = false;
-	isGettingHint = false;
-	hintError = null;
-	contentHint = "";
-	expressionQuery = "";
-	expressionPhrases = [];
+	hint.dismiss();
 	if (notifyParent) onHintDeactivate(hintEditorId);
 }
 
 onDestroy(() => {
-	hintRequests.invalidate();
+	hint.destroy();
 	onHintDeactivate(hintEditorId);
 });
 
 $effect(() => {
-	if (showHintMenu && activeHintEditorId !== null && activeHintEditorId !== hintEditorId) closeHintMenu(false);
+	if (hint.isOpen && activeHintEditorId !== null && activeHintEditorId !== hintEditorId) closeHintMenu(false);
 });
 
 function handleWindowClick(event: MouseEvent) {
 	const target = event.target as HTMLElement;
 	if (!target.closest(".hint-btn-wrapper") && !target.closest(".hint-bubble")) {
-		if (showHintMenu) closeHintMenu();
+		if (hint.isOpen) closeHintMenu();
 	}
 }
 
@@ -254,14 +193,14 @@ $effect(() => {
 					<div class="hint-btn-wrapper relative">
 						<button
 							type="button"
-							class="grid h-7 w-7 place-items-center rounded text-[#878A8C] transition-colors hover:bg-[#EDEFF1] hover:text-[#FF4500] disabled:opacity-40 {showHintMenu
+							class="grid h-7 w-7 place-items-center rounded text-[#878A8C] transition-colors hover:bg-[#EDEFF1] hover:text-[#FF4500] disabled:opacity-40 {hint.isOpen
 								? 'bg-[#FFF3EC] text-[#FF4500]'
 								: ''}"
 							title={t.getHint}
 							aria-label={t.getHint}
 							onclick={(e) => {
 								e.stopPropagation();
-								if (showHintMenu) {
+								if (hint.isOpen) {
 									closeHintMenu();
 								} else {
 									openHintMenu(e.currentTarget);
@@ -271,7 +210,7 @@ $effect(() => {
 						>
 							<Lightbulb
 								size={14}
-								class={isGettingHint
+								class={hint.isLoading
 									? "animate-pulse text-[#FF4500]"
 									: ""}
 							/>
@@ -297,20 +236,23 @@ $effect(() => {
 				</button>
 			</div>
 		</div>
-		{#if sessionId && showHintMenu}
+		{#if sessionId && hint.isOpen}
 			<HintFloatingPanel
 				anchorName={hintAnchorName}
 				layoutReference={hintLayoutReference}
-				motionOrigin={hintMotionOrigin}
+				motionOrigin={hint.motionOrigin}
 				{language}
-				bind:expressionQuery
-				{expressionPhrases}
-				{contentHint}
-				{hintError}
-				{isGettingHint}
+				bind:expressionQuery={hint.expressionQuery}
+				bind:activeMode={hint.mode}
+				bind:submittedExpressionQuery={hint.submittedQuery}
+				expressionPhrases={hint.phrases}
+				contentHint={hint.contentHint}
+				hintError={hint.error}
+				isGettingHint={hint.isLoading}
 				{disabled}
-				onExpressionSubmit={handleExpressionHelp}
-				onContentHint={handleGetHint}
+				onExpressionSubmit={hint.requestExpression}
+				onContentHint={hint.requestContent}
+				onReset={hint.reset}
 				onClose={closeHintMenu}
 			/>
 		{/if}

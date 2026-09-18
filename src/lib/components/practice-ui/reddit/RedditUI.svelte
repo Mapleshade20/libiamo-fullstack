@@ -2,7 +2,8 @@
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Search from "@lucide/svelte/icons/search";
 import { fade } from "svelte/transition";
-import { BottomSheet } from "$lib/components/ui/bottom-sheet";
+import FinishSessionSheet from "../FinishSessionSheet.svelte";
+import { createHintOwnership } from "../hint/ownership";
 import { createPracticeSession } from "../session.svelte";
 import type { PracticeUiRootProps } from "../types";
 import { createRedditPresentationAdapter } from "./adapter";
@@ -47,6 +48,7 @@ const session = createPracticeSession(() => ({
 	labels: sessionLabels,
 	taskId,
 }));
+const hintOwnership = createHintOwnership();
 
 // ── Opening state ────────────────────────────────────────────────────
 
@@ -187,13 +189,17 @@ function handleFinishClick() {
 }
 
 function handleFinishConfirm() {
-	showFinishConfirm = false;
-	void session.handleCompleteAndNavigate(String(taskId));
+	void session.handleCompleteAndNavigate();
 }
 
 function handleFinishCancel() {
 	showFinishConfirm = false;
+	session.clearCompletionError();
 }
+
+$effect(() => {
+	if (session.completionError !== null) showFinishConfirm = true;
+});
 </script>
 
 <!--===================================================-->
@@ -276,6 +282,7 @@ function handleFinishCancel() {
 								{language}
 								sessionId={session.sessionId}
 								contextPath={postContext}
+								{hintOwnership}
 								hintEditorId="top-level"
 								{activeHintEditorId}
 								onHintActivate={activateHintEditor}
@@ -339,16 +346,14 @@ function handleFinishCancel() {
 <!-- Overlays (toast) -->
 <Overlays {showToast} {t} />
 
-<BottomSheet
+<FinishSessionSheet
 	show={showFinishConfirm}
-	title="Finish Task"
-	message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
-	confirmLabel="Finish & Review"
-	cancelLabel="Keep Practicing"
+	{language}
+	pending={session.isCompleting}
+	error={session.completionError}
 	onConfirm={handleFinishConfirm}
 	onCancel={handleFinishCancel}
 />
-
 <style>
 ::-webkit-scrollbar {
 	width: 6px;

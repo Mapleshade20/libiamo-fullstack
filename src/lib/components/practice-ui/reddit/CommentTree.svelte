@@ -13,6 +13,7 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import MoreHorizontal from "@lucide/svelte/icons/more-horizontal";
 import Share2 from "@lucide/svelte/icons/share-2";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
+import type { createHintOwnership } from "../hint/ownership";
 import CommentEditor from "./CommentEditor.svelte";
 // Self-import for recursive rendering
 import CommentTree from "./CommentTree.svelte";
@@ -39,6 +40,7 @@ let {
 	onMockAction = () => {},
 	replyingToId = null as string | null,
 	isAgentTyping = false,
+	hintOwnership,
 }: {
 	node: CommentTreeNode;
 	depth?: number;
@@ -59,6 +61,7 @@ let {
 	onMockAction?: () => void;
 	replyingToId?: string | null;
 	isAgentTyping?: boolean;
+	hintOwnership?: ReturnType<typeof createHintOwnership>;
 } = $props();
 
 // Collapse state persisted via module-level Map
@@ -258,6 +261,7 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 						{sessionId}
 						placeholder={replyPlaceholder}
 						contextPath={extendedPath}
+						{hintOwnership}
 						hintEditorId={`reply-${node.id}`}
 						{activeHintEditorId}
 						{onHintActivate}
@@ -290,6 +294,7 @@ const hasVisibleChildren = $derived(hasChildren || showLoadingHere);
 					{activeHintEditorId}
 					{onHintActivate}
 					{onHintDeactivate}
+					{hintOwnership}
 					{onMockAction}
 					{replyingToId}
 					{isAgentTyping}
