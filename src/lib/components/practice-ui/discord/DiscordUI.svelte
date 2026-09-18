@@ -5,6 +5,7 @@ import { fade } from "svelte/transition";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
+import type { PracticeUiRootProps } from "../types";
 import ChatHeader from "./ChatHeader.svelte";
 import { hasAgentStartedComposing } from "./helpers";
 import { i18n } from "./i18n";
@@ -17,27 +18,7 @@ import Sidebar from "./Sidebar.svelte";
 import { type ChatUser } from "./types";
 import { initUserPool } from "./userPool";
 
-interface Props {
-	taskId?: string | number;
-	userName?: string;
-	avatarUrl?: string;
-	language?: string;
-	existingSession?: any;
-	openingState?: unknown;
-	maxTurns?: number;
-	returnHref?: string;
-}
-
-let {
-	taskId = "",
-	userName = "Learner",
-	avatarUrl = "",
-	language = "en",
-	existingSession = null,
-	openingState = null,
-	maxTurns = 0,
-	returnHref = "",
-}: Props = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const sessionLabels = {

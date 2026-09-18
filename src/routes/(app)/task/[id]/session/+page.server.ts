@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import { parseDraftFromMessage, summarizeMailBodyLayout } from "$lib/components/practice-ui/mail/mailUtils";
+import type { PersistedPracticeMessage, PracticeSessionSnapshot } from "$lib/components/practice-ui/types";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -172,10 +173,27 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			})
 		: null;
 
+	const sessionSnapshot = existingSession
+		? ({
+				id: existingSession.id,
+				status: existingSession.status,
+				messages: existingSession.messages.map((message) => ({
+					...message,
+					// JSONB has an unknown driver type. Preserve the stored payload; consumers
+					// continue to validate metadata through their existing presentation helpers.
+					llmMetadata: message.llmMetadata as PersistedPracticeMessage["llmMetadata"],
+				})),
+				agentReadUpToMessageId: existingSession.agentReadUpToMessageId,
+				maxTurnsSnapshot: existingSession.maxTurnsSnapshot,
+				tutorFeedback: existingSession.tutorFeedback,
+				nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null,
+			} satisfies PracticeSessionSnapshot)
+		: null;
+
 	return {
 		task: taskData,
 		readReceipt: existingSession && latestAssistantMessageId ? { sessionId: existingSession.id, messageId: latestAssistantMessageId } : null,
-		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
+		existingSession: sessionSnapshot,
 		taskId: taskIdStr,
 		maxTurns: resolveSessionMaxTurns(existingSession?.maxTurnsSnapshot, taskData.template.maxTurns),
 	};

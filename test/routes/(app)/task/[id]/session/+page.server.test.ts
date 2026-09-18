@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PersistedPracticeMessage, PracticeSessionSnapshot } from "$lib/components/practice-ui/types";
 
 const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
 	const submitMessage = vi.fn();
@@ -51,6 +52,19 @@ import {
 } from "$lib/constants";
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
+function createSnapshot(overrides: Partial<PracticeSessionSnapshot> = {}): PracticeSessionSnapshot {
+	return {
+		id: 789,
+		status: "in_progress",
+		messages: [],
+		agentReadUpToMessageId: null,
+		maxTurnsSnapshot: null,
+		nextAgentWorkDueAt: null,
+		tutorFeedback: null,
+		...overrides,
+	};
+}
+
 describe("session page server", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
@@ -94,11 +108,15 @@ describe("session page server", () => {
 	describe("load", () => {
 		it("returns task and existing session when found", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 789,
-				status: "in_progress",
-				messages: [],
-			});
+			const message = {
+				id: 12,
+				role: "assistant",
+				content: "An existing reply",
+				createdAt: new Date("2026-08-23T11:00:00.000Z"),
+				llmMetadata: { clientMessageId: "reply-12", hidden: false, providerDetail: { version: 1 } },
+			} satisfies PersistedPracticeMessage;
+			const snapshot = createSnapshot({ messages: [message], agentReadUpToMessageId: 11, maxTurnsSnapshot: 8 });
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(snapshot);
 			const nextAgentWorkDueAt = new Date("2026-08-23T12:00:00.000Z");
 			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({ dueAt: nextAgentWorkDueAt });
 
@@ -107,13 +125,13 @@ describe("session page server", () => {
 				locals: { user: mockUser },
 				// Mock the parent function to resolve the avatarUrl
 				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
+			} as any)) as { task: typeof mockTask; existingSession: PracticeSessionSnapshot | null };
 
 			expect(result.task).toEqual(mockTask);
 			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
 			// the earliest outstanding agent work drives the client's polling lifecycle
-			expect((result.existingSession as unknown as { nextAgentWorkDueAt?: unknown }).nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
+			expect(result.existingSession).toEqual({ ...snapshot, nextAgentWorkDueAt });
 			const batchQuery = mockDb.query.agentResponseBatch.findFirst.mock.calls[0]?.[0];
 			expect(batchQuery.orderBy({ dueAt: "dueAt" }, { asc: (value: string) => `asc:${value}` })).toEqual(["asc:dueAt"]);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
@@ -127,6 +145,18 @@ describe("session page server", () => {
 			]);
 		});
 
+		it.each(["in_progress", "completed", "evaluated", "abandoned"] as const)("preserves a %s snapshot when no Agent work remains", async (status) => {
+			const snapshot = createSnapshot({ status });
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue(snapshot);
+			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue(null);
+			const result = await load({
+				params: { id: mockTaskId },
+				locals: { user: mockUser },
+			} as Parameters<typeof load>[0]);
+			expect(result).toMatchObject({ existingSession: snapshot, readReceipt: null, maxTurns: 0 });
+		});
+
 		it("returns null existingSession when no in-progress session", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
@@ -136,7 +166,7 @@ describe("session page server", () => {
 				locals: { user: mockUser },
 				// Mock the parent function here as well
 				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
+			} as any)) as { task: typeof mockTask; existingSession: PracticeSessionSnapshot | null };
 
 			expect(result.existingSession).toBeNull();
 		});
@@ -192,7 +222,7 @@ describe("session page server", () => {
 				params: { id: mockTaskId },
 				locals: { user: mockUser },
 				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof spanishTask; existingSession: { id: number } | null };
+			} as any)) as { task: typeof spanishTask; existingSession: PracticeSessionSnapshot | null };
 
 			expect(result.task).toEqual(spanishTask);
 			expect(result.existingSession).toBeNull();

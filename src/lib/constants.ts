@@ -1,3 +1,6 @@
+export const PRACTICE_SESSION_STATUSES = ["in_progress", "completed", "evaluated", "abandoned"] as const;
+export type PracticeSessionStatus = (typeof PRACTICE_SESSION_STATUSES)[number];
+
 export const UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 export type UiVariant = (typeof UI_VARIANTS)[number];
 

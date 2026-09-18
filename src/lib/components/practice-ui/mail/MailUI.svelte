@@ -7,12 +7,12 @@ import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
-
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
 import { completeAction, postAction } from "../apiService";
 import { type MessageSubmissionResult, submitPracticeMessage } from "../chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
+import type { PracticeUiRootProps } from "../types";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
@@ -33,27 +33,7 @@ import { getMailContact, getMailContactFromOpeningEmails } from "./userPool";
 
 const clock = getDisplayClock();
 
-interface Props {
-	taskId?: string | number;
-	userName?: string;
-	avatarUrl?: string;
-	language?: string;
-	existingSession?: any;
-	openingState?: unknown;
-	maxTurns?: number;
-	returnHref?: string;
-}
-
-let {
-	taskId = "",
-	userName = "Learner",
-	avatarUrl = "",
-	language = "en",
-	existingSession = null,
-	openingState = null,
-	maxTurns = 0,
-	returnHref = "",
-}: Props = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 

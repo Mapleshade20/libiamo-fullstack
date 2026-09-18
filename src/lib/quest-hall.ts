@@ -1,4 +1,6 @@
-export type HallQuestSessionStatus = "in_progress" | "completed" | "evaluated" | "abandoned" | null;
+import type { PracticeSessionStatus } from "$lib/constants";
+
+export type HallQuestSessionStatus = PracticeSessionStatus | null;
 
 export interface HallQuest {
 	id: number;

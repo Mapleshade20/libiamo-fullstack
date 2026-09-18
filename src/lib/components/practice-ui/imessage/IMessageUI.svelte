@@ -10,7 +10,6 @@ import { base } from "$app/paths";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
-
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import { getTodayDateString, normalizeText } from "../../utils/messageUtils";
 import { requestHint } from "../hint/api";
@@ -18,32 +17,13 @@ import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
 import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
+import type { PracticeUiRootProps } from "../types";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
 const clock = getDisplayClock();
 
-interface Props {
-	taskId?: string | number;
-	userName?: string;
-	avatarUrl?: string;
-	language?: string;
-	existingSession?: any;
-	openingState?: unknown;
-	maxTurns?: number;
-	returnHref?: string;
-}
-
-let {
-	taskId = "",
-	userName = "Learner",
-	avatarUrl = "",
-	language = "en",
-	existingSession = null,
-	openingState = null,
-	maxTurns = 0,
-	returnHref = "",
-}: Props = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const sessionLabels = {
