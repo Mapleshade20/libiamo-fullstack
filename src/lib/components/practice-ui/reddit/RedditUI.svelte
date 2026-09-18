@@ -5,6 +5,7 @@ import { fade } from "svelte/transition";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { createPracticeSession } from "../session.svelte";
 import type { PracticeUiRootProps } from "../types";
+import { createRedditPresentationAdapter } from "./adapter";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
 import CommunityPanel from "./CommunityPanel.svelte";
@@ -33,7 +34,9 @@ const sessionLabels = {
 	},
 };
 
+const adapter = createRedditPresentationAdapter();
 const session = createPracticeSession(() => ({
+	adapter,
 	userName,
 	avatarUrl,
 	language,
@@ -133,7 +136,12 @@ function toTreeNode(comment: RedditRenderableComment): CommentTreeNode {
 	return {
 		id: comment.id,
 		author: comment.author,
-		authorColor: comment.role === "agent" ? session.agentUser.color : comment.role === "user" ? userAvatarColor : getAvatarColor(comment.author),
+		authorColor:
+			comment.role === "agent"
+				? (session.agentPresentation.accentClass ?? getAvatarColor(comment.author))
+				: comment.role === "user"
+					? userAvatarColor
+					: getAvatarColor(comment.author),
 		authorAvatarUrl: comment.role === "user" ? avatarUrl : undefined,
 		text: comment.text,
 		timestamp: comment.timestamp ?? t.earlier,
@@ -305,7 +313,7 @@ function handleFinishCancel() {
 								{userName}
 								{avatarUrl}
 								avatarColor={userAvatarColor}
-								agentColor={session.agentUser.color}
+								agentColor={session.agentPresentation.accentClass}
 								agentName={session.agentName}
 								sessionId={session.sessionId}
 								{t}

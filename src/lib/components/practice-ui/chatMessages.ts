@@ -1,4 +1,5 @@
 import type { CommentThreadMetadata } from "./commentThread";
+import type { PracticeMessageMetadata } from "./types";
 
 type PersistedSessionMessage = {
 	id: number | string;
@@ -11,17 +12,6 @@ type PersistedSessionMessage = {
 type RetryLabels = {
 	retryFailedMessage: string;
 	stillProcessingMessage: string;
-};
-
-type MessageMetadata = {
-	clientMessageId?: string;
-	failed?: boolean;
-	noReply?: boolean;
-	failureError?: string | null;
-	hidden?: boolean;
-	displayContent?: string;
-	assistantAuthorName?: string;
-	thread?: CommentThreadMetadata;
 };
 
 type SessionSnapshotMessage = {
@@ -98,9 +88,9 @@ export function getSessionSnapshot(session: SessionSnapshotInput): string {
 	return `${session.status ?? ""}:${session.tutorFeedback ? "feedback" : ""}:${messagesSnapshot}`;
 }
 
-function getMessageMetadata(value: unknown): MessageMetadata {
+function getMessageMetadata(value: unknown): PracticeMessageMetadata {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as MessageMetadata;
+	return value as PracticeMessageMetadata;
 }
 
 function isAgentRole(role: string) {
@@ -178,6 +168,7 @@ export function buildChatMessages({
 	agentName,
 	avatarUrl,
 	agentColor,
+	agentAvatarUrl,
 	labels,
 	isHidden = () => false,
 }: {
@@ -187,6 +178,7 @@ export function buildChatMessages({
 	agentName: string;
 	avatarUrl?: string;
 	agentColor?: string;
+	agentAvatarUrl?: string;
 	labels: RetryLabels;
 	isHidden?: (message: PersistedSessionMessage) => boolean;
 }): ChatMessage[] {
@@ -200,7 +192,7 @@ export function buildChatMessages({
 			text: metadata.displayContent ?? message.content,
 			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: message.role === "user" ? userName : (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName),
-			avatar: message.role === "user" ? avatarUrl : undefined,
+			avatar: message.role === "user" ? avatarUrl : agentAvatarUrl,
 			avatarColor: message.role !== "user" ? agentColor : undefined,
 			isHidden: metadata.hidden === true || isHidden(message),
 			clientMessageId: metadata.clientMessageId,
@@ -218,6 +210,7 @@ export function buildChatMessages({
 			text: metadata.failed === true ? metadata.failureError || labels.retryFailedMessage : labels.stillProcessingMessage,
 			timestamp: formatTimestamp(parsePersistedMessageDate(message.createdAt)),
 			authorName: metadata.assistantAuthorName ?? metadata.thread?.responderName ?? agentName,
+			avatar: agentAvatarUrl,
 			avatarColor: agentColor,
 			deliveryState: metadata.failed === true ? "failed" : "pending",
 			clientMessageId: metadata.clientMessageId,

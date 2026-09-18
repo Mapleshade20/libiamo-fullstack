@@ -1,19 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { ChatOpeningState, ChatUser } from "$lib/components/practice-ui/discord/types";
 import { getOpeningStateMessages } from "$lib/components/practice-ui/messageTransformer";
+import type { PracticeAgentPresentation, PracticeOpeningState } from "$lib/components/practice-ui/types";
 
 describe("messageTransformer", () => {
-	const mockAgentUser: ChatUser = {
-		id: "agent",
+	const mockAgentUser: PracticeAgentPresentation = {
 		name: "Agent",
-		status: "Online",
-		color: "bg-blue",
-		isAgent: true,
+		accentClass: "bg-blue",
 	};
 
 	const baseParams = {
 		userName: "Learner",
-		agentUser: mockAgentUser,
+		agent: mockAgentUser,
 		avatarUrl: "/avatar.png",
 		labels: { earlier: "Earlier" },
 	};
@@ -21,7 +18,7 @@ describe("messageTransformer", () => {
 	it("returns empty array when openingStateData has no previousMessages", () => {
 		const result = getOpeningStateMessages({
 			...baseParams,
-			openingStateData: {} as ChatOpeningState,
+			openingStateData: {} as PracticeOpeningState,
 		});
 
 		expect(result).toEqual([]);
@@ -30,14 +27,14 @@ describe("messageTransformer", () => {
 	it("returns empty array when previousMessages is malformed", () => {
 		const result = getOpeningStateMessages({
 			...baseParams,
-			openingStateData: { previousMessages: null as any } as ChatOpeningState,
+			openingStateData: { previousMessages: null as any } as PracticeOpeningState,
 		});
 
 		expect(result).toEqual([]);
 	});
 
 	it("converts previous messages to chat messages format", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [
 				{ sender: "Alice", text: "Hello everyone!" },
 				{ sender: "Bob", text: "Hi Alice!" },
@@ -61,7 +58,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("identifies user messages correctly and applies avatar", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [{ sender: "Learner", text: "My message" }],
 		};
 
@@ -79,7 +76,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("applies agent color to non-user messages", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [{ sender: "Alice", text: "Agent message" }],
 		};
 
@@ -95,7 +92,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("handles missing sender by using agent name", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [{ text: "Anonymous message" }],
 		};
 
@@ -116,7 +113,7 @@ describe("messageTransformer", () => {
 		{ label: "whitespace text", invalidText: "   " },
 		{ label: "missing text", invalidText: undefined as any },
 	])("skips message when content is invalid ($label)", ({ invalidText }) => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [
 				{ sender: "Alice", text: "Valid message" },
 				{ sender: "Bob", text: invalidText },
@@ -135,7 +132,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("supports alternative field names (author instead of sender, content instead of text)", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [{ author: "Alice", content: "Using alternative fields" }],
 		};
 
@@ -151,7 +148,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("skips messages with invalid sender/text fields", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [{ sender: null as any, text: null as any }],
 		};
 
@@ -164,7 +161,7 @@ describe("messageTransformer", () => {
 	});
 
 	it("generates unique IDs based on index and author name", () => {
-		const openingStateData: ChatOpeningState = {
+		const openingStateData: PracticeOpeningState = {
 			previousMessages: [
 				{ sender: "Alice", text: "First" },
 				{ sender: "Bob", text: "Second" },

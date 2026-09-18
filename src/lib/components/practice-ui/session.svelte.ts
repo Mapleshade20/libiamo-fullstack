@@ -4,15 +4,13 @@ import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import { getDisplayClock } from "$lib/display-clock";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { prepareMarkdownText } from "../utils/markdownUtils";
-import { createTimeFormatter, normalizeText } from "../utils/messageUtils";
+import { createTimeFormatter } from "../utils/messageUtils";
 import { calculateCurrentTurns, isTurnLimitReached } from "../utils/sessionUtils";
 import { completeAction, postAction } from "./apiService";
 import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
-import type { ChatOpeningState, ChatUser } from "./discord/types";
-import { initUserPool } from "./discord/userPool";
-import { getOpeningStateMessages } from "./messageTransformer";
+import type { PracticeOpeningState, PracticePresentation, PracticePresentationAdapter } from "./types";
 
 export interface PracticeSessionLabels {
 	stillProcessingMessage: string;
@@ -28,7 +26,7 @@ export const AGENT_WORK_WAKE_BUFFER_MS = 2_000;
 
 export type AgentWorkPollingPlan = { kind: "interval" } | { kind: "wake"; delayMs: number } | { kind: "none" };
 
-export interface PracticeSessionOptions {
+export interface PracticeSessionOptions<Opening = PracticeOpeningState, Context = undefined> {
 	userName: string;
 	avatarUrl: string;
 	language: string;
@@ -36,21 +34,8 @@ export interface PracticeSessionOptions {
 	openingState: unknown;
 	maxTurns: number;
 	labels: PracticeSessionLabels;
-	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
+	adapter: PracticePresentationAdapter<Opening, Context>;
 	taskId?: string | number;
-}
-
-/**
- * Extract the agent display name from opening state's previous messages.
- * Returns the first sender that doesn't match the userName, or the fallback.
- */
-export function resolveAgentName(openingStateData: ChatOpeningState, userName: string, fallbackName: string): string {
-	const previousMessages = Array.isArray(openingStateData.previousMessages) ? openingStateData.previousMessages : [];
-	for (const message of previousMessages) {
-		const sender = normalizeText((message as any).sender ?? (message as any).author, "");
-		if (sender && sender !== userName) return sender;
-	}
-	return fallbackName;
 }
 
 /**
@@ -79,7 +64,7 @@ function toAgentWorkDueAt(value: unknown): Date | null {
 	return null;
 }
 
-export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
+export function createPracticeSession<Opening, Context>(getOptions: () => PracticeSessionOptions<Opening, Context>) {
 	const clock = getDisplayClock();
 	// Use $derived to keep values reactive after targeted invalidation re-runs getOptions().
 	// One-time destructuring would capture stale values and never update.
@@ -89,10 +74,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	const openingState = $derived(getOptions().openingState);
 	const maxTurns = $derived(getOptions().maxTurns);
 	const labels = $derived(getOptions().labels);
-	const onPoolInit = $derived(getOptions().onPoolInit);
+	const adapter = getOptions().adapter;
 	const taskId = $derived(getOptions().taskId);
 
-	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
+	const openingStateData = $derived(adapter.normalizeOpeningState(openingState));
 	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
 
 	// ── State ──────────────────────────────────────────────────────
@@ -109,13 +94,13 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
 	let agentReadUpToMessageId = $state<number | null>(null);
-	let agentUser = $state<ChatUser>({
-		id: "agent",
-		name: "Agent",
-		status: "Online",
-		color: "bg-[#5865F2]",
-		isAgent: true,
-	});
+	let presentation = $state.raw<PracticePresentation<Context>>(
+		adapter.resolvePresentation({
+			sessionId: null,
+			openingState: adapter.normalizeOpeningState(getOptions().openingState),
+			userName: getOptions().userName,
+		}),
+	);
 
 	let inputText = $state("");
 	let chatContainer = $state<HTMLElement | null>(null);
@@ -131,7 +116,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	// ── Derived ────────────────────────────────────────────────────
 
-	const agentName = $derived(resolveAgentName(openingStateData, userName, agentUser.name));
+	const agentName = $derived(presentation.agent.name);
 	const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
 	const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
 	const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
@@ -198,6 +183,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	}
 
 	// ── Agent message helpers ──────────────────────────────────────
+	function presentMessage(message: ChatMessage): ChatMessage {
+		return { ...message, ...adapter.messagePatch?.(message) };
+	}
+
 	function addAgentMessage(params: {
 		text: string;
 		deliveryState: "sent" | "pending" | "failed";
@@ -208,18 +197,19 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		pendingReplyTargetId = null;
 		messages = [
 			...messages,
-			{
+			presentMessage({
 				id: crypto.randomUUID(),
 				role: "agent",
 				text: params.text,
 				timestamp: formatTimestamp(new Date()),
 				authorName: agentName,
-				avatarColor: agentUser.color,
+				avatar: presentation.agent.avatarUrl,
+				avatarColor: presentation.agent.accentClass,
 				deliveryState: params.deliveryState,
 				clientMessageId: params.clientMessageId,
 				retryText: params.retryText,
 				...params.messagePatch,
-			},
+			}),
 		];
 	}
 
@@ -287,10 +277,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
-		const retryExtraFields: Record<string, string> = {};
-		if (originalUserMessage?.thread?.targetCommentId) {
-			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
-		}
+		const retryExtraFields = adapter.retryFields?.(originalUserMessage) ?? {};
 		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, retryExtraFields);
 
 		applySendResult(result, message.clientMessageId, retryText, {
@@ -329,6 +316,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 	function finishAndNavigateToFeedback(taskId: string) {
 		isCompleted = true;
+		adapter.beforeFeedbackNavigation?.();
 		window.location.href = `/task/${taskId}/feedback`;
 	}
 
@@ -374,7 +362,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 
 		messages = [
 			...messages,
-			{
+			presentMessage({
 				id: userMsgId,
 				role: "user",
 				text: currentText,
@@ -383,7 +371,7 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				avatar: avatarUrl,
 				clientMessageId,
 				...userPatch,
-			},
+			}),
 		];
 		await scrollToBottom();
 
@@ -413,18 +401,16 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 			lastSessionSnapshot = sessionSnapshot;
 			sessionId = currentId;
 
-			const pool = initUserPool(currentId);
-			agentUser = { ...pool.agentUser };
-			onPoolInit?.(pool);
+			presentation = adapter.resolvePresentation({ sessionId: currentId, openingState: openingStateData, userName });
 
 			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated" || sessionData.status === "abandoned";
 
-			const openingMessages = getOpeningStateMessages({
-				openingStateData,
+			const openingMessages = adapter.buildOpeningMessages({
+				openingState: openingStateData,
+				presentation,
 				userName,
-				agentUser,
 				avatarUrl,
-				labels: { earlier: labels.earlier },
+				earlier: labels.earlier,
 			});
 
 			const sessionMessages = buildChatMessages({
@@ -433,9 +419,10 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				userName,
 				agentName: agentName,
 				avatarUrl,
-				agentColor: agentUser.color,
+				agentColor: presentation.agent.accentClass,
+				agentAvatarUrl: presentation.agent.avatarUrl,
 				labels,
-			});
+			}).map(presentMessage);
 
 			lastHydratedMessages = [...openingMessages, ...sessionMessages];
 			if (isNewSession) {
@@ -467,16 +454,14 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 				sessionId = currentId;
 				lastLoadedSessionId = currentId;
 
-				const pool = initUserPool(currentId);
-				agentUser = { ...pool.agentUser };
-				onPoolInit?.(pool);
+				presentation = adapter.resolvePresentation({ sessionId: currentId, openingState: openingStateData, userName });
 
-				const openingMessages = getOpeningStateMessages({
-					openingStateData,
+				const openingMessages = adapter.buildOpeningMessages({
+					openingState: openingStateData,
+					presentation,
 					userName,
-					agentUser,
 					avatarUrl,
-					labels: { earlier: labels.earlier },
+					earlier: labels.earlier,
 				});
 
 				messages = [...openingMessages];
@@ -573,8 +558,11 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		get messages() {
 			return messages;
 		},
-		get agentUser() {
-			return agentUser;
+		get agentPresentation() {
+			return presentation.agent;
+		},
+		get presentationContext() {
+			return presentation.context;
 		},
 		get inputText() {
 			return inputText;

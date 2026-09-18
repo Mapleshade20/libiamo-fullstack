@@ -1,11 +1,11 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
-import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { normalizeText } from "../../utils/messageUtils";
 import { createPracticeSession } from "../session.svelte";
 import type { PracticeUiRootProps } from "../types";
+import { createDiscordPresentationAdapter } from "./adapter";
 import ChatHeader from "./ChatHeader.svelte";
 import { hasAgentStartedComposing } from "./helpers";
 import { i18n } from "./i18n";
@@ -16,7 +16,6 @@ import MobileTopBar from "./MobileTopBar.svelte";
 import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatUser } from "./types";
-import { initUserPool } from "./userPool";
 
 let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
 
@@ -33,7 +32,9 @@ const sessionLabels = {
 	},
 };
 
+const adapter = createDiscordPresentationAdapter();
 const session = createPracticeSession(() => ({
+	adapter,
 	userName,
 	avatarUrl,
 	language,
@@ -42,13 +43,9 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	labels: sessionLabels,
 	taskId,
-	onPoolInit(pool) {
-		onlineUsers = pool.onlineUsers;
-		offlineUsers = pool.offlineUsers;
-	},
 }));
 
-const openingStateData = session.openingStateData;
+const openingStateData = $derived(session.openingStateData);
 
 // Real Discord typing means the person is composing: the indicator appears only
 // once the worker has claimed the reply batch (read watermark advanced), not as
@@ -71,9 +68,9 @@ emojiConv.replace_mode = "unified";
 emojiConv.allow_native = true;
 
 let showMobileMenu = $state(false);
-let onlineUsers = $state<ChatUser[]>([]);
-let offlineUsers = $state<ChatUser[]>([]);
-let allUsers = $derived([session.agentUser, ...onlineUsers, ...offlineUsers]);
+const onlineUsers = $derived(session.presentationContext.onlineUsers);
+const offlineUsers = $derived(session.presentationContext.offlineUsers);
+let allUsers = $derived([session.presentationContext.agentUser, ...onlineUsers, ...offlineUsers]);
 
 let showToast = $state(false);
 let toastTimeout: ReturnType<typeof setTimeout>;
@@ -129,21 +126,6 @@ function handleMockAction() {
 		showToast = false;
 	}, 3000);
 }
-
-onMount(() => {
-	// Initialize user pool for existing sessions on first mount
-	if (existingSession?.id && !onlineUsers.length) {
-		({ onlineUsers, offlineUsers } = initUserPool(existingSession.id));
-	}
-});
-
-// Reactive: init user pool once sessionId becomes available for new sessions
-$effect(() => {
-	const sid = session.sessionId;
-	if (sid && !onlineUsers.length) {
-		({ onlineUsers, offlineUsers } = initUserPool(sid));
-	}
-});
 </script>
 
 <!--===================================================-->
@@ -206,7 +188,7 @@ $effect(() => {
 					messages={session.messages}
 					isTyping={(session.isTyping && agentComposing) || session.hasPendingReveals}
 					isInitializing={session.isInitializing}
-					agentUser={session.agentUser}
+					agentUser={session.presentationContext.agentUser}
 					limitReached={session.limitReached}
 					{language}
 					{emojiConv}
@@ -235,7 +217,7 @@ $effect(() => {
 				<MemberList
 					{onlineUsers}
 					{offlineUsers}
-					agentUser={session.agentUser}
+					agentUser={session.presentationContext.agentUser}
 					{userName}
 					{avatarUrl}
 					onlineLabel={t.online}

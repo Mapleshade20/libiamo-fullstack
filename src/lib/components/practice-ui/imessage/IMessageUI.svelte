@@ -18,6 +18,7 @@ import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import type { PracticeUiRootProps } from "../types";
+import { createIMessagePresentationAdapter } from "./adapter";
 import { i18n } from "./i18n";
 import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
@@ -38,7 +39,9 @@ const sessionLabels = {
 	},
 };
 
+const adapter = createIMessagePresentationAdapter();
 const session = createPracticeSession(() => ({
+	adapter,
 	userName,
 	avatarUrl,
 	language,

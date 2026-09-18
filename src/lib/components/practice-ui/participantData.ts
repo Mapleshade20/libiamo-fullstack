@@ -1,0 +1,45 @@
+export const USER_POOL = [
+	"ShadowHunter",
+	"PixelDust",
+	"Luna_Star",
+	"CyberPunk",
+	"NeonViper",
+	"GamerPro99",
+	"JazzCat",
+	"SilentWolf",
+	"Nova",
+	"Zephyr",
+	"Aether",
+	"FrostByte",
+	"Ironclad",
+	"GhostRecon",
+	"MysticMage",
+	"QuantumLeap",
+];
+
+export const STATUS_POOL = [
+	"Playing Valorant",
+	"Listening to Spotify",
+	"Coding",
+	"AFK",
+	"Do Not Disturb",
+	"Touching grass",
+	"Browsing Reddit",
+	"Looking for Group",
+	"In a meeting",
+	"Watching YouTube",
+	"Studying",
+	"Grinding ranked",
+];
+
+export const COLOR_POOL = [
+	"bg-red-500",
+	"bg-blue-500",
+	"bg-green-500",
+	"bg-yellow-500",
+	"bg-purple-500",
+	"bg-pink-500",
+	"bg-indigo-500",
+	"bg-teal-500",
+	"bg-orange-500",
+];

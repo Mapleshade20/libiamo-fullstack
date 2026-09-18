@@ -1,14 +1,16 @@
 import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
+import { resolveAgentName } from "$lib/components/practice-ui/messageTransformer";
+import { createChatPresentationAdapter } from "$lib/components/practice-ui/presentationAdapter";
 import {
 	AGENT_WORK_DUE_SOON_MS,
 	AGENT_WORK_WAKE_BUFFER_MS,
 	createPracticeSession,
 	type PracticeSessionOptions,
 	planAgentWorkPolling,
-	resolveAgentName,
 } from "$lib/components/practice-ui/session.svelte";
+import type { PracticeAgentPresentation, PracticeOpeningState } from "$lib/components/practice-ui/types";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 
 const mocks = vi.hoisted(() => ({
@@ -39,12 +41,19 @@ vi.mock("$lib/components/practice-ui/chatFlowController", () => ({
 	submitPracticeMessage: mocks.submitPracticeMessage,
 }));
 
-vi.mock("$lib/components/practice-ui/discord/userPool", () => ({
+vi.mock("$lib/components/practice-ui/participantPool", () => ({
 	initUserPool: mocks.initUserPool,
 }));
 
-function createOptions(overrides: Partial<PracticeSessionOptions> = {}): PracticeSessionOptions {
+type TestOptions = PracticeSessionOptions<PracticeOpeningState, PracticeAgentPresentation>;
+
+function createOptions(overrides: Partial<TestOptions> = {}): TestOptions {
 	return {
+		adapter: {
+			...createChatPresentationAdapter(),
+			retryFields: (message): Record<string, string> =>
+				message?.thread?.targetCommentId ? { threadTargetCommentId: message.thread.targetCommentId } : {},
+		},
 		userName: "Learner",
 		avatarUrl: "/avatar.png",
 		language: "en",
@@ -66,7 +75,7 @@ async function waitForPromises(times = 8) {
 	}
 }
 
-function createSession(options: PracticeSessionOptions) {
+function createSession(options: TestOptions) {
 	return createPracticeSession(() => options);
 }
 
@@ -156,7 +165,6 @@ describe("createPracticeSession", () => {
 	});
 
 	it("hydrates state from existing session and pool", async () => {
-		const onPoolInit = vi.fn();
 		const existingSession = {
 			id: 101,
 			status: "in_progress",
@@ -167,7 +175,6 @@ describe("createPracticeSession", () => {
 			createOptions({
 				existingSession,
 				openingState: { previousMessages: [{ sender: "Roddy", text: "Earlier message" }] },
-				onPoolInit,
 			}),
 		);
 
@@ -175,9 +182,43 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 
 		expect(session.sessionId).toBe(101);
-		expect(session.agentUser.name).toBe("Roddy");
-		expect(onPoolInit).toHaveBeenCalledTimes(1);
+		expect(session.agentPresentation.name).toBe("Roddy");
+		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
 		expect(session.messages.length).toBeGreaterThan(0);
+	});
+
+	it("uses injected presentation and typed context without resolving participants", async () => {
+		const context = { recipient: "custom" };
+		const beforeFeedbackNavigation = vi.fn();
+		const session = createPracticeSession(() => ({
+			...createOptions(),
+			adapter: {
+				normalizeOpeningState: () => ({ subject: "Custom surface" }),
+				resolvePresentation: () => ({ agent: { name: "Recipient", avatarUrl: "recipient.png" }, context }),
+				buildOpeningMessages: () => [],
+				messagePatch: () => ({ avatarColor: "custom-accent" }),
+				beforeFeedbackNavigation,
+			},
+		}));
+		session.hydrateFromExistingSession({
+			id: 101,
+			status: "in_progress",
+			messages: [{ id: 1, role: "assistant", content: "Reply", createdAt: "2026-05-18T00:00:00Z" }],
+		});
+		expect(session.presentationContext).toBe(context);
+		expect(session.openingStateData).toEqual({ subject: "Custom surface" });
+		expect(session.messages[0]).toMatchObject({ id: "1", authorName: "Recipient", avatar: "recipient.png", avatarColor: "custom-accent" });
+		expect(mocks.initUserPool).not.toHaveBeenCalled();
+		mocks.completeAction.mockResolvedValue({ type: "success" });
+		const location = { href: "" };
+		vi.stubGlobal("window", { location });
+		try {
+			await session.handleCompleteAndNavigate("task-1");
+			expect(beforeFeedbackNavigation).toHaveBeenCalledOnce();
+			expect(location.href).toBe("/task/task-1/feedback");
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 
 	it("shows existing completed feedback and scrolls hydrated messages", async () => {
@@ -345,8 +386,10 @@ describe("createPracticeSession", () => {
 		session.hydrateFromExistingSession(existingSession);
 		session.hydrateFromExistingSession(updatedSession);
 
-		expect(mocks.initUserPool).toHaveBeenCalledTimes(2);
+		expect(mocks.initUserPool).toHaveBeenCalledTimes(1);
 		expect(session.isCompleted).toBe(true);
+		expect(session.messages[0].isHidden).toBe(true);
+		expect(session.messages[1].deliveryState).toBe("failed");
 	});
 
 	it("hydrates sessions without a message array", () => {

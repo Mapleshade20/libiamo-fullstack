@@ -1,15 +1,15 @@
 import { normalizeText } from "../utils/messageUtils";
 import type { ChatMessage } from "./chatMessages";
-import type { ChatOpeningState, ChatUser } from "./discord/types";
+import type { PracticeAgentPresentation, PracticeOpeningMessage, PracticeOpeningState } from "./types";
 
 export function getOpeningStateMessages(params: {
-	openingStateData: ChatOpeningState;
+	openingStateData: PracticeOpeningState;
 	userName: string;
-	agentUser: ChatUser;
+	agent: PracticeAgentPresentation;
 	avatarUrl: string;
 	labels: { earlier: string };
 }): ChatMessage[] {
-	const { openingStateData, userName, agentUser, avatarUrl, labels } = params;
+	const { openingStateData, userName, agent, avatarUrl, labels } = params;
 
 	if (!Array.isArray(openingStateData.previousMessages)) return [];
 
@@ -19,7 +19,7 @@ export function getOpeningStateMessages(params: {
 		if (!text) return [];
 
 		const isUserMessage = sender === userName;
-		const authorName = sender || (isUserMessage ? userName : agentUser.name);
+		const authorName = sender || (isUserMessage ? userName : agent.name);
 
 		return [
 			{
@@ -28,10 +28,30 @@ export function getOpeningStateMessages(params: {
 				text,
 				timestamp: labels.earlier,
 				authorName,
-				avatar: isUserMessage ? avatarUrl : undefined,
-				avatarColor: !isUserMessage ? agentUser.color : undefined,
+				avatar: isUserMessage ? avatarUrl : agent.avatarUrl,
+				avatarColor: !isUserMessage ? agent.accentClass : undefined,
 				deliveryState: "sent",
-			} as ChatMessage,
+			} satisfies ChatMessage,
 		];
 	});
+}
+
+export function normalizeOpeningState(value: unknown): PracticeOpeningState {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const messages = (value as { previousMessages?: unknown }).previousMessages;
+	if (!Array.isArray(messages)) return {};
+	return {
+		previousMessages: messages.filter(
+			(message): message is PracticeOpeningMessage => Boolean(message) && typeof message === "object" && !Array.isArray(message),
+		),
+	};
+}
+
+export function resolveAgentName(openingState: PracticeOpeningState, userName: string, fallbackName: string): string {
+	const messages = Array.isArray(openingState.previousMessages) ? openingState.previousMessages : [];
+	for (const message of messages) {
+		const sender = normalizeText(message.sender ?? message.author, "");
+		if (sender && sender !== userName) return sender;
+	}
+	return fallbackName;
 }

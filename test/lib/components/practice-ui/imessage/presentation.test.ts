@@ -6,7 +6,7 @@ import {
 	getRenderableMessages,
 	isLastOutgoingMessageRead,
 } from "$lib/components/practice-ui/imessage/presentation";
-import { resolveAgentName } from "$lib/components/practice-ui/session.svelte";
+import { resolveAgentName } from "$lib/components/practice-ui/messageTransformer";
 
 function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
 	return {

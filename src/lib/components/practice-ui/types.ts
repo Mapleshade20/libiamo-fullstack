@@ -1,4 +1,5 @@
 import type { LanguageCode, PracticeSessionStatus } from "$lib/constants";
+import type { ChatMessage } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
 
 export type { PracticeSessionStatus } from "$lib/constants";
@@ -62,3 +63,46 @@ export type PracticeSendOutcome =
 	| { status: "session_completed"; clientMessageId: string; optimisticMessageId: string; completionReason?: string };
 
 export type PracticeCompletionOutcome = { status: "completed" } | { status: "pending" } | { status: "failed"; error: string };
+
+/** Raw opening fields are normalized by presentation helpers, never by the runtime. */
+export interface PracticeOpeningMessage {
+	sender?: unknown;
+	author?: unknown;
+	text?: unknown;
+	content?: unknown;
+}
+
+export interface PracticeOpeningState {
+	previousMessages?: PracticeOpeningMessage[];
+}
+
+export interface PracticeParticipant {
+	id: string;
+	name: string;
+	status: string;
+	color: string;
+	isAgent: boolean;
+}
+
+export interface PracticePresentation<Context> {
+	agent: PracticeAgentPresentation;
+	context: Context;
+}
+
+export type PracticeMessagePresentationPatch = Partial<Pick<ChatMessage, "text" | "authorName" | "avatar" | "avatarColor" | "isHidden" | "thread">>;
+
+/** Presentation only: no requests, invalidation, timers, or navigation. */
+export interface PracticePresentationAdapter<Opening = PracticeOpeningState, Context = undefined> {
+	normalizeOpeningState: (value: unknown) => Opening;
+	resolvePresentation: (input: { sessionId: number | null; openingState: Opening; userName: string }) => PracticePresentation<Context>;
+	buildOpeningMessages: (input: {
+		openingState: Opening;
+		presentation: PracticePresentation<Context>;
+		userName: string;
+		avatarUrl: string;
+		earlier: string;
+	}) => ChatMessage[];
+	retryFields?: (originalMessage: ChatMessage | undefined) => Record<string, string>;
+	messagePatch?: (message: ChatMessage) => PracticeMessagePresentationPatch;
+	beforeFeedbackNavigation?: () => void;
+}

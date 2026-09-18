@@ -1,18 +1,8 @@
-export type ChatUser = {
-	id: string;
-	name: string;
-	status: string;
-	color: string;
-	isAgent: boolean;
-};
+import type { PracticeOpeningState, PracticeParticipant } from "../types";
 
-export type ChatOpeningState = {
+export type ChatUser = PracticeParticipant;
+
+export type ChatOpeningState = PracticeOpeningState & {
 	serverName?: string;
 	channelName?: string;
-	previousMessages?: Array<{
-		sender?: string;
-		author?: string;
-		text?: string;
-		content?: string;
-	}>;
 };

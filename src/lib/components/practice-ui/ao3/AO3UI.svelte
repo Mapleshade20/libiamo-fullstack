@@ -12,6 +12,7 @@ import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import { createPracticeSession } from "../session.svelte";
 import TurnsLeftMobileBadge from "../TurnsLeftMobileBadge.svelte";
 import type { PracticeUiRootProps } from "../types";
+import { createAo3PresentationAdapter } from "./adapter";
 import {
 	type Ao3OpeningState,
 	type Ao3RenderableComment,
@@ -39,7 +40,9 @@ const sessionLabels = {
 	},
 };
 
+const adapter = createAo3PresentationAdapter();
 const session = createPracticeSession(() => ({
+	adapter,
 	userName,
 	avatarUrl,
 	language,
