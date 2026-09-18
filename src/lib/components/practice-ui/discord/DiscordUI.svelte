@@ -1,8 +1,8 @@
 <script lang="ts">
 import EmojiConvertor from "emoji-js";
 import { fade } from "svelte/transition";
-import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { normalizeText } from "../../utils/messageUtils";
+import FinishSessionSheet from "../FinishSessionSheet.svelte";
 import { createPracticeSession } from "../session.svelte";
 import type { PracticeUiRootProps } from "../types";
 import { createDiscordPresentationAdapter } from "./adapter";
@@ -17,7 +17,7 @@ import Overlays from "./Overlays.svelte";
 import Sidebar from "./Sidebar.svelte";
 import { type ChatUser } from "./types";
 
-let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref, feedbackHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const sessionLabels = {
@@ -41,6 +41,7 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
+	feedbackHref,
 	labels: sessionLabels,
 	taskId,
 }));
@@ -77,6 +78,10 @@ let toastTimeout: ReturnType<typeof setTimeout>;
 let showMembers = $state(false);
 let showFinishConfirm = $state(false);
 
+$effect(() => {
+	if (session.completionError !== null) showFinishConfirm = true;
+});
+
 let contextMenu = $state({
 	show: false,
 	x: 0,
@@ -107,12 +112,12 @@ function handleFinishClick() {
 }
 
 function handleFinishConfirm() {
-	showFinishConfirm = false;
-	void session.handleCompleteAndNavigate(String(taskId));
+	void session.handleCompleteAndNavigate();
 }
 
 function handleFinishCancel() {
 	showFinishConfirm = false;
+	session.clearCompletionError();
 }
 
 function handleWindowClick() {
@@ -229,12 +234,11 @@ function handleMockAction() {
 		</div>
 	</div>
 
-	<BottomSheet
+	<FinishSessionSheet
 		show={showFinishConfirm}
-		title="Finish Task"
-		message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
-		confirmLabel="Finish & Review"
-		cancelLabel="Keep Practicing"
+		{language}
+		pending={session.isCompleting}
+		error={session.completionError}
 		onConfirm={handleFinishConfirm}
 		onCancel={handleFinishCancel}
 	/>

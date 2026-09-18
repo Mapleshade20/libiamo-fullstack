@@ -18,7 +18,7 @@ import Sidebar from "./Sidebar.svelte";
 import type { CommentTreeNode, ContextComment, RedditOpeningState } from "./types";
 import { getAvatarColor } from "./utils";
 
-let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref, feedbackHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] ?? i18n.en);
 
@@ -43,6 +43,7 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
+	feedbackHref,
 	labels: sessionLabels,
 	taskId,
 }));

@@ -24,7 +24,7 @@ import { getBubbleGroupPosition, getLastOutgoingMessageId, getRenderableMessages
 
 const clock = getDisplayClock();
 
-let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref, feedbackHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 const sessionLabels = {
@@ -48,6 +48,7 @@ const session = createPracticeSession(() => ({
 	existingSession,
 	openingState,
 	maxTurns,
+	feedbackHref,
 	labels: sessionLabels,
 	taskId,
 }));

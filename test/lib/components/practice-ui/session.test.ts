@@ -16,6 +16,7 @@ import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 const mocks = vi.hoisted(() => ({
 	tick: vi.fn(async () => {}),
 	invalidate: vi.fn(async () => {}),
+	goto: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
 	submitPracticeMessage: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("svelte", () => ({
 
 vi.mock("$app/navigation", () => ({
 	invalidate: mocks.invalidate,
+	goto: mocks.goto,
 }));
 
 vi.mock("$lib/components/practice-ui/apiService", () => ({
@@ -57,6 +59,7 @@ function createOptions(overrides: Partial<TestOptions> = {}): TestOptions {
 		userName: "Learner",
 		avatarUrl: "/avatar.png",
 		language: "en",
+		feedbackHref: "/libiamo/task/1/feedback",
 		existingSession: null,
 		openingState: {},
 		maxTurns: 0,
@@ -225,15 +228,9 @@ describe("createPracticeSession", () => {
 		expect(session.messages[0]).toMatchObject({ id: "1", authorName: "Recipient", avatar: "recipient.png", avatarColor: "custom-accent" });
 		expect(mocks.initUserPool).not.toHaveBeenCalled();
 		mocks.completeAction.mockResolvedValue({ type: "success" });
-		const location = { href: "" };
-		vi.stubGlobal("window", { location });
-		try {
-			await session.handleCompleteAndNavigate("task-1");
-			expect(beforeFeedbackNavigation).toHaveBeenCalledOnce();
-			expect(location.href).toBe("/task/task-1/feedback");
-		} finally {
-			vi.unstubAllGlobals();
-		}
+		await session.handleCompleteAndNavigate();
+		expect(beforeFeedbackNavigation).toHaveBeenCalledOnce();
+		expect(mocks.goto).toHaveBeenCalledWith("/libiamo/task/1/feedback");
 	});
 
 	it("shows existing completed feedback and scrolls hydrated messages", async () => {
@@ -695,7 +692,6 @@ describe("createPracticeSession", () => {
 
 	it("handles complete failures without leaving loading state", async () => {
 		mocks.completeAction.mockRejectedValue(new Error("complete error"));
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const existingSession = {
 			id: 701,
 			status: "in_progress",
@@ -707,7 +703,8 @@ describe("createPracticeSession", () => {
 
 		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
 
-		expect(errorSpy).toHaveBeenCalledWith("Completion failed:", expect.any(Error));
+		expect(session.completionError).not.toBeNull();
+		expect(mocks.goto).not.toHaveBeenCalled();
 		expect(session.isCompleting).toBe(false);
 	});
 
@@ -736,6 +733,58 @@ describe("createPracticeSession", () => {
 		await session.handleCompleteAndNavigate("0");
 
 		expect(mocks.completeAction).not.toHaveBeenCalled();
+	});
+
+	it("deduplicates completion while pending and allows retry after failure", async () => {
+		let resolve!: (value: unknown) => void;
+		mocks.completeAction.mockReturnValueOnce(
+			new Promise((done) => {
+				resolve = done;
+			}),
+		);
+		const session = createSession(createOptions({ existingSession: { id: 706, status: "in_progress", messages: [] } }));
+		const attempt = session.handleCompleteAndNavigate();
+		await session.handleCompleteAndNavigate();
+		expect(session.isCompleting).toBe(true);
+		expect(mocks.completeAction).toHaveBeenCalledTimes(1);
+		resolve({ type: "failure", data: { error: "Service unavailable" } });
+		await attempt;
+		expect(session.completionError).toBeTruthy();
+		expect(session.isCompleting).toBe(false);
+		mocks.completeAction.mockResolvedValueOnce({ type: "success" });
+		await session.handleCompleteAndNavigate();
+		expect(session.completionError).toBeNull();
+		expect(mocks.goto).toHaveBeenCalledWith("/libiamo/task/1/feedback");
+	});
+
+	it("navigates an already completed snapshot without completing again", async () => {
+		const session = createSession(createOptions({ existingSession: { id: 707, status: "completed", messages: [] } }));
+		await session.handleCompleteAndNavigate();
+		expect(mocks.completeAction).not.toHaveBeenCalled();
+		expect(mocks.goto).toHaveBeenCalledWith("/libiamo/task/1/feedback");
+	});
+
+	it("treats a concurrent completion response as success", async () => {
+		mocks.completeAction.mockResolvedValueOnce({ type: "failure", status: 409, data: { error: "Session not in progress or completed" } });
+		const session = createSession(createOptions({ existingSession: { id: 708, status: "in_progress", messages: [] } }));
+		await session.handleCompleteAndNavigate();
+		expect(session.isCompleted).toBe(true);
+		expect(session.completionError).toBeNull();
+		expect(mocks.goto).toHaveBeenCalledOnce();
+	});
+
+	it("navigates after final send and retries failed navigation without a complete request", async () => {
+		mocks.submitPracticeMessage.mockResolvedValueOnce({ status: "session_completed" });
+		mocks.goto.mockRejectedValueOnce(new Error("Navigation failed"));
+		const session = createSession(createOptions({ existingSession: { id: 709, status: "in_progress", messages: [] } }));
+		await session.handleSend({ message: "Final message" });
+		expect(session.isCompleted).toBe(true);
+		expect(session.completionError).toBeTruthy();
+		expect(session.isCompleting).toBe(false);
+		await session.handleCompleteAndNavigate();
+		expect(mocks.completeAction).not.toHaveBeenCalled();
+		expect(session.completionError).toBeNull();
+		expect(mocks.goto).toHaveBeenCalledTimes(2);
 	});
 
 	it("hydrates using sorted messages and metadata-based hidden state", async () => {

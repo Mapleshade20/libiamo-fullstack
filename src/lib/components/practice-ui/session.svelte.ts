@@ -1,5 +1,5 @@
 import { onMount, tick } from "svelte";
-import { invalidate } from "$app/navigation";
+import { goto, invalidate } from "$app/navigation";
 import { getDeliveryDelayMs } from "$lib/agent-replies/timing";
 import { getDisplayClock } from "$lib/display-clock";
 import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
@@ -10,6 +10,7 @@ import { completeAction, postAction } from "./apiService";
 import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
+import { getFinishLabels } from "./finish/i18n";
 import type { PracticeOpeningState, PracticePresentation, PracticePresentationAdapter, PracticeSendOutcome, PracticeSessionSnapshot } from "./types";
 
 export interface PracticeSessionLabels {
@@ -36,6 +37,7 @@ export interface PracticeSessionOptions<Opening = PracticeOpeningState, Context 
 	labels: PracticeSessionLabels;
 	adapter: PracticePresentationAdapter<Opening, Context>;
 	taskId?: string | number;
+	feedbackHref: string;
 }
 
 /**
@@ -76,6 +78,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	const labels = $derived(getOptions().labels);
 	const adapter = getOptions().adapter;
 	const taskId = $derived(getOptions().taskId);
+	const feedbackHref = $derived(getOptions().feedbackHref);
 
 	const openingStateData = $derived(adapter.normalizeOpeningState(openingState));
 	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
@@ -89,6 +92,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	let isEntering = $state(true);
 	let hasAutoCompleted = $state(false);
 	let isCompleting = $state(false);
+	let completionError = $state<string | null>(null);
 	let isCompleted = $state(false);
 	let isInitializing = $state(false);
 	let refreshPromise: Promise<unknown> | null = null;
@@ -214,10 +218,15 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		];
 	}
 
-	function applySendResult(result: MessageSubmissionResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
+	async function applySendResult(
+		result: MessageSubmissionResult,
+		clientMessageId: string,
+		retryText?: string,
+		agentMessagePatch?: Partial<ChatMessage>,
+	) {
 		if (result.status === "session_completed") {
 			// The server already finished the session in the send transaction; navigate without calling complete.
-			finishAndNavigateToFeedback(String(taskId ?? ""));
+			await handleCompletedNavigation();
 		} else if (result.status === "pending") {
 			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
 		} else if (result.status === "failed") {
@@ -290,7 +299,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 				clientMessageId: message.clientMessageId,
 				extraFields: retryExtraFields,
 			});
-			applySendResult(result, message.clientMessageId, retryText, {
+			await applySendResult(result, message.clientMessageId, retryText, {
 				authorName: message.authorName,
 				thread: message.thread,
 			});
@@ -301,34 +310,47 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		}
 	}
 
-	async function handleCompleteAndNavigate(taskId: string) {
-		if (!sessionId || isCompleting || isCompleted) return;
+	async function handleCompleteAndNavigate(_taskId?: string) {
+		if (!sessionId || isCompleting) return;
 		isCompleting = true;
+		completionError = null;
 		try {
-			const result = await completeAction(sessionId);
-
-			if (result.type === "success") {
-				finishAndNavigateToFeedback(taskId);
-			} else {
-				// A completed session (e.g. finished by the send itself) is still a success for navigation purposes.
-				const error = actionErrorMessage(result) ?? "";
-				if (error.includes("Session not in progress")) {
-					finishAndNavigateToFeedback(taskId);
-				} else {
-					console.error("Completion failed:", error || result);
-				}
+			if (isCompleted) {
+				await finishAndNavigateToFeedback();
+				return;
 			}
-		} catch (error) {
-			console.error("Completion failed:", error);
+			const result = await completeAction(sessionId);
+			if (result.type === "success") {
+				await finishAndNavigateToFeedback();
+				return;
+			}
+			// Completing an already-completed session is idempotent navigation success.
+			const error = actionErrorMessage(result) ?? "";
+			if (error.includes("Session not in progress")) {
+				await finishAndNavigateToFeedback();
+			} else {
+				completionError = getFinishLabels(getOptions().language).error;
+			}
+		} catch {
+			completionError = getFinishLabels(getOptions().language).error;
 		} finally {
 			isCompleting = false;
 		}
 	}
 
-	function finishAndNavigateToFeedback(taskId: string) {
+	async function handleCompletedNavigation() {
+		isCompleted = true;
+		await handleCompleteAndNavigate();
+	}
+
+	function clearCompletionError() {
+		completionError = null;
+	}
+
+	async function finishAndNavigateToFeedback() {
 		isCompleted = true;
 		adapter.beforeFeedbackNavigation?.();
-		window.location.href = `/task/${taskId}/feedback`;
+		await goto(feedbackHref);
 	}
 
 	async function handleSend(request: {
@@ -395,7 +417,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 				clientMessageId,
 				extraFields: resolvedExtraFields,
 			});
-			applySendResult(result, clientMessageId, currentText, agentPatch);
+			await applySendResult(result, clientMessageId, currentText, agentPatch);
 			await scrollToBottom();
 			await refreshAfterSendResult(result);
 			return { status: result.status, clientMessageId, optimisticMessageId: userMsgId };
@@ -574,6 +596,9 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		get isCompleting() {
 			return isCompleting;
 		},
+		get completionError() {
+			return completionError;
+		},
 		get isCompleted() {
 			return isCompleted;
 		},
@@ -636,6 +661,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		},
 		handleSend,
 		handleCompleteAndNavigate,
+		clearCompletionError,
 		handleRetry,
 		runAutoCompleteIfNeeded,
 		hydrateFromExistingSession,
