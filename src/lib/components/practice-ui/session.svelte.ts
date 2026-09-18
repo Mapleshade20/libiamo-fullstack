@@ -10,7 +10,7 @@ import { completeAction, postAction } from "./apiService";
 import { type MessageSubmissionResult, submitPracticeMessage } from "./chatFlowController";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chatMessages";
 import type { CommentThreadMetadata } from "./commentThread";
-import type { PracticeOpeningState, PracticePresentation, PracticePresentationAdapter } from "./types";
+import type { PracticeOpeningState, PracticePresentation, PracticePresentationAdapter, PracticeSendOutcome, PracticeSessionSnapshot } from "./types";
 
 export interface PracticeSessionLabels {
 	stillProcessingMessage: string;
@@ -30,7 +30,7 @@ export interface PracticeSessionOptions<Opening = PracticeOpeningState, Context 
 	userName: string;
 	avatarUrl: string;
 	language: string;
-	existingSession: any;
+	existingSession: PracticeSessionSnapshot | null;
 	openingState: unknown;
 	maxTurns: number;
 	labels: PracticeSessionLabels;
@@ -91,6 +91,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	let isCompleting = $state(false);
 	let isCompleted = $state(false);
 	let isInitializing = $state(false);
+	let refreshPromise: Promise<unknown> | null = null;
 	let messages = $state<ChatMessage[]>([]);
 	let pendingReplyTargetId = $state<string | null>(null);
 	let agentReadUpToMessageId = $state<number | null>(null);
@@ -247,7 +248,11 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	}
 
 	function refreshPracticeSession() {
-		return invalidate(PRACTICE_SESSION_DEPENDENCY);
+		if (refreshPromise) return refreshPromise;
+		refreshPromise = Promise.resolve(invalidate(PRACTICE_SESSION_DEPENDENCY)).finally(() => {
+			refreshPromise = null;
+		});
+		return refreshPromise;
 	}
 
 	function refreshAfterSendResult(result: MessageSubmissionResult) {
@@ -278,16 +283,22 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const retryExtraFields = adapter.retryFields?.(originalUserMessage) ?? {};
-		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, retryExtraFields);
-
-		applySendResult(result, message.clientMessageId, retryText, {
-			authorName: message.authorName,
-			thread: message.thread,
-		});
-
-		await scrollToBottom();
-		await refreshAfterSendResult(result);
-		isSubmitting = false;
+		try {
+			const result = await submitPracticeMessage({
+				sessionId,
+				message: retryText,
+				clientMessageId: message.clientMessageId,
+				extraFields: retryExtraFields,
+			});
+			applySendResult(result, message.clientMessageId, retryText, {
+				authorName: message.authorName,
+				thread: message.thread,
+			});
+			await scrollToBottom();
+			await refreshAfterSendResult(result);
+		} finally {
+			isSubmitting = false;
+		}
 	}
 
 	async function handleCompleteAndNavigate(taskId: string) {
@@ -320,12 +331,13 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		window.location.href = `/task/${taskId}/feedback`;
 	}
 
-	async function handleSend(
-		text: string,
-		extraFields: Record<string, string> = {},
-		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
-	) {
-		if (!text.trim() || disabled) return;
+	async function handleSend(request: {
+		message: string;
+		extraFields?: Record<string, string>;
+		messagePatches?: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> };
+	}): Promise<PracticeSendOutcome> {
+		const { message: text, extraFields = {}, messagePatches = {} } = request;
+		if (!text.trim() || disabled) return { status: "rejected", clientMessageId: null, optimisticMessageId: null };
 
 		// The optimistic user message must land after the full agent burst, so any
 		// paced-out messages are revealed first.
@@ -375,13 +387,21 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		];
 		await scrollToBottom();
 
-		const result = await submitPracticeMessage(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
-
-		applySendResult(result, clientMessageId, currentText, agentPatch);
-
-		await scrollToBottom();
-		await refreshAfterSendResult(result);
-		isSubmitting = false;
+		let result: MessageSubmissionResult;
+		try {
+			result = await submitPracticeMessage({
+				sessionId: sessionId as number,
+				message: currentText,
+				clientMessageId,
+				extraFields: resolvedExtraFields,
+			});
+			applySendResult(result, clientMessageId, currentText, agentPatch);
+			await scrollToBottom();
+			await refreshAfterSendResult(result);
+			return { status: result.status, clientMessageId, optimisticMessageId: userMsgId };
+		} finally {
+			isSubmitting = false;
+		}
 	}
 
 	function runAutoCompleteIfNeeded() {
@@ -477,6 +497,11 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 			isInitializing = false;
 		}
 	}
+
+	// Build server-known messages during component creation so SSR and the first
+	// hydrated DOM contain the same opening and persisted history.
+	const initialExistingSession = getOptions().existingSession;
+	if (initialExistingSession) hydrateFromExistingSession(initialExistingSession);
 
 	// ── Effects ────────────────────────────────────────────────────
 

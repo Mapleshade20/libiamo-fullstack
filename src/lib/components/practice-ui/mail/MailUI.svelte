@@ -334,7 +334,12 @@ async function handleRetry(messageId: string) {
 		const retryText = message.retryText || message.text;
 		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
 		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
-		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, bodyHtml ? { bodyHtml } : {});
+		const result = await submitPracticeMessage({
+			sessionId,
+			message: retryText,
+			clientMessageId: message.clientMessageId,
+			extraFields: bodyHtml ? { bodyHtml } : {},
+		});
 
 		if (result.status === "session_completed") {
 			isCompleted = true;
@@ -376,7 +381,7 @@ async function handleSendEmail() {
 	await scrollToMessageBottom();
 
 	try {
-		const result = await submitPracticeMessage(sessionId, currentText, clientMessageId, { bodyHtml: mailBodyHtml });
+		const result = await submitPracticeMessage({ sessionId, message: currentText, clientMessageId, extraFields: { bodyHtml: mailBodyHtml } });
 		if (result.status === "session_completed") {
 			// The server completed the session in the send transaction; navigate straight to feedback.
 			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());

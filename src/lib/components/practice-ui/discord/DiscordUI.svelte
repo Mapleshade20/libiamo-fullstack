@@ -209,7 +209,7 @@ function handleMockAction() {
 					sessionId={session.sessionId}
 					{t}
 					{allUsers}
-					onSend={session.handleSend}
+					onSend={(text) => session.handleSend({ message: text })}
 				/>
 			</div>
 

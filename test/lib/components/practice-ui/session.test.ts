@@ -45,7 +45,7 @@ vi.mock("$lib/components/practice-ui/participantPool", () => ({
 	initUserPool: mocks.initUserPool,
 }));
 
-type TestOptions = PracticeSessionOptions<PracticeOpeningState, PracticeAgentPresentation>;
+type TestOptions = Omit<PracticeSessionOptions<PracticeOpeningState, PracticeAgentPresentation>, "existingSession"> & { existingSession: any };
 
 function createOptions(overrides: Partial<TestOptions> = {}): TestOptions {
 	return {
@@ -162,6 +162,21 @@ describe("createPracticeSession", () => {
 				isAgent: true,
 			},
 		});
+	});
+
+	it("renders existing persisted messages during initial construction", () => {
+		const existingSession = {
+			id: 100,
+			status: "in_progress" as const,
+			tutorFeedback: null,
+			agentReadUpToMessageId: null,
+			maxTurnsSnapshot: null,
+			nextAgentWorkDueAt: null,
+			messages: [{ id: 9, role: "assistant" as const, content: "SSR reply", createdAt: new Date("2026-05-18T00:00:00.000Z"), llmMetadata: null }],
+		};
+		const session = createSession(createOptions({ existingSession }));
+		expect(session.sessionId).toBe(100);
+		expect(session.messages.some((message) => message.text === "SSR reply")).toBe(true);
 	});
 
 	it("hydrates state from existing session and pool", async () => {
@@ -332,7 +347,7 @@ describe("createPracticeSession", () => {
 		await waitForPromises();
 		expect(session.hasPendingReveals).toBe(true);
 
-		await session.handleSend("next message");
+		await session.handleSend({ message: "next message" });
 
 		expect(session.hasPendingReveals).toBe(false);
 		const texts = session.messages.map((message) => message.text);
@@ -421,9 +436,14 @@ describe("createPracticeSession", () => {
 
 		session.hydrateFromExistingSession(existingSession);
 		await waitForPromises();
-		await session.handleSend("Hello there");
+		await session.handleSend({ message: "Hello there" });
 
-		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith({
+			sessionId: 202,
+			message: "Hello there",
+			clientMessageId: expect.any(String),
+			extraFields: {},
+		});
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.deliveryState === "pending")).toBe(true);
 		expect(mocks.invalidate).toHaveBeenCalledWith(TRIAL_QUOTA_DEPENDENCY);
@@ -432,8 +452,8 @@ describe("createPracticeSession", () => {
 	it("ignores empty or disabled sends", async () => {
 		const session = createSession(createOptions({ existingSession: null }));
 
-		await session.handleSend("   ");
-		await session.handleSend("hello");
+		await session.handleSend({ message: "   " });
+		await session.handleSend({ message: "hello" });
 
 		expect(mocks.submitPracticeMessage).not.toHaveBeenCalled();
 	});
@@ -466,7 +486,12 @@ describe("createPracticeSession", () => {
 
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(303, "Original learner message", "msg-5", {});
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith({
+			sessionId: 303,
+			message: "Original learner message",
+			clientMessageId: "msg-5",
+			extraFields: {},
+		});
 		expect(session.messages.find((message) => message.id === failedMessage?.id)?.isHidden).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.deliveryState === "pending")).toBe(true);
 	});
@@ -550,7 +575,12 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(304, "Original AO3 reply", "ao3-msg-6", { threadTargetCommentId: "c1" });
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith({
+			sessionId: 304,
+			message: "Original AO3 reply",
+			clientMessageId: "ao3-msg-6",
+			extraFields: { threadTargetCommentId: "c1" },
+		});
 	});
 
 	it("retries generic threaded replies with their original target comment id", async () => {
@@ -584,7 +614,12 @@ describe("createPracticeSession", () => {
 		const failedMessage = session.messages.find((message) => message.deliveryState === "failed");
 		await session.handleRetry(failedMessage?.id ?? "");
 
-		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(305, "Original Reddit reply", "reddit-msg-7", { threadTargetCommentId: "c1" });
+		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith({
+			sessionId: 305,
+			message: "Original Reddit reply",
+			clientMessageId: "reddit-msg-7",
+			extraFields: { threadTargetCommentId: "c1" },
+		});
 	});
 	it("adds failed placeholder and retry text when send attempt fails", async () => {
 		mocks.submitPracticeMessage.mockResolvedValue({
@@ -599,7 +634,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 
 		session.hydrateFromExistingSession(existingSession);
-		await session.handleSend("Need help");
+		await session.handleSend({ message: "Need help" });
 
 		const failed = session.messages.find((message) => message.deliveryState === "failed");
 		expect(failed?.text).toBe("Reply failed. Retry.");
@@ -620,7 +655,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 
 		session.hydrateFromExistingSession(existingSession);
-		await session.handleSend("Try send");
+		await session.handleSend({ message: "Try send" });
 
 		expect(warnSpy).toHaveBeenCalledWith("Backend rejected the message");
 		expect(session.messages.some((message) => message.role === "agent" && message.clientMessageId)).toBe(false);

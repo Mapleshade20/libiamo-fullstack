@@ -92,10 +92,10 @@ function sendComment(text: string, targetId: string | null) {
 	const target = targetId ? findRenderableComment(renderableCommentTree, targetId) : null;
 	const responderName = target?.author || post.author;
 	const mode = target ? "reply" : "post";
-	session.handleSend(
-		trimmed,
-		{ threadTargetCommentId: target?.id ?? "" },
-		{
+	session.handleSend({
+		message: trimmed,
+		extraFields: { threadTargetCommentId: target?.id ?? "" },
+		messagePatches: {
 			user: {
 				thread: {
 					commentId: "reddit-user-{clientMessageId}",
@@ -114,7 +114,7 @@ function sendComment(text: string, targetId: string | null) {
 				},
 			},
 		},
-	);
+	});
 }
 
 // ── Handle top-level comment submit ──────────────────────────────────

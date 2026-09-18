@@ -83,7 +83,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 			const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 			closeHintMenu();
 			session.inputText = "";
-			session.handleSend(text);
+			session.handleSend({ message: text });
 		}
 	}
 }
@@ -373,7 +373,7 @@ function showIncomingSender(index: number) {
 									const text = session.inputText.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 									closeHintMenu();
 									session.inputText = "";
-									session.handleSend(text);
+									session.handleSend({ message: text });
 								}}
 								disabled={!session.inputText.trim() || session.disabled}
 							>

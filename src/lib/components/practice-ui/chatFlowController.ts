@@ -2,6 +2,14 @@ import { deserialize } from "$app/forms";
 
 const AGENT_REPLY_TIMEOUT_MS = 25_000;
 
+export interface MessageSubmissionRequest {
+	sessionId: number;
+	message: string;
+	clientMessageId: string;
+	extraFields?: Record<string, string>;
+	signal?: AbortSignal;
+}
+
 export type MessageSubmissionResult =
 	| { status: "pending" }
 	| { status: "failed"; error?: string }
@@ -16,12 +24,8 @@ function actionErrorMessage(result: unknown): string | undefined {
 	return typeof error === "string" && error.trim() ? error : undefined;
 }
 
-export async function submitPracticeMessage(
-	sessionId: number,
-	messageText: string,
-	clientMessageId: string,
-	extraFields: Record<string, string> = {},
-): Promise<MessageSubmissionResult> {
+export async function submitPracticeMessage(request: MessageSubmissionRequest): Promise<MessageSubmissionResult> {
+	const { sessionId, message: messageText, clientMessageId, extraFields = {}, signal } = request;
 	const formData = new FormData();
 	formData.append("sessionId", String(sessionId));
 	formData.append("message", messageText);
@@ -33,6 +37,11 @@ export async function submitPracticeMessage(
 
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), AGENT_REPLY_TIMEOUT_MS);
+	const abort = () => controller.abort();
+	if (signal) {
+		if (signal.aborted) controller.abort();
+		else signal.addEventListener("abort", abort, { once: true });
+	}
 
 	try {
 		const res = await fetch(`?/send`, {
@@ -69,5 +78,6 @@ export async function submitPracticeMessage(
 		return { status: "failed" };
 	} finally {
 		clearTimeout(timeoutId);
+		signal?.removeEventListener("abort", abort);
 	}
 }

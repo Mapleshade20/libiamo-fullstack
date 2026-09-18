@@ -114,10 +114,10 @@ function submitComment() {
 	closeHintMenu();
 	commentText = "";
 	replyTarget = null;
-	session.handleSend(
-		text,
-		{ threadTargetCommentId: target?.id ?? "" },
-		{
+	session.handleSend({
+		message: text,
+		extraFields: { threadTargetCommentId: target?.id ?? "" },
+		messagePatches: {
 			user: {
 				thread: {
 					commentId: "ao3-user-{clientMessageId}",
@@ -136,7 +136,7 @@ function submitComment() {
 				},
 			},
 		},
-	);
+	});
 }
 
 function handleTextareaKeydown(event: KeyboardEvent) {
