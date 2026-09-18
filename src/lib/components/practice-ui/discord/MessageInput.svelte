@@ -9,9 +9,8 @@ import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import EmojiPicker from "../../EmojiPicker.svelte";
 import ResizeableTextarea from "../../ResizeableTextarea.svelte";
 import { extractEmojiFromPickerEvent } from "../../utils/emojiUtils";
-import { requestHint } from "../hint/api";
+import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import { createHintRequestLifecycle } from "../hint/requestLifecycle";
 import type { ChatUser } from "./types";
 
 let {
@@ -48,15 +47,8 @@ let mentionQuery = $state("");
 let mentionIndex = $state(0);
 let filteredMentionUsers = $derived(allUsers.filter((u) => u.name.toLowerCase().includes(mentionQuery.toLowerCase())));
 let showEmojiPicker = $state(false);
-let showHintMenu = $state(false);
-let contentHint = $state("");
-let expressionQuery = $state("");
-let expressionPhrases = $state<string[]>([]);
-let hintError = $state<string | null>(null);
-let isGettingHint = $state(false);
-const hintRequests = createHintRequestLifecycle();
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
-let hintMotionOrigin = $state<HTMLElement | null>(null);
+const hints = createHintController({ getContext: () => ({ sessionId, language, draft: inputText, disabled }) });
 
 const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || isWaitingRetry);
 const canSend = $derived(Boolean(inputText.trim()) && !disabled);
@@ -96,82 +88,22 @@ function insertMention(user: ChatUser) {
 	showMentionMenu = false;
 }
 
-function openHintMenu(trigger: HTMLElement) {
-	if (!sessionId || isCompleted || disabled) return;
-	hintMotionOrigin = trigger;
-	showHintMenu = true;
-	hintError = null;
-	contentHint = "";
-	expressionPhrases = [];
-}
-
-async function handleGetHint() {
-	if (!sessionId || isCompleted || disabled) return;
-	if (isGettingHint) return;
-	const request = hintRequests.begin("content");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const result = await requestHint({ sessionId, mode: "content", draft: inputText });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		contentHint = result.contentHint ?? "";
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get hints:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-async function handleExpressionHelp() {
-	if (disabled || isGettingHint || !expressionQuery.trim()) return;
-	const request = hintRequests.begin("expression");
-	isGettingHint = true;
-	showHintMenu = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		if (!sessionId) return;
-		const result = await requestHint({ sessionId, mode: "expression", draft: inputText, expression: expressionQuery });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		expressionPhrases = result.phrases ?? [];
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-		console.error("Failed to get expression help:", err);
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-function closeHintMenu() {
-	hintRequests.invalidate();
-	showHintMenu = false;
-	isGettingHint = false;
-	hintError = null;
-	contentHint = "";
-	expressionQuery = "";
-	expressionPhrases = [];
-}
-
 function submitInput() {
 	if (!canSend) return;
 	const text = limitInputText(inputText);
 	inputText = "";
 	showMentionMenu = false;
 	showEmojiPicker = false;
-	closeHintMenu();
+	hints.dismiss();
 	onSend(text);
 }
 
-onDestroy(() => hintRequests.invalidate());
+onDestroy(hints.destroy);
+
+$effect(() => {
+	sessionId;
+	return () => hints.dismiss(false);
+});
 
 function handleWindowClick(e: MouseEvent) {
 	const target = e.target as HTMLElement;
@@ -179,8 +111,8 @@ function handleWindowClick(e: MouseEvent) {
 		showEmojiPicker = false;
 	}
 	if (!target.closest(".hint-container-wrapper") && !target.closest(".hint-bubble")) {
-		if (showHintMenu) {
-			closeHintMenu();
+		if (hints.isOpen) {
+			hints.dismiss();
 		}
 	}
 }
@@ -256,20 +188,20 @@ function handleKeyDown(e: KeyboardEvent) {
 		<div class="relative flex shrink-0 items-center hint-container-wrapper md:hidden">
 			<button
 				type="button"
-				class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#4E5058] bg-[#3F4147] text-[#DBDEE1] shadow-sm transition-all hover:border-[#5B5E66] hover:bg-[#4E5058] disabled:opacity-50 {isGettingHint ? 'text-yellow-400' : ''}"
+				class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#4E5058] bg-[#3F4147] text-[#DBDEE1] shadow-sm transition-all hover:border-[#5B5E66] hover:bg-[#4E5058] disabled:opacity-50 {hints.isLoading ? 'text-yellow-400' : ''}"
 				onclick={(e) => {
 					e.stopPropagation();
-					if (showHintMenu) {
-						closeHintMenu();
+					if (hints.isOpen) {
+						hints.dismiss();
 					} else {
-						openHintMenu(e.currentTarget);
+						hints.open(e.currentTarget);
 					}
 				}}
 				title={t.getHint}
 				aria-label={t.getHint}
 				{disabled}
 			>
-				<Lightbulb size={20} class={isGettingHint ? "animate-pulse" : ""} />
+				<Lightbulb size={20} class={hints.isLoading ? "animate-pulse motion-reduce:animate-none" : ""} />
 			</button>
 		</div>
 
@@ -302,20 +234,20 @@ function handleKeyDown(e: KeyboardEvent) {
 					<div class="relative hidden items-center hint-container-wrapper md:flex">
 						<button
 							type="button"
-							class="transition-colors {isGettingHint ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
+							class="transition-colors {hints.isLoading ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
 							onclick={(e) => {
 								e.stopPropagation();
-								if (showHintMenu) {
-									closeHintMenu();
+								if (hints.isOpen) {
+									hints.dismiss();
 								} else {
-									openHintMenu(e.currentTarget);
+									hints.open(e.currentTarget);
 								}
 							}}
 							title={t.getHint}
 							aria-label={t.getHint}
 							{disabled}
 						>
-							<Lightbulb size={22} class={isGettingHint ? "animate-pulse" : ""} />
+							<Lightbulb size={22} class={hints.isLoading ? "animate-pulse motion-reduce:animate-none" : ""} />
 						</button>
 					</div>
 
@@ -358,21 +290,24 @@ function handleKeyDown(e: KeyboardEvent) {
 			<Send size={18} />
 		</button>
 	</div>
-	{#if showHintMenu}
+	{#if hints.isOpen}
 		<HintFloatingPanel
 			anchorName="--libiamo-discord-hint-anchor"
 			layoutReference={hintLayoutReference}
-			motionOrigin={hintMotionOrigin}
+			motionOrigin={hints.motionOrigin}
 			{language}
-			bind:expressionQuery
-			{expressionPhrases}
-			{contentHint}
-			{hintError}
-			{isGettingHint}
+			bind:expressionQuery={hints.expressionQuery}
+			bind:activeMode={hints.mode}
+			bind:submittedExpressionQuery={hints.submittedQuery}
+			expressionPhrases={hints.phrases}
+			contentHint={hints.contentHint}
+			hintError={hints.error}
+			isGettingHint={hints.isLoading}
 			{disabled}
-			onExpressionSubmit={handleExpressionHelp}
-			onContentHint={handleGetHint}
-			onClose={closeHintMenu}
+			onExpressionSubmit={hints.requestExpression}
+			onContentHint={hints.requestContent}
+			onClose={() => hints.dismiss()}
+			onReset={hints.reset}
 		/>
 	{/if}
 </div>

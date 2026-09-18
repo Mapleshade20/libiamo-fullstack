@@ -1,5 +1,6 @@
 export type HintLabels = {
 	panel: string;
+	failure: string;
 	submit: string;
 	back: string;
 	clear: string;
@@ -10,6 +11,7 @@ export type HintLabels = {
 
 const hintI18n: Record<string, HintLabels> = {
 	en: {
+		failure: "Unable to generate a hint. Please try again.",
 		panel: "Hint panel",
 		submit: "Submit",
 		back: "Back",
@@ -19,6 +21,7 @@ const hintI18n: Record<string, HintLabels> = {
 		contentIdea: "Content idea",
 	},
 	es: {
+		failure: "No se pudo generar una pista. Inténtalo de nuevo.",
 		panel: "Panel de ayuda",
 		submit: "Enviar",
 		back: "Volver",
@@ -28,6 +31,7 @@ const hintI18n: Record<string, HintLabels> = {
 		contentIdea: "Idea de contenido",
 	},
 	fr: {
+		failure: "Impossible de générer un indice. Réessayez.",
 		panel: "Panneau d'aide",
 		submit: "Envoyer",
 		back: "Retour",
@@ -37,6 +41,7 @@ const hintI18n: Record<string, HintLabels> = {
 		contentIdea: "Idée de contenu",
 	},
 	ja: {
+		failure: "ヒントを生成できませんでした。もう一度お試しください。",
 		panel: "ヒントパネル",
 		submit: "送信",
 		back: "戻る",

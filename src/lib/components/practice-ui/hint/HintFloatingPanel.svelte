@@ -4,9 +4,11 @@ import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import BookA from "@lucide/svelte/icons/book-a";
 import Pilcrow from "@lucide/svelte/icons/pilcrow";
 import X from "@lucide/svelte/icons/x";
+import { MediaQuery } from "svelte/reactivity";
 import type { TransitionConfig } from "svelte/transition";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
+import type { HintMode } from "./controller.svelte";
 import { getHintLabels } from "./i18n";
 import { isImeKeyboardEvent } from "./keyboard";
 
@@ -27,6 +29,9 @@ let {
 	onExpressionSubmit,
 	onContentHint,
 	onClose,
+	onReset,
+	activeMode = $bindable<HintMode>("expression"),
+	submittedExpressionQuery = $bindable(""),
 }: {
 	anchorName: string;
 	layoutReference: HTMLElement | null;
@@ -42,6 +47,9 @@ let {
 	onExpressionSubmit: () => void;
 	onContentHint: () => void;
 	onClose: () => void;
+	onReset?: () => void;
+	activeMode?: HintMode;
+	submittedExpressionQuery?: string;
 } = $props();
 
 let panelEl = $state<HTMLDivElement | null>(null);
@@ -53,9 +61,9 @@ let previousLayoutAnchorName = "";
 let resultHeight = $state(0);
 let contentHintHeight = $state(0);
 let expressionFocused = $state(false);
-let contentMode = $state(false);
+const contentMode = $derived(activeMode === "content");
+const reducedMotion = new MediaQuery("(prefers-reduced-motion: reduce)", true);
 let suppressNextOutsideClick = false;
-let submittedExpressionQuery = $state("");
 let expressionResultCleared = $state(false);
 const labels = $derived(getHintLabels(language));
 const hasExpressionQuery = $derived(Boolean(expressionQuery.trim()));
@@ -105,7 +113,7 @@ function panelIntro(node: Element): TransitionConfig {
 	const hiddenY = getPanelMotionOffset(node);
 
 	return {
-		duration: 190,
+		duration: reducedMotion.current ? 0 : 190,
 		css: (t) => {
 			const eased = 1 - (1 - t) ** 3;
 			return `
@@ -145,7 +153,7 @@ function panelOutro(node: Element): TransitionConfig {
 	if (node instanceof HTMLElement) freezePanelPosition(node, panelRect);
 
 	return {
-		duration: 150,
+		duration: reducedMotion.current ? 0 : 150,
 		css: (t) => `
 			opacity: ${t};
 			transform: translateY(${(1 - t) * hiddenY}px);
@@ -171,8 +179,8 @@ function handleExpressionKeydown(e: KeyboardEvent) {
 }
 
 function submitExpression() {
-	if (!expressionQuery.trim() || isGettingHint || disabled) return;
-	contentMode = false;
+	if (!expressionQuery.trim() || disabled) return;
+	activeMode = "expression";
 	submittedExpressionQuery = expressionQuery.trim();
 	expressionResultCleared = false;
 	onExpressionSubmit();
@@ -191,16 +199,18 @@ function handlePrimaryAction(event: MouseEvent) {
 
 function requestContentHint(event?: MouseEvent) {
 	event?.stopPropagation();
-	if (contentMode || isGettingHint || disabled) return;
-	contentMode = true;
+	if (contentMode || disabled) return;
+	activeMode = "content";
 	onContentHint();
 }
 
 function leaveContentMode() {
-	contentMode = false;
+	onReset?.();
+	activeMode = "expression";
 }
 
 function clearExpression(event?: MouseEvent) {
+	onReset?.();
 	event?.stopPropagation();
 	expressionResultCleared = true;
 	expressionQuery = "";
@@ -231,17 +241,18 @@ function handleWindowClickCapture(event: MouseEvent) {
 	event.stopImmediatePropagation();
 }
 
+function dismissPanel() {
+	const trigger = motionOrigin;
+	onClose();
+	if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+}
+
 function handleWindowKeydownCapture(event: KeyboardEvent) {
 	if (isImeKeyboardEvent(event)) return;
 	if (event.key !== "Escape") return;
-	if (document.activeElement === expressionInputEl) {
-		event.preventDefault();
-		event.stopImmediatePropagation();
-		expressionInputEl?.blur();
-		return;
-	}
-
-	onClose();
+	event.preventDefault();
+	event.stopImmediatePropagation();
+	dismissPanel();
 }
 
 function positionFallback(node: HTMLElement) {
@@ -274,8 +285,12 @@ $effect(() => {
 	hintError;
 	contentHint;
 	visibleExpressionPhrases.length;
-	requestAnimationFrame(updateResultHeight);
-	requestAnimationFrame(updateContentHintHeight);
+	const resultFrame = requestAnimationFrame(updateResultHeight);
+	const contentFrame = requestAnimationFrame(updateContentHintHeight);
+	return () => {
+		cancelAnimationFrame(resultFrame);
+		cancelAnimationFrame(contentFrame);
+	};
 });
 
 $effect(() => {
@@ -304,6 +319,7 @@ $effect(() => {
 	bind:this={panelEl}
 	role="dialog"
 	aria-label={labels.panel}
+	aria-busy={isGettingHint}
 	tabindex="-1"
 	use:positionFallback
 	class="hint-bubble fixed z-[80] overflow-hidden rounded-[14px] border border-white/70 bg-[#f7f1ea]/90 shadow-[0_18px_46px_rgba(54,42,25,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl"
@@ -324,7 +340,7 @@ $effect(() => {
 				type="button"
 				class="relative mr-2 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-[#333333] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-[background-color,transform,opacity] duration-200 hover:scale-[1.02] hover:bg-[#242424] disabled:scale-100 disabled:bg-[#969696] disabled:opacity-35"
 				onclick={handlePrimaryAction}
-				disabled={contentMode ? false : !expressionQuery.trim() || isGettingHint || disabled}
+				disabled={contentMode ? false : !expressionQuery.trim() || disabled}
 				title={contentMode ? labels.back : labels.submit}
 				aria-label={contentMode ? labels.back : labels.submit}
 			>
@@ -429,7 +445,7 @@ $effect(() => {
 						type="button"
 						class="flex min-h-9 w-full items-center gap-2 whitespace-nowrap rounded-[10px] bg-[#fbfaf7]/90 px-3 text-left text-xs text-[#6f675f] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] transition-[background-color,color,transform,box-shadow] duration-200 hover:bg-[#fffdf9] hover:text-[#2f2a25]"
 						onclick={requestContentHint}
-						disabled={isGettingHint || disabled}
+						{disabled}
 					>
 						<Pilcrow size={17} strokeWidth={1.9} class="shrink-0 text-[#8c7b6c]" />
 						<span class="font-bold">{labels.contentIdea}</span>
@@ -469,6 +485,19 @@ $effect(() => {
 </div>
 
 <style>
+@media (prefers-reduced-motion: reduce) {
+	.hint-bubble,
+	.hint-bubble :global(*) {
+		animation-duration: 0ms;
+		transition-duration: 0ms;
+	}
+}
+.hint-bubble :global(button:focus-visible),
+.hint-bubble :global(input:focus-visible) {
+	outline: 2px solid #6f675f;
+	outline-offset: 2px;
+}
+
 .hint-bubble {
 	inset: auto;
 	position-anchor: var(--hint-anchor);

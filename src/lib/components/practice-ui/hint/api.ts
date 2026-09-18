@@ -1,7 +1,10 @@
 import { sendFormAction } from "../apiService";
+import { getHintLabels } from "./i18n";
 
 export type HintRequest = {
 	sessionId: number;
+	signal?: AbortSignal;
+	language?: string;
 	mode: "content" | "expression";
 	draft?: string;
 	expression?: string;
@@ -21,12 +24,12 @@ export async function requestHint(input: HintRequest): Promise<HintResponse> {
 	if (input.expression?.trim()) formData.append("expression", input.expression.trim());
 	if (input.contextPath?.length) formData.append("contextPath", JSON.stringify(input.contextPath));
 
-	const result = await sendFormAction("hint", formData);
+	const result = await sendFormAction("hint", formData, input.signal);
 	if (result?.type === "failure") {
-		const error = result.data && typeof result.data.error === "string" ? result.data.error : "Failed to generate hints";
+		const error = result.data && typeof result.data.error === "string" ? result.data.error : getHintLabels(input.language ?? "en").failure;
 		throw new Error(error);
 	}
-	if (result?.type !== "success" || !result.data) throw new Error("Failed to generate hints");
+	if (result?.type !== "success" || !result.data) throw new Error(getHintLabels(input.language ?? "en").failure);
 
 	return {
 		contentHint: typeof result.data.contentHint === "string" ? result.data.contentHint : undefined,
