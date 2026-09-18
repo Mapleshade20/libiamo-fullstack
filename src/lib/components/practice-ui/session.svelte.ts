@@ -418,9 +418,13 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 				extraFields: resolvedExtraFields,
 			});
 			await applySendResult(result, clientMessageId, currentText, agentPatch);
+			if (result.status === "rejected") messages = messages.filter((message) => message.id !== userMsgId);
 			await scrollToBottom();
 			await refreshAfterSendResult(result);
 			return { status: result.status, clientMessageId, optimisticMessageId: userMsgId };
+		} catch (error) {
+			messages = messages.filter((message) => message.id !== userMsgId);
+			throw error;
 		} finally {
 			isSubmitting = false;
 		}

@@ -2,9 +2,9 @@
 import { onDestroy, onMount } from "svelte";
 import { fly } from "svelte/transition";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
-import { requestHint } from "../hint/api";
+import { createHintController } from "../hint/controller.svelte";
 import HintFloatingPanel from "../hint/HintFloatingPanel.svelte";
-import { createHintRequestLifecycle } from "../hint/requestLifecycle";
+
 import ComposeActionBar from "./ComposeActionBar.svelte";
 import ComposeBodyEditor from "./ComposeBodyEditor.svelte";
 import ComposeHeader from "./ComposeHeader.svelte";
@@ -43,7 +43,6 @@ let {
 let composeWindowEl = $state<HTMLDivElement | null>(null);
 let bodyEditor = $state<HTMLDivElement | null>(null);
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
-let hintMotionOrigin = $state<HTMLElement | null>(null);
 let frame = $state({ x: 0, y: 0, width: 900, height: 680 });
 let frameReady = $state(false);
 let viewportWidth = $state(1024);
@@ -57,13 +56,7 @@ let activeLayouts = $state<ComposeActiveLayouts>({
 	insertUnorderedList: false,
 	insertOrderedList: false,
 });
-let showHintMenu = $state(false);
-let expressionQuery = $state("");
-let expressionPhrases = $state<string[]>([]);
-let contentHint = $state("");
-let hintError = $state<string | null>(null);
-let isGettingHint = $state(false);
-const hintRequests = createHintRequestLifecycle();
+const hint = createHintController({ getContext: () => ({ sessionId, language, draft: getHintDraft(), disabled: editorDisabled || isInitializing }) });
 
 const isCompact = $derived(viewportWidth <= 640);
 const editorIsEmpty = $derived(!draft.body.trim());
@@ -386,26 +379,12 @@ function redoEditorChange() {
 }
 
 function openHintMenu(event: MouseEvent) {
-	if (showHintMenu) {
-		closeHintMenu();
-		return;
-	}
-	hintMotionOrigin = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-	showHintMenu = true;
-	contentHint = "";
-	hintError = null;
-	expressionQuery = "";
-	expressionPhrases = [];
+	if (hint.isOpen) hint.dismiss();
+	else if (event.currentTarget instanceof HTMLElement) hint.open(event.currentTarget);
 }
 
 function closeHintMenu() {
-	hintRequests.invalidate();
-	showHintMenu = false;
-	isGettingHint = false;
-	contentHint = "";
-	hintError = null;
-	expressionQuery = "";
-	expressionPhrases = [];
+	hint.dismiss();
 }
 
 function getHintDraft() {
@@ -415,50 +394,10 @@ function getHintDraft() {
 	return [headers, getPlainTextFromEditor().trim()].filter(Boolean).join("\n\n");
 }
 
-async function handleGetHint() {
-	if (!sessionId || isGettingHint) return;
-	const request = hintRequests.begin("content");
-	isGettingHint = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const result = await requestHint({ sessionId, mode: "content", draft: getHintDraft() });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		contentHint = result.contentHint ?? "";
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-async function handleExpressionHelp() {
-	if (!sessionId || isGettingHint || !expressionQuery.trim()) return;
-	const request = hintRequests.begin("expression");
-	isGettingHint = true;
-	contentHint = "";
-	expressionPhrases = [];
-	hintError = null;
-	try {
-		const result = await requestHint({ sessionId, mode: "expression", draft: getHintDraft(), expression: expressionQuery });
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		expressionPhrases = result.phrases ?? [];
-	} catch (err) {
-		if (!hintRequests.isCurrent(request) || !showHintMenu) return;
-		hintError = err instanceof Error && err.message.trim() ? err.message : "Failed to generate hints";
-	} finally {
-		if (hintRequests.isCurrent(request)) isGettingHint = false;
-		hintRequests.finish(request);
-	}
-}
-
-onDestroy(() => hintRequests.invalidate());
+onDestroy(() => hint.destroy());
 
 function handleWindowClick(event: MouseEvent) {
-	if (!showHintMenu) return;
+	if (!hint.isOpen) return;
 	const target = event.target as HTMLElement;
 	if (!target.closest(".mail-hint-wrapper") && !target.closest(".hint-bubble")) closeHintMenu();
 }
@@ -620,21 +559,24 @@ $effect(() => {
 			{onSend}
 		/>
 	</div>
-	{#if showHintMenu}
+	{#if hint.isOpen}
 		<HintFloatingPanel
 			anchorName="--libiamo-mail-hint-anchor"
 			layoutReference={hintLayoutReference}
-			motionOrigin={hintMotionOrigin}
+			motionOrigin={hint.motionOrigin}
 			{language}
-			bind:expressionQuery
-			{expressionPhrases}
-			{contentHint}
-			{hintError}
-			{isGettingHint}
+			bind:expressionQuery={hint.expressionQuery}
+			bind:activeMode={hint.mode}
+			bind:submittedExpressionQuery={hint.submittedQuery}
+			expressionPhrases={hint.phrases}
+			contentHint={hint.contentHint}
+			hintError={hint.error}
+			isGettingHint={hint.isLoading}
 			disabled={editorDisabled}
 			placement="above"
-			onExpressionSubmit={handleExpressionHelp}
-			onContentHint={handleGetHint}
+			onExpressionSubmit={hint.requestExpression}
+			onContentHint={hint.requestContent}
+			onReset={hint.reset}
 			onClose={closeHintMenu}
 		/>
 	{/if}

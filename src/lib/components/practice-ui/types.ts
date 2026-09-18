@@ -89,7 +89,9 @@ export interface PracticePresentation<Context> {
 	context: Context;
 }
 
-export type PracticeMessagePresentationPatch = Partial<Pick<ChatMessage, "text" | "authorName" | "avatar" | "avatarColor" | "isHidden" | "thread">>;
+export type PracticeMessagePresentationPatch = Partial<
+	Pick<ChatMessage, "text" | "authorName" | "avatar" | "avatarColor" | "isHidden" | "thread" | "llmMetadata">
+>;
 
 /** Presentation only: no requests, invalidation, timers, or navigation. */
 export interface PracticePresentationAdapter<Opening = PracticeOpeningState, Context = undefined> {

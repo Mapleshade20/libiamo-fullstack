@@ -2,17 +2,14 @@
 import Mail from "@lucide/svelte/icons/mail";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
-import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
-import { BottomSheet } from "$lib/components/ui/bottom-sheet";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
-import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
-import { createTimeFormatter, getTodayDateString } from "../../utils/messageUtils";
-import { completeAction, postAction } from "../apiService";
-import { type MessageSubmissionResult, submitPracticeMessage } from "../chatFlowController";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "../chatMessages";
+import { getTodayDateString } from "../../utils/messageUtils";
+import FinishSessionSheet from "../FinishSessionSheet.svelte";
+import { createPracticeSession } from "../session.svelte";
 import type { PracticeUiRootProps } from "../types";
+import { createMailPresentationAdapter } from "./adapter";
 import ComposeWindow from "./ComposeWindow.svelte";
 import DetailPane from "./DetailPane.svelte";
 import { i18n } from "./i18n";
@@ -26,45 +23,52 @@ import {
 	sanitizeDraftBodyHtml,
 } from "./mailUtils";
 import Overlays from "./Overlays.svelte";
-import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "./presentation";
+import { buildGeneratedInboxEmails } from "./presentation";
 import Sidebar from "./Sidebar.svelte";
 import type { DraftEmail, MailOpeningState } from "./types";
-import { getMailContact, getMailContactFromOpeningEmails } from "./userPool";
 
 const clock = getDisplayClock();
 
-let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref }: PracticeUiRootProps = $props();
+let { taskId, userName, avatarUrl, language, existingSession, openingState, maxTurns, returnHref, feedbackHref }: PracticeUiRootProps = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
 
-function refreshTrialQuota() {
-	return invalidate(TRIAL_QUOTA_DEPENDENCY);
-}
-
-function refreshPracticeSession() {
-	return invalidate(PRACTICE_SESSION_DEPENDENCY);
-}
-
-function refreshAfterSendResult(result: MessageSubmissionResult) {
-	if (result.status === "pending") {
-		return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
-	}
-	return refreshTrialQuota();
-}
-
-let sessionId = $state<number | null>(null);
-let lastLoadedSessionId = $state<number | null>(null);
-let lastSessionSnapshot = $state("");
-let isInitializing = $state(false);
-let isSubmitting = $state(false);
-let isCompleting = $state(false);
-let isCompleted = $state(false);
+const sessionLabels = {
+	get stillProcessingMessage() {
+		return t.stillProcessingMessage;
+	},
+	get retryFailedMessage() {
+		return t.retryFailedMessage;
+	},
+	earlier: "",
+};
+const adapter = createMailPresentationAdapter(
+	() => taskId,
+	() => userName,
+);
+const session = createPracticeSession(() => ({
+	adapter,
+	userName,
+	avatarUrl,
+	language,
+	existingSession,
+	openingState,
+	maxTurns,
+	feedbackHref,
+	labels: sessionLabels,
+	taskId,
+}));
+const sessionId = $derived(session.sessionId);
+const messages = $derived(session.messages);
+const isInitializing = $derived(session.isInitializing);
+const isSubmitting = $derived(session.isSubmitting);
+const isCompleting = $derived(session.isCompleting);
+const isCompleted = $derived(session.isCompleted);
 let isEntering = $state(true);
 let showToast = $state(false);
 let showSidebar = $state(false);
 let showCompose = $state(false);
 let showFinishConfirm = $state(false);
-let messages = $state<ChatMessage[]>([]);
 let hasAutoCompleted = $state(false);
 let selectedInboxId = $state<string | null>(null);
 let selectedSentId = $state<string | null>(null);
@@ -75,7 +79,7 @@ let messageScroll = $state<HTMLElement | null>(null);
 
 const todayLabel = $derived(getTodayDateString(language, clock()));
 const openingStateData = $derived((openingState ?? {}) as MailOpeningState);
-const recipient = $derived(getMailContactFromOpeningEmails(openingStateData.emails, getMailContact(taskId || sessionId || userName)));
+const recipient = $derived(session.presentationContext.recipient);
 const sentMessages = $derived(messages.filter((m) => m.role === "user" && !m.isHidden));
 const agentMessages = $derived(messages.filter((m) => m.role === "agent" && !m.isHidden));
 const currentTurns = $derived(sentMessages.length);
@@ -110,7 +114,6 @@ const sentCount = $derived(sentMessages.length);
 const draftCount = $derived(!limitReached && (draft.body.trim() || draft.subject.trim()) ? 1 : 0);
 const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
 const canFinish = $derived(Boolean(sessionId) && currentTurns > 0 && !isCompleted && !isInitializing);
-const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
 
 function getDefaultDraft(): DraftEmail {
 	return {
@@ -252,106 +255,22 @@ async function scrollToMessageBottom() {
 	if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
 }
 
-function appendAgentMessageFromSendResult(
-	result: MessageSubmissionResult,
-	clientMessageId: string,
-	retryText: string,
-	agentMessageId = crypto.randomUUID(),
-) {
-	const agentMessage = buildAgentMessageFromSendResult({
-		result,
-		clientMessageId,
-		retryText,
-		recipient,
-		timestamp: formatTimestamp(new Date()),
-		stillProcessingMessage: t.stillProcessingMessage,
-		retryFailedMessage: t.retryFailedMessage,
-		id: agentMessageId,
-	});
-	if (!agentMessage) return;
-
-	messages = [...messages, agentMessage];
-	if (agentMessage.deliveryState === "pending") {
-		// No placeholder email while waiting: keep the just-sent mail in view;
-		// the reply arrives as a real inbox email on its own clock.
-		const sent = messages.find((m) => m.role === "user" && m.clientMessageId === clientMessageId);
-		if (sent) {
-			selectedSentId = sent.id;
-			activeMailbox = "sent";
-		}
-	} else {
-		selectedInboxId = `agent-${agentMessage.id}`;
-		activeMailbox = "inbox";
-	}
-}
-
 function handleFinishClick() {
 	showFinishConfirm = true;
 }
 
 function handleFinishConfirm() {
-	showFinishConfirm = false;
-	void handleComplete();
+	void session.handleCompleteAndNavigate();
 }
 
 function handleFinishCancel() {
 	showFinishConfirm = false;
-}
-
-async function handleComplete(force = false) {
-	if (!sessionId || isCompleted || isInitializing || (!force && isSubmitting) || isCompleting) return;
-
-	isCompleting = true;
-	try {
-		const result = await completeAction(sessionId);
-		if (result.type === "success") {
-			isCompleted = true;
-			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
-			draft = getDefaultDraft();
-			// Navigate to feedback page
-			window.location.href = `/task/${taskId}/feedback`;
-		} else {
-			console.error("Mail completion was rejected:", result);
-		}
-	} catch (error) {
-		console.error("Mail completion failed:", error);
-	} finally {
-		isCompleting = false;
-	}
+	session.clearCompletionError();
 }
 
 async function handleRetry(messageId: string) {
-	if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
-
-	const message = messages.find((m) => m.id === messageId);
-	if (!message?.clientMessageId) return;
-
-	messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
+	await session.handleRetry(messageId);
 	await scrollToMessageBottom();
-
-	isSubmitting = true;
-	try {
-		const retryText = message.retryText || message.text;
-		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
-		const bodyHtml = originalUserMessage ? sanitizeDraftBodyHtml(getMailBodyHtmlFromMessage(originalUserMessage)) : "";
-		const result = await submitPracticeMessage({
-			sessionId,
-			message: retryText,
-			clientMessageId: message.clientMessageId,
-			extraFields: bodyHtml ? { bodyHtml } : {},
-		});
-
-		if (result.status === "session_completed") {
-			isCompleted = true;
-			window.location.href = `/task/${taskId}/feedback`;
-			return;
-		}
-		appendAgentMessageFromSendResult(result, message.clientMessageId, retryText);
-		await refreshAfterSendResult(result);
-	} finally {
-		await scrollToMessageBottom();
-		isSubmitting = false;
-	}
 }
 
 async function handleSendEmail() {
@@ -360,92 +279,20 @@ async function handleSendEmail() {
 
 	const currentText = formatDraftMessage(draft, t.noSubject);
 	const mailBodyHtml = sanitizeDraftBodyHtml(draft.bodyHtml);
-	const clientMessageId = crypto.randomUUID();
-	isSubmitting = true;
-
-	const sentMessage: ChatMessage = {
-		id: crypto.randomUUID(),
-		role: "user",
-		text: currentText,
-		timestamp: formatTimestamp(new Date()),
-		authorName: userName,
-		avatar: avatarUrl,
-		clientMessageId,
-		llmMetadata: { clientMessageId, failed: false, mailBodyHtml },
-	};
-
-	messages = [...messages, sentMessage];
-	selectedSentId = sentMessage.id;
-	activeMailbox = "sent";
 	showCompose = false;
 	await scrollToMessageBottom();
-
-	try {
-		const result = await submitPracticeMessage({ sessionId, message: currentText, clientMessageId, extraFields: { bodyHtml: mailBodyHtml } });
-		if (result.status === "session_completed") {
-			// The server completed the session in the send transaction; navigate straight to feedback.
-			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
-			draft = getDefaultDraft();
-			isCompleted = true;
-			window.location.href = `/task/${taskId}/feedback`;
-		} else if (result.status === "pending" || result.status === "failed") {
-			appendAgentMessageFromSendResult(result, clientMessageId, currentText);
-			if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
-			draft = getDefaultDraft();
-			await refreshAfterSendResult(result);
-		} else {
-			console.error("Mail submission was rejected:", result);
-			messages = messages.filter((message) => message.id !== sentMessage.id);
-			showCompose = true;
-		}
-	} catch (error) {
-		console.error("Mail submission failed:", error);
-		messages = messages.filter((message) => message.id !== sentMessage.id);
-		showCompose = true;
-	} finally {
-		await scrollToMessageBottom();
-		isSubmitting = false;
-	}
-}
-
-function loadExistingSession(session: any) {
-	const sessionSnapshot = getSessionSnapshot(session);
-	if (session.id === lastLoadedSessionId && sessionSnapshot === lastSessionSnapshot) return;
-
-	lastLoadedSessionId = session.id;
-	lastSessionSnapshot = sessionSnapshot;
-	sessionId = session.id;
-	isCompleted = session.status === "completed" || session.status === "evaluated" || session.status === "abandoned";
-
-	messages = buildChatMessages({
-		rawMessages: session.messages ?? [],
-		formatTimestamp,
-		userName,
-		agentName: t.tutorReply,
-		avatarUrl,
-		agentColor: "bg-[#3478F6]",
-		labels: t,
+	const outcome = await session.handleSend({
+		message: currentText,
+		extraFields: { bodyHtml: mailBodyHtml },
+		messagePatches: { user: { llmMetadata: { failed: false, mailBodyHtml } } },
 	});
-
-	const visibleAgentMessages = messages.filter((m) => m.role === "agent" && !m.isHidden && m.deliveryState !== "pending");
-	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
-	if (
-		(!selectedInboxId || (activeMailbox === "inbox" && selectedInboxId.startsWith("agent-") && !selectedGeneratedInboxExists)) &&
-		visibleAgentMessages.length
-	) {
-		selectedInboxId = `agent-${visibleAgentMessages.at(-1)?.id}`;
-		activeMailbox = "inbox";
-		showCompose = false;
-	} else if (!selectedSentId && messages.some((m) => m.role === "user" && !m.isHidden)) {
-		selectedSentId = messages.filter((m) => m.role === "user" && !m.isHidden).at(-1)?.id ?? null;
-		activeMailbox = "sent";
-		showCompose = false;
+	if (outcome.status === "rejected") {
+		showCompose = true;
+		return;
 	}
+	draft = getDefaultDraft();
+	if (typeof localStorage !== "undefined") localStorage.removeItem(getDraftStorageKey());
 }
-
-$effect(() => {
-	if (existingSession) loadExistingSession(existingSession);
-});
 
 onMount(async () => {
 	setTimeout(() => {
@@ -463,24 +310,10 @@ onMount(async () => {
 	if (!isCompleted && !hasExistingMessages && !hasTemplateOpeningEmails) {
 		openComposer(true);
 	}
+});
 
-	if (!existingSession) {
-		isInitializing = true;
-		try {
-			const startResult = await postAction("start", null);
-			if (startResult.type === "success" && startResult.data) {
-				sessionId = startResult.data.sessionId as number;
-				lastLoadedSessionId = sessionId;
-				await Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
-			} else {
-				console.error("Mail session initialization was rejected:", startResult);
-			}
-		} catch (error) {
-			console.error("Mail session initialization failed:", error);
-		} finally {
-			isInitializing = false;
-		}
-	}
+$effect(() => {
+	if (session.completionError !== null) showFinishConfirm = true;
 });
 
 $effect(() => {
@@ -496,17 +329,20 @@ $effect(() => {
 		!hasAutoCompleted
 	) {
 		hasAutoCompleted = true;
-		void handleComplete(true);
+		void session.handleCompleteAndNavigate();
 	}
 });
 
 $effect(() => {
-	if (isAnyMessagePending && !isSubmitting && sessionId) {
-		const interval = setInterval(() => {
-			void refreshPracticeSession();
-			void refreshTrialQuota();
-		}, 3000);
-		return () => clearInterval(interval);
+	const visibleAgentMessages = agentMessages.filter((message) => message.deliveryState !== "pending");
+	const selectedGeneratedInboxExists = selectedInboxId ? visibleAgentMessages.some((message) => `agent-${message.id}` === selectedInboxId) : false;
+	if (
+		(!selectedInboxId || (activeMailbox === "inbox" && selectedInboxId.startsWith("agent-") && !selectedGeneratedInboxExists)) &&
+		visibleAgentMessages.length
+	) {
+		selectedInboxId = `agent-${visibleAgentMessages.at(-1)?.id}`;
+		activeMailbox = "inbox";
+		showCompose = false;
 	}
 });
 </script>
@@ -605,12 +441,11 @@ $effect(() => {
 		/>
 	{/if}
 
-	<BottomSheet
+	<FinishSessionSheet
 		show={showFinishConfirm}
-		title="Finish Task"
-		message="Are you ready to finish this task and see your feedback? You won't be able to send more messages after confirming."
-		confirmLabel="Finish & Review"
-		cancelLabel="Keep Practicing"
+		{language}
+		pending={session.isCompleting}
+		error={session.completionError}
 		onConfirm={handleFinishConfirm}
 		onCancel={handleFinishCancel}
 	/>
