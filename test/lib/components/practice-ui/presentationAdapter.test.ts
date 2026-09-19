@@ -46,7 +46,9 @@ describe("practice presentation adapters", () => {
 		expect(messages[0].avatar).toBe("avatar.png");
 		expect(messages[1].avatarColor).toBeUndefined();
 		const empty = adapter.normalizeOpeningState(null);
-		expect(adapter.resolvePresentation({ sessionId: 17, openingState: empty, userName: "Learner" }).agent.name).toBe("Agent");
+		expect(adapter.resolvePresentation({ sessionId: 17, openingState: empty, userName: "Learner" }).agent.name).toMatch(
+			/^(Alex Morgan|Jordan Lee|Taylor Kim|Sam Rivera|Casey Nguyen)$/,
+		);
 	}
 	it.each([
 		["iMessage", () => checkAdapter(createIMessagePresentationAdapter())],

@@ -34,6 +34,18 @@ const isAny = () => true;
 
 const RULES: Rule[] = [
 	{
+		name: "location navigation",
+		pattern: /\b(?:window\.)?location(?:\.href)?\s*=\s*[`"']\/(?!\/)|\b(?:window\.)?location\.(?:assign|replace)\(\s*[`"']\/(?!\/)/g,
+		appliesTo: isAny,
+		hint: "use a base-aware navigation target",
+	},
+	{
+		name: "asset constant",
+		pattern: /\b(?:const|let)\s+\w*(?:ICON|ASSET|IMAGE|LOGO|AVATAR)\w*\s*=\s*[`"']\/(?!\/)/g,
+		appliesTo: isAny,
+		hint: "prefix app-served asset URLs with base or store a relative asset path",
+	},
+	{
 		name: "href",
 		// href="/x" but not href="{base}/x". Also catches href="/".
 		pattern: /\bhref="\/(?!\/)/g,
@@ -67,7 +79,7 @@ const RULES: Rule[] = [
 	},
 	{
 		name: "goto",
-		pattern: /\bgoto\(\s*[`"]\/(?!\/)/g,
+		pattern: /\bgoto\(\s*[`"']\/(?!\/)/g,
 		appliesTo: isAny,
 		hint: "use goto(`${base}/...`)",
 	},
@@ -131,6 +143,10 @@ describe("base path discipline", () => {
 	describe("detector", () => {
 		// The guard is only worth having if it actually fires, so pin its behaviour.
 		it.each([
+			["goto('/task/1/feedback')", "ts", true],
+			['window.location.href = "/task/1/feedback"', "ts", true],
+			["location.assign('/task/1/feedback')", "ts", true],
+			['export const DEFAULT_ICON = "/ao3/icon_user.png"', "ts", true],
 			['<a href="/review">x</a>', "svelte", true],
 			['<a href="/">x</a>', "svelte", true],
 			['<a href="/">x</a>', "html", true],

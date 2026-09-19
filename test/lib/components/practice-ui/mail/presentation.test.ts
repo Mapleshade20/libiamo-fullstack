@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "$lib/components/practice-ui/chatMessages";
-import { buildAgentMessageFromSendResult, buildGeneratedInboxEmails } from "$lib/components/practice-ui/mail/presentation";
+import { buildGeneratedInboxEmails } from "$lib/components/practice-ui/mail/presentation";
 
 describe("mail presentation", () => {
 	const recipient = {
@@ -106,57 +106,5 @@ describe("mail presentation", () => {
 		});
 
 		expect(emails).toHaveLength(0);
-	});
-
-	it("builds agent messages for send result states", () => {
-		expect(
-			buildAgentMessageFromSendResult({
-				result: { status: "pending" },
-				clientMessageId: "mail-1",
-				retryText: "Original",
-				recipient,
-				timestamp: "9:02",
-				stillProcessingMessage: "Still processing",
-				retryFailedMessage: "Failed",
-				id: "agent-1",
-			}),
-		).toMatchObject({
-			id: "agent-1",
-			role: "agent",
-			text: "Still processing",
-			deliveryState: "pending",
-			clientMessageId: "mail-1",
-		});
-
-		expect(
-			buildAgentMessageFromSendResult({
-				result: { status: "failed" },
-				clientMessageId: "mail-1",
-				retryText: "Original",
-				recipient,
-				timestamp: "9:02",
-				stillProcessingMessage: "Still processing",
-				retryFailedMessage: "Failed",
-				id: "agent-2",
-			}),
-		).toMatchObject({
-			text: "Failed",
-			deliveryState: "failed",
-			retryText: "Original",
-		});
-	});
-
-	it("does not build a message for rejected submissions", () => {
-		expect(
-			buildAgentMessageFromSendResult({
-				result: { status: "rejected" },
-				clientMessageId: "mail-1",
-				retryText: "Original",
-				recipient,
-				timestamp: "9:02",
-				stillProcessingMessage: "Still processing",
-				retryFailedMessage: "Failed",
-			}),
-		).toBeNull();
 	});
 });

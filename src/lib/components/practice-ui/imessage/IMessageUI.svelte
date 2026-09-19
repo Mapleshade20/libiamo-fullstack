@@ -48,7 +48,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	feedbackHref,
 	labels: sessionLabels,
-	taskId,
 }));
 
 const contactName = $derived(session.agentName);

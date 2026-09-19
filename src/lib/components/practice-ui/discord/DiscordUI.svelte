@@ -45,7 +45,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	feedbackHref,
 	labels: sessionLabels,
-	taskId,
 }));
 
 const openingStateData = $derived(session.openingStateData);

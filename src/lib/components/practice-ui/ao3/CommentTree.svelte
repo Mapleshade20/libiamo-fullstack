@@ -1,4 +1,5 @@
 <script lang="ts">
+import { base } from "$app/paths";
 import MarkdownRenderer from "../../MarkdownRenderer.svelte";
 import CommentTree from "./CommentTree.svelte";
 import { type Ao3RenderableComment, DEFAULT_AO3_ICON } from "./helpers";
@@ -34,7 +35,7 @@ let {
 			<img
 				class="h-[72px] w-[72px] shrink-0 border border-[#ccc] object-cover p-0.5 md:h-[100px] md:w-[100px]"
 				alt=""
-				src={comment.iconUrl || DEFAULT_AO3_ICON}
+				src={comment.iconUrl || `${base}/${DEFAULT_AO3_ICON}`}
 			>
 			<div class="min-w-0 flex-1 break-words leading-6">
 				<MarkdownRenderer content={comment.comment} />

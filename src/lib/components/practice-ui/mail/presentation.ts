@@ -1,4 +1,3 @@
-import type { MessageSubmissionResult } from "../chatFlowController";
 import type { ChatMessage } from "../chatMessages";
 import { ensureReplySubject, normalizeAgentSignature, normalizeReplySubject, parseAgentMailReply, parseDraftFromMessage } from "./mailUtils";
 import type { NormalizedMailEmail } from "./types";
@@ -63,54 +62,4 @@ export function buildGeneratedInboxEmails({
 			messageId: message.id,
 		};
 	});
-}
-
-export function buildAgentMessageFromSendResult({
-	result,
-	clientMessageId,
-	retryText,
-	recipient,
-	timestamp,
-	stillProcessingMessage,
-	retryFailedMessage,
-	id = crypto.randomUUID(),
-}: {
-	result: MessageSubmissionResult;
-	clientMessageId: string;
-	retryText: string;
-	recipient: MailContact;
-	timestamp: string;
-	stillProcessingMessage: string;
-	retryFailedMessage: string;
-	id?: string;
-}): ChatMessage | null {
-	if (result.status === "pending") {
-		return {
-			id,
-			role: "agent",
-			text: stillProcessingMessage,
-			timestamp,
-			authorName: recipient.name,
-			avatarColor: "bg-[#3478F6]",
-			deliveryState: "pending",
-			clientMessageId,
-			retryText,
-		};
-	}
-
-	if (result.status === "failed") {
-		return {
-			id,
-			role: "agent",
-			text: retryFailedMessage,
-			timestamp,
-			authorName: recipient.name,
-			avatarColor: "bg-[#3478F6]",
-			deliveryState: "failed",
-			clientMessageId,
-			retryText,
-		};
-	}
-
-	return null;
 }

@@ -12,6 +12,7 @@ import {
 	getParentCommentIdForMessage,
 	normalizeThreadText,
 } from "../commentThread";
+import { stableChoice } from "../identityFallback";
 
 export type Ao3CommentNode = {
 	id?: string;
@@ -65,7 +66,7 @@ export type Ao3RenderableComment = CommentThreadRenderableComment & {
 	replies: Ao3RenderableComment[];
 };
 
-export const DEFAULT_AO3_ICON = "/ao3/icon_user.png";
+export const DEFAULT_AO3_ICON = "ao3/icon_user.png";
 
 const ao3ThreadConfig: CommentThreadConfig<Ao3CommentNode> = {
 	idPrefix: "ao3",
@@ -87,6 +88,23 @@ export function normalizeAo3Text(value: unknown, fallback = ""): string {
 
 export function getAo3AuthorName(openingState: Ao3OpeningState, fallback = "FicAuthor"): string {
 	return normalizeAo3Text(openingState.authorName, fallback);
+}
+
+const AO3_PSEUDS = ["archivewanderer", "chapterandchai", "inkstaineddreams", "northstarwriter", "quietlydevoted"] as const;
+
+export function getAo3FallbackPseud(seed: string): string {
+	return stableChoice(`ao3:${seed}`, AO3_PSEUDS);
+}
+
+function withAo3FallbackAuthors(comments: Ao3CommentNode[], seed: string, path: number[] = []): Ao3CommentNode[] {
+	return comments.map((comment, index) => {
+		const location = comment.id || path.concat(index).join("-");
+		return {
+			...comment,
+			username: normalizeAo3Text(comment.username, getAo3FallbackPseud(`${seed}:${location}`)),
+			replies: withAo3FallbackAuthors(comment.replies ?? [], seed, path.concat(index)),
+		};
+	});
 }
 
 export function getAo3AdditionalTags(openingState: Ao3OpeningState): string[] {
@@ -131,10 +149,12 @@ export function buildAo3CommentTree(params: {
 	userAvatarUrl?: string;
 	agentIconUrl?: string;
 	basePath?: string;
+	sessionId?: number | null;
 }): Ao3RenderableComment[] {
-	const defaultIcon = `${params.basePath ?? ""}${DEFAULT_AO3_ICON}`;
+	const defaultIcon = `${params.basePath ?? ""}/${DEFAULT_AO3_ICON}`;
+	const seed = `${params.sessionId ?? "scene"}:${normalizeAo3Text(params.openingState.workTitle, "work")}`;
 	return buildCommentThreadTree<Ao3CommentNode, Ao3RenderableComment>({
-		openingComments: params.openingState.previousComments ?? [],
+		openingComments: withAo3FallbackAuthors(params.openingState.previousComments ?? [], seed),
 		// Pending placeholders are polling triggers only: real AO3 shows nothing
 		// between submitting a comment and the author's reply appearing.
 		messages: params.messages.filter((message) => message.deliveryState !== "pending"),

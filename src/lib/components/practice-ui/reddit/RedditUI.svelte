@@ -46,7 +46,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	feedbackHref,
 	labels: sessionLabels,
-	taskId,
 }));
 const hintOwnership = createHintOwnership();
 
@@ -61,7 +60,7 @@ const post = $derived({
 	votes: typedState.post?.votes ?? 1,
 });
 const visibleMessages = $derived(session.messages.filter((message) => message.deliveryState !== "pending"));
-const renderableCommentTree = $derived(buildRedditCommentTree({ openingState: typedState, messages: visibleMessages }));
+const renderableCommentTree = $derived(buildRedditCommentTree({ openingState: typedState, messages: visibleMessages, sessionId: session.sessionId }));
 
 // Top-level input text (separate from inline reply inputs which manage their own state)
 let topLevelInput = $state("");

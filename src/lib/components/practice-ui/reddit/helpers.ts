@@ -11,6 +11,7 @@ import {
 	findTargetInMessages,
 	normalizeThreadText,
 } from "../commentThread";
+import { stableChoice } from "../identityFallback";
 import type { RedditComment, RedditOpeningState } from "./types";
 import { seededInt } from "./utils";
 
@@ -52,6 +53,23 @@ export function getRedditPostAuthor(openingState: RedditOpeningState, fallback =
 	return normalizeRedditText(openingState.post?.author, fallback);
 }
 
+const REDDIT_AUTHORS = ["northstar", "quietobserver", "maple_signal", "paper_coyote", "riverstone"] as const;
+
+export function getRedditFallbackAuthor(seed: string): string {
+	return `u/${stableChoice(`reddit:${seed}`, REDDIT_AUTHORS)}`;
+}
+
+function withRedditFallbackAuthors(comments: RedditComment[], seed: string, path: number[] = []): RedditComment[] {
+	return comments.map((comment, index) => {
+		const location = comment.id || path.concat(index).join("-");
+		return {
+			...comment,
+			author: normalizeRedditText(comment.author, getRedditFallbackAuthor(`${seed}:${location}`)),
+			replies: withRedditFallbackAuthors(comment.replies ?? [], seed, path.concat(index)),
+		};
+	});
+}
+
 export function findRedditTarget(openingState: RedditOpeningState, targetCommentId: string | null | undefined): RedditTarget | null {
 	const target = findOpeningCommentTarget(openingState.previousComments ?? [], redditThreadConfig, targetCommentId);
 	return target ? toRedditTarget(target) : null;
@@ -82,9 +100,14 @@ export function buildRedditUserPrompt(params: {
 	});
 }
 
-export function buildRedditCommentTree(params: { openingState: RedditOpeningState; messages: ChatMessage[] }): RedditRenderableComment[] {
+export function buildRedditCommentTree(params: {
+	openingState: RedditOpeningState;
+	messages: ChatMessage[];
+	sessionId?: number | null;
+}): RedditRenderableComment[] {
+	const seed = `${params.sessionId ?? "scene"}:${getRedditPostAuthor(params.openingState, "post")}`;
 	return buildCommentThreadTree<RedditComment, RedditRenderableComment>({
-		openingComments: params.openingState.previousComments ?? [],
+		openingComments: withRedditFallbackAuthors(params.openingState.previousComments ?? [], seed),
 		messages: params.messages,
 		config: redditThreadConfig,
 		mapOpeningComment: (comment, base) => ({

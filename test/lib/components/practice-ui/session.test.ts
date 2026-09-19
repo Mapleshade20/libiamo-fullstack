@@ -701,7 +701,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
+		await session.handleCompleteAndNavigate();
 
 		expect(session.completionError).not.toBeNull();
 		expect(mocks.goto).not.toHaveBeenCalled();
@@ -721,7 +721,7 @@ describe("createPracticeSession", () => {
 		const session = createSession(createOptions({ existingSession }));
 		session.hydrateFromExistingSession(existingSession);
 
-		await session.handleCompleteAndNavigate(String(session.sessionId ?? ""));
+		await session.handleCompleteAndNavigate();
 
 		expect(session.isCompleted).toBe(false);
 		expect(session.isCompleting).toBe(false);
@@ -730,7 +730,7 @@ describe("createPracticeSession", () => {
 	it("ignores complete when no active session is available", async () => {
 		const session = createSession(createOptions({ existingSession: null }));
 
-		await session.handleCompleteAndNavigate("0");
+		await session.handleCompleteAndNavigate();
 
 		expect(mocks.completeAction).not.toHaveBeenCalled();
 	});

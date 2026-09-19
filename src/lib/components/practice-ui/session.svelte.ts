@@ -36,7 +36,6 @@ export interface PracticeSessionOptions<Opening = PracticeOpeningState, Context 
 	maxTurns: number;
 	labels: PracticeSessionLabels;
 	adapter: PracticePresentationAdapter<Opening, Context>;
-	taskId?: string | number;
 	feedbackHref: string;
 }
 
@@ -77,7 +76,6 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	const maxTurns = $derived(getOptions().maxTurns);
 	const labels = $derived(getOptions().labels);
 	const adapter = getOptions().adapter;
-	const taskId = $derived(getOptions().taskId);
 	const feedbackHref = $derived(getOptions().feedbackHref);
 
 	const openingStateData = $derived(adapter.normalizeOpeningState(openingState));
@@ -310,7 +308,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 		}
 	}
 
-	async function handleCompleteAndNavigate(_taskId?: string) {
+	async function handleCompleteAndNavigate() {
 		if (!sessionId || isCompleting) return;
 		isCompleting = true;
 		completionError = null;
@@ -433,7 +431,7 @@ export function createPracticeSession<Opening, Context>(getOptions: () => Practi
 	function runAutoCompleteIfNeeded() {
 		if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
 			hasAutoCompleted = true;
-			void handleCompleteAndNavigate(String(taskId ?? ""));
+			void handleCompleteAndNavigate();
 		}
 	}
 

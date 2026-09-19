@@ -50,7 +50,6 @@ const session = createPracticeSession(() => ({
 	maxTurns,
 	feedbackHref,
 	labels: sessionLabels,
-	taskId,
 }));
 
 const opening = $derived((openingState ?? {}) as Ao3OpeningState);
@@ -66,7 +65,9 @@ const categories = $derived(opening.categories?.filter(Boolean) ?? []);
 const relationships = $derived(opening.relationships?.filter(Boolean) ?? []);
 const characters = $derived(opening.characters?.filter(Boolean) ?? []);
 const additionalTags = $derived(getAo3AdditionalTags(opening));
-const commentTree = $derived(buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl, basePath: base }));
+const commentTree = $derived(
+	buildAo3CommentTree({ openingState: opening, messages: session.messages, userAvatarUrl: avatarUrl, basePath: base, sessionId: session.sessionId }),
+);
 const commentCount = $derived(countAo3Comments(commentTree));
 const characterLimit = PRACTICE_UI_TEXT_MAX_LENGTH;
 
