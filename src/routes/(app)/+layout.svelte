@@ -52,7 +52,14 @@ $effect(() => {
 
 <div class="min-h-screen">
 	{#if !isSessionPage}
-		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} trialQuota={data.trialQuota} />
+		<Navbar
+			mode="app"
+			user={data.user}
+			avatarUrl={data.avatarUrl}
+			trialQuota={data.trialQuota}
+			streak={data.streak}
+			streakDayOffset={data.streakDayOffset}
+		/>
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />

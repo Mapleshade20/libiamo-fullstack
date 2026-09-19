@@ -74,14 +74,8 @@ export type SecondDraftLocalState = {
 	commentary: string | null;
 };
 
-export type TransferNoteFixture = {
-	id: number;
-	vocab: string;
-	targetDefinition: string;
-	nativeDefinition: string;
-	queueKind: import("$lib/review").StudyQueueKind;
-	examples: Array<{ targetText: string; nativeText: string }>;
-};
+/** The transfer card's note shape now lives with the shared queue. */
+export type TransferNoteFixture = import("$lib/transfer-queue").TransferNote;
 
 /** Demo / presentation phase keys used by the state switcher. */
 export type DemoScene =

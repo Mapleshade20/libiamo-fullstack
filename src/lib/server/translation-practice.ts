@@ -1,8 +1,11 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { LanguageCode } from "$lib/constants";
+import { startOfNextLocalDay } from "$lib/local-day";
 import { db } from "$lib/server/db";
-import { note, translationAttempt } from "$lib/server/db/schema";
+import { translationAttempt } from "$lib/server/db/schema";
 import { insertNotes } from "$lib/server/note";
-import { rateNote, studyQueueKind } from "$lib/server/review";
+import { creditQuestCompletion } from "$lib/server/streak";
+import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
 import { generateTranslationPractice as callGeneration2 } from "$lib/server/translation-evaluation/practice-generation";
 import { verifySecondDraft } from "$lib/server/translation-evaluation/verifier";
 import { hydrateTranslationEvaluation, type TranslationAttemptRecord, TranslationWorkflowError } from "$lib/server/translation-workflow";
@@ -14,22 +17,10 @@ function assertVersion(record: TranslationAttemptRecord, evaluatedAt: string) {
 }
 
 export async function getTranslationPracticeNotes(record: TranslationAttemptRecord) {
-	const rows = await db.query.note.findMany({
-		where: and(eq(note.userId, record.userId), eq(note.sourceTranslationAttemptId, record.id)),
-		columns: {
-			id: true,
-			vocab: true,
-			targetDefinition: true,
-			nativeDefinition: true,
-			examples: true,
-			fsrsCard: true,
-		},
-		orderBy: note.id,
-	});
-	return rows.map(({ fsrsCard, ...row }) => ({ ...row, queueKind: studyQueueKind(fsrsCard) }));
+	return listTransferNotes(record.userId, { type: "translation", attemptId: record.id });
 }
 
-export async function generateTranslationPractice(record: TranslationAttemptRecord, evaluatedAt: string) {
+export async function generateTranslationPractice(record: TranslationAttemptRecord, evaluatedAt: string, timeZone: string) {
 	if (!record.evaluation || !record.feedbackLanguage || !["second_draft", "transfer"].includes(record.workflowPhase)) {
 		throw new TranslationWorkflowError(409, "Practice cannot be generated from this phase.");
 	}
@@ -60,9 +51,10 @@ export async function generateTranslationPractice(record: TranslationAttemptReco
 		if (!claimed) return false;
 		await insertNotes(transaction, {
 			userId: record.userId,
-			language: record.targetLanguage as typeof note.$inferInsert.language,
+			language: record.targetLanguage as LanguageCode,
 			source: { type: "translation", attemptId: record.id },
 			notes: generated.value.notes,
+			availableFrom: startOfNextLocalDay(now, timeZone),
 		});
 		return true;
 	});
@@ -125,25 +117,40 @@ export async function rateTranslationTransferNote(input: {
 	noteId: number;
 	rating: 1 | 3;
 	elapsedSeconds: number;
+	timeZone: string;
 }) {
 	if (input.record.workflowPhase !== "transfer") throw new TranslationWorkflowError(409, "Transfer practice is not active.");
-	const owned = await db.query.note.findFirst({
-		where: and(eq(note.id, input.noteId), eq(note.userId, input.record.userId), eq(note.sourceTranslationAttemptId, input.record.id)),
-		columns: { id: true },
-	});
-	if (!owned) throw new TranslationWorkflowError(404, "Transfer note not found.");
-	return rateNote(input.noteId, input.record.userId, input.rating, input.elapsedSeconds);
+	try {
+		return await rateTransferNote({
+			userId: input.record.userId,
+			source: { type: "translation", attemptId: input.record.id },
+			noteId: input.noteId,
+			rating: input.rating,
+			elapsedSeconds: input.elapsedSeconds,
+			timeZone: input.timeZone,
+		});
+	} catch (cause) {
+		if (cause instanceof TransferError) throw new TranslationWorkflowError(cause.status, cause.message);
+		throw cause;
+	}
 }
 
-export async function completeTranslationTransfer(record: TranslationAttemptRecord) {
+export async function completeTranslationTransfer(record: TranslationAttemptRecord, timeZone: string) {
 	if (record.workflowPhase !== "transfer" || !record.practiceGeneratedAt) {
 		throw new TranslationWorkflowError(409, "Transfer practice is not ready to complete.");
 	}
 	const now = new Date();
-	const [updated] = await db
-		.update(translationAttempt)
-		.set({ workflowPhase: "completed", completedAt: now, updatedAt: now })
-		.where(and(eq(translationAttempt.id, record.id), eq(translationAttempt.workflowPhase, "transfer")))
-		.returning({ id: translationAttempt.id });
-	if (!updated) throw new TranslationWorkflowError(409, "The attempt changed in another tab. Reload to continue.");
+	// The phase guard is the fence that makes the streak credit exactly-once, so the claim and the
+	// credit must share one transaction.
+	const won = await db.transaction(async (transaction) => {
+		const [updated] = await transaction
+			.update(translationAttempt)
+			.set({ workflowPhase: "completed", completedAt: now, updatedAt: now })
+			.where(and(eq(translationAttempt.id, record.id), eq(translationAttempt.workflowPhase, "transfer")))
+			.returning({ id: translationAttempt.id });
+		if (!updated) return false;
+		await creditQuestCompletion(transaction, record.userId, now, timeZone);
+		return true;
+	});
+	if (!won) throw new TranslationWorkflowError(409, "The attempt changed in another tab. Reload to continue.");
 }

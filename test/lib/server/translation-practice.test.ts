@@ -1,6 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockInsertNotes, mockRateNote, mockStudyQueueKind, mockGeneratePractice, mockVerifySecondDraft, mockHydrate } = vi.hoisted(() => {
+const {
+	mockDb,
+	mockInsertNotes,
+	mockListTransferNotes,
+	mockRateTransferNote,
+	mockCreditQuest,
+	mockGeneratePractice,
+	mockVerifySecondDraft,
+	mockHydrate,
+} = vi.hoisted(() => {
 	const db = {
 		query: { note: { findMany: vi.fn(), findFirst: vi.fn() } },
 		update: vi.fn(),
@@ -10,8 +19,9 @@ const { mockDb, mockInsertNotes, mockRateNote, mockStudyQueueKind, mockGenerateP
 	return {
 		mockDb: db,
 		mockInsertNotes: vi.fn(),
-		mockRateNote: vi.fn(),
-		mockStudyQueueKind: vi.fn(() => "new"),
+		mockListTransferNotes: vi.fn(),
+		mockRateTransferNote: vi.fn(),
+		mockCreditQuest: vi.fn(),
 		mockGeneratePractice: vi.fn(),
 		mockVerifySecondDraft: vi.fn(),
 		mockHydrate: vi.fn(),
@@ -20,7 +30,19 @@ const { mockDb, mockInsertNotes, mockRateNote, mockStudyQueueKind, mockGenerateP
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/note", () => ({ insertNotes: mockInsertNotes }));
-vi.mock("$lib/server/review", () => ({ rateNote: mockRateNote, studyQueueKind: mockStudyQueueKind }));
+vi.mock("$lib/server/streak", () => ({ creditQuestCompletion: mockCreditQuest }));
+vi.mock("$lib/server/transfer", () => ({
+	listTransferNotes: mockListTransferNotes,
+	rateTransferNote: mockRateTransferNote,
+	TransferError: class TransferError extends Error {
+		constructor(
+			public status: number,
+			message: string,
+		) {
+			super(message);
+		}
+	},
+}));
 vi.mock("$lib/server/translation-evaluation/practice-generation", () => ({ generateTranslationPractice: mockGeneratePractice }));
 vi.mock("$lib/server/translation-evaluation/verifier", () => ({ verifySecondDraft: mockVerifySecondDraft }));
 vi.mock("$lib/server/translation-workflow", () => ({
@@ -44,6 +66,8 @@ import {
 } from "$lib/server/translation-practice";
 
 const EVALUATED_AT = new Date("2026-07-15T12:00:00.000Z");
+// UTC-4 in July, so the learner's next local midnight is 2026-07-16T04:00:00Z.
+const TIME_ZONE = "America/New_York";
 
 function record(overrides: Record<string, unknown> = {}) {
 	return {
@@ -71,7 +95,13 @@ function mockUpdate(rows: unknown[]) {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	vi.useFakeTimers();
+	vi.setSystemTime(EVALUATED_AT);
 	mockDb.transaction.mockImplementation(async (callback) => callback(mockDb));
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 describe("Generation 2 practice", () => {
@@ -88,10 +118,10 @@ describe("Generation 2 practice", () => {
 		];
 		mockGeneratePractice.mockResolvedValue({ value: { notes: generatedNotes } });
 		mockUpdate([{ id: 9 }]);
-		const persisted = [{ id: 21, vocab: generatedNotes[0].vocab, examples: generatedNotes[0].examples }];
-		mockDb.query.note.findMany.mockResolvedValue(persisted);
+		const persisted = [{ id: 21, vocab: generatedNotes[0].vocab, examples: generatedNotes[0].examples, queueKind: "new" }];
+		mockListTransferNotes.mockResolvedValue(persisted);
 
-		expect(await generateTranslationPractice(record(), EVALUATED_AT.toISOString())).toEqual([{ ...persisted[0], queueKind: "new" }]);
+		expect(await generateTranslationPractice(record(), EVALUATED_AT.toISOString(), TIME_ZONE)).toEqual(persisted);
 		expect(mockGeneratePractice).toHaveBeenCalledWith({
 			cards,
 			sourceLanguage: "en",
@@ -101,21 +131,21 @@ describe("Generation 2 practice", () => {
 		expect(mockDb.transaction).toHaveBeenCalledOnce();
 		expect(mockInsertNotes).toHaveBeenCalledWith(
 			mockDb,
-			expect.objectContaining({ source: { type: "translation", attemptId: 9 }, notes: generatedNotes }),
+			expect.objectContaining({ source: { type: "translation", attemptId: 9 }, notes: generatedNotes, availableFrom: expect.any(Date) }),
 		);
+		// Generated notes wait for the learner's next local day instead of joining today's queue.
+		expect(mockInsertNotes.mock.calls[0]?.[1].availableFrom.toISOString()).toBe("2026-07-16T04:00:00.000Z");
 	});
 
 	it("returns existing Notes without another model call after generation", async () => {
-		const existing = [{ id: 21 }];
-		mockDb.query.note.findMany.mockResolvedValue(existing);
-		expect(await generateTranslationPractice(record({ practiceGeneratedAt: new Date() }), EVALUATED_AT.toISOString())).toEqual([
-			{ ...existing[0], queueKind: "new" },
-		]);
+		const existing = [{ id: 21, queueKind: "new" }];
+		mockListTransferNotes.mockResolvedValue(existing);
+		expect(await generateTranslationPractice(record({ practiceGeneratedAt: new Date() }), EVALUATED_AT.toISOString(), TIME_ZONE)).toEqual(existing);
 		expect(mockGeneratePractice).not.toHaveBeenCalled();
 	});
 
 	it("rejects stale evaluation versions before generation", async () => {
-		await expect(generateTranslationPractice(record(), "2026-07-15T12:01:00.000Z")).rejects.toMatchObject({ status: 409 });
+		await expect(generateTranslationPractice(record(), "2026-07-15T12:01:00.000Z", TIME_ZONE)).rejects.toMatchObject({ status: 409 });
 		expect(mockHydrate).not.toHaveBeenCalled();
 	});
 });
@@ -145,24 +175,33 @@ describe("second draft and transfer", () => {
 		expect(set).toHaveBeenCalledWith(expect.objectContaining({ workflowPhase: "transfer", generation1Messages: null }));
 	});
 
-	it("rates only a Note owned by this translation attempt", async () => {
-		mockDb.query.note.findFirst.mockResolvedValue({ id: 21 });
-		mockRateNote.mockResolvedValue({ nextDue: "later" });
-		expect(await rateTranslationTransferNote({ record: record({ workflowPhase: "transfer" }), noteId: 21, rating: 3, elapsedSeconds: 8 })).toEqual({
-			nextDue: "later",
-		});
-		expect(mockRateNote).toHaveBeenCalledWith(21, "u1", 3, 8);
+	it("rates through the shared transfer stage and reports a missing Note as 404", async () => {
+		mockRateTransferNote.mockResolvedValue({ nextDue: "later" });
+		expect(
+			await rateTranslationTransferNote({
+				record: record({ workflowPhase: "transfer" }),
+				noteId: 21,
+				rating: 3,
+				elapsedSeconds: 8,
+				timeZone: TIME_ZONE,
+			}),
+		).toEqual({ nextDue: "later" });
+		expect(mockRateTransferNote).toHaveBeenCalledWith(
+			expect.objectContaining({ userId: "u1", source: { type: "translation", attemptId: 9 }, noteId: 21, rating: 3, elapsedSeconds: 8 }),
+		);
 
-		mockDb.query.note.findFirst.mockResolvedValue(null);
+		const { TransferError } = await import("$lib/server/transfer");
+		mockRateTransferNote.mockRejectedValue(new TransferError(404, "Transfer note not found."));
 		await expect(
-			rateTranslationTransferNote({ record: record({ workflowPhase: "transfer" }), noteId: 22, rating: 1, elapsedSeconds: 4 }),
+			rateTranslationTransferNote({ record: record({ workflowPhase: "transfer" }), noteId: 22, rating: 1, elapsedSeconds: 4, timeZone: TIME_ZONE }),
 		).rejects.toMatchObject({ status: 404 });
 	});
 
-	it("completes transfer only after practice has been persisted", async () => {
-		await expect(completeTranslationTransfer(record({ workflowPhase: "transfer" }))).rejects.toMatchObject({ status: 409 });
+	it("completes transfer only after practice has been persisted, crediting the quest in the claim", async () => {
+		await expect(completeTranslationTransfer(record({ workflowPhase: "transfer" }), TIME_ZONE)).rejects.toMatchObject({ status: 409 });
 		const set = mockUpdate([{ id: 9 }]);
-		await completeTranslationTransfer(record({ workflowPhase: "transfer", practiceGeneratedAt: new Date() }));
+		await completeTranslationTransfer(record({ workflowPhase: "transfer", practiceGeneratedAt: new Date() }), TIME_ZONE);
 		expect(set).toHaveBeenCalledWith(expect.objectContaining({ workflowPhase: "completed", completedAt: expect.any(Date) }));
+		expect(mockCreditQuest).toHaveBeenCalledWith(mockDb, "u1", expect.any(Date), TIME_ZONE);
 	});
 });

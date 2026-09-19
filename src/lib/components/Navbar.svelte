@@ -7,8 +7,10 @@ import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { type NavbarTransitionDirection, setNavbarTransitionIntent } from "$lib/client/page-transition";
-import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import type { StreakRecord } from "$lib/streak";
 import LanguageFlag from "./LanguageFlag.svelte";
+import StreakIndicator from "./streak/StreakIndicator.svelte";
 import WineGlassIcon from "./WineGlassIcon.svelte";
 
 interface NavItem {
@@ -26,13 +28,15 @@ type TrialQuotaNavBalance = {
 
 interface Props {
 	mode: "app" | "admin";
-	user: { name: string; email: string; role: string; activeLanguage: string };
+	user: { id?: string; name: string; email: string; role: string; activeLanguage: string };
 	avatarUrl?: string;
 	pendingReviewCount?: number;
 	trialQuota?: TrialQuotaNavBalance | null;
+	streak?: StreakRecord | null;
+	streakDayOffset?: number;
 }
 
-let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null }: Props = $props();
+let { mode, user, avatarUrl, pendingReviewCount = 0, trialQuota = null, streak = null, streakDayOffset = 0 }: Props = $props();
 
 // --- Nav items ---
 // Hrefs carry `base` so they work under a sub-path deploy and so they can be
@@ -207,6 +211,9 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 		<div class="flex items-center gap-3">
 			{#if mode === "app"}
 				<div id="hall-nav-inbox" class="fixed top-[4.25rem] left-1/2 -translate-x-1/2 empty:hidden"></div>
+			{/if}
+			{#if mode === "app" && user.id}
+				<StreakIndicator record={streak} userId={user.id} lang={user.activeLanguage as LanguageCode} dayOffset={streakDayOffset} />
 			{/if}
 			{#if mode === "app" && trialQuota}
 				<a

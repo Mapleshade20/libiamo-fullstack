@@ -4,6 +4,7 @@ import { base } from "$app/paths";
 import type { EvaluationData } from "$lib/components/translate-evaluation/types";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import {
 	completeTranslationTransfer,
@@ -149,7 +150,7 @@ export const actions: Actions = {
 		const evaluatedAt = (await event.request.formData()).get("evaluatedAt");
 		if (typeof evaluatedAt !== "string") return fail(400, { error: "Evaluation version is required." });
 		try {
-			return { success: true, workflowPhase: await finishTranslationCorrections(attempt, evaluatedAt) };
+			return { success: true, workflowPhase: await finishTranslationCorrections(attempt, evaluatedAt, getBrowserTimezone(event.cookies)) };
 		} catch (cause) {
 			return actionFailure(cause);
 		}
@@ -160,7 +161,7 @@ export const actions: Actions = {
 		const evaluatedAt = (await event.request.formData()).get("evaluatedAt");
 		if (typeof evaluatedAt !== "string") return fail(400, { error: "Evaluation version is required." });
 		try {
-			const notes = await generateTranslationPractice(attempt, evaluatedAt);
+			const notes = await generateTranslationPractice(attempt, evaluatedAt, getBrowserTimezone(event.cookies));
 			return { success: true, noteCount: notes.length };
 		} catch (cause) {
 			return actionFailure(cause);
@@ -202,7 +203,15 @@ export const actions: Actions = {
 		const parsed = TransferRatingSchema.safeParse(Object.fromEntries(await event.request.formData()));
 		if (!parsed.success) return fail(400, { error: "Invalid transfer rating." });
 		try {
-			return { success: true, result: await rateTranslationTransferNote({ record: attempt, ...parsed.data, rating: parsed.data.rating as 1 | 3 }) };
+			return {
+				success: true,
+				result: await rateTranslationTransferNote({
+					record: attempt,
+					...parsed.data,
+					rating: parsed.data.rating as 1 | 3,
+					timeZone: getBrowserTimezone(event.cookies),
+				}),
+			};
 		} catch (cause) {
 			return actionFailure(cause);
 		}
@@ -211,7 +220,7 @@ export const actions: Actions = {
 	completeTransfer: async (event) => {
 		const { attempt } = await routeContext(event);
 		try {
-			await completeTranslationTransfer(attempt);
+			await completeTranslationTransfer(attempt, getBrowserTimezone(event.cookies));
 			return { success: true };
 		} catch (cause) {
 			return actionFailure(cause);

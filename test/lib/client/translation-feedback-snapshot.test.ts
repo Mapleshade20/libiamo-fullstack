@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	advanceTranslationTransferQueue,
 	emptyTranslationFeedbackSnapshot,
 	parseTranslationFeedbackSnapshot,
-	type TranslationTransferQueueItem,
 	translationFeedbackSnapshotKey,
 } from "$lib/client/translation-feedback-snapshot";
 
@@ -36,23 +34,6 @@ describe("translation feedback snapshots", () => {
 			queue: [{ noteId: 8, exampleIndex: 2, queueKind: "new" }],
 		};
 		expect(parseTranslationFeedbackSnapshot(JSON.stringify(snapshot), expected)).toEqual(snapshot);
-	});
-
-	it("moves an incorrect Note to the tail indefinitely and removes a passed Note", () => {
-		let queue: TranslationTransferQueueItem[] = [
-			{ noteId: 8, exampleIndex: 0, queueKind: "new" },
-			{ noteId: 9, exampleIndex: 1, queueKind: "review" },
-		];
-		queue = advanceTranslationTransferQueue(queue, "incorrect", 2);
-		expect(queue).toEqual([
-			{ noteId: 9, exampleIndex: 1, queueKind: "review" },
-			{ noteId: 8, exampleIndex: 2, queueKind: "learning" },
-		]);
-		queue = advanceTranslationTransferQueue(queue, "pass");
-		expect(queue).toEqual([{ noteId: 8, exampleIndex: 2, queueKind: "learning" }]);
-		for (let index = 0; index < 10; index++) queue = advanceTranslationTransferQueue(queue, "incorrect", index % 4);
-		expect(queue).toHaveLength(1);
-		expect(queue[0].noteId).toBe(8);
 	});
 
 	it.each([

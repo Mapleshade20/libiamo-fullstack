@@ -1,11 +1,11 @@
 <script lang="ts">
-import StudyCard from "$lib/components/review/StudyCard.svelte";
-import type { StudyCardAction } from "$lib/components/review/study-card";
 import { countStudyQueue } from "$lib/review";
-import type { TransferNoteFixture } from "./types";
+import type { TransferNote } from "$lib/transfer-queue";
+import StudyCard from "./StudyCard.svelte";
+import type { StudyCardAction } from "./study-card";
 
 interface Props {
-	notes: TransferNoteFixture[];
+	notes: TransferNote[];
 	/** Current note index in the local queue. */
 	currentIndex: number;
 	title: string;

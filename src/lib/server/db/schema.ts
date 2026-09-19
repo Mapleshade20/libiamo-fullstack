@@ -180,6 +180,13 @@ export const practiceSession = pgTable(
 		tutorFeedback: jsonb("tutor_feedback"),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
+		/**
+		 * When the learner finished the post-feedback transfer pass. Written only by the POST that
+		 * finishes a pass: it answers "was the pass done", not "is the session finished". A session
+		 * where no notes were collected has nothing to practise, and that is derived from the note
+		 * count rather than recorded here.
+		 */
+		transferCompletedAt: timestamp("transfer_completed_at"),
 	},
 	(t) => [
 		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),

@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetDueNotes, mockGetReviewStats, mockRateNote, MockReviewCardNotDueError } = vi.hoisted(() => {
+const { mockGetDueNotes, mockGetReviewStats, mockRateNote, mockObserveReviewQueue, MockReviewCardNotDueError } = vi.hoisted(() => {
 	class MockReviewCardNotDueError extends Error {}
 	return {
 		mockGetDueNotes: vi.fn(),
 		mockGetReviewStats: vi.fn(),
 		mockRateNote: vi.fn(),
+		mockObserveReviewQueue: vi.fn(async () => null),
 		MockReviewCardNotDueError,
 	};
 });
+
+vi.mock("$lib/server/streak", () => ({ observeReviewQueue: mockObserveReviewQueue }));
 
 vi.mock("$lib/server/review", () => ({
 	getDueNotes: mockGetDueNotes,
@@ -28,6 +31,7 @@ function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<
 			json: overrides.invalidJson ? async () => Promise.reject(new SyntaxError("invalid")) : async () => overrides.body ?? {},
 		},
 		params: overrides.params ?? {},
+		cookies: { get: () => undefined },
 	} as never;
 }
 
@@ -69,11 +73,14 @@ describe("POST /api/review/[noteId]/rate", () => {
 		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "1" }, body: { rating: 9, elapsedSeconds: -1 } }))).status).toBe(400);
 	});
 
-	it("rates an owned Note", async () => {
+	it("rates an owned Note and reports the streak the rating moved", async () => {
 		mockRateNote.mockResolvedValue({ nextDue: "2026-01-01T00:00:00.000Z" });
+		mockObserveReviewQueue.mockResolvedValue({ streakDays: 4 } as never);
 		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
 		expect(response.status).toBe(200);
 		expect(mockRateNote).toHaveBeenCalledWith(12, "u", 3, 14);
+		// The observation runs after the rating so it sees the card's new due date.
+		expect(await response.json()).toMatchObject({ nextDue: "2026-01-01T00:00:00.000Z", streak: { streakDays: 4 } });
 	});
 
 	it("maps a missing Note to 404", async () => {

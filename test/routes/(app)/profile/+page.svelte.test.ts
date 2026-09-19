@@ -9,6 +9,7 @@ const data = {
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {
+		id: "user_1",
 		name: "Alice",
 		email: "alice@example.com",
 		role: "user",
@@ -31,6 +32,8 @@ const data = {
 	],
 	accountResult: null,
 	accountFailure: null,
+	streak: null,
+	streakDayOffset: 0,
 };
 
 describe("Profile page", () => {

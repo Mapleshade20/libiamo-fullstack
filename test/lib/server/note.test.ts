@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const USER_ID = "test-user-id";
+const AVAILABLE_FROM = new Date("2026-09-19T04:00:00.000Z");
 const SESSION_ID = 42;
 
 const { mockDb } = vi.hoisted(() => {
@@ -72,6 +73,7 @@ describe("createNotes", () => {
 			language: "en",
 			source: { type: "translation", attemptId: 99 },
 			notes: [note],
+			availableFrom: AVAILABLE_FROM,
 		});
 
 		expect(result).toEqual([{ id: 7 }]);
@@ -85,7 +87,9 @@ describe("createNotes", () => {
 				targetDefinition: note.targetDefinition,
 				nativeDefinition: note.nativeDefinition,
 				examples: note.examples,
-				fsrsCard: expect.objectContaining({ state: expect.any(Number) }),
+				// A note joins the review queue from the learner's next local day, not the day its
+				// task produced it.
+				fsrsCard: expect.objectContaining({ state: expect.any(Number), due: AVAILABLE_FROM.toISOString() }),
 			}),
 		]);
 	});
@@ -94,7 +98,13 @@ describe("createNotes", () => {
 		const duplicate = generatedNote();
 		duplicate.examples[3] = duplicate.examples[0];
 		await expect(
-			createNotes({ userId: USER_ID, language: "en", source: { type: "practice", sessionId: SESSION_ID }, notes: [duplicate] }),
+			createNotes({
+				userId: USER_ID,
+				language: "en",
+				source: { type: "practice", sessionId: SESSION_ID },
+				notes: [duplicate],
+				availableFrom: AVAILABLE_FROM,
+			}),
 		).rejects.toThrow("4 distinct non-empty examples");
 		expect(mockDb.insert).not.toHaveBeenCalled();
 	});
@@ -108,6 +118,7 @@ describe("generated Note entry points", () => {
 			language: "en",
 			nativeLanguage: "fr",
 			feedbackItems: [],
+			availableFrom: AVAILABLE_FROM,
 		});
 		expect(result).toEqual([]);
 		expect(mockChatJson).not.toHaveBeenCalled();
@@ -126,6 +137,7 @@ describe("generated Note entry points", () => {
 			language: "en",
 			nativeLanguage: "fr",
 			feedbackItems: [{ tutorComment: "Use could have, not could of.", category: "grammar" }],
+			availableFrom: AVAILABLE_FROM,
 		});
 
 		const request = mockChatJson.mock.calls[0]?.[0];
@@ -148,6 +160,7 @@ describe("generated Note entry points", () => {
 				nativeLanguage: "en",
 				selectedText: "A useful selection",
 				currentContext: "Context",
+				availableFrom: AVAILABLE_FROM,
 			}),
 		).rejects.toThrow("more than 2 notes");
 		expect(mockDb.insert).not.toHaveBeenCalled();
@@ -165,6 +178,7 @@ describe("generated Note entry points", () => {
 			answer: "Use could have.",
 			language: "en",
 			nativeLanguage: "en",
+			availableFrom: AVAILABLE_FROM,
 		});
 		expect(result).toEqual({ success: true, note: { id: 8 } });
 	});

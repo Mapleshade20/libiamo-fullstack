@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { DEFAULT_SELF_ASSIGNED_LEVELS, type SelfAssignedLevelsByLanguage } from "$lib/constants";
 import { languageCodeEnum, userRoleEnum } from "./enums";
 
@@ -137,11 +137,60 @@ export const userQuota = pgTable(
 	],
 );
 
+/**
+ * The daily streak, one row per user, created on first progress. It hangs off the account rather
+ * than the learning content: the streak is account-wide, not per-language.
+ *
+ * Counters whose `progressDate` is not today read as zero, so no nightly reset job is needed, and
+ * settlement of missed days is derived from this row plus today's date — never written by a loader.
+ */
+export const userStreak = pgTable(
+	"user_streak",
+	{
+		userId: text("user_id")
+			.primaryKey()
+			.references(() => user.id, { onDelete: "cascade" }),
+		streakDays: integer("streak_days").default(0).notNull(),
+		/** Last day counted into `streakDays`, lit or covered by a saved day. */
+		throughDate: date("through_date"),
+		/** Saved days, including any earned today. */
+		bank: integer("bank").default(0).notNull(),
+		/** The local day the three counters below describe. */
+		progressDate: date("progress_date"),
+		taskCount: integer("task_count").default(0).notNull(),
+		reviewCleared: boolean("review_cleared").default(false).notNull(),
+		/** Saved days already granted for `progressDate`, making repeat grants exactly once. */
+		bankEarnedToday: integer("bank_earned_today").default(0).notNull(),
+		/** Zone used at the last write, for diagnosis only. */
+		timeZone: text("time_zone"),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(t) => [
+		check("user_streak_days_non_negative", sql`${t.streakDays} >= 0`),
+		// Saved days may exist without a streak, so nothing ties `bank` to `streakDays`.
+		check("user_streak_bank_range", sql`${t.bank} between 0 and 3`),
+		check("user_streak_bank_earned_today_range", sql`${t.bankEarnedToday} between 0 and 3`),
+		check("user_streak_task_count_non_negative", sql`${t.taskCount} >= 0`),
+		check("user_streak_through_date_present", sql`(${t.streakDays} = 0) = (${t.throughDate} is null)`),
+	],
+);
+
 export const userRelations = relations(user, ({ many, one }) => ({
 	sessions: many(session),
 	accounts: many(account),
 	apiKey: one(userApiKey),
 	quota: one(userQuota),
+	streak: one(userStreak),
+}));
+
+export const userStreakRelations = relations(userStreak, ({ one }) => ({
+	user: one(user, {
+		fields: [userStreak.userId],
+		references: [user.id],
+	}),
 }));
 
 export const userApiKeyRelations = relations(userApiKey, ({ one }) => ({

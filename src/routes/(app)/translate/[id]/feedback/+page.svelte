@@ -6,7 +6,6 @@ import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
 import {
-	advanceTranslationTransferQueue,
 	clearTranslationFeedbackSnapshot,
 	emptyTranslationFeedbackSnapshot,
 	parseTranslationFeedbackSnapshot,
@@ -14,16 +13,17 @@ import {
 	type TranslationFeedbackSnapshot,
 	translationFeedbackSnapshotKey,
 } from "$lib/client/translation-feedback-snapshot";
+import TransferStage from "$lib/components/review/TransferStage.svelte";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
 import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
 import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte";
-import TransferPractice from "$lib/components/translate-evaluation/TransferPractice.svelte";
-import type { PracticeGenStatus, TransferNoteFixture } from "$lib/components/translate-evaluation/types";
+import type { PracticeGenStatus } from "$lib/components/translate-evaluation/types";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { randomExampleIndex } from "$lib/note";
+import { advanceTransferQueue, type TransferNote, transferQueueNotes } from "$lib/transfer-queue";
 
 let { data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
@@ -357,24 +357,8 @@ async function enterTransfer() {
 	}
 }
 
-function transferFixtures(): TransferNoteFixture[] {
-	if (!snapshot) return [];
-	return snapshot.transfer.queue.flatMap((entry) => {
-		const note = data.practiceNotes.find((item) => item.id === entry.noteId);
-		const example = note?.examples[entry.exampleIndex];
-		return note && example
-			? [
-					{
-						id: note.id,
-						vocab: note.vocab,
-						targetDefinition: note.targetDefinition,
-						nativeDefinition: note.nativeDefinition,
-						queueKind: entry.queueKind,
-						examples: [example],
-					},
-				]
-			: [];
-	});
+function transferFixtures(): TransferNote[] {
+	return snapshot ? transferQueueNotes(snapshot.transfer.queue, data.practiceNotes) : [];
 }
 
 async function rateTransfer(rating: 1 | 3) {
@@ -402,7 +386,7 @@ async function rateTransfer(rating: 1 | 3) {
 		return false;
 	}
 
-	const queue = advanceTranslationTransferQueue(
+	const queue = advanceTransferQueue(
 		snapshot.transfer.queue,
 		rating === 1 ? "incorrect" : "pass",
 		rating === 1 ? randomExampleIndex(activeNote.examples) : undefined,
@@ -543,7 +527,7 @@ function updateCardInput(index: number, value: string) {
 		{#if practiceError}
 			<p class="mx-auto mb-5 max-w-3xl text-sm text-destructive" role="alert">{practiceError}</p>
 		{/if}
-		<TransferPractice
+		<TransferStage
 			notes={transferFixtures()}
 			currentIndex={0}
 			title={t(lang, "eval.transfer.title")}

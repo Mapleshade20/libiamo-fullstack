@@ -148,6 +148,13 @@
       "when": 1789037544116,
       "tag": "0020_better_auth_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789784156147,
+      "tag": "0021_user_streak",
+      "breakpoints": true
     }
   ]
 }

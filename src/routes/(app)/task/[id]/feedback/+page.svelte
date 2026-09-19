@@ -6,16 +6,28 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import {
+	clearPracticeTransferSnapshot,
+	emptyPracticeTransferSnapshot,
+	type PracticeTransferSnapshot,
+	parsePracticeTransferSnapshot,
+	practiceTransferSnapshotKey,
+	savePracticeTransferSnapshot,
+} from "$lib/client/practice-transfer-snapshot";
 import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
+import TransferStage from "$lib/components/review/TransferStage.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
+import { t } from "$lib/i18n";
 import { parseMarkedText } from "$lib/marked-text";
+import { randomExampleIndex } from "$lib/note";
+import { advanceTransferQueue, transferQueueNotes } from "$lib/transfer-queue";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -38,6 +50,19 @@ let activeAnnotation = $state<{
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
 let detailsHref = $derived(`${base}/task/${data.taskId}`);
+let transferOpen = $state(false);
+let transferSnapshot = $state<PracticeTransferSnapshot | null>(null);
+let transferStartedAt = $state(0);
+let transferError = $state<string | null>(null);
+let completingTransfer = $state(false);
+let transferLang = $derived((data.user.activeLanguage ?? data.language) as LanguageCode);
+let transferNoteIds = $derived(data.transferNotes.map((note) => note.id));
+let transferQueue = $derived(transferSnapshot ? transferQueueNotes(transferSnapshot.transfer.queue, data.transferNotes) : []);
+const reviewCountLabels = $derived({
+	new: t(transferLang, "review.count.new"),
+	learning: t(transferLang, "review.count.learning"),
+	review: t(transferLang, "review.count.review"),
+});
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
@@ -194,6 +219,85 @@ function getCommentContext(messageId: number, comment: string): string {
 	return [`Learner message: ${message?.text ?? ""}`, `Tutor comment: ${stripMarkTags(comment)}`].filter(Boolean).join("\n");
 }
 
+function startTransfer() {
+	transferError = null;
+	const expected = { sessionId: data.sessionId, noteIds: transferNoteIds };
+	let restored: PracticeTransferSnapshot | null = null;
+	try {
+		restored = parsePracticeTransferSnapshot(sessionStorage.getItem(practiceTransferSnapshotKey(data.sessionId)), expected);
+	} catch {
+		/* unavailable */
+	}
+	if (!restored?.transfer.initialized) {
+		restored = emptyPracticeTransferSnapshot(data.sessionId, transferNoteIds);
+		restored.transfer = {
+			initialized: true,
+			queue: data.transferNotes.map((note) => ({
+				noteId: note.id,
+				exampleIndex: randomExampleIndex(note.examples),
+				queueKind: note.queueKind,
+			})),
+		};
+	}
+	persistTransfer(restored);
+	transferStartedAt = Date.now();
+	transferOpen = true;
+}
+
+function persistTransfer(next: PracticeTransferSnapshot) {
+	transferSnapshot = next;
+	savePracticeTransferSnapshot(next);
+}
+
+async function rateTransfer(rating: 1 | 3) {
+	if (!transferSnapshot || transferSnapshot.transfer.queue.length === 0) return false;
+	const active = transferSnapshot.transfer.queue[0];
+	const note = data.transferNotes.find((item) => item.id === active.noteId);
+	if (!note) {
+		transferError = "This vocabulary note is no longer available. Reload to continue.";
+		return false;
+	}
+	const form = new FormData();
+	form.set("sessionId", String(data.sessionId));
+	form.set("noteId", String(active.noteId));
+	form.set("rating", String(rating));
+	form.set("elapsedSeconds", String(Math.max(0, Math.round((Date.now() - transferStartedAt) / 1000))));
+	try {
+		await postFeedbackAction("rateTransfer", form);
+	} catch (cause) {
+		transferError = cause instanceof Error ? cause.message : "Something went wrong. Try again.";
+		return false;
+	}
+	transferError = null;
+	const queue = advanceTransferQueue(
+		transferSnapshot.transfer.queue,
+		rating === 1 ? "incorrect" : "pass",
+		rating === 1 ? randomExampleIndex(note.examples) : undefined,
+	);
+	persistTransfer({ ...transferSnapshot, transfer: { ...transferSnapshot.transfer, queue } });
+	transferStartedAt = Date.now();
+	if (queue.length === 0) await finishTransfer();
+	return true;
+}
+
+async function finishTransfer() {
+	if (completingTransfer) return;
+	completingTransfer = true;
+	try {
+		const form = new FormData();
+		form.set("sessionId", String(data.sessionId));
+		await postFeedbackAction("completeTransfer", form);
+		clearPracticeTransferSnapshot(data.sessionId);
+		transferOpen = false;
+		transferSnapshot = null;
+		await invalidateAll();
+	} catch (cause) {
+		transferError = cause instanceof Error ? cause.message : "Something went wrong. Try again.";
+	} finally {
+		completingTransfer = false;
+	}
+}
+
 function getConversationExcerpt(): string {
 	return data.conversation.allMessages
 		.map((message) => `[${message.author}] ${message.text}`)
@@ -253,162 +357,193 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			</div>
 		{/if}
 
-		<!-- Conversation + Comments Layout -->
-		<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
-			<!-- Left: Conversation History (2/3 on wide) -->
-			<div class="min-w-0 space-y-8 lg:col-span-2">
-				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
+		{#if transferOpen && transferQueue.length > 0}
+			<TransferStage
+				notes={transferQueue}
+				currentIndex={0}
+				title={t(transferLang, "eval.transfer.title")}
+				stageLabel={t(transferLang, "eval.transfer.stage")}
+				revealLabel={t(transferLang, "eval.transfer.reveal")}
+				incorrectLabel={t(transferLang, "eval.transfer.incorrect")}
+				passLabel={t(transferLang, "eval.transfer.pass")}
+				countLabels={reviewCountLabels}
+				onincorrect={() => rateTransfer(1)}
+				onpass={() => rateTransfer(3)}
+			/>
+			{#if transferError}
+				<p class="mx-auto mt-4 max-w-4xl text-sm text-red-700">{transferError}</p>
+			{/if}
+		{:else}
+			<!-- Conversation + Comments Layout -->
+			<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
+				<!-- Left: Conversation History (2/3 on wide) -->
+				<div class="min-w-0 space-y-8 lg:col-span-2">
+					<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
-				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative min-w-0">
-						<!-- Chain label -->
-						<div class="mb-4 flex items-center gap-3">
-							<div class="h-px flex-1 bg-[#e8e3db]"></div>
-							<span class="text-xs font-bold uppercase tracking-widest text-[#9b8f85]">{chain.label}</span>
-							<div class="h-px flex-1 bg-[#e8e3db]"></div>
-						</div>
+					{#each data.conversation.chains as chain, chainIdx}
+						<div class="relative min-w-0">
+							<!-- Chain label -->
+							<div class="mb-4 flex items-center gap-3">
+								<div class="h-px flex-1 bg-[#e8e3db]"></div>
+								<span class="text-xs font-bold uppercase tracking-widest text-[#9b8f85]">{chain.label}</span>
+								<div class="h-px flex-1 bg-[#e8e3db]"></div>
+							</div>
 
-						<!-- Messages in chain -->
-						<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
-							{#each chain.messages as message}
-								<div class="mb-6 relative">
-									<!-- Author badge -->
-									<div class="mb-2 flex items-center gap-2">
-										<span
-											class="inline-block rounded-full px-3 py-1 text-xs font-medium {message.role === 'user' ? 'bg-[#4a7c59]/10 text-[#4a7c59]' : message.role === 'agent' ? 'bg-[#6b6560]/10 text-[#6b6560]' : 'bg-[#9b8f85]/10 text-[#9b8f85]'}"
+							<!-- Messages in chain -->
+							<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
+								{#each chain.messages as message}
+									<div class="mb-6 relative">
+										<!-- Author badge -->
+										<div class="mb-2 flex items-center gap-2">
+											<span
+												class="inline-block rounded-full px-3 py-1 text-xs font-medium {message.role === 'user' ? 'bg-[#4a7c59]/10 text-[#4a7c59]' : message.role === 'agent' ? 'bg-[#6b6560]/10 text-[#6b6560]' : 'bg-[#9b8f85]/10 text-[#9b8f85]'}"
+											>
+												{message.author}
+											</span>
+											<span class="text-xs text-[#9b8f85]">#{message.seqId}</span>
+										</div>
+
+										<!-- Message content -->
+										<div
+											data-learning-selectable
+											data-learning-kind="message"
+											data-message-id={message.seqId}
+											data-current-context={getMessageContext(message.seqId).currentContext}
+											data-previous-context={getMessageContext(message.seqId).previousContext}
+											class="font-prose"
 										>
-											{message.author}
-										</span>
-										<span class="text-xs text-[#9b8f85]">#{message.seqId}</span>
-									</div>
-
-									<!-- Message content -->
-									<div
-										data-learning-selectable
-										data-learning-kind="message"
-										data-message-id={message.seqId}
-										data-current-context={getMessageContext(message.seqId).currentContext}
-										data-previous-context={getMessageContext(message.seqId).previousContext}
-										class="font-prose"
-									>
-										{#if message.role === "user"}
-											{@const annotation = getAnnotationForMessage(message.seqId)}
-											{#if annotation}
-												<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
-											{:else if isGenerating}
-												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-													<p class="[overflow-wrap:anywhere]">{message.text}</p>
-												</div>
+											{#if message.role === "user"}
+												{@const annotation = getAnnotationForMessage(message.seqId)}
+												{#if annotation}
+													<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
+												{:else if isGenerating}
+													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+														<p class="[overflow-wrap:anywhere]">{message.text}</p>
+													</div>
+												{:else}
+													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+														<p class="[overflow-wrap:anywhere]">{message.text}</p>
+													</div>
+												{/if}
 											{:else}
-												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+												<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
 													<p class="[overflow-wrap:anywhere]">{message.text}</p>
 												</div>
 											{/if}
-										{:else}
-											<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
-												<p class="[overflow-wrap:anywhere]">{message.text}</p>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<!-- Right: Comments (1/3 on wide) -->
+				<div class="min-w-0 lg:col-span-1">
+					<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
+						<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
+
+						<LoadingReveal loading={isGenerating}>
+							{#snippet placeholder()}
+								<div class="min-w-0 space-y-4">
+									{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
+										<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+											<Skeleton class="h-4 w-3/4 mb-2" />
+											<Skeleton class="h-4 w-full mb-2" />
+											<Skeleton class="h-4 w-5/6" />
+										</div>
+									{/each}
+								</div>
+							{/snippet}
+							{#if feedback}
+								<div class="min-w-0 space-y-4">
+									{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
+										{@const comment = getCommentForMessage(message.seqId)}
+										{#if comment}
+											{@const commentContext = getMessageContext(message.seqId)}
+											<div
+												data-learning-selectable
+												data-learning-kind="comment"
+												data-message-id={message.seqId}
+												data-current-context={getCommentContext(message.seqId, comment)}
+												data-previous-context={commentContext.previousContext}
+												class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
+												transition:fade={{ duration: 200 }}
+											>
+												<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+												<AnnotatedTutorComment
+													{comment}
+													messageId={message.seqId}
+													onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
+												/>
 											</div>
 										{/if}
+									{/each}
+								</div>
+							{/if}
+						</LoadingReveal>
+						<!-- Objectives & Summary -->
+						{#if feedback}
+							<div class="mt-8 space-y-6">
+								<div class="border-t border-[#e8e3db] pt-6">
+									<h3 class="text-lg font-serif mb-4">Objectives</h3>
+									<div class="space-y-3">
+										{#each feedback.objectives as objective}
+											<div
+												data-learning-selectable
+												data-learning-kind="objective"
+												data-current-context={objective.text}
+												data-previous-context={getConversationExcerpt()}
+												class="flex items-start gap-3"
+											>
+												<span
+													class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white {gradeColor(objective.grade)}"
+												>
+													{objective.grade}
+												</span>
+												<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
+											</div>
+										{/each}
 									</div>
 								</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
 
-			<!-- Right: Comments (1/3 on wide) -->
-			<div class="min-w-0 lg:col-span-1">
-				<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
-					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
-
-					<LoadingReveal loading={isGenerating}>
-						{#snippet placeholder()}
-							<div class="min-w-0 space-y-4">
-								{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
-									<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-										<Skeleton class="h-4 w-3/4 mb-2" />
-										<Skeleton class="h-4 w-full mb-2" />
-										<Skeleton class="h-4 w-5/6" />
-									</div>
-								{/each}
-							</div>
-						{/snippet}
-						{#if feedback}
-							<div class="min-w-0 space-y-4">
-								{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
-									{@const comment = getCommentForMessage(message.seqId)}
-									{#if comment}
-										{@const commentContext = getMessageContext(message.seqId)}
-										<div
-											data-learning-selectable
-											data-learning-kind="comment"
-											data-message-id={message.seqId}
-											data-current-context={getCommentContext(message.seqId, comment)}
-											data-previous-context={commentContext.previousContext}
-											class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
-											transition:fade={{ duration: 200 }}
-										>
-											<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
-											<AnnotatedTutorComment
-												{comment}
-												messageId={message.seqId}
-												onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
-											/>
-										</div>
-									{/if}
-								{/each}
+								<div class="border-t border-[#e8e3db] pt-6">
+									<h3 class="text-lg font-serif mb-4">Summary</h3>
+									<p
+										data-learning-selectable
+										data-learning-kind="summary"
+										data-current-context={feedback.summary}
+										data-previous-context={getConversationExcerpt()}
+										class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
+									>
+										{#each summaryParts as part}
+											{#if part.type === "mark"}
+												<mark class="rounded bg-yellow-200/60 px-1 font-semibold">{part.content}</mark>
+											{:else}
+												{part.content}
+											{/if}
+										{/each}
+									</p>
+								</div>
 							</div>
 						{/if}
-					</LoadingReveal>
-					<!-- Objectives & Summary -->
-					{#if feedback}
-						<div class="mt-8 space-y-6">
-							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif mb-4">Objectives</h3>
-								<div class="space-y-3">
-									{#each feedback.objectives as objective}
-										<div
-											data-learning-selectable
-											data-learning-kind="objective"
-											data-current-context={objective.text}
-											data-previous-context={getConversationExcerpt()}
-											class="flex items-start gap-3"
-										>
-											<span
-												class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white {gradeColor(objective.grade)}"
-											>
-												{objective.grade}
-											</span>
-											<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
-										</div>
-									{/each}
-								</div>
-							</div>
-
-							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif mb-4">Summary</h3>
-								<p
-									data-learning-selectable
-									data-learning-kind="summary"
-									data-current-context={feedback.summary}
-									data-previous-context={getConversationExcerpt()}
-									class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
-								>
-									{#each summaryParts as part}
-										{#if part.type === "mark"}
-											<mark class="rounded bg-yellow-200/60 px-1 font-semibold">{part.content}</mark>
-										{:else}
-											{part.content}
-										{/if}
-									{/each}
-								</p>
-							</div>
-						</div>
-					{/if}
+					</div>
 				</div>
 			</div>
-		</div>
+			{#if data.transferNotes.length > 0 && !data.transferCompletedAt}
+				<!-- The pass drills the notes collected above; the conversation itself already counted. -->
+				<div data-selection-ignore class="mt-10 rounded-lg border border-[#e8e3db] bg-white/70 p-6 text-center">
+					<h2 class="font-serif text-xl text-[#2a2520]">{t(transferLang, "eval.transfer.title")}</h2>
+					<p class="mx-auto mt-2 max-w-md text-sm text-[#6b6560]">
+						{t(transferLang, "eval.transfer.practiceCards").replace("{count}", String(data.transferNotes.length))}
+					</p>
+					<Button class="mt-4" onclick={startTransfer}>{t(transferLang, "eval.transfer.start")}</Button>
+					{#if transferError}
+						<p class="mt-3 text-sm text-red-700">{transferError}</p>
+					{/if}
+				</div>
+			{/if}
+		{/if}
 	</div>
 
 	<!-- Annotation popup -->

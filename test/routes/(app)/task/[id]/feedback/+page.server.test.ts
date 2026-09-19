@@ -8,6 +8,7 @@ const { mockDb } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
+vi.mock("$lib/server/transfer", () => ({ listTransferNotes: vi.fn(async () => []) }));
 vi.mock("$lib/server/feedback", () => ({
 	getExistingFeedback: vi.fn(),
 	buildFeedbackConversation: vi.fn(() => ({ chains: [], allMessages: [] })),

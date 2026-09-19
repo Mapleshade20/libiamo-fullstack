@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
-import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
+import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
+import { devStreakDayOffset, getStreakRecord } from "$lib/server/streak";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
@@ -12,6 +13,7 @@ export const load: LayoutServerLoad = async (event) => {
 	}
 
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
+	event.depends?.(STREAK_DEPENDENCY);
 	const user = requireUser(event);
 
 	const email = user.email?.toLowerCase() || "";
@@ -19,9 +21,13 @@ export const load: LayoutServerLoad = async (event) => {
 	const avatarUrl = `https://gravatar.com/avatar/${hash}?d=identicon&s=192`;
 	const hasApiKey = await hasUserApiKey(user.id);
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
+	// The record, not a rendered view: the client re-derives settlement at local midnight without a
+	// round trip, and SSR stays synchronous.
+	const streak = await getStreakRecord(user.id);
 
 	return {
 		user: {
+			id: user.id,
 			name: user.name,
 			email: user.email,
 			role: user.role,
@@ -32,5 +38,8 @@ export const load: LayoutServerLoad = async (event) => {
 		avatarUrl,
 		hasApiKey,
 		trialQuota,
+		streak,
+		// Zero in production; `/streak-lab` sets it so the navbar travels with the server.
+		streakDayOffset: devStreakDayOffset(),
 	};
 };

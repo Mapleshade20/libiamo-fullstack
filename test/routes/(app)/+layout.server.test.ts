@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { load } from "$routes/(app)/+layout.server";
 
+vi.mock("$lib/server/streak", () => ({ getStreakRecord: vi.fn(async () => null), devStreakDayOffset: vi.fn(() => 0) }));
 vi.mock("$lib/server/trial-quota", () => ({
 	hasUserApiKey: vi.fn(async () => false),
 	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
@@ -37,6 +38,7 @@ describe("(app) layout +layout.server", () => {
 		const result = (await load({ locals: { user } } as any)) as any;
 
 		expect(result.user).toEqual({
+			id: "u1",
 			name: "Alice",
 			email: "Alice@Example.com",
 			role: "learner",

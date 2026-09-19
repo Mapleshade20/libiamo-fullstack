@@ -3,13 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { base } from "$app/paths";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import type { FeedbackResult } from "$lib/feedback/types";
+import { startOfNextLocalDay } from "$lib/local-day";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
+import { completePracticeTransfer, listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
 import type { Actions, PageServerLoad } from "./$types";
 
 function hasOversizedUserText(values: string[]) {
@@ -56,6 +59,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			id: true,
 			status: true,
 			agentPromptSnapshot: true,
+			transferCompletedAt: true,
 		},
 		with: {
 			messages: {
@@ -117,9 +121,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Check if feedback already exists
 	const existingFeedback = await getExistingFeedback(session.id);
+	// The notes the learner collected during feedback are what the transfer pass drills. Whether
+	// there is anything to practise is derived from this list; a GET never writes the column.
+	const transferNotes = await listTransferNotes(user.id, { type: "practice", sessionId: session.id });
 
 	return {
 		sessionId: session.id,
+		transferNotes,
+		transferCompletedAt: session.transferCompletedAt?.toISOString() ?? null,
 		readReceipt: latestAssistantMessageId ? { sessionId: session.id, messageId: latestAssistantMessageId } : null,
 		taskId: taskIdStr,
 		taskTitle: taskData.title,
@@ -216,7 +225,7 @@ export const actions: Actions = {
 		}
 	},
 
-	saveNote: async ({ request, params, locals }) => {
+	saveNote: async ({ request, params, locals, cookies }) => {
 		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
@@ -267,6 +276,7 @@ export const actions: Actions = {
 				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
 				feedbackItems: [{ tutorComment, category, sourceContext }],
 				sessionOwnerId: user.id,
+				availableFrom: startOfNextLocalDay(new Date(), getBrowserTimezone(cookies)),
 			});
 
 			return { success: true, note: notes[0] };
@@ -275,7 +285,7 @@ export const actions: Actions = {
 		}
 	},
 
-	saveSelectionNotes: async ({ request, params, locals }) => {
+	saveSelectionNotes: async ({ request, params, locals, cookies }) => {
 		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
@@ -310,6 +320,7 @@ export const actions: Actions = {
 				currentContext,
 				previousContext,
 				sourceKind,
+				availableFrom: startOfNextLocalDay(new Date(), getBrowserTimezone(cookies)),
 			});
 
 			return { success: true, count: result.count, notes: result.notes, reason: result.reason };
@@ -318,7 +329,62 @@ export const actions: Actions = {
 		}
 	},
 
-	saveSelectionQaNote: async ({ request, params, locals }) => {
+	rateTransfer: async ({ request, params, locals, cookies }) => {
+		const user = requireUser({ locals });
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const formData = await request.formData();
+		const sessionId = Number.parseInt(formData.get("sessionId") as string, 10);
+		const noteId = Number.parseInt(formData.get("noteId") as string, 10);
+		const rating = Number.parseInt(formData.get("rating") as string, 10);
+		const elapsedSeconds = Number.parseInt(formData.get("elapsedSeconds") as string, 10);
+		if (
+			Number.isNaN(sessionId) ||
+			Number.isNaN(noteId) ||
+			(rating !== 1 && rating !== 3) ||
+			!Number.isInteger(elapsedSeconds) ||
+			elapsedSeconds < 0
+		) {
+			return fail(400, { error: "Invalid transfer rating" });
+		}
+		if (!(await getSessionOrFail(sessionId, user.id, taskId))) return fail(403, { error: "Access denied" });
+		try {
+			return {
+				success: true,
+				result: await rateTransferNote({
+					userId: user.id,
+					source: { type: "practice", sessionId },
+					noteId,
+					rating,
+					elapsedSeconds,
+					timeZone: getBrowserTimezone(cookies),
+				}),
+			};
+		} catch (cause) {
+			if (cause instanceof TransferError) return fail(cause.status, { error: cause.message });
+			console.error("Failed to rate a practice transfer note:", cause);
+			return fail(500, { error: "Failed to submit rating" });
+		}
+	},
+
+	completeTransfer: async ({ request, params, locals }) => {
+		const user = requireUser({ locals });
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const sessionId = Number.parseInt((await request.formData()).get("sessionId") as string, 10);
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (!(await getSessionOrFail(sessionId, user.id, taskId))) return fail(403, { error: "Access denied" });
+		try {
+			await completePracticeTransfer(user.id, sessionId);
+			return { success: true };
+		} catch (cause) {
+			if (cause instanceof TransferError) return fail(cause.status, { error: cause.message });
+			console.error("Failed to complete a practice transfer pass:", cause);
+			return fail(500, { error: "Failed to finish practice" });
+		}
+	},
+
+	saveSelectionQaNote: async ({ request, params, locals, cookies }) => {
 		const user = requireUser({ locals });
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -345,6 +411,7 @@ export const actions: Actions = {
 				answer,
 				language: sessionContext.language,
 				nativeLanguage: user.nativeLanguage ?? sessionContext.language,
+				availableFrom: startOfNextLocalDay(new Date(), getBrowserTimezone(cookies)),
 			});
 			return { success: true, note: result.note };
 		} catch (cause) {

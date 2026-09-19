@@ -176,7 +176,7 @@ describe("rateNote", () => {
 		const logValues = vi.fn().mockResolvedValue(undefined);
 		mockDb.insert.mockReturnValue({ values: logValues });
 
-		const result = await rateNote(42, USER_ID, Rating.Good, 19, () => 0.6);
+		const result = await rateNote(42, USER_ID, Rating.Good, 19, { random: () => 0.6 });
 
 		expect(mockDb.transaction).toHaveBeenCalledOnce();
 		expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ fsrsCard: expect.objectContaining({ reps: 1 }), updatedAt: expect.any(Date) }));
@@ -205,9 +205,32 @@ describe("rateNote", () => {
 			from: () => ({ where: () => ({ limit: () => ({ for: async () => [row] }) }) }),
 		});
 
-		await expect(rateNote(42, USER_ID, Rating.Good, 1, Math.random, new Date("2025-06-11T12:00:00Z"))).rejects.toBeInstanceOf(ReviewCardNotDueError);
+		await expect(rateNote(42, USER_ID, Rating.Good, 1, { now: new Date("2025-06-11T12:00:00Z") })).rejects.toBeInstanceOf(ReviewCardNotDueError);
 		expect(mockDb.update).not.toHaveBeenCalled();
 		expect(mockDb.insert).not.toHaveBeenCalled();
+	});
+
+	it("accepts a not-yet-due card out of band and never pulls it forward", async () => {
+		const card = createNewCard();
+		card.due = new Date("2025-06-13T00:00:00Z");
+		const row = {
+			id: 42,
+			userId: USER_ID,
+			fsrsCard: serializeCard(card),
+			examples: [{ nativeText: "native", targetText: "target" }],
+		};
+		mockDb.select.mockReturnValue({
+			from: () => ({ where: () => ({ limit: () => ({ for: async () => [row] }) }) }),
+		});
+		const updateSet = vi.fn((_value: unknown) => ({ where: vi.fn().mockResolvedValue(undefined) }));
+		mockDb.update.mockReturnValue({ set: updateSet });
+		mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+
+		const result = await rateNote(42, USER_ID, Rating.Again, 1, { outOfBand: true, now: new Date("2025-06-12T12:00:00Z") });
+
+		// An Again inside a transfer pass would otherwise schedule the card one minute from now,
+		// putting it into today's queue. The pass returns it through its own queue instead.
+		expect(result.nextDue).toBe("2025-06-13T00:00:00.000Z");
 	});
 
 	it("rejects invalid ratings before opening a transaction", async () => {

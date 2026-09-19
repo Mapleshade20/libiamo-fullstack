@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-import { getReviewStats } from "$lib/server/review";
+import { getAvailableCardsByLanguage, getReviewStats } from "$lib/server/review";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async (event) => {
@@ -16,7 +16,10 @@ export const GET: RequestHandler = async (event) => {
 
 	try {
 		const stats = await getReviewStats(user.id, language);
-		return json(stats);
+		// The account-wide breakdown is an extra aggregate, so it is opt-in: the streak popover asks
+		// for it when it first opens, and ordinary navigation never pays for it.
+		if (event.url.searchParams.get("byLanguage") !== "1") return json(stats);
+		return json({ ...stats, byLanguage: await getAvailableCardsByLanguage(user.id) });
 	} catch (error) {
 		console.error("Failed to fetch review stats:", error);
 		return json({ error: "Failed to fetch review stats" }, { status: 500 });

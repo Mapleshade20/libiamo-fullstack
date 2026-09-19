@@ -203,14 +203,20 @@ export async function getDueNotes(userId: string, language: LanguageCode, limit 
 	});
 }
 
-export async function rateNote(
-	noteId: number,
-	userId: string,
-	rating: 1 | 2 | 3 | 4,
-	elapsedSeconds: number,
-	random = Math.random,
-	now = new Date(),
-) {
+export type RateNoteOptions = {
+	random?: () => number;
+	now?: Date;
+	/**
+	 * A rating from a post-task transfer pass rather than from `/review`. It skips the availability
+	 * guard — the pass deliberately drills cards that are not due yet — and never drags those cards
+	 * into today's queue: a card that was not available keeps the later of its scheduled and its
+	 * previous due date. `/review` never sets this, so ordinary study scheduling is untouched.
+	 */
+	outOfBand?: boolean;
+};
+
+export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3 | 4, elapsedSeconds: number, options: RateNoteOptions = {}) {
+	const { random = Math.random, now = new Date(), outOfBand = false } = options;
 	const ratingMap: Record<number, Grade> = {
 		1: Rating.Again as Grade,
 		2: Rating.Hard as Grade,
@@ -228,8 +234,11 @@ export async function rateNote(
 			.for("update");
 		if (!row) throw new Error("Note not found");
 		const previous = deserializeCard(row.fsrsCard);
-		if (!isReviewCardAvailable(previous, now)) throw new ReviewCardNotDueError();
+		const available = isReviewCardAvailable(previous, now);
+		if (!available && !outOfBand) throw new ReviewCardNotDueError();
 		const result = getScheduler().next(previous, now, ratingMap[rating]);
+		// Keep an out-of-band pass from pulling its own not-yet-due cards into today's queue.
+		if (!available) result.card.due = new Date(Math.max(result.card.due.getTime(), previous.due.getTime()));
 		const serialized = serializeCard(result.card);
 		await tx.update(note).set({ fsrsCard: serialized, updatedAt: now }).where(eq(note.id, noteId));
 		await tx.insert(reviewLog).values({
@@ -298,6 +307,22 @@ export async function resetNoteScheduling(noteId: number, userId: string, now = 
 		await transaction.delete(reviewLog).where(and(eq(reviewLog.noteId, noteId), eq(reviewLog.userId, userId)));
 		return { due: card.due.toISOString(), queueKind: studyQueueKind(card), reps: card.reps, lapses: card.lapses };
 	});
+}
+
+/**
+ * Cards available for study right now, per language, across the whole account.
+ *
+ * The streak gate is account-wide while `/review` is per-language, so this is what tells a learner
+ * which language still owes reviews. It is a detail view and is fetched only when asked for.
+ */
+export async function getAvailableCardsByLanguage(userId: string, now = new Date()) {
+	const rows = await db.select({ language: note.language, fsrsCard: note.fsrsCard }).from(note).where(eq(note.userId, userId));
+	const counts: Partial<Record<LanguageCode, number>> = {};
+	for (const row of rows) {
+		if (!isReviewCardAvailable(row.fsrsCard, now)) continue;
+		counts[row.language] = (counts[row.language] ?? 0) + 1;
+	}
+	return counts;
 }
 
 export async function getReviewStats(userId: string, language: LanguageCode) {

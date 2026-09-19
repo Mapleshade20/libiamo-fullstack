@@ -4,11 +4,11 @@ import Home from "@lucide/svelte/icons/home";
 import { fade } from "svelte/transition";
 import { browser } from "$app/environment";
 import { base } from "$app/paths";
+import TransferStage from "$lib/components/review/TransferStage.svelte";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
 import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
 import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte";
-import TransferPractice from "$lib/components/translate-evaluation/TransferPractice.svelte";
 import type { DemoScene, EvaluationData, LocalCardState, PracticeGenStatus, SecondDraftLocalState } from "$lib/components/translate-evaluation/types";
 import { Button } from "$lib/components/ui/button";
 import { t } from "$lib/i18n";
@@ -333,7 +333,7 @@ $effect(() => {
 				onretryPractice={() => void handleRetryPractice()}
 			/>
 		{:else if scene === "transfer"}
-			<TransferPractice
+			<TransferStage
 				notes={transferNotes}
 				currentIndex={0}
 				title={t(UI_LANG, "eval.transfer.title")}
