@@ -1,6 +1,10 @@
 import { base } from "$app/paths";
 
-export type PageTransitionKind = "none" | "fade" | "section-fade" | "navbar-forward" | "navbar-backward";
+/**
+ * A navigation either sweeps sideways between the bar's own sections or it simply cuts. There is no
+ * crossfade: two pages dissolving through each other read as one smeared page, not as two.
+ */
+export type PageTransitionKind = "none" | "navbar-forward" | "navbar-backward";
 export type NavbarTransitionDirection = "forward" | "backward";
 
 const NAVBAR_INTENT_TTL_MS = 1_500;
@@ -23,11 +27,6 @@ function destinationKey(url: URL) {
 	return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function stableSection(pathname: string) {
-	if (pathname === `${base}/review` || pathname === `${base}/review/manage`) return "review";
-	return null;
-}
-
 export function setNavbarTransitionIntent(destination: URL, direction: NavbarTransitionDirection, createdAt = Date.now()) {
 	navbarTransitionIntent = {
 		destination: destinationKey(destination),
@@ -47,10 +46,5 @@ export function resolvePageTransition(from: URL | null, destination: URL, now = 
 		return intent.direction === "forward" ? "navbar-forward" : "navbar-backward";
 	}
 
-	if (from?.pathname === destination.pathname) return "none";
-
-	const fromSection = from ? stableSection(from.pathname) : null;
-	if (fromSection && fromSection === stableSection(destination.pathname)) return "section-fade";
-
-	return "fade";
+	return "none";
 }

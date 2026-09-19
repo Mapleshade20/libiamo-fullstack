@@ -28,7 +28,7 @@ describe("page transition intent", () => {
 		"/review",
 	])("does not classify workflow or unrelated route %s as a book view", (path) => {
 		expect(isQuestMenuPath(path)).toBe(false);
-		expect(resolvePageTransition(url("/translate/17"), url(path), now)).toBe("fade");
+		expect(resolvePageTransition(url("/translate/17"), url(path), now)).toBe("none");
 	});
 	it.each([
 		["forward", "navbar-forward"],
@@ -37,26 +37,26 @@ describe("page transition intent", () => {
 		setNavbarTransitionIntent(url("/archive"), direction, now);
 
 		expect(resolvePageTransition(url("/"), url("/archive"), now + 100)).toBe(expected);
-		expect(resolvePageTransition(url("/"), url("/archive"), now + 200)).toBe("fade");
+		expect(resolvePageTransition(url("/"), url("/archive"), now + 200)).toBe("none");
 	});
 
 	it("does not apply stale intent to a different destination", () => {
 		setNavbarTransitionIntent(url("/archive"), "forward", now);
 
-		expect(resolvePageTransition(url("/"), url("/review"), now + 100)).toBe("fade");
-		expect(resolvePageTransition(url("/"), url("/archive"), now + 200)).toBe("fade");
+		expect(resolvePageTransition(url("/"), url("/review"), now + 100)).toBe("none");
+		expect(resolvePageTransition(url("/"), url("/archive"), now + 200)).toBe("none");
 	});
 
 	it("expires intent that did not produce an immediate navigation", () => {
 		setNavbarTransitionIntent(url("/archive"), "forward", now);
 
-		expect(resolvePageTransition(url("/"), url("/archive"), now + 1_501)).toBe("fade");
+		expect(resolvePageTransition(url("/"), url("/archive"), now + 1_501)).toBe("none");
 	});
 
 	it("includes search and hash state in the destination", () => {
 		setNavbarTransitionIntent(url("/review?language=es#queue"), "backward", now);
 
-		expect(resolvePageTransition(url("/"), url("/review?language=fr#queue"), now + 100)).toBe("fade");
+		expect(resolvePageTransition(url("/"), url("/review?language=fr#queue"), now + 100)).toBe("none");
 	});
 
 	it("skips document transitions when only query or hash state changes", () => {
@@ -64,8 +64,17 @@ describe("page transition intent", () => {
 		expect(resolvePageTransition(url("/review/manage?page=1"), url("/review/manage?page=2#cards"), now)).toBe("none");
 	});
 
-	it("uses a stable-section fade between Review Study and Manage", () => {
-		expect(resolvePageTransition(url("/review?language=es"), url("/review/manage?language=es"), now)).toBe("section-fade");
-		expect(resolvePageTransition(url("/review/manage"), url("/review"), now)).toBe("section-fade");
+	it("cuts rather than crossfades when no bar section was chosen", () => {
+		expect(resolvePageTransition(url("/review?language=es"), url("/review/manage?language=es"), now)).toBe("none");
+		expect(resolvePageTransition(url("/review/manage"), url("/review"), now)).toBe("none");
+		expect(resolvePageTransition(null, url("/archive"), now)).toBe("none");
+	});
+
+	it("treats the account as a section of the bar like any other", () => {
+		setNavbarTransitionIntent(url("/profile"), "forward", now);
+		expect(resolvePageTransition(url("/"), url("/profile"), now + 100)).toBe("navbar-forward");
+
+		setNavbarTransitionIntent(url("/archive"), "backward", now);
+		expect(resolvePageTransition(url("/profile"), url("/archive"), now + 100)).toBe("navbar-backward");
 	});
 });

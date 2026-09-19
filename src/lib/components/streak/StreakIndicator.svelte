@@ -149,7 +149,7 @@ const remainingLanguages = $derived(
 <div class="relative" style="--streak-speed: {speed}">
 	<button
 		type="button"
-		class="flex h-11 items-center gap-1.5 rounded-full px-2 transition-colors hover:bg-secondary"
+		class="streak-trigger flex h-8 items-center gap-1.5 rounded-full px-2 transition-colors hover:bg-secondary"
 		aria-expanded={open}
 		aria-label={t(lang, "streak.label")}
 		onclick={toggle}
@@ -223,6 +223,20 @@ const remainingLanguages = $derived(
 <ActionNotification {notification} />
 
 <style>
+/*
+ * The trigger stays 32px tall so it cannot stretch the 56px navigation bar; the touch target is
+ * expanded past it instead of by it.
+ */
+.streak-trigger {
+	position: relative;
+}
+
+.streak-trigger::before {
+	content: "";
+	position: absolute;
+	inset: -0.4rem -0.15rem;
+}
+
 .badge {
 	position: absolute;
 	top: -0.45rem;

@@ -45,6 +45,11 @@
 	/* A muted ember for the streak flame — warm enough to read as fire on paper, never saturated. */
 	--color-streak-flame: oklch(0.68 0.13 55);
 	--color-streak-flame-core: var(--color-accent-yellow);
+	/* Wine, reserved for meaningful states: the ruled line under the current navigation clipping. */
+	--color-ink-wine: oklch(0.45 0.12 18);
+	/* The navigation stickers: one warm near-black for every outline, one paper for every die cut. */
+	--nav-line: oklch(0.32 0.018 55);
+	--nav-paper: #ffffff;
 	--font-sans-inter: "Inter Variable", "Inter", ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "Noto Sans", sans-serif;
 }
 
@@ -80,6 +85,14 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+}
+
+@theme {
+	/*
+	 * The navigation's own breakpoint: the width at which the Quest Hall stops showing its menu.
+	 * Below it the app wears a bottom bar; above it, only the top bar.
+	 */
+	--breakpoint-nav: 56.25rem;
 }
 
 @theme inline {
@@ -326,36 +339,6 @@
 	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
 }
 
-/* View Transitions: quick crossfade for ordinary in-section navigation */
-html[data-page-transition$="fade"]::view-transition-group(root),
-html[data-page-transition$="fade"]::view-transition-group(page-content) {
-	animation-duration: 170ms;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-html[data-page-transition$="fade"]::view-transition-old(root),
-html[data-page-transition$="fade"]::view-transition-old(page-content) {
-	animation: 170ms cubic-bezier(0.4, 0, 1, 1) both vt-page-fade-out;
-}
-
-html[data-page-transition$="fade"]::view-transition-new(root),
-html[data-page-transition$="fade"]::view-transition-new(page-content) {
-	animation: 170ms cubic-bezier(0, 0, 0.2, 1) both vt-page-fade-in;
-}
-
-html[data-page-transition="section-fade"] .review-route-header {
-	view-transition-name: review-route-header;
-}
-
-html[data-page-transition="section-fade"]::view-transition-group(review-route-header),
-html[data-page-transition="section-fade"]::view-transition-new(review-route-header) {
-	animation: none;
-}
-
-html[data-page-transition="section-fade"]::view-transition-old(review-route-header) {
-	display: none;
-}
-
 /* View Transitions: directional editorial sweep between navbar sections */
 html[data-page-transition^="navbar-"] {
 	--page-slide-distance: clamp(8rem, 24vw, 24rem);
@@ -385,18 +368,6 @@ html[data-page-transition="navbar-backward"]::view-transition-old(page-content) 
 
 html[data-page-transition="navbar-backward"]::view-transition-new(page-content) {
 	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-left;
-}
-
-@keyframes vt-page-fade-out {
-	to {
-		opacity: 0;
-	}
-}
-
-@keyframes vt-page-fade-in {
-	from {
-		opacity: 0;
-	}
 }
 
 @keyframes vt-page-exit-left {
@@ -555,4 +526,57 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	.skeleton-lines [data-slot="skeleton"] {
 		animation: none;
 	}
+}
+
+/*
+ * One hand for the navigation stickers.
+ *
+ * Every navigation icon is a small die-cut sticker: flat colour from the site palette, a warm
+ * near-black outline around it, and a rim of paper cut along the drawing's own silhouette. The pen
+ * and the paper live here rather than in each component so the five icons cannot drift into five
+ * different hands; the colours an icon reaches for stay inside that icon.
+ *
+ * An icon that fills less of its box than the others scales itself up by `--nav-ink-scale` so the
+ * row reads at one size. Every width below divides that back out, so drawing an icon larger never
+ * hands it a fatter pen than the icon beside it.
+ */
+.nav-stroke {
+	fill: none;
+	stroke: var(--nav-line);
+	stroke-width: calc(1.55 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Interior detail — a fold, a ruled line, a seam — drawn with a finer nib. */
+.nav-stroke-thin {
+	stroke-width: calc(1 / var(--nav-ink-scale, 1));
+}
+
+/* The one highlight every glossy surface gets, so nothing reads as flat paint. */
+.nav-shine {
+	fill: none;
+	stroke: #fff;
+	stroke-width: calc(1.4 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	opacity: 0.6;
+}
+
+/*
+ * The die cut: paper pasted behind one part of a drawing. Each part that moves carries its own, so
+ * the rim travels with it and two overlapping parts are parted by a band of paper rather than
+ * tangling. Each paper silhouette is cut independently of the ink, with deliberately uneven
+ * clearance; the shared stroke softens those hand-cut corners without thickening the drawing.
+ */
+.nav-cut {
+	fill: var(--nav-paper);
+	stroke: var(--nav-paper);
+	stroke-width: calc(5.4 / var(--nav-ink-scale, 1));
+	stroke-linejoin: round;
+	stroke-linecap: round;
+}
+
+/* Cutting around an open line, which SVG would otherwise fill as though its ends were joined. */
+.nav-cut-line {
+	fill: none;
 }

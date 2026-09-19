@@ -28,7 +28,7 @@ onMount(() => {
 });
 
 onNavigate((navigation) => {
-	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "fade";
+	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "none";
 	if (transitionKind === "none") return;
 	if (!document.startViewTransition) return;
 

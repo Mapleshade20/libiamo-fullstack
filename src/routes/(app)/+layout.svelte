@@ -68,7 +68,8 @@ $effect(() => {
 		<main class="h-screen w-full">{@render children()}</main>
 	{:else}
 		<div class="min-h-screen" style="view-transition-name: page-content">
-			<main class="mx-auto max-w-5xl px-4 py-8 pt-24">
+			<!-- The extra bottom padding clears the narrow-screen bottom bar. -->
+			<main class="mx-auto max-w-5xl px-4 pt-24 pb-24 nav:pb-8">
 				{#if questMenuRoute}
 					<QuestMenuRoute route={questMenuRoute} form={page.form} />
 				{/if}
