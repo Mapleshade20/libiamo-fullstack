@@ -211,7 +211,13 @@ function handleCardListKeydown(event: KeyboardEvent) {
 			{/if}
 		</aside>
 
-		<section class="min-w-0 lg:sticky lg:top-24 lg:self-start" aria-live="polite">
+		<section
+			id="note-editor"
+			tabindex="-1"
+			class="min-w-0 scroll-mt-4 nav:scroll-mt-24 lg:sticky lg:top-24 lg:self-start"
+			aria-label={t(lang, "review.editCurrent")}
+			aria-live="polite"
+		>
 			{#if selectedNote}
 				{#key selectedNote.id}
 					<ManageNoteEditor note={selectedNote} {lang} onupdate={replaceNote} ondelete={removeNote} />

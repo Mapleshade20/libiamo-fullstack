@@ -31,14 +31,14 @@ function changeLanguage(event: Event) {
 </script>
 
 <div class="space-y-7">
-	<header class="review-route-header flex flex-col items-center gap-4 sm:h-[1.875rem] sm:flex-row sm:items-stretch sm:justify-between">
-		<div class="flex h-[1.875rem] items-stretch gap-3">
-			<h1 class="font-serif text-3xl leading-none">Review</h1>
+	<header class="review-route-header flex flex-wrap items-center justify-between gap-4">
+		<h1 class="font-serif text-3xl leading-none">Review</h1>
+		<div class="ml-auto flex max-w-full min-w-0 items-center gap-2 sm:gap-3">
 			<label class="sr-only" for="review-language">Review language</label>
 			<select
 				id="review-language"
 				value={selectedLanguage}
-				class="h-[1.875rem] rounded-full border border-border bg-card px-3 text-xs font-semibold uppercase tracking-wider text-foreground shadow-sm"
+				class="h-[1.875rem] min-w-0 rounded-full border border-border bg-card px-3 text-xs font-semibold uppercase tracking-wider text-foreground shadow-sm"
 				onchange={changeLanguage}
 			>
 				{#if isManagePage}
@@ -48,26 +48,25 @@ function changeLanguage(event: Event) {
 					<option value={code}>{LANGUAGE_LABELS[code]}</option>
 				{/each}
 			</select>
-		</div>
-
-		<nav class="inline-flex h-[1.875rem] rounded-full border border-border bg-card p-0.5 text-sm shadow-sm" aria-label="Review pages">
-			<a
-				href={studyHref}
-				aria-current={isManagePage ? undefined : "page"}
-				class="inline-flex h-full items-center rounded-full px-4 {isManagePage
+			<nav class="inline-flex h-[1.875rem] shrink-0 rounded-full border border-border bg-card p-0.5 text-sm shadow-sm" aria-label="Review pages">
+				<a
+					href={studyHref}
+					aria-current={isManagePage ? undefined : "page"}
+					class="inline-flex h-full items-center rounded-full px-4 {isManagePage
 					? 'text-muted-foreground transition-colors hover:text-foreground'
 					: 'bg-foreground font-medium text-background'}"
-				>Study</a
-			>
-			<a
-				href={manageHref}
-				aria-current={isManagePage ? "page" : undefined}
-				class="inline-flex h-full items-center rounded-full px-4 {isManagePage
+					>Study</a
+				>
+				<a
+					href={manageHref}
+					aria-current={isManagePage ? "page" : undefined}
+					class="inline-flex h-full items-center rounded-full px-4 {isManagePage
 					? 'bg-foreground font-medium text-background'
 					: 'text-muted-foreground transition-colors hover:text-foreground'}"
-				>Manage</a
-			>
-		</nav>
+					>Manage</a
+				>
+			</nav>
+		</div>
 	</header>
 
 	<div>{@render children()}</div>

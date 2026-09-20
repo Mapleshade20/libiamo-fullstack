@@ -143,6 +143,7 @@ async function rate(rating: number) {
 			</div>
 		{:else if currentCard}
 			<StudyCard
+				editLink={{ href: `${base}/review/manage?note=${currentCard.id}#note-editor`, label: t(lang, "review.editCurrent") }}
 				vocab={currentCard.vocab}
 				nativeDefinition={currentCard.nativeDefinition}
 				nativeText={currentCard.nativeText}
@@ -161,12 +162,4 @@ async function rate(rating: number) {
 			/>
 		{/if}
 	</LoadingReveal>
-
-	{#if currentCard}
-		<div class="border-t border-border pt-6 text-center">
-			<a href="{base}/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground"
-				>{t(lang, "review.editCurrent")}</a
-			>
-		</div>
-	{/if}
 </div>

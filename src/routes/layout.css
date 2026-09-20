@@ -329,14 +329,23 @@
 
 /* View Transitions: smooth morph for the shared navbar */
 ::view-transition-group(main-nav) {
+	z-index: 50;
 	animation-duration: 250ms;
 	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
 }
 
 ::view-transition-old(main-nav),
 ::view-transition-new(main-nav) {
-	animation-duration: 250ms;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
+	animation: none;
+	mix-blend-mode: normal;
+}
+
+::view-transition-old(main-nav) {
+	visibility: hidden;
+}
+
+::view-transition-group(page-content) {
+	z-index: 1;
 }
 
 /* View Transitions: directional editorial sweep between navbar sections */

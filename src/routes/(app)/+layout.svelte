@@ -1,13 +1,16 @@
 <script lang="ts">
 import { browser } from "$app/environment";
+import { base } from "$app/paths";
 import { page } from "$app/state";
 import { isQuestMenuPath } from "$lib/client/page-transition";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
+import HomeMasthead from "$lib/components/HomeMasthead.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
 import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
+let isHome = $derived(page.url.pathname === `${base}/`);
 let questMenuRoute = $derived(isQuestMenuPath(page.url.pathname) ? page.data.questMenu : null);
 let quotaNotification = $state<ActionNotificationContent | null>(null);
 
@@ -50,16 +53,9 @@ $effect(() => {
 
 <svelte:head> <meta name="robots" content="noindex, nofollow"> </svelte:head>
 
-<div class="min-h-screen">
+<div class="min-h-screen" class:app-shell={!isSessionPage}>
 	{#if !isSessionPage}
-		<Navbar
-			mode="app"
-			user={data.user}
-			avatarUrl={data.avatarUrl}
-			trialQuota={data.trialQuota}
-			streak={data.streak}
-			streakDayOffset={data.streakDayOffset}
-		/>
+		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
@@ -69,7 +65,10 @@ $effect(() => {
 	{:else}
 		<div class="min-h-screen" style="view-transition-name: page-content">
 			<!-- The extra bottom padding clears the narrow-screen bottom bar. -->
-			<main class="mx-auto max-w-5xl px-4 pt-24 pb-24 nav:pb-8">
+			<main class="mx-auto max-w-5xl px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHome ? 'pt-0' : 'pt-8 nav:pt-24'}">
+				{#if isHome}
+					<HomeMasthead user={data.user} trialQuota={data.trialQuota} streak={data.streak} streakDayOffset={data.streakDayOffset} />
+				{/if}
 				{#if questMenuRoute}
 					<QuestMenuRoute route={questMenuRoute} form={page.form} />
 				{/if}
@@ -78,3 +77,14 @@ $effect(() => {
 		</div>
 	{/if}
 </div>
+
+<style>
+.app-shell {
+	--app-bottom-nav-height: calc(3.275rem + max(0.5rem, env(safe-area-inset-bottom)) + 1px);
+}
+@media (min-width: 56.25rem) {
+	.app-shell {
+		--app-bottom-nav-height: 0px;
+	}
+}
+</style>
