@@ -60,6 +60,22 @@ describe("Profile page", () => {
 		expect(body).toContain('value="saved-model"');
 		expect(body).toMatch(/<option[^>]*value="https:\/\/api.deepseek.com"[^>]*selected/);
 	});
+	it.each(["https://api.deepseek.com", "https://api.openai.com/v1"])("only offers to retain the key for its saved provider (%s)", (apiBaseUrl) => {
+		const { body } = render(ProfilePage, {
+			props: {
+				data: { ...data, hasApiKey: true, apiBaseUrl: "https://api.deepseek.com", apiModel: "saved-model" },
+				form: {
+					errors: { apiKey: ["Required"] },
+					values: { apiBaseUrl, apiModel: "saved-model", name: undefined, nativeLanguage: undefined, feedbackLanguagePreference: undefined },
+				},
+			},
+		});
+		const input = body.match(/<input[^>]*name="apiKey"[^>]*>/)?.[0];
+		expect(input).toBeDefined();
+		const placeholder = apiBaseUrl === "https://api.deepseek.com" ? "profile.apiKeyKeepPlaceholder" : "profile.apiKeyPlaceholder";
+		expect(input).toContain(`placeholder="${t("fr", placeholder)}"`);
+		expect(input).not.toMatch(/value="[^"]+"/);
+	});
 	it("renders connected and available social login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 

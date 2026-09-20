@@ -48,6 +48,8 @@ const nativeLanguageOptions = $derived(data.serverNativeLanguages ?? []);
 let nativeLanguageInputValue = $derived(form?.values?.nativeLanguage ?? data.user.nativeLanguage ?? "");
 let apiBaseUrlValue = $derived(form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? "");
 let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
+let apiKeyValue = $state("");
+const canRetainApiKey = $derived(data.hasApiKey && apiBaseUrlValue === data.apiBaseUrl);
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
@@ -512,7 +514,8 @@ function enhancePasswordSetup() {
 						id="apiKey"
 						name="apiKey"
 						type="password"
-						placeholder={data.hasApiKey ? t(lang, "profile.apiKeyKeepPlaceholder") : t(lang, "profile.apiKeyPlaceholder")}
+						bind:value={apiKeyValue}
+						placeholder={canRetainApiKey ? t(lang, "profile.apiKeyKeepPlaceholder") : t(lang, "profile.apiKeyPlaceholder")}
 						aria-invalid={Boolean(form?.errors?.apiKey)}
 					/>
 					{#if form?.errors?.apiKey}
@@ -525,6 +528,7 @@ function enhancePasswordSetup() {
 						id="apiBaseUrl"
 						name="apiBaseUrl"
 						bind:value={apiBaseUrlValue}
+						onchange={() => { apiKeyValue = ""; }}
 						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
 						aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
 					>

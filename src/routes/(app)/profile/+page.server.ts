@@ -13,7 +13,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
-import { encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -181,7 +181,16 @@ export const actions: Actions = {
 			apiModel: formData.get("apiModel")?.toString() || undefined,
 		};
 
-		const result = profileSchema.safeParse(raw);
+		let retainedApiKey: string | undefined;
+		if (!raw.apiKey?.trim() && (raw.apiBaseUrl || raw.apiModel)) {
+			const saved = await db.query.userApiKey.findFirst({
+				where: (t, { eq }) => eq(t.userId, user.id),
+				columns: { encryptedKey: true, baseUrl: true },
+			});
+			// Never send a saved credential to a different provider implicitly.
+			if (saved && saved.baseUrl === raw.apiBaseUrl) retainedApiKey = decryptApiKey(saved.encryptedKey);
+		}
+		const result = profileSchema.safeParse({ ...raw, apiKey: retainedApiKey ?? raw.apiKey });
 		const safeValues = (overrides?: Partial<typeof raw>) => {
 			const { apiKey: _, ...safe } = { ...raw, ...overrides };
 			return safe;

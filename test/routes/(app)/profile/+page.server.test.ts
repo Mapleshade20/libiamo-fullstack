@@ -10,30 +10,31 @@ import { createActionEvent } from "../action-test-helpers";
 const sqlParams = (fragment: any): unknown[] =>
 	fragment.queryChunks.filter((chunk: unknown) => typeof chunk === "string" || typeof chunk === "number");
 
-const { mockFindFirst, mockFindUser, mockInsert, mockUpdate, mockSet, mockUpdateWhere, mockDelete, mockWhere } = vi.hoisted(() => {
-	const mockFindFirst = vi.fn().mockResolvedValue(undefined);
-	const mockFindUser = vi.fn().mockResolvedValue(undefined);
-	const mockOnConflictDoUpdate = vi.fn();
-	const mockValues = vi.fn(() => ({ onConflictDoUpdate: mockOnConflictDoUpdate }));
-	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	const mockUpdateWhere = vi.fn();
-	const mockSet = vi.fn((_values: Record<string, unknown>) => ({ where: mockUpdateWhere }));
-	const mockUpdate = vi.fn(() => ({ set: mockSet }));
-	const mockWhere = vi.fn();
-	const mockDelete = vi.fn(() => ({ where: mockWhere }));
-	return {
-		mockFindFirst,
-		mockFindUser,
-		mockInsert,
-		mockUpdate,
-		mockSet,
-		mockUpdateWhere,
-		mockDelete,
-		mockWhere,
-		mockValues,
-		mockOnConflictDoUpdate,
-	};
-});
+const { mockFindFirst, mockFindUser, mockInsert, mockUpdate, mockSet, mockUpdateWhere, mockDelete, mockWhere, mockValues, mockOnConflictDoUpdate } =
+	vi.hoisted(() => {
+		const mockFindFirst = vi.fn().mockResolvedValue(undefined);
+		const mockFindUser = vi.fn().mockResolvedValue(undefined);
+		const mockOnConflictDoUpdate = vi.fn();
+		const mockValues = vi.fn(() => ({ onConflictDoUpdate: mockOnConflictDoUpdate }));
+		const mockInsert = vi.fn(() => ({ values: mockValues }));
+		const mockUpdateWhere = vi.fn();
+		const mockSet = vi.fn((_values: Record<string, unknown>) => ({ where: mockUpdateWhere }));
+		const mockUpdate = vi.fn(() => ({ set: mockSet }));
+		const mockWhere = vi.fn();
+		const mockDelete = vi.fn(() => ({ where: mockWhere }));
+		return {
+			mockFindFirst,
+			mockFindUser,
+			mockInsert,
+			mockUpdate,
+			mockSet,
+			mockUpdateWhere,
+			mockDelete,
+			mockWhere,
+			mockValues,
+			mockOnConflictDoUpdate,
+		};
+	});
 
 vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
@@ -77,13 +78,15 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
-const { mockEncryptApiKey, mockGetTrialQuotaBalance, mockVerifyApiKey } = vi.hoisted(() => ({
+const { mockDecryptApiKey, mockEncryptApiKey, mockGetTrialQuotaBalance, mockVerifyApiKey } = vi.hoisted(() => ({
+	mockDecryptApiKey: vi.fn(() => "sk-saved-key"),
 	mockEncryptApiKey: vi.fn((k: string) => `encrypted:${k}`),
 	mockGetTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
 	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
 }));
 
 vi.mock("$lib/server/llm", () => ({
+	decryptApiKey: mockDecryptApiKey,
 	encryptApiKey: mockEncryptApiKey,
 	verifyApiKey: mockVerifyApiKey,
 }));
@@ -97,6 +100,7 @@ describe("Profile +page.server", () => {
 		vi.clearAllMocks();
 		mockFindFirst.mockResolvedValue(undefined);
 		mockFindUser.mockResolvedValue(undefined);
+		mockVerifyApiKey.mockResolvedValue({ ok: true });
 		vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
 			{ id: "credential-account", providerId: "credential", accountId: "test-user", userId: "test-user" },
 		] as never);
@@ -405,6 +409,47 @@ describe("Profile +page.server", () => {
 
 	// ── BYOK (Bring Your Own Key) ─────────────────────────────────────
 	describe("BYOK", () => {
+		it.each(["", "   "])("retains the saved key when changing the model with a blank key (%j)", async (apiKey) => {
+			mockFindFirst.mockResolvedValue({ encryptedKey: "stored-ciphertext", baseUrl: BYOK_API_BASE_URLS[0] });
+
+			const result = await actions.updateProfile(createActionEvent({ apiKey, apiBaseUrl: BYOK_API_BASE_URLS[0], apiModel: "new-model" }));
+
+			expect(result).toEqual({ success: true });
+			expect(mockDecryptApiKey).toHaveBeenCalledWith("stored-ciphertext");
+			expect(mockVerifyApiKey).toHaveBeenCalledWith(BYOK_API_BASE_URLS[0], "sk-saved-key", "new-model");
+			expect(mockValues).toHaveBeenCalledWith({
+				userId: "u1",
+				encryptedKey: "encrypted:sk-saved-key",
+				baseUrl: BYOK_API_BASE_URLS[0],
+				model: "new-model",
+			});
+			expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
+				expect.objectContaining({ set: { encryptedKey: "encrypted:sk-saved-key", baseUrl: BYOK_API_BASE_URLS[0], model: "new-model" } }),
+			);
+		});
+
+		it("does not save or expose the retained key when the new model fails verification", async () => {
+			mockFindFirst.mockResolvedValue({ encryptedKey: "stored-ciphertext", baseUrl: BYOK_API_BASE_URLS[0] });
+			mockVerifyApiKey.mockResolvedValueOnce({ ok: false, error: "Model unavailable" });
+
+			const result = await actions.updateProfile(createActionEvent({ apiKey: "", apiBaseUrl: BYOK_API_BASE_URLS[0], apiModel: "new-model" }));
+
+			expect(result).toMatchObject({ status: 400, data: { values: { apiModel: "new-model" } } });
+			expect(JSON.stringify(result)).not.toContain("sk-saved-key");
+			expect(mockInsert).not.toHaveBeenCalled();
+		});
+
+		it("requires an explicit key when changing providers", async () => {
+			mockFindFirst.mockResolvedValue({ encryptedKey: "stored-ciphertext", baseUrl: BYOK_API_BASE_URLS[0] });
+
+			const result = await actions.updateProfile(createActionEvent({ apiKey: "", apiBaseUrl: BYOK_API_BASE_URLS[1], apiModel: "new-model" }));
+
+			expect(result).toMatchObject({ status: 400, data: { errors: { apiKey: expect.any(Array) } } });
+			expect(mockDecryptApiKey).not.toHaveBeenCalled();
+			expect(mockVerifyApiKey).not.toHaveBeenCalled();
+			expect(mockInsert).not.toHaveBeenCalled();
+		});
+
 		it("clearApiKey deletes the user's API key row", async () => {
 			const event = createActionEvent({});
 			const result = await actions.clearApiKey(event);
