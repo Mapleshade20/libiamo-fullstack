@@ -9,6 +9,7 @@ interface Props {
 	onNavigate?: (route: NavRoute, index: number, event: MouseEvent) => void;
 	/** Fill the available width and space the clippings evenly, as the bottom bar does. */
 	spread?: boolean;
+	/** Between clippings — a seam rather than a space once the rail spreads. */
 	gap?: string;
 }
 
@@ -36,9 +37,14 @@ let { routes, activeIndex, ariaLabel, onNavigate, spread = false, gap = "0.85rem
 	gap: var(--rail-gap);
 }
 
+/*
+ * Spread: the columns — not the drawings — are what share the width, so a clipping's cell reaches
+ * across the narrow-screen gaps a thumb lands in, and only the rail's gap stays unclaimed.
+ */
 .spread {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	width: 100%;
-	justify-content: space-around;
-	gap: 0;
 }
 </style>

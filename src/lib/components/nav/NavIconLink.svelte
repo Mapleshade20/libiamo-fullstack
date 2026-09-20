@@ -72,7 +72,7 @@ $effect(() => () => clearTimeout(timer));
 .clipping::before {
 	content: "";
 	position: absolute;
-	inset: calc(-1 * var(--nav-icon-reach, 0.4rem));
+	inset: calc(-1 * var(--nav-icon-reach, 0.4rem)) 0;
 }
 
 /*
@@ -95,6 +95,20 @@ $effect(() => () => clearTimeout(timer));
 .clipping:hover .sticker {
 	transform: rotate(var(--tilt)) translateY(-1.5px) scale(1.04);
 	filter: drop-shadow(0 1.4px 1.8px oklch(0.25 0.005 285 / 0.3)) saturate(0.92) opacity(0.96);
+}
+
+/*
+ * Keyboard focus rings the drawing. The clipping's own box is the target a thumb aims at — as wide
+ * as the rail can spread it — and outlining that would draw the empty space instead of the route.
+ */
+.clipping:focus-visible {
+	outline: none;
+}
+
+.clipping:focus-visible .sticker {
+	outline: 2px solid var(--color-ring);
+	outline-offset: 3px;
+	border-radius: 0.4rem;
 }
 
 /*
