@@ -2,6 +2,7 @@
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { parseTemplateJson } from "$lib/admin/template-actions";
+import { focusAndHighlightField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import TemplateForm from "$lib/components/TemplateForm.svelte";
 import { Badge } from "$lib/components/ui/badge";
@@ -37,7 +38,7 @@ type ImportedTemplateData = {
 
 let success = $derived(page.url.searchParams.get("success") === "1");
 let importJsonText = $state("");
-let importError = $state<string | null>(null);
+let importInput: HTMLTextAreaElement | null = $state(null);
 let importFeedback = $state<string | null>(null);
 let importedTemplate = $state<ImportedTemplateData | undefined>(undefined);
 let importedSlotValues = $state<Record<string, string> | undefined>(undefined);
@@ -62,7 +63,7 @@ function formatDate(d: Date | null): string {
 function fillFromJson() {
 	const result = parseTemplateJson(importJsonText);
 	if (!result.success) {
-		importError = result.error;
+		if (importInput) focusAndHighlightField(importInput, result.error);
 		importFeedback = null;
 		return;
 	}
@@ -72,7 +73,6 @@ function fillFromJson() {
 	importedSlotValues = firstVariant?.slotValues;
 	importedOpeningState = firstVariant?.openingState;
 	importResetKey = `import-${Date.now()}`;
-	importError = null;
 	importFeedback =
 		result.data.template.interactionType === "translate"
 			? "Editor filled from JSON. Review the fields, make any edits, then submit for review."
@@ -109,10 +109,7 @@ function fillFromJson() {
 						Only the first active variant is loaded for user contributions.
 					{/if}
 				</p>
-				<Textarea bind:value={importJsonText} rows={8} placeholder={importPlaceholder} />
-				{#if importError}
-					<p class="text-sm text-red-600 whitespace-pre-wrap">{importError}</p>
-				{/if}
+				<Textarea bind:ref={importInput} bind:value={importJsonText} rows={8} placeholder={importPlaceholder} aria-label="Template JSON" />
 				{#if importFeedback}
 					<p class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{importFeedback}</p>
 				{/if}

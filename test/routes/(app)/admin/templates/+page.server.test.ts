@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { load } from "$routes/(admin)/admin/templates/+page.server";
+import { load } from "$routes/(app)/admin/templates/+page.server";
 
 // ── 1. Mock SvelteKit ──────────────────────────────────────────────────
 vi.mock("@sveltejs/kit", () => ({

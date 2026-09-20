@@ -90,7 +90,7 @@ function open() {
 			aria-invalid={Boolean(errors.name)}
 			aria-describedby="name-dialog-error"
 		>
-		<p id="name-dialog-error" class="error" role="status">{errors.name?.[0] ?? failure}</p>
+		<p id="name-dialog-error" data-field-error={errors.name ? "name" : undefined} class="error" role="status">{errors.name?.[0] ?? failure}</p>
 		<div class="actions">
 			<button type="button" disabled={saving} onclick={() => (dialogOpen = false)}>{t(lang, "common.cancel")}</button>
 			<button type="submit" class="save" disabled={saving || value === name}>{t(lang, "profile.saveName")}</button>

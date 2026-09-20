@@ -34,16 +34,16 @@ export function appNavRoutes(base: string, role: string, avatarUrl?: string): Na
 		{ href: `${base}/review`, label: "Review", Icon: CardsIcon, tilt: 1.5 },
 		{ href: `${base}/archive`, label: "Archive", Icon: BoxIcon, tilt: -1 },
 		role === "admin"
-			? { href: `${base}/admin/templates`, label: "Admin", Icon: PeopleIcon, tilt: 2 }
+			? { href: `${base}/admin/templates`, label: "Admin", Icon: PeopleIcon, tilt: 2, sectionPaths: [`${base}/admin`] }
 			: { href: `${base}/contribute`, label: "Contribute", Icon: PullRequestIcon, tilt: 2 },
 	];
 	if (avatarUrl) routes.push({ href: `${base}/profile`, label: "Profile", avatarUrl, tilt: -1.5 });
 	return routes;
 }
 
-export function activeNavIndex(routes: NavRoute[], pathname: string): number {
+export function activeNavIndex(routes: Pick<NavRouteCommon, "href" | "exact" | "sectionPaths">[], pathname: string): number {
 	return routes.findIndex((route) => {
 		if (route.sectionPaths?.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
-		return route.exact ? pathname === route.href : pathname.startsWith(route.href);
+		return pathname === route.href || (!route.exact && pathname.startsWith(`${route.href}/`));
 	});
 }

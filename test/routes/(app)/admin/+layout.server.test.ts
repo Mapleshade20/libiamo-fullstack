@@ -1,6 +1,6 @@
 import { error, redirect } from "@sveltejs/kit";
 import { describe, expect, it, vi } from "vitest";
-import { load } from "$routes/(admin)/+layout.server";
+import { load } from "$routes/(app)/admin/+layout.server";
 
 vi.mock("@sveltejs/kit", () => ({
 	error: vi.fn((status, body) => {
@@ -51,13 +51,12 @@ describe("(admin) Layout Server Load", () => {
 		expect(error).toHaveBeenCalledWith(403, "Forbidden");
 	});
 
-	it("should return the user object if user is an admin", async () => {
+	it("returns admin data without shadowing the app shell user", async () => {
 		const adminUser = { role: "admin", id: 1, name: "Admin", email: "admin@example.com", activeLanguage: "en" };
 		const event = { locals: { user: adminUser } } as any;
 
 		const result = await load(event);
 		expect(result).toEqual({
-			user: { role: "admin", name: "Admin", email: "admin@example.com", activeLanguage: "en" },
 			pendingReviewCount: 0,
 		});
 	});

@@ -1,5 +1,7 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
+import { parseTemplateJson } from "$lib/admin/template-actions";
+import { focusAndHighlightField } from "$lib/client/form-attention";
 import TemplateForm from "$lib/components/TemplateForm.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
@@ -52,7 +54,21 @@ let templateData = $derived(
 	{#if !contributed}
 		<details class="rounded-md border border-input bg-background p-4">
 			<summary class="cursor-pointer text-sm font-medium">Import JSON</summary>
-			<form method="POST" action="?/importJson" use:enhance={() => async ({ update }) => update({ reset: false })} class="mt-4 space-y-3">
+			<form
+				method="POST"
+				action="?/importJson"
+				use:enhance={({ cancel, formElement, formData }) => {
+				const result = parseTemplateJson(String(formData.get("templateJson") ?? ""));
+				if (!result.success) {
+					cancel();
+					const input = formElement.querySelector<HTMLTextAreaElement>('[name="templateJson"]');
+					if (input) focusAndHighlightField(input, result.error);
+					return;
+				}
+				return async ({ update }) => update({ reset: false });
+			}}
+				class="mt-4 space-y-3"
+			>
 				<p class="text-sm text-muted-foreground">Paste an exported template JSON file to create a new template with all variants.</p>
 				<Textarea name="templateJson" rows={10} placeholder={importPlaceholder} required />
 				<Button type="submit" variant="secondary">Import JSON</Button>

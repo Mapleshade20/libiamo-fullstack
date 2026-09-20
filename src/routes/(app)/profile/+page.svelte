@@ -40,6 +40,8 @@ const methodActionClass =
 	"min-h-11 min-w-32 shrink-0 rounded-xl px-3 font-medium text-foreground shadow-none transition-colors duration-200 motion-reduce:transition-none";
 
 let { form, data } = $props();
+let nativeLanguageForm: HTMLFormElement | null = $state(null);
+let proficiencyForm: HTMLFormElement | null = $state(null);
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 const clock = getDisplayClock();
 
@@ -245,7 +247,8 @@ function enhancePasswordSetup() {
 				</fieldset>
 			</form>
 
-			<form method="POST" action="?/updateProfile" onchange={autosave} use:enhance={enhanceSilently} class="space-y-2">
+			<FormErrorFocus formRef={nativeLanguageForm} errors={form?.errors} fieldOrder={["nativeLanguage"]} />
+			<form bind:this={nativeLanguageForm} method="POST" action="?/updateProfile" onchange={autosave} use:enhance={enhanceSilently} class="space-y-2">
 				<Label for="nativeLanguage">{t(lang, "profile.nativeLanguage")}</Label>
 				<select
 					id="nativeLanguage"
@@ -260,11 +263,12 @@ function enhancePasswordSetup() {
 					{/each}
 				</select>
 				{#if form?.errors?.nativeLanguage}
-					<p class="text-sm text-red-600">{form.errors.nativeLanguage[0]}</p>
+					<p data-field-error="nativeLanguage" class="text-sm text-red-600">{form.errors.nativeLanguage[0]}</p>
 				{/if}
 			</form>
 
-			<form method="POST" action="?/updateProficiency" onchange={autosave} use:enhance={enhanceSilently}>
+			<FormErrorFocus formRef={proficiencyForm} errors={form?.proficiencyError ? { levelSelfAssign: [t(lang, "profile.proficiencyError")] } : null} />
+			<form bind:this={proficiencyForm} method="POST" action="?/updateProficiency" onchange={autosave} use:enhance={enhanceSilently}>
 				<fieldset class="space-y-2" aria-describedby="proficiency-help">
 					<legend class="text-sm font-medium">{t(lang, "profile.proficiency")}</legend>
 					<div class="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup">
@@ -280,7 +284,7 @@ function enhancePasswordSetup() {
 					</div>
 					<p id="proficiency-help" class="text-xs leading-relaxed text-muted-foreground">{t(lang, "profile.proficiencyHelp")}</p>
 					{#if form?.proficiencyError}
-						<p class="text-sm text-red-600" role="alert">{t(lang, "profile.proficiencyError")}</p>
+						<p data-field-error="levelSelfAssign" class="text-sm text-red-600" role="alert">{t(lang, "profile.proficiencyError")}</p>
 					{/if}
 				</fieldset>
 			</form>
@@ -519,7 +523,7 @@ function enhancePasswordSetup() {
 						aria-invalid={Boolean(form?.errors?.apiKey)}
 					/>
 					{#if form?.errors?.apiKey}
-						<p class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
+						<p data-field-error="apiKey" class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
 					{/if}
 				</div>
 				<div class="space-y-2">
@@ -538,7 +542,7 @@ function enhancePasswordSetup() {
 						{/each}
 					</select>
 					{#if form?.errors?.apiBaseUrl}
-						<p class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
+						<p data-field-error="apiBaseUrl" class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
 					{/if}
 				</div>
 				<div class="space-y-2">
@@ -551,7 +555,7 @@ function enhancePasswordSetup() {
 						aria-invalid={Boolean(form?.errors?.apiModel)}
 					/>
 					{#if form?.errors?.apiModel}
-						<p class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
+						<p data-field-error="apiModel" class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}
 				</div>
 				<div class="flex gap-3">

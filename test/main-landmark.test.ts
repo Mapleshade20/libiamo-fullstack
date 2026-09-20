@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 const sourceRoot = resolve("src");
 const mainOwners = new Map([
 	["routes/+error.svelte", 1],
-	["routes/(admin)/+layout.svelte", 1],
 	["routes/(app)/+layout.svelte", 2],
 	["routes/changelog/+page.svelte", 1],
 	["routes/privacy/+page.svelte", 1],

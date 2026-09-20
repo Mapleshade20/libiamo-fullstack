@@ -1,6 +1,7 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
 import { buildTemplateImportPreview } from "$lib/admin/template-import-preview";
+import { focusAndHighlightField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import TemplateForm from "$lib/components/TemplateForm.svelte";
 import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
@@ -94,6 +95,11 @@ const templateStatusTone = $derived(data.template.isActive ? "destructive" : "de
 
 function previewImportJson() {
 	importPreview = buildTemplateImportPreview(importJsonText, existingImportVariants);
+	if (!importPreview.ok) {
+		const input = importFormEl?.querySelector<HTMLTextAreaElement>('[name="templateJson"]');
+		if (input) focusAndHighlightField(input, importPreview.error);
+		return;
+	}
 	showImportPreview = true;
 }
 

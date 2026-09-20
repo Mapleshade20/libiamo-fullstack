@@ -5,7 +5,7 @@ import { templateContribution } from "$lib/server/db/schema";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
-	const user = requireAdmin(event);
+	requireAdmin(event);
 
 	const [result] = await db
 		.select({ count: sql<number>`count(*)::int` })
@@ -13,12 +13,6 @@ export const load: LayoutServerLoad = async (event) => {
 		.where(eq(templateContribution.status, "pending"));
 
 	return {
-		user: {
-			name: user.name,
-			email: user.email,
-			role: user.role,
-			activeLanguage: user.activeLanguage,
-		},
 		pendingReviewCount: result?.count ?? 0,
 	};
 };

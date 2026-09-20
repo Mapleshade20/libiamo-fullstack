@@ -178,6 +178,17 @@ describe("Sign-in +page.server", () => {
 			});
 		});
 
+		it("associates invalid credentials with the password without treating service errors as field errors", async () => {
+			const event = createEvent({ email: "user@example.com", password: "secure-pass" });
+			const error = new (await import("better-auth/api")).APIError("BAD_REQUEST", { message: "Invalid credentials" });
+			Object.assign(error, { body: { code: "INVALID_EMAIL_OR_PASSWORD" } });
+			vi.mocked(auth.api.signInEmail).mockRejectedValueOnce(error);
+			const result = (await actions.default(event)) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+			expect(result.data.errors.password).toHaveLength(1);
+			expect(result.data.message).toBeUndefined();
+		});
+
 		it("uses fallback message when APIError message is empty", async () => {
 			const event = createEvent({
 				email: "user@example.com",

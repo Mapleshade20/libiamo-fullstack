@@ -1,7 +1,7 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "$lib/server/db";
-import { actions, load } from "$routes/(admin)/admin/templates/[id]/+page.server";
+import { actions, load } from "$routes/(app)/admin/templates/[id]/+page.server";
 
 // ── Mock DB ──────────────────────────────────────────────────────────────
 

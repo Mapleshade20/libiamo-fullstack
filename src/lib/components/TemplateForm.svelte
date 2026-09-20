@@ -464,7 +464,7 @@ function confirmDeleteVariant() {
 					{/each}
 				</select>
 				{#if form?.errors?.language}
-					<p class="text-sm text-red-600">{form.errors.language[0]}</p>
+					<p data-field-error="language" class="text-sm text-red-600">{form.errors.language[0]}</p>
 				{/if}
 			</div>
 
@@ -483,7 +483,7 @@ function confirmDeleteVariant() {
 						{/each}
 					</select>
 					{#if form?.errors?.urgency}
-						<p class="text-sm text-red-600">{form.errors.urgency[0]}</p>
+						<p data-field-error="urgency" class="text-sm text-red-600">{form.errors.urgency[0]}</p>
 					{/if}
 				</div>
 			{/if}
@@ -502,7 +502,7 @@ function confirmDeleteVariant() {
 					{/each}
 				</select>
 				{#if form?.errors?.interactionType}
-					<p class="text-sm text-red-600">{form.errors.interactionType[0]}</p>
+					<p data-field-error="interactionType" class="text-sm text-red-600">{form.errors.interactionType[0]}</p>
 				{/if}
 			</div>
 
@@ -524,7 +524,7 @@ function confirmDeleteVariant() {
 					<input type="hidden" name="ui" value="translator">
 				{/if}
 				{#if form?.errors?.ui}
-					<p class="text-sm text-red-600">{form.errors.ui[0]}</p>
+					<p data-field-error="ui" class="text-sm text-red-600">{form.errors.ui[0]}</p>
 				{/if}
 			</div>
 
@@ -544,7 +544,7 @@ function confirmDeleteVariant() {
 							{/each}
 						</select>
 						{#if form?.errors?.cadence}
-							<p class="text-sm text-red-600">{form.errors.cadence[0]}</p>
+							<p data-field-error="cadence" class="text-sm text-red-600">{form.errors.cadence[0]}</p>
 						{/if}
 					</div>
 				{:else}
@@ -557,7 +557,7 @@ function confirmDeleteVariant() {
 					<Label for="difficulty">Difficulty (1–3)</Label>
 					<Input id="difficulty" name="difficulty" type="number" min="1" max="3" bind:value={difficultyValue} required />
 					{#if form?.errors?.difficulty}
-						<p class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
+						<p data-field-error="difficulty" class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
 					{/if}
 				</div>
 			{/if}
@@ -579,7 +579,7 @@ function confirmDeleteVariant() {
 					<Label for="pointReward">Point Reward</Label>
 					<Input id="pointReward" name="pointReward" type="number" min="0" bind:value={pointRewardValue} required />
 					{#if form?.errors?.pointReward}
-						<p class="text-sm text-red-600">{form.errors.pointReward[0]}</p>
+						<p data-field-error="pointReward" class="text-sm text-red-600">{form.errors.pointReward[0]}</p>
 					{/if}
 				</div>
 
@@ -587,7 +587,7 @@ function confirmDeleteVariant() {
 					<Label for="gemReward">Gem Reward</Label>
 					<Input id="gemReward" name="gemReward" type="number" min="0" bind:value={gemRewardValue} required />
 					{#if form?.errors?.gemReward}
-						<p class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
+						<p data-field-error="gemReward" class="text-sm text-red-600">{form.errors.gemReward[0]}</p>
 					{/if}
 				</div>
 			{/if}
@@ -602,7 +602,7 @@ function confirmDeleteVariant() {
 			<Label for="titleBase">Title (supports &#123;&#123;slot&#125;&#125; placeholders)</Label>
 			<Input id="titleBase" name="titleBase" bind:value={titleBase} required />
 			{#if form?.errors?.titleBase}
-				<p class="text-sm text-red-600">{form.errors.titleBase[0]}</p>
+				<p data-field-error="titleBase" class="text-sm text-red-600">{form.errors.titleBase[0]}</p>
 			{/if}
 		</div>
 
@@ -627,7 +627,7 @@ function confirmDeleteVariant() {
 					<span class="pt-2 text-muted-foreground">].</span>
 				</div>
 				{#if form?.errors?.agentPromptBase}
-					<p class="text-sm text-red-600">{form.errors.agentPromptBase[0]}</p>
+					<p data-field-error="agentPromptBase" class="text-sm text-red-600">{form.errors.agentPromptBase[0]}</p>
 				{/if}
 			</div>
 		{:else if !hideAdminFields}
@@ -648,7 +648,7 @@ function confirmDeleteVariant() {
 					placeholder="Give a convincing reason&#10;Do not over-explain&#10;Show you still value the friendship"
 				/>
 				{#if form?.errors?.objectivesBase}
-					<p class="text-sm text-red-600">{form.errors.objectivesBase[0]}</p>
+					<p data-field-error="objectivesBase" class="text-sm text-red-600">{form.errors.objectivesBase[0]}</p>
 				{/if}
 			</div>
 		{/if}
@@ -702,7 +702,7 @@ function confirmDeleteVariant() {
 			/>
 			<p class="text-xs text-muted-foreground">Separate paragraphs with a blank line. Store only authentic text in the template language.</p>
 			{#if form?.errors?.translationReference}
-				<p class="text-sm text-red-600">{form.errors.translationReference[0]}</p>
+				<p data-field-error="translationReference" class="text-sm text-red-600">{form.errors.translationReference[0]}</p>
 			{/if}
 		</div>
 	{/if}

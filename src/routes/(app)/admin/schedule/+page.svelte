@@ -181,7 +181,7 @@ function submitFilters(event: Event) {
 						{/each}
 					</select>
 					{#if form?.errors?.templateId}
-						<p class="text-sm text-red-600">{form.errors.templateId[0]}</p>
+						<p data-field-error="templateId" class="text-sm text-red-600">{form.errors.templateId[0]}</p>
 					{/if}
 				</div>
 
@@ -197,7 +197,7 @@ function submitFilters(event: Event) {
 						aria-invalid={Boolean(form?.errors?.date)}
 					/>
 					{#if form?.errors?.date}
-						<p class="text-sm text-red-600">{form.errors.date[0]}</p>
+						<p data-field-error="date" class="text-sm text-red-600">{form.errors.date[0]}</p>
 					{/if}
 				</div>
 

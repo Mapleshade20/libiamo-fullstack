@@ -351,6 +351,16 @@
 /* View Transitions: directional editorial sweep between navbar sections */
 html[data-page-transition^="navbar-"] {
 	--page-slide-distance: clamp(8rem, 24vw, 24rem);
+	/* The sweep has to answer the click immediately. An ease-in curve idles for the first
+	   hundred milliseconds and reads as lag; a fast start that settles reads as response. */
+	--page-sweep-duration: 380ms;
+	--page-sweep-ease: cubic-bezier(0.33, 1, 0.68, 1);
+	/* The two sheets always overlap, because a slide of less than a page cannot clear the screen.
+	   Whoever is still translucent therefore shows the page underneath through its own text, so both
+	   clear inside the first third of the sweep. The departing sheet leads, so it is seen to
+	   dissolve instead of being buried under the arriving one. */
+	--page-enter-fade: 140ms;
+	--page-exit-fade: 120ms;
 }
 
 html[data-page-transition^="navbar-"]::view-transition-old(root),
@@ -359,63 +369,74 @@ html[data-page-transition^="navbar-"]::view-transition-new(root) {
 }
 
 html[data-page-transition^="navbar-"]::view-transition-group(page-content) {
-	animation-duration: 520ms;
-	animation-timing-function: cubic-bezier(0.65, 0, 0.15, 1);
+	animation-duration: var(--page-sweep-duration);
+	animation-timing-function: var(--page-sweep-ease);
 }
 
 html[data-page-transition="navbar-forward"]::view-transition-old(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-left;
+	animation:
+		vt-page-exit-left var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-out var(--page-exit-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-forward"]::view-transition-new(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-right;
+	animation:
+		vt-page-enter-right var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-in var(--page-enter-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-backward"]::view-transition-old(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-right;
+	animation:
+		vt-page-exit-right var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-out var(--page-exit-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-backward"]::view-transition-new(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-left;
+	animation:
+		vt-page-enter-left var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-in var(--page-enter-fade) var(--page-sweep-ease) both;
 }
 
 @keyframes vt-page-exit-left {
 	to {
-		opacity: 0;
 		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
 	}
 }
 
 @keyframes vt-page-enter-right {
 	from {
-		opacity: 0;
 		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
 	}
 }
 
 @keyframes vt-page-exit-right {
 	to {
-		opacity: 0;
 		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
 	}
 }
 
 @keyframes vt-page-enter-left {
 	from {
-		opacity: 0;
 		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
+	}
+}
+
+@keyframes vt-page-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes vt-page-fade-in {
+	from {
+		opacity: 0;
 	}
 }
 
 @media (max-width: 767px) {
 	html[data-page-transition^="navbar-"] {
 		--page-slide-distance: 42vw;
-	}
-
-	html[data-page-transition^="navbar-"]::view-transition-group(page-content),
-	html[data-page-transition^="navbar-"]::view-transition-old(page-content),
-	html[data-page-transition^="navbar-"]::view-transition-new(page-content) {
-		animation-duration: 420ms;
+		--page-sweep-duration: 300ms;
 	}
 }
 
@@ -429,6 +450,7 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	html[data-page-transition]::view-transition-old(root),
 	html[data-page-transition]::view-transition-new(root) {
 		animation-duration: 1ms;
+		animation-delay: 0ms;
 	}
 }
 
@@ -504,22 +526,50 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	}
 }
 
-@keyframes field-attention-pulse {
-	0%,
-	100% {
-		box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 0%, transparent);
-	}
-	18%,
-	72% {
-		box-shadow:
-			0 0 0 3px color-mix(in oklch, var(--destructive) 28%, transparent),
-			0 0 0 8px color-mix(in oklch, var(--destructive) 10%, transparent);
-	}
-}
-
-[data-field-attention="true"] {
+/* Shared field feedback: editing fades the border and its associated message;
+   never leave a stale destructive ring behind from aria-invalid utility classes. */
+[data-field-attention] {
 	border-color: var(--destructive);
-	animation: field-attention-pulse 2.4s ease-out;
+	box-shadow: none;
+	transition:
+		border-color 280ms ease-out,
+		box-shadow 280ms ease-out;
+}
+:is(input, textarea, select, [contenteditable])[aria-invalid="false"] {
+	transition:
+		border-color 280ms ease-out,
+		box-shadow 280ms ease-out;
+}
+[data-field-error] {
+	transition:
+		opacity 280ms ease-out,
+		visibility 0s;
+}
+.field-error-message {
+	display: block;
+	grid-column: 1 / -1;
+	font-weight: normal;
+	text-transform: none;
+	letter-spacing: normal;
+	margin-top: 4px;
+	color: var(--destructive);
+	font-size: 0.8125rem;
+	line-height: 1.4;
+}
+[data-field-error][data-dismissed="true"] {
+	opacity: 0;
+	visibility: hidden;
+	transition:
+		opacity 280ms ease-out,
+		visibility 0s linear 280ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-field-error][data-dismissed],
+	[data-field-error],
+	[data-field-attention],
+	:is(input, textarea, select, [contenteditable])[aria-invalid="false"] {
+		transition: none;
+	}
 }
 
 /* Keep loading surfaces quiet and reveal replacements without moving their shell. */

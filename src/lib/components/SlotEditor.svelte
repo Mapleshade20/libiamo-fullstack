@@ -1,7 +1,9 @@
 <script lang="ts">
+import { validateBeforeSubmit } from "$lib/client/form-attention";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 interface Props {
 	/** Current slot values (bindable) */
@@ -94,7 +96,15 @@ const missingRequired = $derived(getMissingRequired());
 const serialized = $derived(JSON.stringify(value));
 </script>
 
-<div class="space-y-3">
+<div
+	class="space-y-3"
+	tabindex="-1"
+	data-validation-group
+	use:validateBeforeSubmit={() => {
+	const missing = [...requiredSlots].filter((key) => !value[key]?.trim());
+	return missing.length ? [{ path: [], message: `Missing slot values: ${missing.join(", ")}` }] : [];
+}}
+>
 	{#if name}
 		<input type="hidden" {name} value={serialized}>
 	{/if}
@@ -115,7 +125,12 @@ const serialized = $derived(JSON.stringify(value));
 			</div>
 			<div class="flex-[2] space-y-1">
 				<Label class="text-xs text-muted-foreground">Value</Label>
-				<Input value={row.val} oninput={(e) => updateVal(i, e.currentTarget.value)} placeholder="replacement value" />
+				<Input
+					value={row.val}
+					maxlength={USER_TEXT_MAX_LENGTH}
+					oninput={(e) => updateVal(i, e.currentTarget.value)}
+					placeholder="replacement value"
+				/>
 			</div>
 			<button type="button" onclick={() => removeRow(i)} class="mt-6 text-muted-foreground hover:text-destructive" aria-label="Remove slot">
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

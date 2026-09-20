@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { load } from "$routes/(admin)/admin/reviews/+page.server";
+import { load } from "$routes/(app)/admin/reviews/+page.server";
 
 const { mockSelectFrom } = vi.hoisted(() => {
 	const mockSelectFrom = vi.fn();

@@ -55,7 +55,7 @@ $effect(() => {
 
 <div class="min-h-screen" class:app-shell={!isSessionPage}>
 	{#if !isSessionPage}
-		<Navbar mode="app" user={data.user} avatarUrl={data.avatarUrl} />
+		<Navbar user={data.user} avatarUrl={data.avatarUrl} />
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
@@ -63,7 +63,9 @@ $effect(() => {
 	{#if isSessionPage}
 		<main class="h-screen w-full">{@render children()}</main>
 	{:else}
-		<div class="min-h-screen" style="view-transition-name: page-content">
+		<!-- The paper belongs to the snapshot: a transparent page would let the outgoing page show
+		     through wherever this one has no content while the two sweep past each other. -->
+		<div class="min-h-screen bg-background" style="view-transition-name: page-content">
 			<!-- The extra bottom padding clears the narrow-screen bottom bar. -->
 			<main class="mx-auto max-w-5xl px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHome ? 'pt-0' : 'pt-8 nav:pt-24'}">
 				{#if isHome}

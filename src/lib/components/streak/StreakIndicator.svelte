@@ -4,6 +4,7 @@ import { base } from "$app/paths";
 import { readAcknowledgedStreak, writeAcknowledgedStreak } from "$lib/client/streak-acknowledged";
 import { streakPreview } from "$lib/client/streak-preview.svelte";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
+import FloatingPanel from "$lib/components/FloatingPanel.svelte";
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
 import { t } from "$lib/i18n";
@@ -136,107 +137,80 @@ async function loadCardCounts() {
 	}
 }
 
-function toggle() {
-	open = !open;
-	if (open) void loadCardCounts();
-}
-
 const remainingLanguages = $derived(
 	cardsByLanguage ? (Object.entries(cardsByLanguage) as Array<[LanguageCode, number]>).filter(([, count]) => count > 0) : [],
 );
 </script>
 
 <div class="relative" style="--streak-speed: {speed}">
-	<button
-		type="button"
-		class="streak-trigger flex h-8 items-center gap-1.5 rounded-full px-2 transition-colors hover:bg-secondary"
-		aria-expanded={open}
-		aria-label={t(lang, "streak.label")}
-		onclick={toggle}
+	<FloatingPanel
+		bind:open
+		label={t(lang, "streak.label")}
+		triggerClass="streak-trigger gap-1.5 rounded-full px-2"
+		class="w-72 [--floating-panel-padding:1rem]"
+		onOpenChange={(value) => { if (value) void loadCardCounts(); }}
 	>
-		<StreakFlame status={view.status} {igniting} />
-		<span class="relative pr-2 text-sm font-medium">
-			<StreakDigits value={view.days} direction={digitsDirection} muted={view.status !== "lit"} />
-			{#if view.bank > 0}
-				<span class="badge" class:popping={badgePopping}>+{view.bank}</span>
-			{/if}
-		</span>
-	</button>
+		{#snippet trigger()}
+			<StreakFlame status={view.status} {igniting} />
+			<span class="relative pr-2 text-sm font-medium">
+				<StreakDigits value={view.days} direction={digitsDirection} muted={view.status !== "lit"} />
+				{#if view.bank > 0}
+					<span class="badge" class:popping={badgePopping}>+{view.bank}</span>
+				{/if}
+			</span>
+		{/snippet}
+		<p class="font-serif text-lg">{dayLabel(view.days)}</p>
+		<p class="mt-1 text-xs text-muted-foreground">
+			{view.days === 0 ? t(lang, "streak.none") : view.status === "lit" ? t(lang, "streak.lit") : t(lang, "streak.pending")}
+		</p>
 
-	{#if open}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="absolute top-full right-0 z-50 mt-2 w-72 rounded-lg border border-border bg-popover p-4 text-left shadow-sm"
-			role="dialog"
-			aria-label={t(lang, "streak.label")}
-		>
-			<p class="font-serif text-lg">{dayLabel(view.days)}</p>
-			<p class="mt-1 text-xs text-muted-foreground">
-				{view.days === 0 ? t(lang, "streak.none") : view.status === "lit" ? t(lang, "streak.lit") : t(lang, "streak.pending")}
-			</p>
-
-			<ul class="mt-3 space-y-1.5 text-sm">
-				<li class="flex items-baseline justify-between gap-3">
-					<span class={view.taskCount > 0 ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionQuest")}</span>
-					<span class="text-xs text-muted-foreground tabular-nums"> {t(lang, "streak.questsDone").replace("{count}", String(view.taskCount))} </span>
-				</li>
-				<li class="flex items-baseline justify-between gap-3">
-					<span class={view.reviewCleared ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionReview")}</span>
-					<span class="text-xs text-muted-foreground tabular-nums">
-						{#if view.reviewCleared}
-							{t(lang, "streak.reviewCleared")}
-						{:else if cardsByLanguage}
-							{#if remainingLanguages.length === 0}
-								{t(lang, "streak.reviewRemaining").replace("{count}", "0")}
-							{:else}
-								{remainingLanguages
+		<ul class="mt-3 space-y-1.5 text-sm">
+			<li class="flex items-baseline justify-between gap-3">
+				<span class={view.taskCount > 0 ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionQuest")}</span>
+				<span class="text-xs text-muted-foreground tabular-nums"> {t(lang, "streak.questsDone").replace("{count}", String(view.taskCount))} </span>
+			</li>
+			<li class="flex items-baseline justify-between gap-3">
+				<span class={view.reviewCleared ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionReview")}</span>
+				<span class="text-xs text-muted-foreground tabular-nums">
+					{#if view.reviewCleared}
+						{t(lang, "streak.reviewCleared")}
+					{:else if cardsByLanguage}
+						{#if remainingLanguages.length === 0}
+							{t(lang, "streak.reviewRemaining").replace("{count}", "0")}
+						{:else}
+							{remainingLanguages
 									.map(([code, count]) => `${LANGUAGE_LABELS[code]} ${t(lang, "streak.reviewRemaining").replace("{count}", String(count))}`)
 									.join(" · ")}
-							{/if}
-						{:else}
-							<span class="inline-block h-3 w-16 animate-pulse rounded bg-muted align-middle"></span>
 						{/if}
-					</span>
-				</li>
-			</ul>
-
-			<div class="mt-3 border-t border-border pt-3">
-				<p class="flex items-baseline justify-between gap-3 text-sm">
-					<span>{t(lang, "streak.savedDays")}</span>
-					<span class="tabular-nums">{view.bank}</span>
-				</p>
-				<p class="mt-1 text-xs text-muted-foreground">
-					{#if view.savedDaysSpent > 0}
-						{t(lang, "streak.savedDaysSpent")}
-					{:else if view.questsToNextSavedDay === null}
-						{t(lang, "streak.savedDaysFull")}
 					{:else}
-						{t(lang, "streak.savedDaysNext").replace("{count}", String(view.questsToNextSavedDay))}
+						<span class="inline-block h-3 w-16 animate-pulse rounded bg-muted align-middle"></span>
 					{/if}
-				</p>
-				<p class="mt-1 text-xs text-muted-foreground">{t(lang, "streak.savedDaysHint")}</p>
-			</div>
+				</span>
+			</li>
+		</ul>
+
+		<div class="mt-3 border-t border-border pt-3">
+			<p class="flex items-baseline justify-between gap-3 text-sm">
+				<span>{t(lang, "streak.savedDays")}</span>
+				<span class="tabular-nums">{view.bank}</span>
+			</p>
+			<p class="mt-1 text-xs text-muted-foreground">
+				{#if view.savedDaysSpent > 0}
+					{t(lang, "streak.savedDaysSpent")}
+				{:else if view.questsToNextSavedDay === null}
+					{t(lang, "streak.savedDaysFull")}
+				{:else}
+					{t(lang, "streak.savedDaysNext").replace("{count}", String(view.questsToNextSavedDay))}
+				{/if}
+			</p>
+			<p class="mt-1 text-xs text-muted-foreground">{t(lang, "streak.savedDaysHint")}</p>
 		</div>
-	{/if}
+	</FloatingPanel>
 </div>
 
 <ActionNotification {notification} />
 
 <style>
-/*
- * The trigger stays 32px tall so it cannot stretch the 56px navigation bar; the touch target is
- * expanded past it instead of by it.
- */
-.streak-trigger {
-	position: relative;
-}
-
-.streak-trigger::before {
-	content: "";
-	position: absolute;
-	inset: -0.4rem -0.15rem;
-}
-
 .badge {
 	position: absolute;
 	top: -0.45rem;

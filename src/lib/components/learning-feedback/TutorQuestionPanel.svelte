@@ -5,9 +5,11 @@ import Send from "@lucide/svelte/icons/send";
 import X from "@lucide/svelte/icons/x";
 import { tick } from "svelte";
 import { fly, scale } from "svelte/transition";
+import { focusAndHighlightField, textValidationMessage } from "$lib/client/form-attention";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
+import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { renderMarkdown } from "$lib/markdown";
 import type { LearningSelection, SelectionAppendRequest } from "./types";
 
@@ -61,6 +63,11 @@ function toggleExpanded() {
 
 async function handleSubmit() {
 	if (!question.trim() || isLoading) return;
+	const validationMessage = textValidationMessage(question, USER_TEXT_MAX_LENGTH);
+	if (validationMessage && textareaElement) {
+		focusAndHighlightField(textareaElement, validationMessage);
+		return;
+	}
 	isLoading = true;
 	error = null;
 	answer = null;
@@ -151,9 +158,10 @@ function handleKeydown(event: KeyboardEvent) {
 			{/if}
 		</div>
 		{#if !answer && !isLoading}
-			<div class="border-t border-border p-4">
+			<div class="border-t border-border p-4" data-field-container>
 				<div class="flex items-end gap-2">
 					<textarea
+						maxlength={USER_TEXT_MAX_LENGTH}
 						bind:this={textareaElement}
 						bind:value={question}
 						onkeydown={handleKeydown}

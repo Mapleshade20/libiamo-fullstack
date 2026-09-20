@@ -1,12 +1,12 @@
 <script lang="ts">
-import { MediaQuery } from "svelte/reactivity";
-import { scale } from "svelte/transition";
+import Check from "@lucide/svelte/icons/check";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import type { StreakRecord } from "$lib/streak";
+import FloatingPanel from "./FloatingPanel.svelte";
 import LanguageFlag from "./LanguageFlag.svelte";
 import StreakIndicator from "./streak/StreakIndicator.svelte";
 
@@ -24,31 +24,6 @@ interface Props {
 let { user, trialQuota = null, streak = null, streakDayOffset = 0 }: Props = $props();
 // --- Language switcher ---
 let langOpen = $state(false);
-const reducedMotion = new MediaQuery("(prefers-reduced-motion: reduce)", true);
-let langTrigger: HTMLButtonElement | undefined = $state();
-
-function clickOutside(node: HTMLElement, params: { onClose: () => void; exclude: (HTMLElement | undefined)[] }) {
-	let handler: ((e: MouseEvent) => void) | null = null;
-	// Defer so the click that opened this dropdown doesn't immediately close it
-	const timer = setTimeout(() => {
-		handler = (event: MouseEvent) => {
-			const target = event.target as Node;
-			if (node.contains(target)) return;
-			for (const el of params.exclude) {
-				if (el?.contains(target)) return;
-			}
-			params.onClose();
-		};
-		document.addEventListener("click", handler);
-	}, 0);
-	return {
-		destroy() {
-			clearTimeout(timer);
-			if (handler) document.removeEventListener("click", handler);
-		},
-	};
-}
-
 function onProfileShortcutClick(event: MouseEvent) {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 	setNavbarTransitionIntent(new URL(`${base}/profile`, page.url), "forward");
@@ -60,64 +35,31 @@ function quotaPercentage(balance: TrialQuotaNavBalance) {
 let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
 let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
 </script>
-<svelte:window
-	onkeydown={(event) => {
-		if (event.key === "Escape" && langOpen) {
-			langOpen = false;
-			langTrigger?.focus({ preventScroll: true });
-		}
-	}}
-/>
-
 {#snippet languageSwitcher()}
-	<div class="relative">
-		<button
-			type="button"
-			bind:this={langTrigger}
-			onclick={() => (langOpen = !langOpen)}
-			class="flex size-11 items-center justify-center rounded-full transition-colors hover:bg-secondary"
-			aria-label={`Language: ${LANGUAGE_LABELS[user.activeLanguage as LanguageCode]}`}
-			aria-expanded={langOpen}
-		>
+	<FloatingPanel
+		bind:open={langOpen}
+		label={`Language: ${LANGUAGE_LABELS[user.activeLanguage as LanguageCode]}`}
+		triggerClass="rounded-full"
+		class="w-44"
+	>
+		{#snippet trigger()}
 			<LanguageFlag language={user.activeLanguage} />
-		</button>
-
-		{#if langOpen}
-			<div
-				transition:scale={{ start: 0.97, duration: reducedMotion.current ? 0 : 250 }}
-				style="transform-origin: top right"
-				class="absolute right-0 mt-3 w-40 overflow-hidden rounded-xl border border-border bg-stone-50/95 backdrop-blur-xl shadow-lg z-50"
-				use:clickOutside={{ onClose: () => { langOpen = false; }, exclude: [langTrigger] }}
-			>
-				<form
-					method="POST"
-					action="{base}/?/switchLanguage"
-					use:enhance={() => {
-						return async ({ update }) => {
-							langOpen = false;
-							await update();
-						};
-					}}
-				>
-					<div class="py-1">
-						{#each LANGUAGE_CODES as lang}
-							<button
-								type="submit"
-								name="language"
-								value={lang}
-								class="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-sm hover:bg-secondary transition-colors {user.activeLanguage === lang
-									? 'bg-primary/10 text-primary font-semibold'
-									: 'text-foreground'}"
-							>
-								<LanguageFlag language={lang} />
-								<span>{LANGUAGE_LABELS[lang]}</span>
-							</button>
-						{/each}
-					</div>
-				</form>
-			</div>
-		{/if}
-	</div>
+		{/snippet}
+		<form
+			method="POST"
+			action="{base}/?/switchLanguage"
+			use:enhance={() => {
+   return async ({ update }) => { langOpen = false; await update(); };
+  }}
+		>
+			{#each LANGUAGE_CODES as lang}
+				<button type="submit" name="language" value={lang} class="floating-menu-item" aria-pressed={user.activeLanguage === lang}>
+					<LanguageFlag language={lang} /><span class="flex-1">{LANGUAGE_LABELS[lang]}</span>
+					<Check size={16} class={user.activeLanguage === lang ? "" : "invisible"} aria-hidden="true" />
+				</button>
+			{/each}
+		</form>
+	</FloatingPanel>
 {/snippet}
 
 <div class="home-masthead">

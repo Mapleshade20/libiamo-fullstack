@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "$lib/server/db";
-import { actions, load } from "$routes/(admin)/admin/reviews/[id]/+page.server";
+import { actions, load } from "$routes/(app)/admin/reviews/[id]/+page.server";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────
 
