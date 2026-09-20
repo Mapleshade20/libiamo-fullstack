@@ -1,8 +1,8 @@
-import crypto from "node:crypto";
 import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
 import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
+import { gravatarAvatarUrl } from "$lib/server/gravatar";
 import { devStreakDayOffset, getStreakRecord } from "$lib/server/streak";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
@@ -16,9 +16,7 @@ export const load: LayoutServerLoad = async (event) => {
 	event.depends?.(STREAK_DEPENDENCY);
 	const user = requireUser(event);
 
-	const email = user.email?.toLowerCase() || "";
-	const hash = crypto.createHash("md5").update(email).digest("hex");
-	const avatarUrl = `https://gravatar.com/avatar/${hash}?d=identicon&s=192`;
+	const avatarUrl = gravatarAvatarUrl(user.email);
 	const hasApiKey = await hasUserApiKey(user.id);
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 	// The record, not a rendered view: the client re-derives settlement at local midnight without a

@@ -115,6 +115,20 @@ const actionNotification = $derived.by(() => {
 	return null;
 });
 
+const GRAVATAR_LINK =
+	'<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>';
+
+/**
+ * One line about the avatar, not two: the invitation to upload a photo only
+ * applies while Gravatar holds none for this address. The link is spliced into
+ * the sentence rather than placed beside it in the markup, because template
+ * whitespace would then land a space before the English period and around the
+ * Japanese particle. Only in-repo copy reaches `{@html}`.
+ */
+const avatarSentence = $derived(
+	t(lang, data.hasGravatarPhoto ? "profile.avatarConnected" : "profile.avatarMissing").replace("{link}", GRAVATAR_LINK),
+);
+
 function formatConnectedAt(isoDate: string) {
 	return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeZone: clock().timeZone }).format(new Date(isoDate));
 }
@@ -201,12 +215,7 @@ function enhancePasswordSetup() {
 				<img src={data.avatarUrl} alt={t(lang, "profile.avatarAlt")} class="h-24 w-24 rounded-full border border-gray-200 object-cover shadow-sm">
 				<div class="min-w-0 flex-1 space-y-1">
 					<ProfileNameEditor name={data.user.name ?? ""} {lang} />
-					<p class="text-sm text-muted-foreground">
-						{t(lang, "profile.avatarConnectedBefore")}
-						<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>
-						{t(lang, "profile.avatarConnectedAfter")}
-					</p>
-					<p class="text-xs text-muted-foreground">{t(lang, "profile.avatarHint")}</p>
+					<p class="text-sm text-muted-foreground">{@html avatarSentence}</p>
 				</div>
 			</div>
 		</Card.Content>

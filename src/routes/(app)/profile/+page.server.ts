@@ -13,6 +13,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
+import { hasGravatarAvatar } from "$lib/server/gravatar";
 import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
 import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
@@ -21,7 +22,7 @@ export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
-	const [row, learner, accounts] = await Promise.all([
+	const [row, learner, accounts, hasGravatarPhoto] = await Promise.all([
 		db.query.userApiKey.findFirst({
 			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { userId: true, baseUrl: true, model: true },
@@ -31,6 +32,9 @@ export const load: PageServerLoad = async (event) => {
 			columns: { levelSelfAssign: true },
 		}),
 		auth.api.listUserAccounts({ headers: event.request.headers }),
+		// Only this page states where the avatar comes from, so the lookup stays here
+		// rather than in the app layout, which reruns on every navigation.
+		hasGravatarAvatar(user.email),
 	]);
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
@@ -41,6 +45,7 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
+		hasGravatarPhoto,
 		hasApiKey,
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",
