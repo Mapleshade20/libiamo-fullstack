@@ -1021,7 +1021,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 		"profile.baseUrl": "URL de base (compatible avec OpenAI ; accessible depuis la Chine continentale)",
 		"profile.selectApiProvider": "Sélectionnez un fournisseur d'API",
 		"profile.model": "Modèle",
-		"profile.updateApiKey": "Mettre à jour la clé API",
+		"profile.updateApiKey": "MÀJ de la clé API",
 		"profile.saveApiKey": "Enregistrer la clé API",
 		"profile.removeApiKey": "Supprimer la clé API",
 		"profile.loginMethods": "Méthodes de connexion",

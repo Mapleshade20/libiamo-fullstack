@@ -567,10 +567,14 @@ function enhancePasswordSetup() {
 						<p data-field-error="apiModel" class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
 					{/if}
 				</div>
-				<div class="flex gap-3">
-					<Button type="submit">{data.hasApiKey ? t(lang, "profile.updateApiKey") : t(lang, "profile.saveApiKey")}</Button>
+				<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+					<Button type="submit" class="min-h-11 w-full sm:w-auto"
+						>{data.hasApiKey ? t(lang, "profile.updateApiKey") : t(lang, "profile.saveApiKey")}</Button
+					>
 					{#if data.hasApiKey}
-						<Button type="submit" formaction="?/clearApiKey" variant="outline">{t(lang, "profile.removeApiKey")}</Button>
+						<Button type="submit" formaction="?/clearApiKey" variant="outline" class="min-h-11 w-full sm:w-auto"
+							>{t(lang, "profile.removeApiKey")}</Button
+						>
 					{/if}
 				</div>
 			</form>
