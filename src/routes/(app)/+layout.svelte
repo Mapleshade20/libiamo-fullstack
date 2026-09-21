@@ -51,7 +51,12 @@ $effect(() => {
 });
 </script>
 
-<svelte:head> <meta name="robots" content="noindex, nofollow"> </svelte:head>
+<svelte:head>
+	<meta name="robots" content="noindex, nofollow">
+	{#if data.avatarUrl}
+		<link rel="preload" as="image" href={data.avatarUrl}>
+	{/if}
+</svelte:head>
 
 <div class="min-h-screen" class:app-shell={!isSessionPage}>
 	{#if !isSessionPage}

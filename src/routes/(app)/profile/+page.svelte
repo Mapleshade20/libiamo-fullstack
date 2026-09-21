@@ -1,6 +1,7 @@
 <script lang="ts">
 import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+import { onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
@@ -44,6 +45,31 @@ let nativeLanguageForm: HTMLFormElement | null = $state(null);
 let proficiencyForm: HTMLFormElement | null = $state(null);
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 const clock = getDisplayClock();
+let probedGravatarPhoto = $state<boolean | null>(null);
+let hasGravatarPhoto = $derived(probedGravatarPhoto ?? data.hasGravatarPhoto);
+
+onMount(() => {
+	let cancelled = false;
+
+	void fetch(`${base}/profile/avatar-status`, { headers: { accept: "application/json" } })
+		.then(async (response) => {
+			if (!response.ok) return null;
+			const result: unknown = await response.json();
+			return typeof result === "object" && result !== null && "hasGravatarPhoto" in result && typeof result.hasGravatarPhoto === "boolean"
+				? result.hasGravatarPhoto
+				: null;
+		})
+		.then((result) => {
+			if (!cancelled && result !== null) probedGravatarPhoto = result;
+		})
+		.catch(() => {
+			// The avatar image still renders when the optional status probe fails.
+		});
+
+	return () => {
+		cancelled = true;
+	};
+});
 
 const nativeLanguageOptions = $derived(data.serverNativeLanguages ?? []);
 
@@ -126,7 +152,10 @@ const GRAVATAR_LINK =
  * Japanese particle. Only in-repo copy reaches `{@html}`.
  */
 const avatarSentence = $derived(
-	t(lang, data.hasGravatarPhoto ? "profile.avatarConnected" : "profile.avatarMissing").replace("{link}", GRAVATAR_LINK),
+	t(lang, hasGravatarPhoto === null ? "profile.avatarChecking" : hasGravatarPhoto ? "profile.avatarConnected" : "profile.avatarMissing").replace(
+		"{link}",
+		GRAVATAR_LINK,
+	),
 );
 
 function formatConnectedAt(isoDate: string) {
