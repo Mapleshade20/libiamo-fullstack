@@ -15,8 +15,8 @@ let rose = false;
 function camera() {
 	if (!player || !svg) return;
 	const stage = player.state.stage;
-	// The rebound still extends into the calendar area. Reveal only at the settled upper pose.
-	if (stage === "ignite" && player.state.time * 30 >= 103 && !rose) {
+	// Start the calendar fade 0.3s before the settled upper pose (103 at 30fps).
+	if (stage === "ignite" && player.state.time * 30 >= 94 && !rose) {
 		rose = true;
 		onrise?.();
 	}

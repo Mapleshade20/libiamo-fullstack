@@ -98,6 +98,23 @@ describe("recordQuestCompletion", () => {
 });
 
 describe("recordReviewObservation", () => {
+	it("credits an initially empty account without inventing a quest or a lit day", async () => {
+		mockReads({ streak: undefined, dueCards: false });
+		const { updateSet } = mockWrites();
+		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toMatchObject({
+			progressDate: "2026-09-18",
+			reviewCleared: true,
+			taskCount: 0,
+			streakDays: 0,
+		});
+		expect(updateSet).toHaveBeenCalledOnce();
+	});
+	it("does not retract or rewrite daily credit when cards become available later", async () => {
+		mockReads({ streak: { ...emptyStreakRecord(), progressDate: "2026-09-18", reviewCleared: true }, dueCards: true });
+		const { updateSet } = mockWrites();
+		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toBeNull();
+		expect(updateSet).not.toHaveBeenCalled();
+	});
 	it("returns the new record when clearing the queue lights a day already holding a quest", async () => {
 		mockReads({
 			streak: {

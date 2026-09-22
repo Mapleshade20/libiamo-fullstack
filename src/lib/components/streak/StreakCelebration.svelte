@@ -35,14 +35,14 @@ $effect(() => {
 			() => {
 				phase = "week";
 			},
-			(reduced ? 900 : kind === "kindling" ? 1150 : 0) * speed,
+			(reduced ? 900 : kind === "kindling" ? 850 : 0) * speed,
 		);
 	} else if (phase === "week")
 		timer = setTimeout(
 			() => {
 				phase = "leave";
 			},
-			(reduced ? 1900 : 2800) * speed,
+			((reduced ? 1900 : 2800) + (kind === "ignite" ? 2000 : 0)) * speed,
 		);
 	else if (phase === "leave") timer = setTimeout(ondone, (reduced ? 0 : 500) * speed);
 	return () => clearTimeout(timer);
@@ -81,7 +81,7 @@ $effect(() => {
 	padding: 26px 35px 45px;
 	transform: translateX(-50%);
 	color: #674b32;
-	animation: arrive calc(550ms * var(--tempo)) cubic-bezier(0.18, 0.8, 0.24, 1) both;
+	animation: arrive calc(700ms * var(--tempo)) cubic-bezier(0.18, 0.8, 0.24, 1) both;
 	pointer-events: none;
 }
 .wash {

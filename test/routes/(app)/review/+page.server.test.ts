@@ -54,10 +54,9 @@ describe("review page server", () => {
 		expect(mockGetDueNotes).toHaveBeenCalledWith("user-1", "ja", 20);
 	});
 
-	it("defaults to English and recovers from a database failure", async () => {
+	it("does not present a database failure as an empty review queue", async () => {
 		mockGetDueNotes.mockRejectedValue(new Error("DB error"));
-		const result = (await load(event({ id: "user-1" }))) as any;
-		expect(result.cards).toEqual([]);
+		await expect(load(event({ id: "user-1" }))).rejects.toMatchObject({ status: 503 });
 		expect(mockGetDueNotes).toHaveBeenCalledWith("user-1", "en", 20);
 	});
 

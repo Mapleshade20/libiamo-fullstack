@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { load } from "$routes/(app)/+layout.server";
 
-vi.mock("$lib/server/streak", () => ({ getStreakRecord: vi.fn(async () => null), devStreakDayOffset: vi.fn(() => 0) }));
+const mocks = vi.hoisted(() => ({ queueEmpty: vi.fn(async () => true), observe: vi.fn(), db: { select: vi.fn() } }));
+vi.mock("$lib/server/db", () => ({ db: mocks.db }));
+vi.mock("$lib/server/streak", () => ({
+	getStreakRecord: vi.fn(async () => null),
+	devStreakDayOffset: vi.fn(() => 0),
+	isReviewQueueEmpty: mocks.queueEmpty,
+	recordReviewObservation: mocks.observe,
+}));
 vi.mock("$lib/server/trial-quota", () => ({
 	hasUserApiKey: vi.fn(async () => false),
 	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
@@ -46,6 +53,9 @@ describe("(app) layout +layout.server", () => {
 			nativeLanguage: "es",
 		});
 		expect(result.avatarUrl).toBe(`https://gravatar.com/avatar/${ALICE_EMAIL_MD5}?d=identicon&s=192`);
+		expect(result.streakQueueEmpty).toBe(true);
+		expect(mocks.queueEmpty).toHaveBeenCalledWith(mocks.db, "u1", expect.any(Date));
+		expect(mocks.observe).not.toHaveBeenCalled();
 	});
 
 	it("uses empty email fallback when user email is missing", async () => {

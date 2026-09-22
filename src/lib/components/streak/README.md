@@ -5,9 +5,13 @@ The server owns quest/review credit. UI components never grant it.
 - `StreakHost` lives in the app layout, including fullscreen sessions. It observes authoritative
   records and stores a user-scoped **tab-local** progress receipt in sessionStorage. A first visit
   and day rollover establish a silent baseline; increasing same-day progress queues a reward.
+- An empty account-wide layout snapshot is confirmed by a visible host through `POST
+  /api/streak/observe`. This passive review credit is silent, including across reloads;
+  receipt metadata keeps it separate from concurrent quest rewards. The lab never sends it.
 - `StreakCompletion` is the explicit settlement gate: translation mounts it only in `completed`,
   review in its session summary, practice temporarily on feedback entry. Pending progress survives
-  hard navigation, and is acknowledged before an effect starts. Extra quests/ratings do not replay it.
+  hard navigation, and is acknowledged before an effect starts on a **visible** page. Hidden
+  completion surfaces keep the reward pending. Extra quests/ratings do not replay it.
 - `StreakIndicator` owns the trigger, digits and clipboard. It does not consume completion rewards.
 - `StreakWeek` reads actual lit/protected outcomes from the calendar endpoint. Never infer historical
   study days from the aggregate count.

@@ -4,24 +4,39 @@ import type { StreakDayMark } from "$lib/streak-history";
 export type FlameAppearance = "gray" | "kindling" | "burn";
 export type CelebrationKind = "kindling" | "ignite";
 export type ProgressReceipt = { day: string; progress: number };
-export type PresentationReceipt = ProgressReceipt & { pending: CelebrationKind | null };
+export type PresentationReceipt = ProgressReceipt & { pending: CelebrationKind | null; reviewCleared?: boolean };
 
 export function parsePresentationReceipt(raw: string | null): PresentationReceipt | null {
 	try {
 		const value = JSON.parse(raw ?? "null");
 		if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.day) || ![0, 1, 2].includes(value.progress)) return null;
-		return { day: value.day, progress: value.progress, pending: ["kindling", "ignite"].includes(value.pending) ? value.pending : null };
+		return {
+			day: value.day,
+			progress: value.progress,
+			pending: ["kindling", "ignite"].includes(value.pending) ? value.pending : null,
+			...(typeof value.reviewCleared === "boolean" ? { reviewCleared: value.reviewCleared } : {}),
+		};
 	} catch {
 		return null;
 	}
 }
 
-export function advancePresentationReceipt(previous: PresentationReceipt | null, view: StreakView, day: string): PresentationReceipt {
+export function advancePresentationReceipt(
+	previous: PresentationReceipt | null,
+	view: StreakView,
+	day: string,
+	passiveReview = false,
+): PresentationReceipt {
 	const sameDay = previous?.day === day;
+	// Silence only the newly observed review gate, never a concurrent quest or an existing reward.
+	const silentIncrement = passiveReview && view.reviewCleared && sameDay && (previous.reviewCleared === false || previous.progress === 0) ? 1 : 0;
+	const comparison = previous ? { ...previous, progress: previous.progress + silentIncrement } : null;
+	const pending = completionChange(comparison, view, day) ?? (sameDay ? previous.pending : null);
 	return {
 		day,
 		progress: Math.max(progressOf(view), sameDay ? previous.progress : 0),
-		pending: completionChange(previous, view, day) ?? (sameDay ? previous.pending : null),
+		reviewCleared: view.reviewCleared || (sameDay && previous.reviewCleared === true),
+		pending: pending && progressOf(view) === 2 ? "ignite" : pending,
 	};
 }
 export function progressOf(view: StreakView): number {

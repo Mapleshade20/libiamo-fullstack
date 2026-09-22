@@ -14,16 +14,37 @@ describe("completion presentation, independent of art", () => {
 		expect(flameAppearance(before)).toBe("gray");
 		expect(flameAppearance(halfView)).toBe("kindling");
 		const receipt = advancePresentationReceipt(baseline, halfView, day);
-		expect(receipt).toEqual({ day, progress: 1, pending: "kindling" });
+		expect(receipt).toEqual({ day, progress: 1, pending: "kindling", reviewCleared: first === "review" });
 		const whole = first === "quest" ? applyReviewObservation(half, day, true) : applyQuestCompletion(half, day, true);
 		const view = viewStreak(whole, day);
 		expect(flameAppearance(view)).toBe("burn");
 		expect(view.days).toBe(13);
-		expect(advancePresentationReceipt(receipt, view, day)).toEqual({ day, progress: 2, pending: "ignite" });
+		expect(advancePresentationReceipt(receipt, view, day)).toEqual({ day, progress: 2, pending: "ignite", reviewCleared: true });
 	});
 	it("goes straight to ignition when a quest observes an already empty queue", () => {
 		const view = viewStreak(applyQuestCompletion(seed, day, true), day);
 		expect(completionChange(baseline, view, day)).toBe("ignite");
+	});
+	it("silently acknowledges an already empty queue, then celebrates the actual quest", () => {
+		const record = applyReviewObservation(seed, day, true);
+		const receipt = advancePresentationReceipt(baseline, viewStreak(record, day), day, true);
+		expect(receipt).toMatchObject({ progress: 1, reviewCleared: true, pending: null });
+		const restored = parsePresentationReceipt(JSON.stringify(receipt));
+		expect(advancePresentationReceipt(restored, viewStreak(record, day), day).pending).toBeNull();
+		expect(advancePresentationReceipt(restored, viewStreak(applyQuestCompletion(record, day, true), day), day).pending).toBe("ignite");
+	});
+	it("passive observation does not swallow a concurrent quest", () => {
+		const view = viewStreak(applyQuestCompletion(seed, day, true), day);
+		expect(advancePresentationReceipt(baseline, view, day, true).pending).toBe("ignite");
+		const review = advancePresentationReceipt(baseline, viewStreak(applyReviewObservation(seed, day, true), day), day, true);
+		expect(advancePresentationReceipt(review, view, day, true).pending).toBe("ignite");
+	});
+	it("passive review credit alone neither celebrates nor erases a queued quest reward", () => {
+		const quest = applyQuestCompletion(seed, day, false);
+		const pending = advancePresentationReceipt(baseline, viewStreak(quest, day), day);
+		const full = viewStreak(applyReviewObservation(quest, day, true), day);
+		expect(advancePresentationReceipt(pending, full, day, true).pending).toBe("ignite");
+		expect(advancePresentationReceipt({ ...pending, pending: null }, full, day, true).pending).toBeNull();
 	});
 	it("establishes a silent baseline for first visit and for a new day", () => {
 		const view = viewStreak(applyQuestCompletion(seed, day, true), day);

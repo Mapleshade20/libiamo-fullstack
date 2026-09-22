@@ -33,6 +33,7 @@ const data = {
 	accountResult: null,
 	accountFailure: null,
 	streak: null,
+	streakQueueEmpty: true,
 	streakDayOffset: 0,
 };
 

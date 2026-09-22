@@ -2,8 +2,9 @@ import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
 import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
+import { db } from "$lib/server/db";
 import { gravatarAvatarUrl } from "$lib/server/gravatar";
-import { devStreakDayOffset, getStreakRecord } from "$lib/server/streak";
+import { devStreakDayOffset, getStreakRecord, isReviewQueueEmpty } from "$lib/server/streak";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
@@ -21,7 +22,7 @@ export const load: LayoutServerLoad = async (event) => {
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
 	// The record, not a rendered view: the client re-derives settlement at local midnight without a
 	// round trip, and SSR stays synchronous.
-	const streak = await getStreakRecord(user.id);
+	const [streak, streakQueueEmpty] = await Promise.all([getStreakRecord(user.id), isReviewQueueEmpty(db, user.id, new Date())]);
 
 	return {
 		user: {
@@ -37,6 +38,7 @@ export const load: LayoutServerLoad = async (event) => {
 		hasApiKey,
 		trialQuota,
 		streak,
+		streakQueueEmpty,
 		// Zero in production; `/streak-lab` sets it so the navbar travels with the server.
 		streakDayOffset: devStreakDayOffset(),
 	};

@@ -71,7 +71,13 @@ $effect(() => {
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
-	<StreakHost record={data.streak} userId={data.user.id} lang={data.user.activeLanguage as LanguageCode} dayOffset={data.streakDayOffset} />
+	<StreakHost
+		record={data.streak}
+		queueEmpty={data.streakQueueEmpty}
+		userId={data.user.id}
+		lang={data.user.activeLanguage as LanguageCode}
+		dayOffset={data.streakDayOffset}
+	/>
 
 	{#if isSessionPage}
 		<main class="h-screen w-full">{@render children()}</main>
