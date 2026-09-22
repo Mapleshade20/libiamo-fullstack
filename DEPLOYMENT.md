@@ -399,8 +399,7 @@ the browser, scheme included.
 so sign-up still appears to succeed; only the message is lost.
 
 **502 or truncated responses during feedback / translation evaluation.** The proxy
-timed out on a long LLM call. Raise `proxy_read_timeout` and disable buffering
-(§3).
+timed out on a long LLM call. Raise `proxy_read_timeout` (§3).
 
 **Assets 404 under a sub-path.** The image was built with the wrong `BASE_PATH`,
 or the proxy strips the prefix. See §5.

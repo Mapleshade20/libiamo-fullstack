@@ -59,7 +59,8 @@ $effect(() => {
 
 <svelte:head>
 	<meta name="robots" content="noindex, nofollow">
-	{#if data.avatarUrl}
+	<!-- Scoped to the pages that mount the navbar; session practice UIs may never show the avatar. -->
+	{#if !isSessionPage}
 		<link rel="preload" as="image" href={data.avatarUrl}>
 	{/if}
 </svelte:head>

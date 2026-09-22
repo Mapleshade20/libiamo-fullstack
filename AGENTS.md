@@ -63,7 +63,7 @@ Use a refined retro editorial magazine aesthetic: a light warm paper base, elega
 ## Implementation conventions
 
 - Use Svelte 5 runes, not `$:` or `export let`. Use tabs for indentation.
-- SSR-visible values must derive synchronously from server props; do not initialize them only in `$effect`/`onMount`. Browser-only sessionStorage restoration is separate from server-known state.
+- SSR-visible values must derive synchronously from server props; do not initialize them only in `$effect`/`onMount`. Browser-only sessionStorage restoration is separate from server-known state. Slow third-party probes are the exception (`/profile/avatar-status`): self-hosted reverse proxies buffer, so streamed `load` promises cannot be relied on. Probe from a client endpoint and resolve every failure to a definite value instead of stranding the pending copy.
 - Use `lib/display-clock.ts` for rendered dates/day comparisons and explicit timezones for timestamps. Its request-time snapshot and validated browser timezone prevent SSR/hydration disagreement; do not render from ambient `new Date()` or the machine's default timezone.
 - Every internal URL and pathname comparison must include `base` from `$app/paths`. This includes links, form actions, fetches, and redirects. Better Auth needs the full mount point (`baseURL: ${ORIGIN}${base}/api/auth`, `basePath: "/"`); it only appends its default auth path when the base URL has no path.
 - `lib/constants.ts` is the single source for enum values/types, labels, and language display-name helpers. Do not duplicate enum unions or language maps. Use the existing `t(lang, key)` localization API.

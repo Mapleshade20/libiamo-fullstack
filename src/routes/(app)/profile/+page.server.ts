@@ -41,9 +41,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		serverNativeLanguages: getNativeLanguageOptions(activeLanguage),
-		// Gravatar's existence probe runs after the page renders. Waiting for that
-		// remote HEAD request here can hold navigation for its full timeout.
-		hasGravatarPhoto: null as boolean | null,
+		// No `hasGravatarPhoto` here on purpose: the page probes `/profile/avatar-status`
+		// after render, because awaiting Gravatar holds navigation for its full timeout.
 		hasApiKey,
 		trialQuota,
 		apiBaseUrl: row?.baseUrl ?? "",

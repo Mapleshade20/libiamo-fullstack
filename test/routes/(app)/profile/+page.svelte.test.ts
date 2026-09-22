@@ -18,7 +18,6 @@ const data = {
 		feedbackLanguagePreference: "native",
 	},
 	avatarUrl: "https://example.com/avatar.png",
-	hasGravatarPhoto: true,
 	serverNativeLanguages: [{ value: "en" as const, label: "English" }],
 	hasApiKey: false,
 	trialQuota: null,
@@ -177,19 +176,20 @@ describe("Profile page", () => {
 		expect(body).toContain(t("fr", key));
 	});
 
-	it.each([true, false])("states only the avatar line that applies, always linking Gravatar (has photo: %s)", (hasGravatarPhoto) => {
-		const { body } = render(ProfilePage, { props: { data: { ...data, hasGravatarPhoto }, form: null } });
-		const [shown, hidden] = hasGravatarPhoto
-			? ["profile.avatarConnected", "profile.avatarMissing"]
-			: ["profile.avatarMissing", "profile.avatarConnected"];
+	// Gravatar is probed on mount, so SSR can only ever state the checking line; the
+	// connected/missing branches are unreachable without a browser.
+	it("states the checking avatar line before hydration, already linking Gravatar", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
 		const link =
 			'<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>';
 
 		const start = body.indexOf('<p class="text-sm text-muted-foreground">');
 		const avatarLine = body.slice(start, body.indexOf("</p>", start));
 
-		expect(avatarLine).toContain(t("fr", shown).replace("{link}", link));
-		expect(body).not.toContain(t("fr", hidden).split("{link}")[0]);
+		expect(avatarLine).toContain(t("fr", "profile.avatarChecking").replace("{link}", link));
+		for (const key of ["profile.avatarConnected", "profile.avatarMissing"]) {
+			expect(body).not.toContain(t("fr", key).split("{link}")[0]);
+		}
 	});
 
 	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {

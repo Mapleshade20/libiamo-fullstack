@@ -45,30 +45,34 @@ let nativeLanguageForm: HTMLFormElement | null = $state(null);
 let proficiencyForm: HTMLFormElement | null = $state(null);
 let lang = $derived(data.user.activeLanguage as LanguageCode);
 const clock = getDisplayClock();
-let probedGravatarPhoto = $state<boolean | null>(null);
-let hasGravatarPhoto = $derived(probedGravatarPhoto ?? data.hasGravatarPhoto);
+let hasGravatarPhoto = $state<boolean | null>(null);
 
+/**
+ * Every failure answers `true`, matching `hasGravatarAvatar`: the connected
+ * sentence holds either way, and telling someone who already uploaded a photo to
+ * go add one is the wrong guess. Staying `null` would strand the checking
+ * sentence — a stale session redirects this fetch to sign-in HTML, so a parse
+ * failure here is routine rather than exceptional.
+ */
 onMount(() => {
-	let cancelled = false;
+	const controller = new AbortController();
 
-	void fetch(`${base}/profile/avatar-status`, { headers: { accept: "application/json" } })
+	void fetch(`${base}/profile/avatar-status`, { headers: { accept: "application/json" }, signal: controller.signal })
 		.then(async (response) => {
-			if (!response.ok) return null;
+			if (!response.ok) return true;
 			const result: unknown = await response.json();
 			return typeof result === "object" && result !== null && "hasGravatarPhoto" in result && typeof result.hasGravatarPhoto === "boolean"
 				? result.hasGravatarPhoto
-				: null;
+				: true;
 		})
 		.then((result) => {
-			if (!cancelled && result !== null) probedGravatarPhoto = result;
+			hasGravatarPhoto = result;
 		})
 		.catch(() => {
-			// The avatar image still renders when the optional status probe fails.
+			if (!controller.signal.aborted) hasGravatarPhoto = true;
 		});
 
-	return () => {
-		cancelled = true;
-	};
+	return () => controller.abort();
 });
 
 const nativeLanguageOptions = $derived(data.serverNativeLanguages ?? []);
