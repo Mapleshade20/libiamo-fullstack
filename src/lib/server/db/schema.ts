@@ -3,6 +3,7 @@ import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, seria
 import type { TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
+import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak-history";
 import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
 import { user } from "./auth.schema";
 import {
@@ -19,6 +20,24 @@ import {
 	uiVariantEnum,
 	urgencyEnum,
 } from "./enums";
+
+// Sparse outcomes; the composite primary key also serves bounded calendar range queries.
+export const streakDay = pgTable(
+	"streak_day",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		day: date("day").notNull(),
+		state: text("state").$type<StreakDayState>().notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.day] }),
+		// `sql.raw` because a check constraint is serialized into the migration as text: a bound
+		// parameter would not survive. The values are a local literal, never input.
+		check("streak_day_state_check", sql`${t.state} in (${sql.raw(STREAK_DAY_STATES.map((state) => `'${state}'`).join(", "))})`),
+	],
+);
 
 // ── template ─────────────────────────────────────────────────────────
 export const template = pgTable(

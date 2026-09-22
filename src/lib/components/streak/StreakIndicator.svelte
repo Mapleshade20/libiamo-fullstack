@@ -1,247 +1,112 @@
 <script lang="ts">
 import { dev } from "$app/environment";
-import { base } from "$app/paths";
 import { readAcknowledgedStreak, writeAcknowledgedStreak } from "$lib/client/streak-acknowledged";
+import { createStreakDay } from "$lib/client/streak-day.svelte";
 import { streakPreview } from "$lib/client/streak-preview.svelte";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
-import FloatingPanel from "$lib/components/FloatingPanel.svelte";
-import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
+import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { startOfNextLocalDay } from "$lib/local-day";
-import { acknowledgedStreak, localDay, type StreakEvent, type StreakRecord, streakTransitions, viewStreak } from "$lib/streak";
+import { acknowledgedStreak, type StreakRecord, streakTransitions, viewStreak } from "$lib/streak";
+import { flameAppearance } from "$lib/streak-presentation";
+import StreakBoard from "./StreakBoard.svelte";
 import StreakDigits from "./StreakDigits.svelte";
 import StreakFlame from "./StreakFlame.svelte";
 
-interface Props {
-	record: StreakRecord | null;
-	userId: string;
-	lang: LanguageCode;
-	/** Dev-only virtual day travel, in days; the server honours the same offset. */
-	dayOffset?: number;
-}
-
-let { record, userId, lang, dayOffset = 0 }: Props = $props();
-
-const clock = getDisplayClock();
-
-// The request clock renders the first frame; after hydration the client owns the tick, because
-// `displayClock` is a snapshot and cannot cross local midnight on its own.
-let clientNow = $state<number | null>(null);
-let open = $state(false);
-let igniting = $state(false);
-let badgePopping = $state(false);
-let digitsDirection = $state<"up" | "down">("up");
-let brokenNotice = $state<{ days: number; token: number } | null>(null);
-let cardsByLanguage = $state<Partial<Record<LanguageCode, number>> | null>(null);
-let cardsLoading = $state(false);
-let timers: ReturnType<typeof setTimeout>[] = [];
-
-const timeZone = $derived(clock().timeZone);
+let { record, userId, lang, dayOffset = 0 }: { record: StreakRecord | null; userId: string; lang: LanguageCode; dayOffset?: number } = $props();
+const currentDay = createStreakDay(() => ({ record, offset: dayOffset }));
+let boardOpen = $state(false);
+let brokenNotice = $state(false);
 const activeRecord = $derived((dev ? streakPreview.record : null) ?? record);
-const today = $derived((dev ? streakPreview.today : null) ?? localDay((clientNow ?? clock().now) + dayOffset * 86_400_000, timeZone));
+const today = $derived((dev ? streakPreview.today : null) ?? currentDay());
 const view = $derived(viewStreak(activeRecord, today));
-// Every duration in these components is `calc(base * var(--streak-speed))`, so the harness's speed
-// control and its forced reduced-motion branch are the same dial: zero collapses each transition
-// into an instant state swap, exactly as the media query does.
 const speed = $derived(dev ? (streakPreview.forceReducedMotion ? 0 : streakPreview.speed) : 1);
-
-const notification = $derived(
-	brokenNotice ? { variant: "info" as const, message: t(lang, "streak.broken"), key: `streak-broken:${brokenNotice.token}` } : null,
-);
-
-function dayLabel(count: number) {
-	return t(lang, count === 1 ? "streak.dayOne" : "streak.dayMany").replace("{count}", String(count));
-}
-
-function after(ms: number, run: () => void) {
-	timers.push(setTimeout(run, ms * speed));
-}
-
-function play(event: StreakEvent) {
-	if (event.kind === "lit") {
-		digitsDirection = "up";
-		igniting = true;
-		after(700, () => {
-			igniting = false;
-		});
-	}
-	if (event.kind === "saved-day-spent") digitsDirection = "up";
-	if (event.kind === "saved-day-earned") {
-		badgePopping = true;
-		after(260, () => {
-			badgePopping = false;
-		});
-	}
-	if (event.kind === "broken") {
-		digitsDirection = "down";
-		brokenNotice = { days: event.previousDays, token: Date.now() };
-	}
-}
-
-// Diff against what this device last acknowledged, not against the previous render: finishing a
-// session navigates with a full page load, so there is no previous render to diff.
 $effect(() => {
+	if (dev && streakPreview.today) return;
 	const current = acknowledgedStreak(view, today);
 	const previous = readAcknowledgedStreak(userId);
 	writeAcknowledgedStreak(userId, current);
-	for (const event of streakTransitions(previous, view, today)) play(event);
+	brokenNotice = streakTransitions(previous, view, today).some((event) => event.kind === "broken");
 });
-
-$effect(() => {
-	// Re-derive at local midnight. A machine that slept through it fires no timer, so the
-	// visibility check is not redundant.
-	let timer: ReturnType<typeof setTimeout>;
-	const schedule = () => {
-		const untilMidnight = startOfNextLocalDay(Date.now(), timeZone).getTime() - Date.now();
-		timer = setTimeout(
-			() => {
-				clientNow = Date.now();
-				schedule();
-			},
-			Math.max(1_000, untilMidnight + 1_000),
-		);
-	};
-	schedule();
-	const onVisible = () => {
-		if (!document.hidden) clientNow = Date.now();
-	};
-	document.addEventListener("visibilitychange", onVisible);
-	return () => {
-		clearTimeout(timer);
-		document.removeEventListener("visibilitychange", onVisible);
-	};
-});
-
-$effect(() => {
-	if (!dev) return;
-	const replay = streakPreview.replay;
-	if (replay) play(replay.event);
-});
-
-$effect(() => () => {
-	for (const timer of timers) clearTimeout(timer);
-	timers = [];
-});
-
-async function loadCardCounts() {
-	if (cardsByLanguage || cardsLoading) return;
-	cardsLoading = true;
-	try {
-		const response = await fetch(`${base}/api/review/stats?byLanguage=1`);
-		if (response.ok) cardsByLanguage = ((await response.json()) as { byLanguage?: Partial<Record<LanguageCode, number>> }).byLanguage ?? {};
-	} catch {
-		// The lit state never depends on this fetch; the panel just keeps its skeleton.
-	} finally {
-		cardsLoading = false;
-	}
-}
-
-const remainingLanguages = $derived(
-	cardsByLanguage ? (Object.entries(cardsByLanguage) as Array<[LanguageCode, number]>).filter(([, count]) => count > 0) : [],
-);
 </script>
-
-<div class="relative" style="--streak-speed: {speed}">
-	<FloatingPanel
-		bind:open
-		label={t(lang, "streak.label")}
-		triggerClass="streak-trigger gap-1.5 rounded-full px-2"
-		class="w-72 [--floating-panel-padding:1rem]"
-		onOpenChange={(value) => { if (value) void loadCardCounts(); }}
-	>
-		{#snippet trigger()}
-			<StreakFlame status={view.status} {igniting} />
-			<span class="relative pr-2 text-sm font-medium">
-				<StreakDigits value={view.days} direction={digitsDirection} muted={view.status !== "lit"} />
-				{#if view.bank > 0}
-					<span class="badge" class:popping={badgePopping}>+{view.bank}</span>
-				{/if}
-			</span>
-		{/snippet}
-		<p class="font-serif text-lg">{dayLabel(view.days)}</p>
-		<p class="mt-1 text-xs text-muted-foreground">
-			{view.days === 0 ? t(lang, "streak.none") : view.status === "lit" ? t(lang, "streak.lit") : t(lang, "streak.pending")}
-		</p>
-
-		<ul class="mt-3 space-y-1.5 text-sm">
-			<li class="flex items-baseline justify-between gap-3">
-				<span class={view.taskCount > 0 ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionQuest")}</span>
-				<span class="text-xs text-muted-foreground tabular-nums"> {t(lang, "streak.questsDone").replace("{count}", String(view.taskCount))} </span>
-			</li>
-			<li class="flex items-baseline justify-between gap-3">
-				<span class={view.reviewCleared ? "text-foreground" : "text-muted-foreground"}>{t(lang, "streak.conditionReview")}</span>
-				<span class="text-xs text-muted-foreground tabular-nums">
-					{#if view.reviewCleared}
-						{t(lang, "streak.reviewCleared")}
-					{:else if cardsByLanguage}
-						{#if remainingLanguages.length === 0}
-							{t(lang, "streak.reviewRemaining").replace("{count}", "0")}
-						{:else}
-							{remainingLanguages
-									.map(([code, count]) => `${LANGUAGE_LABELS[code]} ${t(lang, "streak.reviewRemaining").replace("{count}", String(count))}`)
-									.join(" · ")}
-						{/if}
-					{:else}
-						<span class="inline-block h-3 w-16 animate-pulse rounded bg-muted align-middle"></span>
-					{/if}
-				</span>
-			</li>
-		</ul>
-
-		<div class="mt-3 border-t border-border pt-3">
-			<p class="flex items-baseline justify-between gap-3 text-sm">
-				<span>{t(lang, "streak.savedDays")}</span>
-				<span class="tabular-nums">{view.bank}</span>
-			</p>
-			<p class="mt-1 text-xs text-muted-foreground">
-				{#if view.savedDaysSpent > 0}
-					{t(lang, "streak.savedDaysSpent")}
-				{:else if view.questsToNextSavedDay === null}
-					{t(lang, "streak.savedDaysFull")}
-				{:else}
-					{t(lang, "streak.savedDaysNext").replace("{count}", String(view.questsToNextSavedDay))}
-				{/if}
-			</p>
-			<p class="mt-1 text-xs text-muted-foreground">{t(lang, "streak.savedDaysHint")}</p>
-		</div>
-	</FloatingPanel>
-</div>
-
-<ActionNotification {notification} />
-
+<button
+	type="button"
+	class="streak-trigger"
+	class:lit={view.status === "lit"}
+	onclick={() => { boardOpen = true; }}
+	aria-label={`${t(lang, "streak.label")}: ${view.days}`}
+	aria-haspopup="dialog"
+	aria-expanded={boardOpen}
+	style="--streak-speed: {speed}"
+>
+	<StreakFlame appearance={flameAppearance(view)} />
+	<span class="number">
+		<StreakDigits value={view.days} muted={view.status !== "lit"} />
+		{#if view.bank > 0}
+			{#key view.bank}
+				<span class="badge">+{view.bank}</span>
+			{/key}
+		{/if}
+	</span>
+</button>
+<StreakBoard bind:open={boardOpen} {view} {today} {lang} />
+<ActionNotification notification={brokenNotice ? { variant: "info", message: t(lang, "streak.broken"), key: `streak-broken:${today}` } : null} />
 <style>
+.streak-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-height: 48px;
+	padding: 2px 12px 2px 5px;
+	border-radius: 14px;
+	transition: background 180ms;
+}
+.streak-trigger:hover {
+	background: #c9923820;
+}
+.streak-trigger:focus-visible {
+	outline: 2px solid #9b6635;
+	outline-offset: 3px;
+}
+.number {
+	position: relative;
+	padding-right: 0.45rem;
+	font-family: var(--font-sans);
+	font-size: 1.3rem;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--color-muted-foreground);
+	transition: color calc(300ms * var(--streak-speed, 1)) ease-out;
+	font-variant-numeric: tabular-nums;
+	min-width: 1.2ch;
+}
+.lit .number {
+	color: #f2700f;
+}
 .badge {
 	position: absolute;
-	top: -0.45rem;
-	right: -0.1rem;
+	top: -0.5rem;
+	right: -0.25rem;
 	border-radius: 9999px;
-	background: color-mix(in oklch, var(--color-streak-flame) 18%, transparent);
-	color: var(--color-streak-flame);
+	background: color-mix(in oklch, #ff9a04 24%, transparent);
+	color: color-mix(in oklch, #f2700f 90%, #000);
 	padding: 0 0.25rem;
+	font-family: var(--font-sans-inter);
 	font-size: 0.625rem;
 	font-weight: 600;
-	line-height: 1.1;
+	line-height: 1.25;
+	letter-spacing: 0;
+	animation: earn calc(350ms * var(--streak-speed, 1)) ease-out;
 }
-
-.badge.popping {
-	animation: badge-pop calc(240ms * var(--streak-speed, 1)) cubic-bezier(0.2, 0, 0.15, 1);
-}
-
-@keyframes badge-pop {
-	0% {
-		transform: scale(0.6);
+@keyframes earn {
+	from {
+		transform: scale(0.4) rotate(-15deg);
 	}
-	60% {
-		transform: scale(1.12);
-	}
-	100% {
+	to {
 		transform: scale(1);
 	}
 }
-
 @media (prefers-reduced-motion: reduce) {
-	.badge.popping {
+	.badge {
 		animation: none;
 	}
 }

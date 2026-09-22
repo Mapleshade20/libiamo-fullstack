@@ -20,6 +20,7 @@ import SelectionActionBubble from "$lib/components/learning-feedback/SelectionAc
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
 import TransferStage from "$lib/components/review/TransferStage.svelte";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
@@ -317,6 +318,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 
 <ConversationReadReceipt receipt={data.readReceipt} />
 
+<StreakCompletion />
 <svelte:head>
 	<title>{data.taskTitle} · Feedback · Libiamo</title>
 	<meta name="description" content="Review feedback, corrections, and tutor comments for your completed practice session.">

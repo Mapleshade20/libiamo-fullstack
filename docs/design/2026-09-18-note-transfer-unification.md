@@ -94,6 +94,18 @@ contract.
 
 ### 2.2 Practice sessions
 
+#### Pending: unify the actual completion boundary
+
+The streak presentation redesign temporarily keeps practice quest credit at its existing guarded
+session-completion transition and presents the reward on entry to evaluation/feedback. Translation
+already waits for `workflowPhase === "completed"` and its final summary. When practice gains the
+planned multi-stage feedback workflow, **entering evaluation must no longer count as completing a
+quest**: all required stages must finish first. Move the server's exact-once quest-credit claim,
+the completed activity predicate, and `StreakCompletion` together to that final settlement boundary;
+do not merely postpone the animation while continuing to grant credit early. Preserve savepoint
+isolation and retry/idempotency tests. This supersedes the deliberate timing asymmetry in the
+original streak design; no workflow/schema migration is part of the presentation change itself.
+
 - `practiceSession` gains `transfer_completed_at timestamp null`. No change to the `session_status`
   enum, which archive, unread, and the reply worker all read.
 - Practice notes are collected by the learner during feedback (selection and batch actions), so the

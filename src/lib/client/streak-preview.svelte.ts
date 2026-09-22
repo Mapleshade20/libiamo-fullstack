@@ -1,4 +1,5 @@
 import type { StreakEvent, StreakRecord } from "$lib/streak";
+import type { StreakDayMark } from "$lib/streak-history";
 
 /**
  * A development override for the navbar streak indicator, driven by `/streak-lab`.
@@ -18,6 +19,11 @@ class StreakPreview {
 	speed = $state(1);
 	/** Forces the reduced-motion branch on, whatever the device reports. */
 	forceReducedMotion = $state(false);
+	microMotion = $state<"auto" | "moving" | "static">("auto");
+	/** Starts a new rehearsal without altering production acknowledgment receipts. */
+	epoch = $state(0);
+	days = $state<StreakDayMark[]>([]);
+	since = $state<string | null>(null);
 
 	set(record: StreakRecord | null, today: string | null = this.today) {
 		this.record = record;
@@ -25,7 +31,11 @@ class StreakPreview {
 	}
 
 	clear() {
+		this.microMotion = "auto";
+		this.epoch++;
 		this.record = null;
+		this.days = [];
+		this.since = null;
 		this.today = null;
 		this.replay = null;
 	}

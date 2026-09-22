@@ -1,16 +1,21 @@
 <script lang="ts">
-import { browser } from "$app/environment";
+import { browser, dev } from "$app/environment";
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { isQuestMenuPath } from "$lib/client/page-transition";
+import { provideStreakPresentation } from "$lib/client/streak-presentation.svelte";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import HomeMasthead from "$lib/components/HomeMasthead.svelte";
 import Navbar from "$lib/components/Navbar.svelte";
 import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
+import StreakHost from "$lib/components/streak/StreakHost.svelte";
+import type { LanguageCode } from "$lib/constants";
 import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
+provideStreakPresentation();
 let isHome = $derived(page.url.pathname === `${base}/`);
+let hasMasthead = $derived(isHome || (dev && page.url.pathname === `${base}/streak-lab`));
 let questMenuRoute = $derived(isQuestMenuPath(page.url.pathname) ? page.data.questMenu : null);
 let quotaNotification = $state<ActionNotificationContent | null>(null);
 
@@ -64,6 +69,7 @@ $effect(() => {
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
+	<StreakHost record={data.streak} userId={data.user.id} lang={data.user.activeLanguage as LanguageCode} dayOffset={data.streakDayOffset} />
 
 	{#if isSessionPage}
 		<main class="h-screen w-full">{@render children()}</main>
@@ -72,8 +78,8 @@ $effect(() => {
 		     through wherever this one has no content while the two sweep past each other. -->
 		<div class="min-h-screen bg-background" style="view-transition-name: page-content">
 			<!-- The extra bottom padding clears the narrow-screen bottom bar. -->
-			<main class="mx-auto max-w-5xl px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHome ? 'pt-0' : 'pt-8 nav:pt-24'}">
-				{#if isHome}
+			<main class="mx-auto max-w-5xl px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {hasMasthead ? 'pt-0' : 'pt-8 nav:pt-24'}">
+				{#if hasMasthead}
 					<HomeMasthead user={data.user} trialQuota={data.trialQuota} streak={data.streak} streakDayOffset={data.streakDayOffset} />
 				{/if}
 				{#if questMenuRoute}

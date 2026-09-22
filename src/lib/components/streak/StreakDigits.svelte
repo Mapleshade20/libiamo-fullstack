@@ -25,7 +25,7 @@ const digits = $derived(String(Math.max(0, Math.trunc(value))).split(""));
 <style>
 .digits {
 	display: inline-flex;
-	color: var(--color-foreground);
+	color: inherit;
 	transition: color calc(300ms * var(--streak-speed, 1)) ease-out;
 }
 

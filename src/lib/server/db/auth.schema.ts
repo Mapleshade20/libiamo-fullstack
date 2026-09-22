@@ -157,6 +157,8 @@ export const userStreak = pgTable(
 		bank: integer("bank").default(0).notNull(),
 		/** The local day the three counters below describe. */
 		progressDate: date("progress_date"),
+		/** Earlier missing calendar entries are unknown, not missed study days. */
+		historySince: date("history_since"),
 		taskCount: integer("task_count").default(0).notNull(),
 		reviewCleared: boolean("review_cleared").default(false).notNull(),
 		/** Saved days already granted for `progressDate`, making repeat grants exactly once. */

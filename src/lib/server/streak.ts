@@ -1,9 +1,18 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { dev } from "$app/environment";
 import { getRequestEvent } from "$app/server";
-import { applyQuestCompletion, applyReviewObservation, emptyStreakRecord, localDay, type StreakRecord, streakRecordsEqual } from "$lib/streak";
+import {
+	applyQuestCompletion,
+	applyReviewObservation,
+	effectiveToday,
+	emptyStreakRecord,
+	localDay,
+	type StreakRecord,
+	streakRecordsEqual,
+} from "$lib/streak";
+import { calendarDays, historyChanges, monthRange, type StreakCalendarData } from "$lib/streak-history";
 import { db } from "./db";
-import { note, userStreak } from "./db/schema";
+import { note, streakDay, userStreak } from "./db/schema";
 import { ANKI_LEARN_AHEAD_MINUTES } from "./review";
 
 export const DEV_STREAK_DAY_OFFSET_COOKIE = "libiamo-dev-streak-day-offset";
@@ -48,6 +57,23 @@ function toRecord(row: typeof userStreak.$inferSelect): StreakRecord {
 export async function getStreakRecord(userId: string): Promise<StreakRecord | null> {
 	const [row] = await db.select().from(userStreak).where(eq(userStreak.userId, userId)).limit(1);
 	return row ? toRecord(row) : null;
+}
+
+export async function getStreakCalendar(userId: string, month: string, today: string): Promise<StreakCalendarData> {
+	const { from, to } = monthRange(month);
+	// One snapshot: the aggregate and its daily marks are committed atomically by the writer.
+	return db.transaction(
+		async (tx) => {
+			const [row] = await tx.select().from(userStreak).where(eq(userStreak.userId, userId)).limit(1);
+			const stored = await tx
+				.select({ day: streakDay.day, state: streakDay.state })
+				.from(streakDay)
+				.where(and(eq(streakDay.userId, userId), gte(streakDay.day, from), lte(streakDay.day, to)));
+			const record = row ? toRecord(row) : null;
+			return { days: calendarDays(stored, record, effectiveToday(record, today), from, to), since: row?.historySince ?? null };
+		},
+		{ isolationLevel: "repeatable read", accessMode: "read only" },
+	);
 }
 
 /**
@@ -102,7 +128,14 @@ async function lockRecord(writer: Reader, userId: string): Promise<StreakRecord>
 	return row ? toRecord(row) : emptyStreakRecord();
 }
 
-async function persist(writer: Reader, userId: string, record: StreakRecord, timeZone: string) {
+async function persist(writer: Reader, userId: string, before: StreakRecord, record: StreakRecord, today: string, timeZone: string) {
+	const day = effectiveToday(before, today);
+	const marks = historyChanges(before, record, day);
+	if (marks.length)
+		await writer
+			.insert(streakDay)
+			.values(marks.map((mark) => ({ userId, ...mark })))
+			.onConflictDoNothing({ target: [streakDay.userId, streakDay.day] });
 	await writer
 		.update(userStreak)
 		.set({
@@ -110,6 +143,7 @@ async function persist(writer: Reader, userId: string, record: StreakRecord, tim
 			throughDate: record.throughDate,
 			bank: record.bank,
 			progressDate: record.progressDate,
+			historySince: sql`coalesce(${userStreak.historySince}, ${day}::date)`,
 			taskCount: record.taskCount,
 			reviewCleared: record.reviewCleared,
 			bankEarnedToday: record.bankEarnedToday,
@@ -135,8 +169,9 @@ export async function recordQuestCompletion(tx: Transaction, userId: string, at:
 	await tx.transaction(async (inner) => {
 		const before = await lockRecord(inner, userId);
 		const queueEmpty = await isReviewQueueEmpty(inner, userId, at);
-		const after = applyQuestCompletion(before, localDay(travelled(at), timeZone), queueEmpty);
-		await persist(inner, userId, after, timeZone);
+		const today = localDay(travelled(at), timeZone);
+		const after = applyQuestCompletion(before, today, queueEmpty);
+		await persist(inner, userId, before, after, today, timeZone);
 	});
 }
 
@@ -151,9 +186,10 @@ export async function recordReviewObservation(userId: string, at: Date, timeZone
 	return db.transaction(async (tx) => {
 		const before = await lockRecord(tx, userId);
 		const queueEmpty = await isReviewQueueEmpty(tx, userId, at);
-		const after = applyReviewObservation(before, localDay(travelled(at), timeZone), queueEmpty);
+		const today = localDay(travelled(at), timeZone);
+		const after = applyReviewObservation(before, today, queueEmpty);
 		if (streakRecordsEqual(before, after)) return null;
-		await persist(tx, userId, after, timeZone);
+		await persist(tx, userId, before, after, today, timeZone);
 		return after;
 	});
 }

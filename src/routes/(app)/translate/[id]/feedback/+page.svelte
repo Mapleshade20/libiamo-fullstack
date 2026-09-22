@@ -14,6 +14,7 @@ import {
 	translationFeedbackSnapshotKey,
 } from "$lib/client/translation-feedback-snapshot";
 import TransferStage from "$lib/components/review/TransferStage.svelte";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
 import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
@@ -549,6 +550,7 @@ function updateCardInput(index: number, value: string) {
 		/>
 	{/if}
 {:else if data.attempt.workflowPhase === "completed"}
+	<StreakCompletion />
 	<section class="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center" aria-live="polite">
 		<CheckCircle2 class="mb-7 size-12 text-[#55705b]" strokeWidth={1.25} />
 		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(lang, "eval.complete.eyebrow")}</p>
