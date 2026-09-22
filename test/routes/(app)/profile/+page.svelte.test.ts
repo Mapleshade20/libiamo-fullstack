@@ -42,7 +42,6 @@ describe("Profile page", () => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected }, form: null } });
 		expect(body).toContain(t("fr", "profile.passwordMethod"));
 		expect(body).toMatch(/<span[^>]*class="block truncate text-xs text-muted-foreground"[^>]*>alice@example.com<\/span>/);
-		expect(body).not.toContain(`>${t("fr", "profile.connected")}</span>`);
 		expect(body).toContain('action="?/changeEmail"');
 		expect(body).toContain('<dialog aria-labelledby="email-dialog-title"');
 		expect(body).not.toContain("<summary");

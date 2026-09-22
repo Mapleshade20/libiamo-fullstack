@@ -67,7 +67,7 @@ $effect(() => {
 
 <div class="min-h-screen" class:app-shell={!isSessionPage}>
 	{#if !isSessionPage}
-		<Navbar user={data.user} avatarUrl={data.avatarUrl} />
+		<Navbar user={data.user} avatarUrl={data.avatarUrl} lang={data.user.activeLanguage as LanguageCode} />
 	{/if}
 
 	<ActionNotification notification={quotaNotification} durationMs={7000} />
