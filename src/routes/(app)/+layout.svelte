@@ -16,7 +16,8 @@ let { children, data } = $props();
 provideStreakPresentation();
 let isHome = $derived(page.url.pathname === `${base}/`);
 let hasMasthead = $derived(isHome || (dev && page.url.pathname === `${base}/streak-lab`));
-let questMenuRoute = $derived(isQuestMenuPath(page.url.pathname) ? page.data.questMenu : null);
+let isHall = $derived(isQuestMenuPath(page.url.pathname));
+let questMenuRoute = $derived(isHall ? page.data.questMenu : null);
 let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
@@ -77,8 +78,14 @@ $effect(() => {
 		<!-- The paper belongs to the snapshot: a transparent page would let the outgoing page show
 		     through wherever this one has no content while the two sweep past each other. -->
 		<div class="min-h-screen bg-background" style="view-transition-name: page-content">
-			<!-- The extra bottom padding clears the narrow-screen bottom bar. -->
-			<main class="mx-auto max-w-5xl px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {hasMasthead ? 'pt-0' : 'pt-8 nav:pt-24'}">
+			<!-- The extra bottom padding clears the narrow-screen bottom bar. The hall measure is wider than
+			     the reading measure because the book spread needs the room; owning both edges here is what
+			     keeps the masthead, the hall heading and the spread on one set of margins. -->
+			<main
+				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
+					? 'pt-0'
+					: 'pt-8 nav:pt-24'}"
+			>
 				{#if hasMasthead}
 					<HomeMasthead user={data.user} trialQuota={data.trialQuota} streak={data.streak} streakDayOffset={data.streakDayOffset} />
 				{/if}
