@@ -154,13 +154,15 @@ describe("shared validation feedback", () => {
 		const first = invalid(input);
 		handleInvalidField(first);
 		handleInvalidField(first);
+		// A click or Enter submit runs microtasks between each control's `invalid` event.
+		await Promise.resolve();
 		const second = invalid(next);
 		handleInvalidField(second);
 		expect(first.defaultPrevented).toBe(true);
 		expect(input.focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
 		expect(next.focus).not.toHaveBeenCalled();
 		expect(input.animate).toHaveBeenCalledOnce();
-		await Promise.resolve();
+		await new Promise((resolve) => setTimeout(resolve));
 		next.visible = false;
 		const hidden = invalid(next);
 		handleInvalidField(hidden);

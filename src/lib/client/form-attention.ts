@@ -291,5 +291,7 @@ export function handleInvalidField(event: Event) {
 	pendingForms.add(owner);
 	field.focus({ preventScroll: true });
 	centerElement(field);
-	queueMicrotask(() => pendingForms.delete(owner));
+	// A user-initiated submit checkpoints microtasks between the controls' `invalid`
+	// events, so the guard has to outlive the whole dispatch: clear it in a later task.
+	setTimeout(() => pendingForms.delete(owner));
 }
