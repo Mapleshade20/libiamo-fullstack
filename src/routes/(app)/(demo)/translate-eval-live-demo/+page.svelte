@@ -1,5 +1,4 @@
 <script lang="ts">
-import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Eye from "@lucide/svelte/icons/eye";
@@ -10,7 +9,6 @@ import type { ActionResult } from "@sveltejs/kit";
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
-import { base } from "$app/paths";
 import { autoGrowTextarea } from "$lib/client/auto-grow-textarea";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import DiffView from "$lib/components/translate-evaluation/DiffView.svelte";
@@ -566,11 +564,7 @@ async function generatePractice(): Promise<void> {
 </svelte:head>
 
 <div class="mx-auto w-full max-w-5xl">
-	<div class="mb-8 flex flex-wrap items-center justify-between gap-3">
-		<a href="{base}/translate-eval-demo" class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-			<ArrowLeft size={15} />
-			Static visual demo
-		</a>
+	<div class="mb-8 flex flex-wrap items-center justify-end gap-3">
 		<div class="flex flex-wrap items-center gap-4">
 			{#if evaluation?.cards.length}
 				<a href="#generation-2-review" class="text-sm font-medium underline decoration-border underline-offset-4 hover:decoration-foreground">

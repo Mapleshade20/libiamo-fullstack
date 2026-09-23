@@ -333,10 +333,4 @@ $effect(() => {
 		animation-duration: 1ms;
 	}
 }
-:global(html.demo-force-reduced) .feedback-slot {
-	transition-duration: 1ms;
-}
-:global(html.demo-force-reduced) .feedback-wipe {
-	animation-duration: 1ms;
-}
 </style>

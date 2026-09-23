@@ -74,28 +74,6 @@ export type SecondDraftLocalState = {
 	commentary: string | null;
 };
 
-/** The transfer card's note shape now lives with the shared queue. */
-export type TransferNoteFixture = import("$lib/transfer-queue").TransferNote;
-
-/** Demo / presentation phase keys used by the state switcher. */
-export type DemoScene =
-	| "evaluating"
-	| "evaluating-failed"
-	| "evaluated"
-	| "evaluated-warning"
-	| "no-cards"
-	| "card-initial"
-	| "card-first-reject"
-	| "card-accept"
-	| "card-second-reject"
-	| "provider-error"
-	| "second-draft-generating"
-	| "second-draft-failed"
-	| "second-draft-ready"
-	| "second-draft-waiting"
-	| "transfer"
-	| "complete";
-
 export type CubicBezier = readonly [number, number, number, number];
 
 export type MotionTokens = {

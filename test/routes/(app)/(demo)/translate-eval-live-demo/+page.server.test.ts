@@ -22,7 +22,7 @@ vi.mock("$lib/server/translation-evaluation/verifier", () => ({
 	verifySecondDraft: mockVerifySecondDraft,
 }));
 
-import { actions, load } from "$routes/(app)/translate-eval-live-demo/+page.server";
+import { actions, load } from "$routes/(app)/(demo)/translate-eval-live-demo/+page.server";
 
 const evaluation = {
 	overallCommentary: "整体意思准确，但有一处不自然。",

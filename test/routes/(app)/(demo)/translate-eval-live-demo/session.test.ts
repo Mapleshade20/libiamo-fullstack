@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PersistedReview, parseLiveDemoTemperature, parsePersistedReview } from "$routes/(app)/translate-eval-live-demo/session";
+import { type PersistedReview, parseLiveDemoTemperature, parsePersistedReview } from "$routes/(app)/(demo)/translate-eval-live-demo/session";
 
 const persistedReview = {
 	version: 7,

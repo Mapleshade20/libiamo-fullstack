@@ -21,8 +21,6 @@ interface Props {
 	warningBody: string;
 	/** Show regenerate because of unverified cards. */
 	showRegenerate?: boolean;
-	/** Hide regenerate after Continue gate. */
-	overviewConfirmed?: boolean;
 	oncontinue?: () => void;
 	onregenerate?: () => void;
 	/** Animate title shrink + two-column expand on mount. */
@@ -41,7 +39,6 @@ let {
 	warningTitle,
 	warningBody,
 	showRegenerate = false,
-	overviewConfirmed = false,
 	oncontinue,
 	onregenerate,
 	animateEntrance = true,
@@ -109,7 +106,7 @@ onDestroy(() => stopAll(controls));
 		</h1>
 	</header>
 
-	{#if hasWarnings && !overviewConfirmed}
+	{#if hasWarnings}
 		<div class="mb-6 rounded-xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-950" role="status">
 			<p class="font-medium">{warningTitle}</p>
 			<p class="mt-1 text-amber-900/80">{warningBody}</p>

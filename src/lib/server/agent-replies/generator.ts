@@ -35,7 +35,7 @@ export const agentResponseDecisionSchema = z
 export type AgentResponseDecision = z.infer<typeof agentResponseDecisionSchema>;
 
 export type AgentHistoryMessage = {
-	id: number | string;
+	id: number;
 	role: "user" | "assistant";
 	content: string;
 	metadata?: unknown;
@@ -147,7 +147,7 @@ export function normalizeReplyTargets(
 ): { decision: AgentResponseDecision; warnings: string[] } {
 	// Threaded replies must point at a learner comment: agent messages are the
 	// model's own output and would nest its reply under itself.
-	const validIds = new Set(history.flatMap((message) => (message.role === "user" && typeof message.id === "number" ? [message.id] : [])));
+	const validIds = new Set(history.flatMap((message) => (message.role === "user" ? [message.id] : [])));
 	const warnings: string[] = [];
 	const deliveries = decision.deliveries.map((delivery) => {
 		if (delivery.replyToMessageId === null) return delivery;

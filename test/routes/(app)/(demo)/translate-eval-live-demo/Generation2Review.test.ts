@@ -1,6 +1,6 @@
 import { render } from "svelte/server";
 import { describe, expect, it, vi } from "vitest";
-import Generation2Review from "$routes/(app)/translate-eval-live-demo/Generation2Review.svelte";
+import Generation2Review from "$routes/(app)/(demo)/translate-eval-live-demo/Generation2Review.svelte";
 
 describe("Generation2Review", () => {
 	it("shows generated notes and the exact model artifacts", () => {

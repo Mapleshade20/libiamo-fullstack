@@ -574,19 +574,4 @@ function handleRetry() {
 		transition-duration: 1ms;
 	}
 }
-:global(html.demo-force-reduced) .submit-orbit--busy .submit-orbit__ring {
-	animation: none;
-	opacity: 0.85;
-}
-:global(html.demo-force-reduced) .feedback-slot,
-:global(html.demo-force-reduced) .provider-slot,
-:global(html.demo-force-reduced) .hint-rail {
-	transition-duration: 1ms;
-}
-:global(html.demo-force-reduced) .feedback-wipe {
-	animation-duration: 1ms;
-}
-:global(html.demo-force-reduced) .hint-track {
-	transition-duration: 1ms;
-}
 </style>

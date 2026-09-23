@@ -10,13 +10,6 @@ export type TranslationEvaluationLiveDemoTask = {
 	referenceParagraphs: string[];
 };
 
-export type TranslationEvaluationLiveDemoReviewNote = {
-	vocab: string;
-	targetDefinition: string;
-	nativeDefinition: string;
-	examples: Array<{ nativeText: string; targetText: string }>;
-};
-
 export const LIVE_DEMO_TEMPERATURE = {
 	min: 0,
 	max: 1,
@@ -49,22 +42,3 @@ export const TRANSLATION_EVALUATION_LIVE_DEMO_TASK: TranslationEvaluationLiveDem
 		"Don't get me wrong, I love the idea of two older cats falling in love even after the deaths of their respective mates--but these two are not the characters for that.",
 	],
 };
-
-export const TRANSLATION_EVALUATION_LIVE_DEMO_REVIEW_NOTE: TranslationEvaluationLiveDemoReviewNote = {
-	vocab: "lore",
-	targetDefinition: "traditional knowledge and stories about a subject, especially a fictional world",
-	nativeDefinition: "（尤指虚构世界的）背景知识、传说与设定",
-	examples: [
-		{ nativeText: "他们重写了多年积累的世界观设定。", targetText: "They rewrote years of lore." },
-		{ nativeText: "这款游戏有丰富而复杂的背景设定。", targetText: "The game has rich and complicated lore." },
-		{ nativeText: "粉丝们喜欢讨论这个系列的设定。", targetText: "Fans love discussing the lore of the series." },
-		{ nativeText: "我需要先补一下背景设定。", targetText: "I need to catch up on the lore first." },
-	],
-};
-
-export const TRANSLATION_EVALUATION_LIVE_DEMO_RATINGS = {
-	accuracy: "A",
-	naturalness: "B",
-	grammar: "B",
-	overall: "B",
-} as const;

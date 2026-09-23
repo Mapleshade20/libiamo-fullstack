@@ -3,8 +3,6 @@ import { MOTION_TOKENS } from "./types";
 
 export function prefersReducedMotion(): boolean {
 	if (typeof window === "undefined") return false;
-	// Demo force flag: documentElement class set by translate-eval-demo
-	if (document.documentElement.classList.contains("demo-force-reduced")) return true;
 	if (typeof window.matchMedia !== "function") return false;
 	return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
