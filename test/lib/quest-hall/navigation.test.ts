@@ -14,6 +14,7 @@ function quest(id: number): HallQuest {
 		templateInteractionType: "chat",
 		pointReward: 5,
 		sessionStatus: null,
+		evaluationPhase: null,
 		unreadCount: 0,
 		hasUnreadReply: false,
 	};

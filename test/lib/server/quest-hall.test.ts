@@ -167,6 +167,7 @@ describe("loadQuestHallData", () => {
 				id: 200,
 				taskId: 10,
 				status: "evaluated",
+				evaluationPhase: "completed",
 				startedAt: new Date("2026-04-20T08:00:00.000Z"),
 				lastSeenAssistantMessageId: 4,
 				messages: [
@@ -180,6 +181,7 @@ describe("loadQuestHallData", () => {
 				id: 199,
 				taskId: 10,
 				status: "in_progress",
+				evaluationPhase: "feedback",
 				startedAt: new Date("2026-04-19T08:00:00.000Z"),
 				lastSeenAssistantMessageId: null,
 				messages: [{ id: 1, role: "assistant" }],
@@ -200,8 +202,8 @@ describe("loadQuestHallData", () => {
 			translationMonth: "2026-04",
 			greeting: "fr:Fedor",
 			subtitle: "fr:subtitle",
-			weeklyTasks: [{ ...weeklyTask, sessionStatus: null, unreadCount: 0, hasUnreadReply: false }],
-			dailyTasks: [{ ...dailyTask, sessionStatus: "evaluated", unreadCount: 2, hasUnreadReply: true }],
+			weeklyTasks: [{ ...weeklyTask, sessionStatus: null, evaluationPhase: null, unreadCount: 0, hasUnreadReply: false }],
+			dailyTasks: [{ ...dailyTask, sessionStatus: "evaluated", evaluationPhase: "completed", unreadCount: 2, hasUnreadReply: true }],
 			translationTasks: [
 				{
 					id: 42,

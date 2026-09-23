@@ -24,7 +24,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 	return {
 		id: overrides.id ?? 1,
 		taskId: overrides.taskId ?? 100,
-		completedAt: overrides.completedAt ?? new Date(),
+		evaluationCompletedAt: overrides.completedAt ?? new Date(),
 		task: { title: overrides.taskTitle ?? "Test Task", template: { ui: overrides.ui ?? "discord" } },
 		notes: overrides.notes ?? [],
 	};

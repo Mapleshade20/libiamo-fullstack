@@ -7,9 +7,9 @@
  * creation.
  */
 
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./db";
-import { note, practiceSession } from "./db/schema";
+import { note } from "./db/schema";
 import { rateNote, studyQueueKind } from "./review";
 import { observeReviewQueue } from "./streak";
 
@@ -70,30 +70,4 @@ export async function rateTransferNote(input: {
 	const result = await rateNote(input.noteId, input.userId, input.rating, input.elapsedSeconds, { outOfBand: true, now });
 	const streak = await observeReviewQueue(input.userId, now, input.timeZone);
 	return { ...result, streak };
-}
-
-/**
- * Mark a practice session's pass as done. Idempotent per session: a repeat call is a no-op rather
- * than an error, because the client completes the pass from a queue it drained locally.
- */
-export async function completePracticeTransfer(userId: string, sessionId: number, now = new Date()) {
-	const [updated] = await db
-		.update(practiceSession)
-		.set({ transferCompletedAt: now })
-		.where(
-			and(
-				eq(practiceSession.id, sessionId),
-				eq(practiceSession.userId, userId),
-				or(eq(practiceSession.status, "completed"), eq(practiceSession.status, "evaluated")),
-				isNull(practiceSession.transferCompletedAt),
-			),
-		)
-		.returning({ id: practiceSession.id });
-	if (updated) return { completedAt: now };
-	const existing = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)),
-		columns: { transferCompletedAt: true },
-	});
-	if (!existing?.transferCompletedAt) throw new TransferError(409, "This session's practice pass is not available.");
-	return { completedAt: existing.transferCompletedAt };
 }

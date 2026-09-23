@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { LanguageCode } from "$lib/constants";
+import type { LanguageCode, PracticeEvaluationPhase } from "$lib/constants";
 import type { HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
@@ -17,6 +17,7 @@ export interface TaskPreparationTask {
 	materialsMd: string | null;
 	pointReward: number;
 	sessionStatus: HallQuestSessionStatus;
+	evaluationPhase: PracticeEvaluationPhase | null;
 }
 
 export interface TaskPreparationData {
@@ -55,6 +56,7 @@ export async function getTaskPreparationData({ userId, taskId }: GetTaskPreparat
 		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
 		columns: {
 			status: true,
+			evaluationPhase: true,
 		},
 	});
 
@@ -64,6 +66,7 @@ export async function getTaskPreparationData({ userId, taskId }: GetTaskPreparat
 		task: {
 			...result,
 			sessionStatus: latestSession?.status ?? null,
+			evaluationPhase: latestSession?.evaluationPhase ?? null,
 		},
 		nativeLanguage: userRecord?.nativeLanguage ?? null,
 	};

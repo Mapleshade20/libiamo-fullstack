@@ -1,12 +1,17 @@
 import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import type { SelfAssignedLevel, TranslationWorkflowPhase } from "$lib/constants";
-import { type HallQuest, type HallQuestSessionStatus, isHallQuestFinished } from "$lib/quest-hall";
+import { type HallQuest, type HallQuestSessionStatus, isHallQuestConversationEnded, isHallQuestFinished } from "$lib/quest-hall";
 import type { HallData, HallTranslationTask } from "$lib/server/quest-hall";
 
 export const QUEST_MENU_SECTIONS = ["daily", "weekly", "translation"] as const;
 export type QuestMenuSection = (typeof QUEST_MENU_SECTIONS)[number];
 export type QuestMenuItemKey = `${QuestMenuSection}-${number}`;
-export type QuestMenuItemState = "ready" | "active" | "finished" | "stopped" | "informational";
+/**
+ * One progress vocabulary for both task types, shown by the same status mark on every surface
+ * (recommendations, catalog, details): `active` is the task itself (conversation or draft),
+ * `reviewing` is its unfinished evaluation page, and only a completed evaluation is `finished`.
+ */
+export type QuestMenuItemState = "ready" | "active" | "reviewing" | "finished" | "stopped" | "informational";
 
 interface QuestMenuItemBase {
 	key: QuestMenuItemKey;
@@ -61,17 +66,19 @@ export function getQuestMenuItemId(key: string | null | undefined): number | nul
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function questState(task: HallQuest): QuestMenuItemState {
-	if (isHallQuestFinished(task.sessionStatus)) return "finished";
+export function questState(task: Pick<HallQuest, "sessionStatus" | "evaluationPhase" | "templateUi">): QuestMenuItemState {
+	if (isHallQuestFinished(task)) return "finished";
+	if (isHallQuestConversationEnded(task.sessionStatus)) return "reviewing";
 	if (task.sessionStatus === "in_progress") return "active";
 	if (task.sessionStatus === "abandoned") return "stopped";
 	if (!isPracticeUiImplemented(task.templateUi)) return "informational";
 	return "ready";
 }
 
-function translationState(workflowPhase: TranslationWorkflowPhase | null): QuestMenuItemState {
+export function translationState(workflowPhase: TranslationWorkflowPhase | null): QuestMenuItemState {
 	if (workflowPhase === "completed") return "finished";
-	return workflowPhase ? "active" : "ready";
+	if (workflowPhase === "draft") return "active";
+	return workflowPhase ? "reviewing" : "ready";
 }
 
 function adaptQuestItems(tasks: HallQuest[], section: "daily" | "weekly"): QuestMenuItem[] {
@@ -144,6 +151,7 @@ export function buildTranslationYearSpreads(items: QuestMenuItem[]): QuestMenuSp
 
 const RECOMMENDATION_RANK: Record<QuestMenuItemState, number> = {
 	active: 1,
+	reviewing: 1,
 	ready: 2,
 	informational: 2,
 	stopped: 3,
@@ -177,7 +185,7 @@ export function deriveQuestMenuRecommendations(
 		})
 		.map(({ item }) => item);
 
-	const urgent = candidates.filter((item) => item.hasUnread || item.state === "active").slice(0, 2);
+	const urgent = candidates.filter((item) => item.hasUnread || item.state === "active" || item.state === "reviewing").slice(0, 2);
 	if (urgent.length === 2) return urgent;
 
 	const selected = [...urgent];

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { base } from "$app/paths";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import type { FeedbackResult } from "$lib/feedback/types";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
 import { startOfNextLocalDay } from "$lib/local-day";
 import { requireUser } from "$lib/server/auth/authz";
 import { getBrowserTimezone } from "$lib/server/browser-timezone";
@@ -11,9 +12,13 @@ import { practiceSession } from "$lib/server/db/schema";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
+import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice-evaluation";
 import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
-import { completePracticeTransfer, listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
+import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
 import type { Actions, PageServerLoad } from "./$types";
+
+/** The card pass drills the notes that existed when it began; a note added mid-pass would be skipped. */
+const CARD_SET_FROZEN = "Cards cannot be added while the card practice is in progress.";
 
 function hasOversizedUserText(values: string[]) {
 	return values.some((value) => value.length > USER_TEXT_MAX_LENGTH);
@@ -33,7 +38,7 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		columns: { tutorFeedback: true, status: true, maxTurnsSnapshot: true },
+		columns: { tutorFeedback: true, status: true, maxTurnsSnapshot: true, evaluationPhase: true },
 		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
 	});
 	if (sessionData?.status === "abandoned") return null;
@@ -42,11 +47,13 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 		language: sessionData?.task?.language ?? "en",
 		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
 		maxTurns: resolveSessionMaxTurns(sessionData?.maxTurnsSnapshot, sessionData?.task?.template?.maxTurns),
+		evaluationPhase: sessionData?.evaluationPhase ?? "feedback",
 	};
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, depends }) => {
 	const user = requireUser({ locals });
+	depends(PRACTICE_NOTES_DEPENDENCY);
 
 	const taskIdStr = params.id;
 	const taskId = Number.parseInt(taskIdStr, 10);
@@ -59,7 +66,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			id: true,
 			status: true,
 			agentPromptSnapshot: true,
-			transferCompletedAt: true,
+			evaluationPhase: true,
 		},
 		with: {
 			messages: {
@@ -121,14 +128,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Check if feedback already exists
 	const existingFeedback = await getExistingFeedback(session.id);
-	// The notes the learner collected during feedback are what the transfer pass drills. Whether
-	// there is anything to practise is derived from this list; a GET never writes the column.
+	// Every note collected on this page is what the final card pass drills.
 	const transferNotes = await listTransferNotes(user.id, { type: "practice", sessionId: session.id });
 
 	return {
 		sessionId: session.id,
 		transferNotes,
-		transferCompletedAt: session.transferCompletedAt?.toISOString() ?? null,
+		evaluationPhase: session.evaluationPhase,
 		readReceipt: latestAssistantMessageId ? { sessionId: session.id, messageId: latestAssistantMessageId } : null,
 		taskId: taskIdStr,
 		taskTitle: taskData.title,
@@ -250,6 +256,7 @@ export const actions: Actions = {
 		try {
 			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
 			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (sessionContext.evaluationPhase === "transfer") return fail(409, { error: CARD_SET_FROZEN });
 			if (hasOversizedConversationContext([currentContext, previousContext], sessionContext.maxTurns)) {
 				return fail(400, { error: "Text is too long" });
 			}
@@ -307,6 +314,7 @@ export const actions: Actions = {
 		try {
 			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
 			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (sessionContext.evaluationPhase === "transfer") return fail(409, { error: CARD_SET_FROZEN });
 			if (hasOversizedConversationContext([currentContext, previousContext], sessionContext.maxTurns)) {
 				return fail(400, { error: "Text is too long" });
 			}
@@ -347,7 +355,9 @@ export const actions: Actions = {
 		) {
 			return fail(400, { error: "Invalid transfer rating" });
 		}
-		if (!(await getSessionOrFail(sessionId, user.id, taskId))) return fail(403, { error: "Access denied" });
+		const sessionContext = await getSessionContext(sessionId, user.id, taskId);
+		if (!sessionContext) return fail(403, { error: "Access denied" });
+		if (sessionContext.evaluationPhase !== "transfer") return fail(409, { error: "Card practice is not active." });
 		try {
 			return {
 				success: true,
@@ -367,7 +377,7 @@ export const actions: Actions = {
 		}
 	},
 
-	completeTransfer: async ({ request, params, locals }) => {
+	finishFeedback: async ({ request, params, locals, cookies }) => {
 		const user = requireUser({ locals });
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
@@ -375,7 +385,23 @@ export const actions: Actions = {
 		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 		if (!(await getSessionOrFail(sessionId, user.id, taskId))) return fail(403, { error: "Access denied" });
 		try {
-			await completePracticeTransfer(user.id, sessionId);
+			return { success: true, evaluationPhase: await finishPracticeFeedback(user.id, sessionId, getBrowserTimezone(cookies)) };
+		} catch (cause) {
+			if (cause instanceof TransferError) return fail(cause.status, { error: cause.message });
+			console.error("Failed to finish the practice feedback stage:", cause);
+			return fail(500, { error: "Failed to continue" });
+		}
+	},
+
+	completeTransfer: async ({ request, params, locals, cookies }) => {
+		const user = requireUser({ locals });
+		const taskId = Number.parseInt(params.id, 10);
+		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const sessionId = Number.parseInt((await request.formData()).get("sessionId") as string, 10);
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
+		if (!(await getSessionOrFail(sessionId, user.id, taskId))) return fail(403, { error: "Access denied" });
+		try {
+			await completePracticeTransfer(user.id, sessionId, getBrowserTimezone(cookies));
 			return { success: true };
 		} catch (cause) {
 			if (cause instanceof TransferError) return fail(cause.status, { error: cause.message });
@@ -401,6 +427,7 @@ export const actions: Actions = {
 		try {
 			const sessionContext = await getSessionContext(sessionId, user.id, taskId);
 			if (!sessionContext) return fail(403, { error: "Access denied" });
+			if (sessionContext.evaluationPhase === "transfer") return fail(409, { error: CARD_SET_FROZEN });
 			if (hasOversizedConversationContext([surroundingContext], sessionContext.maxTurns)) return fail(400, { error: "Text is too long" });
 			const result = await createNoteFromSelectionQA({
 				userId: user.id,

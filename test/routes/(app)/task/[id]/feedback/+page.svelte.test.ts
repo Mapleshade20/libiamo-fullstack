@@ -13,7 +13,7 @@ it("renders already-generated feedback in the server HTML", () => {
 				user: { activeLanguage: "en" },
 				conversation: { chains: [], allMessages: [] },
 				transferNotes: [],
-				transferCompletedAt: null,
+				evaluationPhase: "feedback",
 				existingFeedback: {
 					feedbackLanguage: "en",
 					annotations: [],

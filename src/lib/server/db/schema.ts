@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import type { TranslationWorkflowPhase } from "$lib/constants";
+import type { PracticeEvaluationPhase, TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
 import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak-history";
@@ -200,18 +200,18 @@ export const practiceSession = pgTable(
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
 		/**
-		 * When the learner finished the post-feedback transfer pass. Written only by the POST that
-		 * finishes a pass: it answers "was the pass done", not "is the session finished". A session
-		 * where no notes were collected has nothing to practise, and that is derived from the note
-		 * count rather than recorded here.
+		 * Where the learner is on the evaluation page once the conversation has ended. Authoritative,
+		 * like translation's `workflowPhase`: only the guarded move to `completed` credits the quest.
 		 */
-		transferCompletedAt: timestamp("transfer_completed_at"),
+		evaluationPhase: text("evaluation_phase").$type<PracticeEvaluationPhase>().notNull().default("feedback"),
+		evaluationCompletedAt: timestamp("evaluation_completed_at"),
 	},
 	(t) => [
 		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),
-		index("practice_session_archive_idx").on(t.userId, t.status, t.completedAt),
+		index("practice_session_archive_idx").on(t.userId, t.evaluationPhase, t.evaluationCompletedAt),
 		index("practice_session_expiry_idx").on(t.status, t.expiresAt),
 		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 2`),
+		check("practice_session_evaluation_phase_check", sql`${t.evaluationPhase} IN ('feedback', 'transfer', 'completed')`),
 	],
 );
 

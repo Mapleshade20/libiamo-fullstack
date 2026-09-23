@@ -12,7 +12,6 @@ import {
 } from "$lib/constants";
 import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
@@ -201,7 +200,7 @@ export const actions: Actions = {
 		}
 	},
 
-	send: async ({ request, params, locals, cookies }) => {
+	send: async ({ request, params, locals }) => {
 		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
@@ -274,7 +273,6 @@ export const actions: Actions = {
 				sendOptions.userDisplayContent = formattedMessage;
 			}
 
-			sendOptions.timeZone = getBrowserTimezone(cookies);
 			const result = await submitMessage(sessionId, formattedMessage, user.id, clientMessageId || undefined, sendOptions);
 			return { success: true, ...result };
 		} catch (e) {
@@ -285,7 +283,7 @@ export const actions: Actions = {
 		}
 	},
 
-	complete: async ({ request, params, locals, cookies }) => {
+	complete: async ({ request, params, locals }) => {
 		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
@@ -301,7 +299,7 @@ export const actions: Actions = {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			await completeSession(sessionId, getBrowserTimezone(cookies));
+			await completeSession(sessionId);
 
 			return {
 				success: true,

@@ -8,14 +8,18 @@ const { mockDb } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/transfer", () => ({ listTransferNotes: vi.fn(async () => []) }));
+vi.mock("$lib/server/transfer", () => ({ listTransferNotes: vi.fn(async () => []), rateTransferNote: vi.fn() }));
+vi.mock("$lib/server/note", () => ({ createNotesFromSelectionBatch: vi.fn() }));
+vi.mock("$lib/server/session", () => ({ getSessionOrFail: vi.fn(async () => ({ id: 42 })), resolveSessionMaxTurns: vi.fn(() => 4) }));
 vi.mock("$lib/server/feedback", () => ({
 	getExistingFeedback: vi.fn(),
 	buildFeedbackConversation: vi.fn(() => ({ chains: [], allMessages: [] })),
 }));
 
 import { getExistingFeedback } from "$lib/server/feedback";
-import { load } from "$routes/(app)/task/[id]/feedback/+page.server";
+import { createNotesFromSelectionBatch } from "$lib/server/note";
+import { rateTransferNote } from "$lib/server/transfer";
+import { actions, load } from "$routes/(app)/task/[id]/feedback/+page.server";
 
 const mockGetExistingFeedback = getExistingFeedback as ReturnType<typeof vi.fn>;
 
@@ -39,6 +43,7 @@ const mockEvent = (user: unknown, taskId = "1") =>
 	({
 		locals: { user },
 		params: { id: taskId },
+		depends: vi.fn(),
 	}) as any;
 
 describe("task feedback page load", () => {
@@ -86,5 +91,42 @@ describe("task feedback page load", () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "evaluated" }));
 		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1" }))) as any;
 		expect(result.existingFeedback).toBe(feedback);
+	});
+});
+
+describe("task feedback stage guards", () => {
+	const actionEvent = (fields: Record<string, string>) => {
+		const form = new FormData();
+		for (const [key, value] of Object.entries(fields)) form.set(key, value);
+		return {
+			locals: { user: { id: "user-1", nativeLanguage: "en" } },
+			params: { id: "1" },
+			request: { formData: async () => form },
+			cookies: { get: vi.fn() },
+		} as any;
+	};
+	const sessionIn = (evaluationPhase: string) =>
+		mockDb.query.practiceSession.findFirst.mockResolvedValue({
+			status: "evaluated",
+			evaluationPhase,
+			tutorFeedback: null,
+			maxTurnsSnapshot: 4,
+			task: { language: "es", template: { maxTurns: 4 } },
+		});
+
+	beforeEach(() => vi.clearAllMocks());
+
+	it("rates cards only while the card pass is active", async () => {
+		sessionIn("feedback");
+		const result = await actions.rateTransfer(actionEvent({ sessionId: "42", noteId: "5", rating: "3", elapsedSeconds: "4" }));
+		expect(result).toMatchObject({ status: 409 });
+		expect(rateTransferNote).not.toHaveBeenCalled();
+	});
+
+	it("keeps the card set fixed once the pass has started", async () => {
+		sessionIn("transfer");
+		const result = await actions.saveSelectionNotes(actionEvent({ sessionId: "42", selectedText: "hola" }));
+		expect(result).toMatchObject({ status: 409 });
+		expect(createNotesFromSelectionBatch).not.toHaveBeenCalled();
 	});
 });

@@ -10,6 +10,7 @@ export function quest(id: number, overrides: Partial<HallQuest> = {}): HallQuest
 		templateInteractionType: "chat",
 		pointReward: 10,
 		sessionStatus: null,
+		evaluationPhase: null,
 		unreadCount: 0,
 		hasUnreadReply: false,
 		...overrides,

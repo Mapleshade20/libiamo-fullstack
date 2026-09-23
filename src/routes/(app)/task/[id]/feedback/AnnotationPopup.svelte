@@ -19,6 +19,7 @@ let {
 	previousContext = "",
 	explanationMode = "issue",
 	onClose,
+	onSaved,
 }: {
 	annotation: AnnotationSpan;
 	messageId: number;
@@ -28,6 +29,7 @@ let {
 	previousContext?: string;
 	explanationMode?: "issue" | "good_expression";
 	onClose: () => void;
+	onSaved?: () => void;
 } = $props();
 
 let explanation = $state<string | null>(null);
@@ -157,6 +159,7 @@ async function handleSaveNote() {
 
 		if (result.type === "success") {
 			saveSuccess = true;
+			onSaved?.();
 			setTimeout(() => {
 				saveSuccess = false;
 			}, 2000);

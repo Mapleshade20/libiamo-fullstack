@@ -4,7 +4,7 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import { invalidateAll } from "$app/navigation";
+import { invalidate, invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
 import {
 	clearPracticeTransferSnapshot,
@@ -19,16 +19,15 @@ import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
-import TransferStage from "$lib/components/review/TransferStage.svelte";
+import TransferPass from "$lib/components/review/TransferPass.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import { t } from "$lib/i18n";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
 import { parseMarkedText } from "$lib/marked-text";
-import { randomExampleIndex } from "$lib/note";
-import { advanceTransferQueue, transferQueueNotes } from "$lib/transfer-queue";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -51,25 +50,49 @@ let activeAnnotation = $state<{
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
 let detailsHref = $derived(`${base}/task/${data.taskId}`);
-let transferOpen = $state(false);
+let lang = $derived((data.user.activeLanguage ?? data.language) as LanguageCode);
 let transferSnapshot = $state<PracticeTransferSnapshot | null>(null);
-let transferStartedAt = $state(0);
-let transferError = $state<string | null>(null);
-let completingTransfer = $state(false);
-let transferLang = $derived((data.user.activeLanguage ?? data.language) as LanguageCode);
+let finishingFeedback = $state(false);
+let stageError = $state<string | null>(null);
 let transferNoteIds = $derived(data.transferNotes.map((note) => note.id));
-let transferQueue = $derived(transferSnapshot ? transferQueueNotes(transferSnapshot.transfer.queue, data.transferNotes) : []);
-const reviewCountLabels = $derived({
-	new: t(transferLang, "review.count.new"),
-	learning: t(transferLang, "review.count.learning"),
-	review: t(transferLang, "review.count.review"),
-});
+/** Stages before the card pass; the pass is always the last one. */
+const FEEDBACK_STAGES = 1;
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
 	if (data.existingFeedback && !feedback) {
 		feedback = data.existingFeedback;
 	}
+});
+
+// The pass's queue is tab-scoped: restore it when it still matches the session's notes.
+$effect(() => {
+	if (data.evaluationPhase !== "transfer") {
+		transferSnapshot = null;
+		return;
+	}
+	if (transferSnapshot) return;
+	const expected = { sessionId: data.sessionId, noteIds: transferNoteIds };
+	let restored: PracticeTransferSnapshot | null = null;
+	try {
+		restored = parsePracticeTransferSnapshot(sessionStorage.getItem(practiceTransferSnapshotKey(data.sessionId)), expected);
+	} catch {
+		/* unavailable */
+	}
+	transferSnapshot = restored ?? emptyPracticeTransferSnapshot(data.sessionId, transferNoteIds);
+});
+
+// Each stage starts at the top of the page with focus on its heading.
+let lastPhase = "";
+$effect(() => {
+	const phase = data.evaluationPhase;
+	if (phase === lastPhase) return;
+	const first = lastPhase === "";
+	lastPhase = phase;
+	if (first) return;
+	window.scrollTo({ top: 0 });
+	const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('h1[tabindex="-1"]')?.focus({ preventScroll: true }));
+	return () => cancelAnimationFrame(frame);
 });
 
 // Trigger client-only generation after mount. Calling fetch from an eager
@@ -136,7 +159,9 @@ function handleAskSelection(selection: LearningSelection) {
 }
 
 async function postFeedbackAction(action: string, formData: FormData) {
-	const response = await fetch(`?/${action}`, { method: "POST", body: formData });
+	const response = await fetch(`?/${action}`, { method: "POST", body: formData }).catch(() => {
+		throw new Error(t(lang, "common.error"));
+	});
 	const result = deserialize(await response.text());
 	if (result.type !== "success") {
 		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Request failed");
@@ -152,6 +177,7 @@ async function saveSelection(selection: LearningSelection) {
 	formData.set("previousContext", selection.previousContext);
 	formData.set("sourceKind", selection.sourceKind);
 	const result = await postFeedbackAction("saveSelectionNotes", formData);
+	void refreshNotes();
 	return { count: Number(result?.count ?? 0), reason: result?.reason as string | null | undefined };
 }
 
@@ -176,6 +202,12 @@ async function saveQaNote(input: LearningSelection & { question: string; answer:
 	formData.set("question", input.question);
 	formData.set("answer", input.answer);
 	await postFeedbackAction("saveSelectionQaNote", formData);
+	void refreshNotes();
+}
+
+/** A saved note changes the size of the final card pass, so its count must not wait for a reload. */
+function refreshNotes() {
+	return invalidate(PRACTICE_NOTES_DEPENDENCY);
 }
 
 function closeAnnotationPopup() {
@@ -220,83 +252,37 @@ function getCommentContext(messageId: number, comment: string): string {
 	return [`Learner message: ${message?.text ?? ""}`, `Tutor comment: ${stripMarkTags(comment)}`].filter(Boolean).join("\n");
 }
 
-function startTransfer() {
-	transferError = null;
-	const expected = { sessionId: data.sessionId, noteIds: transferNoteIds };
-	let restored: PracticeTransferSnapshot | null = null;
-	try {
-		restored = parsePracticeTransferSnapshot(sessionStorage.getItem(practiceTransferSnapshotKey(data.sessionId)), expected);
-	} catch {
-		/* unavailable */
-	}
-	if (!restored?.transfer.initialized) {
-		restored = emptyPracticeTransferSnapshot(data.sessionId, transferNoteIds);
-		restored.transfer = {
-			initialized: true,
-			queue: data.transferNotes.map((note) => ({
-				noteId: note.id,
-				exampleIndex: randomExampleIndex(note.examples),
-				queueKind: note.queueKind,
-			})),
-		};
-	}
-	persistTransfer(restored);
-	transferStartedAt = Date.now();
-	transferOpen = true;
-}
-
-function persistTransfer(next: PracticeTransferSnapshot) {
-	transferSnapshot = next;
-	savePracticeTransferSnapshot(next);
-}
-
-async function rateTransfer(rating: 1 | 3) {
-	if (!transferSnapshot || transferSnapshot.transfer.queue.length === 0) return false;
-	const active = transferSnapshot.transfer.queue[0];
-	const note = data.transferNotes.find((item) => item.id === active.noteId);
-	if (!note) {
-		transferError = "This vocabulary note is no longer available. Reload to continue.";
-		return false;
-	}
-	const form = new FormData();
-	form.set("sessionId", String(data.sessionId));
-	form.set("noteId", String(active.noteId));
-	form.set("rating", String(rating));
-	form.set("elapsedSeconds", String(Math.max(0, Math.round((Date.now() - transferStartedAt) / 1000))));
-	try {
-		await postFeedbackAction("rateTransfer", form);
-	} catch (cause) {
-		transferError = cause instanceof Error ? cause.message : "Something went wrong. Try again.";
-		return false;
-	}
-	transferError = null;
-	const queue = advanceTransferQueue(
-		transferSnapshot.transfer.queue,
-		rating === 1 ? "incorrect" : "pass",
-		rating === 1 ? randomExampleIndex(note.examples) : undefined,
-	);
-	persistTransfer({ ...transferSnapshot, transfer: { ...transferSnapshot.transfer, queue } });
-	transferStartedAt = Date.now();
-	if (queue.length === 0) await finishTransfer();
-	return true;
-}
-
-async function finishTransfer() {
-	if (completingTransfer) return;
-	completingTransfer = true;
+async function finishFeedback() {
+	if (finishingFeedback) return;
+	finishingFeedback = true;
+	stageError = null;
 	try {
 		const form = new FormData();
 		form.set("sessionId", String(data.sessionId));
-		await postFeedbackAction("completeTransfer", form);
-		clearPracticeTransferSnapshot(data.sessionId);
-		transferOpen = false;
-		transferSnapshot = null;
+		await postFeedbackAction("finishFeedback", form);
 		await invalidateAll();
 	} catch (cause) {
-		transferError = cause instanceof Error ? cause.message : "Something went wrong. Try again.";
+		stageError = cause instanceof Error ? cause.message : t(lang, "common.error");
 	} finally {
-		completingTransfer = false;
+		finishingFeedback = false;
 	}
+}
+
+async function rateTransfer(input: { noteId: number; rating: 1 | 3; elapsedSeconds: number }) {
+	const form = new FormData();
+	form.set("sessionId", String(data.sessionId));
+	form.set("noteId", String(input.noteId));
+	form.set("rating", String(input.rating));
+	form.set("elapsedSeconds", String(input.elapsedSeconds));
+	await postFeedbackAction("rateTransfer", form);
+}
+
+async function completeTransfer() {
+	const form = new FormData();
+	form.set("sessionId", String(data.sessionId));
+	await postFeedbackAction("completeTransfer", form);
+	clearPracticeTransferSnapshot(data.sessionId);
+	await invalidateAll();
 }
 
 function getConversationExcerpt(): string {
@@ -318,7 +304,9 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 
 <ConversationReadReceipt receipt={data.readReceipt} />
 
-<StreakCompletion />
+{#if data.evaluationPhase === "completed"}
+	<StreakCompletion />
+{/if}
 <svelte:head>
 	<title>{data.taskTitle} · Feedback · Libiamo</title>
 	<meta name="description" content="Review feedback, corrections, and tutor comments for your completed practice session.">
@@ -329,10 +317,15 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
-				<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
-					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
-				</a>
+				{#if data.evaluationPhase === "completed"}
+					<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
+						<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
+						<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
+					</a>
+				{:else}
+					<!-- Like translation, an unfinished evaluation offers no way back to the task, only forward. -->
+					<span aria-hidden="true"></span>
+				{/if}
 				<div class="min-w-0 flex items-center gap-3">
 					<h1 class="min-w-0 truncate text-base">{data.taskTitle}</h1>
 					<Button
@@ -359,21 +352,21 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			</div>
 		{/if}
 
-		{#if transferOpen && transferQueue.length > 0}
-			<TransferStage
-				notes={transferQueue}
-				currentIndex={0}
-				title={t(transferLang, "eval.transfer.title")}
-				stageLabel={t(transferLang, "eval.transfer.stage")}
-				revealLabel={t(transferLang, "eval.transfer.reveal")}
-				incorrectLabel={t(transferLang, "eval.transfer.incorrect")}
-				passLabel={t(transferLang, "eval.transfer.pass")}
-				countLabels={reviewCountLabels}
-				onincorrect={() => rateTransfer(1)}
-				onpass={() => rateTransfer(3)}
-			/>
-			{#if transferError}
-				<p class="mx-auto mt-4 max-w-4xl text-sm text-red-700">{transferError}</p>
+		{#if data.evaluationPhase === "transfer"}
+			{#if transferSnapshot}
+				<TransferPass
+					{lang}
+					stage={FEEDBACK_STAGES + 1}
+					notes={data.transferNotes}
+					pass={transferSnapshot.transfer}
+					onchange={(transfer) => {
+						if (!transferSnapshot) return;
+						transferSnapshot = { ...transferSnapshot, transfer };
+						savePracticeTransferSnapshot(transferSnapshot);
+					}}
+					submitRating={rateTransfer}
+					complete={completeTransfer}
+				/>
 			{/if}
 		{:else}
 			<!-- Conversation + Comments Layout -->
@@ -532,16 +525,22 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 					</div>
 				</div>
 			</div>
-			{#if data.transferNotes.length > 0 && !data.transferCompletedAt}
-				<!-- The pass drills the notes collected above; the conversation itself already counted. -->
+			{#if data.evaluationPhase === "feedback" && feedback}
+				<!-- Every note collected above becomes the final card pass. -->
 				<div data-selection-ignore class="mt-10 rounded-lg border border-[#e8e3db] bg-white/70 p-6 text-center">
-					<h2 class="font-serif text-xl text-[#2a2520]">{t(transferLang, "eval.transfer.title")}</h2>
+					<h2 class="font-serif text-xl text-[#2a2520]">
+						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.title" : "eval.feedback.doneTitle")}
+					</h2>
 					<p class="mx-auto mt-2 max-w-md text-sm text-[#6b6560]">
-						{t(transferLang, "eval.transfer.practiceCards").replace("{count}", String(data.transferNotes.length))}
+						{data.transferNotes.length > 0
+							? t(lang, "eval.transfer.practiceCards").replace("{count}", String(data.transferNotes.length))
+							: t(lang, "eval.feedback.noCards")}
 					</p>
-					<Button class="mt-4" onclick={startTransfer}>{t(transferLang, "eval.transfer.start")}</Button>
-					{#if transferError}
-						<p class="mt-3 text-sm text-red-700">{transferError}</p>
+					<Button class="mt-4" disabled={finishingFeedback} onclick={() => void finishFeedback()}>
+						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.start" : "eval.feedback.finish")}
+					</Button>
+					{#if stageError}
+						<p class="mt-3 text-sm text-red-700" role="alert">{stageError}</p>
 					{/if}
 				</div>
 			{/if}
@@ -559,22 +558,25 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			previousContext={activeAnnotation.previousContext}
 			explanationMode={activeAnnotation.explanationMode}
 			onClose={closeAnnotationPopup}
+			onSaved={refreshNotes}
 		/>
 	{/if}
 
-	<!-- Selection actions -->
-	<SelectionActionBubble
-		lang={(data.user.activeLanguage ?? data.language) as LanguageCode}
-		sourceKey={`practice:${data.sessionId}`}
-		onAskSelection={handleAskSelection}
-		onSaveSelection={saveSelection}
-	/>
+	{#if data.evaluationPhase !== "transfer"}
+		<!-- Selection actions -->
+		<SelectionActionBubble
+			lang={(data.user.activeLanguage ?? data.language) as LanguageCode}
+			sourceKey={`practice:${data.sessionId}`}
+			onAskSelection={handleAskSelection}
+			onSaveSelection={saveSelection}
+		/>
 
-	<!-- Floating question FAB -->
-	<TutorQuestionPanel
-		appendRequest={askAppendRequest}
-		defaultSelection={{ text: getConversationExcerpt(), currentContext: getConversationExcerpt(), previousContext: "", sourceKind: "conversation" }}
-		onAsk={askTutor}
-		onSaveQa={saveQaNote}
-	/>
+		<!-- Floating question FAB -->
+		<TutorQuestionPanel
+			appendRequest={askAppendRequest}
+			defaultSelection={{ text: getConversationExcerpt(), currentContext: getConversationExcerpt(), previousContext: "", sourceKind: "conversation" }}
+			onAsk={askTutor}
+			onSaveQa={saveQaNote}
+		/>
+	{/if}
 </div>

@@ -144,6 +144,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 						id: true,
 						taskId: true,
 						status: true,
+						evaluationPhase: true,
 						startedAt: true,
 						lastSeenAssistantMessageId: true,
 					},
@@ -170,6 +171,7 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 		return {
 			...taskItem,
 			sessionStatus: (session?.status ?? null) as HallQuestSessionStatus,
+			evaluationPhase: session?.evaluationPhase ?? null,
 			unreadCount,
 			hasUnreadReply: unreadCount > 0,
 		};

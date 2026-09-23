@@ -74,13 +74,13 @@ streak's gate should be satisfied by clearing them, not by exempting them.
 | ------------ | ---------------- |
 | `src/lib/transfer-queue.ts` | `TransferQueueItem`, `advanceTransferQueue` (Incorrect → tail with a fresh example, Pass → drop), `transferQueueNotes` (queue resolved against loaded notes), snapshot validation — lifted verbatim from `translation-feedback-snapshot.ts` |
 | `src/lib/components/review/TransferStage.svelte` | the `StudyCard` wiring: queue counts, reveal, Incorrect/Pass actions, completion callback |
-| `src/lib/server/transfer.ts` | `listTransferNotes(userId, source)`, `rateTransferNote({ userId, source, noteId, rating, elapsedSeconds, timeZone })`, `completePracticeTransfer(userId, sessionId)` over `type TransferSource = { type: "practice"; sessionId: number } \| { type: "translation"; attemptId: number }` |
+| `src/lib/server/transfer.ts` | `listTransferNotes(userId, source)`, `rateTransferNote({ userId, source, noteId, rating, elapsedSeconds, timeZone })` over `type TransferSource = { type: "practice"; sessionId: number } \| { type: "translation"; attemptId: number }` |
 
 Completion stays split on purpose. The note-level pieces — listing, ownership, rating, the streak
 observation — are shared, but *finishing* a translation attempt is a transition of that attempt's
 own state machine, guarded by its phase and version and now carrying the quest credit, so
-`completeTranslationTransfer` remains in `translation-practice.ts`. Only the practice side, whose
-completion is a single nullable column, lives in `transfer.ts`.
+`completeTranslationTransfer` remains in `translation-practice.ts`, and practice's counterpart lives
+in `practice-evaluation.ts` (§2.2).
 
 `rateTransferNote` is the single place that passes `outOfBand: true` (§1.1) and, after the rating
 lands, the single place the streak's review observation is triggered for this path (see the streak
@@ -94,34 +94,35 @@ contract.
 
 ### 2.2 Practice sessions
 
-#### Pending: unify the actual completion boundary
+#### The evaluation page is a staged workflow; the card pass is its last stage
 
-The streak presentation redesign temporarily keeps practice quest credit at its existing guarded
-session-completion transition and presents the reward on entry to evaluation/feedback. Translation
-already waits for `workflowPhase === "completed"` and its final summary. When practice gains the
-planned multi-stage feedback workflow, **entering evaluation must no longer count as completing a
-quest**: all required stages must finish first. Move the server's exact-once quest-credit claim,
-the completed activity predicate, and `StreakCompletion` together to that final settlement boundary;
-do not merely postpone the animation while continuing to grant credit early. Preserve savepoint
-isolation and retry/idempotency tests. This supersedes the deliberate timing asymmetry in the
-original streak design; no workflow/schema migration is part of the presentation change itself.
+Practice quest credit used to be granted when the conversation ended, with the reward presented on
+entry to feedback. It now waits for the whole evaluation page, like translation waits for
+`workflowPhase === "completed"`.
 
-- `practiceSession` gains `transfer_completed_at timestamp null`. No change to the `session_status`
-  enum, which archive, unread, and the reply worker all read.
-- Practice notes are collected by the learner during feedback (selection and batch actions), so the
-  set is not fixed until they say so. The feedback page gets an explicit end-of-page action —
-  "practise these N cards" — that enters the stage over the notes with
-  `sourceSessionId = this session` at that moment, mirroring `enterTranslationTransfer`.
-- A session where the learner collected no notes has nothing to practise. `transfer_completed_at` is
-  written **only** by the POST that finishes a pass — with no notes there is no action to click and
-  no request to write it, so "nothing to practise" is derived from the note count, not recorded.
-  The column answers "was the pass done", not "is the session finished".
-- The stage lives inside `/task/[id]/feedback` as a phase of that page, the way translation's
-  transfer is a phase of `/translate/[id]/feedback` — not a new route.
-- Its snapshot follows the existing pattern: versioned, tab-scoped, holding only the queue
-  (`src/lib/client/practice-transfer-snapshot.ts`). It also stores the note ids the pass started
-  over, so collecting another note after starting discards the stale queue rather than drilling a
-  set that no longer matches.
+- `practiceSession.evaluation_phase` (`feedback` → `transfer` → `completed`, text + check constraint)
+  is authoritative, mirroring translation's `workflowPhase`; `evaluation_completed_at` records the
+  final claim. It replaces `transfer_completed_at`. Stages still being designed are inserted
+  between `feedback` and `transfer`; the pass is always last.
+- `completeSession` and the max-turns path of `submitMessage` no longer credit anything. The only
+  credit points are the guarded transitions in `server/practice-evaluation.ts`:
+  `finishPracticeFeedback` (feedback → transfer, or straight to completed when the session produced
+  no notes) and `completePracticeTransfer` (transfer → completed, idempotent once completed). Each
+  claim and its `creditQuestCompletion` share one transaction, and the savepoint isolation is
+  unchanged. Both require `status = 'evaluated'`, i.e. feedback has been generated.
+- The pass covers every note with `sourceSessionId = this session` when the learner leaves the
+  feedback stage. While the pass is running, note-creating actions return 409 and the selection /
+  tutor tools are not mounted, so the set cannot drift under the queue.
+- `StreakCompletion` mounts only in `completed`. The migration backfills sessions that had already
+  ended to `completed`, since they were credited under the old rule.
+- The Quest Hall, task details, and Archive follow translation: an ended conversation whose
+  evaluation is unfinished is *active* (details offer "Continue evaluation", no Completed badge, no
+  Archive entry); only `completed` is finished, and Archive orders practice by
+  `evaluation_completed_at`. Unread routing still reads `session_status`, since it only picks
+  between the session and feedback pages.
+- Client: `TransferPass.svelte` is the one card-pass implementation (queue building, rating,
+  advancing, pruning deleted notes, completion with retry). Both evaluation pages mount it and only
+  supply persistence and their two endpoints.
 
 ### 2.3 What stays separate
 
@@ -145,8 +146,8 @@ pass and the note lifecycle are shared.
 - `test/lib/server/review.test.ts` — `rateNote` rejects an unavailable card by default, accepts it
   with `outOfBand`, raises its `due` to the previous one in that case, and leaves an ordinary
   `/review` rating (including Again on a learn-ahead card) byte-identical to today's behaviour.
-- `test/lib/server/transfer.test.ts` — `completeTransfer` is idempotent per source and rejects a
-  note that does not belong to the source.
+- `test/lib/server/practice-evaluation.test.ts` — practice completion credits exactly on the winning
+  claim, is idempotent once completed, and skips the pass when there are no notes.
 
 ## 5. Work order
 

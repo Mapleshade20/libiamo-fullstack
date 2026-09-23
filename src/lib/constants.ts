@@ -227,6 +227,12 @@ export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
 
 export const TRANSLATION_WORKFLOW_PHASES = ["draft", "submitted", "correction", "second_draft", "transfer", "completed"] as const;
 export type TranslationWorkflowPhase = (typeof TRANSLATION_WORKFLOW_PHASES)[number];
+/**
+ * The stages of a finished practice session's evaluation page. New stages go between `feedback`
+ * and `transfer`: the card pass is always last, and only reaching `completed` credits the quest.
+ */
+export const PRACTICE_EVALUATION_PHASES = ["feedback", "transfer", "completed"] as const;
+export type PracticeEvaluationPhase = (typeof PRACTICE_EVALUATION_PHASES)[number];
 export const TRANSLATION_CANDIDATE_COUNT = 3;
 
 export function resolveFeedbackLanguage(input: {

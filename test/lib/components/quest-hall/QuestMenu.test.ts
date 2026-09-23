@@ -229,6 +229,7 @@ describe("QuestMenu", () => {
 							materialsMd: null,
 							pointReward: 10,
 							sessionStatus: null,
+							evaluationPhase: null,
 						},
 					},
 				},

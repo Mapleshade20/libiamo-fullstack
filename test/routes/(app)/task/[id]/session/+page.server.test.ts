@@ -346,7 +346,7 @@ describe("session page server", () => {
 				turnCount: 2,
 				pending: true,
 			});
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { maxTurns: 0, timeZone: "UTC" });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { maxTurns: 0 });
 		});
 
 		it("passes clientMessageId through to submitMessage", async () => {
@@ -362,7 +362,7 @@ describe("session page server", () => {
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { maxTurns: 0, timeZone: "UTC" });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { maxTurns: 0 });
 		});
 
 		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
@@ -508,7 +508,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toMatchObject({ success: true, pending: true });
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { maxTurns: 0, timeZone: "UTC" });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { maxTurns: 0 });
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {
@@ -691,7 +691,7 @@ describe("session page server", () => {
 			const result = await actions.complete(createFormEvent({ values: { sessionId: "789" } }));
 
 			expect(result).toMatchObject({ success: true });
-			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789, "UTC");
+			expect(mockSessionService.completeSession).toHaveBeenCalledWith(789);
 		});
 
 		it("returns fail 403 when ownership check fails", async () => {

@@ -6,7 +6,6 @@ import { getLanguageEnglishName, PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVarian
 import { db } from "./db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
 import { chatJson } from "./llm";
-import { creditQuestCompletion } from "./streak";
 
 export const sessionMessageChronologicalOrder = [asc(sessionMessage.createdAt), asc(sessionMessage.id)];
 
@@ -362,8 +361,6 @@ export type SubmitMessageOptions = {
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
-	/** The learner's browser timezone, used only when this submission completes the session. */
-	timeZone?: string;
 };
 
 export async function submitMessage(
@@ -446,8 +443,6 @@ export async function submitMessage(
 				.update(practiceSession)
 				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
 				.where(eq(practiceSession.id, sessionId));
-			// The locked `in_progress` check above fences this credit to one per completion.
-			await creditQuestCompletion(tx, userId, now, options.timeZone ?? "UTC");
 			const activeBatches = await tx.query.agentResponseBatch.findMany({
 				where: and(
 					eq(agentResponseBatch.sessionId, sessionId),
@@ -569,7 +564,7 @@ export async function submitMessage(
 	});
 }
 
-export async function completeSession(sessionId: number, timeZone = "UTC"): Promise<void> {
+export async function completeSession(sessionId: number): Promise<void> {
 	const now = new Date();
 	await db.transaction(async (tx) => {
 		// The status check and the write must share one locked view of the row: the
@@ -579,7 +574,7 @@ export async function completeSession(sessionId: number, timeZone = "UTC"): Prom
 		// its final reply, or resurrecting an already-abandoned session as completed.
 		// Lock order is session -> batch -> delivery, matching submitMessage.
 		const [locked] = await tx
-			.select({ id: practiceSession.id, status: practiceSession.status, userId: practiceSession.userId })
+			.select({ id: practiceSession.id, status: practiceSession.status })
 			.from(practiceSession)
 			.where(eq(practiceSession.id, sessionId))
 			.for("update");
@@ -617,8 +612,6 @@ export async function completeSession(sessionId: number, timeZone = "UTC"): Prom
 					),
 				);
 		}
-		// The guarded transition above is the fence that makes this credit exactly-once.
-		await creditQuestCompletion(tx, locked.userId, now, timeZone);
 	});
 }
 

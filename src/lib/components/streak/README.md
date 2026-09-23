@@ -8,8 +8,8 @@ The server owns quest/review credit. UI components never grant it.
 - An empty account-wide layout snapshot is confirmed by a visible host through `POST
   /api/streak/observe`. This passive review credit is silent, including across reloads;
   receipt metadata keeps it separate from concurrent quest rewards. The lab never sends it.
-- `StreakCompletion` is the explicit settlement gate: translation mounts it only in `completed`,
-  review in its session summary, practice temporarily on feedback entry. Pending progress survives
+- `StreakCompletion` is the explicit settlement gate: translation and practice evaluation mount it
+  only in their `completed` phase, review in its session summary. Pending progress survives
   hard navigation, and is acknowledged before an effect starts on a **visible** page. Hidden
   completion surfaces keep the reward pending. Extra quests/ratings do not replay it.
 - `StreakIndicator` owns the trigger, digits and clipboard. It does not consume completion rewards.

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "./db";
 import { note, practiceSession, translationAttempt } from "./db/schema";
 
@@ -39,13 +39,14 @@ export interface ArchiveGroup {
 export async function listCompletedActivities(userId: string, now = new Date()): Promise<ArchiveGroup[]> {
 	const [sessions, translations] = await Promise.all([
 		db.query.practiceSession.findMany({
-			where: and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["completed", "evaluated"])),
-			columns: { id: true, taskId: true, completedAt: true },
+			// Like translation, a practice session is history only once its evaluation page is done.
+			where: and(eq(practiceSession.userId, userId), eq(practiceSession.evaluationPhase, "completed")),
+			columns: { id: true, taskId: true, evaluationCompletedAt: true },
 			with: {
 				task: { columns: { title: true }, with: { template: { columns: { ui: true } } } },
 				notes: { orderBy: desc(note.id), columns: { id: true, vocab: true, targetDefinition: true, nativeDefinition: true } },
 			},
-			orderBy: desc(practiceSession.completedAt),
+			orderBy: desc(practiceSession.evaluationCompletedAt),
 		}),
 		db.query.translationAttempt.findMany({
 			where: and(eq(translationAttempt.userId, userId), eq(translationAttempt.workflowPhase, "completed")),
@@ -60,7 +61,7 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 
 	const activities: ArchiveActivity[] = [];
 	for (const session of sessions) {
-		if (!session.completedAt) continue;
+		if (!session.evaluationCompletedAt) continue;
 		activities.push({
 			id: session.id,
 			activityKey: `practice:${session.id}`,
@@ -68,7 +69,7 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 			title: session.task.title,
 			ui: session.task.template.ui,
 			href: `/task/${session.taskId}/feedback`,
-			completedAt: session.completedAt,
+			completedAt: session.evaluationCompletedAt,
 			notes: session.notes,
 		});
 	}
