@@ -204,4 +204,9 @@ describe("second draft and transfer", () => {
 		expect(set).toHaveBeenCalledWith(expect.objectContaining({ workflowPhase: "completed", completedAt: expect.any(Date) }));
 		expect(mockCreditQuest).toHaveBeenCalledWith(mockDb, "u1", expect.any(Date), TIME_ZONE);
 	});
+
+	it("treats completing an already completed attempt as success without crediting again", async () => {
+		await completeTranslationTransfer(record({ workflowPhase: "completed", practiceGeneratedAt: new Date() }), TIME_ZONE);
+		expect(mockCreditQuest).not.toHaveBeenCalled();
+	});
 });

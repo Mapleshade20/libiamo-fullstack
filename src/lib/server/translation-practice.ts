@@ -136,6 +136,8 @@ export async function rateTranslationTransferNote(input: {
 }
 
 export async function completeTranslationTransfer(record: TranslationAttemptRecord, timeZone: string) {
+	// Idempotent once completed: a retry after a lost response must not report a conflict.
+	if (record.workflowPhase === "completed") return;
 	if (record.workflowPhase !== "transfer" || !record.practiceGeneratedAt) {
 		throw new TranslationWorkflowError(409, "Transfer practice is not ready to complete.");
 	}
