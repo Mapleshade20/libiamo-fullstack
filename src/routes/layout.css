@@ -527,7 +527,9 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 }
 
 /* Shared field feedback: editing fades the border and its associated message;
-   never leave a stale destructive ring behind from aria-invalid utility classes. */
+   never leave a stale destructive ring behind from aria-invalid utility classes.
+   A faded message must not leave a blank line either, so the fade keeps it in flow and
+   `allow-discrete` then collapses it. Browsers without it collapse immediately. */
 [data-field-attention] {
 	border-color: var(--destructive);
 	box-shadow: none;
@@ -541,9 +543,7 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 		box-shadow 280ms ease-out;
 }
 [data-field-error] {
-	transition:
-		opacity 280ms ease-out,
-		visibility 0s;
+	transition: opacity 280ms ease-out;
 }
 .field-error-message {
 	display: block;
@@ -558,10 +558,10 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 }
 [data-field-error][data-dismissed="true"] {
 	opacity: 0;
-	visibility: hidden;
+	display: none;
 	transition:
 		opacity 280ms ease-out,
-		visibility 0s linear 280ms;
+		display 280ms ease-out allow-discrete;
 }
 @media (prefers-reduced-motion: reduce) {
 	[data-field-error][data-dismissed],
