@@ -16,6 +16,8 @@ import {
 } from "$lib/server/review";
 
 const USER_ID = "test-user-id";
+// UTC+8 with no DST, so local midnight is always 16:00 UTC.
+const TIME_ZONE = "Asia/Shanghai";
 
 const { mockDb } = vi.hoisted(() => {
 	const db = {
@@ -176,7 +178,7 @@ describe("rateNote", () => {
 		const logValues = vi.fn().mockResolvedValue(undefined);
 		mockDb.insert.mockReturnValue({ values: logValues });
 
-		const result = await rateNote(42, USER_ID, Rating.Good, 19, { random: () => 0.6 });
+		const result = await rateNote(42, USER_ID, Rating.Good, 19, { random: () => 0.6, timeZone: TIME_ZONE });
 
 		expect(mockDb.transaction).toHaveBeenCalledOnce();
 		expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ fsrsCard: expect.objectContaining({ reps: 1 }), updatedAt: expect.any(Date) }));
@@ -205,7 +207,9 @@ describe("rateNote", () => {
 			from: () => ({ where: () => ({ limit: () => ({ for: async () => [row] }) }) }),
 		});
 
-		await expect(rateNote(42, USER_ID, Rating.Good, 1, { now: new Date("2025-06-11T12:00:00Z") })).rejects.toBeInstanceOf(ReviewCardNotDueError);
+		await expect(rateNote(42, USER_ID, Rating.Good, 1, { now: new Date("2025-06-11T12:00:00Z"), timeZone: TIME_ZONE })).rejects.toBeInstanceOf(
+			ReviewCardNotDueError,
+		);
 		expect(mockDb.update).not.toHaveBeenCalled();
 		expect(mockDb.insert).not.toHaveBeenCalled();
 	});
@@ -226,22 +230,50 @@ describe("rateNote", () => {
 		mockDb.update.mockReturnValue({ set: updateSet });
 		mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
 
-		const result = await rateNote(42, USER_ID, Rating.Again, 1, { outOfBand: true, now: new Date("2025-06-12T12:00:00Z") });
+		const result = await rateNote(42, USER_ID, Rating.Again, 1, { outOfBand: true, now: new Date("2025-06-12T12:00:00Z"), timeZone: TIME_ZONE });
 
 		// An Again inside a transfer pass would otherwise schedule the card one minute from now,
-		// putting it into today's queue. The pass returns it through its own queue instead.
-		expect(result.nextDue).toBe("2025-06-13T00:00:00.000Z");
+		// putting it into today's queue. The pass returns it through its own queue instead. The card
+		// is now Learning, so Learn ahead would surface it 20 minutes early: it must not become
+		// available before its original midnight, even when the pass runs just before midnight.
+		expect(result.nextDue).toBe("2025-06-13T00:20:00.000Z");
+		expect(isReviewCardAvailable(result.card, new Date("2025-06-12T23:59:59Z"))).toBe(false);
+		expect(isReviewCardAvailable(result.card, new Date("2025-06-13T00:00:00Z"))).toBe(true);
+	});
+
+	it("makes a Review card due at the start of its local due day", async () => {
+		const card = createNewCard();
+		card.state = State.Review;
+		card.stability = 10;
+		card.difficulty = 5;
+		card.reps = 5;
+		card.scheduled_days = 10;
+		card.last_review = new Date("2025-06-01T02:00:00Z");
+		card.due = new Date("2025-06-11T02:00:00Z");
+		const row = { id: 42, userId: USER_ID, fsrsCard: serializeCard(card), examples: [{ nativeText: "native", targetText: "target" }] };
+		mockDb.select.mockReturnValue({
+			from: () => ({ where: () => ({ limit: () => ({ for: async () => [row] }) }) }),
+		});
+		mockDb.update.mockReturnValue({ set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })) });
+		mockDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+
+		// 10:00 local: FSRS's interval keeps that time of day, which would hide the card until 10:00.
+		const result = await rateNote(42, USER_ID, Rating.Good, 1, { now: new Date("2025-06-11T02:00:00Z"), timeZone: TIME_ZONE });
+
+		expect(result.queueKind).toBe("review");
+		expect(result.nextDue).toMatch(/T16:00:00\.000Z$/);
+		expect(Date.parse(result.nextDue)).toBeGreaterThanOrEqual(Date.parse("2025-06-11T16:00:00Z"));
 	});
 
 	it("rejects invalid ratings before opening a transaction", async () => {
-		await expect(rateNote(42, USER_ID, 5 as never, 1)).rejects.toThrow("Invalid review rating");
-		await expect(rateNote(42, USER_ID, Rating.Good, -1)).rejects.toThrow("Invalid review duration");
+		await expect(rateNote(42, USER_ID, 5 as never, 1, { timeZone: TIME_ZONE })).rejects.toThrow("Invalid review rating");
+		await expect(rateNote(42, USER_ID, Rating.Good, -1, { timeZone: TIME_ZONE })).rejects.toThrow("Invalid review duration");
 		expect(mockDb.transaction).not.toHaveBeenCalled();
 	});
 });
 
 describe("managed scheduling actions", () => {
-	it("moves due by whole days without changing the FSRS state", async () => {
+	it("moves due to the start of a later local day without changing the FSRS state", async () => {
 		const now = new Date("2025-06-11T12:00:00Z");
 		const card = createNewCard();
 		card.state = State.Review;
@@ -254,11 +286,11 @@ describe("managed scheduling actions", () => {
 		const set = vi.fn(() => ({ where: () => ({ returning }) }));
 		mockDb.update.mockReturnValue({ set });
 
-		const result = await setNoteDueInDays(42, USER_ID, 3, now);
+		const result = await setNoteDueInDays(42, USER_ID, 3, TIME_ZONE, now);
 
-		expect(result).toEqual({ due: "2025-06-14T12:00:00.000Z", queueKind: "review" });
+		expect(result).toEqual({ due: "2025-06-13T16:00:00.000Z", queueKind: "review" });
 		expect(set).toHaveBeenCalledWith({
-			fsrsCard: expect.objectContaining({ due: "2025-06-14T12:00:00.000Z", state: State.Review, reps: 8, stability: 4.5 }),
+			fsrsCard: expect.objectContaining({ due: "2025-06-13T16:00:00.000Z", state: State.Review, reps: 8, stability: 4.5 }),
 			updatedAt: now,
 		});
 	});

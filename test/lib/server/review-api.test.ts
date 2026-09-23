@@ -78,7 +78,7 @@ describe("POST /api/review/[noteId]/rate", () => {
 		mockObserveReviewQueue.mockResolvedValue({ streakDays: 4 } as never);
 		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
 		expect(response.status).toBe(200);
-		expect(mockRateNote).toHaveBeenCalledWith(12, "u", 3, 14);
+		expect(mockRateNote).toHaveBeenCalledWith(12, "u", 3, 14, { timeZone: "UTC" });
 		// The observation runs after the rating so it sees the card's new due date.
 		expect(await response.json()).toMatchObject({ nextDue: "2026-01-01T00:00:00.000Z", streak: { streakDays: 4 } });
 	});

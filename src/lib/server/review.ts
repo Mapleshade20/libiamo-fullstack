@@ -2,6 +2,7 @@ import { and, asc, eq, lte, sql } from "drizzle-orm";
 import type { Card, Grade, ReviewLog, TLearningStepsStrategy } from "ts-fsrs";
 import { BasicLearningStepsStrategy, ConvertStepUnitToMinutes, createEmptyCard, fsrs, Rating, State, StrategyMode } from "ts-fsrs";
 import { type LanguageCode, REVIEW_MAXIMUM_INTERVAL_DAYS } from "$lib/constants";
+import { addDays, localDay, startOfLocalDay } from "$lib/local-day";
 import { parseNoteExamples, randomExampleIndex } from "$lib/note";
 import type { StudyQueueKind } from "$lib/review";
 import { db } from "./db";
@@ -9,6 +10,8 @@ import { note, reviewLog } from "./db/schema";
 
 let scheduler: ReturnType<typeof fsrs> | null = null;
 
+// Must stay at least the longest (re)learning step: then every Learning card a session creates is
+// already inside the window, and an empty queue means the day is done rather than paused.
 export const ANKI_LEARN_AHEAD_MINUTES = 20;
 export const ANKI_MAXIMUM_INTERVAL_DAYS = REVIEW_MAXIMUM_INTERVAL_DAYS;
 const ANKI_LEARNING_STEPS = ["1m", "10m"] as const;
@@ -138,11 +141,28 @@ function previewIntervals(card: Card, now: Date) {
 	};
 }
 
+function isLearningState(state: State) {
+	return state === State.Learning || state === State.Relearning;
+}
+
+/** When a card enters the study queue: its due time, or earlier by Learn ahead for Learning cards. */
+function availableAt(card: Card): number {
+	return card.due.getTime() - (isLearningState(card.state) ? ANKI_LEARN_AHEAD_MINUTES * 60_000 : 0);
+}
+
+/**
+ * Review cards are day-granular, as in Anki: whatever the FSRS interval's time of day, the card
+ * enters the queue when its due day begins in the learner's timezone, so a cleared queue means the
+ * whole day's reviews are done rather than only those due before the current hour. The due day is
+ * fixed at write time; after a timezone change a card may surface a few hours off its new local
+ * midnight once, until its next rating realigns it.
+ */
+function alignToLocalDay(card: Card, day: string, timeZone: string): Date {
+	return new Date(startOfLocalDay(day, timeZone).getTime() + (isLearningState(card.state) ? ANKI_LEARN_AHEAD_MINUTES * 60_000 : 0));
+}
+
 export function isReviewCardAvailable(cardData: unknown, now: Date): boolean {
-	const card = deserializeCard(cardData);
-	if (card.due <= now) return true;
-	if (card.state !== State.Learning && card.state !== State.Relearning) return false;
-	return card.due.getTime() <= now.getTime() + ANKI_LEARN_AHEAD_MINUTES * 60_000;
+	return availableAt(deserializeCard(cardData)) <= now.getTime();
 }
 
 export class ReviewCardNotDueError extends Error {
@@ -204,19 +224,22 @@ export async function getDueNotes(userId: string, language: LanguageCode, limit 
 }
 
 export type RateNoteOptions = {
+	/** The learner's timezone, which fixes the local day a Review card becomes due on. */
+	timeZone: string;
 	random?: () => number;
 	now?: Date;
 	/**
 	 * A rating from a post-task transfer pass rather than from `/review`. It skips the availability
 	 * guard — the pass deliberately drills cards that are not due yet — and never drags those cards
-	 * into today's queue: a card that was not available keeps the later of its scheduled and its
-	 * previous due date. `/review` never sets this, so ordinary study scheduling is untouched.
+	 * into today's queue: a card that was not available cannot become available before it
+	 * previously would have. Learn ahead counts here, since the rating may turn a New card due at
+	 * the next local midnight into a Learning card that Learn ahead would surface before midnight. `/review` never sets this, so ordinary study scheduling is untouched.
 	 */
 	outOfBand?: boolean;
 };
 
-export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3 | 4, elapsedSeconds: number, options: RateNoteOptions = {}) {
-	const { random = Math.random, now = new Date(), outOfBand = false } = options;
+export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3 | 4, elapsedSeconds: number, options: RateNoteOptions) {
+	const { random = Math.random, now = new Date(), outOfBand = false, timeZone } = options;
 	const ratingMap: Record<number, Grade> = {
 		1: Rating.Again as Grade,
 		2: Rating.Hard as Grade,
@@ -237,8 +260,13 @@ export async function rateNote(noteId: number, userId: string, rating: 1 | 2 | 3
 		const available = isReviewCardAvailable(previous, now);
 		if (!available && !outOfBand) throw new ReviewCardNotDueError();
 		const result = getScheduler().next(previous, now, ratingMap[rating]);
+		// Review intervals are at least a day, so the aligned due still falls on a later local day.
+		if (result.card.state === State.Review) result.card.due = alignToLocalDay(result.card, localDay(result.card.due, timeZone), timeZone);
 		// Keep an out-of-band pass from pulling its own not-yet-due cards into today's queue.
-		if (!available) result.card.due = new Date(Math.max(result.card.due.getTime(), previous.due.getTime()));
+		if (!available) {
+			const shortfall = availableAt(previous) - availableAt(result.card);
+			if (shortfall > 0) result.card.due = new Date(result.card.due.getTime() + shortfall);
+		}
 		const serialized = serializeCard(result.card);
 		await tx.update(note).set({ fsrsCard: serialized, updatedAt: now }).where(eq(note.id, noteId));
 		await tx.insert(reviewLog).values({
@@ -274,13 +302,13 @@ async function getOwnedNoteForScheduling(transaction: Pick<typeof db, "select">,
 	return row;
 }
 
-export async function setNoteDueInDays(noteId: number, userId: string, days: number, now = new Date()) {
+export async function setNoteDueInDays(noteId: number, userId: string, days: number, timeZone: string, now = new Date()) {
 	if (!Number.isInteger(days) || days < 0 || days > ANKI_MAXIMUM_INTERVAL_DAYS) throw new Error("Invalid due-day offset.");
 	return db.transaction(async (transaction) => {
 		const row = await getOwnedNoteForScheduling(transaction, noteId, userId);
 		if (!row) return undefined;
 		const card = deserializeCard(row.fsrsCard);
-		card.due = new Date(now.getTime() + days * 86_400_000);
+		card.due = alignToLocalDay(card, addDays(localDay(now, timeZone), days), timeZone);
 		const fsrsCard = serializeCard(card);
 		const [updated] = await transaction
 			.update(note)

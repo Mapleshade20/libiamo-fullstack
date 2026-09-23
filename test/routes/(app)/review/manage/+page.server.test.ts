@@ -28,7 +28,7 @@ function loadEvent(query = "") {
 function actionEvent(values: Record<string, string>, currentUser: typeof user | null = user) {
 	const formData = new FormData();
 	for (const [key, value] of Object.entries(values)) formData.set(key, value);
-	return { locals: { user: currentUser }, request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
+	return { locals: { user: currentUser }, cookies: { get: () => "Asia/Tokyo" }, request: { formData: vi.fn().mockResolvedValue(formData) } } as any;
 }
 
 const examples = Array.from({ length: 4 }, (_, index) => ({ targetText: `target ${index}`, nativeText: `native ${index}` }));
@@ -88,7 +88,7 @@ describe("review/manage page server", () => {
 	it("sets due by an integer day offset", async () => {
 		mockSetDue.mockResolvedValue({ due: "2026-04-20T00:00:00.000Z", queueKind: "review" });
 		const result = await actions.setDue(actionEvent({ noteId: "4", days: "12" }));
-		expect(mockSetDue).toHaveBeenCalledWith(4, "u1", 12);
+		expect(mockSetDue).toHaveBeenCalledWith(4, "u1", 12, "Asia/Tokyo");
 		expect(result).toMatchObject({ success: true, scheduling: { queueKind: "review" } });
 	});
 

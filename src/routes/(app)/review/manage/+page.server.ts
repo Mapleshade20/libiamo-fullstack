@@ -3,6 +3,7 @@ import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
 import { NOTE_QUEUE_FILTERS, NOTE_SOURCE_FILTERS, type NoteQueueFilter, type NoteSourceFilter } from "$lib/note-management";
 import { managedNoteIdSchema, managedNoteSetDueSchema, managedNoteUpdateSchema } from "$lib/schemas";
 import { requireUser } from "$lib/server/auth/authz";
+import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { deleteNote, updateNote } from "$lib/server/note";
 import { browseManagedNotes, MANAGED_NOTES_PAGE_SIZE, toManagedNote } from "$lib/server/note-management";
 import { resetNoteScheduling, setNoteDueInDays } from "$lib/server/review";
@@ -68,7 +69,7 @@ export const actions: Actions = {
 		const formData = await event.request.formData();
 		const result = managedNoteSetDueSchema.safeParse({ noteId: formData.get("noteId"), days: formData.get("days") });
 		if (!result.success) return fail(400, { error: firstValidationError(result) });
-		const updated = await setNoteDueInDays(result.data.noteId, user.id, result.data.days);
+		const updated = await setNoteDueInDays(result.data.noteId, user.id, result.data.days, getBrowserTimezone(event.cookies));
 		if (!updated) return fail(404, { error: "Note not found" });
 		return { success: true, scheduling: updated };
 	},

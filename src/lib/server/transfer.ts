@@ -50,7 +50,7 @@ export async function listTransferNotes(userId: string, source: TransferSource) 
  *
  * This is the single place that passes `outOfBand`, because a pass deliberately drills notes that
  * are not due yet, and the single place the streak's review observation is triggered for this path.
- * It takes the request's timezone for that reason alone.
+ * The request's timezone serves both that observation and the rating's Review due day.
  */
 export async function rateTransferNote(input: {
 	userId: string;
@@ -67,7 +67,7 @@ export async function rateTransferNote(input: {
 	});
 	if (!owned) throw new TransferError(404, "Transfer note not found.");
 	const now = input.now ?? new Date();
-	const result = await rateNote(input.noteId, input.userId, input.rating, input.elapsedSeconds, { outOfBand: true, now });
+	const result = await rateNote(input.noteId, input.userId, input.rating, input.elapsedSeconds, { outOfBand: true, now, timeZone: input.timeZone });
 	const streak = await observeReviewQueue(input.userId, now, input.timeZone);
 	return { ...result, streak };
 }

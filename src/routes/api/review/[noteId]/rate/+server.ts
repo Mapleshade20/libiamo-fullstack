@@ -20,10 +20,11 @@ export const POST: RequestHandler = async (event) => {
 	const parsed = reviewRatingSchema.safeParse(body);
 	if (!parsed.success) return json({ error: "Invalid rating data", details: parsed.error.issues }, { status: 400 });
 	try {
-		const result = await rateNote(noteId, user.id, parsed.data.rating as 1 | 2 | 3 | 4, parsed.data.elapsedSeconds);
+		const timeZone = getBrowserTimezone(event.cookies);
+		const result = await rateNote(noteId, user.id, parsed.data.rating as 1 | 2 | 3 | 4, parsed.data.elapsedSeconds, { timeZone });
 		// After the rating, so the queue check sees the card's new due date. The streak is non-null
 		// only when something changed, which is what tells the study UI to invalidate.
-		const streak = await observeReviewQueue(user.id, new Date(), getBrowserTimezone(event.cookies));
+		const streak = await observeReviewQueue(user.id, new Date(), timeZone);
 		return json({ ...result, streak });
 	} catch (error) {
 		if (error instanceof Error && error.message === "Note not found") return json({ error: "Note not found" }, { status: 404 });
