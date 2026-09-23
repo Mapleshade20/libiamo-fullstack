@@ -348,6 +348,18 @@
 	z-index: 1;
 }
 
+/* The Hall's unread stack loads while the sweep runs, and it lives in the root layer beneath the
+   arriving page's paper: it would show through, be covered, then show again once the snapshots are
+   gone. Keep it out of the sweep and let it arrive once the page has settled. */
+#hall-nav-inbox {
+	transition: opacity 180ms ease-out;
+}
+
+html[data-page-transition^="navbar-"] #hall-nav-inbox {
+	opacity: 0;
+	transition: none;
+}
+
 /* View Transitions: directional editorial sweep between navbar sections */
 html[data-page-transition^="navbar-"] {
 	--page-slide-distance: clamp(8rem, 24vw, 24rem);
@@ -451,6 +463,10 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	html[data-page-transition]::view-transition-new(root) {
 		animation-duration: 1ms;
 		animation-delay: 0ms;
+	}
+
+	#hall-nav-inbox {
+		transition: none;
 	}
 }
 
