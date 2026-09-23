@@ -20,7 +20,7 @@ interface Props {
 	month: string;
 	today: string;
 	marks: Map<string, StreakDayMark["state"]>;
-	/** Continuous recording boundary; earlier missing days are unknown, not empty. */
+	/** The learner's sign-up day: earlier missing days are unknown, not missed. Null until loaded. */
 	since: string | null;
 	loading?: boolean;
 	lang: LanguageCode;
@@ -71,17 +71,13 @@ const cells = $derived.by(() => {
 const previousMonth = $derived(monthOffset(month, -1));
 const nextMonth = $derived(monthOffset(month, 1));
 const atPresent = $derived(nextMonth > today.slice(0, 7));
+// Nothing was recorded before sign-up, so there is nothing to page back to.
+const atStart = $derived(since === null || month <= since.slice(0, 7));
 </script>
 
 <div class="calendar">
 	<div class="month-bar">
-		<button
-			type="button"
-			class="pager"
-			onclick={() => onMonth(previousMonth)}
-			disabled={month <= "1900-01"}
-			aria-label={t(lang, "streak.previousMonth")}
-		>
+		<button type="button" class="pager" onclick={() => onMonth(previousMonth)} disabled={atStart} aria-label={t(lang, "streak.previousMonth")}>
 			<ChevronLeft size={16} aria-hidden="true" />
 		</button>
 		<span class="month-name">{monthLabel}</span>

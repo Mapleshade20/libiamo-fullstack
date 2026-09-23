@@ -59,7 +59,8 @@ export async function getStreakRecord(userId: string): Promise<StreakRecord | nu
 	return row ? toRecord(row) : null;
 }
 
-export async function getStreakCalendar(userId: string, month: string, today: string): Promise<StreakCalendarData> {
+/** `since` is the learner's local sign-up day: daily marks are recorded from then on, so only earlier days are unknown. */
+export async function getStreakCalendar(userId: string, month: string, today: string, since: string): Promise<StreakCalendarData> {
 	const { from, to } = monthRange(month);
 	// One snapshot: the aggregate and its daily marks are committed atomically by the writer.
 	return db.transaction(
@@ -70,7 +71,7 @@ export async function getStreakCalendar(userId: string, month: string, today: st
 				.from(streakDay)
 				.where(and(eq(streakDay.userId, userId), gte(streakDay.day, from), lte(streakDay.day, to)));
 			const record = row ? toRecord(row) : null;
-			return { days: calendarDays(stored, record, effectiveToday(record, today), from, to), since: row?.historySince ?? null };
+			return { days: calendarDays(stored, record, effectiveToday(record, today), from, to), since };
 		},
 		{ isolationLevel: "repeatable read", accessMode: "read only" },
 	);
@@ -143,7 +144,6 @@ async function persist(writer: Reader, userId: string, before: StreakRecord, rec
 			throughDate: record.throughDate,
 			bank: record.bank,
 			progressDate: record.progressDate,
-			historySince: sql`coalesce(${userStreak.historySince}, ${day}::date)`,
 			taskCount: record.taskCount,
 			reviewCleared: record.reviewCleared,
 			bankEarnedToday: record.bankEarnedToday,

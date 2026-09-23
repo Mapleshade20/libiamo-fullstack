@@ -3,7 +3,7 @@ title: One note lifecycle and a shared post-task transfer stage
 type:
     - feature
     - tech-debt
-status: wip
+status: done
 ---
 
 # One note lifecycle and a shared post-task transfer stage

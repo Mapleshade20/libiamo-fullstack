@@ -7,7 +7,7 @@ export const STREAK_DAY_STATES = ["lit", "covered"] as const;
 export type StreakDayState = (typeof STREAK_DAY_STATES)[number];
 
 export type StreakDayMark = { day: string; state: StreakDayState };
-export type StreakCalendarData = { days: StreakDayMark[]; since: string | null };
+export type StreakCalendarData = { days: StreakDayMark[]; since: string };
 
 export function validMonth(value: string): boolean {
 	return /^\d{4}-(0[1-9]|1[0-2])$/.test(value) && value >= "1900-01" && value <= "9998-12";

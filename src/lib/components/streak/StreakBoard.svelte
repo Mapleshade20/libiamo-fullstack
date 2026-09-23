@@ -40,12 +40,13 @@ $effect(() => {
 const remaining = $derived(counts ? (Object.entries(counts) as [LanguageCode, number][]).filter(([, count]) => count > 0) : []);
 
 let month = $state(untrack(() => today.slice(0, 7)));
-let calendar = $state<StreakCalendarData>({ days: [], since: null });
+let days = $state<StreakCalendarData["days"]>([]);
+// Kept across month fetches: it bounds paging, so it must not blink away while the next month loads.
+let since = $state<string | null>(null);
 let loading = $state(false);
 let calendarFailed = $state(false);
 let retry = $state(0);
-const marks = $derived(new Map(calendar.days.map(({ day, state }) => [day, state])));
-const since = $derived(calendar.since);
+const marks = $derived(new Map(days.map(({ day, state }) => [day, state])));
 $effect(() => {
 	if (isOpen) month = untrack(() => today.slice(0, 7));
 });
@@ -57,10 +58,11 @@ $effect(() => {
 	void view;
 	void retry;
 	calendarFailed = false;
-	calendar = { days: [], since: null };
+	days = [];
 	if (dev && streakPreview.today) {
 		const { from, to } = monthRange(selectedMonth);
-		calendar = { days: calendarDays(streakPreview.days, streakPreview.record, today, from, to), since: streakPreview.since };
+		days = calendarDays(streakPreview.days, streakPreview.record, today, from, to);
+		since = streakPreview.since;
 		loading = false;
 		return;
 	}
@@ -70,7 +72,9 @@ $effect(() => {
 		.then(async (response) => {
 			if (!response.ok) throw new Error("Calendar unavailable");
 			const result: StreakCalendarData = await response.json();
-			if (!controller.signal.aborted) calendar = result;
+			if (controller.signal.aborted) return;
+			days = result.days;
+			since = result.since;
 		})
 		.catch(() => {
 			if (!controller.signal.aborted) calendarFailed = true;

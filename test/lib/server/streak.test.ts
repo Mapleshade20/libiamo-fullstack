@@ -176,12 +176,12 @@ describe("transactional daily history", () => {
 			.mockReturnValueOnce({
 				from: () => ({
 					where: () => ({
-						limit: async () => [{ ...emptyStreakRecord(), streakDays: 12, throughDate: "2026-09-16", bank: 1, historySince: "2026-09-01" }],
+						limit: async () => [{ ...emptyStreakRecord(), streakDays: 12, throughDate: "2026-09-16", bank: 1 }],
 					}),
 				}),
 			})
 			.mockReturnValueOnce({ from: () => ({ where }) });
-		const result = await getStreakCalendar(USER_ID, "2026-09", "2026-09-18");
+		const result = await getStreakCalendar(USER_ID, "2026-09", "2026-09-18", "2026-09-01");
 		expect(result).toEqual({
 			days: [
 				{ day: "2026-09-05", state: "lit" },

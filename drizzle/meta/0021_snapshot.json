@@ -1,5 +1,5 @@
 {
-  "id": "b616cc04-f3ed-4cbd-a695-eca695dbd70d",
+  "id": "064ee413-0825-4bb5-ab43-83679968a29f",
   "prevId": "d812e906-f948-46df-8546-3e2f22bffab8",
   "version": "7",
   "dialect": "postgresql",
@@ -651,8 +651,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "transfer_completed_at": {
-          "name": "transfer_completed_at",
+        "evaluation_phase": {
+          "name": "evaluation_phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'feedback'"
+        },
+        "evaluation_completed_at": {
+          "name": "evaluation_completed_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
@@ -690,13 +697,13 @@
               "nulls": "last"
             },
             {
-              "expression": "status",
+              "expression": "evaluation_phase",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "completed_at",
+              "expression": "evaluation_completed_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -764,6 +771,10 @@
         "practice_session_follow_up_count_check": {
           "name": "practice_session_follow_up_count_check",
           "value": "\"practice_session\".\"follow_up_count\" >= 0 AND \"practice_session\".\"follow_up_count\" <= 2"
+        },
+        "practice_session_evaluation_phase_check": {
+          "name": "practice_session_evaluation_phase_check",
+          "value": "\"practice_session\".\"evaluation_phase\" IN ('feedback', 'transfer', 'completed')"
         }
       },
       "isRLSEnabled": false
@@ -1051,6 +1062,64 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.streak_day": {
+      "name": "streak_day",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "streak_day_user_id_user_id_fk": {
+          "name": "streak_day_user_id_user_id_fk",
+          "tableFrom": "streak_day",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "streak_day_user_id_day_pk": {
+          "name": "streak_day_user_id_day_pk",
+          "columns": [
+            "user_id",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "streak_day_state_check": {
+          "name": "streak_day_state_check",
+          "value": "\"streak_day\".\"state\" in ('lit', 'covered')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.task": {
