@@ -26,7 +26,7 @@ let { user, trialQuota = null, streak = null, streakDayOffset = 0 }: Props = $pr
 let langOpen = $state(false);
 function onProfileShortcutClick(event: MouseEvent) {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-	setNavbarTransitionIntent(new URL(`${base}/profile`, page.url), "forward");
+	setNavbarTransitionIntent(new URL(`${base}/profile#llm`, page.url), "forward");
 }
 function quotaPercentage(balance: TrialQuotaNavBalance) {
 	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
@@ -67,7 +67,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 		<a href="{base}/" class="flex min-h-11 items-center text-foreground"><span class="wordmark">Libiamo</span></a>
 		{#if trialQuota}
 			<a
-				href="{base}/profile"
+				href="{base}/profile#llm"
 				onclick={onProfileShortcutClick}
 				class="flex min-h-11 items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {quotaTone === 'depleted'
 							? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'

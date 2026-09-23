@@ -1,4 +1,5 @@
 <script lang="ts">
+import ExternalLink from "@lucide/svelte/icons/external-link";
 import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { onMount } from "svelte";
@@ -19,7 +20,7 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
-import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, SELF_ASSIGNED_LEVELS } from "$lib/constants";
+import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, BYOK_API_PRESETS, SELF_ASSIGNED_LEVELS } from "$lib/constants";
 import { getDisplayClock } from "$lib/display-clock";
 import { t } from "$lib/i18n";
 
@@ -82,6 +83,16 @@ let apiBaseUrlValue = $derived(form?.values?.apiBaseUrl ?? data.apiBaseUrl ?? ""
 let apiModelValue = $derived(form?.values?.apiModel ?? data.apiModel ?? "");
 let apiKeyValue = $state("");
 const canRetainApiKey = $derived(data.hasApiKey && apiBaseUrlValue === data.apiBaseUrl);
+const apiModelPlaceholder = $derived(BYOK_API_PRESETS.find((preset) => preset.baseUrl === apiBaseUrlValue)?.model ?? BYOK_API_PRESETS[0].model);
+let apiKeyInput: HTMLInputElement | null = $state(null);
+
+function applyApiPreset(preset: (typeof BYOK_API_PRESETS)[number]) {
+	// Same rule as picking the provider by hand: a key never follows a base URL change.
+	if (apiBaseUrlValue !== preset.baseUrl) apiKeyValue = "";
+	apiBaseUrlValue = preset.baseUrl;
+	apiModelValue = preset.model;
+	apiKeyInput?.focus();
+}
 let apiKeyForm: HTMLFormElement | null = $state(null);
 let showActionNotification = $state(false);
 let accountPending = $state<SocialProviderId | null>(null);
@@ -493,126 +504,152 @@ function enhancePasswordSetup() {
 		</Card.Content>
 	</Card.Root>
 
-	{#if !data.hasApiKey && data.trialQuota}
-		<Card.Root>
-			<Card.Header> <Card.Title>{t(lang, "profile.trialTitle")}</Card.Title> </Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="flex items-center justify-between text-sm">
-					<span class="text-muted-foreground">{t(lang, "profile.trialBalance")}</span>
-					<span class="font-medium tabular-nums"
-						>{trialPercent}% ({formatTokenCount(data.trialQuota.trialTokensLeft)}
-						/ {formatTokenCount(data.trialQuota.trialTokensTotal)})</span
-					>
-				</div>
-				<div class="h-3 overflow-hidden rounded-full bg-secondary">
-					<div
-						class="h-full rounded-full transition-all {trialTone === 'depleted' ? 'bg-red-500' : trialTone === 'low' ? 'bg-amber-500' : 'bg-primary'}"
-						style="width: {trialPercent}%"
-					></div>
-				</div>
-			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	<Card.Root>
-		<Card.Header> <Card.Title>{t(lang, "profile.apiTitle")}</Card.Title> </Card.Header>
-		<Card.Content>
-			{#if data.hasApiKey}
-				<p class="mb-4 text-sm text-green-700">&#x2705; {t(lang, "profile.apiConfigured")}</p>
-			{:else}
-				<p class="mb-4 text-sm text-muted-foreground">
-					{t(lang, "profile.apiNotConfiguredBefore")}
-					<a href="https://platform.deepseek.com" target="_blank" rel="noopener noreferrer" class="underline hover:text-foreground underline-offset-2"
-						>DeepSeek Platform</a
-					>
-					{t(lang, "profile.apiNotConfiguredAfter")}
-				</p>
-				{#if data.trialQuota && trialTone === "depleted"}
-					<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-						<p class="font-semibold">{t(lang, "profile.trialDepletedTitle")}</p>
-						<p class="mt-1">{t(lang, "profile.trialDepletedBody")}</p>
+	<!-- The masthead's Trial pill links here. -->
+	<section id="llm" class="scroll-mt-6 space-y-8">
+		{#if !data.hasApiKey && data.trialQuota}
+			<Card.Root>
+				<Card.Header> <Card.Title>{t(lang, "profile.trialTitle")}</Card.Title> </Card.Header>
+				<Card.Content class="space-y-3">
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-muted-foreground">{t(lang, "profile.trialBalance")}</span>
+						<span class="font-medium tabular-nums"
+							>{trialPercent}% ({formatTokenCount(data.trialQuota.trialTokensLeft)}
+							/ {formatTokenCount(data.trialQuota.trialTokensTotal)})</span
+						>
 					</div>
-				{:else if data.trialQuota && trialTone === "low"}
-					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-						<p class="font-semibold">{t(lang, "profile.trialLowTitle")}</p>
-						<p class="mt-1">{t(lang, "profile.trialLowBody")}</p>
+					<div class="h-3 overflow-hidden rounded-full bg-secondary">
+						<div
+							class="h-full rounded-full transition-all {trialTone === 'depleted' ? 'bg-red-500' : trialTone === 'low' ? 'bg-amber-500' : 'bg-primary'}"
+							style="width: {trialPercent}%"
+						></div>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		{/if}
+
+		<Card.Root>
+			<Card.Header> <Card.Title>{t(lang, "profile.apiTitle")}</Card.Title> </Card.Header>
+			<Card.Content>
+				{#if data.hasApiKey}
+					<p class="mb-4 text-sm text-green-700">&#x2705; {t(lang, "profile.apiConfigured")}</p>
+				{:else}
+					{#if data.trialQuota && trialTone === "depleted"}
+						<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+							<p class="font-semibold">{t(lang, "profile.trialDepletedTitle")}</p>
+							<p class="mt-1">{t(lang, "profile.trialDepletedBody")}</p>
+						</div>
+					{:else if data.trialQuota && trialTone === "low"}
+						<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+							<p class="font-semibold">{t(lang, "profile.trialLowTitle")}</p>
+							<p class="mt-1">{t(lang, "profile.trialLowBody")}</p>
+						</div>
+					{/if}
+					<p class="mb-2 text-sm text-muted-foreground">{t(lang, "profile.apiNotConfigured")}</p>
+					<div class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+						{#each BYOK_API_PRESETS as preset, index (preset.id)}
+							{@const label = t(lang, preset.id === "deepseek" ? "profile.apiPresetDeepseek" : "profile.apiPresetOpenrouter")}
+							{#if index > 0}
+								<span>{t(lang, "profile.apiPresetOr")}</span>
+							{/if}
+							<span class="inline-flex items-center">
+								<button
+									type="button"
+									class="min-h-11 rounded-full border border-border bg-background/70 px-3 font-medium text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
+									title={t(lang, "profile.apiPresetFill").replace("{provider}", label)}
+									onclick={() => applyApiPreset(preset)}
+								>
+									{label}
+								</button>
+								<a
+									href={preset.keyUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="inline-flex size-11 items-center justify-center rounded-full transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+									aria-label={t(lang, "profile.apiPresetGetKey").replace("{provider}", label)}
+									title={t(lang, "profile.apiPresetGetKey").replace("{provider}", label)}
+								>
+									<ExternalLink class="size-4" aria-hidden="true" />
+								</a>
+							</span>
+						{/each}
 					</div>
 				{/if}
-			{/if}
 
-			<FormErrorFocus formRef={apiKeyForm} errors={form?.errors} fieldOrder={["apiKey", "apiBaseUrl", "apiModel"]} />
-			<form
-				bind:this={apiKeyForm}
-				method="POST"
-				action="?/updateProfile"
-				oninvalidcapture={handleInvalidField}
-				use:enhance={() => {
+				<FormErrorFocus formRef={apiKeyForm} errors={form?.errors} fieldOrder={["apiKey", "apiBaseUrl", "apiModel"]} />
+				<form
+					bind:this={apiKeyForm}
+					method="POST"
+					action="?/updateProfile"
+					oninvalidcapture={handleInvalidField}
+					use:enhance={() => {
 					showActionNotification = true;
 					return async ({ update }) => {
 						await update({ reset: false });
 					};
 				}}
-				class="space-y-3"
-			>
-				<div class="space-y-2">
-					<Label for="apiKey">{t(lang, "profile.apiKey")}</Label>
-					<Input
-						id="apiKey"
-						name="apiKey"
-						type="password"
-						bind:value={apiKeyValue}
-						placeholder={canRetainApiKey ? t(lang, "profile.apiKeyKeepPlaceholder") : t(lang, "profile.apiKeyPlaceholder")}
-						aria-invalid={Boolean(form?.errors?.apiKey)}
-					/>
-					{#if form?.errors?.apiKey}
-						<p data-field-error="apiKey" class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
-					{/if}
-				</div>
-				<div class="space-y-2">
-					<Label for="apiBaseUrl">{t(lang, "profile.baseUrl")}</Label>
-					<select
-						id="apiBaseUrl"
-						name="apiBaseUrl"
-						bind:value={apiBaseUrlValue}
-						onchange={() => { apiKeyValue = ""; }}
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-						aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
-					>
-						<option value="" disabled>{t(lang, "profile.selectApiProvider")}</option>
-						{#each BYOK_API_BASE_URLS as baseUrl}
-							<option value={baseUrl}>{BYOK_API_BASE_URL_LABELS[baseUrl]} — {baseUrl}</option>
-						{/each}
-					</select>
-					{#if form?.errors?.apiBaseUrl}
-						<p data-field-error="apiBaseUrl" class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
-					{/if}
-				</div>
-				<div class="space-y-2">
-					<Label for="apiModel">{t(lang, "profile.model")}</Label>
-					<Input
-						id="apiModel"
-						name="apiModel"
-						bind:value={apiModelValue}
-						placeholder="deepseek-v4-flash"
-						aria-invalid={Boolean(form?.errors?.apiModel)}
-					/>
-					{#if form?.errors?.apiModel}
-						<p data-field-error="apiModel" class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
-					{/if}
-				</div>
-				<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-					<Button type="submit" class="min-h-11 w-full sm:w-auto"
-						>{data.hasApiKey ? t(lang, "profile.updateApiKey") : t(lang, "profile.saveApiKey")}</Button
-					>
-					{#if data.hasApiKey}
-						<Button type="submit" formaction="?/clearApiKey" variant="outline" class="min-h-11 w-full sm:w-auto"
-							>{t(lang, "profile.removeApiKey")}</Button
+					class="space-y-3"
+				>
+					<div class="space-y-2">
+						<Label for="apiKey">{t(lang, "profile.apiKey")}</Label>
+						<Input
+							id="apiKey"
+							name="apiKey"
+							bind:ref={apiKeyInput}
+							type="password"
+							bind:value={apiKeyValue}
+							placeholder={canRetainApiKey ? t(lang, "profile.apiKeyKeepPlaceholder") : t(lang, "profile.apiKeyPlaceholder")}
+							aria-invalid={Boolean(form?.errors?.apiKey)}
+						/>
+						{#if form?.errors?.apiKey}
+							<p data-field-error="apiKey" class="text-sm text-red-600">{form.errors.apiKey[0]}</p>
+						{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="apiBaseUrl">{t(lang, "profile.baseUrl")}</Label>
+						<select
+							id="apiBaseUrl"
+							name="apiBaseUrl"
+							bind:value={apiBaseUrlValue}
+							onchange={() => { apiKeyValue = ""; }}
+							class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+							aria-invalid={Boolean(form?.errors?.apiBaseUrl)}
 						>
-					{/if}
-				</div>
-			</form>
-		</Card.Content>
-	</Card.Root>
+							<option value="" disabled>{t(lang, "profile.selectApiProvider")}</option>
+							{#each BYOK_API_BASE_URLS as baseUrl}
+								<option value={baseUrl}>{BYOK_API_BASE_URL_LABELS[baseUrl]} — {baseUrl}</option>
+							{/each}
+						</select>
+						{#if form?.errors?.apiBaseUrl}
+							<p data-field-error="apiBaseUrl" class="text-sm text-red-600">{form.errors.apiBaseUrl[0]}</p>
+						{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="apiModel">{t(lang, "profile.model")}</Label>
+						<Input
+							id="apiModel"
+							name="apiModel"
+							bind:value={apiModelValue}
+							placeholder={apiModelPlaceholder}
+							aria-invalid={Boolean(form?.errors?.apiModel)}
+						/>
+						{#if form?.errors?.apiModel}
+							<p data-field-error="apiModel" class="text-sm text-red-600">{form.errors.apiModel[0]}</p>
+						{/if}
+					</div>
+					<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+						<Button type="submit" class="min-h-11 w-full sm:w-auto"
+							>{data.hasApiKey ? t(lang, "profile.updateApiKey") : t(lang, "profile.saveApiKey")}</Button
+						>
+						{#if data.hasApiKey}
+							<Button type="submit" formaction="?/clearApiKey" variant="outline" class="min-h-11 w-full sm:w-auto"
+								>{t(lang, "profile.removeApiKey")}</Button
+							>
+						{/if}
+					</div>
+				</form>
+			</Card.Content>
+		</Card.Root>
+	</section>
 
 	<Separator />
 
