@@ -5,7 +5,7 @@ import { getLanguageEnglishName, getSelfAssignedLevel, isLanguageCode, PRACTICE_
 import { db } from "./db";
 import { user as authUser } from "./db/auth.schema";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
-import { chatJson } from "./llm";
+import { chatJson, chatText } from "./llm";
 import { buildChatTranscript, describeLevel, renderScenarioSetting, renderTaskBrief, type TranscriptEntry } from "./prompt-context";
 
 export const sessionMessageChronologicalOrder = [asc(sessionMessage.createdAt), asc(sessionMessage.id)];
@@ -347,9 +347,21 @@ export type HintResult = { contentHint: string } | { phrases: string[] };
 const HINT_HISTORY_MAX_CHARACTERS = 20_000;
 const HINT_HISTORY_TRUNCATION_MARKER = "\n[... message truncated ...]\n";
 
-const ContentHintSchema = z.object({
-	contentHint: z.string().min(1).max(500).describe("One concise direction for content the learner could add, without drafting it for them."),
-});
+const WrappedContentHintSchema = z.object({ contentHint: z.string().min(1) });
+
+/** The content hint arrives as plain text; a reply that still comes wrapped in JSON is unwrapped. */
+export function unwrapContentHint(content: string): string {
+	const trimmed = content.trim();
+	if (trimmed.startsWith("{")) {
+		try {
+			const parsed = WrappedContentHintSchema.safeParse(JSON.parse(trimmed));
+			if (parsed.success) return parsed.data.contentHint.trim();
+		} catch {
+			// Not JSON after all: the reply is the hint.
+		}
+	}
+	return trimmed;
+}
 
 const ExpressionHintSchema = z.object({
 	phrases: z
@@ -403,7 +415,7 @@ export function buildHintSystemPrompt(input: HintPromptInput): string {
 	const level = describeLevel(input.learnerLevel);
 	const learner = [level ? `${learning} level: ${level}, self-assessed.` : null, native ? `Native language: ${native}.` : null].filter(Boolean);
 	const sections = [
-		`You are an expert ${learning} tutor. A learner is practising ${learning} in a role-play and asked for a hint about their next message. You always answer with a single JSON object, never with plain text.`,
+		`You are an expert ${learning} tutor. A learner is practising ${learning} in a role-play and asked for a hint about their next message.`,
 		`## TASK\n${renderTaskBrief(input.task, { objectives: true })}`,
 		`## SETTING\n${renderScenarioSetting(input.task.ui, input.task.openingState)}`,
 		...(learner.length ? [`## LEARNER\n${learner.join("\n")}`] : []),
@@ -420,13 +432,15 @@ phrases: 2 to 4 useful ${learning} words, short phrases, or sentence fragments t
 Return valid JSON only, in this exact shape: {"phrases":["fragment one","fragment two"]}`);
 	} else {
 		sections.push(`## OUTPUT
-contentHint: exactly one concise direction for what content the learner could add next.
+contentHint: exactly one direction for what content the learner could add next, in one short sentence (about 25 words at most).
 - Write it in ${hintLanguage}${hintLanguage === learning ? "" : `; quote ${learning} words only when the learner needs to recognise them in the conversation`}.
 - Choose the highest-priority missing content from the task objectives, the conversation, and the current draft together; do not suggest what the learner has already covered.
+- Give only that single most useful direction, not a list of options or follow-up steps.
+- Speak to the learner directly. Never mention objective numbers or input field names such as currentDraft or transcript.
 - Mention whether it belongs before, after, or within the draft only when that is genuinely useful.
 - Do not provide a complete sentence, suggested reply, rewrite, polishing, or text that can be pasted directly.
 
-Return valid JSON only, in this exact shape: {"contentHint":"one concise direction"}`);
+Reply with the direction itself as plain text: no JSON, quotes, labels, or Markdown.`);
 	}
 	return sections.join("\n\n");
 }
@@ -473,8 +487,9 @@ export async function generateHint(sessionId: number, input: HintRequest): Promi
 		const { value } = await chatJson({ schema: ExpressionHintSchema, messages, userId: session.userId });
 		return value;
 	}
-	const { value } = await chatJson({ schema: ContentHintSchema, messages, userId: session.userId });
-	return value;
+	// A single sentence needs no JSON envelope: models often dropped it, which only bought a repair round trip.
+	const response = await chatText({ messages, userId: session.userId });
+	return { contentHint: unwrapContentHint(response.content) };
 }
 
 export async function getSessionOrFail(sessionId: number, userId: string, taskId: number) {
