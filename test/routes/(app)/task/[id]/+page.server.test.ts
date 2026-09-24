@@ -6,6 +6,7 @@ import { hallData } from "../../../../fixtures/quest-hall";
 const mocks = vi.hoisted(() => ({
 	chatJson: vi.fn(),
 	findTask: vi.fn(),
+	findUser: vi.fn(),
 	getTaskIdentity: vi.fn(),
 	resolveRequestLineup: vi.fn(),
 	getTaskPreparationData: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 	getOrCreateTranslationAttempt: vi.fn(),
 }));
 
-vi.mock("$lib/server/db", () => ({ db: { query: { task: { findFirst: mocks.findTask } } } }));
+vi.mock("$lib/server/db", () => ({ db: { query: { task: { findFirst: mocks.findTask }, user: { findFirst: mocks.findUser } } } }));
 vi.mock("$lib/server/llm", () => ({
 	chatJson: mocks.chatJson,
 	llmErrorStatus: (error: unknown) =>
@@ -216,7 +217,17 @@ describe("Task detail +page.server", () => {
 			expect(result).toEqual({ success: true, expressions: ["Could I have the check?", "Where is the exit?"] });
 			const prompt = JSON.stringify(mockChatJson.mock.calls[0][0].messages);
 			expect(prompt).toContain("Ordering");
+			expect(prompt).toContain("Ask for the bill");
 			expect(prompt).not.toContain("Injected title");
+		});
+
+		it("tells the model the learner's level in the task language", async () => {
+			mocks.findUser.mockResolvedValueOnce({ levelSelfAssign: { en: 2, es: 2, fr: 3, ja: 2 } });
+			mockChatJson.mockResolvedValueOnce({ value: ["L'addition, s'il vous plaît."] });
+
+			await actions.generateExpressions(createActionEvent({}));
+
+			expect(mockChatJson.mock.calls[0][0].messages[1].content).toContain("advanced (3 of 3)");
 		});
 
 		it("returns 404 for translation tasks", async () => {
@@ -269,7 +280,7 @@ describe("Task detail +page.server", () => {
 
 		it("returns 400 when native language is missing", async () => {
 			const result = (await actions.evaluateTranslation(
-				createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour", targetLanguage: "fr" }),
+				createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour", targetLanguage: "fr" }, "u1", { nativeLanguage: null }),
 			)) as any;
 
 			expect(result.status).toBe(400);
@@ -288,6 +299,32 @@ describe("Task detail +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.error).toBe("Translation help text is too long");
+		});
+
+		it("judges against the stored task, with the learner's text only in the user message", async () => {
+			mockChatJson.mockResolvedValueOnce({ value: { feedback: "Good.", correction: "L'addition, s'il vous plaît." } });
+
+			await actions.evaluateTranslation(
+				createActionEvent({
+					sourceExpression: "The bill, please",
+					userTranslation: "L'addition, s'il vous plaît",
+					nativeLanguage: "en",
+					targetLanguage: "es",
+				}),
+			);
+
+			const [system, user] = mockChatJson.mock.calls[0][0].messages;
+			// The stored task decides the target language and register, not the posted form.
+			expect(system.content).toContain("French");
+			expect(system.content).toContain("Ordering");
+			expect(system.content).not.toContain("L'addition");
+			expect(JSON.parse(user.content)).toEqual({ source: "The bill, please", translation: "L'addition, s'il vous plaît" });
+		});
+
+		it("returns 404 for translation tasks", async () => {
+			const event = createActionEvent({ sourceExpression: "Hello", userTranslation: "Bonjour" });
+			event.params.id = "1";
+			await expect(actions.evaluateTranslation(event)).rejects.toMatchObject({ status: 404 });
 		});
 
 		it("evaluates a perfect translation", async () => {

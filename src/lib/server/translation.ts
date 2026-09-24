@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getLanguageEnglishName, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
-import { chatJson } from "$lib/server/llm";
+import { type ChatMessage, chatJson } from "$lib/server/llm";
 
 export const TRANSLATION_VOTE_THRESHOLD = 30;
 
@@ -26,75 +26,34 @@ export type GenerateTranslationVariantsInput = {
 	candidateCount?: number;
 };
 
-const SPANISH_GREETING_VARIANTS = [
-	"Hola.",
-	"Buenas.",
-	"¿Qué tal?",
-	"Saludos.",
-	"Muy buenas.",
-	"Buenas tardes.",
-	"Un saludo.",
-	"Hola a todos.",
-	"Encantado de saludarles.",
-];
-
-const SPANISH_FAREWELL_VARIANTS = [
-	"Adiós.",
-	"Hasta luego.",
-	"Nos vemos.",
-	"Hasta pronto.",
-	"Que te vaya bien.",
-	"Hasta la próxima.",
-	"Nos vemos pronto.",
-	"Me despido.",
-	"Hasta otra ocasión.",
-];
-
-const ENGLISH_THANKS_VARIANTS = [
-	"Thank you very much.",
-	"Thanks so much.",
-	"I really appreciate it.",
-	"Many thanks.",
-	"I am very grateful.",
-	"Thank you kindly.",
-	"I truly appreciate that.",
-	"Thanks a million.",
-	"I cannot thank you enough.",
-];
-
-function variantsFewShotMessages(candidateCount: number) {
+/**
+ * Source candidates translate the authentic reference paragraphs into the learner's prompt
+ * language. The task's translation context is trusted and stable, so it sits in the system
+ * message; the paragraphs are the per-call input.
+ */
+export function buildTranslationVariantsMessages(input: {
+	paragraphs: string[];
+	sourceLanguage: string;
+	targetLanguage: string;
+	context: string;
+	candidateCount: number;
+}): ChatMessage[] {
+	const source = getLanguageEnglishName(input.sourceLanguage);
+	const target = getLanguageEnglishName(input.targetLanguage);
+	const count = input.candidateCount;
+	const shape = JSON.stringify({
+		paragraphs: [{ paragraphIndex: 0, candidates: Array.from({ length: count }, (_, index) => `<${target} candidate ${index + 1}>`) }],
+	});
 	return [
 		{
-			role: "user" as const,
-			content: `FORMAT EXAMPLE 1\nTranslate from English to Spanish and return exactly ${candidateCount} candidates for each paragraph.\n\n[Paragraph 0]\nHello.\n\n[Paragraph 1]\nGoodbye.`,
+			role: "system",
+			content: `You are a literary and pragmatic translator. Translate each ${source} paragraph in the user message into ${target}, giving exactly ${count} natural alternatives per paragraph. Preserve meaning, register, voice, and paragraph boundaries; vary the phrasing without adding facts. The text comes from: ${input.context.trim()}
+
+Return only one JSON object, with no Markdown fences or explanation, in this shape:
+${shape}
+Include every input paragraphIndex exactly once, in order, each with exactly ${count} non-empty ${target} candidates.`,
 		},
-		{
-			role: "assistant" as const,
-			content: JSON.stringify(
-				{
-					paragraphs: [
-						{ paragraphIndex: 0, candidates: SPANISH_GREETING_VARIANTS.slice(0, candidateCount) },
-						{ paragraphIndex: 1, candidates: SPANISH_FAREWELL_VARIANTS.slice(0, candidateCount) },
-					],
-				},
-				null,
-				2,
-			),
-		},
-		{
-			role: "user" as const,
-			content: `FORMAT EXAMPLE 2\nTranslate from Japanese to English and return exactly ${candidateCount} candidates for each paragraph.\n\n[Paragraph 0]\n本当にありがとうございます。`,
-		},
-		{
-			role: "assistant" as const,
-			content: JSON.stringify(
-				{
-					paragraphs: [{ paragraphIndex: 0, candidates: ENGLISH_THANKS_VARIANTS.slice(0, candidateCount) }],
-				},
-				null,
-				2,
-			),
-		},
+		{ role: "user", content: JSON.stringify({ paragraphs: input.paragraphs.map((text, paragraphIndex) => ({ paragraphIndex, text })) }) },
 	];
 }
 
@@ -118,41 +77,10 @@ export async function generateTranslationVariants({
 	if (!Number.isInteger(candidateCount) || candidateCount < 1 || candidateCount > 10) throw new Error("Candidate count must be between 1 and 10.");
 	if (paragraphs.length === 0 || paragraphs.some((paragraph) => !paragraph.trim())) throw new Error("Source paragraphs must be non-empty.");
 	if (!context.trim()) throw new Error("Translation context must be non-empty.");
-	const outputShape = JSON.stringify(
-		{
-			paragraphs: [
-				{
-					paragraphIndex: 0,
-					candidates: Array.from({ length: candidateCount }, (_, index) => `<candidate ${index + 1}>`),
-				},
-			],
-		},
-		null,
-		2,
-	);
-
 	const { value: result } = await chatJson({
 		schema: VariantsSchema,
 		userId,
-		messages: [
-			{
-				role: "system",
-				content: `You are a literary and pragmatic translator. Translate each ${getLanguageEnglishName(sourceLanguage)} paragraph into ${getLanguageEnglishName(targetLanguage)}. Produce exactly ${candidateCount} natural alternatives per paragraph. Preserve meaning, register, voice, and paragraph boundaries; vary phrasing without adding facts.
-
-OUTPUT CONTRACT:
-- Return ONLY one valid JSON object. Do not use Markdown fences or add any explanation.
-- Use exactly this shape: ${outputShape}
-- Return every input paragraph exactly once in its original numeric order, using the same zero-based paragraphIndex.
-- Each candidates array must contain exactly ${candidateCount} non-empty strings in ${getLanguageEnglishName(targetLanguage)}.
-- Never return headings such as "[Paragraph 0]" or "**Paragraph 0:**". Never return a numbered list.
-- The following exchanges are format examples only. Follow their JSON structure, but follow the requested languages and content for the real task.`,
-			},
-			...variantsFewShotMessages(candidateCount),
-			{
-				role: "user",
-				content: `REAL TASK\nTranslate from ${getLanguageEnglishName(sourceLanguage)} to ${getLanguageEnglishName(targetLanguage)}. This is in the context of [${context}].\n\n${paragraphs.map((paragraph, index) => `[Paragraph ${index}]\n${paragraph}`).join("\n\n")}`,
-			},
-		],
+		messages: buildTranslationVariantsMessages({ paragraphs, sourceLanguage, targetLanguage, context, candidateCount }),
 		options: { temperature: 0.8, maxTokens: 8192 },
 	});
 

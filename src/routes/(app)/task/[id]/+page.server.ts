@@ -1,6 +1,6 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
-import { LANGUAGE_CODES, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH, UI_VARIANT_LABELS } from "$lib/constants";
+import { getSelfAssignedLevel, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
 import { getBrowserTimezone } from "$lib/server/browser-timezone";
@@ -19,19 +19,28 @@ import type { Actions, PageServerLoad } from "./$types";
 
 const TRANSLATION_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
 
-/** Validate and cast a language code, defaulting to "en" */
-function validateLanguageCode(code: unknown): LanguageCode {
-	if (typeof code === "string" && (LANGUAGE_CODES as readonly string[]).includes(code)) {
-		return code as LanguageCode;
-	}
-	return "en";
-}
-
 async function requireTask(params: { id: string }, kind?: TaskIdentity["interactionType"]): Promise<TaskIdentity> {
 	const taskId = parseTaskId(params.id);
 	const identity = taskId ? await getTaskIdentity(taskId) : null;
 	if (!identity || (kind && identity.interactionType !== kind)) throw error(404, "Task not found");
 	return identity;
+}
+
+/** The chat task facts translation help prompts describe. */
+async function loadTranslationHelpTask(taskId: number) {
+	return db.query.task.findFirst({
+		where: (tasks, { eq }) => eq(tasks.id, taskId),
+		columns: {
+			title: true,
+			shortObjective: true,
+			description: true,
+			objectives: true,
+			difficulty: true,
+			ui: true,
+			language: true,
+			openingState: true,
+		},
+	});
 }
 
 export const load: PageServerLoad = async (event) => {
@@ -127,23 +136,17 @@ export const actions: Actions = {
 		if (!user.nativeLanguage?.trim()) {
 			return fail(400, { error: "Please set your native language in your profile before using translation help." });
 		}
-		const task = await db.query.task.findFirst({
-			where: (tasks, { eq }) => eq(tasks.id, identity.id),
-			columns: { title: true, description: true, objectives: true, ui: true, language: true },
-		});
+		const task = await loadTranslationHelpTask(identity.id);
 		if (!task) throw error(404, "Task not found");
+		const learner = await db.query.user.findFirst({ where: (users, { eq }) => eq(users.id, user.id), columns: { levelSelfAssign: true } });
 
 		try {
 			const expressions = await generateExpressions(
-				{
-					title: task.title,
-					description: task.description,
-					objectives: task.objectives,
-					uiLabel: UI_VARIANT_LABELS[task.ui],
-				},
+				task,
 				user.nativeLanguage,
 				task.language,
 				user.id,
+				learner ? getSelfAssignedLevel(learner.levelSelfAssign, task.language) : null,
 			);
 
 			return { success: true, expressions };
@@ -155,12 +158,12 @@ export const actions: Actions = {
 	/** Evaluate a user's translation attempt and return feedback + correction */
 	evaluateTranslation: async (event) => {
 		const user = requireUser(event);
+		const identity = await requireTask(event.params, "chat");
 
 		const formData = await event.request.formData();
 		const sourceExpression = formData.get("sourceExpression");
 		const userTranslation = formData.get("userTranslation");
-		const nativeLang = formData.get("nativeLanguage");
-		const targetLang = formData.get("targetLanguage");
+		const nativeLang = user.nativeLanguage?.trim() || formData.get("nativeLanguage");
 
 		if (!sourceExpression || typeof sourceExpression !== "string" || !sourceExpression.trim()) {
 			return fail(400, { error: "Missing source expression" });
@@ -176,13 +179,17 @@ export const actions: Actions = {
 			return fail(400, { error: "Translation help text is too long" });
 		}
 
+		const task = await loadTranslationHelpTask(identity.id);
+		if (!task) throw error(404, "Task not found");
+
 		try {
 			const { feedback, correction } = await evaluateUserTranslation(
 				sourceExpression.trim(),
 				userTranslation.trim(),
 				nativeLang,
-				validateLanguageCode(targetLang),
+				task.language,
 				user.id,
+				task,
 			);
 
 			return { success: true, feedback, correction };

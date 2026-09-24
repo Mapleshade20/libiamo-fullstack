@@ -21,12 +21,34 @@ describe("generateExpressions", () => {
 	it("returns structured expressions from chatJson", async () => {
 		mockChatJson.mockResolvedValueOnce({ value: ["Could I have the check, please?", "Is this seat taken?"] });
 
-		const result = await generateExpressions({ title: "Ordering at a café" }, lang("en"), lang("fr"), "user-1");
+		const task = { title: "Ordering at a café", language: "fr", ui: "imessage" as const, objectives: ["Ask for the bill"] };
+		const result = await generateExpressions(task, lang("en"), lang("fr"), "user-1", 1);
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
 		const request = mockChatJson.mock.calls[0][0];
 		expect(request).toMatchObject({ schema: expect.anything(), options: { temperature: 0.7, maxTokens: 1024 }, userId: "user-1" });
 		expect(request.messages.map((message: { role: string }) => message.role)).toEqual(["system", "user"]);
+		// The task is this call's input; the system message stays the stable role and contract.
+		expect(request.messages[0].content).not.toContain("Ordering at a café");
+		expect(request.messages[1].content).toContain("Ordering at a café");
+		expect(request.messages[1].content).toContain("Ask for the bill");
+		expect(request.messages[1].content).toContain("beginner (1 of 3)");
+	});
+
+	it("includes the opening messages the learner will answer", async () => {
+		mockChatJson.mockResolvedValueOnce({ value: ["Je suis libre samedi."] });
+		const task = {
+			title: "Weekend plans",
+			language: "fr",
+			ui: "imessage" as const,
+			openingState: { previousMessages: [{ sender: "Léa", text: "Tu es libre samedi ?" }] },
+		};
+
+		await generateExpressions(task, lang("en"), lang("fr"));
+
+		const [system, user] = mockChatJson.mock.calls[0][0].messages;
+		expect(user.content).toContain("Léa: Tu es libre samedi ?");
+		expect(system.content).not.toContain("Tu es libre samedi");
 	});
 });
 
@@ -49,12 +71,13 @@ describe("evaluateUserTranslation", () => {
 
 		expect(result.feedback).toContain("Good attempt");
 		expect(result.correction).toContain("café au lait");
-		expect(mockChatJson).toHaveBeenCalledWith(
-			expect.objectContaining({
-				schema: expect.any(Object),
-				userId: "user-1",
-			}),
-		);
+		const request = mockChatJson.mock.calls[0][0];
+		expect(request).toMatchObject({ schema: expect.any(Object), userId: "user-1" });
+		expect(request.messages[0].content).not.toContain("café avec du lait");
+		expect(JSON.parse(request.messages[1].content)).toEqual({
+			source: "I would like a coffee with milk, please.",
+			translation: "Je voudrais un café avec du lait, s'il vous plaît.",
+		});
 	});
 
 	it("throws when chatJson rejects", async () => {

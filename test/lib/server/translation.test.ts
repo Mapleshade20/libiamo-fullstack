@@ -98,13 +98,19 @@ describe("translation service", () => {
 		expect(mockChatJson).toHaveBeenCalledTimes(1);
 		const request = mockChatJson.mock.calls[0][0];
 		expect(request.userId).toBe("u1");
-		const assistantExamples = request.messages.filter((message: { role: string }) => message.role === "assistant");
-		expect(assistantExamples).toHaveLength(2);
-		for (const example of assistantExamples) {
-			const parsed = JSON.parse(example.content);
-			for (const paragraph of parsed.paragraphs) expect(paragraph.candidates).toHaveLength(2);
-		}
-		expect(JSON.parse(assistantExamples[0].content).paragraphs).toHaveLength(2);
+		expect(request.messages.map((message: { role: string }) => message.role)).toEqual(["system", "user"]);
+		const [system, user] = request.messages;
+		// The trusted task context belongs to the system message; the user message is only the paragraphs.
+		expect(system.content).toContain("a numbered list");
+		expect(user.content).not.toContain("a numbered list");
+		expect(JSON.parse(user.content)).toEqual({
+			paragraphs: [
+				{ paragraphIndex: 0, text: "Un" },
+				{ paragraphIndex: 1, text: "Deux" },
+			],
+		});
+		const shape = JSON.parse(system.content.match(/\{"paragraphs".*\}/)?.[0] ?? "{}");
+		expect(shape.paragraphs[0].candidates).toHaveLength(2);
 	});
 
 	it("rejects missing paragraphs, duplicate indices, and incorrect candidate counts", async () => {
