@@ -107,9 +107,10 @@ describe("mailUtils", () => {
 			expect(ensureReplySubject("Project update", "(No Subject)")).toBe("Re: Project update");
 		});
 
-		it("replaces MBTI-like signatures with the sender name", () => {
-			expect(normalizeAgentSignature("Sounds good.\n\nBest,\nINTJ", "Maya")).toBe("Sounds good.\n\nBest,\nMaya");
-			expect(normalizeAgentSignature("Thanks,\n\nENFP", "Maya")).toBe("Thanks,\n\nMaya");
+		it("signs the line after a closing with the sender name", () => {
+			expect(normalizeAgentSignature("Sounds good.\n\nBest,\nThe assistant", "Maya")).toBe("Sounds good.\n\nBest,\nMaya");
+			expect(normalizeAgentSignature("Thanks,\n\nSupport team", "Maya")).toBe("Thanks,\n\nMaya");
+			expect(normalizeAgentSignature("No closing here.", "Maya")).toBe("No closing here.");
 		});
 	});
 

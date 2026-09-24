@@ -1,5 +1,8 @@
 export const UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3", "translator"] as const;
 export type UiVariant = (typeof UI_VARIANTS)[number];
+/** Interfaces of chat tasks; `translator` belongs to translation tasks alone. */
+export const CHAT_UI_VARIANTS = ["reddit", "apple_mail", "discord", "imessage", "ao3"] as const satisfies readonly UiVariant[];
+export type ChatUiVariant = (typeof CHAT_UI_VARIANTS)[number];
 
 export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
 export const MAIL_TEXT_MAX_LENGTH = 50000;
@@ -219,8 +222,17 @@ export const URGENCY_LABELS: Record<Urgency, string> = {
 	low: "Low — ~10 min (max 40 min)",
 };
 
-export const CADENCES = ["weekly", "daily", "none"] as const;
-export type Cadence = (typeof CADENCES)[number];
+/** Distribution strategies a lineup can follow. Only the distribution layer uses these; tasks never do. */
+export const LINEUP_KINDS = ["daily", "weekly"] as const;
+export type LineupKind = (typeof LINEUP_KINDS)[number];
+
+export const LINEUP_KIND_LABELS: Record<LineupKind, string> = {
+	daily: "Daily",
+	weekly: "Weekly",
+};
+
+/** Tasks each auto-filled lineup holds. */
+export const LINEUP_SIZE = 3;
 
 export const FEEDBACK_LANGUAGE_MODES = ["native", "target"] as const;
 export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];

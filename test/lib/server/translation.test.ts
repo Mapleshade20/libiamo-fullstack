@@ -32,7 +32,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 vi.mock("$lib/server/db/schema", () => ({
 	translationSourceSet: {
 		id: "sourceSet.id",
-		templateId: "sourceSet.templateId",
+		taskId: "sourceSet.taskId",
 		promptLanguage: "sourceSet.promptLanguage",
 		contentFingerprint: "sourceSet.contentFingerprint",
 	},
@@ -40,6 +40,7 @@ vi.mock("$lib/server/db/schema", () => ({
 		id: "attempt.id",
 		userId: "attempt.userId",
 		sourceSetId: "attempt.sourceSetId",
+		lineupId: "attempt.lineupId",
 		workflowPhase: "attempt.workflowPhase",
 	},
 	translationAnswer: {
@@ -53,6 +54,7 @@ vi.mock("drizzle-orm", () => ({
 	count: vi.fn(),
 	eq: vi.fn((column, value) => ({ column, value })),
 	inArray: vi.fn(),
+	isNull: vi.fn((column) => ({ column, isNull: true })),
 }));
 vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
 
@@ -132,7 +134,7 @@ describe("translation service", () => {
 		selectQueue.push([cached]);
 		const result = await getOrCreateTranslationSourceSet({
 			userId: "u1",
-			templateId: 1,
+			taskId: 1,
 			referenceParagraphs: ["Bonjour"],
 			context: "a greeting",
 			sourceLanguage: "fr",
@@ -151,7 +153,7 @@ describe("translation service", () => {
 		});
 		const result = await getOrCreateTranslationSourceSet({
 			userId: "u1",
-			templateId: 1,
+			taskId: 1,
 			referenceParagraphs: ["Bonjour"],
 			context: "a greeting",
 			sourceLanguage: "fr",
@@ -180,7 +182,9 @@ describe("translation service", () => {
 		insertQueue.push([{ id: 7 }]);
 		const random = vi.spyOn(Math, "random").mockReturnValue(0.9);
 
-		expect(await getOrCreateTranslationAttempt("u1", 4, 2)).toBe(7);
+		expect(await getOrCreateTranslationAttempt({ userId: "u1", sourceSet: { id: 4, taskId: 3, candidates: [[], []] }, lineupId: 5 })).toBe(7);
+		const attemptInsert = mockDb.insert.mock.results[0].value;
+		expect(attemptInsert.values).toHaveBeenCalledWith({ userId: "u1", taskId: 3, sourceSetId: 4, lineupId: 5, workflowPhase: "draft" });
 		const answerInsert = mockDb.insert.mock.results[1].value;
 		expect(answerInsert.values).toHaveBeenCalledWith([
 			{ attemptId: 7, paragraphIndex: 0, candidateIndex: 0, translation: "" },
@@ -194,7 +198,7 @@ describe("translation service", () => {
 	it("returns the winning attempt when concurrent creation loses the unique insert", async () => {
 		selectQueue.push([], [], [{ id: 8 }]);
 		insertQueue.push([]);
-		expect(await getOrCreateTranslationAttempt("u1", 4, 1)).toBe(8);
+		expect(await getOrCreateTranslationAttempt({ userId: "u1", sourceSet: { id: 4, taskId: 3, candidates: [[]] }, lineupId: null })).toBe(8);
 		expect(mockDb.insert).toHaveBeenCalledTimes(1);
 	});
 });

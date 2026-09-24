@@ -111,6 +111,7 @@ async function triggerGeneration() {
 
 	try {
 		const formData = new FormData();
+		formData.set("sessionId", String(data.sessionId));
 		const response = await fetch("?/generateFeedback", {
 			method: "POST",
 			body: formData,

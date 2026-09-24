@@ -19,7 +19,7 @@ describe("Quest Hall routing", () => {
 	it.each([
 		["daily-7", "/task/7"],
 		["weekly-9", "/task/9"],
-		["translation-22", "/translate/22"],
+		["translation-22", "/task/22"],
 	])("redirects legacy %s without catalog membership checks", async (key, location) => {
 		await expect(
 			load({ locals: { user: { id: "u1" } }, url: new URL(`https://libiamo.test/?view=prepare&task=${key}`) } as any),

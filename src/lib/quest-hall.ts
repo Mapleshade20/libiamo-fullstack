@@ -1,15 +1,15 @@
-import type { PracticeEvaluationPhase } from "$lib/constants";
+import type { PracticeEvaluationPhase, UiVariant } from "$lib/constants";
 
 export type HallQuestSessionStatus = "in_progress" | "completed" | "evaluated" | "abandoned" | null;
 
+/** One practice task as it stands in a lineup, with the learner's progress in that lineup. */
 export interface HallQuest {
 	id: number;
+	lineupId: number;
 	title: string;
 	shortObjective: string | null;
-	templateUi: string;
-	templateDifficulty: number;
-	templateInteractionType: string;
-	pointReward: number;
+	ui: UiVariant;
+	difficulty: number;
 	sessionStatus: HallQuestSessionStatus;
 	/** Progress through the evaluation page once the conversation has ended. */
 	evaluationPhase: PracticeEvaluationPhase | null;

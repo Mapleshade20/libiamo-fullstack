@@ -2,164 +2,161 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import {
-	CADENCES,
+	type ChatUiVariant,
 	INTERACTION_TYPES,
 	LANGUAGE_CODES,
+	LINEUP_KINDS,
 	MAIL_TEXT_MAX_LENGTH,
 	PRACTICE_UI_TEXT_MAX_LENGTH,
 	UI_VARIANTS,
-	type UiVariant,
 	URGENCIES,
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
 
+export const TASK_JSON_VERSION = 4;
+
 dayjs.extend(customParseFormat);
 
-const templateContentFields = {
-	titleBase: z.string().min(1, "Title is required"),
-	shortObjectiveBase: z.string().optional(),
-	descriptionBase: z.string().optional(),
-	materialsMd: z.string().optional(),
-	objectivesBase: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-	translationReference: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return null;
-			const paragraphs = v
-				.split(/\n\s*\n/)
-				.map((paragraph) => paragraph.trim())
-				.filter(Boolean);
-			return paragraphs.length > 0 ? paragraphs : null;
-		}),
-	tags: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-};
+const ROTATION_OPTIONS = ["none", ...LINEUP_KINDS] as const;
+export type TaskRotation = (typeof ROTATION_OPTIONS)[number];
 
-const contributionContentFields = {
-	titleBase: z.string().min(1, "Title is required").max(USER_TEXT_MAX_LENGTH),
-	shortObjectiveBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	descriptionBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	materialsMd: z.string().max(USER_LONG_TEXT_MAX_LENGTH).optional(),
-	objectivesBase: z
-		.string()
-		.max(USER_LONG_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-	agentPromptBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	translationReference: z
-		.string()
-		.max(USER_LONG_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return null;
-			const paragraphs = v
-				.split(/\n\s*\n/)
-				.map((paragraph) => paragraph.trim())
-				.filter(Boolean);
-			return paragraphs.length > 0 ? paragraphs : null;
-		}),
-	tags: z
-		.string()
-		.max(USER_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-};
+function blankToNull(value: unknown) {
+	return value === undefined || value === null || (typeof value === "string" && value.trim() === "") ? null : value;
+}
 
-const templateCore = {
+/** Optional text: blank input is stored as null. */
+function optionalText(max: number) {
+	return z.preprocess((value) => (typeof value === "string" ? blankToNull(value.trim()) : blankToNull(value)), z.string().max(max).nullable());
+}
+
+/** A form string split by `separator`, or an already-split array (JSON import). Empty becomes null. */
+function textList(separator: RegExp, max: number) {
+	return z.preprocess(
+		(value) => {
+			if (typeof value === "string") {
+				if (value.length > max) return value;
+				return value
+					.split(separator)
+					.map((item) => item.trim())
+					.filter(Boolean);
+			}
+			return Array.isArray(value) ? value.map((item) => (typeof item === "string" ? item.trim() : item)).filter(Boolean) : value;
+		},
+		z
+			.array(z.string().max(max))
+			.nullable()
+			.optional()
+			.transform((items) => (items && items.length > 0 ? items : null)),
+	);
+}
+
+/** An optional positive count; blank and zero mean "none". */
+const optionalCount = z.preprocess((value) => {
+	const blank = blankToNull(value);
+	return blank === null || Number(blank) === 0 ? null : Number(blank);
+}, z.number().int().positive().nullable());
+
+/** Opening state arrives as a JSON string from the editor and as an object from JSON import. */
+const openingStateInput = z.preprocess((value) => {
+	if (typeof value !== "string") return value ?? null;
+	if (!value.trim()) return null;
+	try {
+		return JSON.parse(value);
+	} catch {
+		return value;
+	}
+}, z.record(z.string(), z.unknown()).nullable());
+
+const taskContentShape = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
 	ui: z.enum(UI_VARIANTS),
-	urgency: z.enum(URGENCIES).nullable().optional(),
-	...templateContentFields,
+	urgency: z.preprocess(blankToNull, z.enum(URGENCIES).nullable()),
+	title: z.string().trim().min(1, "Title is required").max(USER_TEXT_MAX_LENGTH),
+	shortObjective: optionalText(USER_TEXT_MAX_LENGTH),
+	description: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	objectives: textList(/\n/, USER_LONG_TEXT_MAX_LENGTH),
+	materialsMd: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	tags: textList(/,/, USER_TEXT_MAX_LENGTH),
+	agentPrompt: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	openingState: openingStateInput,
+	referenceParagraphs: textList(/\n\s*\n/, USER_LONG_TEXT_MAX_LENGTH),
+	translationContext: optionalText(USER_TEXT_MAX_LENGTH),
 };
 
-const templateContributionCore = {
-	language: z.enum(LANGUAGE_CODES),
-	interactionType: z.enum(INTERACTION_TYPES),
-	ui: z.enum(UI_VARIANTS),
-	urgency: z.enum(URGENCIES).nullable().optional(),
-	...contributionContentFields,
-};
+type TaskContent = z.infer<z.ZodObject<typeof taskContentShape>>;
 
-const translateUiRefine = (data: { interactionType: string; ui: string }) => (data.interactionType === "translate") === (data.ui === "translator");
-
-const translateUiMessage = 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise';
-
-function validateTranslationContent(
-	data: { interactionType: string; urgency?: string | null; agentPromptBase?: string | null; translationReference?: string[] | null },
-	ctx: z.RefinementCtx,
-) {
-	if (data.interactionType !== "translate") {
-		if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+function validateTaskContent(data: TaskContent, ctx: z.RefinementCtx) {
+	if ((data.interactionType === "translate") !== (data.ui === "translator")) {
+		ctx.addIssue({ code: "custom", message: 'UI must be "translator" exactly when the task is a translation', path: ["ui"] });
 		return;
 	}
-	if (!data.agentPromptBase?.trim()) {
-		ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
+	if (data.interactionType === "translate") {
+		if (!data.translationContext) ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["translationContext"] });
+		if (!data.referenceParagraphs?.length) {
+			ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["referenceParagraphs"] });
+		}
+		return;
 	}
-	if (!data.translationReference?.length) {
-		ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
+	if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+	const openingState = validateOpeningState(data.ui as ChatUiVariant, data.openingState ?? {});
+	if (!openingState.success) {
+		ctx.addIssue({ code: "custom", message: `Invalid opening state: ${z.prettifyError(openingState.error)}`, path: ["openingState"] });
 	}
 }
 
-function normalizeTranslationContent<T extends { interactionType: string; shortObjectiveBase?: string | null; materialsMd?: string | null }>(
-	data: T,
-) {
-	return data.interactionType === "translate" ? { ...data, shortObjectiveBase: null, materialsMd: null } : data;
+/** Clears the columns the other task kind owns, matching the database's kind constraint. */
+function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null }>(data: T): T {
+	if (data.interactionType === "translate") {
+		return {
+			...data,
+			urgency: null,
+			agentPrompt: null,
+			openingState: null,
+			shortObjective: null,
+			materialsMd: null,
+			objectives: null,
+			...("maxTurns" in data ? { maxTurns: null } : {}),
+		};
+	}
+	const openingState = validateOpeningState(data.ui as ChatUiVariant, data.openingState ?? {});
+	return {
+		...data,
+		openingState: openingState.success ? (openingState.data as Record<string, unknown>) : data.openingState,
+		referenceParagraphs: null,
+		translationContext: null,
+	};
 }
 
-export const templateSchema = z
+/** An admin-authored task, from the task form or a JSON import. */
+export const taskSchema = z
 	.object({
-		...templateCore,
-		cadence: z.enum(CADENCES),
+		...taskContentShape,
 		difficulty: z.coerce.number().int().min(1).max(3),
-		maxTurns: z.coerce.number().int().min(0).optional(),
-		estimatedWords: z.coerce.number().int().min(0).optional(),
-		pointReward: z.coerce.number().int().min(0),
-		gemReward: z.coerce.number().int().min(0),
-		agentPromptBase: z.string().optional(),
+		maxTurns: optionalCount,
+		estimatedWords: optionalCount,
 	})
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent)
-	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
+	.superRefine(validateTaskContent)
+	.transform(normalizeTaskContent);
 
-export const templateContributionSchema = z
-	.object({ ...templateContributionCore })
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent)
-	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
+/** A learner-proposed task. Scheduling-related and scoring fields are left to the reviewing admin. */
+export const taskContributionSchema = z.object(taskContentShape).superRefine(validateTaskContent).transform(normalizeTaskContent);
+
+/** Auto-rotation pool membership chosen in the admin task editor. */
+export const taskRotationSchema = z.preprocess((value) => blankToNull(value) ?? "none", z.enum(ROTATION_OPTIONS));
+
+/** The single-task JSON document used by admin export and import; `task` is parsed by `taskSchema`. */
+export const taskJsonSchema = z.object({
+	version: z.literal(TASK_JSON_VERSION),
+	task: z.record(z.string(), z.unknown()),
+});
+
+/** Import-only task properties that live outside the task form. */
+export const taskJsonExtrasSchema = z.object({
+	isActive: z.boolean().default(true),
+	rotation: taskRotationSchema.default("none"),
+});
 
 // ── openingState per-UI schemas ───────────────────────────────────────
 const uiText = z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH);
@@ -276,10 +273,6 @@ export const ao3OpeningStateSchema = z.object({
 		})
 		.optional(),
 	previousComments: z.array(ao3CommentSchema).optional(),
-});
-
-export const translatorOpeningStateSchema = z.object({
-	sourceText: uiText.min(1, "Source text is required"),
 });
 
 // ── Opening state editor metadata ─────────────────────────────────────
@@ -414,36 +407,33 @@ export const openingStateSchemas = {
 			},
 		],
 	} satisfies OpeningStateEditorMeta),
-	translator: translatorOpeningStateSchema.meta({
-		fields: [{ type: "textarea", key: "sourceText", label: "Source Text", rows: 4, placeholder: "Text to translate...", required: true }],
-	} satisfies OpeningStateEditorMeta),
-} satisfies Record<UiVariant, z.ZodType>;
+} satisfies Record<ChatUiVariant, z.ZodType>;
 
-export function validateOpeningState(ui: UiVariant, data: unknown) {
+export function validateOpeningState(ui: ChatUiVariant, data: unknown) {
 	return openingStateSchemas[ui].safeParse(data);
 }
 
-export function getEditorFields(ui: UiVariant): FieldDef[] {
+export function getEditorFields(ui: ChatUiVariant): FieldDef[] {
 	return (openingStateSchemas[ui].meta() as OpeningStateEditorMeta | undefined)?.fields ?? [];
 }
 
-// ── Schedule ──────────────────────────────────────────────────────────
-export const scheduleManualSchema = z.object({
-	templateId: z.coerce.number().int().positive(),
-	// Validate both ISO week formats and real calendar dates
-	date: z.string().refine((value) => {
-		const standardDateRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-		// Restrict weeks to valid ISO range: 01 to 53
-		const isoWeekRegex = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+// ── Lineups ───────────────────────────────────────────────────────────
+const ISO_WEEK = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+const CALENDAR_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-		if (isoWeekRegex.test(value)) {
-			return true;
+/** A manual lineup entry: daily lineups take a date, weekly lineups an ISO week (`YYYY-Www`). */
+export const lineupEntrySchema = z
+	.object({
+		taskId: z.coerce.number().int().positive(),
+		kind: z.enum(LINEUP_KINDS),
+		date: z.string().trim(),
+	})
+	.superRefine((data, ctx) => {
+		if (data.kind === "weekly" ? !ISO_WEEK.test(data.date) : !(CALENDAR_DATE.test(data.date) && dayjs(data.date, "YYYY-MM-DD", true).isValid())) {
+			ctx.addIssue({
+				code: "custom",
+				message: data.kind === "weekly" ? "Weekly lineups need an ISO week (YYYY-Www)" : "Daily lineups need a valid YYYY-MM-DD date",
+				path: ["date"],
+			});
 		}
-		if (!standardDateRegex.test(value)) {
-			return false;
-		}
-
-		// Ensure the date actually exists (e.g., prevent Feb 30th)
-		return dayjs(value, "YYYY-MM-DD", true).isValid();
-	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
-});
+	});

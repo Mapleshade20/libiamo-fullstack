@@ -1,9 +1,11 @@
-import { and, eq } from "drizzle-orm";
-import type { LanguageCode, PracticeEvaluationPhase } from "$lib/constants";
+import { eq } from "drizzle-orm";
+import type { LanguageCode, PracticeEvaluationPhase, UiVariant } from "$lib/constants";
 import type { HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
-import { practiceSession, task, template } from "$lib/server/db/schema";
+import { task } from "$lib/server/db/schema";
+import { findPracticeSession } from "$lib/server/task-context";
+import type { AttemptContext } from "$lib/task-attempts";
 
 export interface TaskPreparationTask {
 	id: number;
@@ -11,11 +13,9 @@ export interface TaskPreparationTask {
 	description: string | null;
 	objectives: string[] | null;
 	language: LanguageCode;
-	templateInteractionType: string;
-	templateUi: string;
-	templateDifficulty: number;
+	ui: UiVariant;
+	difficulty: number;
 	materialsMd: string | null;
-	pointReward: number;
 	sessionStatus: HallQuestSessionStatus;
 	evaluationPhase: PracticeEvaluationPhase | null;
 }
@@ -28,45 +28,37 @@ export interface TaskPreparationData {
 interface GetTaskPreparationDataInput {
 	userId: string;
 	taskId: number;
+	context: AttemptContext;
 }
 
-export async function getTaskPreparationData({ userId, taskId }: GetTaskPreparationDataInput): Promise<TaskPreparationData | null> {
+export async function getTaskPreparationData({ userId, taskId, context }: GetTaskPreparationDataInput): Promise<TaskPreparationData | null> {
 	const [result] = await db
 		.select({
 			id: task.id,
+			interactionType: task.interactionType,
 			title: task.title,
 			description: task.description,
 			objectives: task.objectives,
 			language: task.language,
-			templateInteractionType: template.interactionType,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			materialsMd: template.materialsMd,
-			pointReward: template.pointReward,
+			ui: task.ui,
+			difficulty: task.difficulty,
+			materialsMd: task.materialsMd,
 		})
 		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
 		.where(eq(task.id, taskId))
 		.limit(1);
 
-	if (!result) return null;
+	if (!result || result.interactionType !== "chat") return null;
+	const { interactionType: _interactionType, ...details } = result;
 
-	const latestSession = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, userId)),
-		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
-		columns: {
-			status: true,
-			evaluationPhase: true,
-		},
-	});
-
+	const shownSession = await findPracticeSession(userId, taskId, context);
 	const [userRecord] = await db.select({ nativeLanguage: authUser.nativeLanguage }).from(authUser).where(eq(authUser.id, userId)).limit(1);
 
 	return {
 		task: {
-			...result,
-			sessionStatus: latestSession?.status ?? null,
-			evaluationPhase: latestSession?.evaluationPhase ?? null,
+			...details,
+			sessionStatus: shownSession?.status ?? null,
+			evaluationPhase: shownSession?.evaluationPhase ?? null,
 		},
 		nativeLanguage: userRecord?.nativeLanguage ?? null,
 	};

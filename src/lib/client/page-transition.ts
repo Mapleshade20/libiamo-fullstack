@@ -20,7 +20,7 @@ let navbarTransitionIntent: NavbarTransitionIntent | null = null;
 export function isQuestMenuPath(pathname: string): boolean {
 	if (pathname === `${base}/`) return true;
 	if (!pathname.startsWith(`${base}/`)) return false;
-	return /^(?:task|translate)\/[1-9]\d*$/.test(pathname.slice(base.length + 1));
+	return /^task\/[1-9]\d*$/.test(pathname.slice(base.length + 1));
 }
 
 function destinationKey(url: URL) {

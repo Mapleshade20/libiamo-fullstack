@@ -1,8 +1,7 @@
-import { randomInt } from "node:crypto";
-import { type AnyColumn, and, asc, eq, inArray, type SQL } from "drizzle-orm";
+import { type AnyColumn, and, asc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/agent-replies/timing";
-import { getLanguageEnglishName, PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVariant } from "$lib/constants";
+import { getLanguageEnglishName, type LanguageCode, PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVariant } from "$lib/constants";
 import { db } from "./db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage, task } from "./db/schema";
 import { chatJson } from "./llm";
@@ -14,54 +13,6 @@ export function orderSessionMessagesChronologically<T extends { createdAt: AnyCo
 	operators: { asc: (column: AnyColumn) => SQL },
 ) {
 	return [operators.asc(messages.createdAt), operators.asc(messages.id)];
-}
-
-export const MBTI_TYPES = [
-	"INTJ",
-	"INTP",
-	"ENTJ",
-	"ENTP",
-	"INFJ",
-	"INFP",
-	"ENFJ",
-	"ENFP",
-	"ISTJ",
-	"ISFJ",
-	"ESTJ",
-	"ESFJ",
-	"ISTP",
-	"ISFP",
-	"ESTP",
-	"ESFP",
-] as const;
-
-export type MbtiType = (typeof MBTI_TYPES)[number];
-
-export const MBTI_PROMPT_MAP: Record<MbtiType, string> = {
-	INTJ: "You are an INTJ personality type: strategic, analytical, and direct. You value efficiency and tend to be reserved but decisive.",
-	INTP: "You are an INTP personality type: logical, curious, and reflective. You enjoy exploring ideas and may be slow to commit.",
-	ENTJ: "You are an ENTJ personality type: confident, assertive, and goal-oriented. You take charge and communicate with authority.",
-	ENTP: "You are an ENTP personality type: inventive, energetic, and argumentative. You enjoy debate and thinking outside the box.",
-	INFJ: "You are an INFJ personality type: empathetic, insightful, and principled. You care deeply about others and act with intention.",
-	INFP: "You are an INFP personality type: idealistic, compassionate, and introspective. You express yourself with warmth and creativity.",
-	ENFJ: "You are an ENFJ personality type: charismatic, empathetic, and encouraging. You naturally bring out the best in others.",
-	ENFP: "You are an ENFP personality type: enthusiastic, spontaneous, and imaginative. You are warm and love connecting with people.",
-	ISTJ: "You are an ISTJ personality type: responsible, thorough, and detail-oriented. You follow through on commitments reliably.",
-	ISFJ: "You are an ISFJ personality type: caring, dependable, and observant. You prioritize harmony and support those around you.",
-	ESTJ: "You are an ESTJ personality type: organized, decisive, and practical. You value order and clear expectations.",
-	ESFJ: "You are an ESFJ personality type: sociable, warm, and conscientious. You thrive when helping and pleasing others.",
-	ISTP: "You are an ISTP personality type: calm, observant, and pragmatic. You act on facts and enjoy working with your hands.",
-	ISFP: "You are an ISFP personality type: gentle, flexible, and artistic. You are attuned to aesthetics and live in the moment.",
-	ESTP: "You are an ESTP personality type: energetic, perceptive, and bold. You are action-oriented and enjoy fast-paced situations.",
-	ESFP: "You are an ESFP personality type: spontaneous, playful, and enthusiastic. You love life and are naturally entertaining.",
-};
-
-export function getRandomMbti(): MbtiType {
-	return MBTI_TYPES[randomInt(MBTI_TYPES.length)];
-}
-
-export function getMbtiPrompt(mbti: MbtiType): string {
-	return MBTI_PROMPT_MAP[mbti];
 }
 
 const MESSAGE_FIELD_ORDER = ["sender", "author", "username", "from", "to", "subject", "time", "text", "comment", "body", "timestamp"];
@@ -123,7 +74,7 @@ function buildRedditContext(openingState: Record<string, unknown>): string {
 function buildMailContext(openingState: Record<string, unknown>): string {
 	const emails = openingState.emails as Array<{ from?: string; to?: string; subject?: string; body?: string; time?: string }> | undefined;
 	const roleplayRule =
-		"Roleplay rule: when you reply to the learner, write a natural email reply body only. Do not include markdown fences, JSON, or header lines such as Subject:, From:, or To: in the reply text. If you include a sign-off, sign with the email sender's normal name, never with an MBTI/personality label.";
+		"Roleplay rule: when you reply to the learner, write a natural email reply body only. Do not include markdown fences, JSON, or header lines such as Subject:, From:, or To: in the reply text. If you include a sign-off, sign with the email sender's normal name.";
 	if (!emails?.length) return `Scenario: Mail app\n${roleplayRule}`;
 
 	const emailLines = emails.map((e, i) => {
@@ -200,131 +151,66 @@ function buildAo3Context(openingState: Record<string, unknown>): string {
 	return ctx;
 }
 
-function buildTranslatorContext(openingState: Record<string, unknown>): string {
-	const text = openingState.sourceText as string | undefined;
-	return text ? `Text to translate: ${text}` : "Translation task";
-}
+export type ChatTaskContext = {
+	language: LanguageCode;
+	ui: UiVariant;
+	agentPrompt: string | null;
+	openingState: Record<string, unknown> | null;
+};
 
-function buildScenarioContext(ui: UiVariant, openingState: Record<string, unknown>): string {
-	const builders: Record<UiVariant, (s: Record<string, unknown>) => string> = {
+/** A plain-text summary of what the learner sees when the scenario opens. */
+export function buildScenarioContext(ui: UiVariant, openingState: Record<string, unknown> | null): string {
+	const builders: Partial<Record<UiVariant, (s: Record<string, unknown>) => string>> = {
 		reddit: buildRedditContext,
 		apple_mail: buildMailContext,
 		discord: buildDiscordContext,
 		imessage: buildIMessageContext,
 		ao3: buildAo3Context,
-		translator: buildTranslatorContext,
 	};
-	return builders[ui]?.(openingState) ?? "";
+	return builders[ui]?.(openingState ?? {}) ?? "";
 }
 
-function buildSystemPrompt(agentPrompt: string | null, scenarioContext: string): string {
-	const parts: string[] = [];
-
+/** The agent's system prompt, built from the live task on every use: nothing is snapshotted. */
+export function buildAgentSystemPrompt(task: ChatTaskContext): string {
+	const learningLanguage = getLanguageEnglishName(task.language);
+	const parts = [`IMPORTANT: You MUST give all your conversational replies in ${learningLanguage.toUpperCase()}.`];
+	const scenarioContext = buildScenarioContext(task.ui, task.openingState);
 	if (scenarioContext) parts.push(scenarioContext);
-	if (agentPrompt) parts.push(agentPrompt);
-
+	if (task.agentPrompt) parts.push(task.agentPrompt);
 	return parts.join("\n\n");
 }
 
-type StartSessionResult = {
-	sessionId: number;
-	systemPrompt: string;
-	mbti: string;
-};
-
-/**
- * The turn limit a session runs under. It is frozen at session start so an admin
- * editing the template cannot change the rules (or the remaining-turns display)
- * underneath a learner, and the feedback flow must honour the same frozen value:
- * the limits it derives describe how long that conversation was allowed to get.
- * Sessions started before the snapshot column existed fall back to the template.
- */
-export function resolveSessionMaxTurns(maxTurnsSnapshot: number | null | undefined, templateMaxTurns: number | null | undefined): number {
-	return maxTurnsSnapshot ?? templateMaxTurns ?? 0;
-}
-
-export async function startSession(taskId: number, userId: string, _learningLanguage?: string): Promise<StartSessionResult> {
+/** Starts (or returns) the learner's session for a task within one lineup entry. */
+export async function startSession(taskId: number, userId: string, lineupId: number | null): Promise<{ sessionId: number }> {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
-		with: {
-			variant: true,
-			template: true,
-		},
+		columns: { interactionType: true },
 	});
+	if (!taskData || taskData.interactionType !== "chat") throw new Error("Task not found");
 
-	if (!taskData?.variant || !taskData.template) {
-		throw new Error("Task not found");
-	}
-
-	const existingSession = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
-		columns: {
-			id: true,
-			agentPromptSnapshot: true,
-		},
-	});
-	if (existingSession) {
-		const snapshot = existingSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
-		return {
-			sessionId: existingSession.id,
-			systemPrompt: snapshot.systemPrompt ?? "",
-			mbti: snapshot.mbti ?? "",
-		};
-	}
-
-	const mbti = getRandomMbti();
-	const mbtiPrefix = getMbtiPrompt(mbti);
-	const agentPrompt = taskData.agentPrompt ? `${mbtiPrefix}\n\n${taskData.agentPrompt}` : mbtiPrefix;
-	const ui = taskData.template.ui;
-	const openingState = taskData.variant.openingState as Record<string, unknown>;
-	const scenarioContext = buildScenarioContext(ui, openingState);
-	const learningLanguage = getLanguageEnglishName(taskData.language);
-	const languageConstraint = `IMPORTANT: You MUST give all your conversational replies in ${learningLanguage.toUpperCase()}.`;
-
-	const baseSystemPrompt = buildSystemPrompt(agentPrompt, scenarioContext);
-	const systemPrompt = `${languageConstraint}\n\n${baseSystemPrompt}`;
-
-	const snapshot = { systemPrompt, mbti, ui, scenarioContext };
-	const urgency = taskData.urgency ?? "high";
+	const sameAttempt = and(
+		eq(practiceSession.userId, userId),
+		eq(practiceSession.taskId, taskId),
+		lineupId === null ? isNull(practiceSession.lineupId) : eq(practiceSession.lineupId, lineupId),
+	);
 	const startedAt = new Date();
+	const [session] = await db
+		.insert(practiceSession)
+		.values({
+			userId,
+			taskId,
+			lineupId,
+			startedAt,
+			expiresAt: getSessionExpiry(startedAt, PRACTICE_SESSION_MAX_AGE_SECONDS),
+			status: "in_progress",
+		})
+		.onConflictDoNothing()
+		.returning({ id: practiceSession.id });
+	if (session) return { sessionId: session.id };
 
-	try {
-		const [session] = await db
-			.insert(practiceSession)
-			.values({
-				userId,
-				taskId,
-				agentPromptSnapshot: snapshot,
-				maxTurnsSnapshot: taskData.template.maxTurns ?? 0,
-				urgency,
-				startedAt,
-				expiresAt: getSessionExpiry(startedAt, PRACTICE_SESSION_MAX_AGE_SECONDS),
-				status: "in_progress",
-			})
-			.returning();
-
-		if (!session) throw new Error("Failed to create session");
-		return { sessionId: session.id, systemPrompt, mbti };
-	} catch (error) {
-		const racedSession = await db.query.practiceSession.findFirst({
-			where: and(eq(practiceSession.userId, userId), eq(practiceSession.taskId, taskId)),
-			columns: {
-				id: true,
-				agentPromptSnapshot: true,
-			},
-		});
-		if (!racedSession) {
-			if (error instanceof Error && error.message === "Failed to create session") throw error;
-			throw new Error("Failed to create session");
-		}
-
-		const racedSnapshot = racedSession.agentPromptSnapshot as { systemPrompt?: string; mbti?: string };
-		return {
-			sessionId: racedSession.id,
-			systemPrompt: racedSnapshot.systemPrompt ?? "",
-			mbti: racedSnapshot.mbti ?? "",
-		};
-	}
+	const existing = await db.query.practiceSession.findFirst({ where: sameAttempt, columns: { id: true } });
+	if (!existing) throw new Error("Failed to create session");
+	return { sessionId: existing.id };
 }
 
 type SubmitMessageResult =
@@ -357,7 +243,6 @@ function countVisibleUserTurns(messages: Array<{ role: string; llmMetadata?: unk
 }
 
 export type SubmitMessageOptions = {
-	maxTurns?: number | null;
 	promptContent?: string;
 	userDisplayContent?: string;
 	userMetadata?: Record<string, unknown>;
@@ -391,7 +276,10 @@ export async function submitMessage(
 		if (!locked) throw new Error("Session not found");
 		const session = await tx.query.practiceSession.findFirst({
 			where: and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)),
-			with: { messages: { orderBy: sessionMessageChronologicalOrder } },
+			with: {
+				messages: { orderBy: sessionMessageChronologicalOrder },
+				task: { columns: { urgency: true, maxTurns: true } },
+			},
 		});
 		if (!session) throw new Error("Session not found");
 		if (session.status !== "in_progress") throw new Error("Session not in progress");
@@ -437,8 +325,8 @@ export async function submitMessage(
 		}
 
 		const turnCount = countVisibleUserTurns(session.messages) + (revivedMessageId !== null ? 0 : 1);
-		const maxTurns = options.maxTurns ?? 0;
-		if (maxTurns > 0 && turnCount >= maxTurns) {
+		const maxTurns = session.task.maxTurns;
+		if (maxTurns && turnCount >= maxTurns) {
 			await tx
 				.update(practiceSession)
 				.set({ status: "completed", completionReason: "max_turns", completedAt: now })
@@ -499,7 +387,7 @@ export async function submitMessage(
 			return { turnCount, pending: false, sessionCompleted: true, completionReason: "max_turns" };
 		}
 
-		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.urgency));
+		const dueAt = new Date(now.getTime() + sampleReplyDelayMs(session.task.urgency ?? "high"));
 		const activeBatch = await tx.query.agentResponseBatch.findFirst({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),
@@ -688,9 +576,8 @@ export async function generateHint(sessionId: number, input: HintRequest): Promi
 	const learningLanguageName = getLanguageEnglishName(session.task.language);
 	const hintLanguageName = input.nativeLanguage ? getLanguageEnglishName(input.nativeLanguage) : learningLanguageName;
 
-	const snapshot = session.agentPromptSnapshot as { scenarioContext?: string };
 	const history = buildHintConversationHistory(session.messages);
-	const scenarioContext = typeof snapshot.scenarioContext === "string" ? snapshot.scenarioContext.trim() : "";
+	const scenarioContext = buildScenarioContext(session.task.ui, session.task.openingState).trim();
 
 	const taskGoals = [session.task.shortObjective, session.task.description, ...(session.task.objectives ?? [])].filter(Boolean).join("\n- ");
 	const trustedSystemContext = `You are an expert language tutor. A learner is practicing ${learningLanguageName} in a roleplay.

@@ -22,11 +22,11 @@ import {
 	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
-	resolveSessionMaxTurns,
 	type SubmitMessageOptions,
 	startSession,
 	submitMessage,
 } from "$lib/server/session";
+import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task-context";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();
@@ -97,59 +97,49 @@ function parseHintContextPath(value: FormDataEntryValue | null, maxLength: numbe
 	}
 }
 
-export const load: PageServerLoad = async ({ params, locals, depends }) => {
-	depends?.(PRACTICE_SESSION_DEPENDENCY);
-	const user = requireUser({ locals });
-
-	const taskIdStr = params.id;
-	const taskId = Number.parseInt(taskIdStr, 10);
-	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
-
+async function loadChatTask(taskId: number) {
 	const taskData = await db.query.task.findFirst({
 		where: eq(task.id, taskId),
-		columns: {
-			id: true,
-			title: true,
-			language: true,
-		},
-		with: {
-			variant: { columns: { openingState: true } },
-			template: { columns: { ui: true, maxTurns: true } },
-		},
+		columns: { id: true, interactionType: true, title: true, language: true, ui: true, maxTurns: true, openingState: true },
 	});
+	return taskData?.interactionType === "chat" ? taskData : null;
+}
 
+export const load: PageServerLoad = async (event) => {
+	event.depends?.(PRACTICE_SESSION_DEPENDENCY);
+	const user = requireUser(event);
+
+	const taskId = parseTaskId(event.params.id);
+	const taskData = taskId ? await loadChatTask(taskId) : null;
 	if (!taskData) throw error(404, "Task not found");
 
-	const existingSession = await db.query.practiceSession.findFirst({
-		where: and(
-			eq(practiceSession.taskId, taskId),
-			eq(practiceSession.userId, user.id),
-			inArray(practiceSession.status, ["in_progress", "completed", "evaluated", "abandoned"]),
-		),
-		columns: {
-			id: true,
-			status: true,
-			tutorFeedback: true,
-			agentReadUpToMessageId: true,
-			maxTurnsSnapshot: true,
-		},
-		orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
-		with: {
-			messages: {
+	const shown = await findPracticeSession(user.id, taskData.id, await resolveRequestLineup(event, taskData));
+	const existingSession = shown
+		? await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, shown.id),
 				columns: {
 					id: true,
-					role: true,
-					content: true,
-					createdAt: true,
-					llmMetadata: true,
+					status: true,
+					tutorFeedback: true,
+					agentReadUpToMessageId: true,
 				},
-				orderBy: orderSessionMessagesChronologically,
-			},
-		},
-	});
+				with: {
+					messages: {
+						columns: {
+							id: true,
+							role: true,
+							content: true,
+							createdAt: true,
+							llmMetadata: true,
+						},
+						orderBy: orderSessionMessagesChronologically,
+					},
+				},
+			})
+		: undefined;
 
-	if (!isPracticeUiImplemented(taskData.template.ui)) {
-		throw error(501, `The ${taskData.template.ui} interface is not implemented yet.`);
+	if (!isPracticeUiImplemented(taskData.ui)) {
+		throw error(501, `The ${taskData.ui} interface is not implemented yet.`);
 	}
 
 	const latestAssistantMessageId = existingSession?.messages.reduce(
@@ -176,20 +166,22 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		task: taskData,
 		readReceipt: existingSession && latestAssistantMessageId ? { sessionId: existingSession.id, messageId: latestAssistantMessageId } : null,
 		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
-		taskId: taskIdStr,
-		maxTurns: resolveSessionMaxTurns(existingSession?.maxTurnsSnapshot, taskData.template.maxTurns),
+		taskId: String(taskData.id),
+		maxTurns: taskData.maxTurns ?? 0,
 	};
 };
 
 export const actions: Actions = {
-	start: async ({ params, locals }) => {
-		const user = requireUser({ locals });
+	start: async (event) => {
+		const user = requireUser(event);
 
-		const taskId = Number.parseInt(params.id, 10);
-		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const taskId = parseTaskId(event.params.id);
+		const identity = taskId ? await getTaskIdentity(taskId) : null;
+		if (!identity || identity.interactionType !== "chat") return fail(404, { error: "Task not found" });
 
 		try {
-			const result = await startSession(taskId, user.id);
+			const context = await resolveRequestLineup(event, identity);
+			const result = await startSession(identity.id, user.id, context.lineupId);
 			return { success: true, ...result };
 		} catch (e) {
 			const mappedError = mapStartSessionError(e);
@@ -217,15 +209,12 @@ export const actions: Actions = {
 		if (clientMessageId && isOversizedMetadataId(clientMessageId)) return fail(400, { error: "Client message ID is too long" });
 
 		try {
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				with: { template: true, variant: true },
-			});
+			const taskData = await loadChatTask(taskId);
 			if (!taskData) {
 				return fail(404, { error: "Task not found" });
 			}
 
-			if (isOverlongMessage(taskData.template.ui, rawMessage)) {
+			if (isOverlongMessage(taskData.ui, rawMessage)) {
 				return fail(400, { error: "Message is too long" });
 			}
 
@@ -234,11 +223,9 @@ export const actions: Actions = {
 
 			const formattedMessage = emojiConverter.replace_unified(rawMessage);
 
-			const sendOptions: SubmitMessageOptions = {
-				maxTurns: resolveSessionMaxTurns(session.maxTurnsSnapshot, taskData.template.maxTurns),
-			};
+			const sendOptions: SubmitMessageOptions = {};
 			let mailNameInstruction = "";
-			if (taskData.template.ui === "apple_mail") {
+			if (taskData.ui === "apple_mail") {
 				const learnerProfileName = await getLearnerProfileName(user);
 				mailNameInstruction = [
 					`Learner profile display name: ${learnerProfileName}.`,
@@ -248,9 +235,9 @@ export const actions: Actions = {
 			}
 
 			const uiOptions = await buildPracticeUiSendOptions({
-				ui: taskData.template.ui,
+				ui: taskData.ui,
 				formData,
-				openingState: taskData.variant?.openingState,
+				openingState: taskData.openingState,
 				sessionId,
 				message: formattedMessage,
 				clientMessageId,
@@ -259,7 +246,7 @@ export const actions: Actions = {
 
 			if (!uiOptions.ok) return fail(uiOptions.status, { error: uiOptions.error });
 			Object.assign(sendOptions, uiOptions.options);
-			if (taskData.template.ui === "apple_mail") {
+			if (taskData.ui === "apple_mail") {
 				const mailBodyHtml =
 					sendOptions.userMetadata && typeof sendOptions.userMetadata.mailBodyHtml === "string" ? sendOptions.userMetadata.mailBodyHtml : "";
 				const mailBodyLayout = summarizeMailBodyLayout(mailBodyHtml);
@@ -339,13 +326,10 @@ export const actions: Actions = {
 			const session = await getSessionOrFail(sessionId, user.id, taskId);
 			if (!session) return fail(403, { error: "Access denied" });
 
-			const taskData = await db.query.task.findFirst({
-				where: eq(task.id, taskId),
-				with: { template: true },
-			});
+			const taskData = await loadChatTask(taskId);
 			if (!taskData) return fail(404, { error: "Task not found" });
 
-			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.template.maxTurns));
+			const contextPath = parseHintContextPath(contextPathRaw, getConversationContextMaxLength(taskData.maxTurns));
 			const result = await generateHint(sessionId, {
 				mode,
 				draft,

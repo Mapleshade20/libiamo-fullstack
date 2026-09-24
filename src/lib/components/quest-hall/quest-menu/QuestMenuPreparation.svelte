@@ -63,7 +63,7 @@ let backLabel = $derived(t(lang, returnView === "home" ? "hall.menu.backToRecomm
 				/>
 			{:else if preparation?.kind === "translation"}
 				<TranslationPreparation
-					template={preparation.data.template}
+					task={preparation.data.task}
 					attempt={preparation.data.attempt}
 					blockedReason={preparation.data.blockedReason}
 					{form}

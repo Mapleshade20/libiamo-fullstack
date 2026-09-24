@@ -38,7 +38,7 @@ function close() {
 		onfocusout={(event) => { if (!container?.contains(event.relatedTarget as Node)) close(); }}
 	>
 		<div class="cards" style:--count={items.length}>
-			{#each items as item, index (item.taskId)}
+			{#each items as item, index (item.sessionId)}
 				<a
 					href={unreadTargetHref(item, base)}
 					class="notification"

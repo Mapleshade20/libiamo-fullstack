@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getLanguageEnglishName, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { db } from "$lib/server/db";
@@ -183,7 +183,7 @@ export function translationContentFingerprint(input: {
 
 export async function getOrCreateTranslationSourceSet(input: {
 	userId: string;
-	templateId: number;
+	taskId: number;
 	referenceParagraphs: string[];
 	context: string;
 	sourceLanguage: string;
@@ -191,7 +191,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 }) {
 	const contentFingerprint = translationContentFingerprint(input);
 	const filter = and(
-		eq(translationSourceSet.templateId, input.templateId),
+		eq(translationSourceSet.taskId, input.taskId),
 		eq(translationSourceSet.promptLanguage, input.promptLanguage),
 		eq(translationSourceSet.contentFingerprint, contentFingerprint),
 	);
@@ -211,7 +211,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 	const [inserted] = await db
 		.insert(translationSourceSet)
 		.values({
-			templateId: input.templateId,
+			taskId: input.taskId,
 			sourceLanguage: input.sourceLanguage,
 			promptLanguage: input.promptLanguage,
 			referenceParagraphs: input.referenceParagraphs,
@@ -220,7 +220,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 			candidates,
 		})
 		.onConflictDoNothing({
-			target: [translationSourceSet.templateId, translationSourceSet.promptLanguage, translationSourceSet.contentFingerprint],
+			target: [translationSourceSet.taskId, translationSourceSet.promptLanguage, translationSourceSet.contentFingerprint],
 		})
 		.returning();
 	if (inserted) return inserted;
@@ -240,19 +240,23 @@ export function chooseInitialCandidate(votes: number[], random = Math.random) {
 	return tied[Math.min(tied.length - 1, Math.floor(random() * tied.length))];
 }
 
-export async function getOrCreateTranslationAttempt(userId: string, sourceSetId: number, paragraphCount: number) {
+/** The learner's unfinished attempt for a source set within one lineup entry, created when missing. */
+export async function getOrCreateTranslationAttempt(input: {
+	userId: string;
+	sourceSet: { id: number; taskId: number; candidates: string[][] };
+	lineupId: number | null;
+}) {
+	const { userId, sourceSet, lineupId } = input;
+	const sourceSetId = sourceSet.id;
+	const paragraphCount = sourceSet.candidates.length;
 	if (!Number.isInteger(paragraphCount) || paragraphCount < 1) throw new Error("A translation attempt requires at least one paragraph.");
-	const [existing] = await db
-		.select({ id: translationAttempt.id })
-		.from(translationAttempt)
-		.where(
-			and(
-				eq(translationAttempt.userId, userId),
-				eq(translationAttempt.sourceSetId, sourceSetId),
-				inArray(translationAttempt.workflowPhase, ["draft", "submitted", "correction", "second_draft", "transfer"]),
-			),
-		)
-		.limit(1);
+	const activeAttempt = and(
+		eq(translationAttempt.userId, userId),
+		eq(translationAttempt.sourceSetId, sourceSetId),
+		lineupId === null ? isNull(translationAttempt.lineupId) : eq(translationAttempt.lineupId, lineupId),
+		inArray(translationAttempt.workflowPhase, ["draft", "submitted", "correction", "second_draft", "transfer"]),
+	);
+	const [existing] = await db.select({ id: translationAttempt.id }).from(translationAttempt).where(activeAttempt).limit(1);
 	if (existing) return existing.id;
 
 	const voteRows = await db
@@ -282,7 +286,7 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 	const insertedId = await db.transaction(async (tx) => {
 		const [inserted] = await tx
 			.insert(translationAttempt)
-			.values({ userId, sourceSetId, workflowPhase: "draft" })
+			.values({ userId, taskId: sourceSet.taskId, sourceSetId, lineupId, workflowPhase: "draft" })
 			.onConflictDoNothing()
 			.returning({ id: translationAttempt.id });
 		if (!inserted) return null;
@@ -298,17 +302,7 @@ export async function getOrCreateTranslationAttempt(userId: string, sourceSetId:
 	});
 	if (insertedId) return insertedId;
 
-	const [winner] = await db
-		.select({ id: translationAttempt.id })
-		.from(translationAttempt)
-		.where(
-			and(
-				eq(translationAttempt.userId, userId),
-				eq(translationAttempt.sourceSetId, sourceSetId),
-				inArray(translationAttempt.workflowPhase, ["draft", "submitted", "correction", "second_draft", "transfer"]),
-			),
-		)
-		.limit(1);
+	const [winner] = await db.select({ id: translationAttempt.id }).from(translationAttempt).where(activeAttempt).limit(1);
 	if (!winner) throw new Error("Translation attempt creation lost a race but no winning record was found.");
 	return winner.id;
 }

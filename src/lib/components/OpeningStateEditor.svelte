@@ -1,21 +1,22 @@
 <script lang="ts">
-import { getDefaultOpeningState, type OpeningState, type UiVariant } from "$lib/admin/variant-helpers";
+import { getDefaultOpeningState, type OpeningState } from "$lib/admin/opening-state";
 import { validateBeforeSubmit } from "$lib/client/form-attention";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
+import type { ChatUiVariant } from "$lib/constants";
 import { type FieldDef, getEditorFields, validateOpeningState } from "$lib/schemas";
 
 interface Props {
 	value: Record<string, unknown>;
-	ui: UiVariant;
+	ui: ChatUiVariant;
 	name?: string;
 	onchange?: (value: OpeningState) => void;
 }
 
 let { value = $bindable({}), ui, name, onchange }: Props = $props();
-let previousUi = $state<UiVariant | null>(null);
+let previousUi = $state<ChatUiVariant | null>(null);
 
 $effect(() => {
 	if (previousUi === null) {

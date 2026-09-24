@@ -2,7 +2,6 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
-import Star from "@lucide/svelte/icons/star";
 import { base } from "$app/paths";
 import QuestMenuStatusMark from "$lib/components/quest-hall/quest-menu/QuestMenuStatusMark.svelte";
 import TranslateModal from "$lib/components/translate/TranslateModal.svelte";
@@ -81,13 +80,9 @@ function difficultyLabel(level: number): string {
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
-					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
-				</Badge>
-				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">
-					{INTERACTION_TYPE_LABELS[task.templateInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? task.templateInteractionType}
-				</Badge>
-				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.templateDifficulty)} </span>
+				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS[task.ui]}</Badge>
+				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.chat}</Badge>
+				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.difficulty)} </span>
 			</div>
 
 			<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
@@ -130,15 +125,7 @@ function difficultyLabel(level: number): string {
 
 		<div class="mt-auto pt-12 pb-4">
 			<div class="mb-6 h-px w-full bg-border"></div>
-			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<div class="flex items-center gap-4 text-sm text-muted-foreground">
-					<span class="flex items-center gap-1.5">
-						<Star size={14} strokeWidth={1.5} />
-						{task.pointReward}
-						{t(lang, "task.points")}
-					</span>
-				</div>
-
+			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
 				<div class="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
 					{#if canShowUsefulExpressions}
 						<Button bind:ref={expressionsTrigger} variant="outline" class="min-h-11 w-full justify-center sm:w-auto" onclick={openTranslateModal}>
@@ -251,11 +238,6 @@ function difficultyLabel(level: number): string {
 		<TranslateModal
 			{lang}
 			show={showTranslateModal}
-			taskTitle={task.title}
-			taskDescription={task.description ?? null}
-			taskObjectives={objectives}
-			taskUi={task.templateUi}
-			taskInteractionType={task.templateInteractionType}
 			{nativeLanguage}
 			targetLanguage={task.language}
 			{generateExpressionsAction}

@@ -1,13 +1,14 @@
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { type FeedbackLanguageMode, type LanguageCode, resolveFeedbackLanguage } from "$lib/constants";
 import { db } from "$lib/server/db";
-import { type PersistedTranslationEvaluation, template, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
+import { type PersistedTranslationEvaluation, task, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import type { ChatMessage } from "$lib/server/llm";
 import { creditQuestCompletion } from "$lib/server/streak";
 import { generateTranslationEvaluation } from "$lib/server/translation-evaluation/generation";
 import { buildGeneration1Messages, type Generation1Input } from "$lib/server/translation-evaluation/prompt";
 import { type ValidatedGeneration1Evaluation, validateGeneration1Evaluation } from "$lib/server/translation-evaluation/validation";
 import { type ValidatedCorrectionVerification, verifyCorrection } from "$lib/server/translation-evaluation/verifier";
+import { type AttemptContext, pickShownAttempt } from "$lib/task-attempts";
 
 export const TRANSLATION_LLM_CALL_TOKEN_BUDGET = 40_000;
 const GENERATION_1_COMPLETION_BUDGET = 32_768;
@@ -42,18 +43,17 @@ export function assertGeneration1CallFitsBudget(input: Generation1Input): void {
 	}
 }
 
-export async function findTranslationAttempt(input: { userId: string; templateId: number; promptLanguage: string; activeOnly?: boolean }) {
-	const filters = [
-		eq(translationAttempt.userId, input.userId),
-		eq(translationSourceSet.templateId, input.templateId),
-		eq(translationSourceSet.promptLanguage, input.promptLanguage),
-	];
-	if (input.activeOnly) filters.push(ne(translationAttempt.workflowPhase, "completed"));
-
-	const [record] = await db
+/**
+ * The learner's attempt a translation task URL shows, chosen by `pickShownAttempt` within the
+ * learner's prompt language.
+ */
+export async function findTranslationAttempt(input: { userId: string; taskId: number; promptLanguage: string; context: AttemptContext }) {
+	const records = await db
 		.select({
 			id: translationAttempt.id,
 			userId: translationAttempt.userId,
+			taskId: translationAttempt.taskId,
+			lineupId: translationAttempt.lineupId,
 			sourceSetId: translationAttempt.sourceSetId,
 			workflowPhase: translationAttempt.workflowPhase,
 			evaluation: translationAttempt.evaluation,
@@ -72,10 +72,20 @@ export async function findTranslationAttempt(input: { userId: string; templateId
 		})
 		.from(translationAttempt)
 		.innerJoin(translationSourceSet, eq(translationAttempt.sourceSetId, translationSourceSet.id))
-		.where(and(...filters))
-		.orderBy(sql`${translationAttempt.workflowPhase} <> 'completed' DESC`, desc(translationAttempt.updatedAt), desc(translationAttempt.id))
-		.limit(1);
-	return record;
+		.where(
+			and(
+				eq(translationAttempt.userId, input.userId),
+				eq(translationAttempt.taskId, input.taskId),
+				eq(translationSourceSet.promptLanguage, input.promptLanguage),
+			),
+		)
+		.orderBy(desc(translationAttempt.updatedAt), desc(translationAttempt.id));
+	return (
+		pickShownAttempt(
+			records.map((record) => ({ ...record, finished: record.workflowPhase === "completed" })),
+			input.context,
+		) ?? undefined
+	);
 }
 
 export async function getTranslationAnswers(attemptId: number) {
@@ -327,27 +337,25 @@ export async function abandonTranslationAttempt(record: TranslationAttemptRecord
 	if (!deleted) throw new TranslationWorkflowError(409, "The attempt has already changed.");
 }
 
-export async function getTranslationTemplate(templateId: number, activeLanguage: string) {
+export async function getTranslationTask(taskId: number, activeLanguage: string) {
 	const [record] = await db
 		.select({
-			id: template.id,
-			title: template.titleBase,
-			description: template.descriptionBase,
-			language: template.language,
-			translationReference: template.translationReference,
-			context: template.agentPromptBase,
-			difficulty: template.difficulty,
-			estimatedWords: template.estimatedWords,
-			pointReward: template.pointReward,
-			gemReward: template.gemReward,
+			id: task.id,
+			title: task.title,
+			description: task.description,
+			language: task.language,
+			referenceParagraphs: task.referenceParagraphs,
+			context: task.translationContext,
+			difficulty: task.difficulty,
+			estimatedWords: task.estimatedWords,
 		})
-		.from(template)
+		.from(task)
 		.where(
 			and(
-				eq(template.id, templateId),
-				eq(template.interactionType, "translate"),
-				eq(template.isActive, true),
-				eq(template.language, activeLanguage as typeof template.$inferSelect.language),
+				eq(task.id, taskId),
+				eq(task.interactionType, "translate"),
+				eq(task.isActive, true),
+				eq(task.language, activeLanguage as typeof task.$inferSelect.language),
 			),
 		)
 		.limit(1);

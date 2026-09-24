@@ -3,10 +3,8 @@ import AlertCircle from "@lucide/svelte/icons/alert-circle";
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Clock from "@lucide/svelte/icons/clock";
-import Gem from "@lucide/svelte/icons/gem";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
-import Star from "@lucide/svelte/icons/star";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { handlePreparationActionResult } from "$lib/client/quest-hall/preparation-actions";
@@ -18,18 +16,16 @@ import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { translationState } from "$lib/quest-hall/menu";
 
-export interface TranslationPreparationTemplate {
+export interface TranslationPreparationTask {
 	id: number;
 	title: string;
 	description: string | null;
 	difficulty: number;
-	pointReward: number;
-	gemReward: number;
 	estimatedWords: number | null;
 }
 
 interface Props {
-	template: TranslationPreparationTemplate;
+	task: TranslationPreparationTask;
 	attempt: { workflowPhase: string } | null;
 	blockedReason: "missing-native-language" | "same-language" | null;
 	lang: LanguageCode;
@@ -39,16 +35,7 @@ interface Props {
 	onback?: () => void;
 }
 
-let {
-	template,
-	attempt,
-	blockedReason,
-	lang,
-	form = null,
-	backHref = `${base}/`,
-	backLabel = t(lang, "task.returnToHall"),
-	onback,
-}: Props = $props();
+let { task, attempt, blockedReason, lang, form = null, backHref = `${base}/`, backLabel = t(lang, "task.returnToHall"), onback }: Props = $props();
 
 let starting = $state(false);
 let retaking = $state(false);
@@ -56,7 +43,7 @@ let embeddedError = $state<string | null>(null);
 let progress = $derived(translationState((attempt?.workflowPhase ?? null) as TranslationWorkflowPhase | null));
 let isDraft = $derived(!attempt || attempt.workflowPhase === "draft");
 let isComplete = $derived(progress === "finished");
-let primaryHref = $derived(isDraft ? `${base}/translate/${template.id}/attempt` : `${base}/translate/${template.id}/feedback`);
+let primaryHref = $derived(`${base}/task/${task.id}/translation${isDraft ? "" : "/feedback"}`);
 let primaryLabel = $derived(
 	!attempt
 		? t(lang, "translate.details.begin")
@@ -66,8 +53,8 @@ let primaryLabel = $derived(
 				? t(lang, "translate.details.review")
 				: t(lang, "task.continueEvaluation"),
 );
-let startAction = $derived(`${base}/translate/${template.id}?/start`);
-let retakeAction = $derived(`${base}/translate/${template.id}?/retake`);
+let startAction = $derived(`${base}/task/${task.id}?/start`);
+let retakeAction = $derived(`${base}/task/${task.id}?/retake`);
 
 function difficultyLabel(level: number): string {
 	return (
@@ -96,14 +83,14 @@ function difficultyLabel(level: number): string {
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS.translator}</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
-				<span class="difficulty">{difficultyLabel(template.difficulty)}</span>
+				<span class="difficulty">{difficultyLabel(task.difficulty)}</span>
 			</div>
 
-			<h2 id="translation-preparation-title">{template.title}</h2>
+			<h2 id="translation-preparation-title">{task.title}</h2>
 		</div>
 
-		{#if template.description}
-			<p class="description font-prose">{template.description}</p>
+		{#if task.description}
+			<p class="description font-prose">{task.description}</p>
 		{/if}
 
 		{#if blockedReason}
@@ -125,10 +112,8 @@ function difficultyLabel(level: number): string {
 			<div class="footer-rule"></div>
 			<div class="footer-content">
 				<div class="rewards">
-					<span><Star size={14} strokeWidth={1.5} aria-hidden="true" />{template.pointReward} {t(lang, "task.points")}</span>
-					<span><Gem size={14} strokeWidth={1.5} aria-hidden="true" />{template.gemReward} {t(lang, "task.gems")}</span>
-					{#if template.estimatedWords}
-						<span><Clock size={14} strokeWidth={1.5} aria-hidden="true" />~{template.estimatedWords} {t(lang, "task.words")}</span>
+					{#if task.estimatedWords}
+						<span><Clock size={14} strokeWidth={1.5} aria-hidden="true" />~{task.estimatedWords} {t(lang, "task.words")}</span>
 					{/if}
 				</div>
 

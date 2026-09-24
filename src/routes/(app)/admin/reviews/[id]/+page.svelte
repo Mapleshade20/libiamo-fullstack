@@ -31,7 +31,7 @@ function fmtDate(d: Date | null): string {
 </script>
 
 <svelte:head>
-	<title>Review: {c.titleBase} · Admin · Libiamo</title>
+	<title>Review: {c.title} · Admin · Libiamo</title>
 	<meta name="description" content="Inspect and manage user-contributed material.">
 </svelte:head>
 
@@ -43,7 +43,7 @@ function fmtDate(d: Date | null): string {
 		<Badge variant="outline" class={statusBadge.class}>{statusBadge.label}</Badge>
 	</div>
 
-	<h1 class="text-3xl text-gray-800 font-medium">Review: {c.titleBase}</h1>
+	<h1 class="text-3xl text-gray-800 font-medium">Review: {c.title}</h1>
 
 	<!-- Contributor info -->
 	<div class="text-sm text-muted-foreground">
@@ -73,47 +73,35 @@ function fmtDate(d: Date | null): string {
 			<Label class="text-xs text-muted-foreground">UI</Label>
 			<p class="text-sm">{c.ui}</p>
 		</div>
-		{#if c.cadence}
-			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Cadence</Label>
-				<p class="text-sm capitalize">{c.cadence}</p>
-			</div>
-		{/if}
-		{#if c.difficulty}
-			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Difficulty</Label>
-				<p class="text-sm">{c.difficulty}</p>
-			</div>
-		{/if}
 	</div>
 
 	<!-- Content -->
-	{#if !isTranslate && c.shortObjectiveBase}
+	{#if !isTranslate && c.shortObjective}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Short Objective</Label>
-			<p class="text-sm">{c.shortObjectiveBase}</p>
+			<p class="text-sm">{c.shortObjective}</p>
 		</div>
 	{/if}
 
-	{#if c.descriptionBase}
+	{#if c.description}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Description</Label>
-			<p class="text-sm">{c.descriptionBase}</p>
+			<p class="text-sm">{c.description}</p>
 		</div>
 	{/if}
 
-	{#if c.agentPromptBase}
+	{#if c.agentPrompt}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Agent Prompt</Label>
-			<p class="text-sm whitespace-pre-wrap">{c.agentPromptBase}</p>
+			<p class="text-sm whitespace-pre-wrap">{c.agentPrompt}</p>
 		</div>
 	{/if}
 
-	{#if c.objectivesBase && c.objectivesBase.length > 0}
+	{#if c.objectives && c.objectives.length > 0}
 		<div class="space-y-1">
 			<Label class="text-xs text-muted-foreground">Objectives</Label>
 			<ul class="list-disc list-inside text-sm">
-				{#each c.objectivesBase as obj}
+				{#each c.objectives as obj}
 					<li>{obj}</li>
 				{/each}
 			</ul>
@@ -138,26 +126,26 @@ function fmtDate(d: Date | null): string {
 		</div>
 	{/if}
 
-	{#if isTranslate && c.translationReference}
+	{#if isTranslate && c.translationContext}
 		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Source Text</Label>
+			<Label class="text-xs text-muted-foreground">Translation Context</Label>
+			<p class="text-sm">{c.translationContext}</p>
+		</div>
+	{/if}
+
+	{#if isTranslate && c.referenceParagraphs}
+		<div class="space-y-1">
+			<Label class="text-xs text-muted-foreground">Reference Text</Label>
 			<div class="space-y-2">
-				{#each c.translationReference as paragraph}
+				{#each c.referenceParagraphs as paragraph}
 					<p class="text-sm whitespace-pre-wrap">{paragraph}</p>
 				{/each}
 			</div>
 		</div>
 	{/if}
 
-	<!-- Variant -->
 	{#if !isTranslate}
 		<div class="space-y-3">
-			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Slot Values</Label>
-				<pre
-					class="text-xs bg-muted rounded px-2 py-1 overflow-auto max-h-20"
-				>{(c.slotValues as object) ? JSON.stringify(c.slotValues, null, 2) : ""}</pre>
-			</div>
 			<div class="space-y-1">
 				<Label class="text-xs text-muted-foreground">Opening State</Label>
 				<pre
@@ -176,7 +164,7 @@ function fmtDate(d: Date | null): string {
 	{#if c.status === "pending"}
 		<div class="h-px bg-border"></div>
 		<div class="flex items-center gap-3">
-			<a href="{base}/admin/templates/new?fromContribution={c.id}">
+			<a href="{base}/admin/tasks/new?fromContribution={c.id}">
 				<Button class="bg-green-600 hover:bg-green-700 text-white">
 					<Pencil size={16} class="mr-1.5" />
 					Edit &amp; Approve

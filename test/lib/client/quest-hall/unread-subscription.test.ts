@@ -10,7 +10,9 @@ import type { UnreadInboxItem } from "$lib/unread";
 
 function item(taskId: number, overrides: Partial<UnreadInboxItem> = {}): UnreadInboxItem {
 	return {
+		sessionId: taskId,
 		taskId,
+		lineupId: 1,
 		title: `Task ${taskId}`,
 		ui: "imessage",
 		sessionStatus: "in_progress",
@@ -128,7 +130,9 @@ describe("Quest Hall unread subscription", () => {
 			visibilitySource: visibilitySource(),
 			onchange: vi.fn(),
 			onHallFactsChange,
-			getHallFacts: () => [{ taskId: current.taskId, sessionStatus: current.sessionStatus, unreadCount: current.unreadCount }],
+			getHallFacts: () => [
+				{ taskId: current.taskId, lineupId: current.lineupId, sessionStatus: current.sessionStatus, unreadCount: current.unreadCount },
+			],
 		});
 
 		await subscription.refresh();
@@ -185,8 +189,9 @@ describe("unread Hall fact comparison", () => {
 	});
 
 	it("compares only tasks represented by the current Hall snapshot", () => {
-		const snapshot = [{ taskId: 1, sessionStatus: "in_progress", unreadCount: 0 }];
+		const snapshot = [{ taskId: 1, lineupId: 1, sessionStatus: "in_progress", unreadCount: 0 }];
 		expect(unreadHallSnapshotChanged(snapshot, [item(99)])).toBe(false);
+		expect(unreadHallSnapshotChanged(snapshot, [item(1, { lineupId: 2 })])).toBe(false);
 		expect(unreadHallSnapshotChanged(snapshot, [item(1)])).toBe(true);
 		expect(unreadHallSnapshotChanged([{ ...snapshot[0], unreadCount: 1 }], [])).toBe(true);
 	});

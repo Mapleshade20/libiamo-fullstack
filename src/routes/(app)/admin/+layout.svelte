@@ -11,8 +11,8 @@ afterNavigate(() => {
 	toolsOpen = false;
 });
 const sections = [
-	{ href: `${base}/admin/templates`, label: "Templates" },
-	{ href: `${base}/admin/schedule`, label: "Schedule" },
+	{ href: `${base}/admin/tasks`, label: "Tasks" },
+	{ href: `${base}/admin/lineups`, label: "Lineups" },
 	{ href: `${base}/admin/reviews`, label: "Reviews" },
 ];
 const activeIndex = $derived(activeNavIndex(sections, page.url.pathname));

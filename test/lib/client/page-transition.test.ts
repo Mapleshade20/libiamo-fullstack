@@ -9,10 +9,10 @@ function url(path: string) {
 
 describe("page transition intent", () => {
 	it.each([
-		["/?view=catalog", "/translate/17"],
+		["/?view=catalog", "/task/17"],
 		["/task/123", "/?view=catalog&section=weekly"],
 		["/", "/task/123"],
-		["/translate/17", "/"],
+		["/task/17", "/"],
 	])("leaves %s → %s to the persistent book animator", (from, to) => {
 		setNavbarTransitionIntent(url(to), "backward", now);
 		expect(resolvePageTransition(url(from), url(to), now)).toBe("none");
@@ -20,15 +20,16 @@ describe("page transition intent", () => {
 
 	it.each([
 		"/task/123/session",
-		"/translate/17/attempt",
-		"/translate/17/feedback",
+		"/task/17/translation",
+		"/task/17/translation/feedback",
+		"/translate/17",
 		"/task",
 		"/task/0",
 		"/task/abc",
 		"/review",
 	])("does not classify workflow or unrelated route %s as a book view", (path) => {
 		expect(isQuestMenuPath(path)).toBe(false);
-		expect(resolvePageTransition(url("/translate/17"), url(path), now)).toBe("none");
+		expect(resolvePageTransition(url("/task/17"), url(path), now)).toBe("none");
 	});
 	it.each([
 		["forward", "navbar-forward"],

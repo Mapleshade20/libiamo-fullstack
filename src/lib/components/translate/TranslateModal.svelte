@@ -14,11 +14,6 @@ import { t } from "$lib/i18n";
 interface Props {
 	lang: LanguageCode;
 	show: boolean;
-	taskTitle: string;
-	taskDescription: string | null;
-	taskObjectives: string[] | null;
-	taskUi: string;
-	taskInteractionType: string;
 	nativeLanguage: string;
 	targetLanguage: string;
 	generateExpressionsAction?: string;
@@ -29,11 +24,6 @@ interface Props {
 let {
 	lang,
 	show,
-	taskTitle,
-	taskDescription,
-	taskObjectives,
-	taskUi,
-	taskInteractionType,
 	nativeLanguage,
 	targetLanguage,
 	generateExpressionsAction = "?/generateExpressions",
@@ -89,18 +79,8 @@ async function handleGenerate() {
 	generateError = null;
 
 	try {
-		const f = new FormData();
-		f.set("title", taskTitle);
-		if (taskDescription) f.set("description", taskDescription);
-		if (taskObjectives && taskObjectives.length > 0) {
-			f.set("objectives", JSON.stringify(taskObjectives));
-		}
-		f.set("ui", taskUi);
-		f.set("interactionType", taskInteractionType);
-		f.set("nativeLanguage", nativeLanguage);
-		f.set("targetLanguage", targetLanguage);
-
-		const res = await fetch(generateExpressionsAction, { method: "POST", body: f });
+		// The server reads the task context itself; the request only asks for suggestions.
+		const res = await fetch(generateExpressionsAction, { method: "POST", body: new FormData() });
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { expressions?: string[]; error?: string };

@@ -16,8 +16,8 @@ interface Props {
 }
 
 let { item, lang, compact = false, onselect }: Props = $props();
-let title = $derived(item.kind === "quest" ? item.task.title : item.task.titleBase);
-let objective = $derived(item.kind === "quest" ? item.task.shortObjective : item.task.descriptionBase);
+let title = $derived(item.task.title);
+let objective = $derived(item.kind === "quest" ? item.task.shortObjective : item.task.description);
 
 function statusLabel(state: QuestMenuItemState): string {
 	return t(lang, `hall.menu.status.${state}`);

@@ -13,8 +13,10 @@ import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExi
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
 import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice-evaluation";
-import { getSessionOrFail, resolveSessionMaxTurns } from "$lib/server/session";
+import { getSessionOrFail } from "$lib/server/session";
+import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task-context";
 import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
+import { lineupQuery } from "$lib/task-attempts";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** The card pass drills the notes that existed when it began; a note added mid-pass would be skipped. */
@@ -38,61 +40,59 @@ async function getSessionContext(sessionId: number, userId: string, taskId: numb
 
 	const sessionData = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
-		columns: { tutorFeedback: true, status: true, maxTurnsSnapshot: true, evaluationPhase: true },
-		with: { task: { columns: { language: true }, with: { template: { columns: { maxTurns: true } } } } },
+		columns: { tutorFeedback: true, status: true, evaluationPhase: true },
+		with: { task: { columns: { language: true, maxTurns: true } } },
 	});
 	if (sessionData?.status === "abandoned") return null;
 
 	return {
 		language: sessionData?.task?.language ?? "en",
 		feedbackLanguage: (sessionData?.tutorFeedback as FeedbackResult | null)?.feedbackLanguage || sessionData?.task?.language || "en",
-		maxTurns: resolveSessionMaxTurns(sessionData?.maxTurnsSnapshot, sessionData?.task?.template?.maxTurns),
+		maxTurns: sessionData?.task?.maxTurns ?? 0,
 		evaluationPhase: sessionData?.evaluationPhase ?? "feedback",
 	};
 }
 
-export const load: PageServerLoad = async ({ params, locals, depends }) => {
-	const user = requireUser({ locals });
-	depends(PRACTICE_NOTES_DEPENDENCY);
+export const load: PageServerLoad = async (event) => {
+	const user = requireUser(event);
+	event.depends(PRACTICE_NOTES_DEPENDENCY);
 
-	const taskIdStr = params.id;
-	const taskId = Number.parseInt(taskIdStr, 10);
-	if (Number.isNaN(taskId)) throw error(400, "Invalid task ID");
+	const taskId = parseTaskId(event.params.id);
+	const identity = taskId ? await getTaskIdentity(taskId) : null;
+	if (!identity || identity.interactionType !== "chat") throw error(404, "Task not found");
+	const sessionPath = `${base}/task/${identity.id}/session${lineupQuery(event.url)}`;
 
-	// Get the current user's session. If it doesn't exist yet, send them to the session flow.
-	const session = await db.query.practiceSession.findFirst({
-		where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
-		columns: {
-			id: true,
-			status: true,
-			agentPromptSnapshot: true,
-			evaluationPhase: true,
-		},
-		with: {
-			messages: {
+	// Get the session this URL shows. If there is none yet, send the learner to the session flow.
+	const shown = await findPracticeSession(user.id, identity.id, await resolveRequestLineup(event, identity));
+	const session = shown
+		? await db.query.practiceSession.findFirst({
+				where: eq(practiceSession.id, shown.id),
 				columns: {
 					id: true,
-					role: true,
-					content: true,
-					createdAt: true,
-					llmMetadata: true,
+					status: true,
+					evaluationPhase: true,
 				},
-				orderBy: (messages, { asc }) => [asc(messages.createdAt)],
-			},
-			task: {
 				with: {
-					variant: true,
-					template: true,
+					messages: {
+						columns: {
+							id: true,
+							role: true,
+							content: true,
+							createdAt: true,
+							llmMetadata: true,
+						},
+						orderBy: (messages, { asc }) => [asc(messages.createdAt)],
+					},
+					task: { columns: { title: true, language: true, ui: true, openingState: true } },
 				},
-			},
-		},
-	});
+			})
+		: undefined;
 
-	if (!session) throw redirect(303, `${base}/task/${taskId}/session`);
+	if (!session) throw redirect(303, sessionPath);
 
 	// Redirect if not completed
 	if (session.status !== "completed" && session.status !== "evaluated") {
-		throw redirect(303, `${base}/task/${taskId}/session`);
+		throw redirect(303, sessionPath);
 	}
 
 	const latestAssistantMessageId = session.messages.reduce(
@@ -100,14 +100,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		0,
 	);
 
-	// Get task data
 	const taskData = session.task;
-	if (!taskData) throw error(404, "Task not found");
-
-	// Build conversation structure
-	const snapshot = session.agentPromptSnapshot as { ui?: string; scenarioContext?: string };
-	const ui = (snapshot.ui ?? taskData.template?.ui ?? "discord") as string;
-	const openingState = (taskData.variant?.openingState as Record<string, unknown>) ?? {};
 
 	const visibleMessages = session.messages.filter((m) => {
 		const metadata = m.llmMetadata as { hidden?: boolean } | null;
@@ -122,8 +115,8 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			createdAt: m.createdAt,
 			llmMetadata: m.llmMetadata,
 		})),
-		openingState,
-		ui as any,
+		taskData.openingState ?? {},
+		taskData.ui,
 	);
 
 	// Check if feedback already exists
@@ -136,7 +129,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		transferNotes,
 		evaluationPhase: session.evaluationPhase,
 		readReceipt: latestAssistantMessageId ? { sessionId: session.id, messageId: latestAssistantMessageId } : null,
-		taskId: taskIdStr,
+		taskId: String(identity.id),
 		taskTitle: taskData.title,
 		conversation,
 		existingFeedback,
@@ -145,16 +138,17 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 };
 
 export const actions: Actions = {
-	generateFeedback: async ({ params, locals }) => {
+	generateFeedback: async ({ request, params, locals }) => {
 		const user = requireUser({ locals });
 
 		const taskId = Number.parseInt(params.id, 10);
 		if (Number.isNaN(taskId)) return fail(400, { error: "Invalid task ID" });
+		const sessionId = Number.parseInt((await request.formData()).get("sessionId") as string, 10);
+		if (Number.isNaN(sessionId)) return fail(400, { error: "Invalid session ID" });
 
 		try {
-			// Get session
 			const session = await db.query.practiceSession.findFirst({
-				where: and(eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
+				where: and(eq(practiceSession.id, sessionId), eq(practiceSession.taskId, taskId), eq(practiceSession.userId, user.id)),
 				columns: { id: true, userId: true, status: true },
 				with: { task: { columns: { language: true } } },
 			});

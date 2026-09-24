@@ -27,7 +27,7 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	templateContribution: { status: "status" },
+	taskContribution: { status: "status" },
 }));
 
 vi.mock("drizzle-orm", () => {

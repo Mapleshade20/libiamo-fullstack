@@ -73,7 +73,7 @@ export function hallLocationUrl(location: HallLocation, base: string): string {
 	const normalized = normalizeHallLocation(location);
 	if (normalized.view === "home") return `${base}/`;
 	if (normalized.view === "prepare" && normalized.task) {
-		return `${base}/${normalized.section === "translation" ? "translate" : "task"}/${getQuestMenuItemId(normalized.task)}`;
+		return `${base}/task/${getQuestMenuItemId(normalized.task)}`;
 	}
 	const params = new URLSearchParams();
 	params.set("view", normalized.view);

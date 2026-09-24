@@ -1,18 +1,11 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import {
-	getSelfAssignedLevel,
-	type InteractionType,
-	type LanguageCode,
-	type SelfAssignedLevel,
-	type TranslationWorkflowPhase,
-	type UiVariant,
-} from "$lib/constants";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { getSelfAssignedLevel, type LanguageCode, type SelfAssignedLevel, type TranslationWorkflowPhase } from "$lib/constants";
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall";
 import { db } from "$lib/server/db";
-import { practiceSession, task, template, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
+import { practiceSession, task, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { getGreeting, getRandomSubtitle } from "$lib/server/greetings";
-import { getLocalDateString, getMondayOfWeekForDate } from "$lib/server/scheduling/dates";
-import { ensureTasksForDate } from "$lib/server/scheduling/tasks";
+import { currentLineupStarts, ensureCurrentLineups, listLineupTasks } from "$lib/server/lineups";
+import { getLocalDateString } from "$lib/server/scheduling/dates";
 
 export interface QuestHallUser {
 	id: string;
@@ -23,8 +16,8 @@ export interface QuestHallUser {
 
 export interface HallTranslationTask {
 	id: number;
-	titleBase: string;
-	descriptionBase: string | null;
+	title: string;
+	description: string | null;
 	difficulty: number;
 	createdMonth: string;
 }
@@ -45,75 +38,62 @@ export interface HallData {
 	translationStatusMap: Record<string, TranslationWorkflowPhase>;
 }
 
-interface ScheduledHallTask {
-	id: number;
-	title: string;
-	shortObjective: string | null;
-	templateUi: UiVariant;
-	templateDifficulty: number;
-	templateInteractionType: InteractionType;
-	pointReward: number;
+async function loadLineupQuests(lineupId: number, userId: string): Promise<HallQuest[]> {
+	const entries = await listLineupTasks(lineupId);
+	const sessions =
+		entries.length > 0
+			? await db.query.practiceSession.findMany({
+					where: and(eq(practiceSession.userId, userId), eq(practiceSession.lineupId, lineupId)),
+					columns: { taskId: true, status: true, evaluationPhase: true, lastSeenAssistantMessageId: true },
+					with: { messages: { columns: { id: true, role: true } } },
+				})
+			: [];
+	const sessionByTaskId = new Map(sessions.map((session) => [session.taskId, session]));
+
+	return entries.map(({ origin: _origin, ...entry }) => {
+		const session = sessionByTaskId.get(entry.id);
+		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
+		const unreadCount = session?.messages.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
+		return {
+			...entry,
+			lineupId,
+			sessionStatus: (session?.status ?? null) as HallQuestSessionStatus,
+			evaluationPhase: session?.evaluationPhase ?? null,
+			unreadCount,
+			hasUnreadReply: unreadCount > 0,
+		};
+	});
 }
 
 export async function loadQuestHallData(user: QuestHallUser, browserTimezone: string): Promise<HallData> {
 	const activeLanguage = user.activeLanguage as LanguageCode;
 	const localDate = getLocalDateString(browserTimezone);
-	const localMonday = getMondayOfWeekForDate(localDate);
-
-	await ensureTasksForDate(activeLanguage, localDate);
+	const lineups = await ensureCurrentLineups(activeLanguage, localDate);
 	const learner = await db.query.user.findFirst({
 		where: (u, { eq }) => eq(u.id, user.id),
 		columns: { levelSelfAssign: true },
 	});
 
-	const weeklyTasks = await db
-		.select({
-			id: task.id,
-			title: task.title,
-			shortObjective: task.shortObjective,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			templateInteractionType: template.interactionType,
-			pointReward: template.pointReward,
-		})
-		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, activeLanguage), eq(task.date, localMonday), eq(task.cadence, "weekly")))
-		.orderBy(asc(task.id));
-
-	const dailyTasks = await db
-		.select({
-			id: task.id,
-			title: task.title,
-			shortObjective: task.shortObjective,
-			templateUi: template.ui,
-			templateDifficulty: template.difficulty,
-			templateInteractionType: template.interactionType,
-			pointReward: template.pointReward,
-		})
-		.from(task)
-		.innerJoin(template, eq(task.templateId, template.id))
-		.where(and(eq(task.language, activeLanguage), eq(task.date, localDate), eq(task.cadence, "daily")))
-		.orderBy(asc(task.id));
+	const [dailyTasks, weeklyTasks] = await Promise.all([loadLineupQuests(lineups.daily, user.id), loadLineupQuests(lineups.weekly, user.id)]);
 
 	const translationTasks = await db
 		.select({
-			id: template.id,
-			titleBase: template.titleBase,
-			descriptionBase: template.descriptionBase,
-			difficulty: template.difficulty,
-			createdAt: template.createdAt,
+			id: task.id,
+			title: task.title,
+			description: task.description,
+			difficulty: task.difficulty,
+			createdAt: task.createdAt,
 		})
-		.from(template)
-		.where(and(eq(template.language, activeLanguage), eq(template.ui, "translator"), eq(template.isActive, true)))
-		.orderBy(desc(template.createdAt), desc(template.id));
+		.from(task)
+		.where(and(eq(task.language, activeLanguage), eq(task.interactionType, "translate"), eq(task.isActive, true)))
+		.orderBy(desc(task.createdAt), desc(task.id));
 
-	const translationTemplateIds = translationTasks.map((taskItem) => taskItem.id);
+	const translationTaskIds = translationTasks.map((taskItem) => taskItem.id);
 	const translationAttempts =
-		user.nativeLanguage && translationTemplateIds.length > 0
+		user.nativeLanguage && translationTaskIds.length > 0
 			? await db
 					.select({
-						templateId: translationSourceSet.templateId,
+						taskId: translationAttempt.taskId,
 						status: translationAttempt.workflowPhase,
 					})
 					.from(translationAttempt)
@@ -122,77 +102,35 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 						and(
 							eq(translationAttempt.userId, user.id),
 							eq(translationSourceSet.promptLanguage, user.nativeLanguage),
-							inArray(translationSourceSet.templateId, translationTemplateIds),
+							inArray(translationAttempt.taskId, translationTaskIds),
 						),
 					)
 					.orderBy(sql`${translationAttempt.workflowPhase} <> 'completed' DESC`, desc(translationAttempt.updatedAt), desc(translationAttempt.id))
 			: [];
 
-	const translationStatusByTemplateId = new Map<number, TranslationWorkflowPhase>();
+	const translationStatusByTaskId = new Map<number, TranslationWorkflowPhase>();
 	for (const attempt of translationAttempts) {
-		if (!translationStatusByTemplateId.has(attempt.templateId)) {
-			translationStatusByTemplateId.set(attempt.templateId, attempt.status);
+		if (!translationStatusByTaskId.has(attempt.taskId)) {
+			translationStatusByTaskId.set(attempt.taskId, attempt.status);
 		}
 	}
-
-	const allTaskIds = [...new Set([...weeklyTasks, ...dailyTasks].map((taskItem) => taskItem.id))];
-	const relatedSessions =
-		allTaskIds.length > 0
-			? await db.query.practiceSession.findMany({
-					where: and(eq(practiceSession.userId, user.id), inArray(practiceSession.taskId, allTaskIds)),
-					columns: {
-						id: true,
-						taskId: true,
-						status: true,
-						evaluationPhase: true,
-						startedAt: true,
-						lastSeenAssistantMessageId: true,
-					},
-					with: {
-						messages: {
-							columns: { id: true, role: true },
-						},
-					},
-					orderBy: (sessions, { desc }) => [desc(sessions.startedAt), desc(sessions.id)],
-				})
-			: [];
-
-	const latestSessionByTaskId = new Map<number, (typeof relatedSessions)[number]>();
-	for (const session of relatedSessions) {
-		if (!latestSessionByTaskId.has(session.taskId)) {
-			latestSessionByTaskId.set(session.taskId, session);
-		}
-	}
-
-	const addSessionState = (taskItem: ScheduledHallTask): HallQuest => {
-		const session = latestSessionByTaskId.get(taskItem.id);
-		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
-		const unreadCount = session?.messages?.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
-		return {
-			...taskItem,
-			sessionStatus: (session?.status ?? null) as HallQuestSessionStatus,
-			evaluationPhase: session?.evaluationPhase ?? null,
-			unreadCount,
-			hasUnreadReply: unreadCount > 0,
-		};
-	};
 
 	return {
 		activeLanguage,
 		nativeLanguage: user.nativeLanguage ?? null,
 		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
 		localDate,
-		localMonday,
+		localMonday: currentLineupStarts(localDate).weekly,
 		editionDate: localDate,
 		translationMonth: localDate.slice(0, 7),
 		greeting: getGreeting(activeLanguage, user.name),
 		subtitle: getRandomSubtitle(activeLanguage),
-		weeklyTasks: weeklyTasks.map(addSessionState),
-		dailyTasks: dailyTasks.map(addSessionState),
+		weeklyTasks,
+		dailyTasks,
 		translationTasks: translationTasks.map(({ createdAt, ...taskItem }) => ({
 			...taskItem,
 			createdMonth: getLocalDateString(browserTimezone, createdAt).slice(0, 7),
 		})),
-		translationStatusMap: Object.fromEntries(translationStatusByTemplateId),
+		translationStatusMap: Object.fromEntries(translationStatusByTaskId),
 	};
 }

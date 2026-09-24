@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
 import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/agent-replies/timing";
-import { type UiVariant, URGENCY_PRESETS, type Urgency } from "$lib/constants";
+import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
 import {
 	type AgentGenerationArtifacts,
 	AgentGenerationError,
@@ -10,6 +10,7 @@ import {
 } from "$lib/server/agent-replies/generator";
 import { db } from "$lib/server/db";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
+import { buildAgentSystemPrompt } from "$lib/server/session";
 
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
@@ -347,8 +348,8 @@ export class AgentReplyWorker {
 
 		try {
 			const result = await generateAgentResponse({
-				baseSystemPrompt: (session.agentPromptSnapshot as { systemPrompt: string }).systemPrompt,
-				ui: (session.agentPromptSnapshot as { ui?: Parameters<typeof generateAgentResponse>[0]["ui"] }).ui ?? "discord",
+				baseSystemPrompt: buildAgentSystemPrompt(session.task),
+				ui: session.task.ui,
 				history,
 				userId: session.userId,
 				additionalInstruction: getBatchGenerationInstruction(batch.kind, session.followUpCount),
@@ -395,7 +396,7 @@ export class AgentReplyWorker {
 				return;
 			}
 
-			await this.persistGenerationOutcome(batch, session, result, completedAt);
+			await this.persistGenerationOutcome(batch, result, completedAt);
 		} catch (error) {
 			await this.handleGenerationFailure(batch, new Date(), error);
 		}
@@ -407,12 +408,7 @@ export class AgentReplyWorker {
 	 * batch on abuse termination, queues the deliveries, and schedules the idle
 	 * follow-up for silent turns.
 	 */
-	private async persistGenerationOutcome(
-		batch: ClaimedBatch,
-		session: { urgency: Urgency },
-		result: AgentGenerationArtifacts,
-		now: WorkerNow,
-	): Promise<void> {
+	private async persistGenerationOutcome(batch: ClaimedBatch, result: AgentGenerationArtifacts, now: WorkerNow): Promise<void> {
 		const deliveries = result.parsedResult.deliveries;
 		const terminated = result.parsedResult.decision === "terminate_abuse";
 		await db.transaction(async (tx) => {
@@ -496,7 +492,7 @@ export class AgentReplyWorker {
 					.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
 			}
 			if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
-				await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
+				await this.scheduleFollowUp(tx, batch.sessionId, now);
 			}
 		});
 	}
@@ -556,7 +552,7 @@ export class AgentReplyWorker {
 				// block each other, never deadlock. Reading the session under its row
 				// lock also makes the deliverability check transactional.
 				const [session] = await tx
-					.select({ status: practiceSession.status, completionReason: practiceSession.completionReason, urgency: practiceSession.urgency })
+					.select({ status: practiceSession.status, completionReason: practiceSession.completionReason })
 					.from(practiceSession)
 					.where(eq(practiceSession.id, batch.sessionId))
 					.for("update");
@@ -630,20 +626,22 @@ export class AgentReplyWorker {
 						.set({ status: "abandoned", completionReason: "terminated_abuse", completedAt: now })
 						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
 				} else if (batch.allowIdleFollowUp) {
-					await this.scheduleFollowUp(tx, batch.sessionId, now, session.urgency);
+					await this.scheduleFollowUp(tx, batch.sessionId, now);
 				}
 			});
 		}
 	}
 
-	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow, urgency: Urgency): Promise<void> {
-		const session = await executor.query.practiceSession.findFirst({ where: eq(practiceSession.id, sessionId) });
+	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow): Promise<void> {
+		const session = await executor.query.practiceSession.findFirst({
+			where: eq(practiceSession.id, sessionId),
+			with: { task: { columns: { ui: true, urgency: true } } },
+		});
 		if (!session || session.status !== "in_progress" || session.followUpCount >= 2 || session.expiresAt <= now) return;
 		// Comment threads (Reddit/AO3) never chase a silent learner: silence ends a
 		// public thread naturally, and a nudge would model the very norm violation
 		// the simulation teaches learners to avoid.
-		const ui = (session.agentPromptSnapshot as { ui?: UiVariant } | null)?.ui ?? "discord";
-		if (!supportsIdleFollowUp(ui)) return;
+		if (!supportsIdleFollowUp(session.task.ui)) return;
 		const existing = await executor.query.agentResponseBatch.findFirst({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),
@@ -661,7 +659,7 @@ export class AgentReplyWorker {
 			sessionId,
 			kind: "follow_up",
 			status: "pending",
-			dueAt: getUrgencyFollowUpAt(now, urgency, session.followUpCount + 1),
+			dueAt: getUrgencyFollowUpAt(now, session.task.urgency ?? "high", session.followUpCount + 1),
 			inputMessageId: null,
 		});
 	}

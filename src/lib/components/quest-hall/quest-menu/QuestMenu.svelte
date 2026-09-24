@@ -453,6 +453,7 @@ onMount(() => {
 		getHallFacts: () =>
 			[...data.dailyTasks, ...data.weeklyTasks].map((task) => ({
 				taskId: task.id,
+				lineupId: task.lineupId,
 				sessionStatus: task.sessionStatus,
 				unreadCount: task.unreadCount ?? 0,
 			})),

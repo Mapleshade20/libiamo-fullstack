@@ -1,4 +1,4 @@
-import type { UnreadInboxItem } from "$lib/unread";
+import { type UnreadInboxItem, unreadEntryKey } from "$lib/unread";
 
 export type UnreadSubscriptionStatus = "loading" | "ready" | "error";
 
@@ -10,6 +10,7 @@ export interface UnreadSubscriptionState {
 
 export interface UnreadHallFact {
 	taskId: number;
+	lineupId: number | null;
 	sessionStatus: string | null;
 	unreadCount: number;
 }
@@ -42,14 +43,14 @@ export function getUnreadTotal(items: readonly Pick<UnreadInboxItem, "unreadCoun
  */
 export function unreadHallFactsChanged(previous: readonly UnreadInboxItem[], next: readonly UnreadInboxItem[]): boolean {
 	if (previous.length !== next.length) return true;
-	const previousFacts = new Map(previous.map((item) => [item.taskId, `${item.sessionStatus}:${item.unreadCount}`]));
-	return next.some((item) => previousFacts.get(item.taskId) !== `${item.sessionStatus}:${item.unreadCount}`);
+	const previousFacts = new Map(previous.map((item) => [unreadEntryKey(item), `${item.sessionStatus}:${item.unreadCount}`]));
+	return next.some((item) => previousFacts.get(unreadEntryKey(item)) !== `${item.sessionStatus}:${item.unreadCount}`);
 }
 
 export function unreadHallSnapshotChanged(snapshot: readonly UnreadHallFact[], items: readonly UnreadInboxItem[]): boolean {
-	const itemsByTaskId = new Map(items.map((item) => [item.taskId, item]));
+	const itemsByEntry = new Map(items.map((item) => [unreadEntryKey(item), item]));
 	return snapshot.some((fact) => {
-		const item = itemsByTaskId.get(fact.taskId);
+		const item = itemsByEntry.get(unreadEntryKey(fact));
 		if (!item) return fact.unreadCount !== 0;
 		return item.unreadCount !== fact.unreadCount || item.sessionStatus !== fact.sessionStatus;
 	});

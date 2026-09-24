@@ -12,15 +12,13 @@ const { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindUser } = vi.ho
 	return { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindUser };
 });
 
-const { mockEnsureTasksForDate, mockGetGreeting, mockGetRandomSubtitle } = vi.hoisted(() => ({
-	mockEnsureTasksForDate: vi.fn(),
-	mockGetGreeting: vi.fn((language: string, name: string) => `${language}:${name}`),
-	mockGetRandomSubtitle: vi.fn((language: string) => `${language}:subtitle`),
+const { mockEnsureCurrentLineups, mockListLineupTasks } = vi.hoisted(() => ({
+	mockEnsureCurrentLineups: vi.fn(),
+	mockListLineupTasks: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", () => ({
 	and: (...conditions: unknown[]) => ({ op: "and", conditions }),
-	asc: (column: unknown) => ({ op: "asc", column }),
 	desc: (column: unknown) => ({ op: "desc", column }),
 	eq: (column: unknown, value: unknown) => ({ op: "eq", column, value }),
 	inArray: (column: unknown, values: unknown[]) => ({ op: "inArray", column, values }),
@@ -31,88 +29,54 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		select: mockSelect,
 		query: {
-			user: {
-				findFirst: mockFindUser,
-			},
-			practiceSession: {
-				findMany: mockFindMany,
-			},
+			user: { findFirst: mockFindUser },
+			practiceSession: { findMany: mockFindMany },
 		},
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	user: {
-		id: "user.id",
-	},
 	task: {
 		id: "task.id",
 		title: "task.title",
-		shortObjective: "task.shortObjective",
+		description: "task.description",
+		difficulty: "task.difficulty",
 		language: "task.language",
-		date: "task.date",
-		cadence: "task.cadence",
-		templateId: "task.templateId",
-	},
-	template: {
-		id: "template.id",
-		titleBase: "template.titleBase",
-		descriptionBase: "template.descriptionBase",
-		difficulty: "template.difficulty",
-		ui: "template.ui",
-		interactionType: "template.interactionType",
-		pointReward: "template.pointReward",
-		language: "template.language",
-		isActive: "template.isActive",
-		createdAt: "template.createdAt",
+		interactionType: "task.interactionType",
+		isActive: "task.isActive",
+		createdAt: "task.createdAt",
 	},
 	practiceSession: {
-		id: "practiceSession.id",
 		userId: "practiceSession.userId",
-		taskId: "practiceSession.taskId",
+		lineupId: "practiceSession.lineupId",
 	},
 	translationAttempt: {
 		id: "translationAttempt.id",
 		userId: "translationAttempt.userId",
+		taskId: "translationAttempt.taskId",
 		sourceSetId: "translationAttempt.sourceSetId",
 		workflowPhase: "translationAttempt.workflowPhase",
 		updatedAt: "translationAttempt.updatedAt",
 	},
 	translationSourceSet: {
 		id: "translationSourceSet.id",
-		templateId: "translationSourceSet.templateId",
 		promptLanguage: "translationSourceSet.promptLanguage",
 	},
 }));
 
 vi.mock("$lib/server/greetings", () => ({
-	getGreeting: mockGetGreeting,
-	getRandomSubtitle: mockGetRandomSubtitle,
+	getGreeting: (language: string, name: string) => `${language}:${name}`,
+	getRandomSubtitle: (language: string) => `${language}:subtitle`,
 }));
 
-vi.mock("$lib/server/scheduling/tasks", () => ({
-	ensureTasksForDate: mockEnsureTasksForDate,
+vi.mock("$lib/server/lineups", async (importOriginal) => ({
+	currentLineupStarts: (await importOriginal<typeof import("$lib/server/lineups")>()).currentLineupStarts,
+	ensureCurrentLineups: mockEnsureCurrentLineups,
+	listLineupTasks: mockListLineupTasks,
 }));
 
-const weeklyTask = {
-	id: 20,
-	title: "Weekly",
-	shortObjective: "Weekly objective",
-	templateUi: "apple_mail" as const,
-	templateDifficulty: 2,
-	templateInteractionType: "chat" as const,
-	pointReward: 5,
-};
-
-const dailyTask = {
-	id: 10,
-	title: "Daily",
-	shortObjective: "Daily objective",
-	templateUi: "imessage" as const,
-	templateDifficulty: 1,
-	templateInteractionType: "chat" as const,
-	pointReward: 5,
-};
+const weeklyTask = { id: 20, title: "Weekly", shortObjective: "Weekly objective", ui: "apple_mail" as const, difficulty: 2, origin: "auto" };
+const dailyTask = { id: 10, title: "Daily", shortObjective: "Daily objective", ui: "imessage" as const, difficulty: 1, origin: "manual" };
 
 function containsCondition(value: unknown, expected: Record<string, unknown>): boolean {
 	if (!value || typeof value !== "object") return false;
@@ -129,136 +93,93 @@ describe("loadQuestHallData", () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-04-19T16:30:00.000Z"));
 		mockFindUser.mockResolvedValue(undefined);
+		mockEnsureCurrentLineups.mockResolvedValue({ daily: 1, weekly: 2 });
+		mockListLineupTasks.mockImplementation(async (lineupId: number) => (lineupId === 1 ? [dailyTask] : [weeklyTask]));
+		mockFindMany.mockResolvedValue([]);
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	it("loads stable, user-scoped Hall facts at the browser-local day and week boundary", async () => {
-		const firstTranslationCreatedAt = new Date("2026-04-30T18:00:00.000Z");
+	it("reads the lineups current on the browser-local day with each entry's own progress", async () => {
 		mockFindUser.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 2 } });
-		mockOrderBy
-			.mockResolvedValueOnce([weeklyTask])
-			.mockResolvedValueOnce([dailyTask])
-			.mockResolvedValueOnce([
-				{
-					id: 42,
-					titleBase: "Newest translation",
-					descriptionBase: "A translated letter",
-					difficulty: 2,
-					createdAt: firstTranslationCreatedAt,
-				},
-				{
-					id: 41,
-					titleBase: "Older translation",
-					descriptionBase: null,
-					difficulty: 1,
-					createdAt: new Date("2026-03-01T12:00:00.000Z"),
-				},
-			])
-			.mockResolvedValueOnce([
-				{ templateId: 42, status: "draft" },
-				{ templateId: 42, status: "completed" },
-				{ templateId: 41, status: "completed" },
-			]);
-		mockFindMany.mockResolvedValue([
-			{
-				id: 200,
-				taskId: 10,
-				status: "evaluated",
-				evaluationPhase: "completed",
-				startedAt: new Date("2026-04-20T08:00:00.000Z"),
-				lastSeenAssistantMessageId: 4,
-				messages: [
-					{ id: 3, role: "assistant" },
-					{ id: 5, role: "assistant" },
-					{ id: 6, role: "assistant" },
-					{ id: 7, role: "user" },
-				],
-			},
-			{
-				id: 199,
-				taskId: 10,
-				status: "in_progress",
-				evaluationPhase: "feedback",
-				startedAt: new Date("2026-04-19T08:00:00.000Z"),
-				lastSeenAssistantMessageId: null,
-				messages: [{ id: 1, role: "assistant" }],
-			},
-		]);
+		mockOrderBy.mockResolvedValueOnce([]);
+		mockFindMany.mockImplementation(async (query: { where: unknown }) =>
+			containsCondition(query.where, { op: "eq", column: "practiceSession.lineupId", value: 1 })
+				? [
+						{
+							taskId: 10,
+							status: "evaluated",
+							evaluationPhase: "completed",
+							lastSeenAssistantMessageId: 4,
+							messages: [
+								{ id: 3, role: "assistant" },
+								{ id: 5, role: "assistant" },
+								{ id: 6, role: "assistant" },
+								{ id: 7, role: "user" },
+							],
+						},
+					]
+				: [],
+		);
 
 		const result = await loadQuestHallData({ id: "user-1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" }, "Asia/Shanghai");
 
-		expect(mockEnsureTasksForDate).toHaveBeenCalledTimes(1);
-		expect(mockEnsureTasksForDate).toHaveBeenCalledWith("fr", "2026-04-20");
-		expect(result).toEqual({
+		expect(mockEnsureCurrentLineups).toHaveBeenCalledWith("fr", "2026-04-20");
+		expect(result).toMatchObject({
 			activeLanguage: "fr",
 			nativeLanguage: "en",
 			levelSelfAssign: 3,
 			localDate: "2026-04-20",
 			localMonday: "2026-04-20",
-			editionDate: "2026-04-20",
-			translationMonth: "2026-04",
 			greeting: "fr:Fedor",
 			subtitle: "fr:subtitle",
-			weeklyTasks: [{ ...weeklyTask, sessionStatus: null, evaluationPhase: null, unreadCount: 0, hasUnreadReply: false }],
-			dailyTasks: [{ ...dailyTask, sessionStatus: "evaluated", evaluationPhase: "completed", unreadCount: 2, hasUnreadReply: true }],
-			translationTasks: [
-				{
-					id: 42,
-					titleBase: "Newest translation",
-					descriptionBase: "A translated letter",
-					difficulty: 2,
-					createdMonth: "2026-05",
-				},
-				{
-					id: 41,
-					titleBase: "Older translation",
-					descriptionBase: null,
-					difficulty: 1,
-					createdMonth: "2026-03",
-				},
-			],
-			translationStatusMap: { 41: "completed", 42: "draft" },
 		});
+		const { origin: _daily, ...daily } = dailyTask;
+		const { origin: _weekly, ...weekly } = weeklyTask;
+		expect(result.dailyTasks).toEqual([
+			{ ...daily, lineupId: 1, sessionStatus: "evaluated", evaluationPhase: "completed", unreadCount: 2, hasUnreadReply: true },
+		]);
+		expect(result.weeklyTasks).toEqual([
+			{ ...weekly, lineupId: 2, sessionStatus: null, evaluationPhase: null, unreadCount: 0, hasUnreadReply: false },
+		]);
+		for (const [query] of mockFindMany.mock.calls) {
+			expect(containsCondition(query.where, { op: "eq", column: "practiceSession.userId", value: "user-1" })).toBe(true);
+		}
 		expect(() => JSON.stringify(result)).not.toThrow();
-		expect(mockFindUser).toHaveBeenCalledOnce();
-
-		expect(mockOrderBy.mock.calls[0]).toEqual([{ op: "asc", column: "task.id" }]);
-		expect(mockOrderBy.mock.calls[1]).toEqual([{ op: "asc", column: "task.id" }]);
-		expect(mockOrderBy.mock.calls[2]).toEqual([
-			{ op: "desc", column: "template.createdAt" },
-			{ op: "desc", column: "template.id" },
-		]);
-		expect(mockOrderBy.mock.calls[3]).toEqual([
-			{
-				op: "sql",
-				strings: ["", " <> 'completed' DESC"],
-				values: ["translationAttempt.workflowPhase"],
-			},
-			{ op: "desc", column: "translationAttempt.updatedAt" },
-			{ op: "desc", column: "translationAttempt.id" },
-		]);
-
-		const attemptScope = (mockWhere.mock.calls as unknown[][])[3]?.[0];
-		expect(containsCondition(attemptScope, { op: "eq", column: "translationAttempt.userId", value: "user-1" })).toBe(true);
-		expect(containsCondition(attemptScope, { op: "eq", column: "translationSourceSet.promptLanguage", value: "en" })).toBe(true);
-		expect(containsCondition(attemptScope, { op: "inArray", column: "translationSourceSet.templateId" })).toBe(true);
-
-		const sessionQuery = mockFindMany.mock.calls[0]?.[0];
-		expect(containsCondition(sessionQuery.where, { op: "eq", column: "practiceSession.userId", value: "user-1" })).toBe(true);
-		expect(containsCondition(sessionQuery.where, { op: "inArray", column: "practiceSession.taskId" })).toBe(true);
-		expect(
-			sessionQuery.orderBy({ startedAt: "sessions.startedAt", id: "sessions.id" }, { desc: (column: unknown) => ({ op: "desc", column }) }),
-		).toEqual([
-			{ op: "desc", column: "sessions.startedAt" },
-			{ op: "desc", column: "sessions.id" },
-		]);
 	});
 
-	it("skips attempt and session reads when the user has no native language or scheduled tasks", async () => {
-		mockOrderBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+	it("lists active translation tasks by creation month and prefers unfinished attempts in the status map", async () => {
+		mockOrderBy
+			.mockResolvedValueOnce([
+				{ id: 42, title: "Newest translation", description: "A translated letter", difficulty: 2, createdAt: new Date("2026-04-30T18:00:00.000Z") },
+				{ id: 41, title: "Older translation", description: null, difficulty: 1, createdAt: new Date("2026-03-01T12:00:00.000Z") },
+			])
+			.mockResolvedValueOnce([
+				{ taskId: 42, status: "draft" },
+				{ taskId: 42, status: "completed" },
+				{ taskId: 41, status: "completed" },
+			]);
+
+		const result = await loadQuestHallData({ id: "user-1", name: "Fedor", activeLanguage: "fr", nativeLanguage: "en" }, "Asia/Shanghai");
+
+		expect(result.translationTasks).toEqual([
+			{ id: 42, title: "Newest translation", description: "A translated letter", difficulty: 2, createdMonth: "2026-05" },
+			{ id: 41, title: "Older translation", description: null, difficulty: 1, createdMonth: "2026-03" },
+		]);
+		expect(result.translationStatusMap).toEqual({ 41: "completed", 42: "draft" });
+		const translationScope = (mockWhere.mock.calls as unknown[][])[0]?.[0];
+		expect(containsCondition(translationScope, { op: "eq", column: "task.interactionType", value: "translate" })).toBe(true);
+		expect(containsCondition(translationScope, { op: "eq", column: "task.isActive", value: true })).toBe(true);
+		const attemptScope = (mockWhere.mock.calls as unknown[][])[1]?.[0];
+		expect(containsCondition(attemptScope, { op: "eq", column: "translationSourceSet.promptLanguage", value: "en" })).toBe(true);
+		expect(containsCondition(attemptScope, { op: "inArray", column: "translationAttempt.taskId" })).toBe(true);
+	});
+
+	it("skips attempt and session reads when the user has no native language or lined-up tasks", async () => {
+		mockListLineupTasks.mockResolvedValue([]);
+		mockOrderBy.mockResolvedValueOnce([{ id: 42, title: "Letter", description: null, difficulty: 1, createdAt: new Date() }]);
 
 		const result = await loadQuestHallData({ id: "user-2", name: "Ada", activeLanguage: "ja" }, "UTC");
 
@@ -267,7 +188,7 @@ describe("loadQuestHallData", () => {
 		expect(result.dailyTasks).toEqual([]);
 		expect(result.weeklyTasks).toEqual([]);
 		expect(result.translationStatusMap).toEqual({});
-		expect(mockOrderBy).toHaveBeenCalledTimes(3);
+		expect(mockOrderBy).toHaveBeenCalledTimes(1);
 		expect(mockFindMany).not.toHaveBeenCalled();
 	});
 });

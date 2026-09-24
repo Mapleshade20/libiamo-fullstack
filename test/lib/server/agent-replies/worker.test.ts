@@ -123,7 +123,7 @@ function makeDeliveryTx(
 	options: { sessionRow?: Record<string, unknown> | null; batchRow?: Record<string, unknown> | null; remainingDelivery?: { id: number } | null } = {},
 ) {
 	const operations: RecordedDeliveryOperation[] = [];
-	const sessionRow = options.sessionRow ?? { status: "in_progress", completionReason: null, urgency: "high" };
+	const sessionRow = options.sessionRow ?? { status: "in_progress", completionReason: null };
 	const batchRow = options.batchRow ?? { status: "delivery_pending" };
 	const tx = {
 		select: () => ({
@@ -267,9 +267,11 @@ describe("agent reply worker scheduling", () => {
 		const { tx, updates, inserts } = makeRecordingTx(31, [29, 30]);
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
 		const worker = new AgentReplyWorker({});
-		await (
-			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
-		).persistGenerationOutcome(batch, { urgency: "high" }, result, now);
+		await (worker as unknown as { persistGenerationOutcome: (b: unknown, r: unknown, n: Date) => Promise<void> }).persistGenerationOutcome(
+			batch,
+			result,
+			now,
+		);
 
 		// the terminating batch itself is queued for delivery, never cancelled
 		const fenceUpdate = updates.find((update) => update.table === agentResponseBatch && update.set.status === "delivery_pending");
@@ -323,9 +325,11 @@ describe("agent reply worker scheduling", () => {
 		const { tx, inserts } = makeRecordingTx(31, []);
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
 		const worker = new AgentReplyWorker({});
-		await (
-			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
-		).persistGenerationOutcome(batch, { urgency: "high" }, result, completedAt);
+		await (worker as unknown as { persistGenerationOutcome: (b: unknown, r: unknown, n: Date) => Promise<void> }).persistGenerationOutcome(
+			batch,
+			result,
+			completedAt,
+		);
 
 		// the first message is due the moment composing finishes; the wait before the
 		// second scales with the second message's own length (typing model)
@@ -357,9 +361,11 @@ describe("agent reply worker scheduling", () => {
 		const { tx, updates, inserts } = makeRecordingTx(31, [], { clientMessageId: "msg-1", thread: { commentId: "c1" } });
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
 		const worker = new AgentReplyWorker({});
-		await (
-			worker as unknown as { persistGenerationOutcome: (b: unknown, s: unknown, r: unknown, n: Date) => Promise<void> }
-		).persistGenerationOutcome(batch, { urgency: "high" }, result, completedAt);
+		await (worker as unknown as { persistGenerationOutcome: (b: unknown, r: unknown, n: Date) => Promise<void> }).persistGenerationOutcome(
+			batch,
+			result,
+			completedAt,
+		);
 
 		const messageUpdate = updates.find((update) => update.table === sessionMessage);
 		expect(messageUpdate?.set).toEqual({ llmMetadata: { clientMessageId: "msg-1", thread: { commentId: "c1" }, noReply: true } });
@@ -384,13 +390,13 @@ describe("agent reply worker scheduling", () => {
 				status: "in_progress",
 				followUpCount: 0,
 				expiresAt: new Date(now.getTime() + 3_600_000),
-				agentPromptSnapshot: { ui, systemPrompt: "prompt" },
+				task: { ui, urgency: "high" },
 			});
 			await (
 				worker as unknown as {
-					scheduleFollowUp: (executor: unknown, sessionId: number, now: Date, urgency: "high") => Promise<void>;
+					scheduleFollowUp: (executor: unknown, sessionId: number, now: Date) => Promise<void>;
 				}
-			).scheduleFollowUp(executor, 5, now, "high");
+			).scheduleFollowUp(executor, 5, now);
 			expect(inserts).toEqual([]);
 		}
 	});
@@ -402,13 +408,13 @@ describe("agent reply worker scheduling", () => {
 			status: "in_progress",
 			followUpCount: 0,
 			expiresAt: new Date(now.getTime() + 3_600_000),
-			agentPromptSnapshot: { ui: "imessage", systemPrompt: "prompt" },
+			task: { ui: "imessage", urgency: "high" },
 		});
 		await (
 			worker as unknown as {
-				scheduleFollowUp: (executor: unknown, sessionId: number, now: Date, urgency: "high") => Promise<void>;
+				scheduleFollowUp: (executor: unknown, sessionId: number, now: Date) => Promise<void>;
 			}
-		).scheduleFollowUp(executor, 5, now, "high");
+		).scheduleFollowUp(executor, 5, now);
 		expect(inserts.length).toBe(1);
 		expect(inserts[0]?.values).toMatchObject({ sessionId: 5, kind: "follow_up", status: "pending", inputMessageId: null });
 	});
@@ -524,7 +530,7 @@ describe("agent reply worker scheduling", () => {
 			allowIdleFollowUp: false,
 		});
 		const { tx, operations } = makeDeliveryTx({
-			sessionRow: { status: "completed", completionReason: "user_requested", urgency: "high" },
+			sessionRow: { status: "completed", completionReason: "user_requested" },
 		});
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
 		const worker = new AgentReplyWorker({});

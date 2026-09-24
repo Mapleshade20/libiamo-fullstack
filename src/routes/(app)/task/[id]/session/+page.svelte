@@ -19,63 +19,63 @@ let detailsHref = $derived(`${base}/task/${data.taskId}`);
 	<meta name="description" content={`Practice “${data.task.title}” in an interactive simulated conversation.`}>
 </svelte:head>
 
-{#if data.task.template.ui === "discord"}
+{#if data.task.ui === "discord"}
 	<DiscordUI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
 		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
 		returnHref={detailsHref}
 	/>
-{:else if data.task.template.ui === "imessage"}
+{:else if data.task.ui === "imessage"}
 	<IMessageUI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
 		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
 		returnHref={detailsHref}
 	/>
-{:else if data.task.template.ui === "apple_mail"}
+{:else if data.task.ui === "apple_mail"}
 	<MailUI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
 		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
 		returnHref={detailsHref}
 	/>
-{:else if data.task.template.ui === "ao3"}
+{:else if data.task.ui === "ao3"}
 	<AO3UI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
 		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
 		returnHref={detailsHref}
 	/>
-{:else if data.task.template.ui === "reddit"}
+{:else if data.task.ui === "reddit"}
 	<RedditUI
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
 		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
 		returnHref={detailsHref}
 	/>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-background">
-		<p class="text-muted-foreground text-sm uppercase tracking-widest">{data.task.template.ui} interface not yet implemented</p>
+		<p class="text-muted-foreground text-sm uppercase tracking-widest">{data.task.ui} interface not yet implemented</p>
 	</div>
 {/if}

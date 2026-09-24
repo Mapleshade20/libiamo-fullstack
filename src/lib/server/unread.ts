@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "$lib/server/db";
-import { practiceSession, sessionMessage, task, template } from "$lib/server/db/schema";
+import { practiceSession, sessionMessage, task } from "$lib/server/db/schema";
 import type { UnreadInboxItem } from "$lib/unread";
 
 const UNREAD_CONDITION = sql`(${sessionMessage.role} = 'assistant' and ${sessionMessage.id} > coalesce(${practiceSession.lastSeenAssistantMessageId}, 0))`;
@@ -31,27 +31,30 @@ export async function markAssistantMessagesSeen(sessionId: number, userId: strin
 export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]> {
 	const rows = await db
 		.select({
+			sessionId: practiceSession.id,
 			taskId: task.id,
+			lineupId: practiceSession.lineupId,
 			title: task.title,
-			ui: template.ui,
+			ui: task.ui,
 			sessionStatus: practiceSession.status,
 			unreadCount: sql<number>`count(*) filter (where ${UNREAD_CONDITION})::int`,
 			latestAgeSeconds: sql<number | null>`extract(epoch from (now() - max(${sessionMessage.createdAt}) filter (where ${UNREAD_CONDITION})))::int`,
 		})
 		.from(practiceSession)
 		.innerJoin(task, eq(task.id, practiceSession.taskId))
-		.innerJoin(template, eq(template.id, task.templateId))
 		.leftJoin(sessionMessage, eq(sessionMessage.sessionId, practiceSession.id))
 		.where(and(eq(practiceSession.userId, userId), inArray(practiceSession.status, ["in_progress", "completed", "evaluated", "abandoned"])))
-		.groupBy(task.id, task.title, template.ui, practiceSession.status, practiceSession.lastSeenAssistantMessageId);
+		.groupBy(practiceSession.id, task.id, task.title, task.ui);
 
 	return (
 		rows
 			.filter((row) => row.unreadCount > 0)
 			// Smaller ages are newer replies, so newest unread conversations come first.
 			.sort((a, b) => (a.latestAgeSeconds ?? 0) - (b.latestAgeSeconds ?? 0))
-			.map(({ taskId, title, ui, sessionStatus, unreadCount, latestAgeSeconds }) => ({
+			.map(({ sessionId, taskId, lineupId, title, ui, sessionStatus, unreadCount, latestAgeSeconds }) => ({
+				sessionId,
 				taskId,
+				lineupId,
 				title,
 				ui,
 				sessionStatus,

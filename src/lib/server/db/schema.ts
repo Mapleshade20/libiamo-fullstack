@@ -1,5 +1,20 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	check,
+	date,
+	foreignKey,
+	index,
+	integer,
+	jsonb,
+	pgTable,
+	primaryKey,
+	serial,
+	text,
+	timestamp,
+	unique,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
 import type { PracticeEvaluationPhase, TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
@@ -10,11 +25,11 @@ import {
 	agentDeliveryStatusEnum,
 	agentResponseBatchKindEnum,
 	agentResponseBatchStatusEnum,
-	cadenceEnum,
 	interactionTypeEnum,
 	languageCodeEnum,
+	lineupKindEnum,
+	lineupOriginEnum,
 	messageRoleEnum,
-	scheduleOriginEnum,
 	sessionCompletionReasonEnum,
 	sessionStatusEnum,
 	uiVariantEnum,
@@ -39,141 +54,148 @@ export const streakDay = pgTable(
 	],
 );
 
-// ── template ─────────────────────────────────────────────────────────
-export const template = pgTable(
-	"template",
-	{
-		id: serial("id").primaryKey(),
-		isActive: boolean("is_active").default(true).notNull(),
-		urgency: urgencyEnum("urgency"),
-		language: languageCodeEnum("language").notNull(),
-		interactionType: interactionTypeEnum("interaction_type").notNull(),
-		ui: uiVariantEnum("ui").notNull(),
-		cadence: cadenceEnum("cadence").notNull(),
-
-		titleBase: text("title_base").notNull(),
-		shortObjectiveBase: text("short_objective_base"),
-		descriptionBase: text("description_base"),
-		objectivesBase: text("objectives_base").array(),
-		agentPromptBase: text("agent_prompt_base"),
-		materialsMd: text("materials_md"),
-		translationReference: jsonb("translation_reference").$type<string[]>(),
-		tags: text("tags").array(),
-
-		maxTurns: integer("max_turns"),
-		estimatedWords: integer("estimated_words"),
-		difficulty: integer("difficulty").notNull(),
-		pointReward: integer("point_reward").notNull(),
-		gemReward: integer("gem_reward").notNull(),
-
-		createdBy: text("created_by").references(() => user.id),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(t) => [
-		uniqueIndex("template_id_language_idx").on(t.id, t.language),
-		check("difficulty_check", sql`${t.difficulty} >= 1 AND ${t.difficulty} <= 3`),
-		check(
-			"template_urgency_check",
-			sql`(${t.interactionType} = 'translate' AND ${t.urgency} IS NULL) OR (${t.interactionType} = 'chat' AND ${t.urgency} IS NOT NULL)`,
-		),
-	],
-);
-
-// ── templateContribution ──────────────────────────────────────────────
-export const templateContribution = pgTable("template_contribution", {
-	id: serial("id").primaryKey(),
-	language: languageCodeEnum("language").notNull(),
-	interactionType: interactionTypeEnum("interaction_type").notNull(),
-	ui: uiVariantEnum("ui").notNull(),
-	cadence: cadenceEnum("cadence"),
-	urgency: urgencyEnum("urgency"),
-
-	titleBase: text("title_base").notNull(),
-	shortObjectiveBase: text("short_objective_base"),
-	descriptionBase: text("description_base"),
-	objectivesBase: text("objectives_base").array(),
-	agentPromptBase: text("agent_prompt_base"),
-	materialsMd: text("materials_md"),
-	translationReference: jsonb("translation_reference").$type<string[]>(),
-	tags: text("tags").array(),
-
-	slotValues: jsonb("slot_values").notNull().default({}),
-	openingState: jsonb("opening_state").notNull().default({}),
-
-	difficulty: integer("difficulty"),
-
-	status: text("status", { enum: ["approved", "pending", "rejected"] })
-		.$type<"approved" | "pending" | "rejected">()
-		.default("pending")
-		.notNull(),
-	createdBy: text("created_by")
-		.notNull()
-		.references(() => user.id),
-	reviewedBy: text("reviewed_by").references(() => user.id),
-	reviewNotes: text("review_notes"),
-	submittedAt: timestamp("submitted_at"),
-	createdAt: timestamp("created_at").defaultNow().notNull(),
-	updatedAt: timestamp("updated_at")
-		.defaultNow()
-		.$onUpdate(() => new Date())
-		.notNull(),
-});
-
-// ── templateVariant ───────────────────────────────────────────────────
-export const templateVariant = pgTable(
-	"template_variant",
-	{
-		id: serial("id").primaryKey(),
-		templateId: integer("template_id")
-			.notNull()
-			.references(() => template.id, { onDelete: "cascade" }),
-		isActive: boolean("is_active").default(true).notNull(),
-		slotValues: jsonb("slot_values").notNull().default({}),
-		openingState: jsonb("opening_state").notNull().default({}),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-		updatedAt: timestamp("updated_at")
-			.defaultNow()
-			.$onUpdate(() => new Date())
-			.notNull(),
-	},
-	(t) => [index("template_variant_template_id_idx").on(t.templateId)],
-);
-
 // ── task ─────────────────────────────────────────────────────────────
+/**
+ * One static piece of content. It knows nothing about how it reaches learners (see lineups) and
+ * nothing is snapshotted from it: every consumer reads the live row, so edits apply everywhere.
+ */
 export const task = pgTable(
 	"task",
 	{
 		id: serial("id").primaryKey(),
-		templateId: integer("template_id")
-			.notNull()
-			.references(() => template.id),
-		variantId: integer("variant_id")
-			.notNull()
-			.references(() => templateVariant.id),
+		interactionType: interactionTypeEnum("interaction_type").notNull(),
 		language: languageCodeEnum("language").notNull(),
-		cadence: cadenceEnum("cadence").notNull(),
-		date: date("date").notNull(),
-		origin: scheduleOriginEnum("origin").notNull(),
-		urgency: urgencyEnum("urgency").notNull(),
+		ui: uiVariantEnum("ui").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		difficulty: integer("difficulty").notNull(),
 
 		title: text("title").notNull(),
 		shortObjective: text("short_objective"),
 		description: text("description"),
 		objectives: text("objectives").array(),
-		agentPrompt: text("agent_prompt"),
+		materialsMd: text("materials_md"),
+		tags: text("tags").array(),
+		estimatedWords: integer("estimated_words"),
 
+		// chat
+		urgency: urgencyEnum("urgency"),
+		/** Null means the conversation has no turn limit. */
+		maxTurns: integer("max_turns"),
+		agentPrompt: text("agent_prompt"),
+		openingState: jsonb("opening_state").$type<Record<string, unknown>>(),
+
+		// translate
+		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>(),
+		translationContext: text("translation_context"),
+
+		createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
 	},
 	(t) => [
-		uniqueIndex("task_date_template_idx").on(t.date, t.templateId),
-		index("task_language_date_idx").on(t.language, t.date),
-		index("task_language_cadence_date_idx").on(t.language, t.cadence, t.date),
+		index("task_language_type_idx").on(t.language, t.interactionType),
+		check("task_difficulty_check", sql`${t.difficulty} BETWEEN 1 AND 3`),
+		check("task_max_turns_check", sql`${t.maxTurns} IS NULL OR ${t.maxTurns} > 0`),
+		check("task_estimated_words_check", sql`${t.estimatedWords} IS NULL OR ${t.estimatedWords} > 0`),
+		check("task_translator_ui_check", sql`(${t.interactionType} = 'translate') = (${t.ui} = 'translator')`),
+		check(
+			"task_kind_fields_check",
+			sql`CASE ${t.interactionType}
+				WHEN 'chat' THEN ${t.urgency} IS NOT NULL AND ${t.openingState} IS NOT NULL AND ${t.referenceParagraphs} IS NULL AND ${t.translationContext} IS NULL
+				ELSE ${t.urgency} IS NULL AND ${t.maxTurns} IS NULL AND ${t.agentPrompt} IS NULL AND ${t.openingState} IS NULL
+					AND jsonb_typeof(${t.referenceParagraphs}) = 'array' AND jsonb_array_length(${t.referenceParagraphs}) > 0
+					AND length(btrim(${t.translationContext})) > 0
+			END`,
+		),
 	],
 );
+
+// ── taskContribution ──────────────────────────────────────────────────
+/** A learner-proposed task awaiting review. Its content columns mirror `task`. */
+export const taskContribution = pgTable(
+	"task_contribution",
+	{
+		id: serial("id").primaryKey(),
+		interactionType: interactionTypeEnum("interaction_type").notNull(),
+		language: languageCodeEnum("language").notNull(),
+		ui: uiVariantEnum("ui").notNull(),
+
+		title: text("title").notNull(),
+		shortObjective: text("short_objective"),
+		description: text("description"),
+		objectives: text("objectives").array(),
+		materialsMd: text("materials_md"),
+		tags: text("tags").array(),
+
+		urgency: urgencyEnum("urgency"),
+		agentPrompt: text("agent_prompt"),
+		openingState: jsonb("opening_state").$type<Record<string, unknown>>(),
+
+		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>(),
+		translationContext: text("translation_context"),
+
+		status: text("status", { enum: ["approved", "pending", "rejected"] })
+			.$type<"approved" | "pending" | "rejected">()
+			.default("pending")
+			.notNull(),
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
+		reviewNotes: text("review_notes"),
+		submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(t) => [index("task_contribution_status_idx").on(t.status, t.submittedAt), index("task_contribution_created_by_idx").on(t.createdBy)],
+);
+
+// ── lineup ────────────────────────────────────────────────────────────
+/**
+ * Distribution layer: a lineup is one occasion on which a set of tasks is put in front of the
+ * learners of a language. Attempts reference `(lineup_id, task_id)` so completion is scoped to
+ * the lineup entry; tasks never reference lineups, so this layer can be replaced wholesale.
+ */
+export const lineup = pgTable(
+	"lineup",
+	{
+		id: serial("id").primaryKey(),
+		language: languageCodeEnum("language").notNull(),
+		kind: lineupKindEnum("kind").notNull(),
+		startsOn: date("starts_on").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [uniqueIndex("lineup_language_kind_starts_on_idx").on(t.language, t.kind, t.startsOn)],
+);
+
+export const lineupTask = pgTable(
+	"lineup_task",
+	{
+		lineupId: integer("lineup_id")
+			.notNull()
+			.references(() => lineup.id, { onDelete: "cascade" }),
+		taskId: integer("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		position: integer("position").notNull(),
+		origin: lineupOriginEnum("origin").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.lineupId, t.taskId] }), index("lineup_task_task_idx").on(t.taskId)],
+);
+
+/** The auto-fill pool: which tasks the daily/weekly strategy may pick. Owned by distribution. */
+export const lineupRotation = pgTable("lineup_rotation", {
+	taskId: integer("task_id")
+		.primaryKey()
+		.references(() => task.id, { onDelete: "cascade" }),
+	kind: lineupKindEnum("kind").notNull(),
+});
 
 // ── practiceSession ────────────────────────────────────────────────────
 export const practiceSession = pgTable(
@@ -185,16 +207,15 @@ export const practiceSession = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		taskId: integer("task_id")
 			.notNull()
-			.references(() => task.id, { onDelete: "cascade" }),
-		agentPromptSnapshot: jsonb("agent_prompt_snapshot").notNull(),
-		urgency: urgencyEnum("urgency").notNull(),
+			.references(() => task.id),
+		/** The lineup entry this attempt belongs to; null when the task was not distributed. */
+		lineupId: integer("lineup_id"),
 		expiresAt: timestamp("expires_at").notNull(),
 		status: sessionStatusEnum("status").default("in_progress").notNull(),
 		completionReason: sessionCompletionReasonEnum("completion_reason"),
 		lastProcessedUserMessageId: integer("last_processed_user_message_id"),
 		lastSeenAssistantMessageId: integer("last_seen_assistant_message_id"),
 		agentReadUpToMessageId: integer("agent_read_up_to_message_id"),
-		maxTurnsSnapshot: integer("max_turns_snapshot"),
 		followUpCount: integer("follow_up_count").default(0).notNull(),
 		tutorFeedback: jsonb("tutor_feedback"),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
@@ -207,7 +228,13 @@ export const practiceSession = pgTable(
 		evaluationCompletedAt: timestamp("evaluation_completed_at"),
 	},
 	(t) => [
-		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),
+		foreignKey({
+			name: "practice_session_lineup_task_fk",
+			columns: [t.lineupId, t.taskId],
+			foreignColumns: [lineupTask.lineupId, lineupTask.taskId],
+		}),
+		unique("practice_session_user_task_lineup_key").on(t.userId, t.taskId, t.lineupId).nullsNotDistinct(),
+		index("practice_session_task_idx").on(t.taskId),
 		index("practice_session_archive_idx").on(t.userId, t.evaluationPhase, t.evaluationCompletedAt),
 		index("practice_session_expiry_idx").on(t.status, t.expiresAt),
 		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 2`),
@@ -299,9 +326,9 @@ export const translationSourceSet = pgTable(
 	"translation_source_set",
 	{
 		id: serial("id").primaryKey(),
-		templateId: integer("template_id")
+		taskId: integer("task_id")
 			.notNull()
-			.references(() => template.id),
+			.references(() => task.id),
 		sourceLanguage: text("source_language").notNull(),
 		promptLanguage: text("prompt_language").notNull(),
 		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>().notNull(),
@@ -311,8 +338,8 @@ export const translationSourceSet = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [
-		uniqueIndex("translation_source_set_template_prompt_fingerprint_idx").on(t.templateId, t.promptLanguage, t.contentFingerprint),
-		index("translation_source_set_template_idx").on(t.templateId),
+		uniqueIndex("translation_source_set_task_prompt_fingerprint_idx").on(t.taskId, t.promptLanguage, t.contentFingerprint),
+		unique("translation_source_set_id_task_key").on(t.id, t.taskId),
 	],
 );
 
@@ -328,9 +355,10 @@ export const translationAttempt = pgTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		sourceSetId: integer("source_set_id")
-			.notNull()
-			.references(() => translationSourceSet.id),
+		taskId: integer("task_id").notNull(),
+		sourceSetId: integer("source_set_id").notNull(),
+		/** The lineup entry this attempt belongs to; null when the task was not distributed. */
+		lineupId: integer("lineup_id"),
 		workflowPhase: text("workflow_phase").$type<TranslationWorkflowPhase>().notNull().default("draft"),
 		evaluation: jsonb("evaluation").$type<PersistedTranslationEvaluation>(),
 		generation1Messages: jsonb("generation_1_messages").$type<{ messages: ChatMessage[] }>(),
@@ -346,8 +374,21 @@ export const translationAttempt = pgTable(
 			.notNull(),
 	},
 	(t) => [
-		uniqueIndex("translation_attempt_active_user_source_set_idx").on(t.userId, t.sourceSetId).where(sql`${t.workflowPhase} <> 'completed'`),
-		index("translation_attempt_user_idx").on(t.userId),
+		foreignKey({
+			name: "translation_attempt_source_set_task_fk",
+			columns: [t.sourceSetId, t.taskId],
+			foreignColumns: [translationSourceSet.id, translationSourceSet.taskId],
+		}),
+		foreignKey({
+			name: "translation_attempt_lineup_task_fk",
+			columns: [t.lineupId, t.taskId],
+			foreignColumns: [lineupTask.lineupId, lineupTask.taskId],
+		}),
+		// One unfinished attempt per source set and lineup entry; retaking a completed one is allowed.
+		uniqueIndex("translation_attempt_active_idx")
+			.on(t.userId, t.sourceSetId, sql`coalesce(${t.lineupId}, 0)`)
+			.where(sql`${t.workflowPhase} <> 'completed'`),
+		index("translation_attempt_user_task_idx").on(t.userId, t.taskId),
 		index("translation_attempt_source_phase_idx").on(t.sourceSetId, t.workflowPhase),
 		check(
 			"translation_attempt_workflow_phase_check",
@@ -442,41 +483,44 @@ export const reviewLog = pgTable(
 );
 
 // ── Relations ────────────────────────────────────────────────────────
-export const templateRelations = relations(template, ({ one, many }) => ({
-	createdByUser: one(user, {
-		fields: [template.createdBy],
-		references: [user.id],
-	}),
-	tasks: many(task),
-	variants: many(templateVariant),
+export const taskRelations = relations(task, ({ one, many }) => ({
+	createdByUser: one(user, { fields: [task.createdBy], references: [user.id] }),
+	lineupEntries: many(lineupTask),
+	rotation: one(lineupRotation),
+	sessions: many(practiceSession),
 	translationSourceSets: many(translationSourceSet),
 }));
 
-export const templateVariantRelations = relations(templateVariant, ({ one, many }) => ({
-	template: one(template, {
-		fields: [templateVariant.templateId],
-		references: [template.id],
-	}),
-	tasks: many(task),
-}));
-
-export const templateContributionRelations = relations(templateContribution, ({ one }) => ({
+export const taskContributionRelations = relations(taskContribution, ({ one }) => ({
 	createdByUser: one(user, {
-		fields: [templateContribution.createdBy],
+		fields: [taskContribution.createdBy],
 		references: [user.id],
 		relationName: "contributionCreatedBy",
 	}),
 	reviewedByUser: one(user, {
-		fields: [templateContribution.reviewedBy],
+		fields: [taskContribution.reviewedBy],
 		references: [user.id],
 		relationName: "contributionReviewedBy",
 	}),
 }));
 
+export const lineupRelations = relations(lineup, ({ many }) => ({
+	entries: many(lineupTask),
+}));
+
+export const lineupTaskRelations = relations(lineupTask, ({ one }) => ({
+	lineup: one(lineup, { fields: [lineupTask.lineupId], references: [lineup.id] }),
+	task: one(task, { fields: [lineupTask.taskId], references: [task.id] }),
+}));
+
+export const lineupRotationRelations = relations(lineupRotation, ({ one }) => ({
+	task: one(task, { fields: [lineupRotation.taskId], references: [task.id] }),
+}));
+
 export const translationSourceSetRelations = relations(translationSourceSet, ({ one, many }) => ({
-	template: one(template, {
-		fields: [translationSourceSet.templateId],
-		references: [template.id],
+	task: one(task, {
+		fields: [translationSourceSet.taskId],
+		references: [task.id],
 	}),
 	attempts: many(translationAttempt),
 }));
@@ -485,6 +529,14 @@ export const translationAttemptRelations = relations(translationAttempt, ({ one,
 	user: one(user, {
 		fields: [translationAttempt.userId],
 		references: [user.id],
+	}),
+	task: one(task, {
+		fields: [translationAttempt.taskId],
+		references: [task.id],
+	}),
+	lineup: one(lineup, {
+		fields: [translationAttempt.lineupId],
+		references: [lineup.id],
 	}),
 	sourceSet: one(translationSourceSet, {
 		fields: [translationAttempt.sourceSetId],
@@ -501,17 +553,6 @@ export const translationAnswerRelations = relations(translationAnswer, ({ one })
 	}),
 }));
 
-export const taskRelations = relations(task, ({ one }) => ({
-	template: one(template, {
-		fields: [task.templateId],
-		references: [template.id],
-	}),
-	variant: one(templateVariant, {
-		fields: [task.variantId],
-		references: [templateVariant.id],
-	}),
-}));
-
 export const practiceSessionRelations = relations(practiceSession, ({ one, many }) => ({
 	user: one(user, {
 		fields: [practiceSession.userId],
@@ -520,6 +561,10 @@ export const practiceSessionRelations = relations(practiceSession, ({ one, many 
 	task: one(task, {
 		fields: [practiceSession.taskId],
 		references: [task.id],
+	}),
+	lineup: one(lineup, {
+		fields: [practiceSession.lineupId],
+		references: [lineup.id],
 	}),
 	messages: many(sessionMessage),
 	responseBatches: many(agentResponseBatch),

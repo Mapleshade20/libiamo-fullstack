@@ -14,7 +14,7 @@ export const load: PageServerLoad = async (event) => {
 	const requestedLocation = parseHallLocation(event.url);
 	if (requestedLocation.view === "prepare" && requestedLocation.task) {
 		const id = getQuestMenuItemId(requestedLocation.task);
-		throw redirect(308, `${base}/${requestedLocation.section === "translation" ? "translate" : "task"}/${id}`);
+		throw redirect(308, `${base}/task/${id}`);
 	}
 	const browserTimezone = getBrowserTimezone(event.cookies);
 	const hallData = await loadQuestHallData(user, browserTimezone);

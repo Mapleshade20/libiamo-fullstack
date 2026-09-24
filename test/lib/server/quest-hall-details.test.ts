@@ -12,11 +12,9 @@ function taskData(id: number) {
 			description: null,
 			objectives: [],
 			language: "en" as const,
-			templateInteractionType: "chat",
-			templateUi: "imessage",
-			templateDifficulty: 1,
+			ui: "imessage" as const,
+			difficulty: 1,
 			materialsMd: null,
-			pointReward: 1,
 			sessionStatus: null,
 			evaluationPhase: null,
 		},
@@ -41,22 +39,20 @@ describe("canonical detail catalog context", () => {
 	});
 
 	it("locates an older-year translation independently of the default catalog year", () => {
-		const hall = hallData({ translationTasks: [{ id: 3, titleBase: "Old letter", descriptionBase: null, difficulty: 1, createdMonth: "2024-03" }] });
+		const hall = hallData({ translationTasks: [{ id: 3, title: "Old letter", description: null, difficulty: 1, createdMonth: "2024-03" }] });
 		const preparation = {
 			kind: "translation",
 			key: "translation-3",
 			data: {
-				template: {
+				task: {
 					id: 3,
 					title: "Old letter",
 					description: null,
 					language: "en",
-					translationReference: ["Hello"],
+					referenceParagraphs: ["Hello"],
 					context: "Letter",
 					difficulty: 1,
 					estimatedWords: 10,
-					pointReward: 1,
-					gemReward: 1,
 				},
 				blockedReason: null,
 				attempt: null,

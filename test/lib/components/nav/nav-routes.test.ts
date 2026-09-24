@@ -7,14 +7,14 @@ describe("shared app navigation", () => {
 		const routes = appNavRoutes(base, "admin", "avatar.png", "en");
 		for (const path of [
 			"/admin",
-			"/admin/templates",
-			"/admin/templates/new",
-			"/admin/templates/42",
+			"/admin/tasks",
+			"/admin/tasks/new",
+			"/admin/tasks/42",
 			"/admin/schedule",
 			"/admin/reviews/7",
 			"/admin/future-tool",
 		]) {
-			expect(routes[activeNavIndex(routes, base + path)]?.href).toBe(`${base}/admin/templates`);
+			expect(routes[activeNavIndex(routes, base + path)]?.href).toBe(`${base}/admin/tasks`);
 		}
 		expect(routes[activeNavIndex(routes, `${base}/profile`)]?.href).toBe(`${base}/profile`);
 		expect(activeNavIndex(routes, `${base}/administrator`)).toBe(-1);
@@ -34,7 +34,7 @@ describe("shared app navigation", () => {
 	});
 
 	it("selects the parent tool on nested pages without matching sibling prefixes", () => {
-		const routes = [{ href: "/learn/admin/templates" }, { href: "/learn/admin/reviews" }];
+		const routes = [{ href: "/learn/admin/tasks" }, { href: "/learn/admin/reviews" }];
 		expect(activeNavIndex(routes, "/learn/admin/reviews/7")).toBe(1);
 		expect(activeNavIndex(routes, "/learn/admin/reviews-other")).toBe(-1);
 	});

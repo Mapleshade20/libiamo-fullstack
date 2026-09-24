@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
+const { mockDb, mockSessionService, mockNoteService, mockTaskContext } = vi.hoisted(() => {
 	const submitMessage = vi.fn();
 	return {
 		mockDb: {
@@ -23,14 +23,16 @@ const { mockDb, mockSessionService, mockNoteService } = vi.hoisted(() => {
 			generateHint: vi.fn(),
 			getSessionOrFail: vi.fn(),
 			followUpOnFeedback: vi.fn(),
-			// Pure helper: keep the real behaviour so the assertions below still describe
-			// which turn limit the page resolves rather than a mock's return value.
-			resolveSessionMaxTurns: (snapshot: number | null | undefined, templateMaxTurns: number | null | undefined) => snapshot ?? templateMaxTurns ?? 0,
 			orderSessionMessagesChronologically: vi.fn((messages, operators) => [operators.asc(messages.createdAt), operators.asc(messages.id)]),
 		},
 		mockNoteService: {
 			createNotesBatch: vi.fn(),
 			validateAndCreateNoteFromSelection: vi.fn(),
+		},
+		mockTaskContext: {
+			getTaskIdentity: vi.fn(),
+			resolveRequestLineup: vi.fn(),
+			findPracticeSession: vi.fn(),
 		},
 	};
 });
@@ -41,6 +43,10 @@ vi.mock("$lib/server/feedback", () => ({
 	followUpOnFeedback: mockSessionService.followUpOnFeedback,
 }));
 vi.mock("$lib/server/note", () => mockNoteService);
+vi.mock("$lib/server/task-context", () => ({
+	...mockTaskContext,
+	parseTaskId: (value: string) => (/^[1-9]\d*$/.test(value) ? Number(value) : null),
+}));
 
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
@@ -52,19 +58,26 @@ import {
 import { actions, load } from "$routes/(app)/task/[id]/session/+page.server";
 
 describe("session page server", () => {
+	const context = { lineupId: 3, pinned: false };
+
 	beforeEach(() => {
 		vi.resetAllMocks();
 		mockDb.query.user.findFirst.mockResolvedValue(null);
+		mockTaskContext.resolveRequestLineup.mockResolvedValue(context);
+		mockTaskContext.findPracticeSession.mockResolvedValue(null);
+		mockTaskContext.getTaskIdentity.mockImplementation(async (id: number) => (id === 456 ? { id, interactionType: "chat", language: "en" } : null));
 	});
 
 	const mockUser = { id: "user_123", name: "Test User", activeLanguage: "en" };
 	const mockTaskId = "456";
 	const mockTask = {
 		id: 456,
+		interactionType: "chat" as const,
 		title: "Test Task",
 		language: "en",
-		template: { ui: "discord" as const, maxTurns: 0 },
-		variant: { openingState: {} },
+		ui: "discord" as const,
+		maxTurns: null as number | null,
+		openingState: {},
 	};
 
 	const createFormEvent = ({
@@ -88,13 +101,23 @@ describe("session page server", () => {
 			request: { formData: vi.fn().mockResolvedValue(formData) },
 			params: { id: taskId },
 			locals: { user },
+			url: new URL(`https://libiamo.test/task/${taskId}/session`),
 			cookies: { get: vi.fn().mockReturnValue(undefined) },
 		} as any;
 	};
 
+	const loadEvent = (id = mockTaskId, user: typeof mockUser | null = mockUser) =>
+		({
+			params: { id },
+			locals: { user },
+			url: new URL(`https://libiamo.test/task/${id}/session`),
+			cookies: { get: vi.fn().mockReturnValue(undefined) },
+		}) as any;
+
 	describe("load", () => {
-		it("returns task and existing session when found", async () => {
+		it("returns the task and the session its URL shows", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			mockTaskContext.findPracticeSession.mockResolvedValue({ id: 789 });
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
 				id: 789,
 				status: "in_progress",
@@ -103,135 +126,64 @@ describe("session page server", () => {
 			const nextAgentWorkDueAt = new Date("2026-08-23T12:00:00.000Z");
 			mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({ dueAt: nextAgentWorkDueAt });
 
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-				// Mock the parent function to resolve the avatarUrl
-				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
+			const result = (await load(loadEvent())) as any;
 
+			expect(mockTaskContext.findPracticeSession).toHaveBeenCalledWith("user_123", 456, context);
 			expect(result.task).toEqual(mockTask);
-			expect(result.existingSession).toBeDefined();
 			expect(result.existingSession?.id).toBe(789);
 			// the earliest outstanding agent work drives the client's polling lifecycle
-			expect((result.existingSession as unknown as { nextAgentWorkDueAt?: unknown }).nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
+			expect(result.existingSession.nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
 			const batchQuery = mockDb.query.agentResponseBatch.findFirst.mock.calls[0]?.[0];
 			expect(batchQuery.orderBy({ dueAt: "dueAt" }, { asc: (value: string) => `asc:${value}` })).toEqual(["asc:dueAt"]);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
-			expect(sessionQuery.orderBy({ startedAt: "startedAt", id: "id" }, { desc: (value: string) => `desc:${value}` })).toEqual([
-				"desc:startedAt",
-				"desc:id",
-			]);
 			expect(sessionQuery.with.messages.orderBy({ createdAt: "createdAt", id: "id" }, { asc: (value: string) => `asc:${value}` })).toEqual([
 				"asc:createdAt",
 				"asc:id",
 			]);
 		});
 
-		it("returns null existingSession when no in-progress session", async () => {
+		it("returns null existingSession when the learner has no session to show", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-				// Mock the parent function here as well
-				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof mockTask; existingSession: { id: number } | null };
+			const result = (await load(loadEvent())) as any;
 
 			expect(result.existingSession).toBeNull();
+			expect(mockDb.query.practiceSession.findFirst).not.toHaveBeenCalled();
+		});
+
+		it("reads the turn limit from the live task", async () => {
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 6 });
+			expect(((await load(loadEvent())) as any).maxTurns).toBe(6);
+			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
+			expect(((await load(loadEvent())) as any).maxTurns).toBe(0);
 		});
 
 		it("does not duplicate parent user profile data", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: { ...mockUser, name: "Stale Name" } },
-			} as any)) as { user?: unknown };
+			const result = (await load(loadEvent("456", { ...mockUser, name: "Stale Name" }))) as { user?: unknown };
 
 			expect(result.user).toBeUndefined();
 			expect(mockDb.query.user.findFirst).not.toHaveBeenCalled();
 		});
 
 		it("redirects when user not authenticated", async () => {
-			await expect(
-				load({
-					params: { id: mockTaskId },
-					locals: { user: null },
-				} as any),
-			).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			await expect(load(loadEvent(mockTaskId, null))).rejects.toMatchObject({ status: 302, location: "/sign-in" });
 		});
 
-		it("throws 400 for invalid task ID", async () => {
-			await expect(
-				load({
-					params: { id: "invalid" },
-					locals: { user: mockUser },
-				} as any),
-			).rejects.toMatchObject({ status: 400 });
-		});
-
-		it("throws 404 when task not found", async () => {
+		it("returns 404 for invalid, missing, and translation task ids", async () => {
+			await expect(load(loadEvent("invalid"))).rejects.toMatchObject({ status: 404 });
 			mockDb.query.task.findFirst.mockResolvedValue(null);
-
-			await expect(
-				load({
-					params: { id: "999" },
-					locals: { user: mockUser },
-				} as any),
-			).rejects.toMatchObject({ status: 404 });
+			await expect(load(loadEvent("999"))).rejects.toMatchObject({ status: 404 });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, interactionType: "translate", ui: "translator" });
+			await expect(load(loadEvent())).rejects.toMatchObject({ status: 404 });
 		});
 
-		it("returns task when task language differs from active language", async () => {
-			const spanishTask = { ...mockTask, language: "es" };
-			mockDb.query.task.findFirst.mockResolvedValue(spanishTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-				parent: async () => ({ avatarUrl: "https://gravatar.com/avatar/mockhash" }),
-			} as any)) as { task: typeof spanishTask; existingSession: { id: number } | null };
-
-			expect(result.task).toEqual(spanishTask);
-			expect(result.existingSession).toBeNull();
-		});
-
-		it("returns task data when UI is imessage", async () => {
-			const imessageTask = {
-				id: 456,
-				title: "Test Task",
-				language: "en",
-				template: { ui: "imessage" as const },
-				variant: { openingState: {} },
-			};
-			mockDb.query.task.findFirst.mockResolvedValue(imessageTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-				parent: async () => ({ avatarUrl: "https://mock.com" }),
-			} as any)) as { task: typeof imessageTask };
-
-			expect(result.task.template.ui).toBe("imessage");
-		});
-
-		it.each(["apple_mail", "reddit"] as const)("allows %s tasks", async (ui) => {
-			const implementedTask = {
-				...mockTask,
-				template: { ui, maxTurns: 99, interactionType: "chat" },
-			};
+		it.each(["apple_mail", "reddit", "imessage"] as const)("allows %s tasks", async (ui) => {
+			const implementedTask = { ...mockTask, ui, maxTurns: 99 };
 			mockDb.query.task.findFirst.mockResolvedValue(implementedTask);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
 
-			const result = (await load({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-				parent: async () => ({ avatarUrl: "https://mock.com/avatar.png" }),
-			} as any)) as { task: typeof implementedTask; existingSession: null };
+			const result = (await load(loadEvent())) as any;
 
 			expect(result.task).toEqual(implementedTask);
 			expect(result.existingSession).toBeNull();
@@ -239,87 +191,46 @@ describe("session page server", () => {
 	});
 
 	describe("actions.start", () => {
-		beforeEach(() => {
-			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
-		});
+		it("starts the session in the resolved lineup", async () => {
+			mockSessionService.startSession.mockResolvedValue({ sessionId: 789 });
 
-		it("creates new session successfully", async () => {
-			mockSessionService.startSession.mockResolvedValue({
-				sessionId: 789,
-				systemPrompt: "Test prompt",
-				mbti: "ENFP",
-			});
-
-			const result = await actions.start({
-				params: { id: mockTaskId },
-				locals: { user: mockUser },
-			} as any);
-
-			expect(result).toMatchObject({
-				success: true,
-				sessionId: 789,
-				systemPrompt: "Test prompt",
-				mbti: "ENFP",
-			});
-			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
-		});
-
-		it("starts session when task language differs from active language", async () => {
-			mockSessionService.startSession.mockResolvedValue({
-				sessionId: 789,
-				systemPrompt: "Test prompt",
-				mbti: "ENFP",
-			});
-
-			const result = await actions.start({
-				params: { id: mockTaskId },
-				locals: { user: { ...mockUser, activeLanguage: "fr" } },
-			} as any);
+			const result = await actions.start(createFormEvent({}));
 
 			expect(result).toMatchObject({ success: true, sessionId: 789 });
-			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123");
+			expect(mockSessionService.startSession).toHaveBeenCalledWith(456, "user_123", 3);
 		});
 
 		it("maps Task not found from service to 404", async () => {
 			mockSessionService.startSession.mockRejectedValue(new Error("Task not found"));
-			const result = await actions.start({ params: { id: mockTaskId }, locals: { user: mockUser } } as any);
+			const result = await actions.start(createFormEvent({}));
 			expect(result).toMatchObject({ status: 404, data: { error: "Task not found" } });
 		});
 
 		it.each([
 			{
-				name: "unauthenticated user",
-				event: { params: { id: mockTaskId }, locals: { user: null } },
-				expected: { status: 302, location: "/sign-in" },
-				redirect: true,
-			},
-			{
 				name: "invalid task id",
-				event: { params: { id: "invalid" }, locals: { user: mockUser } },
-				expected: { status: 400, data: { error: "Invalid task ID" } },
+				taskId: "invalid",
+				expected: { status: 404, data: { error: "Task not found" } },
 			},
 			{
 				name: "unexpected service failure",
-				event: { params: { id: mockTaskId }, locals: { user: mockUser } },
 				setup: () => mockSessionService.startSession.mockRejectedValue(new Error("DB error")),
 				expected: { status: 500, data: { error: "Failed to start session" } },
 			},
 			{
 				name: "non-error payload from service",
-				event: { params: { id: mockTaskId }, locals: { user: mockUser } },
 				setup: () => mockSessionService.startSession.mockRejectedValue("String error"),
 				expected: { status: 500, data: { error: "Failed to start session" } },
 			},
-		])("returns controlled failures for $name", async ({ event, expected, setup, redirect }) => {
+		])("returns controlled failures for $name", async ({ taskId, expected, setup }) => {
 			setup?.();
-			if (redirect) {
-				await expect(actions.start(event as any)).rejects.toMatchObject(expected);
-				expect(mockSessionService.startSession).not.toHaveBeenCalled();
-				return;
-			}
-
-			const result = await actions.start(event as any);
+			const result = await actions.start(createFormEvent({ taskId }));
 			expect(result).toMatchObject(expected);
+		});
+
+		it("redirects unauthenticated users before starting", async () => {
+			await expect(actions.start(createFormEvent({ user: null }))).rejects.toMatchObject({ status: 302, location: "/sign-in" });
+			expect(mockSessionService.startSession).not.toHaveBeenCalled();
 		});
 	});
 
@@ -346,7 +257,7 @@ describe("session page server", () => {
 				turnCount: 2,
 				pending: true,
 			});
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, { maxTurns: 0 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", undefined, {});
 		});
 
 		it("passes clientMessageId through to submitMessage", async () => {
@@ -362,14 +273,15 @@ describe("session page server", () => {
 
 			await actions.send(createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "msg-123" } }));
 
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", { maxTurns: 0 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", {});
 		});
 
 		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
+				ui: "apple_mail" as const,
+				maxTurns: 3,
+				openingState: { emails: [] },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
@@ -392,7 +304,6 @@ describe("session page server", () => {
 				"user_123",
 				"mail-1",
 				expect.objectContaining({
-					maxTurns: 3,
 					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
 					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
 				}),
@@ -402,13 +313,12 @@ describe("session page server", () => {
 		it("builds AO3 prompt metadata for a nested comment reply", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "ao3" as const, maxTurns: 4 },
-				variant: {
-					openingState: {
-						workTitle: "My Fic",
-						authorName: "FicAuthor",
-						previousComments: [{ id: "c1", username: "ReaderA", comment: "Great start!" }],
-					},
+				ui: "ao3" as const,
+				maxTurns: 4,
+				openingState: {
+					workTitle: "My Fic",
+					authorName: "FicAuthor",
+					previousComments: [{ id: "c1", username: "ReaderA", comment: "Great start!" }],
 				},
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
@@ -425,7 +335,6 @@ describe("session page server", () => {
 				"user_123",
 				"ao3-msg",
 				expect.objectContaining({
-					maxTurns: 4,
 					userDisplayContent: "What did you like?",
 					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
 				}),
@@ -435,8 +344,9 @@ describe("session page server", () => {
 		it("rejects an invalid AO3 reply target", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "ao3" as const, maxTurns: 4 },
-				variant: { openingState: { workTitle: "My Fic", previousComments: [] } },
+				ui: "ao3" as const,
+				maxTurns: 4,
+				openingState: { workTitle: "My Fic", previousComments: [] },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({ messages: [] });
@@ -452,8 +362,9 @@ describe("session page server", () => {
 		it("retries failed AO3 turns from persisted metadata even if the target no longer resolves", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "ao3" as const, maxTurns: 4 },
-				variant: { openingState: { workTitle: "My Fic", authorName: "FicAuthor", previousComments: [] } },
+				ui: "ao3" as const,
+				maxTurns: 4,
+				openingState: { workTitle: "My Fic", authorName: "FicAuthor", previousComments: [] },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
@@ -508,7 +419,7 @@ describe("session page server", () => {
 			);
 
 			expect(result).toMatchObject({ success: true, pending: true });
-			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, { maxTurns: 0 });
+			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hola", "user_123", undefined, {});
 		});
 
 		it("returns fail 403 when session ownership check fails", async () => {
@@ -549,8 +460,9 @@ describe("session page server", () => {
 		it("allows Apple Mail messages above the shared UI limit", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
+				ui: "apple_mail" as const,
+				maxTurns: 3,
+				openingState: { emails: [] },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
@@ -565,8 +477,9 @@ describe("session page server", () => {
 		it("allows Apple Mail messages at the body limit even when headers push the formatted message over the raw limit", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
+				ui: "apple_mail" as const,
+				maxTurns: 3,
+				openingState: { emails: [] },
 			});
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 			mockSessionService.submitMessage.mockResolvedValue({ turnCount: 1, pending: true });
@@ -582,8 +495,9 @@ describe("session page server", () => {
 		it("rejects Apple Mail messages over the mail limit", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
-				template: { ui: "apple_mail" as const, maxTurns: 3 },
-				variant: { openingState: { emails: [] } },
+				ui: "apple_mail" as const,
+				maxTurns: 3,
+				openingState: { emails: [] },
 			});
 
 			const result = await actions.send(createFormEvent({ values: { sessionId: "789", message: "x".repeat(MAIL_TEXT_MAX_LENGTH + 1) } }));
@@ -668,7 +582,7 @@ describe("session page server", () => {
 		});
 
 		it("returns fail 403 when maximum conversation turns reached", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ id: 456, language: "en", template: { maxTurns: 5 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 5 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({ id: 789, userId: "user_123", taskId: 456 });
 
 			mockSessionService.submitMessage.mockRejectedValue(new Error("Maximum conversation turns reached"));
@@ -779,7 +693,7 @@ describe("session page server", () => {
 
 		it("uses the shared hint generator for apple_mail after mail hints are removed", async () => {
 			const mockHint = { contentHint: "Clarify the request." };
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { ui: "apple_mail" as const } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, ui: "apple_mail" as const });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -877,7 +791,7 @@ describe("session page server", () => {
 		});
 
 		it("passes valid contextPath array to generateHint", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 3 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -897,7 +811,7 @@ describe("session page server", () => {
 		});
 
 		it("allows large hint contextPaths up to the task turn-based context budget", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 6 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 6 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -925,7 +839,7 @@ describe("session page server", () => {
 		});
 
 		it("ignores contextPath when it is not valid JSON", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 3 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -939,7 +853,7 @@ describe("session page server", () => {
 		});
 
 		it("ignores contextPath when it is a JSON object instead of array", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 3 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -953,7 +867,7 @@ describe("session page server", () => {
 		});
 
 		it("filters malformed contextPath entries before calling generateHint", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 3 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",
@@ -971,7 +885,7 @@ describe("session page server", () => {
 		});
 
 		it("ignores contextPath when it is an empty string", async () => {
-			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, template: { maxTurns: 3 } });
+			mockDb.query.task.findFirst.mockResolvedValue({ ...mockTask, maxTurns: 3 });
 			mockSessionService.getSessionOrFail.mockResolvedValue({
 				id: 123,
 				userId: "user_123",

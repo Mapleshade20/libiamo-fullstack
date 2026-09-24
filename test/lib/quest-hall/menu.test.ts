@@ -23,12 +23,11 @@ import type { HallData } from "$lib/server/quest-hall";
 function quest(id: number, sessionStatus: HallQuestSessionStatus = null, overrides: Partial<HallQuest> = {}): HallQuest {
 	return {
 		id,
+		lineupId: 1,
 		title: `Task ${id}`,
 		shortObjective: `Objective ${id}`,
-		templateUi: "imessage",
-		templateDifficulty: 2,
-		templateInteractionType: "chat",
-		pointReward: 5,
+		ui: "imessage",
+		difficulty: 2,
 		sessionStatus,
 		evaluationPhase: sessionStatus === "completed" || sessionStatus === "evaluated" ? "completed" : null,
 		unreadCount: 0,
@@ -41,10 +40,10 @@ describe("translation year catalog", () => {
 	it("includes the selected year, marks past months and preserves monthly compatibility", () => {
 		const data = hallData({
 			translationTasks: [
-				{ id: 51, titleBase: "Past", descriptionBase: null, difficulty: 1, createdMonth: "2026-01" },
-				{ id: 52, titleBase: "Current", descriptionBase: null, difficulty: 1, createdMonth: "2026-09" },
-				{ id: 53, titleBase: "Future", descriptionBase: null, difficulty: 1, createdMonth: "2026-12" },
-				{ id: 54, titleBase: "Other year", descriptionBase: null, difficulty: 1, createdMonth: "2025-12" },
+				{ id: 51, title: "Past", description: null, difficulty: 1, createdMonth: "2026-01" },
+				{ id: 52, title: "Current", description: null, difficulty: 1, createdMonth: "2026-09" },
+				{ id: 53, title: "Future", description: null, difficulty: 1, createdMonth: "2026-12" },
+				{ id: 54, title: "Other year", description: null, difficulty: 1, createdMonth: "2025-12" },
 			],
 		});
 		const catalog = adaptHallDataToQuestMenu(data, "2026-09", "year");
@@ -88,8 +87,8 @@ function hallData(overrides: Partial<HallData> = {}): HallData {
 		dailyTasks: [quest(1), quest(2), quest(3), quest(4)],
 		weeklyTasks: [quest(11), quest(12)],
 		translationTasks: [
-			{ id: 21, titleBase: "Letter", descriptionBase: "A short letter", difficulty: 1, createdMonth: "2026-09" },
-			{ id: 22, titleBase: "Older month", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+			{ id: 21, title: "Letter", description: "A short letter", difficulty: 1, createdMonth: "2026-09" },
+			{ id: 22, title: "Older month", description: null, difficulty: 2, createdMonth: "2026-08" },
 		],
 		translationStatusMap: { "21": "draft", "22": "completed" },
 		...overrides,
@@ -108,7 +107,7 @@ describe("Quest menu production adaptation", () => {
 				quest(2, "in_progress"),
 				quest(3, "evaluated"),
 				quest(4, "abandoned"),
-				quest(5, null, { templateUi: "translator" }),
+				quest(5, null, { ui: "translator" }),
 				quest(6, "evaluated", { evaluationPhase: "transfer" }),
 			],
 		});
@@ -129,12 +128,12 @@ describe("Quest menu production adaptation", () => {
 			translationTasks: [
 				...Array.from({ length: 8 }, (_, index) => ({
 					id: 30 + index,
-					titleBase: `September ${index + 1}`,
-					descriptionBase: null,
+					title: `September ${index + 1}`,
+					description: null,
 					difficulty: 1,
 					createdMonth: "2026-09",
 				})),
-				{ id: 50, titleBase: "August", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+				{ id: 50, title: "August", description: null, difficulty: 2, createdMonth: "2026-08" },
 			],
 		});
 
@@ -172,7 +171,7 @@ describe("Quest menu production adaptation", () => {
 		expect(getQuestMenuItemId("weekly-12")).toBe(12);
 		expect(() => getQuestMenuItemKey("daily", 0)).toThrow(RangeError);
 		expect(getQuestMenuItemHref(catalog.sections.daily[0], "/libiamo")).toBe("/libiamo/task/1");
-		expect(getQuestMenuItemHref(catalog.sections.translation[0], "/libiamo")).toBe("/libiamo/translate/21");
+		expect(getQuestMenuItemHref(catalog.sections.translation[0], "/libiamo")).toBe("/libiamo/task/21");
 	});
 
 	it("prioritizes unread and active work while preferring a second section", () => {
@@ -197,7 +196,7 @@ describe("Quest menu production adaptation", () => {
 		const catalog = adaptHallDataToQuestMenu(
 			hallData({
 				levelSelfAssign,
-				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 2 }), quest(3, null, { templateDifficulty: 3 })],
+				dailyTasks: [quest(1, null, { difficulty: 1 }), quest(2, null, { difficulty: 2 }), quest(3, null, { difficulty: 3 })],
 				weeklyTasks: [],
 				translationTasks: [],
 			}),
@@ -211,7 +210,7 @@ describe("Quest menu production adaptation", () => {
 		const nearest = adaptHallDataToQuestMenu(
 			hallData({
 				levelSelfAssign: 3,
-				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 2 })],
+				dailyTasks: [quest(1, null, { difficulty: 1 }), quest(2, null, { difficulty: 2 })],
 				weeklyTasks: [],
 				translationTasks: [],
 			}),
@@ -221,7 +220,7 @@ describe("Quest menu production adaptation", () => {
 		const stableTie = adaptHallDataToQuestMenu(
 			hallData({
 				levelSelfAssign: 2,
-				dailyTasks: [quest(1, null, { templateDifficulty: 1 }), quest(2, null, { templateDifficulty: 3 })],
+				dailyTasks: [quest(1, null, { difficulty: 1 }), quest(2, null, { difficulty: 3 })],
 				weeklyTasks: [],
 				translationTasks: [],
 			}),
@@ -232,9 +231,9 @@ describe("Quest menu production adaptation", () => {
 			hallData({
 				levelSelfAssign: 1,
 				dailyTasks: [
-					quest(1, "in_progress", { templateDifficulty: 3 }),
-					quest(2, null, { unreadCount: 1, hasUnreadReply: true, templateDifficulty: 3 }),
-					quest(3, null, { templateDifficulty: 1 }),
+					quest(1, "in_progress", { difficulty: 3 }),
+					quest(2, null, { unreadCount: 1, hasUnreadReply: true, difficulty: 3 }),
+					quest(3, null, { difficulty: 1 }),
 				],
 				weeklyTasks: [],
 				translationTasks: [],
@@ -248,9 +247,9 @@ describe("Quest menu production adaptation", () => {
 			hallData({
 				levelSelfAssign: 3,
 				dailyTasks: [
-					quest(1, null, { templateUi: "translator", templateDifficulty: 1 }),
-					quest(2, null, { templateUi: "translator", templateDifficulty: 3 }),
-					quest(3, "abandoned", { templateDifficulty: 3 }),
+					quest(1, null, { ui: "translator", difficulty: 1 }),
+					quest(2, null, { ui: "translator", difficulty: 3 }),
+					quest(3, "abandoned", { difficulty: 3 }),
 				],
 				weeklyTasks: [],
 				translationTasks: [],
@@ -262,7 +261,7 @@ describe("Quest menu production adaptation", () => {
 		const stopped = adaptHallDataToQuestMenu(
 			hallData({
 				levelSelfAssign: 3,
-				dailyTasks: [quest(4, "abandoned", { templateDifficulty: 1 }), quest(5, "abandoned", { templateDifficulty: 3 })],
+				dailyTasks: [quest(4, "abandoned", { difficulty: 1 }), quest(5, "abandoned", { difficulty: 3 })],
 				weeklyTasks: [],
 				translationTasks: [],
 			}),
@@ -274,8 +273,8 @@ describe("Quest menu production adaptation", () => {
 		const catalog = adaptHallDataToQuestMenu(
 			hallData({
 				levelSelfAssign: 2,
-				dailyTasks: [quest(1, null, { templateDifficulty: 2 }), quest(2, null, { templateDifficulty: 2 })],
-				weeklyTasks: [quest(11, "abandoned", { templateDifficulty: 2 })],
+				dailyTasks: [quest(1, null, { difficulty: 2 }), quest(2, null, { difficulty: 2 })],
+				weeklyTasks: [quest(11, "abandoned", { difficulty: 2 })],
 				translationTasks: [],
 			}),
 		);
@@ -301,7 +300,7 @@ describe("shared quest progress", () => {
 		expect(translationState("draft")).toBe("active");
 		for (const phase of ["submitted", "correction", "second_draft", "transfer"] as const) expect(translationState(phase)).toBe("reviewing");
 		expect(translationState("completed")).toBe("finished");
-		const practice = { templateUi: "imessage" };
+		const practice = { ui: "imessage" as const };
 		expect(questState({ ...practice, sessionStatus: "in_progress", evaluationPhase: "feedback" })).toBe("active");
 		expect(questState({ ...practice, sessionStatus: "completed", evaluationPhase: "feedback" })).toBe("reviewing");
 		expect(questState({ ...practice, sessionStatus: "evaluated", evaluationPhase: "completed" })).toBe("finished");

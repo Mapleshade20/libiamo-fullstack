@@ -19,7 +19,7 @@ import type {
 import { db } from "./db";
 import { practiceSession } from "./db/schema";
 import { type ChatMessage, chatJson, chatText } from "./llm";
-import { sessionMessageChronologicalOrder } from "./session";
+import { buildScenarioContext, sessionMessageChronologicalOrder } from "./session";
 
 // ── XML extraction helpers ───────────────────────────────────────────
 
@@ -580,15 +580,10 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	if (!input.feedbackLanguage.trim()) throw new Error("Feedback language is required");
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, input.sessionId),
-		columns: { id: true, userId: true, status: true, tutorFeedback: true, agentPromptSnapshot: true },
+		columns: { id: true, userId: true, status: true, tutorFeedback: true },
 		with: {
 			messages: { orderBy: sessionMessageChronologicalOrder },
-			task: {
-				with: {
-					variant: true,
-					template: true,
-				},
-			},
+			task: true,
 		},
 	});
 
@@ -600,11 +595,10 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	}
 	if (session.status !== "completed") throw new Error("Session is not ready for feedback");
 
-	const snapshot = session.agentPromptSnapshot as { systemPrompt: string; scenarioContext?: string; ui?: string };
-	const ui = (snapshot.ui ?? session.task.template?.ui ?? "discord") as UiVariant;
-	const openingState = (session.task.variant?.openingState as Record<string, unknown>) ?? {};
+	const { ui } = session.task;
+	const openingState = session.task.openingState ?? {};
 	const objectives = session.task.objectives ?? [];
-	const scenarioContext = snapshot.scenarioContext ?? "";
+	const scenarioContext = buildScenarioContext(ui, openingState);
 
 	const visibleMessages = session.messages.filter((m) => !isHidden(m));
 	const conversation = buildFeedbackConversation(visibleMessages, openingState, ui);

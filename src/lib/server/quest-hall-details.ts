@@ -5,7 +5,7 @@ import type { HallData } from "$lib/server/quest-hall";
 
 /** Detail identity does not depend on membership in today's catalog. */
 export function questHallDetails(hall: HallData, preparation: QuestHallPreparation) {
-	const id = preparation.kind === "quest" ? preparation.data.task.id : preparation.data.template.id;
+	const id = preparation.data.task.id;
 	const month =
 		preparation.kind === "translation"
 			? (hall.translationTasks.find((task) => task.id === id)?.createdMonth ?? hall.translationMonth)

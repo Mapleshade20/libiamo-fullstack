@@ -41,11 +41,11 @@ let {
 }: Props = $props();
 
 function itemTitle(item: QuestMenuItem): string {
-	return item.kind === "quest" ? item.task.title : item.task.titleBase;
+	return item.task.title;
 }
 
 function itemObjective(item: QuestMenuItem): string | null {
-	return item.kind === "quest" ? item.task.shortObjective : item.task.descriptionBase;
+	return item.kind === "quest" ? item.task.shortObjective : item.task.description;
 }
 </script>
 
@@ -61,11 +61,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 			{:else}
 				<div class="recommendation-list">
 					{#each recommendations as item (item.key)}
-						<article
-							class="recommendation-card quest-difficulty-tone"
-							data-level={item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty}
-							class:is-unread={item.hasUnread}
-						>
+						<article class="recommendation-card quest-difficulty-tone" data-level={item.task.difficulty} class:is-unread={item.hasUnread}>
 							<div class="card-meta">
 								<QuestMenuItemIndicator {item} {lang} />
 								<QuestMenuStatusMark state={item.state} label={t(lang, `hall.menu.status.${item.state}`)} />

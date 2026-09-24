@@ -1,5 +1,8 @@
 export type UnreadInboxItem = {
+	sessionId: number;
 	taskId: number;
+	/** The lineup the session belongs to; one task can hold sessions in several lineups. */
+	lineupId: number | null;
 	title: string;
 	ui: string;
 	sessionStatus: string;
@@ -12,8 +15,14 @@ export type UnreadInboxItem = {
  * refuses them, and the reply that made one unread is the agent's parting message
  * after an abuse termination, which only the session view renders.
  */
-export function unreadTargetHref(item: Pick<UnreadInboxItem, "taskId" | "sessionStatus">, base = ""): string {
-	return `${base}/task/${item.taskId}/${item.sessionStatus === "completed" || item.sessionStatus === "evaluated" ? "feedback" : "session"}`;
+export function unreadTargetHref(item: Pick<UnreadInboxItem, "taskId" | "lineupId" | "sessionStatus">, base = ""): string {
+	const page = item.sessionStatus === "completed" || item.sessionStatus === "evaluated" ? "feedback" : "session";
+	return `${base}/task/${item.taskId}/${page}${item.lineupId == null ? "" : `?lineup=${item.lineupId}`}`;
+}
+
+/** Identifies one session's entry: a task within a lineup. */
+export function unreadEntryKey(item: Pick<UnreadInboxItem, "taskId" | "lineupId">): string {
+	return `${item.lineupId ?? "none"}:${item.taskId}`;
 }
 
 export function formatUnreadBadgeCount(count: number): string {

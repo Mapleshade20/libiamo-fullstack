@@ -6,8 +6,8 @@ import NotificationIcon from "./NotificationIcon.svelte";
 import "./difficulty.css";
 
 let { item, lang }: { item: QuestMenuItem; lang: LanguageCode } = $props();
-let difficulty = $derived(item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty);
-let ui = $derived(item.kind === "quest" ? item.task.templateUi : "translator");
+let difficulty = $derived(item.task.difficulty);
+let ui = $derived(item.kind === "quest" ? item.task.ui : "translator");
 let channel = $derived(UI_VARIANT_LABELS[ui as UiVariant] ?? ui);
 </script>
 

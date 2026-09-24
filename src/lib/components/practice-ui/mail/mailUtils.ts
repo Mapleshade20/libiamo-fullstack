@@ -285,20 +285,11 @@ function stripReplyPrefixes(value: string) {
 }
 
 export function normalizeAgentSignature(body: string, fallbackName: string) {
-	const mbtiPattern = /\b(?:INTJ|INTP|ENTJ|ENTP|INFJ|INFP|ENFJ|ENFP|ISTJ|ISFJ|ESTJ|ESFJ|ISTP|ISFP|ESTP|ESFP)\b/;
 	const lines = body.split("\n");
 	const closingIndex = lines.findLastIndex((line) => /^\s*(best|regards|sincerely|thanks|thank you)[,!]?\s*$/i.test(line));
 	const signatureIndex = closingIndex === -1 ? -1 : lines.findIndex((line, index) => index > closingIndex && line.trim());
 
-	if (signatureIndex !== -1) {
-		lines[signatureIndex] = fallbackName;
-	} else if (lines.some((line) => mbtiPattern.test(line))) {
-		for (let index = lines.length - 1; index >= 0; index -= 1) {
-			if (!lines[index].trim()) continue;
-			if (mbtiPattern.test(lines[index])) lines[index] = fallbackName;
-			break;
-		}
-	}
+	if (signatureIndex !== -1) lines[signatureIndex] = fallbackName;
 
 	return lines.join("\n").trim();
 }

@@ -32,11 +32,11 @@ export type NavRoute =
  */
 export function appNavRoutes(base: string, role: string, avatarUrl: string | undefined, lang: LanguageCode): NavRoute[] {
 	const routes: NavRoute[] = [
-		{ href: `${base}/`, label: t(lang, "nav.home"), Icon: ClinkIcon, tilt: -2, exact: true, sectionPaths: [`${base}/task`, `${base}/translate`] },
+		{ href: `${base}/`, label: t(lang, "nav.home"), Icon: ClinkIcon, tilt: -2, exact: true, sectionPaths: [`${base}/task`] },
 		{ href: `${base}/review`, label: t(lang, "nav.review"), Icon: CardsIcon, tilt: 1.5 },
 		{ href: `${base}/archive`, label: t(lang, "nav.archive"), Icon: BoxIcon, tilt: -1 },
 		role === "admin"
-			? { href: `${base}/admin/templates`, label: t(lang, "nav.admin"), Icon: PeopleIcon, tilt: 2, sectionPaths: [`${base}/admin`] }
+			? { href: `${base}/admin/tasks`, label: t(lang, "nav.admin"), Icon: PeopleIcon, tilt: 2, sectionPaths: [`${base}/admin`] }
 			: { href: `${base}/contribute`, label: t(lang, "nav.contribute"), Icon: PullRequestIcon, tilt: 2 },
 	];
 	if (avatarUrl) routes.push({ href: `${base}/profile`, label: t(lang, "nav.profile"), avatarUrl, tilt: -1.5 });

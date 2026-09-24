@@ -77,19 +77,33 @@ beforeEach(() => {
 });
 
 describe("findTranslationAttempt", () => {
-	it("prefers unfinished attempts and breaks equal update times by newest id", async () => {
-		const limit = vi.fn().mockResolvedValue([]);
-		const orderBy = vi.fn((..._values: unknown[]) => ({ limit }));
+	function attemptRows(rows: unknown[]) {
+		const orderBy = vi.fn((..._values: unknown[]) => Promise.resolve(rows));
 		const where = vi.fn(() => ({ orderBy }));
 		const innerJoin = vi.fn(() => ({ where }));
 		mockDb.select.mockReturnValue({ from: vi.fn(() => ({ innerJoin })) });
+		return orderBy;
+	}
 
-		await findTranslationAttempt({ userId: "u1", templateId: 7, promptLanguage: "en" });
+	it("orders candidates newest first, breaking equal update times by id", async () => {
+		const orderBy = attemptRows([]);
 
-		expect(orderBy).toHaveBeenCalledOnce();
-		expect(orderBy.mock.calls[0]).toHaveLength(3);
-		expect(orderBy.mock.calls[0][2]).toEqual(desc(translationAttempt.id));
-		expect(limit).toHaveBeenCalledWith(1);
+		expect(
+			await findTranslationAttempt({ userId: "u1", taskId: 7, promptLanguage: "en", context: { lineupId: null, pinned: false } }),
+		).toBeUndefined();
+
+		expect(orderBy.mock.calls[0]).toHaveLength(2);
+		expect(orderBy.mock.calls[0][1]).toEqual(desc(translationAttempt.id));
+	});
+
+	it("shows unfinished work first and otherwise the context lineup's attempt", async () => {
+		const completedHere = record({ id: 3, lineupId: 12, workflowPhase: "completed" });
+		const completedElsewhere = record({ id: 2, lineupId: 11, workflowPhase: "completed" });
+		attemptRows([completedElsewhere, completedHere]);
+		expect((await findTranslationAttempt({ userId: "u1", taskId: 7, promptLanguage: "en", context: { lineupId: 12, pinned: false } }))?.id).toBe(3);
+
+		attemptRows([completedHere, record({ id: 4, lineupId: 11, workflowPhase: "second_draft" })]);
+		expect((await findTranslationAttempt({ userId: "u1", taskId: 7, promptLanguage: "en", context: { lineupId: 12, pinned: false } }))?.id).toBe(4);
 	});
 });
 
