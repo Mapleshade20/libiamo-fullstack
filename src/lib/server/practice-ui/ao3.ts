@@ -1,7 +1,6 @@
 import {
 	type Ao3OpeningState,
 	type Ao3Target,
-	buildAo3UserPrompt,
 	findAo3Target,
 	findAo3TargetInMessages,
 	getAo3AuthorName,
@@ -61,12 +60,6 @@ function buildAo3NewTurnSendOptions(params: {
 	const userCommentId = `ao3-user-${params.clientMessageId}`;
 	const mode = params.target ? "reply" : "work";
 	return {
-		promptContent: buildAo3UserPrompt({
-			openingState: params.openingState,
-			comment: params.message,
-			target: params.target,
-			responderName,
-		}),
 		userDisplayContent: params.message,
 		userMetadata: {
 			thread: {

@@ -1,7 +1,6 @@
 import type { ChatMessage } from "../chatMessages";
 import {
 	buildCommentThreadTree,
-	buildTargetedCommentPrompt,
 	type CommentThreadConfig,
 	type CommentThreadRenderableComment,
 	type CommentThreadTarget,
@@ -103,26 +102,6 @@ export function findAo3Target(openingState: Ao3OpeningState, targetCommentId: st
 export function findAo3TargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): Ao3Target | null {
 	const target = findTargetInMessages(messages, ao3ThreadConfig, targetCommentId);
 	return target ? toAo3Target(target) : null;
-}
-
-export function buildAo3UserPrompt(params: {
-	openingState: Ao3OpeningState;
-	comment: string;
-	target: Ao3Target | null;
-	responderName: string;
-}): string {
-	const workTitle = normalizeAo3Text(params.openingState.workTitle, "this work");
-	const authorName = getAo3AuthorName(params.openingState);
-	return buildTargetedCommentPrompt({
-		surfaceName: "AO3",
-		containerDescription: `"${workTitle}"${params.target ? "" : ` by ${authorName}`}`,
-		containerAuthorName: "the work author",
-		comment: params.comment,
-		target: params.target,
-		responderName: params.responderName,
-		topLevelActionDescription: "new top-level AO3 comment",
-		replyActionDescription: "replied to this AO3 comment",
-	});
 }
 
 export function buildAo3CommentTree(params: {

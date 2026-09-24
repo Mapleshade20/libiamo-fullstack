@@ -12,6 +12,14 @@ import {
 	normalizeReplyTargets,
 } from "$lib/server/agent-replies/generator";
 
+const task = {
+	title: "Plan a trip",
+	language: "es",
+	ui: "imessage" as const,
+	agentPrompt: "Eres Lucía.",
+	openingState: { previousMessages: [{ sender: "Lucía", text: "¿Vamos?" }] },
+};
+
 const reply = {
 	decision: "reply" as const,
 	deliveries: [{ content: "Sounds good.", replyToMessageId: null }],
@@ -37,16 +45,24 @@ describe("structured agent response", () => {
 		expect(agentResponseDecisionSchema.safeParse({ ...reply, terminationReason: "ordinary goodbye" }).success).toBe(false);
 	});
 
-	it("serializes conversation history into a user message", () => {
+	it("tolerates a dropped or stringified reply target instead of spending a repair", () => {
+		const parsed = agentResponseDecisionSchema.parse({
+			...reply,
+			deliveries: [{ content: "Sin destino" }, { content: "Con destino", replyToMessageId: "12" }],
+		});
+		expect(parsed.deliveries.map((delivery) => delivery.replyToMessageId)).toEqual([null, 12]);
+		expect(agentResponseDecisionSchema.safeParse({ ...reply, deliveries: [{ content: "x", replyToMessageId: "c-12" }] }).success).toBe(false);
+	});
+
+	it("builds a system message and a transcript user message from the live task", () => {
 		const messages = buildAgentResponseMessages({
-			baseSystemPrompt: "Speak Spanish.",
-			ui: "imessage",
+			task,
+			learnerName: "Maple",
 			history: [{ id: 7, role: "user", content: "Gracias, adiós." }],
 		});
 
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
-		const serializedHistory = messages[1].content.slice(messages[1].content.indexOf("["));
-		expect(JSON.parse(serializedHistory)).toEqual([{ message_id: 7, role: "user", content: "Gracias, adiós." }]);
+		expect(JSON.parse(messages[1].content).transcript.at(-1)).toMatchObject({ role: "learner", author: "Maple", text: "Gracias, adiós." });
 	});
 
 	it("coerces linear-interface targets to null and rejects unknown threaded targets", () => {
@@ -99,8 +115,8 @@ describe("structured agent response", () => {
 		});
 
 		const result = await generateAgentResponse({
-			baseSystemPrompt: "Context",
-			ui: "discord",
+			task: { ...task, ui: "discord" as const },
+			learnerName: "Maple",
 			history: [{ id: 1, role: "user", content: "Hi" }],
 			userId: "user-1",
 		});
@@ -136,8 +152,8 @@ describe("structured agent response", () => {
 		mockChatJson.mockRejectedValue(providerError);
 
 		const failure = await generateAgentResponse({
-			baseSystemPrompt: "Context",
-			ui: "discord",
+			task: { ...task, ui: "discord" as const },
+			learnerName: "Maple",
 			history: [{ id: 1, role: "user", content: "Hi" }],
 		}).catch((error) => error);
 
@@ -166,8 +182,8 @@ describe("structured agent response", () => {
 		});
 
 		const failure = await generateAgentResponse({
-			baseSystemPrompt: "Context",
-			ui: "reddit",
+			task: { ...task, ui: "reddit" as const, openingState: null },
+			learnerName: "Maple",
 			history: [{ id: 7, role: "user", content: "Parent" }],
 		}).catch((error) => error);
 
@@ -187,8 +203,8 @@ describe("structured agent response", () => {
 		mockChatJson.mockRejectedValue(new Error("network down"));
 
 		const failure = await generateAgentResponse({
-			baseSystemPrompt: "Context",
-			ui: "discord",
+			task: { ...task, ui: "discord" as const },
+			learnerName: "Maple",
 			history: [],
 		}).catch((error) => error);
 

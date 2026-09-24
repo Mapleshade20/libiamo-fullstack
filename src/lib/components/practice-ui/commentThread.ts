@@ -227,20 +227,3 @@ export function buildCommentThreadTree<
 export function countThreadComments(comments: Pick<CommentThreadRenderableComment, "replies">[]): number {
 	return comments.reduce((count, comment) => count + 1 + countThreadComments(comment.replies), 0);
 }
-
-export function buildTargetedCommentPrompt(params: {
-	surfaceName: string;
-	containerDescription: string;
-	containerAuthorName: string;
-	comment: string;
-	target: CommentThreadTarget | null;
-	responderName: string;
-	topLevelActionDescription: string;
-	replyActionDescription: string;
-}): string {
-	const base = params.target
-		? `The learner replied to this ${params.surfaceName} comment on ${params.containerDescription}:\nComment author you must roleplay as: ${params.responderName}\nOriginal comment: ${params.target.text}`
-		: `The learner left a new top-level ${params.surfaceName} comment on ${params.containerDescription}. You must roleplay as ${params.containerAuthorName}, ${params.responderName}.`;
-
-	return `${base}\n\nLearner's comment:\n${params.comment}\n\nReply as ${params.responderName} with only the ${params.surfaceName} comment text. Stay in character as that commenter for this turn only.`;
-}

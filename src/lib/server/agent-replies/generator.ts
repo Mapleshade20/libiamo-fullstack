@@ -1,10 +1,27 @@
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
+import { type AgentEvent, type AgentTaskContext, buildAgentMessages, isThreadedUi } from "$lib/server/agent-replies/prompt";
 import { type ChatMessage, chatJson, type StructuredOutputErrorDetails } from "$lib/server/llm";
+
+/**
+ * Models often drop a key whose value is null, or echo a numeric id as a string. Neither is worth
+ * a repair round trip, so a missing target reads as null and a numeric string as its number.
+ */
+const replyTargetSchema = z
+	.union([
+		z.number().int().positive(),
+		z
+			.string()
+			.regex(/^[1-9]\d*$/)
+			.transform(Number),
+		z.null(),
+	])
+	.optional()
+	.transform((value) => value ?? null);
 
 const deliverySchema = z.object({
 	content: z.string().trim().min(1).max(50_000),
-	replyToMessageId: z.number().int().positive().nullable(),
+	replyToMessageId: replyTargetSchema,
 });
 
 export const agentResponseDecisionSchema = z
@@ -38,7 +55,7 @@ export type AgentHistoryMessage = {
 	id: number;
 	role: "user" | "assistant";
 	content: string;
-	metadata?: unknown;
+	llmMetadata?: unknown;
 };
 
 export type AgentGenerationArtifacts = {
@@ -91,14 +108,13 @@ export class AgentGenerationError extends Error {
 }
 
 export type GenerateAgentResponseInput = {
-	baseSystemPrompt: string;
-	ui: UiVariant;
+	task: AgentTaskContext;
+	/** The learner's display name, as the interface shows it. */
+	learnerName: string;
 	history: AgentHistoryMessage[];
+	event?: AgentEvent;
 	userId?: string;
-	additionalInstruction?: string;
 };
-
-const THREADED_UIS = new Set<UiVariant>(["reddit", "ao3"]);
 
 /**
  * Idle follow-ups chase the learner's silence, which is only natural in
@@ -108,36 +124,11 @@ const THREADED_UIS = new Set<UiVariant>(["reddit", "ao3"]);
  * follow-up is ever scheduled there regardless of the model's allowIdleFollowUp.
  */
 export function supportsIdleFollowUp(ui: UiVariant): boolean {
-	return !THREADED_UIS.has(ui);
+	return !isThreadedUi(ui);
 }
 
-const AGENT_RESPONSE_JSON_SHAPE = {
-	decision: "reply | no_reply | terminate_abuse",
-	deliveries: [{ content: "complete message text", replyToMessageId: null }],
-	allowIdleFollowUp: true,
-	terminationReason: null,
-};
-
 export function buildAgentResponseMessages(input: Omit<GenerateAgentResponseInput, "userId">): ChatMessage[] {
-	const targetRule = THREADED_UIS.has(input.ui)
-		? "For Reddit/AO3 comment threads, reply to each unanswered learner comment separately: one delivery per comment, with replyToMessageId set to that comment's message_id so each reply threads under its comment. Use null only for a reply that addresses the thread as a whole."
-		: "This is a linear interface. Every replyToMessageId must be null.";
-	const system = `${input.baseSystemPrompt}\n\nAGENT RESPONSE CONTRACT:\n- Return ONLY a single JSON object with exactly this shape:\n${JSON.stringify(AGENT_RESPONSE_JSON_SHAPE, null, 2)}\n- No Markdown fences, no commentary, no extra keys. Replace the example values with real ones; replyToMessageId is null when the target rule below says so.\n- decision=reply requires one or more connected, natural messages.\n- decision=no_reply means you would not respond, either because they have not finished saying what they intend to say, or you actively choose to be silent for now. It must contain no deliveries.\n- decision=terminate_abuse should be used when they try to abuse you or manipulate you.\n- allowIdleFollowUp controls whether a later idle follow-up (sent by you) may be scheduled.\n- terminationReason is null unless decision=terminate_abuse.\n- ${targetRule}`;
-
-	const history = input.history.map((message) => ({
-		message_id: message.id,
-		role: message.role,
-		content: message.content,
-		...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-	}));
-	const content = `Interface: ${input.ui}\nConversation history (oldest first):\n${JSON.stringify(history)}${
-		input.additionalInstruction ? `\nCurrent event instruction:\n${input.additionalInstruction}` : ""
-	}`;
-
-	return [
-		{ role: "system", content: system },
-		{ role: "user", content },
-	];
+	return buildAgentMessages(input);
 }
 
 export function normalizeReplyTargets(
@@ -151,7 +142,7 @@ export function normalizeReplyTargets(
 	const warnings: string[] = [];
 	const deliveries = decision.deliveries.map((delivery) => {
 		if (delivery.replyToMessageId === null) return delivery;
-		if (!THREADED_UIS.has(ui)) {
+		if (!isThreadedUi(ui)) {
 			warnings.push(`Coerced non-null replyToMessageId ${delivery.replyToMessageId} to null for linear interface ${ui}`);
 			return { ...delivery, replyToMessageId: null };
 		}
@@ -242,7 +233,7 @@ export async function generateAgentResponse(input: GenerateAgentResponseInput): 
 	}
 	let normalized: ReturnType<typeof normalizeReplyTargets>;
 	try {
-		normalized = normalizeReplyTargets(response.value, input.ui, input.history);
+		normalized = normalizeReplyTargets(response.value, input.task.ui, input.history);
 	} catch (error) {
 		const message = error instanceof Error && error.message ? error.message : "Agent response target validation failed";
 		throw new AgentGenerationError(message, validationErrorArtifacts(response, error), { cause: error });

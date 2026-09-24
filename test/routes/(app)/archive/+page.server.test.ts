@@ -140,7 +140,7 @@ describe("archive page server", () => {
 				sessionId: 99,
 				userId: "user_123",
 				feedbackLanguage: "en",
-				itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				itemText: "tomar una decisión",
 				category: "vocabulary",
 				question: "why",
 				currentContext: "elegir qué hacer tras considerar las opciones\n作出决定",
@@ -160,7 +160,7 @@ describe("archive page server", () => {
 			expect(mockSessionService.followUpOnLearningContent).toHaveBeenCalledWith(
 				expect.objectContaining({
 					learningLanguage: "es",
-					itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+					itemText: "tomar una decisión",
 				}),
 			);
 		});

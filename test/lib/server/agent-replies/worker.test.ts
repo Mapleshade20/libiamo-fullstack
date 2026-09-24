@@ -18,7 +18,7 @@ import { supportsIdleFollowUp } from "$lib/server/agent-replies/generator";
 import {
 	AgentReplyWorker,
 	buildDeliveredReplyMetadata,
-	getBatchGenerationInstruction,
+	getBatchGenerationEvent,
 	getDeliveryDueAt,
 	getThreadMetadataFromMessage,
 	getUrgencyFollowUpAt,
@@ -173,13 +173,9 @@ describe("agent reply worker scheduling", () => {
 		expect(getDeliveryDueAt(first, undefined)).toEqual(first);
 	});
 
-	it("injects an idle nudge instruction only into follow_up generations", () => {
-		expect(getBatchGenerationInstruction("reply", 1)).toBeUndefined();
-		const first = getBatchGenerationInstruction("follow_up", 1);
-		const last = getBatchGenerationInstruction("follow_up", 2);
-		expect(first).toEqual(expect.any(String));
-		expect(last).toEqual(expect.any(String));
-		expect(last).not.toBe(first);
+	it("marks only follow_up batches as idle-nudge events, carrying the nudge count", () => {
+		expect(getBatchGenerationEvent("reply", 1)).toEqual({ kind: "reply" });
+		expect(getBatchGenerationEvent("follow_up", 2)).toEqual({ kind: "follow_up", followUpCount: 2 });
 	});
 
 	it("uses urgency-specific idle follow-up windows", () => {

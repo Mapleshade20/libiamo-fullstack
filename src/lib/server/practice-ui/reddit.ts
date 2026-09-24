@@ -1,6 +1,5 @@
 import { buildChatMessages } from "$lib/components/practice-ui/chatMessages";
 import {
-	buildRedditUserPrompt,
 	findRedditTarget,
 	findRedditTargetInMessages,
 	getRedditPostAuthor,
@@ -61,12 +60,6 @@ function buildRedditNewTurnSendOptions(params: {
 	const userCommentId = `reddit-user-${params.clientMessageId}`;
 	const mode = params.target ? "reply" : "post";
 	return {
-		promptContent: buildRedditUserPrompt({
-			openingState: params.openingState,
-			comment: params.message,
-			target: params.target,
-			responderName,
-		}),
 		userDisplayContent: params.message,
 		userMetadata: {
 			thread: {

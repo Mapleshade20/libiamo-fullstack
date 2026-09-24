@@ -8,9 +8,10 @@ import {
 	generateAgentResponse,
 	supportsIdleFollowUp,
 } from "$lib/server/agent-replies/generator";
+import type { AgentEvent } from "$lib/server/agent-replies/prompt";
 import { db } from "$lib/server/db";
+import { user as authUser } from "$lib/server/db/auth.schema";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
-import { buildAgentSystemPrompt } from "$lib/server/session";
 
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
@@ -119,13 +120,9 @@ export function getUrgencyFollowUpAt(now: Date, urgency: Urgency, followUpCount:
 	return new Date(now.getTime() + URGENCY_PRESETS[urgency].idleFollowUpDelayMs * Math.max(1, followUpCount));
 }
 
-/** Instruction injected only into idle follow-up generations so the agent knows
- * the user has gone quiet and how many nudges remain. Reply batches get none. */
-export function getBatchGenerationInstruction(kind: string, followUpCount: number): string | undefined {
-	if (kind !== "follow_up") return undefined;
-	const ordinal =
-		followUpCount >= 2 ? "This is your final follow-up; afterwards you stay silent." : "At most one more follow-up may ever be sent after this one.";
-	return `The user has gone quiet since your last message. If you are genuinely still waiting on an answer (for example you asked a question or proposed a plan), send one short, natural follow-up that fits your persona; do not repeat your previous wording and do not pressure them. If the conversation has naturally wound down, choose no_reply. ${ordinal}`;
+/** Why a batch is generating: idle follow-ups tell the agent the learner went quiet and how many nudges remain. */
+export function getBatchGenerationEvent(kind: string, followUpCount: number): AgentEvent {
+	return kind === "follow_up" ? { kind: "follow_up", followUpCount } : { kind: "reply" };
 }
 
 export type AgentReplyWorkerOptions = {
@@ -347,12 +344,14 @@ export class AgentReplyWorker {
 		}
 
 		try {
+			const learner = await db.query.user.findFirst({ where: eq(authUser.id, session.userId), columns: { name: true } });
 			const result = await generateAgentResponse({
-				baseSystemPrompt: buildAgentSystemPrompt(session.task),
-				ui: session.task.ui,
+				task: session.task,
+				// The same name the practice interface shows for the learner.
+				learnerName: learner?.name || "Learner",
 				history,
 				userId: session.userId,
-				additionalInstruction: getBatchGenerationInstruction(batch.kind, session.followUpCount),
+				event: getBatchGenerationEvent(batch.kind, session.followUpCount),
 			});
 			// Anchor every post-generation timestamp at completion time. The scan's `now`
 			// predates the provider call; anchoring there would let generation latency

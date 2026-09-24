@@ -1,7 +1,6 @@
 import type { ChatMessage } from "../chatMessages";
 import {
 	buildCommentThreadTree,
-	buildTargetedCommentPrompt,
 	type CommentThreadConfig,
 	type CommentThreadMetadata,
 	type CommentThreadRenderableComment,
@@ -60,26 +59,6 @@ export function findRedditTarget(openingState: RedditOpeningState, targetComment
 export function findRedditTargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): RedditTarget | null {
 	const target = findTargetInMessages(messages, redditThreadConfig, targetCommentId);
 	return target ? toRedditTarget(target) : null;
-}
-
-export function buildRedditUserPrompt(params: {
-	openingState: RedditOpeningState;
-	comment: string;
-	target: RedditTarget | null;
-	responderName: string;
-}): string {
-	const title = normalizeRedditText(params.openingState.post?.title, "this post");
-	const subreddit = normalizeRedditText(params.openingState.post?.subreddit, "Reddit").replace(/^r\//, "");
-	return buildTargetedCommentPrompt({
-		surfaceName: "Reddit",
-		containerDescription: `r/${subreddit} post "${title}"`,
-		containerAuthorName: "the post author",
-		comment: params.comment,
-		target: params.target,
-		responderName: params.responderName,
-		topLevelActionDescription: "new top-level Reddit comment",
-		replyActionDescription: "replied to this Reddit comment",
-	});
 }
 
 export function buildRedditCommentTree(params: { openingState: RedditOpeningState; messages: ChatMessage[] }): RedditRenderableComment[] {

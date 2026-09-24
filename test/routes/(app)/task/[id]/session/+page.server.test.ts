@@ -303,10 +303,8 @@ describe("session page server", () => {
 				"To: Maya\nSubject: Meeting\n\nHello Maya",
 				"user_123",
 				"mail-1",
-				expect.objectContaining({
-					userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' },
-					userDisplayContent: "To: Maya\nSubject: Meeting\n\nHello Maya",
-				}),
+				// Only what the learner wrote is persisted: no prompt wrapper with names or layout instructions.
+				{ userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' } },
 			);
 		});
 
