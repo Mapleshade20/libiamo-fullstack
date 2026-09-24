@@ -9,7 +9,7 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
-import { markAssistantMessagesSeen } from "$lib/server/practice/unread";
+import { acknowledgeAssistantMessage } from "$lib/server/practice/unread";
 
 /** Flattens a drizzle SQL object's chunks into the literal text it will emit. */
 function sqlText(value: unknown): string {
@@ -22,28 +22,38 @@ function sqlText(value: unknown): string {
 	return "";
 }
 
-describe("markAssistantMessagesSeen", () => {
+describe("acknowledgeAssistantMessage", () => {
 	let setMock: ReturnType<typeof vi.fn>;
+	let whereMock: ReturnType<typeof vi.fn>;
+	let returning: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		vi.resetAllMocks();
-		setMock = vi.fn(() => ({ where: vi.fn() }));
+		returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		whereMock = vi.fn(() => ({ returning }));
+		setMock = vi.fn(() => ({ where: whereMock }));
 		mockDb.update.mockImplementation(() => ({ set: setMock }));
 	});
 
-	// The session page polls while replies land, so two loads can overlap. If the
-	// older snapshot's smaller id were written last the watermark would move
-	// backwards and already-read replies would resurface as unread.
+	// Two acknowledgements can overlap. If the older snapshot's smaller id were
+	// written last the watermark would move backwards and already-read replies
+	// would resurface as unread.
 	it("moves the watermark forward only, resolving the maximum in the database", async () => {
-		await markAssistantMessagesSeen(42, "user-1", 10);
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toBe(true);
 
 		expect(setMock).toHaveBeenCalledTimes(1);
 		expect(sqlText(setMock.mock.calls[0][0].lastSeenAssistantMessageId)).toContain("greatest");
 	});
 
-	it("skips the write when the session has no assistant message yet", async () => {
-		await markAssistantMessagesSeen(42, "user-1", 0);
+	it("proves ownership and the assistant role in the same statement", async () => {
+		await acknowledgeAssistantMessage(42, "user-1", 10);
+		const condition = sqlText(whereMock.mock.calls[0][0]);
+		expect(condition).toContain("exists");
+		expect(condition).toContain("'assistant'");
+	});
 
-		expect(mockDb.update).not.toHaveBeenCalled();
+	it("reports a message outside the reader's sessions as not acknowledged", async () => {
+		returning.mockResolvedValue([]);
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toBe(false);
 	});
 });

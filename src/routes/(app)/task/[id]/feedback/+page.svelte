@@ -7,6 +7,7 @@ import { deserialize } from "$app/forms";
 import { invalidate, invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
 import { PRACTICE_NOTES_DEPENDENCY } from "$lib/app/load-dependencies";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
 import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
 import SelectionActionBubble from "$lib/components/practice/feedback/SelectionActionBubble.svelte";
@@ -159,10 +160,14 @@ function handleAskSelection(selection: LearningSelection) {
 	askAppendRequest = { id: askAppendCounter, selection };
 }
 
+/** The Tutor and Note-writing actions spend the trial balance. */
+const TRIAL_QUOTA_ACTIONS = new Set(["followUp", "saveSelectionNotes", "saveSelectionQaNote"]);
+
 async function postFeedbackAction(action: string, formData: FormData) {
 	const response = await fetch(`?/${action}`, { method: "POST", body: formData }).catch(() => {
 		throw new Error(t(lang, "common.error"));
 	});
+	if (TRIAL_QUOTA_ACTIONS.has(action)) void refreshTrialQuota();
 	const result = deserialize(await response.text());
 	if (result.type !== "success") {
 		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Request failed");

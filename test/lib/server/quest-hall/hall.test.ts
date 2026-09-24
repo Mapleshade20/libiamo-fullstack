@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadQuestHallData } from "$lib/server/quest-hall/hall";
 
-const { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindUser } = vi.hoisted(() => {
+const { mockSelect, mockWhere, mockOrderBy, mockSessions, mockFindUser } = vi.hoisted(() => {
 	const mockOrderBy = vi.fn();
 	const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
 	const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
 	const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
-	const mockSelect = vi.fn(() => ({ from: mockFrom }));
-	const mockFindMany = vi.fn();
+	// Lineup session reads are the selects that project the unread count.
+	const mockSessions = vi.fn();
+	const mockSelect = vi.fn((projection?: Record<string, unknown>) =>
+		projection && "unreadCount" in projection ? { from: () => ({ where: mockSessions }) } : { from: mockFrom },
+	);
 	const mockFindUser = vi.fn();
-	return { mockSelect, mockWhere, mockOrderBy, mockFindMany, mockFindUser };
+	return { mockSelect, mockWhere, mockOrderBy, mockSessions, mockFindUser };
 });
 
 const { mockEnsureCurrentLineups, mockListLineupTasks } = vi.hoisted(() => ({
@@ -30,7 +33,6 @@ vi.mock("$lib/server/db", () => ({
 		select: mockSelect,
 		query: {
 			user: { findFirst: mockFindUser },
-			practiceSession: { findMany: mockFindMany },
 		},
 	},
 }));
@@ -64,6 +66,8 @@ vi.mock("$lib/server/db/schema", () => ({
 	},
 }));
 
+vi.mock("$lib/server/practice/unread", () => ({ unreadReplyCount: "unreadReplyCount" }));
+
 vi.mock("$lib/server/quest-hall/greetings", () => ({
 	getGreeting: (language: string, name: string) => `${language}:${name}`,
 	getRandomSubtitle: (language: string) => `${language}:subtitle`,
@@ -95,7 +99,7 @@ describe("loadQuestHallData", () => {
 		mockFindUser.mockResolvedValue(undefined);
 		mockEnsureCurrentLineups.mockResolvedValue({ daily: 1, weekly: 2 });
 		mockListLineupTasks.mockImplementation(async (lineupId: number) => (lineupId === 1 ? [dailyTask] : [weeklyTask]));
-		mockFindMany.mockResolvedValue([]);
+		mockSessions.mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -105,22 +109,9 @@ describe("loadQuestHallData", () => {
 	it("reads the lineups current on the browser-local day with each entry's own progress", async () => {
 		mockFindUser.mockResolvedValue({ levelSelfAssign: { en: 2, es: 1, fr: 3, ja: 2 } });
 		mockOrderBy.mockResolvedValueOnce([]);
-		mockFindMany.mockImplementation(async (query: { where: unknown }) =>
-			containsCondition(query.where, { op: "eq", column: "practiceSession.lineupId", value: 1 })
-				? [
-						{
-							taskId: 10,
-							status: "evaluated",
-							evaluationPhase: "completed",
-							lastSeenAssistantMessageId: 4,
-							messages: [
-								{ id: 3, role: "assistant" },
-								{ id: 5, role: "assistant" },
-								{ id: 6, role: "assistant" },
-								{ id: 7, role: "user" },
-							],
-						},
-					]
+		mockSessions.mockImplementation(async (where: unknown) =>
+			containsCondition(where, { op: "eq", column: "practiceSession.lineupId", value: 1 })
+				? [{ taskId: 10, status: "evaluated", evaluationPhase: "completed", unreadCount: 2 }]
 				: [],
 		);
 
@@ -144,8 +135,8 @@ describe("loadQuestHallData", () => {
 		expect(result.weeklyTasks).toEqual([
 			{ ...weekly, lineupId: 2, sessionStatus: null, evaluationPhase: null, unreadCount: 0, hasUnreadReply: false },
 		]);
-		for (const [query] of mockFindMany.mock.calls) {
-			expect(containsCondition(query.where, { op: "eq", column: "practiceSession.userId", value: "user-1" })).toBe(true);
+		for (const [where] of mockSessions.mock.calls) {
+			expect(containsCondition(where, { op: "eq", column: "practiceSession.userId", value: "user-1" })).toBe(true);
 		}
 		expect(() => JSON.stringify(result)).not.toThrow();
 	});
@@ -189,6 +180,6 @@ describe("loadQuestHallData", () => {
 		expect(result.weeklyTasks).toEqual([]);
 		expect(result.translationStatusMap).toEqual({});
 		expect(mockOrderBy).toHaveBeenCalledTimes(1);
-		expect(mockFindMany).not.toHaveBeenCalled();
+		expect(mockSessions).not.toHaveBeenCalled();
 	});
 });

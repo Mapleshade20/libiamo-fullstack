@@ -318,7 +318,12 @@ export const sessionMessage = pgTable(
 		deliveryId: integer("delivery_id").references(() => agentDelivery.id, { onDelete: "set null" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
-	(t) => [index("session_message_session_idx").on(t.sessionId), uniqueIndex("session_message_delivery_idx").on(t.deliveryId)],
+	(t) => [
+		index("session_message_session_idx").on(t.sessionId),
+		uniqueIndex("session_message_delivery_idx").on(t.deliveryId),
+		// Unread counts scan only replies past each session's watermark (`server/practice/unread.ts`).
+		index("session_message_unread_idx").on(t.sessionId, t.id).where(sql`${t.role} = 'assistant'`),
+	],
 );
 
 // ── translationSourceSet ────────────────────────────────────────────

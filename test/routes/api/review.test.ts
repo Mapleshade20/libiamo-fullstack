@@ -1,28 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetDueNotes, mockGetReviewStats, mockRateNote, mockObserveReviewQueue, MockReviewCardNotDueError } = vi.hoisted(() => {
+const { mockCountAvailable, mockRateNote, mockObserveReviewQueue, MockReviewCardNotDueError } = vi.hoisted(() => {
 	class MockReviewCardNotDueError extends Error {}
 	return {
-		mockGetDueNotes: vi.fn(),
-		mockGetReviewStats: vi.fn(),
+		mockCountAvailable: vi.fn(),
 		mockRateNote: vi.fn(),
 		mockObserveReviewQueue: vi.fn(async () => null),
 		MockReviewCardNotDueError,
 	};
 });
 
-vi.mock("$lib/server/streak", () => ({ observeReviewQueue: mockObserveReviewQueue }));
+vi.mock("$lib/server/streak", () => ({ observeReviewQueue: mockObserveReviewQueue, countAvailableNotesByLanguage: mockCountAvailable }));
 
 vi.mock("$lib/server/review/scheduler", () => ({
-	getDueNotes: mockGetDueNotes,
-	getReviewStats: mockGetReviewStats,
 	rateNote: mockRateNote,
 	ReviewCardNotDueError: MockReviewCardNotDueError,
 }));
 
 import { POST as rateNote } from "../../../src/routes/api/review/[noteId]/rate/+server";
-import { GET as dueNotes } from "../../../src/routes/api/review/due/+server";
-import { GET as stats } from "../../../src/routes/api/review/stats/+server";
+import { GET as available } from "../../../src/routes/api/review/available/+server";
 
 function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<string, string>; invalidJson?: boolean }) {
 	return {
@@ -39,26 +35,16 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-describe("GET /api/review/due", () => {
+describe("GET /api/review/available", () => {
 	it("requires authentication", async () => {
-		expect((await dueNotes(mockEvent({ user: null }))).status).toBe(401);
+		expect((await available(mockEvent({ user: null }))).status).toBe(401);
 	});
 
-	it("returns due Notes and stats for the active language", async () => {
-		mockGetDueNotes.mockResolvedValue([{ id: 1, front: "Prompt", back: "Answer" }]);
-		mockGetReviewStats.mockResolvedValue({ dueToday: 1 });
-		const response = await dueNotes(mockEvent({ user: { id: "u", activeLanguage: "fr" } }));
-		expect(await response.json()).toEqual({
-			cards: [{ id: 1, front: "Prompt", back: "Answer" }],
-			stats: { dueToday: 1 },
-		});
-		expect(mockGetDueNotes).toHaveBeenCalledWith("u", "fr", 20);
-	});
-});
-
-describe("GET /api/review/stats", () => {
-	it("requires authentication", async () => {
-		expect((await stats(mockEvent({ user: null }))).status).toBe(401);
+	it("reports the account-wide queue per language", async () => {
+		mockCountAvailable.mockResolvedValue({ fr: 3, ja: 1 });
+		const response = await available(mockEvent({ user: { id: "u", activeLanguage: "fr" } }));
+		expect(await response.json()).toEqual({ byLanguage: { fr: 3, ja: 1 } });
+		expect(mockCountAvailable).toHaveBeenCalledWith("u", expect.any(Date));
 	});
 });
 

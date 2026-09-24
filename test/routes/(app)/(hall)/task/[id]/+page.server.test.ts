@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { hallData } from "../../../../fixtures/quest-hall";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -52,10 +51,9 @@ vi.mock("$lib/server/translation/sources", () => ({
 	getOrCreateTranslationSourceSet: mocks.getOrCreateTranslationSourceSet,
 	getOrCreateTranslationAttempt: mocks.getOrCreateTranslationAttempt,
 }));
-vi.mock("$lib/server/quest-hall/hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
 vi.mock("$lib/time/browser-timezone", async (importOriginal) => ({ ...(await importOriginal()), getBrowserTimezone: vi.fn(() => "UTC") }));
 
-import { actions, load } from "$routes/(app)/task/[id]/+page.server";
+import { actions, load } from "$routes/(app)/(hall)/task/[id]/+page.server";
 
 const mockChatJson = mocks.chatJson;
 const context = { lineupId: 7, pinned: false };
@@ -124,7 +122,7 @@ describe("Task detail +page.server", () => {
 			mocks.getTaskPreparationData.mockResolvedValue(data);
 			const result = (await load(event(undefined, "42"))) as any;
 			expect(mocks.getTaskPreparationData).toHaveBeenCalledWith({ userId: "u1", taskId: 42, context });
-			expect(result).toMatchObject({ kind: "quest", ...data, initialPreparation: { kind: "quest", data } });
+			expect(result).toEqual({ preparation: { kind: "quest", key: "daily-42", data } });
 			expect(mocks.getTranslationPreparationData).not.toHaveBeenCalled();
 		});
 
@@ -139,7 +137,7 @@ describe("Task detail +page.server", () => {
 				activeLanguage: "fr",
 				nativeLanguage: "en",
 			});
-			expect(result).toMatchObject({ kind: "translation", attempt: { id: 9, workflowPhase: "second_draft" } });
+			expect(result).toEqual({ preparation: { kind: "translation", key: "translation-1", data } });
 		});
 	});
 

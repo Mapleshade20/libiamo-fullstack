@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { questHallDetails } from "$lib/quest-hall/details";
 import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
-import { questHallDetails } from "$lib/server/quest-hall/details";
-import { hallData, quest } from "../../../fixtures/quest-hall";
+import { hallData, quest } from "../../fixtures/quest-hall";
 
 function taskData(id: number) {
 	return {

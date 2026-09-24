@@ -6,6 +6,7 @@ import X from "@lucide/svelte/icons/x";
 import { Portal } from "bits-ui";
 import { onMount } from "svelte";
 import { deserialize } from "$app/forms";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
@@ -81,6 +82,7 @@ async function handleGenerate() {
 	try {
 		// The server reads the task context itself; the request only asks for suggestions.
 		const res = await fetch(generateExpressionsAction, { method: "POST", body: new FormData() });
+		void refreshTrialQuota();
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { expressions?: string[]; error?: string };
@@ -118,6 +120,7 @@ async function handleCheck(idx: number) {
 		f.set("targetLanguage", targetLanguage);
 
 		const res = await fetch(evaluateTranslationAction, { method: "POST", body: f });
+		void refreshTrialQuota();
 		const r = deserialize(await res.text()) as {
 			type: string;
 			data?: { feedback?: string; correction?: string; error?: string };

@@ -5,6 +5,7 @@ import Home from "@lucide/svelte/icons/home";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import TransferPass from "$lib/components/review/TransferPass.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import CorrectionCard from "$lib/components/translation/evaluation/CorrectionCard.svelte";
@@ -196,6 +197,7 @@ async function verifyCard(input: string) {
 	submitting = true;
 	try {
 		const result = await postAction("verifyCorrection", form);
+		void refreshTrialQuota();
 		if (result.type !== "success" || !result.data?.verification) {
 			const cards = [...snapshot.cards];
 			cards[index] = { ...local, input, phase: "provider_error" };
@@ -268,6 +270,7 @@ async function submitSecondDraft() {
 	submitting = true;
 	try {
 		const result = await postAction("verifySecondDraft", form);
+		void refreshTrialQuota();
 		if (result.type !== "success" || !result.data?.verification) {
 			persist({
 				...snapshot,

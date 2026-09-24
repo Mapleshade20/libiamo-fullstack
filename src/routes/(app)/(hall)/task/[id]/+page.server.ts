@@ -2,19 +2,17 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
 import { getSelfAssignedLevel, type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
+import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import { getTaskPreparationData } from "$lib/server/practice/preparation";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/practice/translation-help";
-import { questHallDetails } from "$lib/server/quest-hall/details";
-import { loadQuestHallData } from "$lib/server/quest-hall/hall";
 import { getTaskIdentity, parseTaskId, resolveRequestLineup, type TaskIdentity } from "$lib/server/task/context";
 import { getTranslationPreparationData, validPromptLanguage } from "$lib/server/translation/preparation";
 import { getOrCreateTranslationAttempt, getOrCreateTranslationSourceSet } from "$lib/server/translation/sources";
 import { abandonTranslationAttempt, findTranslationAttempt, getTranslationTask, TranslationWorkflowError } from "$lib/server/translation/workflow";
 import { type AttemptContext, lineupQuery } from "$lib/task/attempts";
-import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { Actions, PageServerLoad } from "./$types";
 
 const TRANSLATION_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
@@ -43,12 +41,15 @@ async function loadTranslationHelpTask(taskId: number) {
 	});
 }
 
+/**
+ * Only this task's preparation: the book data comes from the `(hall)` layout, and `+page.ts` places
+ * the task in it. Calling `parent()` here would re-run that layout load on every visit.
+ */
 export const load: PageServerLoad = async (event) => {
 	event.depends?.(QUEST_HALL_DEPENDENCY);
 	const user = requireUser(event);
 	const identity = await requireTask(event.params);
 	const context = await resolveRequestLineup(event, identity);
-	const hall = await loadQuestHallData(user, getBrowserTimezone(event.cookies));
 
 	if (identity.interactionType === "translate") {
 		const data = await getTranslationPreparationData({
@@ -59,12 +60,12 @@ export const load: PageServerLoad = async (event) => {
 			nativeLanguage: user.nativeLanguage,
 		});
 		if (!data) throw error(404, "Task not found");
-		return { kind: "translation" as const, ...data, ...questHallDetails(hall, { kind: "translation", key: `translation-${identity.id}`, data }) };
+		return { preparation: { kind: "translation", key: `translation-${identity.id}`, data } satisfies QuestHallPreparation };
 	}
 
 	const data = await getTaskPreparationData({ userId: user.id, taskId: identity.id, context });
 	if (!data) throw error(404, "Task not found");
-	return { kind: "quest" as const, ...data, ...questHallDetails(hall, { kind: "quest", key: `daily-${identity.id}`, data }) };
+	return { preparation: { kind: "quest", key: `daily-${identity.id}`, data } satisfies QuestHallPreparation };
 };
 
 async function translationContext(event: Parameters<Actions[string]>[0]) {

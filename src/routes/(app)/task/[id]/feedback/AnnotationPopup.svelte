@@ -4,6 +4,7 @@ import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
@@ -115,6 +116,7 @@ async function fetchExplanation() {
 			method: "POST",
 			body: formData,
 		});
+		void refreshTrialQuota();
 
 		const result = deserialize(await response.text());
 
@@ -154,6 +156,7 @@ async function handleSaveNote() {
 			method: "POST",
 			body: formData,
 		});
+		void refreshTrialQuota();
 
 		const result = deserialize(await response.text());
 

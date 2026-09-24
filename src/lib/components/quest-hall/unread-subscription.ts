@@ -1,4 +1,8 @@
+import { planAgentWorkPolling } from "$lib/practice/agent-work-polling";
 import { type UnreadInboxItem, unreadEntryKey } from "$lib/practice/unread";
+
+/** `setTimeout` overflows past this and fires at once. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export type UnreadSubscriptionStatus = "loading" | "ready" | "error";
 
@@ -30,6 +34,7 @@ interface CreateUnreadSubscriptionOptions {
 	onchange: (state: UnreadSubscriptionState) => void;
 	onHallFactsChange?: () => void;
 	getHallFacts?: () => readonly UnreadHallFact[];
+	now?: () => Date;
 }
 
 export function getUnreadTotal(items: readonly Pick<UnreadInboxItem, "unreadCount">[]): number {
@@ -56,6 +61,18 @@ export function unreadHallSnapshotChanged(snapshot: readonly UnreadHallFact[], i
 	});
 }
 
+function parseDueAt(value: unknown): Date | null {
+	if (typeof value !== "string") return null;
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Keeps the Hall's inbox current. Replies only appear when agent work falls due, so the server
+ * reports the next due time and the subscription follows `planAgentWorkPolling`: poll at
+ * `intervalMs` while a reply is close, wake once when it is far, and stay silent when nothing is
+ * outstanding. Returning to a hidden tab refreshes, which also covers work started elsewhere.
+ */
 export function createUnreadSubscription({
 	endpoint,
 	initialTotal = 0,
@@ -65,12 +82,15 @@ export function createUnreadSubscription({
 	onchange,
 	onHallFactsChange,
 	getHallFacts,
+	now = () => new Date(),
 }: CreateUnreadSubscriptionOptions) {
 	let state: UnreadSubscriptionState = { items: [], total: initialTotal, status: "loading" };
 	let successfulItems: UnreadInboxItem[] | null = null;
 	let activeRequest: Promise<void> | null = null;
 	let controller: AbortController | null = null;
 	let destroyed = false;
+	let nextAgentWorkDueAt: Date | null = null;
+	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	async function performRefresh(): Promise<void> {
 		controller = new AbortController();
@@ -80,9 +100,10 @@ export function createUnreadSubscription({
 				signal: controller.signal,
 			});
 			if (!response.ok) throw new Error(`Unread request failed with ${response.status}`);
-			const body = (await response.json()) as { items?: UnreadInboxItem[]; total?: number };
+			const body = (await response.json()) as { items?: UnreadInboxItem[]; total?: number; nextAgentWorkDueAt?: unknown };
 			if (!Array.isArray(body.items)) throw new Error("Unread response is missing items");
 			if (destroyed) return;
+			nextAgentWorkDueAt = parseDueAt(body.nextAgentWorkDueAt);
 
 			const items = body.items;
 			const total = Number.isSafeInteger(body.total) && (body.total ?? -1) >= 0 ? (body.total as number) : getUnreadTotal(items);
@@ -105,11 +126,29 @@ export function createUnreadSubscription({
 		}
 	}
 
+	function schedule(): void {
+		if (timer) clearTimeout(timer);
+		timer = null;
+		if (destroyed || visibilitySource.hidden) return;
+		// A failed read retries at the polling interval rather than trusting a stale due time.
+		const plan =
+			state.status === "error"
+				? ({ kind: "interval" } as const)
+				: planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: nextAgentWorkDueAt, now: now() });
+		if (plan.kind === "none") return;
+		const delay = plan.kind === "interval" ? intervalMs : Math.min(plan.delayMs, MAX_TIMER_DELAY_MS);
+		timer = setTimeout(() => {
+			timer = null;
+			if (!visibilitySource.hidden) void refresh();
+		}, delay);
+	}
+
 	function refresh(): Promise<void> {
 		if (destroyed) return Promise.resolve();
 		if (activeRequest) return activeRequest;
 		activeRequest = performRefresh().finally(() => {
 			activeRequest = null;
+			schedule();
 		});
 		return activeRequest;
 	}
@@ -118,15 +157,13 @@ export function createUnreadSubscription({
 		if (!visibilitySource.hidden) void refresh();
 	};
 	visibilitySource.addEventListener("visibilitychange", onVisibilityChange);
-	const interval = setInterval(() => {
-		if (!visibilitySource.hidden) void refresh();
-	}, intervalMs);
 	void refresh();
 
 	function destroy(): void {
 		if (destroyed) return;
 		destroyed = true;
-		clearInterval(interval);
+		if (timer) clearTimeout(timer);
+		timer = null;
 		visibilitySource.removeEventListener("visibilitychange", onVisibilityChange);
 		controller?.abort();
 		controller = null;

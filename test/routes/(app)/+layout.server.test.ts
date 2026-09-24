@@ -14,19 +14,41 @@ vi.mock("$lib/server/account/trial-quota", () => ({
 	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
 }));
 
+function signedOut(path: string) {
+	const url = new URL(`https://libiamo.test${path}`);
+	const tracked = vi.fn();
+	let untracked = false;
+	const event = {
+		locals: { user: null },
+		get url() {
+			if (!untracked) tracked();
+			return url;
+		},
+		untrack: <T>(read: () => T) => {
+			untracked = true;
+			try {
+				return read();
+			} finally {
+				untracked = false;
+			}
+		},
+	};
+	return { event, tracked };
+}
+
 const ALICE_EMAIL_MD5 = "c160f8cc69a4f0bf2b0362752353d060";
 const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";
 
 describe("(app) layout +layout.server", () => {
-	it("redirects signed-out root visits to the public homepage", async () => {
-		await expect(load({ locals: { user: null }, url: new URL("https://libiamo.test/") } as any)).rejects.toMatchObject({
-			status: 302,
-			location: "/welcome",
-		});
+	it("redirects signed-out root visits to the public homepage without tracking the URL", async () => {
+		const { event, tracked } = signedOut("/");
+		await expect(load(event as any)).rejects.toMatchObject({ status: 302, location: "/welcome" });
+		// A tracked pathname would re-run the layout, and its queries, on every navigation.
+		expect(tracked).not.toHaveBeenCalled();
 	});
 
 	it.each(["/archive", "/review", "/profile", "/task/1", "/translate/1"])("redirects signed-out visits to %s through sign-in", async (path) => {
-		await expect(load({ locals: { user: null }, url: new URL(`https://libiamo.test${path}`) } as any)).rejects.toMatchObject({
+		await expect(load(signedOut(path).event as any)).rejects.toMatchObject({
 			status: 302,
 			location: "/sign-in",
 		});

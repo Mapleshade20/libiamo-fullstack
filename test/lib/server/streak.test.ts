@@ -134,12 +134,23 @@ describe("recordReviewObservation", () => {
 		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toMatchObject({ streakDays: 1, throughDate: "2026-09-18" });
 	});
 
-	it("writes nothing when the observation changes nothing", async () => {
-		mockReads({ streak: undefined, dueCards: true });
+	it("answers a non-empty queue without locking or writing", async () => {
+		const order = mockReads({ streak: undefined, dueCards: true });
 		const { updateSet } = mockWrites();
 
 		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toBeNull();
+		expect(order).toEqual(["queue"]);
+		expect(mockDb.transaction).not.toHaveBeenCalled();
+		expect(mockDb.insert).not.toHaveBeenCalled();
 		expect(updateSet).not.toHaveBeenCalled();
+	});
+
+	it("rechecks an empty queue under the lock before crediting it", async () => {
+		const order = mockReads({ streak: undefined, dueCards: false });
+		mockWrites();
+
+		await recordReviewObservation(USER_ID, NOW, TIME_ZONE);
+		expect(order).toEqual(["queue", "lock", "queue"]);
 	});
 });
 

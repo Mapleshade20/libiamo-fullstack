@@ -4,7 +4,8 @@ import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
-import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import { buildChatMessages, type ChatMessage, getSessionSnapshot, updateMessageById } from "$lib/components/practice/session/chat-messages";
 import { completeAction, postAction } from "$lib/components/practice/session/form-actions";
 import { createTimeFormatter, getTodayDateString } from "$lib/components/practice/session/message-format";
@@ -55,10 +56,6 @@ let {
 }: Props = $props();
 
 const t = $derived(i18n[language as keyof typeof i18n] || i18n.en);
-
-function refreshTrialQuota() {
-	return invalidate(TRIAL_QUOTA_DEPENDENCY);
-}
 
 function refreshPracticeSession() {
 	return invalidate(PRACTICE_SESSION_DEPENDENCY);
@@ -516,12 +513,16 @@ $effect(() => {
 
 $effect(() => {
 	if (isAnyMessagePending && !isSubmitting && sessionId) {
-		const interval = setInterval(() => {
-			void refreshPracticeSession();
-			void refreshTrialQuota();
-		}, 3000);
+		const interval = setInterval(() => void refreshPracticeSession(), 3000);
 		return () => clearInterval(interval);
 	}
+});
+
+// Re-read the balance the worker spent once the reply lands, not on every poll.
+let replyWasPending = false;
+$effect(() => {
+	if (replyWasPending && !isAnyMessagePending) void refreshTrialQuota();
+	replyWasPending = isAnyMessagePending;
 });
 </script>
 

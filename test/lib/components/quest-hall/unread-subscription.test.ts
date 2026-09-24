@@ -6,6 +6,7 @@ import {
 	unreadHallFactsChanged,
 	unreadHallSnapshotChanged,
 } from "$lib/components/quest-hall/unread-subscription";
+import { AGENT_WORK_WAKE_BUFFER_MS } from "$lib/practice/agent-work-polling";
 import type { UnreadInboxItem } from "$lib/practice/unread";
 
 function item(taskId: number, overrides: Partial<UnreadInboxItem> = {}): UnreadInboxItem {
@@ -22,8 +23,12 @@ function item(taskId: number, overrides: Partial<UnreadInboxItem> = {}): UnreadI
 	};
 }
 
-function response(items: UnreadInboxItem[], total = getUnreadTotal(items)): Response {
-	return new Response(JSON.stringify({ items, total }), { status: 200, headers: { "content-type": "application/json" } });
+function response(items: UnreadInboxItem[], total = getUnreadTotal(items), nextAgentWorkDueAt: string | null = null): Response {
+	return new Response(JSON.stringify({ items, total, nextAgentWorkDueAt }), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+function dueIn(ms: number): string {
+	return new Date(Date.now() + ms).toISOString();
 }
 
 function visibilitySource(hidden = false) {
@@ -143,28 +148,79 @@ describe("Quest Hall unread subscription", () => {
 		subscription.destroy();
 	});
 
-	it("polls only while visible, refreshes on visibility return, and cleans up", async () => {
+	it("stays silent while no agent work is outstanding, refreshing only when the tab returns", async () => {
 		vi.useFakeTimers();
-		const source = visibilitySource(true);
-		const fetcher = vi.fn().mockResolvedValue(response([]));
-		const subscription = createUnreadSubscription({
-			endpoint: "/api/unread",
-			fetcher,
-			visibilitySource: source,
-			onchange: vi.fn(),
-		});
-		await subscription.refresh();
+		const source = visibilitySource();
+		const fetcher = vi.fn(async () => response([]));
+		const subscription = createUnreadSubscription({ endpoint: "/api/unread", fetcher, visibilitySource: source, onchange: vi.fn() });
+		await vi.advanceTimersByTimeAsync(0);
 		expect(fetcher).toHaveBeenCalledTimes(1);
 
-		await vi.advanceTimersByTimeAsync(12_000);
+		await vi.advanceTimersByTimeAsync(10 * 60_000);
 		expect(fetcher).toHaveBeenCalledTimes(1);
+
+		source.hidden = true;
+		source.dispatch();
 		source.hidden = false;
 		source.dispatch();
-		await Promise.resolve();
+		await vi.advanceTimersByTimeAsync(0);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 
 		subscription.destroy();
 		expect(source.listenerCount()).toBe(0);
+	});
+
+	it("polls at the interval while a reply is due soon, then stops once it has landed", async () => {
+		vi.useFakeTimers();
+		const fetcher = vi
+			.fn()
+			.mockImplementationOnce(async () => response([], 0, dueIn(5_000)))
+			.mockImplementationOnce(async () => response([], 0, dueIn(-1_000)))
+			.mockImplementation(async () => response([item(1)]));
+		const subscription = createUnreadSubscription({ endpoint: "/api/unread", fetcher, visibilitySource: visibilitySource(), onchange: vi.fn() });
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(12_000);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		await vi.advanceTimersByTimeAsync(12_000);
+		expect(fetcher).toHaveBeenCalledTimes(3);
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(fetcher).toHaveBeenCalledTimes(3);
+		subscription.destroy();
+	});
+
+	it("wakes once when the next reply is far off", async () => {
+		vi.useFakeTimers();
+		const fetcher = vi
+			.fn()
+			.mockImplementationOnce(async () => response([], 0, dueIn(10 * 60_000)))
+			.mockImplementation(async () => response([]));
+		const subscription = createUnreadSubscription({ endpoint: "/api/unread", fetcher, visibilitySource: visibilitySource(), onchange: vi.fn() });
+		await vi.advanceTimersByTimeAsync(9 * 60_000);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(60_000 + AGENT_WORK_WAKE_BUFFER_MS);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		subscription.destroy();
+	});
+
+	it("retries a failed read at the interval, and never while the tab is hidden", async () => {
+		vi.useFakeTimers();
+		const source = visibilitySource();
+		const fetcher = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockImplementation(async () => response([]));
+		const subscription = createUnreadSubscription({ endpoint: "/api/unread", fetcher, visibilitySource: source, onchange: vi.fn() });
+		await vi.advanceTimersByTimeAsync(0);
+		source.hidden = true;
+		await vi.advanceTimersByTimeAsync(12_000);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+
+		source.hidden = false;
+		source.dispatch();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		subscription.destroy();
 		await vi.advanceTimersByTimeAsync(24_000);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});

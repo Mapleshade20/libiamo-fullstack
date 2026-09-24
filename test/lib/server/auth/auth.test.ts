@@ -66,6 +66,8 @@ describe("auth server configuration", () => {
 		expect(config.basePath).toBe("/");
 		expect(config.advanced.defaultCookieAttributes.path).toBe("/");
 		expect(config.secret).toBe("test-secret");
+		// Per-request session resolution reads a signed cookie instead of the database.
+		expect(config.session.cookieCache).toEqual({ enabled: true, maxAge: 300 });
 		expect(config.emailAndPassword.enabled).toBe(true);
 		expect(config.emailAndPassword.requireEmailVerification).toBe(true);
 		expect(config.emailAndPassword.minPasswordLength).toBe(8);

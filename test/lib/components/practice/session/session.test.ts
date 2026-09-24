@@ -1,19 +1,12 @@
 import { onMount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
-import {
-	AGENT_WORK_DUE_SOON_MS,
-	AGENT_WORK_WAKE_BUFFER_MS,
-	createPracticeSession,
-	type PracticeSessionOptions,
-	planAgentWorkPolling,
-	resolveAgentName,
-} from "$lib/components/practice/session/session.svelte";
+import { createPracticeSession, type PracticeSessionOptions, resolveAgentName } from "$lib/components/practice/session/session.svelte";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
 
 const mocks = vi.hoisted(() => ({
 	tick: vi.fn(async () => {}),
 	invalidate: vi.fn(async () => {}),
+	refreshTrialQuota: vi.fn(async () => {}),
 	postAction: vi.fn(),
 	completeAction: vi.fn(),
 	submitPracticeMessage: vi.fn(),
@@ -29,6 +22,8 @@ vi.mock("svelte", () => ({
 vi.mock("$app/navigation", () => ({
 	invalidate: mocks.invalidate,
 }));
+
+vi.mock("$lib/components/account/trial-quota", () => ({ refreshTrialQuota: mocks.refreshTrialQuota }));
 
 vi.mock("$lib/components/practice/session/form-actions", () => ({
 	postAction: mocks.postAction,
@@ -111,32 +106,6 @@ describe("resolveAgentName", () => {
 		);
 
 		expect(name).toBe("Agent");
-	});
-});
-
-describe("planAgentWorkPolling", () => {
-	const now = new Date("2026-08-23T12:00:00.000Z");
-
-	it("polls continuously while a placeholder is pending even without scheduled work", () => {
-		expect(planAgentWorkPolling({ hasPendingPlaceholder: true, agentWorkDueAt: null, now })).toEqual({ kind: "interval" });
-	});
-
-	it("polls while agent work is due within the horizon", () => {
-		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: new Date(now.getTime() + AGENT_WORK_DUE_SOON_MS), now })).toEqual({
-			kind: "interval",
-		});
-	});
-
-	it("wakes once when the next agent work is far in the future", () => {
-		const dueAt = new Date(now.getTime() + 10 * 60_000);
-		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: dueAt, now })).toEqual({
-			kind: "wake",
-			delayMs: 10 * 60_000 + AGENT_WORK_WAKE_BUFFER_MS,
-		});
-	});
-
-	it("stops watching when no agent work is outstanding", () => {
-		expect(planAgentWorkPolling({ hasPendingPlaceholder: false, agentWorkDueAt: null, now })).toEqual({ kind: "none" });
 	});
 });
 
@@ -383,7 +352,7 @@ describe("createPracticeSession", () => {
 		expect(mocks.submitPracticeMessage).toHaveBeenCalledWith(202, "Hello there", expect.any(String), {});
 		expect(session.messages.some((message) => message.role === "user" && message.text === "Hello there")).toBe(true);
 		expect(session.messages.some((message) => message.role === "agent" && message.deliveryState === "pending")).toBe(true);
-		expect(mocks.invalidate).toHaveBeenCalledWith(TRIAL_QUOTA_DEPENDENCY);
+		expect(mocks.refreshTrialQuota).toHaveBeenCalled();
 	});
 
 	it("ignores empty or disabled sends", async () => {

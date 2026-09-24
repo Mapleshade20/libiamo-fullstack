@@ -1,3 +1,4 @@
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import { sendFormAction } from "../session/form-actions";
 
 export type HintRequest = {
@@ -22,6 +23,7 @@ export async function requestHint(input: HintRequest): Promise<HintResponse> {
 	if (input.contextPath?.length) formData.append("contextPath", JSON.stringify(input.contextPath));
 
 	const result = await sendFormAction("hint", formData);
+	void refreshTrialQuota();
 	if (result?.type === "failure") {
 		const error = result.data && typeof result.data.error === "string" ? result.data.error : "Failed to generate hints";
 		throw new Error(error);

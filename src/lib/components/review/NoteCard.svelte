@@ -5,6 +5,7 @@ import Trash2 from "@lucide/svelte/icons/trash-2";
 import X from "@lucide/svelte/icons/x";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 type Note = {
@@ -47,6 +48,7 @@ async function submitAsk(q: string) {
 		formData.append("noteId", String(note.id));
 		formData.append("question", q);
 		const res = await fetch("?/followUp", { method: "POST", body: formData });
+		void refreshTrialQuota();
 		const result = deserialize(await res.text());
 		if (result.type === "success" && result.data) {
 			askAnswer = (result.data as { answer?: string }).answer ?? null;

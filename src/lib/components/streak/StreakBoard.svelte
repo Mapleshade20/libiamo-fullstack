@@ -26,7 +26,7 @@ $effect(() => {
 	const controller = new AbortController();
 	counts = null;
 	failed = false;
-	fetch(`${base}/api/review/stats?byLanguage=1`, { signal: controller.signal })
+	fetch(`${base}/api/review/available`, { signal: controller.signal })
 		.then(async (response) => {
 			if (!response.ok) throw new Error("Review counts unavailable");
 			const result = await response.json();

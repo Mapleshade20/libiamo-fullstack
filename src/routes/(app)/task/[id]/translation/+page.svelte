@@ -5,6 +5,7 @@ import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Send from "@lucide/svelte/icons/send";
 import { enhance } from "$app/forms";
 import { goto } from "$app/navigation";
+import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
 import {
 	parseTranslationDraft,
 	serializeTranslationDraft,
@@ -75,7 +76,8 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 				submitting = false;
 				if (result.type === "redirect") {
 					try { sessionStorage.removeItem(translationDraftStorageKey(data.attempt.id)); } catch { /* unavailable */ }
-					await goto(result.location);
+					// Submitting spends the trial balance and may complete the quest.
+					await goto(result.location, { invalidate: [TRIAL_QUOTA_DEPENDENCY, STREAK_DEPENDENCY] });
 					return;
 				}
 				await update({ reset: false });

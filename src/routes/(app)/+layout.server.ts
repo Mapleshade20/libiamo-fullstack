@@ -9,7 +9,9 @@ import { devStreakDayOffset, getStreakRecord, isReviewQueueEmpty } from "$lib/se
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {
-	if (!event.locals.user && event.url.pathname === `${base}/`) {
+	// Untracked: reading the pathname would otherwise re-run this load, and every query below, on
+	// each navigation. The data refreshes through the dependencies declared here instead.
+	if (!event.locals.user && event.untrack(() => event.url.pathname === `${base}/`)) {
 		throw redirect(302, `${base}/welcome`);
 	}
 

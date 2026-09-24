@@ -1,6 +1,8 @@
 import { onMount, tick } from "svelte";
 import { invalidate } from "$app/navigation";
-import { PRACTICE_SESSION_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
+import { planAgentWorkPolling } from "$lib/practice/agent-work-polling";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
 import { prepareMarkdownText } from "$lib/text/markdown";
 import { getDisplayClock } from "$lib/time/display-clock";
@@ -20,12 +22,6 @@ export interface PracticeSessionLabels {
 }
 
 export const SESSION_POLL_INTERVAL_MS = 3_000;
-/** Outstanding agent work due within this horizon keeps the client polling. */
-export const AGENT_WORK_DUE_SOON_MS = 30_000;
-/** Wake slightly after the due time so the worker has claimed the batch first. */
-export const AGENT_WORK_WAKE_BUFFER_MS = 2_000;
-
-export type AgentWorkPollingPlan = { kind: "interval" } | { kind: "wake"; delayMs: number } | { kind: "none" };
 
 export interface PracticeSessionOptions {
 	userName: string;
@@ -50,23 +46,6 @@ export function resolveAgentName(openingStateData: ChatOpeningState, userName: s
 		if (sender && sender !== userName) return sender;
 	}
 	return fallbackName;
-}
-
-/**
- * How the client watches for outstanding agent work (a batch still composing or
- * pacing out its deliveries): poll continuously while a reply placeholder is up
- * or work falls due within the horizon, otherwise wake once when the next work
- * item is due — and stop when nothing is outstanding.
- */
-export function planAgentWorkPolling(input: { hasPendingPlaceholder: boolean; agentWorkDueAt: Date | null; now: Date }): AgentWorkPollingPlan {
-	const dueAt = input.agentWorkDueAt?.getTime() ?? null;
-	if (input.hasPendingPlaceholder || (dueAt !== null && dueAt <= input.now.getTime() + AGENT_WORK_DUE_SOON_MS)) {
-		return { kind: "interval" };
-	}
-	if (dueAt !== null) {
-		return { kind: "wake", delayMs: Math.max(0, dueAt + AGENT_WORK_WAKE_BUFFER_MS - input.now.getTime()) };
-	}
-	return { kind: "none" };
 }
 
 function toAgentWorkDueAt(value: unknown): Date | null {
@@ -250,10 +229,6 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 	}
 
 	// ── Actions ────────────────────────────────────────────────────
-
-	function refreshTrialQuota() {
-		return invalidate(TRIAL_QUOTA_DEPENDENCY);
-	}
 
 	function refreshPracticeSession() {
 		return invalidate(PRACTICE_SESSION_DEPENDENCY);
@@ -516,19 +491,22 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		if (plan.kind === "none" || !sessionId || isCompleted) return;
 		if (plan.kind === "interval") {
 			if (isSubmitting) return;
-			const interval = setInterval(() => {
-				void refreshPracticeSession();
-				void refreshTrialQuota();
-			}, SESSION_POLL_INTERVAL_MS);
+			const interval = setInterval(() => void refreshPracticeSession(), SESSION_POLL_INTERVAL_MS);
 			return () => clearInterval(interval);
 		}
 		// Far-future work (e.g. an idle follow-up): one wake-up at due time instead
 		// of polling the whole window.
-		const timer = setTimeout(() => {
-			void refreshPracticeSession();
-			void refreshTrialQuota();
-		}, plan.delayMs);
+		const timer = setTimeout(() => void refreshPracticeSession(), plan.delayMs);
 		return () => clearTimeout(timer);
+	});
+
+	// The worker spends the balance while composing; re-read it once the work settles rather than
+	// on every poll, which would reload the whole app layout every few seconds.
+	let agentWorkWasOutstanding = false;
+	$effect(() => {
+		const outstanding = nextAgentWorkDueAt !== null || messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
+		if (agentWorkWasOutstanding && !outstanding) void refreshTrialQuota();
+		agentWorkWasOutstanding = outstanding;
 	});
 
 	onMount(() => {

@@ -32,6 +32,8 @@ import {
 } from "$lib/quest-hall/navigation";
 import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
 import type { HallData } from "$lib/server/quest-hall/hall";
+import { getDisplayClock } from "$lib/time/display-clock";
+import { localDay } from "$lib/time/local-day";
 import {
 	createQuestMenuAnimator,
 	prefersReducedQuestMenuMotion,
@@ -300,7 +302,23 @@ function focusView(view: QuestMenuView): void {
 	});
 }
 
+const displayClock = getDisplayClock();
+let refreshedForDay: string | null = null;
+
+/**
+ * The book's data persists across Hall navigation, so a tab left open past local midnight would keep
+ * yesterday's lineup. Reload it once per new day, on return to the tab or on the next Hall move.
+ */
+function refreshStaleHallDay(): void {
+	if (document.hidden) return;
+	const today = localDay(Date.now(), displayClock().timeZone);
+	if (today === data.localDate || today === refreshedForDay) return;
+	refreshedForDay = today;
+	void invalidate(QUEST_HALL_DEPENDENCY);
+}
+
 afterNavigate((navigation) => {
+	if (mounted) refreshStaleHallDay();
 	if (mounted && navigation.from && isQuestMenuPath(navigation.from.url.pathname) && navigation.to && isQuestMenuPath(navigation.to.url.pathname)) {
 		disableScrollHandling();
 	}
@@ -547,6 +565,7 @@ onMount(() => {
 	};
 	reducedMotion.addEventListener("change", handleReducedMotion);
 	document.addEventListener("visibilitychange", updateAmbientMotion);
+	document.addEventListener("visibilitychange", refreshStaleHallDay);
 	window.addEventListener("resize", updateLayout);
 	window.addEventListener("popstate", handlePopstate);
 	updateLayout();
@@ -555,6 +574,7 @@ onMount(() => {
 		media.removeEventListener("change", updateLayout);
 		reducedMotion.removeEventListener("change", handleReducedMotion);
 		document.removeEventListener("visibilitychange", updateAmbientMotion);
+		document.removeEventListener("visibilitychange", refreshStaleHallDay);
 		bookVisibility.disconnect();
 		initialLayoutObserver.disconnect();
 		window.removeEventListener("resize", updateLayout);

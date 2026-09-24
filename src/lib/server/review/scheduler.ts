@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Card, Grade, ReviewLog, TLearningStepsStrategy } from "ts-fsrs";
 import { BasicLearningStepsStrategy, ConvertStepUnitToMinutes, createEmptyCard, fsrs, Rating, State, StrategyMode } from "ts-fsrs";
 import { type LanguageCode, REVIEW_MAXIMUM_INTERVAL_DAYS } from "$lib/constants";
@@ -335,57 +335,4 @@ export async function resetNoteScheduling(noteId: number, userId: string, now = 
 		await transaction.delete(reviewLog).where(and(eq(reviewLog.noteId, noteId), eq(reviewLog.userId, userId)));
 		return { due: card.due.toISOString(), queueKind: studyQueueKind(card), reps: card.reps, lapses: card.lapses };
 	});
-}
-
-/**
- * Cards available for study right now, per language, across the whole account.
- *
- * The streak gate is account-wide while `/review` is per-language, so this is what tells a learner
- * which language still owes reviews. It is a detail view and is fetched only when asked for.
- */
-export async function getAvailableCardsByLanguage(userId: string, now = new Date()) {
-	const rows = await db.select({ language: note.language, fsrsCard: note.fsrsCard }).from(note).where(eq(note.userId, userId));
-	const counts: Partial<Record<LanguageCode, number>> = {};
-	for (const row of rows) {
-		if (!isReviewCardAvailable(row.fsrsCard, now)) continue;
-		counts[row.language] = (counts[row.language] ?? 0) + 1;
-	}
-	return counts;
-}
-
-export async function getReviewStats(userId: string, language: LanguageCode) {
-	const now = new Date();
-	const notes = await db
-		.select({ fsrsCard: note.fsrsCard })
-		.from(note)
-		.where(and(eq(note.userId, userId), eq(note.language, language)));
-	const [reviewedToday] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(reviewLog)
-		.where(
-			and(
-				eq(reviewLog.userId, userId),
-				lte(reviewLog.reviewedAt, now),
-				sql`${reviewLog.reviewedAt} >= ${new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()}`,
-			),
-		);
-	let newCount = 0;
-	let learningCount = 0;
-	let reviewCount = 0;
-	let dueToday = 0;
-	for (const row of notes) {
-		const card = deserializeCard(row.fsrsCard);
-		if (card.state === State.New) newCount++;
-		else if (card.state === State.Learning || card.state === State.Relearning) learningCount++;
-		else reviewCount++;
-		if (isReviewCardAvailable(card, now)) dueToday++;
-	}
-	return {
-		dueToday,
-		totalCards: notes.length,
-		newCount,
-		learningCount,
-		reviewCount,
-		reviewedToday: reviewedToday?.count ?? 0,
-	};
 }

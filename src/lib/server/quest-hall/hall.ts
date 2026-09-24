@@ -3,6 +3,7 @@ import { getSelfAssignedLevel, type LanguageCode, type SelfAssignedLevel, type T
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall/quest";
 import { db } from "$lib/server/db";
 import { practiceSession, task, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
+import { unreadReplyCount } from "$lib/server/practice/unread";
 import { getGreeting, getRandomSubtitle } from "$lib/server/quest-hall/greetings";
 import { getLocalDateString } from "$lib/server/task/lineup-dates";
 import { currentLineupStarts, ensureCurrentLineups, listLineupTasks } from "$lib/server/task/lineups";
@@ -42,18 +43,21 @@ async function loadLineupQuests(lineupId: number, userId: string): Promise<HallQ
 	const entries = await listLineupTasks(lineupId);
 	const sessions =
 		entries.length > 0
-			? await db.query.practiceSession.findMany({
-					where: and(eq(practiceSession.userId, userId), eq(practiceSession.lineupId, lineupId)),
-					columns: { taskId: true, status: true, evaluationPhase: true, lastSeenAssistantMessageId: true },
-					with: { messages: { columns: { id: true, role: true } } },
-				})
+			? await db
+					.select({
+						taskId: practiceSession.taskId,
+						status: practiceSession.status,
+						evaluationPhase: practiceSession.evaluationPhase,
+						unreadCount: unreadReplyCount,
+					})
+					.from(practiceSession)
+					.where(and(eq(practiceSession.userId, userId), eq(practiceSession.lineupId, lineupId)))
 			: [];
 	const sessionByTaskId = new Map(sessions.map((session) => [session.taskId, session]));
 
 	return entries.map(({ origin: _origin, ...entry }) => {
 		const session = sessionByTaskId.get(entry.id);
-		const seenWatermark = session?.lastSeenAssistantMessageId ?? 0;
-		const unreadCount = session?.messages.filter((message) => message.role === "assistant" && message.id > seenWatermark).length ?? 0;
+		const unreadCount = session?.unreadCount ?? 0;
 		return {
 			...entry,
 			lineupId,

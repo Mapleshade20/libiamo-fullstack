@@ -87,6 +87,14 @@ $effect(() => {
 		}
 	});
 });
+// Navigation no longer reloads the layout, so a tab that crosses local midnight re-reads the record
+// and the queue snapshot once for the new day; the observation below then sees the new day's queue.
+let loadedDay: string | null = null;
+$effect(() => {
+	const day = today;
+	if (loadedDay !== null && loadedDay !== day && !lab) void invalidate(STREAK_DEPENDENCY);
+	loadedDay = day;
+});
 $effect(() => {
 	if (lab || (dev && page.url.pathname === `${base}/streak-lab`) || !visible || !queueEmpty || view.reviewCleared) return;
 	const id = userId;
