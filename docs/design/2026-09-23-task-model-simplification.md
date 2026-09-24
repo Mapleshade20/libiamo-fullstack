@@ -121,8 +121,10 @@ belongs to and which attempt a workflow page shows (`server/task-context.ts`):
 1. **Context lineup**: an explicit `?lineup=` owned by the task if given (used by the Archive),
    otherwise the current lineup containing the task (today's daily or this week's weekly in the
    learner's timezone), otherwise the most recent lineup containing it, otherwise none.
-2. **Shown attempt**: any unfinished attempt of the learner for this task, otherwise the attempt
-   in the context lineup. If the context is "no lineup", the latest attempt is shown.
+2. **Shown attempt**: an explicit `?lineup=` pins exactly that entry's attempt (Archive and unread
+   links must show the attempt they name). Otherwise any unfinished attempt of the learner for this
+   task, then the attempt in the context lineup. If the context is "no lineup", the latest attempt
+   is shown.
 3. **Starting** creates the attempt in the context lineup. A task reappearing in a new lineup is
    therefore `ready` again, while past lineups keep their finished attempts.
 

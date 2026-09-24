@@ -60,38 +60,21 @@ for reverse-proxy configuration, updates and rollback, and backups.
 
 Roles
 - learner: browse tasks, view background materials, and complete sessions
-- admin: create and manage templates and variants, and schedule tasks
+- admin: create and manage tasks, and curate lineups
 
 Quest Hall
-- The authenticated root `/` presents daily and weekly practice quests, translation templates, and unread replies through the responsive Quest Menu.
-- Task and translation details use the book-beside-sheet Quest Menu presentation at their canonical `/task/[id]` and `/translate/[id]` URLs. Workflow exits always return to that resource; there is no storage-dependent detail routing or persisted scroll position.
-- Catalog section, page, and translation year are URL state. Detail-to-catalog navigation derives the selected task's catalog position. The `/task` and `/translate` roots redirect to Quest Hall; legacy root preparation queries redirect to canonical details.
+- The authenticated root `/` presents the current daily and weekly lineups, translation tasks, and unread replies through the responsive Quest Menu.
+- Chat and translation tasks share the book-beside-sheet Quest Menu presentation at their canonical `/task/[id]` URL; the translation workflow lives under `/task/[id]/translation`. Workflow exits always return to that resource; there is no storage-dependent detail routing or persisted scroll position.
+- Catalog section, page, and translation year are URL state. Detail-to-catalog navigation derives the selected task's catalog position. The `/task` root redirects to Quest Hall; legacy root preparation queries redirect to canonical details.
 - Each target language stores a self-assigned proficiency level: level 1 corresponds to A2–B1, level 2 to B2–C1, and level 3 to C2+. Recommendations preserve unread and in-progress work, then prefer tasks closest to the active language's level.
 
-Template vs Template Variant vs Task
-- Template: the reusable content blueprint. Key columns now include:
-  - interactionType (enum: chat, translate)
-  - cadence (enum: weekly, daily, none)
-  - objectivesBase (text[] — ordered by array index)
-  - materialsMd (Markdown background material)
-  - tags
-
-- TemplateVariant: a new per-template row that holds variant-specific data used at scheduling and runtime:
-  - slotValues (jsonb): values that replace {{slot}} placeholders
-  - openingState (jsonb): UI-specific initial state validated by per-UI Zod schemas
-
-- Task: a scheduled instance created from a template + selected variant. Tasks record variantId and store resolved fields.
-
-Scheduling and recurrence
-- Amounts: the app schedules 3 weekly tasks (per-week, date normalized to Monday) and 3 daily tasks (per-day).
-- Auto-scheduling: when a user requests tasks for a date and the quota isn't met, the scheduler queries active templates and fills missing tasks. Instead of a denormalized lastScheduledAt column, templates are prioritized by their most recent task date so templates with no recent tasks are scheduled first.
-- Variant selection: when creating a task the system selects one active variant at random and resolves slots from variant.slotValues. Templates without explicit slots must still have at least one active variant.
-
-Persona & agent prompt
-- Persona selection happens at practice session start: a random MBTI-based persona prefix is prepended to the task's resolved agent prompt and saved in the session prompt snapshot.
+Task, lineup, and attempt
+- Task: a flat, static, editable piece of content. `interactionType` (chat, translate) decides which fields apply: chat tasks carry the agent prompt, UI opening state, urgency, and max turns; translation tasks carry reference paragraphs and context. Edits apply live; nothing is snapshotted into sessions.
+- Lineup: a dated distribution of tasks (`lineup` + `lineup_task`), currently one per language for each day and each ISO week. Missing slots are auto-filled up to 3 tasks from `lineup_rotation`, least recently lined up first; admins can add tasks manually. A task may appear in many lineups.
+- Attempt: practice sessions and translation attempts reference the task and, optionally, the lineup entry they were started from. Completion is scoped to that entry, so a task that reappears in a later lineup can be done again. `?lineup=` pins a task URL to one entry's attempt.
 
 Validation and UI
-- Opening state shapes are validated in TypeScript with per-UI Zod schemas. AO3 variants support work metadata plus nested `previousComments` so learners can reply at any thread depth.
+- Opening state shapes are validated in TypeScript with per-UI Zod schemas. AO3 opening states support work metadata plus nested `previousComments` so learners can reply at any thread depth.
 - Practice UI components live under `src/lib/components/practice-ui/`; Reddit, Apple Mail, Discord, iMessage, and AO3 are implemented for active sessions.
 - materialsMd is authored in Markdown and rendered at display time (use a safe renderer / sanitizer in production).
 

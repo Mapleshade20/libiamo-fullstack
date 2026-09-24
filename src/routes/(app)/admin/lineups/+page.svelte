@@ -99,7 +99,7 @@ function submitFilters(event: Event) {
 
 		<div class="space-y-1">
 			<Label for="date">{mode === "daily" ? "Date" : "Week"}</Label>
-			<Input id="date" name="date" type={mode === "daily" ? "date" : "week"} lang="en" value={rawDate} class="w-48" />
+			<Input id="date" name="date" type={mode === "daily" ? "date" : "week"} lang="en" value={rawDate} class="h-10 w-48" />
 		</div>
 
 		<div class="space-y-1">
@@ -131,7 +131,7 @@ function submitFilters(event: Event) {
 					{#each data.entries as t}
 						<Table.Row>
 							<Table.Cell>{t.id}</Table.Cell>
-							<Table.Cell>{t.title}</Table.Cell>
+							<Table.Cell class="max-w-md truncate" title={t.title}>{t.title}</Table.Cell>
 							<Table.Cell>{UI_VARIANT_LABELS[t.ui]}</Table.Cell>
 							<Table.Cell>
 								<Badge
@@ -198,6 +198,7 @@ function submitFilters(event: Event) {
 						lang="en"
 						value={rawDate}
 						required
+						class="h-10"
 						aria-invalid={Boolean(form?.errors?.date)}
 					/>
 					{#if form?.errors?.date}
