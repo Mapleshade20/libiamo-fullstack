@@ -40,7 +40,7 @@ Every LLM call site had grown its own prompt shape. An audit found:
 - **Notes** (`note.ts`): system = contract, the source task brief instead of a raw conversation snippet, and a short input description. User = the items. Shared vocabulary rules live in `vocabulary-note-rules.ts` and are used by translation Generation 2 too. Selection notes teach what makes a selection worth learning, not incidental dates or names.
 - **Translation help** (`translate.ts`, `task/[id]` actions): expressions receive the task brief, objectives, setting, opening messages and learner level as input. The translation evaluation takes the target language from the task rather than the form, and judges register against the task.
 - **Translation candidates** (`translation.ts`): the translation context moves into the system message, and the user message is `{ paragraphs: [{ paragraphIndex, text }] }`. The two format few-shot exchanges are removed; the JSON shape alone was enough in testing.
-- **Translation evaluation** (`translation-evaluation/*`): Generation 1 is unchanged. Its few-shot pairs carry each example's own context in the user payload, so the real task keeps the same shape. The Correction Verifier still sends only the current card's trusted context. Its payload now lists the card fields in order, names the shown hint (`shownHint: "initialHint" | "deeperHint"`) instead of repeating its text, and ends with `learnerRevision`. The Second Draft Verifier still appends its system/user turn to the successful Generation 1 history.
+- **Translation evaluation** (`translation-evaluation/*`): Generation 1 is unchanged. Its few-shot pairs carry each example's own context in the user payload, so the real task keeps the same shape. The Correction Verifier sends the task's translation `context` followed by the current card's trusted fields; the context only informs register and contextual fit (`fullyNatural`) and never adds required meaning. Its payload lists the card fields in order, names the shown hint (`shownHint: "initialHint" | "deeperHint"`) instead of repeating its text, and ends with `learnerRevision`. The Second Draft Verifier still appends its system/user turn to the successful Generation 1 history.
 
 ### Constraints kept
 
@@ -49,6 +49,6 @@ Every LLM call site had grown its own prompt shape. An audit found:
 
 ## Open questions for review
 
-- The Correction Verifier does not see the task's translation context (for example “Reddit r/WarriorCats”) even though `fullyNatural` asks for contextual fit. The protocol limits it to the current card, so this is left unchanged.
-- The content hint is a single string but still uses `chatJson`. On `openai/gpt-6-luna` about 1 in 12 first-turn hints came back as bare text and needed a repair. It could move to `chatText` like the follow-up.
+- ~~The Correction Verifier does not see the task's translation context.~~ Decided: it now receives the task's translation `context` alongside the card, because `fullyNatural` asks for contextual fit.
+- ~~The content hint still uses `chatJson`.~~ Decided: it moved to `chatText` like the follow-up (about 1 in 12 first-turn hints previously came back as bare text and cost a repair). A reply still wrapped as `{"contentHint": …}` is unwrapped. Its output rules also now ask for one short sentence with a single direction and forbid naming objective numbers or input fields.
 - Generation 1 keeps the translation context in the user payload so that it matches its few-shot examples, rather than moving it to the system message.

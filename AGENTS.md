@@ -55,7 +55,7 @@ Use a refined retro editorial magazine aesthetic: a light warm paper base, elega
 - Centralize LLM calls in `server/llm.ts` for both environment and BYOK credentials. Structured calls use `chatJson({ schema, messages, ... })` with at most one targeted repair; never repair truncation.
 - Translation evaluation contracts live in `server/translation-evaluation/`; shared grades/Diff AST types live in `translation-evaluation/types.ts`. Never render model Diff markup directly.
 - Translation routes use task IDs, never attempt IDs. The first draft is immutable; `translationAttempt.workflowPhase` is authoritative, while card/second-draft/transfer details use a versioned tab-scoped snapshot.
-- Correction Verifier uses only the current card's trusted context; Second Draft Verifier appends to successful Generation 1 history. Keep these strategies separate.
+- Correction Verifier uses only the current card's trusted context plus the task's translation context (for register and contextual fit); Second Draft Verifier appends to successful Generation 1 history. Keep these strategies separate.
 - Development-only demos live in the `(app)/(demo)` route group (URLs unchanged) and each 404s outside `dev` in its own load and actions. Use `/translate-eval-live-demo` for qualitative prompt review against production services. Detailed protocol decisions belong in `docs/plans/2026-07-15-redesign-translate-eval.md`.
 
 ### Read safety and authentication
