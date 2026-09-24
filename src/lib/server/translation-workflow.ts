@@ -285,6 +285,7 @@ export async function verifyTranslationCorrection(input: {
 	if (!card || card.ordinal !== input.cardOrdinal) throw new TranslationWorkflowError(400, "Invalid correction card.");
 	const response = await verifyCorrection({
 		card,
+		context: input.record.context,
 		learnerRevision: input.learnerRevision,
 		displayedHint: input.hintLevel === "initial" ? card.initialHint : card.deeperHint,
 		targetLanguage: input.record.targetLanguage,

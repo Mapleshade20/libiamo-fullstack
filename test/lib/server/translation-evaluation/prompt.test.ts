@@ -86,6 +86,7 @@ describe("translation evaluation prompt builders", () => {
 	it("builds the correction verifier from one complete selected-card payload", () => {
 		const messages = buildCorrectionVerifierMessages({
 			card: validatedCard,
+			context: "A heated fan review",
 			learnerRevision: "I disagree.",
 			displayedHint: validatedCard.initialHint,
 			targetLanguage: "en",
@@ -94,6 +95,7 @@ describe("translation evaluation prompt builders", () => {
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
 		const payload = JSON.parse(messages[1].content);
 		expect(payload).toEqual({
+			context: "A heated fan review",
 			cardOrdinal: 0,
 			sourceText: validatedCard.sourceText,
 			originalAnswer: validatedCard.originalAnswer,
@@ -109,6 +111,7 @@ describe("translation evaluation prompt builders", () => {
 		expect(Object.keys(payload).at(-1)).toBe("learnerRevision");
 		const deeper = buildCorrectionVerifierMessages({
 			card: validatedCard,
+			context: "A heated fan review",
 			learnerRevision: "I disagree.",
 			displayedHint: validatedCard.deeperHint,
 			targetLanguage: "en",

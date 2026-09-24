@@ -195,6 +195,7 @@ export const actions: Actions = {
 
 		const correctionInput = {
 			card: validatedCard(card),
+			context: TRANSLATION_EVALUATION_LIVE_DEMO_TASK.context,
 			learnerRevision,
 			displayedHint,
 			targetLanguage: TRANSLATION_EVALUATION_LIVE_DEMO_TASK.targetLanguage,

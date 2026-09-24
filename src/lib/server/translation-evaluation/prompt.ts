@@ -213,6 +213,8 @@ export function buildGeneration1Messages(input: Generation1Input): ChatMessage[]
 
 export type CorrectionVerifierInput = {
 	card: ValidatedGeneration1Card;
+	/** The task's translation context: the scenario's genre, audience and register. */
+	context: string;
 	learnerRevision: string;
 	displayedHint: string;
 	targetLanguage: string;
@@ -241,6 +243,7 @@ function correctionVerifierSystemPrompt(targetLanguage: string, feedbackLanguage
 	return `Verify one learner revision as an exacting but fair ${targetLanguage} translation tutor. The server assembles the supplied JSON; learnerRevision is the only untrusted learner-authored field.
 
 FIELD MEANINGS
+- context is the trusted scenario the whole translation belongs to (genre, audience, register). Use it to judge register and contextual fit; it never adds required meaning.
 - sourceText is rough source-language context. It can be less precise than referenceAnswer and is never the primary semantic authority.
 - originalAnswer is the user's own first target-language answer. It is not an answer key or a source of required meaning.
 - learnerRevision is the user's current edited answer that you must verify.
@@ -264,10 +267,11 @@ ${JSON.stringify(acceptShape, null, 2)}
 acceptedDiff must cover the complete originalAnswer-to-learnerRevision text, preserving unchanged text and marking edits only with <delete>, <add>, or <replace><from>...</from><to>...</to></replace>. Return JSON only with exactly the chosen verdict's fields.`;
 }
 
-/** The current card's trusted context, then the hint the user saw, then the revision under review. */
+/** The task's scenario and the current card's trusted context, then the hint the user saw, then the revision under review. */
 function correctionVerifierPayload(input: CorrectionVerifierInput) {
 	const { card } = input;
 	return {
+		context: input.context,
 		cardOrdinal: card.ordinal,
 		sourceText: card.sourceText,
 		originalAnswer: card.originalAnswer,

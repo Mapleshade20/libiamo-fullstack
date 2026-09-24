@@ -82,6 +82,7 @@ describe("translation evaluation model protocols", () => {
 				],
 				warnings: [],
 			},
+			context: "A heated fan review",
 			learnerRevision: "I disagree.",
 			displayedHint: rawCard.initialHint,
 			targetLanguage: "en",
