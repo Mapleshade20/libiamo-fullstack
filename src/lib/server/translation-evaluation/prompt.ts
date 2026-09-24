@@ -1,5 +1,7 @@
 import { getLanguageEnglishName } from "$lib/constants";
+import { NOTE_EXAMPLE_COUNT } from "$lib/note";
 import type { ChatMessage } from "$lib/server/llm";
+import { vocabularyNoteRules } from "$lib/server/vocabulary-note-rules";
 import { TRANSLATION_GRADES } from "$lib/translation-evaluation/types";
 import type { ValidatedGeneration1Card } from "./validation";
 
@@ -244,8 +246,8 @@ FIELD MEANINGS
 - learnerRevision is the user's current edited answer that you must verify.
 - referenceAnswer is the primary trusted baseline for required concepts and communicative intent. Its exact wording, synonym choice, and fine-grained intensity are optional, but its interpretation takes priority over sourceText when they do not align.
 - minimalAnswer is one possible minimal correction, not an answer key or a source of extra semantic requirements.
-- teacherNotes are trusted Generation 1 tutor diagnoses of the card's major issues.
-- displayedHint is the hint already shown to the user for this attempt. It does not limit which problems you must inspect.
+- teacherNotes, initialHint, and deeperHint are trusted Generation 1 tutor diagnoses of the card's major issues.
+- shownHint names the hint (initialHint or deeperHint) the user has already seen for this attempt. It does not limit which problems you must inspect.
 
 INDEPENDENT DECISION PROCESS
 - Judge learnerRevision against the intended meaning represented by referenceAnswer, while accepting defensible paraphrases and differences in emphasis. If sourceText, originalAnswer, or minimalAnswer contains a detail that referenceAnswer does not require, do not require that detail or treat its removal as a new error.
@@ -262,14 +264,20 @@ ${JSON.stringify(acceptShape, null, 2)}
 acceptedDiff must cover the complete originalAnswer-to-learnerRevision text, preserving unchanged text and marking edits only with <delete>, <add>, or <replace><from>...</from><to>...</to></replace>. Return JSON only with exactly the chosen verdict's fields.`;
 }
 
-function correctionRevisionPayload(input: CorrectionVerifierInput) {
+/** The current card's trusted context, then the hint the user saw, then the revision under review. */
+function correctionVerifierPayload(input: CorrectionVerifierInput) {
+	const { card } = input;
 	return {
-		cardOrdinal: input.card.ordinal,
-		sourceText: input.card.sourceText,
-		originalAnswer: input.card.originalAnswer,
-		referenceAnswer: input.card.referenceAnswer,
-		teacherNotes: input.card.teacherNotes,
-		displayedHint: input.displayedHint,
+		cardOrdinal: card.ordinal,
+		sourceText: card.sourceText,
+		originalAnswer: card.originalAnswer,
+		referenceAnswer: card.referenceAnswer,
+		minimalAnswer: card.minimalAnswer,
+		teacherNotes: card.teacherNotes,
+		initialHint: card.initialHint,
+		deeperHint: card.deeperHint,
+		// Names the hint rather than repeating its text, which the payload already carries.
+		shownHint: input.displayedHint === card.initialHint ? "initialHint" : "deeperHint",
 		learnerRevision: input.learnerRevision,
 	};
 }
@@ -277,15 +285,9 @@ function correctionRevisionPayload(input: CorrectionVerifierInput) {
 export function buildCorrectionVerifierMessages(input: CorrectionVerifierInput): ChatMessage[] {
 	const targetLanguage = getLanguageEnglishName(input.targetLanguage);
 	const feedbackLanguage = getLanguageEnglishName(input.feedbackLanguage);
-	const payload = {
-		...correctionRevisionPayload(input),
-		initialHint: input.card.initialHint,
-		deeperHint: input.card.deeperHint,
-		minimalAnswer: input.card.minimalAnswer,
-	};
 	return [
 		{ role: "system", content: correctionVerifierSystemPrompt(targetLanguage, feedbackLanguage) },
-		{ role: "user", content: JSON.stringify(payload) },
+		{ role: "user", content: JSON.stringify(correctionVerifierPayload(input)) },
 	];
 }
 
@@ -340,10 +342,16 @@ export function buildGeneration2Messages(input: Generation2Input): ChatMessage[]
 				vocab: "...",
 				targetDefinition: "...",
 				nativeDefinition: "...",
-				examples: Array.from({ length: 4 }, () => ({ targetText: "...", nativeText: "..." })),
+				examples: Array.from({ length: NOTE_EXAMPLE_COUNT }, () => ({ targetText: "...", nativeText: "..." })),
 			},
 		],
 	};
+	const rules = [
+		"Cover every supplied card ordinal exactly once across all notes. Never omit or duplicate an ordinal.",
+		`Infer the concrete ${targetLanguage} vocabulary the learner failed to know or use correctly from referenceAnswer and minimalAnswer. Teacher notes are supporting context; never extract an incidental example that is not part of the correction.`,
+		"Merge cards only when they teach the same vocab. If one card has unrelated issues, select its most transferable corrected word or lexical chunk. When uncertain, keep cards separate.",
+		...vocabularyNoteRules(targetLanguage, sourceLanguage),
+	];
 	return [
 		{
 			role: "system",
@@ -353,14 +361,7 @@ Return JSON only, with exactly this shape:
 ${JSON.stringify(outputShape, null, 2)}
 
 CONTRACT
-- Cover every supplied card ordinal exactly once across all notes. Never omit or duplicate an ordinal.
-- Infer the concrete ${targetLanguage} vocabulary the learner failed to know or use correctly from referenceAnswer and minimalAnswer. Teacher notes are supporting context; never extract an incidental example that is not part of the correction.
-- vocab must be the exact reusable ${targetLanguage} expression: choose a single word when the learner needs that word itself, or a lexical chunk when this context requires a fixed or semi-fixed collocation, phrasal verb, fixed phrase, idiom, or functional formula. Never output an abstract grammar pattern, sentence structure, study instruction, slash-separated bundle, or the learner's incorrect wording.
-- Merge cards only when they teach the same vocab. If one card has unrelated issues, select its most transferable corrected word or lexical chunk. When uncertain, keep cards separate.
-- targetDefinition is a concise dictionary-style definition entirely in ${targetLanguage}. nativeDefinition is the equivalent concise dictionary-style definition entirely in ${sourceLanguage}. Neither field is a grammar lesson.
-- Every note has exactly four distinct examples in varied everyday situations. Each targetText is an independently natural ${targetLanguage} sentence that uses vocab, allowing grammatically required inflection. Each nativeText is an independently natural ${sourceLanguage} translation with exactly the same meaning.
-- Do not force every detail from the correction card into an example. Before returning, silently audit every pair for meaning preservation, word forms, grammar, register, and collocation; rewrite anything a native speaker would find awkward.
-- Do not add fields.`,
+${rules.map((rule) => `- ${rule}`).join("\n")}`,
 		},
 		{
 			role: "user",

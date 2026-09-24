@@ -8,6 +8,7 @@ import {
 } from "$lib/server/translation-evaluation/prompt";
 import { Generation1Schema } from "$lib/server/translation-evaluation/schema";
 import { validateGeneration1Evaluation } from "$lib/server/translation-evaluation/validation";
+import { vocabularyNoteRules } from "$lib/server/vocabulary-note-rules";
 
 const input: Generation1Input = {
 	sourceParagraphs: ["我不同意。"],
@@ -91,18 +92,29 @@ describe("translation evaluation prompt builders", () => {
 			feedbackLanguage: "zh",
 		});
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
-		expect(JSON.parse(messages[1].content)).toEqual({
+		const payload = JSON.parse(messages[1].content);
+		expect(payload).toEqual({
 			cardOrdinal: 0,
 			sourceText: validatedCard.sourceText,
 			originalAnswer: validatedCard.originalAnswer,
 			referenceAnswer: validatedCard.referenceAnswer,
+			minimalAnswer: validatedCard.minimalAnswer,
 			teacherNotes: validatedCard.teacherNotes,
-			displayedHint: validatedCard.initialHint,
-			learnerRevision: "I disagree.",
 			initialHint: validatedCard.initialHint,
 			deeperHint: validatedCard.deeperHint,
-			minimalAnswer: validatedCard.minimalAnswer,
+			shownHint: "initialHint",
+			learnerRevision: "I disagree.",
 		});
+		// The revision under review comes last, after the trusted card context.
+		expect(Object.keys(payload).at(-1)).toBe("learnerRevision");
+		const deeper = buildCorrectionVerifierMessages({
+			card: validatedCard,
+			learnerRevision: "I disagree.",
+			displayedHint: validatedCard.deeperHint,
+			targetLanguage: "en",
+			feedbackLanguage: "zh",
+		});
+		expect(JSON.parse(deeper[1].content).shownHint).toBe("deeperHint");
 	});
 
 	it("builds structured second-draft and Generation 2 payloads", () => {
@@ -123,6 +135,8 @@ describe("translation evaluation prompt builders", () => {
 
 		const generation2 = buildGeneration2Messages({ cards: [validatedCard], sourceLanguage: "zh", targetLanguage: "en" });
 		expect(generation2.map((message) => message.role)).toEqual(["system", "user"]);
+		// Translation and practice Notes follow one vocabulary contract.
+		for (const rule of vocabularyNoteRules("English", "Chinese")) expect(generation2[0].content).toContain(rule);
 		expect(JSON.parse(generation2[1].content)).toEqual({
 			cards: [
 				{

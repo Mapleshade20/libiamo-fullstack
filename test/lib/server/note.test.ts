@@ -34,6 +34,7 @@ import {
 	getNote,
 	updateNote,
 } from "$lib/server/note";
+import { vocabularyNoteRules } from "$lib/server/vocabulary-note-rules";
 
 const mockChatJson = vi.mocked(chatJson);
 
@@ -124,28 +125,48 @@ describe("generated Note entry points", () => {
 		expect(mockChatJson).not.toHaveBeenCalled();
 	});
 
-	it("uses the learner's native language and persists validated generated notes", async () => {
+	it("describes the source task once in the system message and sends only the items as input", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue({
-			messages: [{ role: "user", content: "I could of arrived earlier." }],
+			id: SESSION_ID,
+			task: { title: "Late for class", language: "en", ui: "imessage", shortObjective: "Apologise to a friend", description: null },
 		});
 		mockChatJson.mockResolvedValue({ value: { notes: [generatedNote()] } } as never);
 		const { noteValues } = mockNoteInsert();
+		const item = { tutorComment: "Use could have, not could of.", category: "grammar" as const, sourceContext: "I could of arrived earlier." };
 
 		await createNotesBatch({
 			userId: USER_ID,
 			source: { type: "practice", sessionId: SESSION_ID },
 			language: "en",
 			nativeLanguage: "fr",
-			feedbackItems: [{ tutorComment: "Use could have, not could of.", category: "grammar" }],
+			feedbackItems: [item],
+			sessionOwnerId: USER_ID,
 			availableFrom: AVAILABLE_FROM,
 		});
 
-		const request = mockChatJson.mock.calls[0]?.[0];
-		expect(JSON.parse(request?.messages[1]?.content ?? "{}").items[0]).toMatchObject({
-			ordinal: 0,
-			conversationSnippet: "[user] I could of arrived earlier.",
-		});
+		const [system, user] = mockChatJson.mock.calls[0]?.[0]?.messages ?? [];
+		expect(system.content).toContain("Late for class");
+		expect(system.content).toContain("French");
+		expect(system.content).not.toContain("could of arrived");
+		for (const rule of vocabularyNoteRules("English", "French")) expect(system.content).toContain(rule);
+		expect(JSON.parse(user.content)).toEqual({ items: [{ ordinal: 0, ...item }] });
 		expect(noteValues).toHaveBeenCalledOnce();
+	});
+
+	it("refuses a practice source the learner does not own", async () => {
+		mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
+		await expect(
+			createNotesBatch({
+				userId: USER_ID,
+				source: { type: "practice", sessionId: SESSION_ID },
+				language: "en",
+				nativeLanguage: "fr",
+				feedbackItems: [{ tutorComment: "x" }],
+				sessionOwnerId: USER_ID,
+				availableFrom: AVAILABLE_FROM,
+			}),
+		).rejects.toThrow("Session not found");
+		expect(mockChatJson).not.toHaveBeenCalled();
 	});
 
 	it("caps selection-derived notes at two before any database write", async () => {
