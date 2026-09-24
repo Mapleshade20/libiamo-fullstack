@@ -40,7 +40,7 @@ const example = $derived(note?.examples[0] ?? null);
 const counts = $derived(countStudyQueue(notes));
 const actions = $derived([
 	{ id: "incorrect", label: incorrectLabel, shortcut: "1", tone: "again" },
-	{ id: "pass", label: passLabel, shortcut: "2", tone: "good" },
+	{ id: "pass", label: passLabel, shortcut: ["2", "3", "4"], tone: "good" },
 ] satisfies StudyCardAction[]);
 
 $effect(() => {

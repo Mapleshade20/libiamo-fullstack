@@ -47,7 +47,7 @@ function handleKeydown(event: KeyboardEvent) {
 		return;
 	}
 	if (!revealed) return;
-	const action = actions.find((item) => item.shortcut === event.key);
+	const action = actions.find((item) => (Array.isArray(item.shortcut) ? item.shortcut.includes(event.key) : item.shortcut === event.key));
 	if (!action) return;
 	event.preventDefault();
 	onaction(action.id);
