@@ -1,6 +1,7 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { dev } from "$app/environment";
 import { getRequestEvent } from "$app/server";
+import { calendarDays, historyChanges, monthRange, type StreakCalendarData } from "$lib/streak/history";
 import {
 	applyQuestCompletion,
 	applyReviewObservation,
@@ -9,11 +10,10 @@ import {
 	localDay,
 	type StreakRecord,
 	streakRecordsEqual,
-} from "$lib/streak";
-import { calendarDays, historyChanges, monthRange, type StreakCalendarData } from "$lib/streak-history";
+} from "$lib/streak/rules";
 import { db } from "./db";
 import { note, streakDay, userStreak } from "./db/schema";
-import { ANKI_LEARN_AHEAD_MINUTES } from "./review";
+import { ANKI_LEARN_AHEAD_MINUTES } from "./review/scheduler";
 
 export const DEV_STREAK_DAY_OFFSET_COOKIE = "libiamo-dev-streak-day-offset";
 

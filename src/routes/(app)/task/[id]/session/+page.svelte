@@ -1,11 +1,11 @@
 <script lang="ts">
 import { base } from "$app/paths";
-import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
-import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
-import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
-import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
-import MailUI from "$lib/components/practice-ui/mail/MailUI.svelte";
-import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
+import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
+import AO3UI from "$lib/components/practice/ui/ao3/AO3UI.svelte";
+import DiscordUI from "$lib/components/practice/ui/discord/DiscordUI.svelte";
+import IMessageUI from "$lib/components/practice/ui/imessage/IMessageUI.svelte";
+import MailUI from "$lib/components/practice/ui/mail/MailUI.svelte";
+import RedditUI from "$lib/components/practice/ui/reddit/RedditUI.svelte";
 import type { LanguageCode } from "$lib/constants";
 
 let { data } = $props();

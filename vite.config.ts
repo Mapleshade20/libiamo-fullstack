@@ -9,29 +9,21 @@ export default defineConfig({
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",
-			include: [
-				"src/routes/**/*.ts",
-				"src/lib/server/*.ts",
-				"src/lib/components/**/*.ts",
-				"src/lib/constants.ts",
-				"src/lib/markdown.ts",
-				"src/lib/schemas.ts",
-			],
+			include: ["src/routes/**/*.ts", "src/lib/**/*.ts"],
 			exclude: [
-				// No executable logic — pure translation keys
-				"**/i18n.ts",
+				// Pure data: translation strings and declarative Drizzle tables
+				"src/lib/i18n/{en,es,fr,ja}.ts",
+				"src/lib/server/db/*.schema.ts",
+				"src/lib/server/db/schema.ts",
+				"src/lib/server/db/enums.ts",
 				// Type-only definitions, no runtime code
 				"**/types.ts",
 				"**/*.d.ts",
-				// Barrel re-exports, no logic
-				"**/index.ts",
-				// Internal utility helpers tested indirectly through component tests
-				"src/lib/components/utils/*.ts",
+				// Generated shadcn-svelte primitives and barrel re-exports
+				"src/lib/components/ui/**",
+				"src/lib/schemas/index.ts",
 				// Static demo data (pre-seeded fake users/messages), zero logic
-				"src/lib/components/practice-ui/reddit/data.ts",
-				// Thin SvelteKit request-handler glue — underlying service functions
-				// (rateCard, getDueCards, etc.) are tested at 98% in review-cards.test.ts
-				"src/routes/api/review/**/+server.ts",
+				"src/lib/components/practice/ui/reddit/data.ts",
 				// Load function tested (auth gate, redirects, session state);
 				// four form actions are pure glue: parse FormData → validate → call already-tested service
 				"**/feedback/+page.server.ts",

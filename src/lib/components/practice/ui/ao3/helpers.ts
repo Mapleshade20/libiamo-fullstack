@@ -1,0 +1,137 @@
+import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
+import {
+	buildCommentThreadTree,
+	type CommentThreadConfig,
+	type CommentThreadRenderableComment,
+	type CommentThreadTarget,
+	countThreadComments,
+	findOpeningCommentTarget,
+	findTargetInMessages,
+	getCommentIdForMessage,
+	getParentCommentIdForMessage,
+	normalizeThreadText,
+} from "$lib/components/practice/session/comment-thread";
+
+export type Ao3CommentNode = {
+	id?: string;
+	username?: string;
+	comment?: string;
+	timestamp?: string;
+	chapterTitle?: string;
+	iconUrl?: string;
+	replies?: Ao3CommentNode[];
+};
+
+export type Ao3Stats = {
+	published?: string;
+	updated?: string;
+	words?: string;
+	chapters?: string;
+	comments?: string;
+	kudos?: string;
+	bookmarks?: string;
+	hits?: string;
+};
+
+export type Ao3OpeningState = {
+	workTitle?: string;
+	authorName?: string;
+	chapterTitle?: string;
+	summary?: string;
+	bodyExcerpt?: string;
+	rating?: string;
+	archiveWarning?: string;
+	categories?: string[];
+	fandoms?: string[];
+	relationships?: string[];
+	characters?: string[];
+	additionalTags?: string[];
+	tags?: string[];
+	stats?: Ao3Stats;
+	previousComments?: Ao3CommentNode[];
+};
+
+export type Ao3Target = CommentThreadTarget & {
+	username: string;
+	comment: string;
+};
+
+export type Ao3RenderableComment = CommentThreadRenderableComment & {
+	username: string;
+	comment: string;
+	chapterTitle?: string;
+	iconUrl?: string;
+	replies: Ao3RenderableComment[];
+};
+
+export const DEFAULT_AO3_ICON = "/ao3/icon_user.png";
+
+const ao3ThreadConfig: CommentThreadConfig<Ao3CommentNode> = {
+	idPrefix: "ao3",
+	defaultAuthor: "Anonymous",
+	getAuthor: (comment) => comment.username,
+	getText: (comment) => comment.comment,
+	getReplies: (comment) => comment.replies,
+	getTimestamp: (comment) => comment.timestamp,
+	getMetadata: (message) => message.thread,
+};
+
+function toAo3Target(target: CommentThreadTarget): Ao3Target {
+	return { ...target, username: target.author, comment: target.text };
+}
+
+export function normalizeAo3Text(value: unknown, fallback = ""): string {
+	return normalizeThreadText(value, fallback);
+}
+
+export function getAo3AuthorName(openingState: Ao3OpeningState, fallback = "FicAuthor"): string {
+	return normalizeAo3Text(openingState.authorName, fallback);
+}
+
+export function getAo3AdditionalTags(openingState: Ao3OpeningState): string[] {
+	return [...(openingState.additionalTags ?? []), ...(openingState.tags ?? [])].filter(
+		(tag, index, tags) => Boolean(tag) && tags.indexOf(tag) === index,
+	);
+}
+
+export function findAo3Target(openingState: Ao3OpeningState, targetCommentId: string | null | undefined): Ao3Target | null {
+	const target = findOpeningCommentTarget(openingState.previousComments ?? [], ao3ThreadConfig, targetCommentId);
+	return target ? toAo3Target(target) : null;
+}
+
+export function findAo3TargetInMessages(messages: ChatMessage[], targetCommentId: string | null | undefined): Ao3Target | null {
+	const target = findTargetInMessages(messages, ao3ThreadConfig, targetCommentId);
+	return target ? toAo3Target(target) : null;
+}
+
+export function buildAo3CommentTree(params: {
+	openingState: Ao3OpeningState;
+	messages: ChatMessage[];
+	userAvatarUrl?: string;
+	agentIconUrl?: string;
+}): Ao3RenderableComment[] {
+	return buildCommentThreadTree<Ao3CommentNode, Ao3RenderableComment>({
+		openingComments: params.openingState.previousComments ?? [],
+		// Pending placeholders are polling triggers only: real AO3 shows nothing
+		// between submitting a comment and the author's reply appearing.
+		messages: params.messages.filter((message) => message.deliveryState !== "pending"),
+		config: ao3ThreadConfig,
+		mapOpeningComment: (comment, base) => ({
+			username: base.author,
+			comment: base.text,
+			chapterTitle: normalizeAo3Text(comment.chapterTitle) || undefined,
+			iconUrl: normalizeAo3Text(comment.iconUrl, DEFAULT_AO3_ICON),
+		}),
+		mapMessageComment: (message, base) => ({
+			username: base.author,
+			comment: base.text,
+			iconUrl: message.role === "user" ? params.userAvatarUrl || DEFAULT_AO3_ICON : params.agentIconUrl || DEFAULT_AO3_ICON,
+		}),
+	});
+}
+
+export function countAo3Comments(comments: Ao3RenderableComment[]): number {
+	return countThreadComments(comments);
+}
+
+export { getCommentIdForMessage as getAo3CommentIdForMessage, getParentCommentIdForMessage as getAo3ParentCommentIdForMessage };

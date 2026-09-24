@@ -9,13 +9,13 @@ const { mockBrowse, mockToManaged, mockUpdate, mockDelete, mockSetDue, mockReset
 	mockReset: vi.fn(),
 }));
 
-vi.mock("$lib/server/note-management", () => ({
+vi.mock("$lib/server/review/manage", () => ({
 	browseManagedNotes: mockBrowse,
 	toManagedNote: mockToManaged,
 	MANAGED_NOTES_PAGE_SIZE: 50,
 }));
-vi.mock("$lib/server/note", () => ({ updateNote: mockUpdate, deleteNote: mockDelete }));
-vi.mock("$lib/server/review", () => ({ setNoteDueInDays: mockSetDue, resetNoteScheduling: mockReset }));
+vi.mock("$lib/server/review/notes", () => ({ updateNote: mockUpdate, deleteNote: mockDelete }));
+vi.mock("$lib/server/review/scheduler", () => ({ setNoteDueInDays: mockSetDue, resetNoteScheduling: mockReset }));
 
 import { actions, load } from "$routes/(app)/review/manage/+page.server";
 

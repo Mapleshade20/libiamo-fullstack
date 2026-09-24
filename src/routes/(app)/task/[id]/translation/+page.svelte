@@ -10,7 +10,7 @@ import {
 	serializeTranslationDraft,
 	type TranslationDraftAnswer,
 	translationDraftStorageKey,
-} from "$lib/client/translation-draft";
+} from "$lib/components/translation/draft-storage";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { getHtmlLanguageTag, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";

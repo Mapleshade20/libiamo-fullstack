@@ -5,6 +5,13 @@ import Home from "@lucide/svelte/icons/home";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import TransferPass from "$lib/components/review/TransferPass.svelte";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
+import CorrectionCard from "$lib/components/translation/evaluation/CorrectionCard.svelte";
+import EvaluationOverview from "$lib/components/translation/evaluation/EvaluationOverview.svelte";
+import EvaluationWaiting from "$lib/components/translation/evaluation/EvaluationWaiting.svelte";
+import SecondDraft from "$lib/components/translation/evaluation/SecondDraft.svelte";
+import type { PracticeGenStatus } from "$lib/components/translation/evaluation/types";
 import {
 	clearTranslationFeedbackSnapshot,
 	emptyTranslationFeedbackSnapshot,
@@ -12,14 +19,7 @@ import {
 	saveTranslationFeedbackSnapshot,
 	type TranslationFeedbackSnapshot,
 	translationFeedbackSnapshotKey,
-} from "$lib/client/translation-feedback-snapshot";
-import TransferPass from "$lib/components/review/TransferPass.svelte";
-import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
-import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
-import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
-import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
-import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte";
-import type { PracticeGenStatus } from "$lib/components/translate-evaluation/types";
+} from "$lib/components/translation/feedback-snapshot";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";

@@ -9,7 +9,7 @@ vi.mock("$lib/server/streak", () => ({
 	isReviewQueueEmpty: mocks.queueEmpty,
 	recordReviewObservation: mocks.observe,
 }));
-vi.mock("$lib/server/trial-quota", () => ({
+vi.mock("$lib/server/account/trial-quota", () => ({
 	hasUserApiKey: vi.fn(async () => false),
 	getTrialQuotaBalance: vi.fn(async () => ({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 })),
 }));

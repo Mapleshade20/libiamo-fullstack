@@ -1,5 +1,5 @@
-import type { HallQuest } from "$lib/quest-hall";
-import type { HallData } from "$lib/server/quest-hall";
+import type { HallQuest } from "$lib/quest-hall/quest";
+import type { HallData } from "$lib/server/quest-hall/hall";
 export function quest(id: number, overrides: Partial<HallQuest> = {}): HallQuest {
 	return {
 		id,

@@ -1,13 +1,13 @@
 <script lang="ts">
 import { dev } from "$app/environment";
-import { readAcknowledgedStreak, writeAcknowledgedStreak } from "$lib/client/streak-acknowledged";
-import { createStreakDay } from "$lib/client/streak-day.svelte";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import { readAcknowledgedStreak, writeAcknowledgedStreak } from "$lib/components/streak/acknowledged";
+import { createStreakDay } from "$lib/components/streak/day.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { acknowledgedStreak, type StreakRecord, streakTransitions, viewStreak } from "$lib/streak";
-import { flameAppearance } from "$lib/streak-presentation";
+import { flameAppearance } from "$lib/streak/presentation";
+import { acknowledgedStreak, type StreakRecord, streakTransitions, viewStreak } from "$lib/streak/rules";
 import StreakBoard from "./StreakBoard.svelte";
 import StreakDigits from "./StreakDigits.svelte";
 import StreakFlame from "./StreakFlame.svelte";

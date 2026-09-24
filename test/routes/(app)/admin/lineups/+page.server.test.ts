@@ -15,14 +15,14 @@ vi.mock("$lib/server/db", () => {
 	};
 	return { db: { select: vi.fn(chain) } };
 });
-vi.mock("$lib/server/lineups", async (importOriginal) => ({
-	LineupError: (await importOriginal<typeof import("$lib/server/lineups")>()).LineupError,
+vi.mock("$lib/server/task/lineups", async (importOriginal) => ({
+	LineupError: (await importOriginal<typeof import("$lib/server/task/lineups")>()).LineupError,
 	findLineup: mocks.findLineup,
 	listLineupTasks: mocks.listLineupTasks,
 	addTaskToLineup: mocks.addTaskToLineup,
 }));
 
-import { LineupError } from "$lib/server/lineups";
+import { LineupError } from "$lib/server/task/lineups";
 import { actions, load } from "$routes/(app)/admin/lineups/+page.server";
 
 const admin = { id: "admin-1", role: "admin" };

@@ -4,19 +4,19 @@ import { dev } from "$app/environment";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { generateTranslationEvaluation } from "$lib/server/translation-evaluation/generation";
-import { GENERATION_2_TEMPERATURE, generateTranslationPractice } from "$lib/server/translation-evaluation/practice-generation";
+import { generateTranslationEvaluation } from "$lib/server/translation/evaluation/generation";
+import { GENERATION_2_TEMPERATURE, generateTranslationPractice } from "$lib/server/translation/evaluation/practice-generation";
 import {
 	buildCorrectionVerifierMessages,
 	buildGeneration1Messages,
 	buildGeneration2Messages,
 	buildSecondDraftVerifierMessages,
 	type Generation1Input,
-} from "$lib/server/translation-evaluation/prompt";
-import type { ValidatedGeneration1Card } from "$lib/server/translation-evaluation/validation";
-import { verifyCorrection, verifySecondDraft } from "$lib/server/translation-evaluation/verifier";
-import { LIVE_DEMO_TEMPERATURE, TRANSLATION_EVALUATION_LIVE_DEMO_TASK } from "$lib/translation-evaluation/live-demo-fixture";
+} from "$lib/server/translation/evaluation/prompt";
+import type { ValidatedGeneration1Card } from "$lib/server/translation/evaluation/validation";
+import { verifyCorrection, verifySecondDraft } from "$lib/server/translation/evaluation/verifier";
 import type { Actions, PageServerLoad } from "./$types";
+import { LIVE_DEMO_TEMPERATURE, TRANSLATION_EVALUATION_LIVE_DEMO_TASK } from "./fixture";
 
 const LearnerParagraphsSchema = z
 	.array(z.string().trim().min(1).max(PRACTICE_UI_TEXT_MAX_LENGTH))

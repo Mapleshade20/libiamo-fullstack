@@ -2,10 +2,10 @@ import type { Handle } from "@sveltejs/kit";
 import { sequence } from "@sveltejs/kit/hooks";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
-import { applyDocumentLanguageToHtml, resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/document-language";
-import { ensureAgentReplyWorker } from "$lib/server/agent-replies/boot";
+import { applyDocumentLanguageToHtml, resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/app/document-language";
 import { auth } from "$lib/server/auth/auth";
 import { sql } from "$lib/server/db";
+import { ensureAgentReplyWorker } from "$lib/server/practice/agent-replies/boot";
 
 ensureAgentReplyWorker();
 

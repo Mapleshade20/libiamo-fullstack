@@ -10,9 +10,9 @@ import type {
 } from "openai/resources/chat/completions";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
+import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "./account/trial-quota";
 import { db } from "./db";
 import { userApiKey } from "./db/schema";
-import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "./trial-quota";
 
 // ── Public types ──────────────────────────────────────────────────────
 

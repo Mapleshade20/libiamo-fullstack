@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ limit: vi.fn(), mark: vi.fn(), select: vi.fn() }));
 vi.mock("$lib/server/db", () => ({ db: { select: mocks.select } }));
-vi.mock("$lib/server/unread", () => ({ getUnreadInbox: vi.fn(), markAssistantMessagesSeen: mocks.mark }));
+vi.mock("$lib/server/practice/unread", () => ({ getUnreadInbox: vi.fn(), markAssistantMessagesSeen: mocks.mark }));
 
 import { POST } from "../../../../src/routes/api/unread/+server";
 

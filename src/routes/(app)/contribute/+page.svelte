@@ -3,13 +3,13 @@ import { base } from "$app/paths";
 import { page } from "$app/state";
 import { parseTaskJson } from "$lib/admin/task-actions";
 import { focusAndHighlightField } from "$lib/client/form-attention";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
-import TaskForm, { type TaskFormData } from "$lib/components/TaskForm.svelte";
+import TaskForm, { type TaskFormData } from "$lib/components/admin/TaskForm.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
-import { getDisplayClock } from "$lib/display-clock";
 import { TASK_JSON_VERSION } from "$lib/schemas";
+import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
 

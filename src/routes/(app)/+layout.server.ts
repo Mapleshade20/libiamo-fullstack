@@ -1,11 +1,11 @@
 import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
-import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
+import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
+import { gravatarAvatarUrl } from "$lib/server/account/gravatar";
+import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/account/trial-quota";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { gravatarAvatarUrl } from "$lib/server/gravatar";
 import { devStreakDayOffset, getStreakRecord, isReviewQueueEmpty } from "$lib/server/streak";
-import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = async (event) => {

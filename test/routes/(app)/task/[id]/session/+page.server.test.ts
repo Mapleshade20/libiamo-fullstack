@@ -38,12 +38,13 @@ const { mockDb, mockSessionService, mockNoteService, mockTaskContext } = vi.hois
 });
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/session", () => mockSessionService);
-vi.mock("$lib/server/feedback", () => ({
+vi.mock("$lib/server/practice/session", () => mockSessionService);
+vi.mock("$lib/server/practice/hints", () => ({ generateHint: mockSessionService.generateHint }));
+vi.mock("$lib/server/practice/feedback", () => ({
 	followUpOnFeedback: mockSessionService.followUpOnFeedback,
 }));
-vi.mock("$lib/server/note", () => mockNoteService);
-vi.mock("$lib/server/task-context", () => ({
+vi.mock("$lib/server/review/notes", () => mockNoteService);
+vi.mock("$lib/server/task/context", () => ({
 	...mockTaskContext,
 	parseTaskId: (value: string) => (/^[1-9]\d*$/.test(value) ? Number(value) : null),
 }));

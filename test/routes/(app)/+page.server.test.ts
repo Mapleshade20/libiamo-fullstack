@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import { auth } from "$lib/server/auth/auth";
-import { loadQuestHallData } from "$lib/server/quest-hall";
+import { loadQuestHallData } from "$lib/server/quest-hall/hall";
 import { actions, load } from "$routes/(app)/+page.server";
 import { hallData } from "../../fixtures/quest-hall";
 import { runSwitchLanguageActionSuite } from "./action-test-helpers";
 
 vi.mock("$lib/server/auth/auth", () => ({ auth: { api: { updateUser: vi.fn() } } }));
-vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: vi.fn(() => "UTC") }));
-vi.mock("$lib/server/quest-hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
+vi.mock("$lib/time/browser-timezone", async (importOriginal) => ({ ...(await importOriginal()), getBrowserTimezone: vi.fn(() => "UTC") }));
+vi.mock("$lib/server/quest-hall/hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
 
 describe("Quest Hall routing", () => {
 	beforeEach(() => vi.clearAllMocks());

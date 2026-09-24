@@ -2,9 +2,9 @@
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { randomExampleIndex } from "$lib/note";
-import type { StudyQueueKind } from "$lib/review";
-import { advanceTransferQueue, type TransferQueueState, transferQueueNotes } from "$lib/transfer-queue";
+import { randomExampleIndex } from "$lib/review/note";
+import type { StudyQueueKind } from "$lib/review/queue";
+import { advanceTransferQueue, type TransferQueueState, transferQueueNotes } from "$lib/review/transfer-queue";
 import TransferStage from "./TransferStage.svelte";
 
 /**

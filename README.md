@@ -75,7 +75,7 @@ Task, lineup, and attempt
 
 Validation and UI
 - Opening state shapes are validated in TypeScript with per-UI Zod schemas. AO3 opening states support work metadata plus nested `previousComments` so learners can reply at any thread depth.
-- Practice UI components live under `src/lib/components/practice-ui/`; Reddit, Apple Mail, Discord, iMessage, and AO3 are implemented for active sessions.
+- Practice UI components live under `src/lib/components/practice/ui/`; Reddit, Apple Mail, Discord, iMessage, and AO3 are implemented for active sessions.
 - materialsMd is authored in Markdown and rendered at display time (use a safe renderer / sanitizer in production).
 
 ## Features

@@ -6,8 +6,8 @@ import { lineupEntrySchema } from "$lib/schemas";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { task } from "$lib/server/db/schema";
-import { addTaskToLineup, findLineup, LineupError, listLineupTasks } from "$lib/server/lineups";
-import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/scheduling/dates";
+import { dayjs, getCurrentWeekString, getMondayFromWeekString, toDateString } from "$lib/server/task/lineup-dates";
+import { addTaskToLineup, findLineup, LineupError, listLineupTasks } from "$lib/server/task/lineups";
 import type { Actions, PageServerLoad } from "./$types";
 
 const ISO_WEEK = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;

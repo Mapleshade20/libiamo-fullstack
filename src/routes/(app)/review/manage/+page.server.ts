@@ -1,12 +1,12 @@
 import { fail } from "@sveltejs/kit";
 import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-import { NOTE_QUEUE_FILTERS, NOTE_SOURCE_FILTERS, type NoteQueueFilter, type NoteSourceFilter } from "$lib/note-management";
+import { NOTE_QUEUE_FILTERS, NOTE_SOURCE_FILTERS, type NoteQueueFilter, type NoteSourceFilter } from "$lib/review/manage";
 import { managedNoteIdSchema, managedNoteSetDueSchema, managedNoteUpdateSchema } from "$lib/schemas";
 import { requireUser } from "$lib/server/auth/authz";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
-import { deleteNote, updateNote } from "$lib/server/note";
-import { browseManagedNotes, MANAGED_NOTES_PAGE_SIZE, toManagedNote } from "$lib/server/note-management";
-import { resetNoteScheduling, setNoteDueInDays } from "$lib/server/review";
+import { browseManagedNotes, MANAGED_NOTES_PAGE_SIZE, toManagedNote } from "$lib/server/review/manage";
+import { deleteNote, updateNote } from "$lib/server/review/notes";
+import { resetNoteScheduling, setNoteDueInDays } from "$lib/server/review/scheduler";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { Actions, PageServerLoad } from "./$types";
 
 function supportedValue<T extends readonly string[]>(values: T, value: string | null, fallback: T[number]): T[number] {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall";
 import {
 	adaptHallDataToQuestMenu,
 	buildQuestMenuSpreads,
@@ -18,7 +17,8 @@ import {
 	questState,
 	translationState,
 } from "$lib/quest-hall/menu";
-import type { HallData } from "$lib/server/quest-hall";
+import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall/quest";
+import type { HallData } from "$lib/server/quest-hall/hall";
 
 function quest(id: number, sessionStatus: HallQuestSessionStatus = null, overrides: Partial<HallQuest> = {}): HallQuest {
 	return {

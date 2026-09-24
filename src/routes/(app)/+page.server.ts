@@ -3,8 +3,8 @@ import { base } from "$app/paths";
 import { adaptHallDataToQuestMenu, getQuestMenuItemId } from "$lib/quest-hall/menu";
 import { parseHallLocation, QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import { requireUser } from "$lib/server/auth/authz";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
-import { loadQuestHallData } from "$lib/server/quest-hall";
+import { loadQuestHallData } from "$lib/server/quest-hall/hall";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { Actions, PageServerLoad } from "./$types";
 import { switchActiveLanguage } from "./user-language-action";
 

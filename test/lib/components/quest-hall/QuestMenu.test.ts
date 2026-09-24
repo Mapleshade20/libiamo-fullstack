@@ -1,9 +1,9 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
-import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
-import QuestMenuBook from "$lib/components/quest-hall/quest-menu/QuestMenuBook.svelte";
-import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
-import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
+import QuestMenu from "$lib/components/quest-hall/QuestMenu.svelte";
+import QuestMenuBook from "$lib/components/quest-hall/QuestMenuBook.svelte";
+import QuestMenuInbox from "$lib/components/quest-hall/QuestMenuInbox.svelte";
+import QuestMenuSheet from "$lib/components/quest-hall/QuestMenuSheet.svelte";
 import { t } from "$lib/i18n";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";

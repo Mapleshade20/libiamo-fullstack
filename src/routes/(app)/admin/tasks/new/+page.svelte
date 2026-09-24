@@ -2,8 +2,8 @@
 import { enhance } from "$app/forms";
 import { parseTaskJson } from "$lib/admin/task-actions";
 import { focusAndHighlightField } from "$lib/client/form-attention";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
-import TaskForm, { type TaskFormData } from "$lib/components/TaskForm.svelte";
+import TaskForm, { type TaskFormData } from "$lib/components/admin/TaskForm.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
 import { TASK_JSON_VERSION } from "$lib/schemas";

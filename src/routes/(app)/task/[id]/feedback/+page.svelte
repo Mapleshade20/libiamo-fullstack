@@ -6,6 +6,11 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidate, invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/app/load-dependencies";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
+import SelectionActionBubble from "$lib/components/practice/feedback/SelectionActionBubble.svelte";
+import TutorQuestionPanel from "$lib/components/practice/feedback/TutorQuestionPanel.svelte";
 import {
 	clearPracticeTransferSnapshot,
 	emptyPracticeTransferSnapshot,
@@ -13,21 +18,16 @@ import {
 	parsePracticeTransferSnapshot,
 	practiceTransferSnapshotKey,
 	savePracticeTransferSnapshot,
-} from "$lib/client/practice-transfer-snapshot";
-import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
-import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
-import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
-import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
+} from "$lib/components/practice/feedback/transfer-snapshot";
+import type { LearningSelection, SelectionAppendRequest } from "$lib/components/practice/feedback/types";
 import TransferPass from "$lib/components/review/TransferPass.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
-import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import { t } from "$lib/i18n";
-import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
-import { parseMarkedText } from "$lib/marked-text";
+import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/practice/feedback";
+import { parseMarkedText } from "$lib/text/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";

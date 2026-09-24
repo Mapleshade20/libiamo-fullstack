@@ -2,8 +2,8 @@
 import { afterNavigate } from "$app/navigation";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import Accordion from "$lib/components/Accordion.svelte";
-import { activeNavIndex } from "$lib/components/nav/nav-routes";
+import Accordion from "$lib/components/common/Accordion.svelte";
+import { activeNavIndex } from "$lib/components/shell/nav/nav-routes";
 
 let { children, data } = $props();
 let toolsOpen = $state(false);

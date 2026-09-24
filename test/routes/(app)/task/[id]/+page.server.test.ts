@@ -25,17 +25,17 @@ vi.mock("$lib/server/llm", () => ({
 		typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : 500,
 	llmErrorMessage: (error: unknown) => (error instanceof Error && error.message.trim() ? error.message : "The AI request failed. Please try again."),
 }));
-vi.mock("$lib/server/task-context", () => ({
+vi.mock("$lib/server/task/context", () => ({
 	parseTaskId: (value: string) => (/^[1-9]\d*$/.test(value) ? Number(value) : null),
 	getTaskIdentity: mocks.getTaskIdentity,
 	resolveRequestLineup: mocks.resolveRequestLineup,
 }));
-vi.mock("$lib/server/task-preparation", () => ({ getTaskPreparationData: mocks.getTaskPreparationData }));
-vi.mock("$lib/server/translation-preparation", () => ({
+vi.mock("$lib/server/practice/preparation", () => ({ getTaskPreparationData: mocks.getTaskPreparationData }));
+vi.mock("$lib/server/translation/preparation", () => ({
 	getTranslationPreparationData: mocks.getTranslationPreparationData,
 	validPromptLanguage: (value: unknown) => typeof value === "string" && value.length === 2,
 }));
-vi.mock("$lib/server/translation-workflow", () => ({
+vi.mock("$lib/server/translation/workflow", () => ({
 	TranslationWorkflowError: class TranslationWorkflowError extends Error {
 		constructor(
 			public status: number,
@@ -48,12 +48,12 @@ vi.mock("$lib/server/translation-workflow", () => ({
 	findTranslationAttempt: mocks.findTranslationAttempt,
 	getTranslationTask: mocks.getTranslationTask,
 }));
-vi.mock("$lib/server/translation", () => ({
+vi.mock("$lib/server/translation/sources", () => ({
 	getOrCreateTranslationSourceSet: mocks.getOrCreateTranslationSourceSet,
 	getOrCreateTranslationAttempt: mocks.getOrCreateTranslationAttempt,
 }));
-vi.mock("$lib/server/quest-hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
-vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: vi.fn(() => "UTC") }));
+vi.mock("$lib/server/quest-hall/hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
+vi.mock("$lib/time/browser-timezone", async (importOriginal) => ({ ...(await importOriginal()), getBrowserTimezone: vi.fn(() => "UTC") }));
 
 import { actions, load } from "$routes/(app)/task/[id]/+page.server";
 
@@ -440,6 +440,3 @@ describe("Task detail +page.server", () => {
 		});
 	});
 });
-
-vi.mock("$lib/server/quest-hall", () => ({ loadQuestHallData: vi.fn(async () => hallData()) }));
-vi.mock("$lib/server/browser-timezone", () => ({ getBrowserTimezone: vi.fn(() => "UTC") }));

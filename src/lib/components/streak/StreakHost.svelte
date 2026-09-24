@@ -4,13 +4,13 @@ import { dev } from "$app/environment";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import { createStreakDay } from "$lib/client/streak-day.svelte";
-import { getStreakPresentation } from "$lib/client/streak-presentation.svelte";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
+import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
+import { createStreakDay } from "$lib/components/streak/day.svelte";
+import { getStreakPresentation } from "$lib/components/streak/presentation-state.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import type { LanguageCode } from "$lib/constants";
-import { STREAK_DEPENDENCY } from "$lib/load-dependencies";
-import { type StreakRecord, viewStreak } from "$lib/streak";
-import { advancePresentationReceipt, type CelebrationKind, type PresentationReceipt, parsePresentationReceipt } from "$lib/streak-presentation";
+import { advancePresentationReceipt, type CelebrationKind, type PresentationReceipt, parsePresentationReceipt } from "$lib/streak/presentation";
+import { type StreakRecord, viewStreak } from "$lib/streak/rules";
 import StreakCelebration from "./StreakCelebration.svelte";
 
 let {

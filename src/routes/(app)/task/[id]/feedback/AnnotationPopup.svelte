@@ -4,11 +4,11 @@ import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import type { AnnotationSpan } from "$lib/feedback/types";
-import { renderMarkdown } from "$lib/markdown";
+import type { AnnotationSpan } from "$lib/practice/feedback";
+import { renderMarkdown } from "$lib/text/markdown";
 
 let {
 	annotation,

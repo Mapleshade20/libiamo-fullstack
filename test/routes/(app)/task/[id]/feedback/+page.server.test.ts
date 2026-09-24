@@ -8,23 +8,23 @@ const { mockDb } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/transfer", () => ({ listTransferNotes: vi.fn(async () => []), rateTransferNote: vi.fn() }));
-vi.mock("$lib/server/note", () => ({ createNotesFromSelectionBatch: vi.fn() }));
-vi.mock("$lib/server/session", () => ({ getSessionOrFail: vi.fn(async () => ({ id: 42 })) }));
-vi.mock("$lib/server/task-context", () => ({
+vi.mock("$lib/server/review/transfer", () => ({ listTransferNotes: vi.fn(async () => []), rateTransferNote: vi.fn() }));
+vi.mock("$lib/server/review/notes", () => ({ createNotesFromSelectionBatch: vi.fn() }));
+vi.mock("$lib/server/practice/session", () => ({ getSessionOrFail: vi.fn(async () => ({ id: 42 })) }));
+vi.mock("$lib/server/task/context", () => ({
 	parseTaskId: (value: string) => (/^[1-9]\d*$/.test(value) ? Number(value) : null),
 	getTaskIdentity: vi.fn(async (id: number) => ({ id, interactionType: "chat", language: "es" })),
 	resolveRequestLineup: vi.fn(async () => ({ lineupId: 3, pinned: false })),
 	findPracticeSession: vi.fn(async () => ({ id: 42 })),
 }));
-vi.mock("$lib/server/feedback", () => ({
+vi.mock("$lib/server/practice/feedback", () => ({
 	getExistingFeedback: vi.fn(),
 	buildFeedbackConversation: vi.fn(() => ({ chains: [], allMessages: [] })),
 }));
 
-import { getExistingFeedback } from "$lib/server/feedback";
-import { createNotesFromSelectionBatch } from "$lib/server/note";
-import { rateTransferNote } from "$lib/server/transfer";
+import { getExistingFeedback } from "$lib/server/practice/feedback";
+import { createNotesFromSelectionBatch } from "$lib/server/review/notes";
+import { rateTransferNote } from "$lib/server/review/transfer";
 import { actions, load } from "$routes/(app)/task/[id]/feedback/+page.server";
 
 const mockGetExistingFeedback = getExistingFeedback as ReturnType<typeof vi.fn>;

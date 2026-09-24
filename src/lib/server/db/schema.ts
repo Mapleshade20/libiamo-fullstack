@@ -17,9 +17,9 @@ import {
 } from "drizzle-orm/pg-core";
 import type { PracticeEvaluationPhase, TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
-import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
-import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak-history";
-import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
+import type { Generation1Evaluation } from "$lib/server/translation/evaluation/schema";
+import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak/history";
+import type { TranslationCardWarning } from "$lib/translation/evaluation";
 import { user } from "./auth.schema";
 import {
 	agentDeliveryStatusEnum,

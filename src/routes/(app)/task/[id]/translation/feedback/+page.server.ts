@@ -1,8 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
-import type { EvaluationData } from "$lib/components/translate-evaluation/types";
+import type { EvaluationData } from "$lib/components/translation/evaluation/types";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
 import {
 	completeTranslationTransfer,
@@ -11,8 +10,8 @@ import {
 	getTranslationPracticeNotes,
 	rateTranslationTransferNote,
 	verifyTranslationSecondDraft,
-} from "$lib/server/translation-practice";
-import { requireTranslationAttempt } from "$lib/server/translation-preparation";
+} from "$lib/server/translation/practice";
+import { requireTranslationAttempt } from "$lib/server/translation/preparation";
 import {
 	type findTranslationAttempt,
 	finishTranslationCorrections,
@@ -21,7 +20,8 @@ import {
 	retryTranslationEvaluation,
 	TranslationWorkflowError,
 	verifyTranslationCorrection,
-} from "$lib/server/translation-workflow";
+} from "$lib/server/translation/workflow";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { Actions, PageServerLoad } from "./$types";
 
 const CorrectionSchema = z.object({

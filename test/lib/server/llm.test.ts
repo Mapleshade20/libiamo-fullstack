@@ -85,6 +85,51 @@ beforeEach(() => {
 });
 
 describe("chatText", () => {
+	it("sends caller-provided multi-turn history unchanged", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("I am doing well."));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatText } = await import("$lib/server/llm");
+		const result = await chatText({
+			messages: [
+				{ role: "system", content: "You are helpful." },
+				{ role: "user", content: "Hi" },
+				{ role: "assistant", content: "Hello!" },
+				{ role: "user", content: "How are you?" },
+			],
+		});
+
+		expect(result.content).toBe("I am doing well.");
+		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		expect(payload.messages).toEqual([
+			{ role: "system", content: "You are helpful." },
+			{ role: "user", content: "Hi" },
+			{ role: "assistant", content: "Hello!" },
+			{ role: "user", content: "How are you?" },
+		]);
+	});
+
+	it("preserves adjacent user turns", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatText } = await import("$lib/server/llm");
+		await chatText({
+			messages: [
+				{ role: "system", content: "New persona" },
+				{ role: "user", content: "Hi" },
+				{ role: "user", content: "How are you?" },
+			],
+		});
+
+		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		expect(payload.messages).toEqual([
+			{ role: "system", content: "New persona" },
+			{ role: "user", content: "Hi" },
+			{ role: "user", content: "How are you?" },
+		]);
+	});
+
 	it("sends validated messages exactly and returns trimmed content", async () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("  hello  "));
 		vi.stubGlobal("fetch", fetchMock);
@@ -210,7 +255,7 @@ describe("chatText", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatText } = await import("$lib/server/llm");
-		const { TrialQuotaExhaustedError } = await import("$lib/server/trial-quota");
+		const { TrialQuotaExhaustedError } = await import("$lib/server/account/trial-quota");
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toBeInstanceOf(TrialQuotaExhaustedError);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});

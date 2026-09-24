@@ -4,7 +4,7 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Sparkles from "@lucide/svelte/icons/sparkles";
 import { Button } from "$lib/components/ui/button";
 import type { ChatMessage } from "$lib/server/llm";
-import type { Generation2Result } from "$lib/server/translation-evaluation/schema";
+import type { Generation2Result } from "$lib/server/translation/evaluation/schema";
 import Generation1Inspector from "./Generation1Inspector.svelte";
 import type { GenerationMetadata } from "./session";
 

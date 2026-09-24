@@ -9,7 +9,7 @@ import { showValidationIssues } from "$lib/client/form-attention";
 import type { LanguageCode } from "$lib/constants";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { ManagedNote } from "$lib/note-management";
+import type { ManagedNote } from "$lib/review/manage";
 import { managedNoteSetDueSchema, managedNoteUpdateSchema } from "$lib/schemas/review";
 
 let {

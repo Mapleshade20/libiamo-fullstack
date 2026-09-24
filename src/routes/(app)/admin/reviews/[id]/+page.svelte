@@ -7,8 +7,8 @@ import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
 import { LANGUAGE_LABELS, type LanguageCode, type UiVariant } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
-import { renderMarkdown } from "$lib/markdown";
+import { renderMarkdown } from "$lib/text/markdown";
+import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
 

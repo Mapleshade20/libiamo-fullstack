@@ -2,9 +2,9 @@ import { fail } from "@sveltejs/kit";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { listCompletedActivities } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
-import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { deleteNote, getNote } from "$lib/server/note";
+import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/practice/feedback";
+import { deleteNote, getNote } from "$lib/server/review/notes";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {

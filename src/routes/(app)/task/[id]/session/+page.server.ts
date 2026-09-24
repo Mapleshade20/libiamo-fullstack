@@ -1,8 +1,8 @@
 import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
-import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
-import { parseDraftFromMessage } from "$lib/components/practice-ui/mail/mailUtils";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
+import { parseDraftFromMessage } from "$lib/components/practice/ui/mail/mail-content";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -10,22 +10,22 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
-import { PRACTICE_SESSION_DEPENDENCY } from "$lib/load-dependencies";
+import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { buildPracticeUiSendOptions } from "$lib/server/practice-ui/send-options";
+import { generateHint } from "$lib/server/practice/hints";
+import { buildPracticeUiSendOptions } from "$lib/server/practice/send-options";
 import {
 	completeSession,
-	generateHint,
 	getSessionOrFail,
 	orderSessionMessagesChronologically,
 	type SubmitMessageOptions,
 	startSession,
 	submitMessage,
-} from "$lib/server/session";
-import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task-context";
+} from "$lib/server/practice/session";
+import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task/context";
 import type { Actions, PageServerLoad } from "./$types";
 
 const emojiConverter = new EmojiConverter();

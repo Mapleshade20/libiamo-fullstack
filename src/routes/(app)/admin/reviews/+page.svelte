@@ -3,7 +3,7 @@ import { base } from "$app/paths";
 import { Badge } from "$lib/components/ui/badge";
 import * as Table from "$lib/components/ui/table";
 import { type LanguageCode } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
+import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
 

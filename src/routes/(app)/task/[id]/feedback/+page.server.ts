@@ -1,22 +1,22 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { and, eq } from "drizzle-orm";
 import { base } from "$app/paths";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/app/load-dependencies";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, resolveFeedbackLanguage, USER_LONG_TEXT_MAX_LENGTH, USER_TEXT_MAX_LENGTH } from "$lib/constants";
-import type { FeedbackResult } from "$lib/feedback/types";
-import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
-import { startOfNextLocalDay } from "$lib/local-day";
+import type { FeedbackResult } from "$lib/practice/feedback";
 import { requireUser } from "$lib/server/auth/authz";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
-import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/feedback";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
-import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/note";
-import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice-evaluation";
-import { getSessionOrFail } from "$lib/server/session";
-import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task-context";
-import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/transfer";
-import { lineupQuery } from "$lib/task-attempts";
+import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice/evaluation";
+import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/practice/feedback";
+import { getSessionOrFail } from "$lib/server/practice/session";
+import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/review/notes";
+import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/review/transfer";
+import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task/context";
+import { lineupQuery } from "$lib/task/attempts";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
+import { startOfNextLocalDay } from "$lib/time/local-day";
 import type { Actions, PageServerLoad } from "./$types";
 
 /** The card pass drills the notes that existed when it began; a note added mid-pass would be skipped. */

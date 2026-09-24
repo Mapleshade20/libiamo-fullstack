@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "$lib/server/db";
 import { practiceSession, sessionMessage } from "$lib/server/db/schema";
-import { getUnreadInbox, markAssistantMessagesSeen } from "$lib/server/unread";
+import { getUnreadInbox, markAssistantMessagesSeen } from "$lib/server/practice/unread";
 import type { RequestHandler } from "./$types";
 
 const receiptSchema = z.object({ sessionId: z.number().int().positive().safe(), messageId: z.number().int().positive().safe() });

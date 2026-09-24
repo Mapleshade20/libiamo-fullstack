@@ -14,7 +14,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
 import { PgDialect } from "drizzle-orm/pg-core";
 import { getStreakCalendar, recordQuestCompletion, recordReviewObservation } from "$lib/server/streak";
-import { emptyStreakRecord } from "$lib/streak";
+import { emptyStreakRecord } from "$lib/streak/rules";
 
 const USER_ID = "user_1";
 // 12:00 UTC is 08:00 in New York, so the local day is the 18th on both sides of the clock.

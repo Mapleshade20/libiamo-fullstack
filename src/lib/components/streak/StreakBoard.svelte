@@ -2,13 +2,13 @@
 import { untrack } from "svelte";
 import { dev } from "$app/environment";
 import { base } from "$app/paths";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
-import ModalDialog from "$lib/components/ModalDialog.svelte";
+import ModalDialog from "$lib/components/common/ModalDialog.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { StreakView } from "$lib/streak";
-import { calendarDays, monthRange, type StreakCalendarData } from "$lib/streak-history";
-import { flameAppearance } from "$lib/streak-presentation";
+import { calendarDays, monthRange, type StreakCalendarData } from "$lib/streak/history";
+import { flameAppearance } from "$lib/streak/presentation";
+import type { StreakView } from "$lib/streak/rules";
 import StreakCalendar from "./StreakCalendar.svelte";
 import StreakDigits from "./StreakDigits.svelte";
 import StreakFlame from "./StreakFlame.svelte";

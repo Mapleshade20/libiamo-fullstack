@@ -1,7 +1,7 @@
-import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import type { SelfAssignedLevel, TranslationWorkflowPhase } from "$lib/constants";
-import { type HallQuest, type HallQuestSessionStatus, isHallQuestConversationEnded, isHallQuestFinished } from "$lib/quest-hall";
-import type { HallData, HallTranslationTask } from "$lib/server/quest-hall";
+import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
+import { type HallQuest, type HallQuestSessionStatus, isHallQuestConversationEnded, isHallQuestFinished } from "$lib/quest-hall/quest";
+import type { HallData, HallTranslationTask } from "$lib/server/quest-hall/hall";
 
 export const QUEST_MENU_SECTIONS = ["daily", "weekly", "translation"] as const;
 export type QuestMenuSection = (typeof QUEST_MENU_SECTIONS)[number];

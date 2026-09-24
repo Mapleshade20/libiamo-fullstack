@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { HallQuest } from "$lib/quest-hall";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import { DEFAULT_HALL_LOCATION, hallLocationUrl, normalizeHallLocation, parseHallLocation, reduceHallLocation } from "$lib/quest-hall/navigation";
-import type { HallData } from "$lib/server/quest-hall";
+import type { HallQuest } from "$lib/quest-hall/quest";
+import type { HallData } from "$lib/server/quest-hall/hall";
 
 function quest(id: number): HallQuest {
 	return {

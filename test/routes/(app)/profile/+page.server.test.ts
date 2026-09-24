@@ -91,7 +91,7 @@ vi.mock("$lib/server/llm", () => ({
 	verifyApiKey: mockVerifyApiKey,
 }));
 
-vi.mock("$lib/server/trial-quota", () => ({
+vi.mock("$lib/server/account/trial-quota", () => ({
 	getTrialQuotaBalance: mockGetTrialQuotaBalance,
 }));
 

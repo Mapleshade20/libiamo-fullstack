@@ -1,6 +1,6 @@
 <script lang="ts">
 import Pencil from "@lucide/svelte/icons/pencil";
-import type { StudyQueueCounts } from "$lib/review";
+import type { StudyQueueCounts } from "$lib/review/queue";
 import type { StudyCardAction, StudyCardActionTone } from "./study-card";
 
 interface Props {

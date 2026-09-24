@@ -4,17 +4,17 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
+import { TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
 import { type AccountActionResult, accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS, socialAuthFailure } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
-import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
+import { getTrialQuotaBalance } from "$lib/server/account/trial-quota";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
 import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
-import { getTrialQuotaBalance } from "$lib/server/trial-quota";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
