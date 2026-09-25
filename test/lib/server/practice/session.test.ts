@@ -22,7 +22,7 @@ const { mockDb, mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/llm", () => mockClient);
+vi.mock("$lib/server/llm/client", () => mockClient);
 
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 import { completeSession, getSessionOrFail, startSession, submitMessage } from "$lib/server/practice/session";

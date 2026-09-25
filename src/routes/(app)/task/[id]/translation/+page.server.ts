@@ -1,7 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
 import { PRACTICE_UI_TEXT_MAX_LENGTH, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { requireTranslationAttempt } from "$lib/server/translation/preparation";
 import { getTranslationAnswers, submitTranslationAttempt, TranslationWorkflowError } from "$lib/server/translation/workflow";
 import type { Actions, PageServerLoad } from "./$types";

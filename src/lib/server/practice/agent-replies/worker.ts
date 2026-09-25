@@ -351,6 +351,7 @@ export class AgentReplyWorker {
 				learnerName: learner?.name || "Learner",
 				history,
 				userId: session.userId,
+				subjects: { taskId: session.taskId, sessionId: session.id },
 				event: getBatchGenerationEvent(batch.kind, session.followUpCount),
 			});
 			// Anchor every post-generation timestamp at completion time. The scan's `now`

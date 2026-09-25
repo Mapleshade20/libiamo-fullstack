@@ -3,7 +3,7 @@ import { z } from "zod";
 import { dev } from "$app/environment";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { generateTranslationEvaluation } from "$lib/server/translation/evaluation/generation";
 import { GENERATION_2_TEMPERATURE, generateTranslationPractice } from "$lib/server/translation/evaluation/practice-generation";
 import {

@@ -2,7 +2,7 @@ import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { type FeedbackLanguageMode, type LanguageCode, resolveFeedbackLanguage } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { type PersistedTranslationEvaluation, task, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
-import type { ChatMessage } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
 import { creditQuestCompletion } from "$lib/server/streak";
 import { generateTranslationEvaluation } from "$lib/server/translation/evaluation/generation";
 import { buildGeneration1Messages, type Generation1Input } from "$lib/server/translation/evaluation/prompt";
@@ -178,7 +178,11 @@ async function persistGeneratedEvaluation(input: {
 
 async function runGeneration1(record: TranslationAttemptRecord, answers: TranslationAnswerInput[], feedbackLanguage: string) {
 	const input = generationInput(record, answers, feedbackLanguage);
-	const response = await generateTranslationEvaluation({ ...input, userId: record.userId });
+	const response = await generateTranslationEvaluation({
+		...input,
+		userId: record.userId,
+		subjects: { taskId: record.taskId, translationAttemptId: record.id },
+	});
 	return { input, response };
 }
 
@@ -291,6 +295,7 @@ export async function verifyTranslationCorrection(input: {
 		targetLanguage: input.record.targetLanguage,
 		feedbackLanguage: input.record.feedbackLanguage,
 		userId: input.record.userId,
+		subjects: { taskId: input.record.taskId, translationAttemptId: input.record.id },
 	});
 	return response.value;
 }

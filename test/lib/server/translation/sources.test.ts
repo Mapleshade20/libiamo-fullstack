@@ -56,7 +56,7 @@ vi.mock("drizzle-orm", () => ({
 	inArray: vi.fn(),
 	isNull: vi.fn((column) => ({ column, isNull: true })),
 }));
-vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
+vi.mock("$lib/server/llm/client", () => ({ chatJson: mockChatJson }));
 
 import {
 	chooseInitialCandidate,

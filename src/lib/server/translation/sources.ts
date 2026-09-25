@@ -4,7 +4,9 @@ import { z } from "zod";
 import { getLanguageEnglishName, TRANSLATION_CANDIDATE_COUNT } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
-import { type ChatMessage, chatJson } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
+import { defineLlmRecipe } from "$lib/server/llm/recipe";
+import { runLlmRecipe } from "$lib/server/llm/run";
 
 export const TRANSLATION_VOTE_THRESHOLD = 30;
 
@@ -19,6 +21,8 @@ const VariantsSchema = z.object({
 
 export type GenerateTranslationVariantsInput = {
 	userId: string;
+	/** The task the candidates are for (trace subject only). */
+	taskId?: number;
 	paragraphs: string[];
 	sourceLanguage: string;
 	targetLanguage: string;
@@ -31,13 +35,15 @@ export type GenerateTranslationVariantsInput = {
  * language. The task's translation context is trusted and stable, so it sits in the system
  * message; the paragraphs are the per-call input.
  */
-export function buildTranslationVariantsMessages(input: {
+type TranslationVariantsPromptInput = {
 	paragraphs: string[];
 	sourceLanguage: string;
 	targetLanguage: string;
 	context: string;
 	candidateCount: number;
-}): ChatMessage[] {
+};
+
+export function buildTranslationVariantsMessages(input: TranslationVariantsPromptInput): ChatMessage[] {
 	const source = getLanguageEnglishName(input.sourceLanguage);
 	const target = getLanguageEnglishName(input.targetLanguage);
 	const count = input.candidateCount;
@@ -66,8 +72,26 @@ export function validateTranslationCandidates(candidates: string[][], paragraphC
 	}
 }
 
+export const translationCandidatesRecipe = defineLlmRecipe({
+	id: "translation.candidates",
+	version: 1,
+	title: "Translation source candidates",
+	reasoningEffort: "low",
+	output: { kind: "json", schema: VariantsSchema },
+	build: (input: TranslationVariantsPromptInput) => buildTranslationVariantsMessages(input),
+	options: { temperature: 0.8 },
+	finalize: (result, input) => {
+		const ordered = [...result.paragraphs].sort((a, b) => a.paragraphIndex - b.paragraphIndex);
+		if (ordered.some((paragraph, index) => paragraph.paragraphIndex !== index)) throw new Error("The AI response used invalid paragraph indices.");
+		const candidates = ordered.map((paragraph) => paragraph.candidates.map((candidate) => candidate.trim()));
+		validateTranslationCandidates(candidates, input.paragraphs.length, input.candidateCount);
+		return candidates;
+	},
+});
+
 export async function generateTranslationVariants({
 	userId,
+	taskId,
 	paragraphs,
 	sourceLanguage,
 	targetLanguage,
@@ -77,18 +101,12 @@ export async function generateTranslationVariants({
 	if (!Number.isInteger(candidateCount) || candidateCount < 1 || candidateCount > 10) throw new Error("Candidate count must be between 1 and 10.");
 	if (paragraphs.length === 0 || paragraphs.some((paragraph) => !paragraph.trim())) throw new Error("Source paragraphs must be non-empty.");
 	if (!context.trim()) throw new Error("Translation context must be non-empty.");
-	const { value: result } = await chatJson({
-		schema: VariantsSchema,
-		userId,
-		messages: buildTranslationVariantsMessages({ paragraphs, sourceLanguage, targetLanguage, context, candidateCount }),
-		options: { temperature: 0.8, maxTokens: 8192 },
-	});
-
-	const ordered = [...result.paragraphs].sort((a, b) => a.paragraphIndex - b.paragraphIndex);
-	if (ordered.some((paragraph, index) => paragraph.paragraphIndex !== index)) throw new Error("The AI response used invalid paragraph indices.");
-	const candidates = ordered.map((paragraph) => paragraph.candidates.map((candidate) => candidate.trim()));
-	validateTranslationCandidates(candidates, paragraphs.length, candidateCount);
-	return candidates;
+	const { value } = await runLlmRecipe(
+		translationCandidatesRecipe,
+		{ paragraphs, sourceLanguage, targetLanguage, context, candidateCount },
+		{ userId, subjects: taskId === undefined ? undefined : { taskId } },
+	);
+	return value;
 }
 
 export function translationContentFingerprint(input: {
@@ -131,6 +149,7 @@ export async function getOrCreateTranslationSourceSet(input: {
 
 	const candidates = await generateTranslationVariants({
 		userId: input.userId,
+		taskId: input.taskId,
 		paragraphs: input.referenceParagraphs,
 		sourceLanguage: input.sourceLanguage,
 		targetLanguage: input.promptLanguage,

@@ -76,6 +76,9 @@ export const ja: Record<keyof typeof en, string> = {
 	"profile.settings": "設定",
 	"profile.selectNativeLanguage": "母国語を選択",
 	"profile.proficiency": "おすすめ課題レベル",
+	"profile.llmTraceCapture": "Libiamoの機能改善に協力する",
+	"profile.llmTraceCaptureHelp":
+		"練習中のAIへのリクエストと応答をLibiamoチームが確認し、プロンプトやモデルの改善に使えるようにします。記録は30日後に削除されますが、選ばれた例はアカウントと切り離してテスト用に保管されることがあります。オフにすると新しい記録は保存されません。",
 	"profile.proficiencyHelp": "この学習言語での現在のレベルを選んでください。クエストホールのおすすめだけに反映されます。",
 	"profile.proficiency.level1": "レベル1",
 	"profile.proficiency.range1": "A2–B1",

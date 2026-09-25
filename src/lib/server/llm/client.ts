@@ -10,9 +10,10 @@ import type {
 } from "openai/resources/chat/completions";
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
-import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "./account/trial-quota";
-import { db } from "./db";
-import { userApiKey } from "./db/schema";
+import type { ReasoningEffort } from "$lib/constants";
+import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "../account/trial-quota";
+import { db } from "../db";
+import { userApiKey } from "../db/schema";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -56,7 +57,13 @@ export type ChatMessage = {
 export type ChatOptions = {
 	temperature?: number;
 	maxTokens?: number;
+	/** OpenAI-spec `reasoning_effort`; thinking is always on, defaulting to low. */
+	reasoningEffort?: ReasoningEffort;
 };
+
+/** One output budget for every call: reasoning tokens count against it, so small caps starve the answer. */
+export const MAX_OUTPUT_TOKENS = 32_768;
+const DEFAULT_REASONING_EFFORT: ReasoningEffort = "low";
 
 export type ChatResponse = {
 	id?: string;
@@ -66,6 +73,29 @@ export type ChatResponse = {
 	usage?: ChatUsage;
 	raw: unknown;
 	quota?: TrialQuotaStatus;
+	/** Where the request went. Never includes credentials. */
+	route?: LlmRouteInfo;
+};
+
+/** Credentials and model of one OpenAI-compatible endpoint. */
+export type OpenAIConfig = {
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+};
+
+/**
+ * An explicitly chosen endpoint (LLM Lab runs and staff overrides). Explicit routes bypass BYOK
+ * resolution and never debit trial quota.
+ */
+export type LlmProviderRoute = OpenAIConfig & { id: string };
+
+export type LlmRouteInfo = {
+	source: "byok" | "env" | "explicit";
+	/** The explicit provider id, when `source` is `explicit`. */
+	providerId?: string;
+	model: string;
+	host: string;
 };
 
 export type ChatUsage = {
@@ -78,6 +108,8 @@ export type ChatRequest = {
 	messages: ChatMessage[];
 	options?: ChatOptions;
 	userId?: string;
+	/** Send to this endpoint instead of the user's BYOK or the environment provider. */
+	provider?: LlmProviderRoute;
 };
 
 export type JsonChatRequest<T extends z.ZodType> = ChatRequest & {
@@ -204,19 +236,14 @@ export async function verifyApiKey(baseUrl: string, apiKey: string, model: strin
 
 // ── Config resolution ─────────────────────────────────────────────────
 
-type OpenAIConfigSource = "byok" | "env";
-
-type OpenAIConfig = {
-	apiKey: string;
-	baseUrl: string;
-	model: string;
-};
+type OpenAIConfigSource = LlmRouteInfo["source"];
 
 type ResolvedOpenAIConfig = OpenAIConfig & {
 	source: OpenAIConfigSource;
+	providerId?: string;
 };
 
-function getEnvOpenAIConfig(): OpenAIConfig {
+export function getEnvOpenAIConfig(): OpenAIConfig {
 	const apiKey = env.OPENAI_API_KEY?.trim();
 	if (!apiKey) {
 		throw new LlmProviderError("The shared AI service is not configured. Add your own API key in Profile to keep using AI features.", 503);
@@ -235,7 +262,7 @@ function getEnvOpenAIConfig(): OpenAIConfig {
 	return { apiKey, baseUrl: trimTrailingSlash(baseUrlRaw), model };
 }
 
-async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null> {
+export async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null> {
 	const row = await db.query.userApiKey.findFirst({
 		where: eq(userApiKey.userId, userId),
 	});
@@ -249,7 +276,18 @@ async function getUserOpenAIConfig(userId: string): Promise<OpenAIConfig | null>
 	};
 }
 
-async function resolveOpenAIConfig(userId?: string): Promise<ResolvedOpenAIConfig> {
+async function resolveOpenAIConfig(userId?: string, provider?: LlmProviderRoute): Promise<ResolvedOpenAIConfig> {
+	if (provider) {
+		const resolved = {
+			apiKey: provider.apiKey,
+			baseUrl: trimTrailingSlash(provider.baseUrl),
+			model: provider.model,
+			source: "explicit" as const,
+			providerId: provider.id,
+		};
+		debugLog("config", { source: resolved.source, providerId: resolved.providerId, model: resolved.model, baseUrl: resolved.baseUrl });
+		return resolved;
+	}
 	if (userId) {
 		const userConfig = await getUserOpenAIConfig(userId);
 		if (userConfig) {
@@ -443,12 +481,28 @@ type CompletionOptions = ChatOptions & {
 type ChatCompletionResult = {
 	completion: ChatCompletion;
 	quota?: TrialQuotaStatus;
+	route: LlmRouteInfo;
 };
 
-async function callChatCompletion(messages: ChatMessage[], options: CompletionOptions = {}, userId?: string): Promise<ChatCompletionResult> {
+function routeInfo(config: ResolvedOpenAIConfig): LlmRouteInfo {
+	let host = config.baseUrl;
+	try {
+		host = new URL(config.baseUrl).host;
+	} catch {
+		// Keep the configured value; it is only descriptive.
+	}
+	return { source: config.source, ...(config.providerId ? { providerId: config.providerId } : {}), model: config.model, host };
+}
+
+async function callChatCompletion(
+	messages: ChatMessage[],
+	options: CompletionOptions = {},
+	userId?: string,
+	provider?: LlmProviderRoute,
+): Promise<ChatCompletionResult> {
 	validateMessages(messages);
 
-	const config = await resolveOpenAIConfig(userId);
+	const config = await resolveOpenAIConfig(userId, provider);
 	const shouldApplyTrialQuota = Boolean(userId && config.source === "env");
 	if (userId && shouldApplyTrialQuota) {
 		await assertTrialQuotaAvailable(userId);
@@ -457,7 +511,8 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
 		messages: toOpenAIMessages(messages),
-		max_tokens: options.maxTokens ?? 8192,
+		max_tokens: options.maxTokens ?? MAX_OUTPUT_TOKENS,
+		reasoning_effort: options.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
 		...(options.temperature === undefined ? {} : { temperature: options.temperature }),
 		...(options.tools ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto", parallel_tool_calls: false } : {}),
 	};
@@ -484,7 +539,7 @@ async function callChatCompletion(messages: ChatMessage[], options: CompletionOp
 
 	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractOutputTokenUsage(completion)) : undefined;
 
-	return { completion, quota };
+	return { completion, quota, route: routeInfo(config) };
 }
 
 function extractOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {
@@ -561,13 +616,25 @@ function normalizeOpenAIError(error: unknown): Error {
 
 // ── Public facade ─────────────────────────────────────────────────────
 
-export async function chatText({ messages, options = {}, userId }: ChatRequest): Promise<ChatResponse> {
-	const result = await callChatCompletion(messages, options, userId);
+export async function chatText({ messages, options = {}, userId, provider }: ChatRequest): Promise<ChatResponse> {
+	const result = await callChatCompletion(messages, options, userId, provider);
 	const response = completionResponse(result.completion);
 	if (!response.content) {
-		throw new LlmProviderError("The AI provider returned an empty response. Please try again.", 502);
+		// Keep the evidence (finish reason, usage): reasoning models can spend the whole budget before answering.
+		const error = new LlmProviderError("The AI provider returned an empty response. Please try again.", 502);
+		attachStructuredOutputDetails(error, {
+			requestMessages: messages,
+			initialContent: "",
+			initialRaw: response.raw,
+			errors: [`Empty response (finish_reason: ${response.finishReason ?? "unknown"})`],
+			finishReason: response.finishReason,
+			usage: response.usage,
+			id: response.id,
+			model: response.model,
+		});
+		throw error;
 	}
-	return { ...response, quota: result.quota };
+	return { ...response, quota: result.quota, route: result.route };
 }
 
 export async function chatJson<T extends z.ZodType>({
@@ -575,8 +642,9 @@ export async function chatJson<T extends z.ZodType>({
 	messages,
 	options = {},
 	userId,
+	provider,
 }: JsonChatRequest<T>): Promise<JsonChatResponse<z.infer<T>>> {
-	const first = await chatText({ messages, options, userId });
+	const first = await chatText({ messages, options, userId, provider });
 	if (first.finishReason === "length")
 		throw structuredOutputError({
 			requestMessages: messages,
@@ -605,7 +673,7 @@ export async function chatJson<T extends z.ZodType>({
 	const repairMessages = buildRepairMessages(messages, first.content, firstParse.errors);
 	let repaired: ChatResponse;
 	try {
-		repaired = await chatText({ messages: repairMessages, options, userId });
+		repaired = await chatText({ messages: repairMessages, options, userId, provider });
 	} catch (error) {
 		attachStructuredOutputDetails(error, {
 			...failureDetails,

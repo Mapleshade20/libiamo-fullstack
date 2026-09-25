@@ -1,6 +1,6 @@
 import { getLanguageEnglishName } from "$lib/constants";
 import { NOTE_EXAMPLE_COUNT } from "$lib/review/note";
-import type { ChatMessage } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
 import { vocabularyNoteRules } from "$lib/server/review/note-rules";
 import { TRANSLATION_GRADES } from "$lib/translation/evaluation";
 import type { ValidatedGeneration1Card } from "./validation";

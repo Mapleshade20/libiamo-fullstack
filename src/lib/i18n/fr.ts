@@ -77,6 +77,9 @@ export const fr: Record<keyof typeof en, string> = {
 	"profile.settings": "Paramètres",
 	"profile.selectNativeLanguage": "Sélectionnez votre langue maternelle",
 	"profile.proficiency": "Niveau de tâches recommandé",
+	"profile.llmTraceCapture": "Aider à améliorer les fonctions de Libiamo",
+	"profile.llmTraceCaptureHelp":
+		"Autorisez l’équipe Libiamo à examiner les requêtes et réponses d’IA de votre pratique pour améliorer les consignes et les modèles. Les enregistrements sont supprimés après 30 jours, mais l’équipe peut conserver des exemples choisis, détachés de votre compte, pour ses tests. Désactiver l’option arrête les nouveaux enregistrements.",
 	"profile.proficiencyHelp":
 		"Choisissez votre niveau actuel pour cette langue. Ce réglage influence uniquement les recommandations de la Salle des Quêtes.",
 	"profile.proficiency.level1": "Niveau 1",

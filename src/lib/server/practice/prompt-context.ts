@@ -34,6 +34,23 @@ export type TaskFacts = {
 	difficulty?: number | null;
 };
 
+/**
+ * The prompt-relevant facts of a task row. LLM recipe inputs must be JSON-plain, so call sites pass
+ * this instead of a full row (which carries dates and unrelated columns).
+ */
+export function pickTaskFacts(task: TaskFacts): TaskFacts {
+	return {
+		title: task.title,
+		language: task.language,
+		ui: task.ui,
+		shortObjective: task.shortObjective ?? null,
+		description: task.description ?? null,
+		objectives: task.objectives ?? null,
+		materialsMd: task.materialsMd ?? null,
+		difficulty: task.difficulty ?? null,
+	};
+}
+
 type TaskBriefOptions = {
 	/** Include the graded objectives (tutor-side calls). */
 	objectives?: boolean;

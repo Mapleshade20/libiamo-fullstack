@@ -5,7 +5,7 @@ import { QUEST_HALL_DEPENDENCY } from "$lib/quest-hall/navigation";
 import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { getTaskPreparationData } from "$lib/server/practice/preparation";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/practice/translation-help";
 import { getTaskIdentity, parseTaskId, resolveRequestLineup, type TaskIdentity } from "$lib/server/task/context";
@@ -148,6 +148,7 @@ export const actions: Actions = {
 				task.language,
 				user.id,
 				learner ? getSelfAssignedLevel(learner.levelSelfAssign, task.language) : null,
+				{ taskId: identity.id },
 			);
 
 			return { success: true, expressions };
@@ -191,6 +192,7 @@ export const actions: Actions = {
 				task.language,
 				user.id,
 				task,
+				{ taskId: identity.id },
 			);
 
 			return { success: true, feedback, correction };

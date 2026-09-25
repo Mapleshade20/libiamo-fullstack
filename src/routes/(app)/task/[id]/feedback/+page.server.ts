@@ -7,7 +7,7 @@ import type { FeedbackResult } from "$lib/practice/feedback";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice/evaluation";
 import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/practice/feedback";
 import { getSessionOrFail } from "$lib/server/practice/session";

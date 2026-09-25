@@ -33,6 +33,7 @@ export async function generateTranslationPractice(record: TranslationAttemptReco
 		sourceLanguage: record.promptLanguage,
 		targetLanguage: record.targetLanguage,
 		userId: record.userId,
+		subjects: { taskId: record.taskId, translationAttemptId: record.id },
 	});
 	const now = new Date();
 	const won = await db.transaction(async (transaction) => {
@@ -90,6 +91,7 @@ export async function verifyTranslationSecondDraft(input: {
 			targetLanguage: input.record.targetLanguage,
 			feedbackLanguage: input.record.feedbackLanguage,
 			userId: input.record.userId,
+			subjects: { taskId: input.record.taskId, translationAttemptId: input.record.id },
 		})
 	).value;
 }

@@ -10,12 +10,12 @@ const { mockDb } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	chatJson: vi.fn(),
 	chatText: vi.fn(),
 }));
 
-import { chatText } from "$lib/server/llm";
+import { chatText } from "$lib/server/llm/client";
 import {
 	buildFeedbackConversation,
 	followUpOnFeedback,

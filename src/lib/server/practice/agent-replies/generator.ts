@@ -1,7 +1,15 @@
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
-import { type ChatMessage, chatJson, type StructuredOutputErrorDetails } from "$lib/server/llm";
-import { type AgentEvent, type AgentTaskContext, buildAgentMessages, isThreadedUi } from "$lib/server/practice/agent-replies/prompt";
+import type { ChatMessage, StructuredOutputErrorDetails } from "$lib/server/llm/client";
+import { defineLlmRecipe } from "$lib/server/llm/recipe";
+import { type LlmRecipeResponse, type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
+import {
+	AGENT_REPLY_SLOTS,
+	type AgentEvent,
+	type AgentTaskContext,
+	buildAgentMessages,
+	isThreadedUi,
+} from "$lib/server/practice/agent-replies/prompt";
 
 /**
  * Models often drop a key whose value is null, or echo a numeric id as a string. Neither is worth
@@ -114,7 +122,36 @@ export type GenerateAgentResponseInput = {
 	history: AgentHistoryMessage[];
 	event?: AgentEvent;
 	userId?: string;
+	subjects?: LlmSubjects;
 };
+
+export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "userId" | "subjects">;
+
+/**
+ * Reply-target normalization stays with the caller: its failures must be persisted with the
+ * response artifacts, which only the caller holds.
+ */
+export const agentReplyRecipe = defineLlmRecipe({
+	id: "practice.agent-reply",
+	version: 1,
+	title: "Conversation partner reply",
+	reasoningEffort: "low",
+	output: { kind: "json", schema: agentResponseDecisionSchema },
+	slots: AGENT_REPLY_SLOTS,
+	build: (input: AgentReplyRecipeInput, slot) => buildAgentMessages(input, slot),
+});
+
+function agentTaskContext(task: AgentTaskContext): AgentTaskContext {
+	return {
+		title: task.title,
+		language: task.language,
+		ui: task.ui,
+		shortObjective: task.shortObjective ?? null,
+		description: task.description ?? null,
+		agentPrompt: task.agentPrompt,
+		openingState: task.openingState,
+	};
+}
 
 /**
  * Idle follow-ups chase the learner's silence, which is only natural in
@@ -196,7 +233,7 @@ function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentG
 	};
 }
 
-function validationErrorArtifacts(response: Awaited<ReturnType<typeof chatJson>>, error: unknown): AgentGenerationFailureArtifacts {
+function validationErrorArtifacts(response: LlmRecipeResponse<unknown>, error: unknown): AgentGenerationFailureArtifacts {
 	return {
 		requestMessages: response.requestMessages,
 		rawResponse: response.content,
@@ -223,11 +260,14 @@ function validationErrorArtifacts(response: Awaited<ReturnType<typeof chatJson>>
 }
 
 export async function generateAgentResponse(input: GenerateAgentResponseInput): Promise<AgentGenerationArtifacts> {
-	const messages = buildAgentResponseMessages(input);
-	let response: Awaited<ReturnType<typeof chatJson<typeof agentResponseDecisionSchema>>>;
+	const { userId, subjects, ...rest } = input;
+	const recipeInput: AgentReplyRecipeInput = { ...rest, task: agentTaskContext(input.task) };
+	let response: LlmRecipeResponse<AgentResponseDecision>;
 	try {
-		response = await chatJson({ schema: agentResponseDecisionSchema, messages, userId: input.userId });
+		response = await runLlmRecipe(agentReplyRecipe, recipeInput, { userId, subjects });
 	} catch (error) {
+		const messages =
+			(error as { details?: StructuredOutputErrorDetails } | null)?.details?.requestMessages ?? buildAgentResponseMessages(recipeInput);
 		const message = error instanceof Error && error.message ? error.message : "Agent generation failed";
 		throw new AgentGenerationError(message, providerErrorArtifacts(messages, error), { cause: error });
 	}

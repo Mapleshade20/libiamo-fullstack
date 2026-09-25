@@ -647,6 +647,32 @@ function enhancePasswordSetup() {
 						{/if}
 					</div>
 				</form>
+
+				{#if data.llmTraceSetting}
+					<form
+						method="POST"
+						action="?/updateLlmTraceCapture"
+						onchange={autosave}
+						use:enhance={enhanceSilently}
+						class="mt-6 border-t border-border pt-5"
+					>
+						<label class="flex min-h-11 cursor-pointer items-start gap-3">
+							<input
+								type="checkbox"
+								name="llmTraceCapture"
+								class="mt-0.5 size-5 shrink-0 accent-foreground"
+								checked={data.llmTraceSetting.enabled}
+								aria-describedby="llm-trace-capture-help"
+							>
+							<span class="space-y-1">
+								<span class="block text-sm font-medium">{t(lang, "profile.llmTraceCapture")}</span>
+								<span id="llm-trace-capture-help" class="block text-xs leading-relaxed text-muted-foreground"
+									>{t(lang, "profile.llmTraceCaptureHelp")}</span
+								>
+							</span>
+						</label>
+					</form>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	</section>

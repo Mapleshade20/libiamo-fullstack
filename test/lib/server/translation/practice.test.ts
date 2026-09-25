@@ -127,6 +127,7 @@ describe("Generation 2 practice", () => {
 			sourceLanguage: "en",
 			targetLanguage: "fr",
 			userId: "u1",
+			subjects: expect.objectContaining({ translationAttemptId: 9 }),
 		});
 		expect(mockDb.transaction).toHaveBeenCalledOnce();
 		expect(mockInsertNotes).toHaveBeenCalledWith(

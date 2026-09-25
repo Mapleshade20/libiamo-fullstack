@@ -17,7 +17,7 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 vi.mock("$lib/server/archive", () => mockArchiveService);
 vi.mock("$lib/server/review/notes", () => mockNoteService);
 vi.mock("$lib/server/practice/feedback", () => mockSessionService);
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	llmErrorStatus: () => 500,
 	llmErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "The AI request failed. Please try again."),
 }));

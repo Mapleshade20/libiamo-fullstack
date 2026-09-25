@@ -24,6 +24,7 @@ const data = {
 	apiBaseUrl: "",
 	apiModel: "",
 	levelSelfAssign: 2 as const,
+	llmTraceSetting: null as { enabled: boolean } | null,
 	credentialConnected: true,
 	loginMethodCount: 2,
 	socialLoginMethods: [
@@ -75,6 +76,11 @@ describe("Profile page", () => {
 		const placeholder = apiBaseUrl === "https://api.deepseek.com" ? "profile.apiKeyKeepPlaceholder" : "profile.apiKeyPlaceholder";
 		expect(input).toContain(`placeholder="${t("fr", placeholder)}"`);
 		expect(input).not.toMatch(/value="[^"]+"/);
+	});
+	it("shows the trace capture setting only when the server offers it", () => {
+		expect(render(ProfilePage, { props: { data, form: null } }).body).not.toContain('name="llmTraceCapture"');
+		const { body } = render(ProfilePage, { props: { data: { ...data, hasApiKey: true, llmTraceSetting: { enabled: true } }, form: null } });
+		expect(body).toMatch(/<input[^>]*name="llmTraceCapture"[^>]*checked/);
 	});
 	it("renders connected and available social login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });

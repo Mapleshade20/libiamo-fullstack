@@ -2,7 +2,7 @@ import { fail } from "@sveltejs/kit";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { listCompletedActivities } from "$lib/server/archive";
 import { requireUser } from "$lib/server/auth/authz";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { followUpOnFeedback, followUpOnLearningContent } from "$lib/server/practice/feedback";
 import { deleteNote, getNote } from "$lib/server/review/notes";
 import type { Actions, PageServerLoad } from "./$types";

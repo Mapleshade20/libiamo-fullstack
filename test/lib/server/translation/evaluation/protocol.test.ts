@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
-vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
+vi.mock("$lib/server/llm/client", () => ({ chatJson: mockChatJson }));
 
 import { generateTranslationEvaluation } from "$lib/server/translation/evaluation/generation";
 import { generateTranslationPractice } from "$lib/server/translation/evaluation/practice-generation";
@@ -62,7 +62,7 @@ describe("translation evaluation model protocols", () => {
 		expect(result.value.cards[0]).toMatchObject({ ordinal: 0, warnings: [] });
 		expect(result.history.at(-1)).toEqual({ role: "assistant", content: JSON.stringify(rawEvaluation) });
 		expect(mockChatJson).toHaveBeenCalledWith(
-			expect.objectContaining({ userId: "user-1", schema: expect.anything(), options: { temperature: 0.4, maxTokens: 32_768 } }),
+			expect.objectContaining({ userId: "user-1", schema: expect.anything(), options: { temperature: 0.4, reasoningEffort: "medium" } }),
 		);
 	});
 
@@ -93,7 +93,7 @@ describe("translation evaluation model protocols", () => {
 		const request = mockChatJson.mock.calls[0][0];
 		expect(request.messages).toHaveLength(2);
 		expect(JSON.parse(request.messages[1].content)).toMatchObject({ cardOrdinal: 0, learnerRevision: "I disagree." });
-		expect(request.options).toEqual({ temperature: 0.2 });
+		expect(request.options).toEqual({ temperature: 0.2, reasoningEffort: "medium" });
 	});
 
 	it("sorts complete second-draft ordinals and rejects incomplete output", async () => {
@@ -119,7 +119,7 @@ describe("translation evaluation model protocols", () => {
 			feedbackLanguage: "zh",
 		});
 		expect(result.value.cards.map((card) => card.ordinal)).toEqual([0, 1]);
-		expect(mockChatJson.mock.calls[0][0].options).toEqual({ temperature: 0.2 });
+		expect(mockChatJson.mock.calls[0][0].options).toEqual({ temperature: 0.2, reasoningEffort: "medium" });
 	});
 
 	it("validates Gen2 coverage before returning", async () => {
@@ -157,7 +157,7 @@ describe("translation evaluation model protocols", () => {
 			targetLanguage: "en",
 		});
 		expect(result.value.notes[0].examples).toHaveLength(4);
-		expect(mockChatJson.mock.calls[0][0].options).toEqual({ temperature: 0.6, maxTokens: 32_768 });
+		expect(mockChatJson.mock.calls[0][0].options).toEqual({ temperature: 0.6, reasoningEffort: "medium" });
 	});
 
 	it("rejects invalid verifier and Gen2 inputs before calling the provider", async () => {

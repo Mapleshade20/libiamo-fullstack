@@ -79,6 +79,9 @@ export const en = {
 	"profile.settings": "Settings",
 	"profile.selectNativeLanguage": "Select your native language",
 	"profile.proficiency": "Recommended task level",
+	"profile.llmTraceCapture": "Help improve Libiamo features",
+	"profile.llmTraceCaptureHelp":
+		"Let the Libiamo team review the AI requests and responses from your practice to improve prompts and models. Records are deleted after 30 days, but the team may keep selected examples, without your account, for testing. Turning this off stops new records.",
 	"profile.proficiencyHelp": "Choose your current range for this target language. This only affects Quest Hall recommendations.",
 	"profile.proficiency.level1": "Level 1",
 	"profile.proficiency.range1": "A2–B1",

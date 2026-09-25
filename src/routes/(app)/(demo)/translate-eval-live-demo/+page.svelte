@@ -19,7 +19,7 @@ import type { EvaluationData, LocalCardState, SecondDraftLocalState } from "$lib
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
 import { t } from "$lib/i18n";
-import type { ChatMessage } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
 import type { Generation2Result } from "$lib/server/translation/evaluation/schema";
 import type { ValidatedGeneration1Evaluation } from "$lib/server/translation/evaluation/validation";
 import type { TranslationDiffPart } from "$lib/translation/evaluation";

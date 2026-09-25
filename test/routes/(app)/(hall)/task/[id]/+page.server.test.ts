@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/server/db", () => ({ db: { query: { task: { findFirst: mocks.findTask }, user: { findFirst: mocks.findUser } } } }));
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	chatJson: mocks.chatJson,
 	llmErrorStatus: (error: unknown) =>
 		typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : 500,

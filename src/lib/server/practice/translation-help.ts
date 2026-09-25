@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { getLanguageEnglishName, type LanguageCode } from "$lib/constants";
-import { type ChatMessage, chatJson } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
+import { defineLlmRecipe } from "$lib/server/llm/recipe";
+import { type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
 import {
 	buildChatTranscript,
 	describeLevel,
+	pickTaskFacts,
 	renderScenarioSetting,
 	renderTaskBrief,
 	type TaskFacts,
@@ -85,6 +88,42 @@ The user message is a JSON object: source is the ${nativeName} phrase, and trans
 Respond with ONLY this JSON object (no Markdown fences): {"feedback":"<the ${nativeName} feedback>","correction":"<the corrected, natural ${targetName} translation>"}`;
 }
 
+type ExpressionsRecipeInput = { task: TranslationHelpTask; nativeLanguage: string; targetLanguage: LanguageCode; learnerLevel: number | null };
+
+export const expressionsRecipe = defineLlmRecipe({
+	id: "practice.translation-help-expressions",
+	version: 1,
+	title: "Translation help: expressions",
+	reasoningEffort: "low",
+	output: { kind: "json", schema: ExpressionsSchema },
+	build: (input: ExpressionsRecipeInput): ChatMessage[] => [
+		{ role: "system", content: buildExpressionsPrompt(input.nativeLanguage, input.targetLanguage) },
+		{ role: "user", content: buildExpressionsUserMessage(input.task, input.learnerLevel) },
+	],
+	options: { temperature: 0.7 },
+});
+
+type TranslationFeedbackRecipeInput = {
+	sourceExpression: string;
+	userTranslation: string;
+	nativeLanguage: string;
+	targetLanguage: LanguageCode;
+	task: TranslationHelpTask | null;
+};
+
+export const translationFeedbackRecipe = defineLlmRecipe({
+	id: "practice.translation-help-feedback",
+	version: 1,
+	title: "Translation help: feedback",
+	reasoningEffort: "low",
+	output: { kind: "json", schema: TranslationFeedbackSchema },
+	build: (input: TranslationFeedbackRecipeInput): ChatMessage[] => [
+		{ role: "system", content: buildEvaluationPrompt(input.nativeLanguage, input.targetLanguage, input.task ?? undefined) },
+		{ role: "user", content: JSON.stringify({ source: input.sourceExpression.trim(), translation: input.userTranslation.trim() }) },
+	],
+	options: { temperature: 0.3 },
+});
+
 /**
  * Generate useful expressions for a task scenario.
  * Returns an array of expression strings in the native language.
@@ -95,12 +134,10 @@ export async function generateExpressions(
 	targetLang: LanguageCode,
 	userId?: string,
 	learnerLevel?: number | null,
+	subjects?: LlmSubjects,
 ): Promise<string[]> {
-	const messages: ChatMessage[] = [
-		{ role: "system", content: buildExpressionsPrompt(nativeLang, targetLang) },
-		{ role: "user", content: buildExpressionsUserMessage(task, learnerLevel) },
-	];
-	const { value } = await chatJson({ schema: ExpressionsSchema, messages, options: { temperature: 0.7, maxTokens: 1024 }, userId });
+	const input = { task: helpTask(task), nativeLanguage: nativeLang, targetLanguage: targetLang, learnerLevel: learnerLevel ?? null };
+	const { value } = await runLlmRecipe(expressionsRecipe, input, { userId, subjects });
 	return value;
 }
 
@@ -114,11 +151,13 @@ export async function evaluateUserTranslation(
 	targetLang: LanguageCode,
 	userId?: string,
 	task?: TranslationHelpTask,
+	subjects?: LlmSubjects,
 ): Promise<{ feedback: string; correction: string }> {
-	const messages: ChatMessage[] = [
-		{ role: "system", content: buildEvaluationPrompt(nativeLang, targetLang, task) },
-		{ role: "user", content: JSON.stringify({ source: sourceExpression.trim(), translation: userTranslation.trim() }) },
-	];
-	const { value } = await chatJson({ schema: TranslationFeedbackSchema, messages, options: { temperature: 0.3, maxTokens: 1024 }, userId });
+	const input = { sourceExpression, userTranslation, nativeLanguage: nativeLang, targetLanguage: targetLang, task: task ? helpTask(task) : null };
+	const { value } = await runLlmRecipe(translationFeedbackRecipe, input, { userId, subjects });
 	return value;
+}
+
+function helpTask(task: TranslationHelpTask): TranslationHelpTask {
+	return { ...pickTaskFacts(task), openingState: task.openingState ?? null };
 }

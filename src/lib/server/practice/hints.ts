@@ -6,8 +6,9 @@ import { getLanguageEnglishName, getSelfAssignedLevel, isLanguageCode } from "$l
 import { db } from "../db";
 import { user as authUser } from "../db/auth.schema";
 import { practiceSession } from "../db/schema";
-import { chatJson, chatText } from "../llm";
-import { buildChatTranscript, describeLevel, renderScenarioSetting, renderTaskBrief, type TranscriptEntry } from "./prompt-context";
+import { defineLlmRecipe } from "../llm/recipe";
+import { runLlmRecipe } from "../llm/run";
+import { buildChatTranscript, describeLevel, pickTaskFacts, renderScenarioSetting, renderTaskBrief, type TranscriptEntry } from "./prompt-context";
 import { sessionMessageChronologicalOrder } from "./session";
 
 export type HintRequest = {
@@ -121,6 +122,37 @@ Reply with the direction itself as plain text: no JSON, quotes, labels, or Markd
 	return sections.join("\n\n");
 }
 
+export type HintRecipeInput = Omit<HintPromptInput, "mode"> & { learnerData: Record<string, unknown> };
+
+function hintMessages(mode: HintRequest["mode"], input: HintRecipeInput) {
+	return [
+		{
+			role: "system" as const,
+			content: buildHintSystemPrompt({ mode, task: input.task, learnerLevel: input.learnerLevel, nativeLanguage: input.nativeLanguage }),
+		},
+		{ role: "user" as const, content: JSON.stringify(input.learnerData) },
+	];
+}
+
+export const expressionHintRecipe = defineLlmRecipe({
+	id: "practice.hint-expression",
+	version: 1,
+	title: "Expression hint",
+	reasoningEffort: "low",
+	output: { kind: "json", schema: ExpressionHintSchema },
+	build: (input: HintRecipeInput) => hintMessages("expression", input),
+});
+
+// A single sentence needs no JSON envelope: models often dropped it, which only bought a repair round trip.
+export const contentHintRecipe = defineLlmRecipe({
+	id: "practice.hint-content",
+	version: 1,
+	title: "Content hint",
+	reasoningEffort: "low",
+	output: { kind: "text", parse: unwrapContentHint },
+	build: (input: HintRecipeInput) => hintMessages("content", input),
+});
+
 export async function generateHint(sessionId: number, input: HintRequest): Promise<HintResult> {
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
@@ -147,23 +179,24 @@ export async function generateHint(sessionId: number, input: HintRequest): Promi
 			learnerName: learner?.name || "Learner",
 		}),
 	);
-	const system = buildHintSystemPrompt({ mode: input.mode, task: session.task, learnerLevel, nativeLanguage: input.nativeLanguage ?? null });
 	const learnerData = {
 		transcript,
 		replyingTo: input.contextPath ?? [],
 		currentDraft: input.draft?.trim() || "",
 		...(input.mode === "expression" ? { intendedMeaning: input.expression?.trim() || "" } : {}),
 	};
-	const messages = [
-		{ role: "system" as const, content: system },
-		{ role: "user" as const, content: JSON.stringify(learnerData) },
-	];
+	const recipeInput: HintRecipeInput = {
+		task: { ...pickTaskFacts(session.task), openingState: session.task.openingState },
+		learnerLevel,
+		nativeLanguage: input.nativeLanguage ?? null,
+		learnerData,
+	};
+	const context = { userId: session.userId, subjects: { taskId: session.task.id, sessionId: session.id } };
 
 	if (input.mode === "expression") {
-		const { value } = await chatJson({ schema: ExpressionHintSchema, messages, userId: session.userId });
+		const { value } = await runLlmRecipe(expressionHintRecipe, recipeInput, context);
 		return value;
 	}
-	// A single sentence needs no JSON envelope: models often dropped it, which only bought a repair round trip.
-	const response = await chatText({ messages, userId: session.userId });
-	return { contentHint: unwrapContentHint(response.content) };
+	const { value } = await runLlmRecipe(contentHintRecipe, recipeInput, context);
+	return { contentHint: value };
 }

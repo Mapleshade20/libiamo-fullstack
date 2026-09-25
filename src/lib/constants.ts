@@ -58,6 +58,14 @@ export const BYOK_API_PRESETS = [
 	{ id: "openrouter", baseUrl: "https://openrouter.ai/api/v1", model: "~openai/gpt-luna-latest", keyUrl: "https://openrouter.ai/keys" },
 ] as const satisfies readonly { id: string; baseUrl: ByokApiBaseUrl; model: string; keyUrl: string }[];
 
+/** OpenAI-spec `reasoning_effort` levels. Every LLM call sends one; recipes pick low or medium. */
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+	return typeof value === "string" && REASONING_EFFORTS.includes(value as ReasoningEffort);
+}
+
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 

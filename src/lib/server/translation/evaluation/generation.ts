@@ -1,15 +1,21 @@
-import { type ChatMessage, chatJson, type JsonChatResponse } from "$lib/server/llm";
+import type { ChatMessage } from "$lib/server/llm/client";
+import { defineLlmRecipe } from "$lib/server/llm/recipe";
+import { type LlmRecipeResponse, type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
 import { buildGeneration1Messages, type Generation1Input } from "./prompt";
 import { Generation1Schema } from "./schema";
 import { TranslationEvaluationContractError, type ValidatedGeneration1Evaluation, validateGeneration1Evaluation } from "./validation";
 
-export type GenerateTranslationEvaluationInput = Generation1Input & {
-	userId?: string;
+type Generation1RecipeInput = Generation1Input & {
 	/** Optional caller-controlled sampling temperature for approved development tooling. */
 	temperature?: number;
 };
 
-export type TranslationEvaluationResponse = JsonChatResponse<ValidatedGeneration1Evaluation> & {
+export type GenerateTranslationEvaluationInput = Generation1RecipeInput & {
+	userId?: string;
+	subjects?: LlmSubjects;
+};
+
+export type TranslationEvaluationResponse = LlmRecipeResponse<ValidatedGeneration1Evaluation> & {
 	history: ChatMessage[];
 };
 
@@ -33,19 +39,23 @@ function validateInput(input: GenerateTranslationEvaluationInput): void {
 	}
 }
 
+export const generation1Recipe = defineLlmRecipe({
+	id: "translation.generation-1",
+	version: 1,
+	title: "Translation evaluation (Generation 1)",
+	reasoningEffort: "medium",
+	output: { kind: "json", schema: Generation1Schema },
+	build: (input: Generation1RecipeInput) => buildGeneration1Messages(input),
+	options: (input) => ({ temperature: input.temperature ?? 0.4 }),
+	finalize: (value, input) => validateGeneration1Evaluation(value, input),
+});
+
 export async function generateTranslationEvaluation(input: GenerateTranslationEvaluationInput): Promise<TranslationEvaluationResponse> {
 	validateInput(input);
-	const messages = buildGeneration1Messages(input);
-	const response = await chatJson({
-		schema: Generation1Schema,
-		messages,
-		options: { temperature: input.temperature ?? 0.4, maxTokens: 32_768 },
-		userId: input.userId,
-	});
-	const value = validateGeneration1Evaluation(response.value, input);
+	const { userId, subjects, ...recipeInput } = input;
+	const response = await runLlmRecipe(generation1Recipe, recipeInput, { userId, subjects });
 	return {
 		...response,
-		value,
 		history: [...response.requestMessages, { role: "assistant", content: response.content }],
 	};
 }

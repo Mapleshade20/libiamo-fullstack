@@ -89,7 +89,7 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("I am doing well."));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		const result = await chatText({
 			messages: [
 				{ role: "system", content: "You are helpful." },
@@ -113,7 +113,7 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		await chatText({
 			messages: [
 				{ role: "system", content: "New persona" },
@@ -134,7 +134,7 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("  hello  "));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		const result = await chatText({
 			messages: [
 				{ role: "system", content: "  You are a tutor.  " },
@@ -166,7 +166,7 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		await chatText({
 			messages: [
 				{ role: "system", content: "Return text." },
@@ -176,7 +176,9 @@ describe("chatText", () => {
 		});
 
 		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-		expect(payload.max_tokens).toBe(8192);
+		// One shared output budget, and thinking always on (OpenAI-spec reasoning_effort, low unless the caller asks).
+		expect(payload.max_tokens).toBe(32_768);
+		expect(payload.reasoning_effort).toBe("low");
 		expect(payload.messages).toEqual([
 			{ role: "system", content: "Return text." },
 			{ role: "user", content: "Learner said hello." },
@@ -188,7 +190,7 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		await expect(chatText({ messages: [] as any })).rejects.toThrow("messages must contain at least one item");
 		await expect(chatText({ messages: [{ role: "bad" as any, content: "hi" }] })).rejects.toThrow("each message.role must be one of");
 		await expect(chatText({ messages: [{ role: "user", content: "   " }] })).rejects.toThrow("each message.content must be a non-empty string");
@@ -197,7 +199,7 @@ describe("chatText", () => {
 
 	it("uses BYOK config when userId has a configured key", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
-		const { chatText, encryptApiKey } = await import("$lib/server/llm");
+		const { chatText, encryptApiKey } = await import("$lib/server/llm/client");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce({
 			userId: "byok-user",
 			encryptedKey: encryptApiKey("user-key"),
@@ -224,7 +226,7 @@ describe("chatText", () => {
 		);
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
 
 		const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -241,7 +243,7 @@ describe("chatText", () => {
 			vi.fn<FetchLike>(async () => createChatCompletionResponse("hello world")),
 		);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
 
 		expect(result.quota).toMatchObject({ trialTokensUsed: 3, trialUsageEstimated: true });
@@ -254,14 +256,14 @@ describe("chatText", () => {
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		const { TrialQuotaExhaustedError } = await import("$lib/server/account/trial-quota");
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toBeInstanceOf(TrialQuotaExhaustedError);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("throws config and provider errors clearly", async () => {
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		vi.stubGlobal("fetch", vi.fn());
 
 		mockEnv.OPENAI_API_KEY = "";
@@ -277,7 +279,7 @@ describe("chatText", () => {
 	});
 
 	it("maps OpenAI-compatible API and network errors", async () => {
-		const { chatText, OpenAIAuthError } = await import("$lib/server/llm");
+		const { chatText, OpenAIAuthError } = await import("$lib/server/llm/client");
 
 		vi.stubGlobal(
 			"fetch",
@@ -306,13 +308,35 @@ describe("chatText", () => {
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("Could not connect to the AI provider");
 	});
 
+	it("keeps the finish reason and usage of an empty response for tracing", async () => {
+		const { chatText } = await import("$lib/server/llm/client");
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () =>
+				createChatCompletionResponse(
+					"",
+					{},
+					{
+						choices: [{ finish_reason: "length", message: { role: "assistant", content: "" } }],
+						usage: { prompt_tokens: 5, completion_tokens: 1024, total_tokens: 1029 },
+					},
+				),
+			),
+		);
+		const error = await chatText({ messages: [{ role: "user", content: "hi" }] }).catch((caught: unknown) => caught);
+		expect(error).toMatchObject({
+			status: 502,
+			details: { finishReason: "length", usage: { completionTokens: 1024 }, errors: ["Empty response (finish_reason: length)"] },
+		});
+	});
+
 	it("logs request and response bodies only when LLM_DEBUG is enabled", async () => {
 		mockEnv.LLM_DEBUG = "true";
 		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
 		const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatText } = await import("$lib/server/llm");
+		const { chatText } = await import("$lib/server/llm/client");
 		await chatText({ messages: [{ role: "system", content: "Return text." }] });
 
 		expect(infoSpy).toHaveBeenCalledWith("[llm-debug] request", expect.stringContaining('"url": "https://example.com/v1/chat/completions"'));
@@ -330,7 +354,7 @@ describe("chatJson", () => {
 			vi.fn<FetchLike>(async () => createChatCompletionResponse('```json\n["one", "two"]\n```')),
 		);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		const result = await chatJson({ schema: z.array(z.string()), messages: [{ role: "system", content: "Return JSON." }] });
 
 		expect(result.value).toEqual(["one", "two"]);
@@ -344,7 +368,7 @@ describe("chatJson", () => {
 			vi.fn<FetchLike>(async () => createChatCompletionResponse('{"\nreply":"¡Hola!","terminate":false}')),
 		);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 
 		await expect(chatJson({ schema, messages: [{ role: "system", content: "Return JSON." }] })).resolves.toMatchObject({
@@ -359,7 +383,7 @@ describe("chatJson", () => {
 			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"Recovered","terminate":false}'));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		const schema = z.object({ reply: z.string(), terminate: z.boolean() });
 		const result = await chatJson({ schema, messages: [{ role: "system", content: "Return JSON." }] });
 
@@ -383,7 +407,7 @@ describe("chatJson", () => {
 			.mockResolvedValueOnce(createChatCompletionResponse("still not json"));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		const failure = await chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] }).catch(
 			(error) => error,
 		);
@@ -410,7 +434,7 @@ describe("chatJson", () => {
 			.mockRejectedValueOnce(new TypeError("repair connection failed"));
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		const failure = await chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] }).catch(
 			(error) => error,
 		);
@@ -443,7 +467,7 @@ describe("chatJson", () => {
 		);
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { chatJson } = await import("$lib/server/llm");
+		const { chatJson } = await import("$lib/server/llm/client");
 		await expect(chatJson({ schema: z.object({ reply: z.string() }), messages: [{ role: "system", content: "Return JSON." }] })).rejects.toThrow(
 			"expected format",
 		);
@@ -454,7 +478,7 @@ describe("chatJson", () => {
 describe("trial quota", () => {
 	it("preserves and resumes trial quota around BYOK by only debiting env-sourced calls", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
-		const { chatText, encryptApiKey } = await import("$lib/server/llm");
+		const { chatText, encryptApiKey } = await import("$lib/server/llm/client");
 		vi.mocked(mockDb.query.userApiKey.findFirst)
 			.mockResolvedValueOnce({
 				userId: "user-1",

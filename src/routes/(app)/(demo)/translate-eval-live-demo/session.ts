@@ -1,5 +1,5 @@
 import type { EvaluationData } from "$lib/components/translation/evaluation/types";
-import type { ChatMessage, ChatUsage } from "$lib/server/llm";
+import type { ChatMessage, ChatUsage } from "$lib/server/llm/client";
 import type { Generation2Result } from "$lib/server/translation/evaluation/schema";
 import { TRANSLATION_GRADES, TRANSLATION_RATING_KEYS } from "$lib/translation/evaluation";
 import { LIVE_DEMO_TEMPERATURE } from "./fixture";

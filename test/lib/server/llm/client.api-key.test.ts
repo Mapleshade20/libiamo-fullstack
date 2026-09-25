@@ -16,7 +16,7 @@ vi.mock("$lib/server/db", () => ({
 	},
 }));
 
-import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm/client";
 
 describe("LLM API key helpers", () => {
 	describe("encryptApiKey / decryptApiKey", () => {

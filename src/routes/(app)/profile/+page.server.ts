@@ -14,14 +14,15 @@ import { requireUser } from "$lib/server/auth/authz";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
-import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm";
+import { decryptApiKey, encryptApiKey, verifyApiKey } from "$lib/server/llm/client";
+import { hasTraceOptOut, setTraceOptOut } from "$lib/server/llm/lab/opt-out";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
 	const user = requireUser(event);
 	const activeLanguage = isLanguageCode(user.activeLanguage) ? user.activeLanguage : "en";
-	const [row, learner, accounts] = await Promise.all([
+	const [row, learner, accounts, llmTraceOptOut] = await Promise.all([
 		db.query.userApiKey.findFirst({
 			where: (t, { eq }) => eq(t.userId, user.id),
 			columns: { userId: true, baseUrl: true, model: true },
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async (event) => {
 			columns: { levelSelfAssign: true },
 		}),
 		auth.api.listUserAccounts({ headers: event.request.headers }),
+		hasTraceOptOut(user.id),
 	]);
 	const hasApiKey = row !== undefined;
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
@@ -48,6 +50,8 @@ export const load: PageServerLoad = async (event) => {
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
+		// Capture is automatic without a key; only learners on their own key may opt out.
+		llmTraceSetting: hasApiKey && user.role !== "admin" ? { enabled: !llmTraceOptOut } : null,
 		credentialConnected: connectedProviders.has("credential"),
 		loginMethodCount: connectedProviders.size,
 		socialLoginMethods: SOCIAL_PROVIDERS.map((provider) => ({
@@ -272,6 +276,13 @@ export const actions: Actions = {
 			.where(eq(userTable.id, user.id));
 
 		return { success: true, levelSelfAssign };
+	},
+
+	updateLlmTraceCapture: async (event) => {
+		const user = requireUser(event);
+		const formData = await event.request.formData();
+		await setTraceOptOut(user.id, formData.get("llmTraceCapture") !== "on");
+		return { success: true };
 	},
 
 	signOut: async (event) => {

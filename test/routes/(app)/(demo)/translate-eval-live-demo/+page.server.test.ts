@@ -8,7 +8,7 @@ const { mockGenerateTranslationEvaluation, mockGenerateTranslationPractice, mock
 }));
 
 vi.mock("$app/environment", () => ({ dev: true }));
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	llmErrorMessage: (cause: unknown) => (cause instanceof Error ? cause.message : "The AI request failed. Please try again."),
 	llmErrorStatus: () => 500,
 }));

@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { z } from "zod";
 import type { EvaluationData } from "$lib/components/translation/evaluation/types";
 import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import {
 	completeTranslationTransfer,
 	enterTranslationTransfer,

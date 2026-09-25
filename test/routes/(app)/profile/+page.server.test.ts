@@ -85,11 +85,17 @@ const { mockDecryptApiKey, mockEncryptApiKey, mockGetTrialQuotaBalance, mockVeri
 	mockVerifyApiKey: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true })),
 }));
 
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	decryptApiKey: mockDecryptApiKey,
 	encryptApiKey: mockEncryptApiKey,
 	verifyApiKey: mockVerifyApiKey,
 }));
+
+const { mockHasTraceOptOut, mockSetTraceOptOut } = vi.hoisted(() => ({
+	mockHasTraceOptOut: vi.fn(async () => false),
+	mockSetTraceOptOut: vi.fn(async () => {}),
+}));
+vi.mock("$lib/server/llm/lab/opt-out", () => ({ hasTraceOptOut: mockHasTraceOptOut, setTraceOptOut: mockSetTraceOptOut }));
 
 vi.mock("$lib/server/account/trial-quota", () => ({
 	getTrialQuotaBalance: mockGetTrialQuotaBalance,
@@ -106,9 +112,9 @@ describe("Profile +page.server", () => {
 		] as never);
 	});
 
-	const createLoadEvent = (activeLanguage: string, query = "") =>
+	const createLoadEvent = (activeLanguage: string, query = "", role = "user") =>
 		({
-			locals: { user: { id: "test-user", activeLanguage } },
+			locals: { user: { id: "test-user", activeLanguage, role } },
 			request: { headers: new Headers() },
 			url: new URL(`https://example.com/profile${query}`),
 		}) as any;
@@ -166,6 +172,16 @@ describe("Profile +page.server", () => {
 			expect(result.apiModel).toBe("Qwen/Qwen3-8B");
 			expect(result.apiKey).toBeUndefined();
 			expect(result.encryptedKey).toBeUndefined();
+		});
+
+		it("offers the trace capture setting only to learners on their own key", async () => {
+			expect(((await load(createLoadEvent("en"))) as any).llmTraceSetting).toBeNull();
+
+			mockFindFirst.mockResolvedValue({ userId: "test-user", baseUrl: BYOK_API_BASE_URLS[0], model: "m" });
+			expect(((await load(createLoadEvent("en"))) as any).llmTraceSetting).toEqual({ enabled: true });
+			mockHasTraceOptOut.mockResolvedValueOnce(true);
+			expect(((await load(createLoadEvent("en"))) as any).llmTraceSetting).toEqual({ enabled: false });
+			expect(((await load(createLoadEvent("en", "", "admin"))) as any).llmTraceSetting).toBeNull();
 		});
 
 		it("returns connected and available login methods", async () => {
@@ -394,6 +410,13 @@ describe("Profile +page.server", () => {
 			const params = sqlParams(mockSet.mock.calls[0]?.[0].levelSelfAssign);
 			expect(params).toEqual(["es", 1]);
 			expect(mockUpdateWhere).toHaveBeenCalledOnce();
+		});
+
+		it("opts out of and back in to trace capture from the checkbox", async () => {
+			await expect(actions.updateLlmTraceCapture(createActionEvent({}))).resolves.toEqual({ success: true });
+			expect(mockSetTraceOptOut).toHaveBeenLastCalledWith("u1", true);
+			await expect(actions.updateLlmTraceCapture(createActionEvent({ llmTraceCapture: "on" }))).resolves.toEqual({ success: true });
+			expect(mockSetTraceOptOut).toHaveBeenLastCalledWith("u1", false);
 		});
 
 		it("rejects an invalid self-assigned level", async () => {

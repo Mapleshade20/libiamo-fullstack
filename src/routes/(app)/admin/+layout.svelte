@@ -14,6 +14,7 @@ const sections = [
 	{ href: `${base}/admin/tasks`, label: "Tasks" },
 	{ href: `${base}/admin/lineups`, label: "Lineups" },
 	{ href: `${base}/admin/reviews`, label: "Reviews" },
+	{ href: `${base}/admin/lab`, label: "LLM Lab" },
 ];
 const activeIndex = $derived(activeNavIndex(sections, page.url.pathname));
 </script>

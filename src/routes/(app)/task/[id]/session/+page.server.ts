@@ -14,7 +14,7 @@ import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
-import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm";
+import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { generateHint } from "$lib/server/practice/hints";
 import { buildPracticeUiSendOptions } from "$lib/server/practice/send-options";
 import {

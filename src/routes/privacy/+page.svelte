@@ -85,6 +85,12 @@ import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 					If you provide your own API key, Libiamo encrypts it before storage and sends requests to the base URL and model you select. That provider's
 					own terms, retention, and training practices apply. Do not submit sensitive personal information that is unnecessary for language practice.
 				</p>
+				<p class="mt-3">
+					Libiamo records the AI requests and responses made for your learning activity so team members can review and improve its features, prompts,
+					and models. These records are deleted after 30 days. Team members may copy selected examples into test sets kept until they are removed; if
+					you delete your account, those examples are detached from it but their content is kept. If you use your own API key, you can turn off “Help
+					improve Libiamo features” in the LLM API Key section of your profile; turning it off stops new records.
+				</p>
 			</section>
 
 			<section aria-labelledby="social-login">

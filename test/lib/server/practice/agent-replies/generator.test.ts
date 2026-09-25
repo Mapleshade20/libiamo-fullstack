@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
-vi.mock("$lib/server/llm", () => ({ chatJson: mockChatJson }));
+vi.mock("$lib/server/llm/client", () => ({ chatJson: mockChatJson }));
 
 import type { AgentHistoryMessage } from "$lib/server/practice/agent-replies/generator";
 import {

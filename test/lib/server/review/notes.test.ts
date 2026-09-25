@@ -22,9 +22,9 @@ const { mockDb } = vi.hoisted(() => {
 });
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
-vi.mock("$lib/server/llm", () => ({ chatJson: vi.fn() }));
+vi.mock("$lib/server/llm/client", () => ({ chatJson: vi.fn() }));
 
-import { chatJson } from "$lib/server/llm";
+import { chatJson } from "$lib/server/llm/client";
 import { vocabularyNoteRules } from "$lib/server/review/note-rules";
 import {
 	createNoteFromSelectionQA,
