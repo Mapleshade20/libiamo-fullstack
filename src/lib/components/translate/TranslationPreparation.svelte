@@ -10,11 +10,13 @@ import Star from "@lucide/svelte/icons/star";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { handlePreparationActionResult } from "$lib/client/quest-hall/preparation-actions";
+import QuestMenuStatusMark from "$lib/components/quest-hall/quest-menu/QuestMenuStatusMark.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
-import type { LanguageCode } from "$lib/constants";
+import type { LanguageCode, TranslationWorkflowPhase } from "$lib/constants";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { t } from "$lib/i18n";
+import { translationState } from "$lib/quest-hall/menu";
 
 export interface TranslationPreparationTemplate {
 	id: number;
@@ -51,8 +53,9 @@ let {
 let starting = $state(false);
 let retaking = $state(false);
 let embeddedError = $state<string | null>(null);
+let progress = $derived(translationState((attempt?.workflowPhase ?? null) as TranslationWorkflowPhase | null));
 let isDraft = $derived(!attempt || attempt.workflowPhase === "draft");
-let isComplete = $derived(attempt?.workflowPhase === "completed");
+let isComplete = $derived(progress === "finished");
 let primaryHref = $derived(isDraft ? `${base}/translate/${template.id}/attempt` : `${base}/translate/${template.id}/feedback`);
 let primaryLabel = $derived(
 	!attempt
@@ -61,7 +64,7 @@ let primaryLabel = $derived(
 			? t(lang, "translate.details.continueDraft")
 			: isComplete
 				? t(lang, "translate.details.review")
-				: t(lang, "translate.details.continueEvaluation"),
+				: t(lang, "task.continueEvaluation"),
 );
 let startAction = $derived(`${base}/translate/${template.id}?/start`);
 let retakeAction = $derived(`${base}/translate/${template.id}?/retake`);
@@ -90,11 +93,7 @@ function difficultyLabel(level: number): string {
 	<div class="preparation-body">
 		<div>
 			<div class="badge-line">
-				{#if isComplete}
-					<Badge class="border-green-500/20 bg-green-500/10 text-[10px] font-bold uppercase tracking-widest text-green-600 hover:bg-green-500/10">
-						{t(lang, "task.completed")}
-					</Badge>
-				{/if}
+				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS.translator}</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
 				<span class="difficulty">{difficultyLabel(template.difficulty)}</span>
@@ -169,7 +168,9 @@ function difficultyLabel(level: number): string {
 					</form>
 				{:else}
 					<div class="continue-actions">
-						<Button href={primaryHref} class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8">{primaryLabel}</Button>
+						<Button href={primaryHref} variant={isComplete ? "outline" : "default"} class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8"
+							>{primaryLabel}</Button
+						>
 						{#if !isDraft}
 							<form
 								method="POST"

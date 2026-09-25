@@ -2,7 +2,7 @@
 import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
-import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
+import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -26,13 +26,6 @@ const actionNotification = $derived(
 			? { variant: "error" as const, title: "Unable to reset password", message: form.resetMessage }
 			: null,
 );
-
-// Clear mismatch error naturally when passwords match
-$effect(() => {
-	if (newPassword === confirmNewPassword && confirmNewPasswordError) {
-		confirmNewPasswordError = "";
-	}
-});
 </script>
 
 <svelte:head>
@@ -91,11 +84,12 @@ $effect(() => {
 							name="newPassword"
 							type="password"
 							bind:value={newPassword}
+							oninput={() => { if (confirmNewPasswordInput) clearFieldFeedback(confirmNewPasswordInput); }}
 							required
 							aria-invalid={Boolean(form?.resetErrors?.newPassword)}
 						/>
 						{#if form?.resetErrors?.newPassword}
-							<p class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
+							<p data-field-error="newPassword" class="text-sm text-red-600">{form.resetErrors.newPassword[0]}</p>
 						{/if}
 					</div>
 
@@ -110,7 +104,7 @@ $effect(() => {
 							aria-invalid={Boolean(confirmNewPasswordError)}
 						/>
 						{#if confirmNewPasswordError}
-							<p class="text-sm text-red-600">{confirmNewPasswordError}</p>
+							<p data-field-error="confirmNewPassword" class="text-sm text-red-600">{confirmNewPasswordError}</p>
 						{/if}
 					</div>
 
@@ -126,7 +120,7 @@ $effect(() => {
 					<Label for="email">Email</Label>
 					<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
 					{#if form?.errors?.email}
-						<p class="text-sm text-red-600">{form.errors.email[0]}</p>
+						<p data-field-error="email" class="text-sm text-red-600">{form.errors.email[0]}</p>
 					{/if}
 				</div>
 				<Button type="submit" class="w-full">Send Reset Link</Button>

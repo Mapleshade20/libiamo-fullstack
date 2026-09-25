@@ -1,7 +1,12 @@
 <script lang="ts">
+/**
+ * The one status mark for quest progress. Recommendations, the catalog, and both details pages all
+ * render it, so a state looks the same wherever a task appears.
+ */
 import Bookmark from "@lucide/svelte/icons/bookmark";
 import Check from "@lucide/svelte/icons/check";
 import Circle from "@lucide/svelte/icons/circle";
+import ClipboardCheck from "@lucide/svelte/icons/clipboard-check";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import type { QuestMenuItemState } from "$lib/quest-hall/menu";
 
@@ -20,6 +25,8 @@ let { state, label, variant = "line" }: Props = $props();
 			<Check size={14} />
 		{:else if state === "active"}
 			<Bookmark size={14} />
+		{:else if state === "reviewing"}
+			<ClipboardCheck size={14} />
 		{:else if state === "stopped"}
 			<RotateCcw size={14} />
 		{:else}
@@ -41,19 +48,23 @@ let { state, label, variant = "line" }: Props = $props();
 	letter-spacing: 0.075em;
 	line-height: 1;
 	text-transform: uppercase;
-	color: var(--menu-ink-muted);
+	color: var(--menu-ink-muted, #6d665d);
 }
 
 .status[data-state="finished"] {
-	color: var(--menu-green);
+	color: var(--menu-green, #416c55);
 }
 
 .status[data-state="active"] {
-	color: var(--menu-brass-dark);
+	color: var(--menu-brass-dark, #765d28);
+}
+
+.status[data-state="reviewing"] {
+	color: var(--menu-blue, #526878);
 }
 
 .status[data-state="stopped"] {
-	color: var(--menu-wine);
+	color: var(--menu-wine, #803945);
 }
 
 .is-stamp {

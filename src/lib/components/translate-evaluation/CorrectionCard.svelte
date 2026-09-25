@@ -6,8 +6,10 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import { fade } from "svelte/transition";
 import { autoGrowTextarea } from "$lib/client/auto-grow-textarea";
+import { focusAndHighlightField, textValidationMessage } from "$lib/client/form-attention";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
+import { PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { renderMarkdown } from "$lib/markdown";
 import CorrectionResult from "./CorrectionResult.svelte";
 import { prefersReducedMotion } from "./motion";
@@ -206,6 +208,11 @@ $effect(() => {
 
 function handleSubmit() {
 	if (!canSubmit) return;
+	const message = textValidationMessage(local.input, PRACTICE_UI_TEXT_MAX_LENGTH);
+	if (message && inputEl) {
+		focusAndHighlightField(inputEl, message);
+		return;
+	}
 	onsubmit?.(local.input);
 }
 
@@ -217,7 +224,7 @@ function handleRetry() {
 		onretry?.();
 		return;
 	}
-	onsubmit?.(local.input);
+	handleSubmit();
 }
 </script>
 
@@ -278,12 +285,13 @@ function handleRetry() {
 			/>
 		</div>
 	{:else}
-		<div class="mt-7 border-t border-stone-400/25 pt-6">
+		<div class="mt-7 border-t border-stone-400/25 pt-6" data-field-container>
 			{#if !reviewOnly}
 				<label for="correction-input" class="mb-3 block text-sm font-semibold">{reviseLabel}</label>
 
 				<div class="flex items-center gap-2.5">
 					<Textarea
+						maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
 						id="correction-input"
 						bind:ref={inputEl}
 						rows={4}
@@ -565,20 +573,5 @@ function handleRetry() {
 	.hint-track {
 		transition-duration: 1ms;
 	}
-}
-:global(html.demo-force-reduced) .submit-orbit--busy .submit-orbit__ring {
-	animation: none;
-	opacity: 0.85;
-}
-:global(html.demo-force-reduced) .feedback-slot,
-:global(html.demo-force-reduced) .provider-slot,
-:global(html.demo-force-reduced) .hint-rail {
-	transition-duration: 1ms;
-}
-:global(html.demo-force-reduced) .feedback-wipe {
-	animation-duration: 1ms;
-}
-:global(html.demo-force-reduced) .hint-track {
-	transition-duration: 1ms;
 }
 </style>

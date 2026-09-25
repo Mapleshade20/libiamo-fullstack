@@ -74,34 +74,6 @@ export type SecondDraftLocalState = {
 	commentary: string | null;
 };
 
-export type TransferNoteFixture = {
-	id: number;
-	vocab: string;
-	targetDefinition: string;
-	nativeDefinition: string;
-	queueKind: import("$lib/review").StudyQueueKind;
-	examples: Array<{ targetText: string; nativeText: string }>;
-};
-
-/** Demo / presentation phase keys used by the state switcher. */
-export type DemoScene =
-	| "evaluating"
-	| "evaluating-failed"
-	| "evaluated"
-	| "evaluated-warning"
-	| "no-cards"
-	| "card-initial"
-	| "card-first-reject"
-	| "card-accept"
-	| "card-second-reject"
-	| "provider-error"
-	| "second-draft-generating"
-	| "second-draft-failed"
-	| "second-draft-ready"
-	| "second-draft-waiting"
-	| "transfer"
-	| "complete";
-
 export type CubicBezier = readonly [number, number, number, number];
 
 export type MotionTokens = {

@@ -15,6 +15,8 @@ import {
 	getQuestMenuTurnTarget,
 	getQuestMenuUnreadCount,
 	type QuestMenuItem,
+	questState,
+	translationState,
 } from "$lib/quest-hall/menu";
 import type { HallData } from "$lib/server/quest-hall";
 
@@ -28,6 +30,7 @@ function quest(id: number, sessionStatus: HallQuestSessionStatus = null, overrid
 		templateInteractionType: "chat",
 		pointReward: 5,
 		sessionStatus,
+		evaluationPhase: sessionStatus === "completed" || sessionStatus === "evaluated" ? "completed" : null,
 		unreadCount: 0,
 		hasUnreadReply: false,
 		...overrides,
@@ -106,12 +109,14 @@ describe("Quest menu production adaptation", () => {
 				quest(3, "evaluated"),
 				quest(4, "abandoned"),
 				quest(5, null, { templateUi: "translator" }),
+				quest(6, "evaluated", { evaluationPhase: "transfer" }),
 			],
 		});
 		const before = structuredClone(source);
 		const catalog = adaptHallDataToQuestMenu(source);
 
-		expect(catalog.sections.daily.map((item) => item.state)).toEqual(["ready", "active", "finished", "stopped", "informational"]);
+		// An ended conversation whose evaluation page is unfinished is being evaluated, not finished.
+		expect(catalog.sections.daily.map((item) => item.state)).toEqual(["ready", "active", "finished", "stopped", "informational", "reviewing"]);
 		expect(catalog.sections.translation).toHaveLength(1);
 		expect(catalog.sections.translation[0]).toMatchObject({ key: "translation-21", state: "active", workflowPhase: "draft" });
 		expect(source).toEqual(before);
@@ -287,6 +292,26 @@ describe("Quest menu production adaptation", () => {
 			}),
 		);
 		expect(deriveQuestMenuRecommendations(catalog.sections)).toEqual([]);
+	});
+});
+
+describe("shared quest progress", () => {
+	it("maps both task types onto the same states", () => {
+		expect(translationState(null)).toBe("ready");
+		expect(translationState("draft")).toBe("active");
+		for (const phase of ["submitted", "correction", "second_draft", "transfer"] as const) expect(translationState(phase)).toBe("reviewing");
+		expect(translationState("completed")).toBe("finished");
+		const practice = { templateUi: "imessage" };
+		expect(questState({ ...practice, sessionStatus: "in_progress", evaluationPhase: "feedback" })).toBe("active");
+		expect(questState({ ...practice, sessionStatus: "completed", evaluationPhase: "feedback" })).toBe("reviewing");
+		expect(questState({ ...practice, sessionStatus: "evaluated", evaluationPhase: "completed" })).toBe("finished");
+	});
+
+	it("recommends work under evaluation alongside work in progress", () => {
+		const catalog = adaptHallDataToQuestMenu(
+			hallData({ dailyTasks: [quest(1), quest(2, "evaluated", { evaluationPhase: "transfer" })], weeklyTasks: [], translationTasks: [] }),
+		);
+		expect(catalog.recommendations[0]).toMatchObject({ key: "daily-2", state: "reviewing" });
 	});
 });
 

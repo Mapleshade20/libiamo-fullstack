@@ -42,6 +42,14 @@
 	--color-accent-blue: #8fa3b1;
 	--color-accent-sage: #8faf8f;
 	--color-accent-rose: #c9a4a4;
+	/* A muted ember for the streak flame — warm enough to read as fire on paper, never saturated. */
+	--color-streak-flame: oklch(0.68 0.13 55);
+	--color-streak-flame-core: var(--color-accent-yellow);
+	/* Wine, reserved for meaningful states: the ruled line under the current navigation clipping. */
+	--color-ink-wine: oklch(0.45 0.12 18);
+	/* The navigation stickers: one warm near-black for every outline, one paper for every die cut. */
+	--nav-line: oklch(0.32 0.018 55);
+	--nav-paper: #ffffff;
 	--font-sans-inter: "Inter Variable", "Inter", ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "Noto Sans", sans-serif;
 }
 
@@ -77,6 +85,14 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+}
+
+@theme {
+	/*
+	 * The navigation's own breakpoint: the width at which the Quest Hall stops showing its menu.
+	 * Below it the app wears a bottom bar; above it, only the top bar.
+	 */
+	--breakpoint-nav: 56.25rem;
 }
 
 @theme inline {
@@ -313,49 +329,50 @@
 
 /* View Transitions: smooth morph for the shared navbar */
 ::view-transition-group(main-nav) {
+	z-index: 50;
 	animation-duration: 250ms;
 	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
 }
 
 ::view-transition-old(main-nav),
 ::view-transition-new(main-nav) {
-	animation-duration: 250ms;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.15, 1);
-}
-
-/* View Transitions: quick crossfade for ordinary in-section navigation */
-html[data-page-transition$="fade"]::view-transition-group(root),
-html[data-page-transition$="fade"]::view-transition-group(page-content) {
-	animation-duration: 170ms;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-html[data-page-transition$="fade"]::view-transition-old(root),
-html[data-page-transition$="fade"]::view-transition-old(page-content) {
-	animation: 170ms cubic-bezier(0.4, 0, 1, 1) both vt-page-fade-out;
-}
-
-html[data-page-transition$="fade"]::view-transition-new(root),
-html[data-page-transition$="fade"]::view-transition-new(page-content) {
-	animation: 170ms cubic-bezier(0, 0, 0.2, 1) both vt-page-fade-in;
-}
-
-html[data-page-transition="section-fade"] .review-route-header {
-	view-transition-name: review-route-header;
-}
-
-html[data-page-transition="section-fade"]::view-transition-group(review-route-header),
-html[data-page-transition="section-fade"]::view-transition-new(review-route-header) {
 	animation: none;
+	mix-blend-mode: normal;
 }
 
-html[data-page-transition="section-fade"]::view-transition-old(review-route-header) {
-	display: none;
+::view-transition-old(main-nav) {
+	visibility: hidden;
+}
+
+::view-transition-group(page-content) {
+	z-index: 1;
+}
+
+/* The Hall's unread stack loads while the sweep runs, and it lives in the root layer beneath the
+   arriving page's paper: it would show through, be covered, then show again once the snapshots are
+   gone. Keep it out of the sweep and let it arrive once the page has settled. */
+#hall-nav-inbox {
+	transition: opacity 180ms ease-out;
+}
+
+html[data-page-transition^="navbar-"] #hall-nav-inbox {
+	opacity: 0;
+	transition: none;
 }
 
 /* View Transitions: directional editorial sweep between navbar sections */
 html[data-page-transition^="navbar-"] {
 	--page-slide-distance: clamp(8rem, 24vw, 24rem);
+	/* The sweep has to answer the click immediately. An ease-in curve idles for the first
+	   hundred milliseconds and reads as lag; a fast start that settles reads as response. */
+	--page-sweep-duration: 380ms;
+	--page-sweep-ease: cubic-bezier(0.33, 1, 0.68, 1);
+	/* The two sheets always overlap, because a slide of less than a page cannot clear the screen.
+	   Whoever is still translucent therefore shows the page underneath through its own text, so both
+	   clear inside the first third of the sweep. The departing sheet leads, so it is seen to
+	   dissolve instead of being buried under the arriving one. */
+	--page-enter-fade: 140ms;
+	--page-exit-fade: 120ms;
 }
 
 html[data-page-transition^="navbar-"]::view-transition-old(root),
@@ -364,24 +381,56 @@ html[data-page-transition^="navbar-"]::view-transition-new(root) {
 }
 
 html[data-page-transition^="navbar-"]::view-transition-group(page-content) {
-	animation-duration: 520ms;
-	animation-timing-function: cubic-bezier(0.65, 0, 0.15, 1);
+	animation-duration: var(--page-sweep-duration);
+	animation-timing-function: var(--page-sweep-ease);
 }
 
 html[data-page-transition="navbar-forward"]::view-transition-old(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-left;
+	animation:
+		vt-page-exit-left var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-out var(--page-exit-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-forward"]::view-transition-new(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-right;
+	animation:
+		vt-page-enter-right var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-in var(--page-enter-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-backward"]::view-transition-old(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-exit-right;
+	animation:
+		vt-page-exit-right var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-out var(--page-exit-fade) var(--page-sweep-ease) both;
 }
 
 html[data-page-transition="navbar-backward"]::view-transition-new(page-content) {
-	animation: 520ms cubic-bezier(0.65, 0, 0.15, 1) both vt-page-enter-left;
+	animation:
+		vt-page-enter-left var(--page-sweep-duration) var(--page-sweep-ease) both,
+		vt-page-fade-in var(--page-enter-fade) var(--page-sweep-ease) both;
+}
+
+@keyframes vt-page-exit-left {
+	to {
+		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
+	}
+}
+
+@keyframes vt-page-enter-right {
+	from {
+		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
+	}
+}
+
+@keyframes vt-page-exit-right {
+	to {
+		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
+	}
+}
+
+@keyframes vt-page-enter-left {
+	from {
+		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
+	}
 }
 
 @keyframes vt-page-fade-out {
@@ -396,43 +445,10 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	}
 }
 
-@keyframes vt-page-exit-left {
-	to {
-		opacity: 0;
-		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
-	}
-}
-
-@keyframes vt-page-enter-right {
-	from {
-		opacity: 0;
-		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
-	}
-}
-
-@keyframes vt-page-exit-right {
-	to {
-		opacity: 0;
-		transform: translateX(var(--page-slide-distance)) rotate(0.35deg);
-	}
-}
-
-@keyframes vt-page-enter-left {
-	from {
-		opacity: 0;
-		transform: translateX(calc(-1 * var(--page-slide-distance))) rotate(-0.35deg);
-	}
-}
-
 @media (max-width: 767px) {
 	html[data-page-transition^="navbar-"] {
 		--page-slide-distance: 42vw;
-	}
-
-	html[data-page-transition^="navbar-"]::view-transition-group(page-content),
-	html[data-page-transition^="navbar-"]::view-transition-old(page-content),
-	html[data-page-transition^="navbar-"]::view-transition-new(page-content) {
-		animation-duration: 420ms;
+		--page-sweep-duration: 300ms;
 	}
 }
 
@@ -446,6 +462,11 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	html[data-page-transition]::view-transition-old(root),
 	html[data-page-transition]::view-transition-new(root) {
 		animation-duration: 1ms;
+		animation-delay: 0ms;
+	}
+
+	#hall-nav-inbox {
+		transition: none;
 	}
 }
 
@@ -521,22 +542,50 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	}
 }
 
-@keyframes field-attention-pulse {
-	0%,
-	100% {
-		box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 0%, transparent);
-	}
-	18%,
-	72% {
-		box-shadow:
-			0 0 0 3px color-mix(in oklch, var(--destructive) 28%, transparent),
-			0 0 0 8px color-mix(in oklch, var(--destructive) 10%, transparent);
-	}
-}
-
-[data-field-attention="true"] {
+/* Shared field feedback: editing fades the border and its associated message;
+   never leave a stale destructive ring behind from aria-invalid utility classes.
+   A faded message must not leave a blank line either, so the fade keeps it in flow and
+   `allow-discrete` then collapses it. Browsers without it collapse immediately. */
+[data-field-attention] {
 	border-color: var(--destructive);
-	animation: field-attention-pulse 2.4s ease-out;
+	box-shadow: none;
+	transition:
+		border-color 280ms ease-out,
+		box-shadow 280ms ease-out;
+}
+:is(input, textarea, select, [contenteditable])[aria-invalid="false"] {
+	transition:
+		border-color 280ms ease-out,
+		box-shadow 280ms ease-out;
+}
+[data-field-error] {
+	transition: opacity 280ms ease-out;
+}
+.field-error-message {
+	display: block;
+	grid-column: 1 / -1;
+	font-weight: normal;
+	text-transform: none;
+	letter-spacing: normal;
+	margin-top: 4px;
+	color: var(--destructive);
+	font-size: 0.8125rem;
+	line-height: 1.4;
+}
+[data-field-error][data-dismissed="true"] {
+	opacity: 0;
+	display: none;
+	transition:
+		opacity 280ms ease-out,
+		display 280ms ease-out allow-discrete;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-field-error][data-dismissed],
+	[data-field-error],
+	[data-field-attention],
+	:is(input, textarea, select, [contenteditable])[aria-invalid="false"] {
+		transition: none;
+	}
 }
 
 /* Keep loading surfaces quiet and reveal replacements without moving their shell. */
@@ -552,4 +601,57 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 	.skeleton-lines [data-slot="skeleton"] {
 		animation: none;
 	}
+}
+
+/*
+ * One hand for the navigation stickers.
+ *
+ * Every navigation icon is a small die-cut sticker: flat colour from the site palette, a warm
+ * near-black outline around it, and a rim of paper cut along the drawing's own silhouette. The pen
+ * and the paper live here rather than in each component so the five icons cannot drift into five
+ * different hands; the colours an icon reaches for stay inside that icon.
+ *
+ * An icon that fills less of its box than the others scales itself up by `--nav-ink-scale` so the
+ * row reads at one size. Every width below divides that back out, so drawing an icon larger never
+ * hands it a fatter pen than the icon beside it.
+ */
+.nav-stroke {
+	fill: none;
+	stroke: var(--nav-line);
+	stroke-width: calc(1.55 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Interior detail — a fold, a ruled line, a seam — drawn with a finer nib. */
+.nav-stroke-thin {
+	stroke-width: calc(1 / var(--nav-ink-scale, 1));
+}
+
+/* The one highlight every glossy surface gets, so nothing reads as flat paint. */
+.nav-shine {
+	fill: none;
+	stroke: #fff;
+	stroke-width: calc(1.4 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	opacity: 0.6;
+}
+
+/*
+ * The die cut: paper pasted behind one part of a drawing. Each part that moves carries its own, so
+ * the rim travels with it and two overlapping parts are parted by a band of paper rather than
+ * tangling. Each paper silhouette is cut independently of the ink, with deliberately uneven
+ * clearance; the shared stroke softens those hand-cut corners without thickening the drawing.
+ */
+.nav-cut {
+	fill: var(--nav-paper);
+	stroke: var(--nav-paper);
+	stroke-width: calc(5.4 / var(--nav-ink-scale, 1));
+	stroke-linejoin: round;
+	stroke-linecap: round;
+}
+
+/* Cutting around an open line, which SVG would otherwise fill as though its ends were joined. */
+.nav-cut-line {
+	fill: none;
 }

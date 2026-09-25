@@ -3,7 +3,7 @@ import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { isSocialProviderId, type SocialProviderId } from "$lib/auth/social";
-import { focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
+import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/ActionNotification.svelte";
 import SocialAuthButtons from "$lib/components/auth/SocialAuthButtons.svelte";
 import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
@@ -37,13 +37,6 @@ const actionNotification = $derived(
 			? { variant: "error" as const, title: "Unable to sign up", message: data.socialAuthError }
 			: null,
 );
-
-// Clear mismatch error naturally when passwords match
-$effect(() => {
-	if (password === confirmPassword && confirmPasswordError) {
-		confirmPasswordError = "";
-	}
-});
 </script>
 
 <svelte:head>
@@ -97,7 +90,7 @@ $effect(() => {
 					{/each}
 				</select>
 				{#if formState?.errors?.activeLanguage}
-					<p class="text-sm text-red-600">{formState.errors.activeLanguage[0]}</p>
+					<p data-field-error="activeLanguage" class="text-sm text-red-600">{formState.errors.activeLanguage[0]}</p>
 				{/if}
 			</div>
 
@@ -114,7 +107,7 @@ $effect(() => {
 							<Label for="name">Name</Label>
 							<Input id="name" name="name" value={formState?.values?.name ?? ""} required aria-invalid={Boolean(formState?.errors?.name)} />
 							{#if formState?.errors?.name}
-								<p class="text-sm text-red-600">{formState.errors.name[0]}</p>
+								<p data-field-error="name" class="text-sm text-red-600">{formState.errors.name[0]}</p>
 							{/if}
 						</div>
 
@@ -129,7 +122,7 @@ $effect(() => {
 								aria-invalid={Boolean(formState?.errors?.email)}
 							/>
 							{#if formState?.errors?.email}
-								<p class="text-sm text-red-600">{formState.errors.email[0]}</p>
+								<p data-field-error="email" class="text-sm text-red-600">{formState.errors.email[0]}</p>
 							{/if}
 						</div>
 
@@ -140,11 +133,12 @@ $effect(() => {
 								name="password"
 								type="password"
 								bind:value={password}
+								oninput={() => { if (confirmPasswordInput) clearFieldFeedback(confirmPasswordInput); }}
 								required
 								aria-invalid={Boolean(formState?.errors?.password)}
 							/>
 							{#if formState?.errors?.password}
-								<p class="text-sm text-red-600">{formState.errors.password[0]}</p>
+								<p data-field-error="password" class="text-sm text-red-600">{formState.errors.password[0]}</p>
 							{/if}
 						</div>
 
@@ -159,7 +153,7 @@ $effect(() => {
 								aria-invalid={Boolean(confirmPasswordError)}
 							/>
 							{#if confirmPasswordError}
-								<p class="text-sm text-red-600">{confirmPasswordError}</p>
+								<p data-field-error="confirmPassword" class="text-sm text-red-600">{confirmPasswordError}</p>
 							{/if}
 						</div>
 

@@ -58,7 +58,7 @@ const actionNotification = $derived(
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
 				{#if form?.errors?.email}
-					<p class="text-sm text-red-600">{form.errors.email[0]}</p>
+					<p data-field-error="email" class="text-sm text-red-600">{form.errors.email[0]}</p>
 				{/if}
 			</div>
 
@@ -81,7 +81,7 @@ const actionNotification = $derived(
 					</button>
 				</div>
 				{#if form?.errors?.password}
-					<p class="text-sm text-red-600">{form.errors.password[0]}</p>
+					<p data-field-error="password" class="text-sm text-red-600">{form.errors.password[0]}</p>
 				{/if}
 			</div>
 

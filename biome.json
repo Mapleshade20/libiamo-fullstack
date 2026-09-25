@@ -7,11 +7,11 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!**/dist", "!drizzle"]
+		"includes": ["**", "!**/dist", "!drizzle", "!src/lib/components/streak/art"]
 	},
 	"formatter": {
 		"enabled": true,
-		"includes": ["**", "!package.json", "!pnpm-lock.yaml", "!biome.json"],
+		"includes": ["**", "!package.json", "!pnpm-lock.yaml", "!biome.json", "!src/error.html"],
 		"indentStyle": "tab",
 		"lineEnding": "lf",
 		"lineWidth": 150

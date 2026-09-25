@@ -6,7 +6,6 @@ import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
 import {
-	advanceTranslationTransferQueue,
 	clearTranslationFeedbackSnapshot,
 	emptyTranslationFeedbackSnapshot,
 	parseTranslationFeedbackSnapshot,
@@ -14,16 +13,16 @@ import {
 	type TranslationFeedbackSnapshot,
 	translationFeedbackSnapshotKey,
 } from "$lib/client/translation-feedback-snapshot";
+import TransferPass from "$lib/components/review/TransferPass.svelte";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
 import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
 import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
 import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte";
-import TransferPractice from "$lib/components/translate-evaluation/TransferPractice.svelte";
-import type { PracticeGenStatus, TransferNoteFixture } from "$lib/components/translate-evaluation/types";
+import type { PracticeGenStatus } from "$lib/components/translate-evaluation/types";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { randomExampleIndex } from "$lib/note";
 
 let { data } = $props();
 let lang = $derived(data.user.activeLanguage as LanguageCode);
@@ -36,8 +35,6 @@ let initializedVersion = $state<string | null>(null);
 let practiceStatus = $state<PracticeGenStatus>("idle");
 let practiceError = $state<string | null>(null);
 let workflowError = $state<string | null>(null);
-let transferStartedAt = $state(0);
-let completingTransfer = $state(false);
 let lastFocusKey = $state("");
 let detailsHref = $derived(`${base}/translate/${data.template.id}`);
 
@@ -46,11 +43,6 @@ const ratingLabels = $derived({
 	"eval.rating.naturalness": t(lang, "eval.rating.naturalness"),
 	"eval.rating.grammar": t(lang, "eval.rating.grammar"),
 	"eval.rating.overall": t(lang, "eval.rating.overall"),
-});
-const reviewCountLabels = $derived({
-	new: t(lang, "review.count.new"),
-	learning: t(lang, "review.count.learning"),
-	review: t(lang, "review.count.review"),
 });
 
 $effect(() => {
@@ -67,18 +59,6 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (
-		data.attempt.workflowPhase === "transfer" &&
-		practiceStatus === "ready" &&
-		snapshot?.transfer.initialized &&
-		snapshot.transfer.queue.length === 0 &&
-		!completingTransfer
-	) {
-		void completeTransfer();
-	}
-});
-
-$effect(() => {
 	if (data.attempt.practiceGeneratedAt) {
 		practiceStatus = "ready";
 		practiceError = null;
@@ -86,23 +66,6 @@ $effect(() => {
 	}
 	if (!["second_draft", "transfer"].includes(data.attempt.workflowPhase) || practiceStatus !== "idle") return;
 	void generatePractice();
-});
-
-$effect(() => {
-	if (data.attempt.workflowPhase !== "transfer" || practiceStatus !== "ready" || !snapshot || snapshot.transfer.initialized) return;
-	const queue = data.practiceNotes.map((note) => ({
-		noteId: note.id,
-		exampleIndex: randomExampleIndex(note.examples),
-		queueKind: note.queueKind,
-	}));
-	persist({ ...snapshot, transfer: { initialized: true, queue } });
-	transferStartedAt = Date.now();
-});
-
-$effect(() => {
-	if (data.attempt.workflowPhase === "transfer" && practiceStatus === "ready" && snapshot?.transfer.initialized && transferStartedAt === 0) {
-		transferStartedAt = Date.now();
-	}
 });
 
 $effect(() => {
@@ -357,81 +320,24 @@ async function enterTransfer() {
 	}
 }
 
-function transferFixtures(): TransferNoteFixture[] {
-	if (!snapshot) return [];
-	return snapshot.transfer.queue.flatMap((entry) => {
-		const note = data.practiceNotes.find((item) => item.id === entry.noteId);
-		const example = note?.examples[entry.exampleIndex];
-		return note && example
-			? [
-					{
-						id: note.id,
-						vocab: note.vocab,
-						targetDefinition: note.targetDefinition,
-						nativeDefinition: note.nativeDefinition,
-						queueKind: entry.queueKind,
-						examples: [example],
-					},
-				]
-			: [];
-	});
-}
-
-async function rateTransfer(rating: 1 | 3) {
-	if (!snapshot || snapshot.transfer.queue.length === 0) return false;
-	const active = snapshot.transfer.queue[0];
-	const activeNote = data.practiceNotes.find((item) => item.id === active.noteId);
-	if (!activeNote) {
-		practiceError = "This vocabulary note is no longer available. Reload to continue.";
-		return false;
-	}
-	practiceError = null;
+async function rateTransfer(input: { noteId: number; rating: 1 | 3; elapsedSeconds: number }) {
 	const form = new FormData();
-	form.set("noteId", String(active.noteId));
-	form.set("rating", String(rating));
-	form.set("elapsedSeconds", String(Math.max(0, Math.round((Date.now() - transferStartedAt) / 1000))));
-	let result: Awaited<ReturnType<typeof postAction>>;
-	try {
-		result = await postAction("rateTransfer", form);
-	} catch {
-		practiceError = t(lang, "common.error");
-		return false;
-	}
-	if (result.type !== "success") {
-		practiceError = resultError(result);
-		return false;
-	}
-
-	const queue = advanceTranslationTransferQueue(
-		snapshot.transfer.queue,
-		rating === 1 ? "incorrect" : "pass",
-		rating === 1 ? randomExampleIndex(activeNote.examples) : undefined,
-	);
-	const nextSnapshot = { ...snapshot, transfer: { ...snapshot.transfer, queue } };
-	persist(nextSnapshot);
-	transferStartedAt = Date.now();
-	if (queue.length === 0) await completeTransfer();
-	return true;
+	form.set("noteId", String(input.noteId));
+	form.set("rating", String(input.rating));
+	form.set("elapsedSeconds", String(input.elapsedSeconds));
+	const result = await postAction("rateTransfer", form).catch(() => {
+		throw new Error(t(lang, "common.error"));
+	});
+	if (result.type !== "success") throw new Error(resultError(result));
 }
 
 async function completeTransfer() {
-	if (completingTransfer) return;
-	completingTransfer = true;
-	try {
-		const result = await postAction("completeTransfer");
-		if (result.type !== "success") {
-			practiceStatus = "failed";
-			practiceError = resultError(result);
-			return;
-		}
-		clearTranslationFeedbackSnapshot(data.attempt.id);
-		await invalidateAll();
-	} catch {
-		practiceStatus = "failed";
-		practiceError = t(lang, "common.error");
-	} finally {
-		completingTransfer = false;
-	}
+	const result = await postAction("completeTransfer").catch(() => {
+		throw new Error(t(lang, "common.error"));
+	});
+	if (result.type !== "success") throw new Error(resultError(result));
+	clearTranslationFeedbackSnapshot(data.attempt.id);
+	await invalidateAll();
 }
 
 function updateCardInput(index: number, value: string) {
@@ -539,21 +445,15 @@ function updateCardInput(index: number, value: string) {
 		onretryPractice={() => { practiceStatus = "idle"; practiceError = null; }}
 	/>
 {:else if data.attempt.workflowPhase === "transfer"}
-	{#if practiceStatus === "ready" && snapshot && snapshot.transfer.initialized && snapshot.transfer.queue.length > 0}
-		{#if practiceError}
-			<p class="mx-auto mb-5 max-w-3xl text-sm text-destructive" role="alert">{practiceError}</p>
-		{/if}
-		<TransferPractice
-			notes={transferFixtures()}
-			currentIndex={0}
-			title={t(lang, "eval.transfer.title")}
-			stageLabel={t(lang, "eval.transfer.stage")}
-			revealLabel={t(lang, "eval.transfer.reveal")}
-			incorrectLabel={t(lang, "eval.transfer.incorrect")}
-			passLabel={t(lang, "eval.transfer.pass")}
-			countLabels={reviewCountLabels}
-			onincorrect={() => rateTransfer(1)}
-			onpass={() => rateTransfer(3)}
+	{#if practiceStatus === "ready" && snapshot}
+		<TransferPass
+			{lang}
+			stage={3}
+			notes={data.practiceNotes}
+			pass={snapshot.transfer}
+			onchange={(transfer) => { if (snapshot) persist({ ...snapshot, transfer }); }}
+			submitRating={rateTransfer}
+			complete={completeTransfer}
 		/>
 	{:else}
 		<EvaluationWaiting
@@ -565,6 +465,7 @@ function updateCardInput(index: number, value: string) {
 		/>
 	{/if}
 {:else if data.attempt.workflowPhase === "completed"}
+	<StreakCompletion />
 	<section class="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center" aria-live="polite">
 		<CheckCircle2 class="mb-7 size-12 text-[#55705b]" strokeWidth={1.25} />
 		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(lang, "eval.complete.eyebrow")}</p>

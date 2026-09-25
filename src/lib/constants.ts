@@ -27,15 +27,12 @@ export const UI_VARIANT_LABELS: Record<UiVariant, string> = {
 export const BYOK_API_BASE_URLS = [
 	"https://openrouter.ai/api/v1",
 	"https://api.deepseek.com",
+	"https://api.openai.com/v1",
 	"https://dashscope.aliyuncs.com/compatible-mode/v1",
-	"https://api.hunyuan.cloud.tencent.com/v1",
-	"https://qianfan.baidubce.com/v2",
 	"https://open.bigmodel.cn/api/paas/v4",
 	"https://api.moonshot.cn/v1",
 	"https://api.minimaxi.com/v1",
-	"https://ark.cn-beijing.volces.com/api/v3",
 	"https://api.siliconflow.com/v1",
-	"https://api-inference.modelscope.cn/v1",
 	"https://api.stepfun.com/v1",
 ] as const;
 export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
@@ -43,17 +40,20 @@ export type ByokApiBaseUrl = (typeof BYOK_API_BASE_URLS)[number];
 export const BYOK_API_BASE_URL_LABELS: Record<ByokApiBaseUrl, string> = {
 	"https://openrouter.ai/api/v1": "OpenRouter",
 	"https://api.deepseek.com": "DeepSeek",
+	"https://api.openai.com/v1": "OpenAI",
 	"https://dashscope.aliyuncs.com/compatible-mode/v1": "Alibaba Cloud Bailian / Qwen",
-	"https://api.hunyuan.cloud.tencent.com/v1": "Tencent Hunyuan",
-	"https://qianfan.baidubce.com/v2": "Baidu Qianfan",
 	"https://open.bigmodel.cn/api/paas/v4": "Zhipu AI / GLM",
 	"https://api.moonshot.cn/v1": "Kimi / Moonshot",
 	"https://api.minimaxi.com/v1": "MiniMax",
-	"https://ark.cn-beijing.volces.com/api/v3": "Volcengine Ark / Doubao",
 	"https://api.siliconflow.com/v1": "SiliconFlow",
-	"https://api-inference.modelscope.cn/v1": "ModelScope",
 	"https://api.stepfun.com/v1": "StepFun",
 };
+
+/** One-click provider setups offered to users without a key; `model` doubles as the model field's placeholder. */
+export const BYOK_API_PRESETS = [
+	{ id: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", keyUrl: "https://platform.deepseek.com/api_keys" },
+	{ id: "openrouter", baseUrl: "https://openrouter.ai/api/v1", model: "~openai/gpt-luna-latest", keyUrl: "https://openrouter.ai/keys" },
+] as const satisfies readonly { id: string; baseUrl: ByokApiBaseUrl; model: string; keyUrl: string }[];
 
 export const LANGUAGE_CODES = ["en", "es", "fr", "ja"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
@@ -227,6 +227,12 @@ export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
 
 export const TRANSLATION_WORKFLOW_PHASES = ["draft", "submitted", "correction", "second_draft", "transfer", "completed"] as const;
 export type TranslationWorkflowPhase = (typeof TRANSLATION_WORKFLOW_PHASES)[number];
+/**
+ * The stages of a finished practice session's evaluation page. New stages go between `feedback`
+ * and `transfer`: the card pass is always last, and only reaching `completed` credits the quest.
+ */
+export const PRACTICE_EVALUATION_PHASES = ["feedback", "transfer", "completed"] as const;
+export type PracticeEvaluationPhase = (typeof PRACTICE_EVALUATION_PHASES)[number];
 export const TRANSLATION_CANDIDATE_COUNT = 3;
 
 export function resolveFeedbackLanguage(input: {

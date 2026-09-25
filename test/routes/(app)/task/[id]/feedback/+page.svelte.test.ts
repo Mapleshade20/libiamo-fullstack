@@ -12,6 +12,8 @@ it("renders already-generated feedback in the server HTML", () => {
 				language: "en",
 				user: { activeLanguage: "en" },
 				conversation: { chains: [], allMessages: [] },
+				transferNotes: [],
+				evaluationPhase: "feedback",
 				existingFeedback: {
 					feedbackLanguage: "en",
 					annotations: [],

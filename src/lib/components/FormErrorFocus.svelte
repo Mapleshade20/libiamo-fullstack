@@ -10,19 +10,16 @@ interface Props {
 
 let { formRef = null, errors = null, fieldOrder = [] }: Props = $props();
 
-let lastSignature = $state("");
-
 $effect(() => {
-	const signature = JSON.stringify(errors ?? {});
-	if (!signature || signature === "{}") {
-		lastSignature = "";
-		return;
-	}
-	if (signature === lastSignature) return;
-	lastSignature = signature;
-
-	tick().then(() => {
-		focusFirstFormError(formRef, errors, fieldOrder);
+	const currentErrors = errors;
+	const currentForm = formRef;
+	const order = fieldOrder;
+	let cancelled = false;
+	void tick().then(() => {
+		if (!cancelled) focusFirstFormError(currentForm, currentErrors, order);
 	});
+	return () => {
+		cancelled = true;
+	};
 });
 </script>

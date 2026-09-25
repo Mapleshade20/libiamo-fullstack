@@ -1,13 +1,16 @@
 <script lang="ts">
 import { untrack } from "svelte";
+import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
+import { STREAK_DEPENDENCY } from "$lib/load-dependencies";
 import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review";
 
 let { data } = $props();
@@ -98,6 +101,7 @@ async function rate(rating: number) {
 		if (!res.ok) throw new Error("Failed to submit rating");
 		const result: unknown = await res.json();
 		if (!isReviewRateResult(result)) throw new Error("Invalid review response");
+		if ("streak" in result && result.streak) void invalidate(STREAK_DEPENDENCY);
 
 		cardsReviewed++;
 		queue = advanceReviewQueue(queue, {
@@ -135,6 +139,7 @@ async function rate(rating: number) {
 				<button type="button" class="ml-2 underline" onclick={() => { error = null; }}>{t(lang, "common.retry")}</button>
 			</div>
 		{:else if sessionComplete}
+			<StreakCompletion />
 			<ReviewSessionSummary {cardsReviewed} timeSpentSeconds={Math.round((Date.now() - sessionStart) / 1000)} {lang} />
 		{:else if data.cards.length === 0}
 			<div class="flex flex-col items-center gap-4 py-12">
@@ -143,6 +148,7 @@ async function rate(rating: number) {
 			</div>
 		{:else if currentCard}
 			<StudyCard
+				editLink={{ href: `${base}/review/manage?note=${currentCard.id}#note-editor`, label: t(lang, "review.editCurrent") }}
 				vocab={currentCard.vocab}
 				nativeDefinition={currentCard.nativeDefinition}
 				nativeText={currentCard.nativeText}
@@ -161,12 +167,4 @@ async function rate(rating: number) {
 			/>
 		{/if}
 	</LoadingReveal>
-
-	{#if currentCard}
-		<div class="border-t border-border pt-6 text-center">
-			<a href="{base}/review/manage?note={currentCard.id}" class="text-muted-foreground underline hover:text-foreground"
-				>{t(lang, "review.editCurrent")}</a
-			>
-		</div>
-	{/if}
 </div>

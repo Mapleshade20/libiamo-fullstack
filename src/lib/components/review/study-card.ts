@@ -4,6 +4,6 @@ export type StudyCardAction = {
 	id: string;
 	label: string;
 	detail?: string;
-	shortcut?: string;
+	shortcut?: string | string[];
 	tone: StudyCardActionTone;
 };

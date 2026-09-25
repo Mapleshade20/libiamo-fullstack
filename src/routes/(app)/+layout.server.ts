@@ -1,8 +1,10 @@
-import crypto from "node:crypto";
 import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
-import { TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
+import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/load-dependencies";
 import { requireUser } from "$lib/server/auth/authz";
+import { db } from "$lib/server/db";
+import { gravatarAvatarUrl } from "$lib/server/gravatar";
+import { devStreakDayOffset, getStreakRecord, isReviewQueueEmpty } from "$lib/server/streak";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/trial-quota";
 import type { LayoutServerLoad } from "./$types";
 
@@ -12,16 +14,19 @@ export const load: LayoutServerLoad = async (event) => {
 	}
 
 	event.depends?.(TRIAL_QUOTA_DEPENDENCY);
+	event.depends?.(STREAK_DEPENDENCY);
 	const user = requireUser(event);
 
-	const email = user.email?.toLowerCase() || "";
-	const hash = crypto.createHash("md5").update(email).digest("hex");
-	const avatarUrl = `https://gravatar.com/avatar/${hash}?d=identicon&s=192`;
+	const avatarUrl = gravatarAvatarUrl(user.email);
 	const hasApiKey = await hasUserApiKey(user.id);
 	const trialQuota = hasApiKey ? null : await getTrialQuotaBalance(user.id);
+	// The record, not a rendered view: the client re-derives settlement at local midnight without a
+	// round trip, and SSR stays synchronous.
+	const [streak, streakQueueEmpty] = await Promise.all([getStreakRecord(user.id), isReviewQueueEmpty(db, user.id, new Date())]);
 
 	return {
 		user: {
+			id: user.id,
 			name: user.name,
 			email: user.email,
 			role: user.role,
@@ -32,5 +37,9 @@ export const load: LayoutServerLoad = async (event) => {
 		avatarUrl,
 		hasApiKey,
 		trialQuota,
+		streak,
+		streakQueueEmpty,
+		// Zero in production; `/streak-lab` sets it so the navbar travels with the server.
+		streakDayOffset: devStreakDayOffset(),
 	};
 };

@@ -40,6 +40,13 @@ export type CreateNotesInput = {
 	language: LanguageCode;
 	source: NoteSource;
 	notes: NoteContent[];
+	/**
+	 * When the new cards first become due — the start of the learner's next local day. A note
+	 * created by finishing a task must not join the same day's `/review` workload: the task that
+	 * produced it already practises it in its own transfer stage, and spaced repetition starts the
+	 * day after.
+	 */
+	availableFrom: Date;
 };
 
 export async function insertNotes(writer: Pick<typeof db, "insert">, input: CreateNotesInput) {
@@ -72,7 +79,7 @@ export async function insertNotes(writer: Pick<typeof db, "insert">, input: Crea
 					targetText: example.targetText.trim(),
 					nativeText: example.nativeText.trim(),
 				})),
-				fsrsCard: serializeCard(createNewCard()),
+				fsrsCard: serializeCard({ ...createNewCard(), due: input.availableFrom }),
 			})),
 		)
 		.returning();
@@ -130,6 +137,7 @@ export async function createNotesBatch(input: {
 	nativeLanguage: string;
 	feedbackItems: Array<{ tutorComment: string; category?: "grammar" | "vocabulary" | "coherence"; sourceContext?: string }>;
 	sessionOwnerId?: string;
+	availableFrom: Date;
 }) {
 	if (input.feedbackItems.length === 0) return [];
 
@@ -160,7 +168,7 @@ export async function createNotesBatch(input: {
 		nativeLanguage: input.nativeLanguage,
 		items: input.feedbackItems.map((item, ordinal) => ({ ordinal, ...item, conversationSnippet })),
 	});
-	return createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
+	return createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated, availableFrom: input.availableFrom });
 }
 
 export async function createNotesFromSelectionBatch(input: {
@@ -172,6 +180,7 @@ export async function createNotesFromSelectionBatch(input: {
 	currentContext: string;
 	previousContext?: string;
 	sourceKind?: string;
+	availableFrom: Date;
 }) {
 	const selectedText = input.selectedText.trim();
 	if (!selectedText) return { success: true as const, notes: [], count: 0, reason: "Selection is empty." };
@@ -183,7 +192,13 @@ export async function createNotesFromSelectionBatch(input: {
 		items: [{ ordinal: 0, selectedText, currentContext: input.currentContext, previousContext: input.previousContext, sourceKind: input.sourceKind }],
 	});
 	if (generated.length === 0) return { success: true as const, notes: [], count: 0, reason: "No reusable language point found." };
-	const created = await createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
+	const created = await createNotes({
+		userId: input.userId,
+		source: input.source,
+		language: input.language,
+		notes: generated,
+		availableFrom: input.availableFrom,
+	});
 	return { success: true as const, notes: created, count: created.length, reason: null };
 }
 
@@ -196,6 +211,7 @@ export async function createNoteFromSelectionQA(input: {
 	answer: string;
 	language: LanguageCode;
 	nativeLanguage: string;
+	availableFrom: Date;
 }) {
 	const generated = await generateNotes({
 		userId: input.userId,
@@ -213,7 +229,13 @@ export async function createNoteFromSelectionQA(input: {
 		],
 	});
 	if (generated.length === 0) return { success: true as const, note: null };
-	const [created] = await createNotes({ userId: input.userId, source: input.source, language: input.language, notes: generated });
+	const [created] = await createNotes({
+		userId: input.userId,
+		source: input.source,
+		language: input.language,
+		notes: generated,
+		availableFrom: input.availableFrom,
+	});
 	return { success: true as const, note: created };
 }
 

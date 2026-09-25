@@ -88,6 +88,7 @@ describe("session page server", () => {
 			request: { formData: vi.fn().mockResolvedValue(formData) },
 			params: { id: taskId },
 			locals: { user },
+			cookies: { get: vi.fn().mockReturnValue(undefined) },
 		} as any;
 	};
 

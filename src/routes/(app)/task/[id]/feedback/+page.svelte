@@ -4,17 +4,29 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { onMount } from "svelte";
 import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import { invalidateAll } from "$app/navigation";
+import { invalidate, invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import {
+	clearPracticeTransferSnapshot,
+	emptyPracticeTransferSnapshot,
+	type PracticeTransferSnapshot,
+	parsePracticeTransferSnapshot,
+	practiceTransferSnapshotKey,
+	savePracticeTransferSnapshot,
+} from "$lib/client/practice-transfer-snapshot";
 import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
 import LoadingReveal from "$lib/components/LoadingReveal.svelte";
 import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
+import TransferPass from "$lib/components/review/TransferPass.svelte";
+import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
+import { t } from "$lib/i18n";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
 import { parseMarkedText } from "$lib/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
@@ -38,12 +50,49 @@ let activeAnnotation = $state<{
 let askAppendRequest = $state<SelectionAppendRequest | null>(null);
 let askAppendCounter = $state(0);
 let detailsHref = $derived(`${base}/task/${data.taskId}`);
+let lang = $derived((data.user.activeLanguage ?? data.language) as LanguageCode);
+let transferSnapshot = $state<PracticeTransferSnapshot | null>(null);
+let finishingFeedback = $state(false);
+let stageError = $state<string | null>(null);
+let transferNoteIds = $derived(data.transferNotes.map((note) => note.id));
+/** Stages before the card pass; the pass is always the last one. */
+const FEEDBACK_STAGES = 1;
 
 // Keep local state in sync if page data is refreshed.
 $effect(() => {
 	if (data.existingFeedback && !feedback) {
 		feedback = data.existingFeedback;
 	}
+});
+
+// The pass's queue is tab-scoped: restore it when it still matches the session's notes.
+$effect(() => {
+	if (data.evaluationPhase !== "transfer") {
+		transferSnapshot = null;
+		return;
+	}
+	if (transferSnapshot) return;
+	const expected = { sessionId: data.sessionId, noteIds: transferNoteIds };
+	let restored: PracticeTransferSnapshot | null = null;
+	try {
+		restored = parsePracticeTransferSnapshot(sessionStorage.getItem(practiceTransferSnapshotKey(data.sessionId)), expected);
+	} catch {
+		/* unavailable */
+	}
+	transferSnapshot = restored ?? emptyPracticeTransferSnapshot(data.sessionId, transferNoteIds);
+});
+
+// Each stage starts at the top of the page with focus on its heading.
+let lastPhase = "";
+$effect(() => {
+	const phase = data.evaluationPhase;
+	if (phase === lastPhase) return;
+	const first = lastPhase === "";
+	lastPhase = phase;
+	if (first) return;
+	window.scrollTo({ top: 0 });
+	const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('h1[tabindex="-1"]')?.focus({ preventScroll: true }));
+	return () => cancelAnimationFrame(frame);
 });
 
 // Trigger client-only generation after mount. Calling fetch from an eager
@@ -110,7 +159,9 @@ function handleAskSelection(selection: LearningSelection) {
 }
 
 async function postFeedbackAction(action: string, formData: FormData) {
-	const response = await fetch(`?/${action}`, { method: "POST", body: formData });
+	const response = await fetch(`?/${action}`, { method: "POST", body: formData }).catch(() => {
+		throw new Error(t(lang, "common.error"));
+	});
 	const result = deserialize(await response.text());
 	if (result.type !== "success") {
 		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Request failed");
@@ -126,6 +177,7 @@ async function saveSelection(selection: LearningSelection) {
 	formData.set("previousContext", selection.previousContext);
 	formData.set("sourceKind", selection.sourceKind);
 	const result = await postFeedbackAction("saveSelectionNotes", formData);
+	void refreshNotes();
 	return { count: Number(result?.count ?? 0), reason: result?.reason as string | null | undefined };
 }
 
@@ -150,6 +202,12 @@ async function saveQaNote(input: LearningSelection & { question: string; answer:
 	formData.set("question", input.question);
 	formData.set("answer", input.answer);
 	await postFeedbackAction("saveSelectionQaNote", formData);
+	void refreshNotes();
+}
+
+/** A saved note changes the size of the final card pass, so its count must not wait for a reload. */
+function refreshNotes() {
+	return invalidate(PRACTICE_NOTES_DEPENDENCY);
 }
 
 function closeAnnotationPopup() {
@@ -194,6 +252,39 @@ function getCommentContext(messageId: number, comment: string): string {
 	return [`Learner message: ${message?.text ?? ""}`, `Tutor comment: ${stripMarkTags(comment)}`].filter(Boolean).join("\n");
 }
 
+async function finishFeedback() {
+	if (finishingFeedback) return;
+	finishingFeedback = true;
+	stageError = null;
+	try {
+		const form = new FormData();
+		form.set("sessionId", String(data.sessionId));
+		await postFeedbackAction("finishFeedback", form);
+		await invalidateAll();
+	} catch (cause) {
+		stageError = cause instanceof Error ? cause.message : t(lang, "common.error");
+	} finally {
+		finishingFeedback = false;
+	}
+}
+
+async function rateTransfer(input: { noteId: number; rating: 1 | 3; elapsedSeconds: number }) {
+	const form = new FormData();
+	form.set("sessionId", String(data.sessionId));
+	form.set("noteId", String(input.noteId));
+	form.set("rating", String(input.rating));
+	form.set("elapsedSeconds", String(input.elapsedSeconds));
+	await postFeedbackAction("rateTransfer", form);
+}
+
+async function completeTransfer() {
+	const form = new FormData();
+	form.set("sessionId", String(data.sessionId));
+	await postFeedbackAction("completeTransfer", form);
+	clearPracticeTransferSnapshot(data.sessionId);
+	await invalidateAll();
+}
+
 function getConversationExcerpt(): string {
 	return data.conversation.allMessages
 		.map((message) => `[${message.author}] ${message.text}`)
@@ -213,6 +304,9 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 
 <ConversationReadReceipt receipt={data.readReceipt} />
 
+{#if data.evaluationPhase === "completed"}
+	<StreakCompletion />
+{/if}
 <svelte:head>
 	<title>{data.taskTitle} · Feedback · Libiamo</title>
 	<meta name="description" content="Review feedback, corrections, and tutor comments for your completed practice session.">
@@ -223,10 +317,15 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
 		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
-				<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
-					<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-					<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
-				</a>
+				{#if data.evaluationPhase === "completed"}
+					<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
+						<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
+						<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
+					</a>
+				{:else}
+					<!-- Like translation, an unfinished evaluation offers no way back to the task, only forward. -->
+					<span aria-hidden="true"></span>
+				{/if}
 				<div class="min-w-0 flex items-center gap-3">
 					<h1 class="min-w-0 truncate text-base">{data.taskTitle}</h1>
 					<Button
@@ -253,162 +352,199 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			</div>
 		{/if}
 
-		<!-- Conversation + Comments Layout -->
-		<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
-			<!-- Left: Conversation History (2/3 on wide) -->
-			<div class="min-w-0 space-y-8 lg:col-span-2">
-				<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
+		{#if data.evaluationPhase === "transfer"}
+			{#if transferSnapshot}
+				<TransferPass
+					{lang}
+					stage={FEEDBACK_STAGES + 1}
+					notes={data.transferNotes}
+					pass={transferSnapshot.transfer}
+					onchange={(transfer) => {
+						if (!transferSnapshot) return;
+						transferSnapshot = { ...transferSnapshot, transfer };
+						savePracticeTransferSnapshot(transferSnapshot);
+					}}
+					submitRating={rateTransfer}
+					complete={completeTransfer}
+				/>
+			{/if}
+		{:else}
+			<!-- Conversation + Comments Layout -->
+			<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
+				<!-- Left: Conversation History (2/3 on wide) -->
+				<div class="min-w-0 space-y-8 lg:col-span-2">
+					<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
 
-				{#each data.conversation.chains as chain, chainIdx}
-					<div class="relative min-w-0">
-						<!-- Chain label -->
-						<div class="mb-4 flex items-center gap-3">
-							<div class="h-px flex-1 bg-[#e8e3db]"></div>
-							<span class="text-xs font-bold uppercase tracking-widest text-[#9b8f85]">{chain.label}</span>
-							<div class="h-px flex-1 bg-[#e8e3db]"></div>
-						</div>
+					{#each data.conversation.chains as chain, chainIdx}
+						<div class="relative min-w-0">
+							<!-- Chain label -->
+							<div class="mb-4 flex items-center gap-3">
+								<div class="h-px flex-1 bg-[#e8e3db]"></div>
+								<span class="text-xs font-bold uppercase tracking-widest text-[#9b8f85]">{chain.label}</span>
+								<div class="h-px flex-1 bg-[#e8e3db]"></div>
+							</div>
 
-						<!-- Messages in chain -->
-						<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
-							{#each chain.messages as message}
-								<div class="mb-6 relative">
-									<!-- Author badge -->
-									<div class="mb-2 flex items-center gap-2">
-										<span
-											class="inline-block rounded-full px-3 py-1 text-xs font-medium {message.role === 'user' ? 'bg-[#4a7c59]/10 text-[#4a7c59]' : message.role === 'agent' ? 'bg-[#6b6560]/10 text-[#6b6560]' : 'bg-[#9b8f85]/10 text-[#9b8f85]'}"
+							<!-- Messages in chain -->
+							<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
+								{#each chain.messages as message}
+									<div class="mb-6 relative">
+										<!-- Author badge -->
+										<div class="mb-2 flex items-center gap-2">
+											<span
+												class="inline-block rounded-full px-3 py-1 text-xs font-medium {message.role === 'user' ? 'bg-[#4a7c59]/10 text-[#4a7c59]' : message.role === 'agent' ? 'bg-[#6b6560]/10 text-[#6b6560]' : 'bg-[#9b8f85]/10 text-[#9b8f85]'}"
+											>
+												{message.author}
+											</span>
+											<span class="text-xs text-[#9b8f85]">#{message.seqId}</span>
+										</div>
+
+										<!-- Message content -->
+										<div
+											data-learning-selectable
+											data-learning-kind="message"
+											data-message-id={message.seqId}
+											data-current-context={getMessageContext(message.seqId).currentContext}
+											data-previous-context={getMessageContext(message.seqId).previousContext}
+											class="font-prose"
 										>
-											{message.author}
-										</span>
-										<span class="text-xs text-[#9b8f85]">#{message.seqId}</span>
-									</div>
-
-									<!-- Message content -->
-									<div
-										data-learning-selectable
-										data-learning-kind="message"
-										data-message-id={message.seqId}
-										data-current-context={getMessageContext(message.seqId).currentContext}
-										data-previous-context={getMessageContext(message.seqId).previousContext}
-										class="font-prose"
-									>
-										{#if message.role === "user"}
-											{@const annotation = getAnnotationForMessage(message.seqId)}
-											{#if annotation}
-												<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
-											{:else if isGenerating}
-												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-													<p class="[overflow-wrap:anywhere]">{message.text}</p>
-												</div>
+											{#if message.role === "user"}
+												{@const annotation = getAnnotationForMessage(message.seqId)}
+												{#if annotation}
+													<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
+												{:else if isGenerating}
+													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+														<p class="[overflow-wrap:anywhere]">{message.text}</p>
+													</div>
+												{:else}
+													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+														<p class="[overflow-wrap:anywhere]">{message.text}</p>
+													</div>
+												{/if}
 											{:else}
-												<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+												<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
 													<p class="[overflow-wrap:anywhere]">{message.text}</p>
 												</div>
 											{/if}
-										{:else}
-											<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
-												<p class="[overflow-wrap:anywhere]">{message.text}</p>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<!-- Right: Comments (1/3 on wide) -->
+				<div class="min-w-0 lg:col-span-1">
+					<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
+						<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
+
+						<LoadingReveal loading={isGenerating}>
+							{#snippet placeholder()}
+								<div class="min-w-0 space-y-4">
+									{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
+										<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+											<Skeleton class="h-4 w-3/4 mb-2" />
+											<Skeleton class="h-4 w-full mb-2" />
+											<Skeleton class="h-4 w-5/6" />
+										</div>
+									{/each}
+								</div>
+							{/snippet}
+							{#if feedback}
+								<div class="min-w-0 space-y-4">
+									{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
+										{@const comment = getCommentForMessage(message.seqId)}
+										{#if comment}
+											{@const commentContext = getMessageContext(message.seqId)}
+											<div
+												data-learning-selectable
+												data-learning-kind="comment"
+												data-message-id={message.seqId}
+												data-current-context={getCommentContext(message.seqId, comment)}
+												data-previous-context={commentContext.previousContext}
+												class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
+												transition:fade={{ duration: 200 }}
+											>
+												<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+												<AnnotatedTutorComment
+													{comment}
+													messageId={message.seqId}
+													onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
+												/>
 											</div>
 										{/if}
+									{/each}
+								</div>
+							{/if}
+						</LoadingReveal>
+						<!-- Objectives & Summary -->
+						{#if feedback}
+							<div class="mt-8 space-y-6">
+								<div class="border-t border-[#e8e3db] pt-6">
+									<h3 class="text-lg font-serif mb-4">Objectives</h3>
+									<div class="space-y-3">
+										{#each feedback.objectives as objective}
+											<div
+												data-learning-selectable
+												data-learning-kind="objective"
+												data-current-context={objective.text}
+												data-previous-context={getConversationExcerpt()}
+												class="flex items-start gap-3"
+											>
+												<span
+													class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white {gradeColor(objective.grade)}"
+												>
+													{objective.grade}
+												</span>
+												<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
+											</div>
+										{/each}
 									</div>
 								</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
 
-			<!-- Right: Comments (1/3 on wide) -->
-			<div class="min-w-0 lg:col-span-1">
-				<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
-					<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
-
-					<LoadingReveal loading={isGenerating}>
-						{#snippet placeholder()}
-							<div class="min-w-0 space-y-4">
-								{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
-									<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-										<Skeleton class="h-4 w-3/4 mb-2" />
-										<Skeleton class="h-4 w-full mb-2" />
-										<Skeleton class="h-4 w-5/6" />
-									</div>
-								{/each}
-							</div>
-						{/snippet}
-						{#if feedback}
-							<div class="min-w-0 space-y-4">
-								{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
-									{@const comment = getCommentForMessage(message.seqId)}
-									{#if comment}
-										{@const commentContext = getMessageContext(message.seqId)}
-										<div
-											data-learning-selectable
-											data-learning-kind="comment"
-											data-message-id={message.seqId}
-											data-current-context={getCommentContext(message.seqId, comment)}
-											data-previous-context={commentContext.previousContext}
-											class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
-											transition:fade={{ duration: 200 }}
-										>
-											<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
-											<AnnotatedTutorComment
-												{comment}
-												messageId={message.seqId}
-												onHighlightClick={(span, messageId, element) => handleCommentHighlightClick(span, messageId, element, comment)}
-											/>
-										</div>
-									{/if}
-								{/each}
+								<div class="border-t border-[#e8e3db] pt-6">
+									<h3 class="text-lg font-serif mb-4">Summary</h3>
+									<p
+										data-learning-selectable
+										data-learning-kind="summary"
+										data-current-context={feedback.summary}
+										data-previous-context={getConversationExcerpt()}
+										class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
+									>
+										{#each summaryParts as part}
+											{#if part.type === "mark"}
+												<mark class="rounded bg-yellow-200/60 px-1 font-semibold">{part.content}</mark>
+											{:else}
+												{part.content}
+											{/if}
+										{/each}
+									</p>
+								</div>
 							</div>
 						{/if}
-					</LoadingReveal>
-					<!-- Objectives & Summary -->
-					{#if feedback}
-						<div class="mt-8 space-y-6">
-							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif mb-4">Objectives</h3>
-								<div class="space-y-3">
-									{#each feedback.objectives as objective}
-										<div
-											data-learning-selectable
-											data-learning-kind="objective"
-											data-current-context={objective.text}
-											data-previous-context={getConversationExcerpt()}
-											class="flex items-start gap-3"
-										>
-											<span
-												class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white {gradeColor(objective.grade)}"
-											>
-												{objective.grade}
-											</span>
-											<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
-										</div>
-									{/each}
-								</div>
-							</div>
-
-							<div class="border-t border-[#e8e3db] pt-6">
-								<h3 class="text-lg font-serif mb-4">Summary</h3>
-								<p
-									data-learning-selectable
-									data-learning-kind="summary"
-									data-current-context={feedback.summary}
-									data-previous-context={getConversationExcerpt()}
-									class="whitespace-pre-wrap font-prose [overflow-wrap:anywhere]"
-								>
-									{#each summaryParts as part}
-										{#if part.type === "mark"}
-											<mark class="rounded bg-yellow-200/60 px-1 font-semibold">{part.content}</mark>
-										{:else}
-											{part.content}
-										{/if}
-									{/each}
-								</p>
-							</div>
-						</div>
-					{/if}
+					</div>
 				</div>
 			</div>
-		</div>
+			{#if data.evaluationPhase === "feedback" && feedback}
+				<!-- Every note collected above becomes the final card pass. -->
+				<div data-selection-ignore class="mt-10 rounded-lg border border-[#e8e3db] bg-white/70 p-6 text-center">
+					<h2 class="font-serif text-xl text-[#2a2520]">
+						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.title" : "eval.feedback.doneTitle")}
+					</h2>
+					<p class="mx-auto mt-2 max-w-md text-sm text-[#6b6560]">
+						{data.transferNotes.length > 0
+							? t(lang, "eval.transfer.practiceCards").replace("{count}", String(data.transferNotes.length))
+							: t(lang, "eval.feedback.noCards")}
+					</p>
+					<Button class="mt-4" disabled={finishingFeedback} onclick={() => void finishFeedback()}>
+						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.start" : "eval.feedback.finish")}
+					</Button>
+					{#if stageError}
+						<p class="mt-3 text-sm text-red-700" role="alert">{stageError}</p>
+					{/if}
+				</div>
+			{/if}
+		{/if}
 	</div>
 
 	<!-- Annotation popup -->
@@ -422,22 +558,25 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			previousContext={activeAnnotation.previousContext}
 			explanationMode={activeAnnotation.explanationMode}
 			onClose={closeAnnotationPopup}
+			onSaved={refreshNotes}
 		/>
 	{/if}
 
-	<!-- Selection actions -->
-	<SelectionActionBubble
-		lang={(data.user.activeLanguage ?? data.language) as LanguageCode}
-		sourceKey={`practice:${data.sessionId}`}
-		onAskSelection={handleAskSelection}
-		onSaveSelection={saveSelection}
-	/>
+	{#if data.evaluationPhase !== "transfer"}
+		<!-- Selection actions -->
+		<SelectionActionBubble
+			lang={(data.user.activeLanguage ?? data.language) as LanguageCode}
+			sourceKey={`practice:${data.sessionId}`}
+			onAskSelection={handleAskSelection}
+			onSaveSelection={saveSelection}
+		/>
 
-	<!-- Floating question FAB -->
-	<TutorQuestionPanel
-		appendRequest={askAppendRequest}
-		defaultSelection={{ text: getConversationExcerpt(), currentContext: getConversationExcerpt(), previousContext: "", sourceKind: "conversation" }}
-		onAsk={askTutor}
-		onSaveQa={saveQaNote}
-	/>
+		<!-- Floating question FAB -->
+		<TutorQuestionPanel
+			appendRequest={askAppendRequest}
+			defaultSelection={{ text: getConversationExcerpt(), currentContext: getConversationExcerpt(), previousContext: "", sourceKind: "conversation" }}
+			onAsk={askTutor}
+			onSaveQa={saveQaNote}
+		/>
+	{/if}
 </div>

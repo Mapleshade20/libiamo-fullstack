@@ -1,4 +1,5 @@
 <script lang="ts">
+import Pencil from "@lucide/svelte/icons/pencil";
 import type { StudyQueueCounts } from "$lib/review";
 import type { StudyCardAction, StudyCardActionTone } from "./study-card";
 
@@ -13,6 +14,7 @@ interface Props {
 	countLabels: { new: string; learning: string; review: string };
 	actions: StudyCardAction[];
 	disabled?: boolean;
+	editLink?: { href: string; label: string };
 	onreveal: () => void;
 	onaction: (id: string) => void;
 }
@@ -28,6 +30,7 @@ let {
 	countLabels,
 	actions,
 	disabled = false,
+	editLink,
 	onreveal,
 	onaction,
 }: Props = $props();
@@ -44,7 +47,7 @@ function handleKeydown(event: KeyboardEvent) {
 		return;
 	}
 	if (!revealed) return;
-	const action = actions.find((item) => item.shortcut === event.key);
+	const action = actions.find((item) => (Array.isArray(item.shortcut) ? item.shortcut.includes(event.key) : item.shortcut === event.key));
 	if (!action) return;
 	event.preventDefault();
 	onaction(action.id);
@@ -66,7 +69,17 @@ function actionClasses(tone: StudyCardActionTone) {
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="w-full pb-40 sm:pb-44">
+<div class="relative w-full pb-40 sm:pb-44">
+	{#if editLink}
+		<a
+			href={editLink.href}
+			aria-label={editLink.label}
+			title={editLink.label}
+			class="absolute top-0 right-5 z-10 flex size-11 -translate-y-1/2 rotate-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-[color,transform] duration-250 hover:rotate-0 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none sm:right-7"
+		>
+			<Pencil size={19} strokeWidth={1.75} aria-hidden="true" />
+		</a>
+	{/if}
 	<article
 		class="grid min-h-[27rem] overflow-hidden rounded-[1.75rem] border border-border/80 bg-card shadow-[0_18px_50px_-35px_rgba(55,45,35,0.45)] sm:min-h-[30rem]"
 		aria-label={showAnswerLabel}
@@ -99,24 +112,9 @@ function actionClasses(tone: StudyCardActionTone) {
 </div>
 
 <footer
-	class="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_-24px_rgba(55,45,35,0.45)] backdrop-blur-md"
+	class="fixed inset-x-0 bottom-[var(--app-bottom-nav-height,0px)] z-40 border-t border-border/70 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_-24px_rgba(55,45,35,0.45)] backdrop-blur-md"
 >
 	<div class="mx-auto w-full max-w-3xl">
-		<div
-			class="mb-2 flex items-center justify-center gap-2 font-mono text-lg font-semibold tabular-nums"
-			aria-label={`${countLabels.new}: ${counts.new}; ${countLabels.learning}: ${counts.learning}; ${countLabels.review}: ${counts.review}`}
-		>
-			<span class="border-b border-current text-[#4d85b5]" title={countLabels.new}>{counts.new}<span class="sr-only"> {countLabels.new}</span></span>
-			<span class="text-muted-foreground" aria-hidden="true">+</span>
-			<span class="border-b border-current text-[#b76565]" title={countLabels.learning}
-				>{counts.learning}<span class="sr-only"> {countLabels.learning}</span></span
-			>
-			<span class="text-muted-foreground" aria-hidden="true">+</span>
-			<span class="border-b border-current text-[#4d9b70]" title={countLabels.review}
-				>{counts.review}<span class="sr-only"> {countLabels.review}</span></span
-			>
-		</div>
-
 		<div class="flex min-h-16 items-center">
 			{#if !revealed}
 				<button
@@ -144,6 +142,20 @@ function actionClasses(tone: StudyCardActionTone) {
 					{/each}
 				</div>
 			{/if}
+		</div>
+		<div
+			class="mt-2 flex items-center justify-center gap-2 font-mono text-lg font-semibold tabular-nums"
+			aria-label={`${countLabels.new}: ${counts.new}; ${countLabels.learning}: ${counts.learning}; ${countLabels.review}: ${counts.review}`}
+		>
+			<span class="border-b border-current text-[#4d85b5]" title={countLabels.new}>{counts.new}<span class="sr-only"> {countLabels.new}</span></span>
+			<span class="text-muted-foreground" aria-hidden="true">+</span>
+			<span class="border-b border-current text-[#b76565]" title={countLabels.learning}
+				>{counts.learning}<span class="sr-only"> {countLabels.learning}</span></span
+			>
+			<span class="text-muted-foreground" aria-hidden="true">+</span>
+			<span class="border-b border-current text-[#4d9b70]" title={countLabels.review}
+				>{counts.review}<span class="sr-only"> {countLabels.review}</span></span
+			>
 		</div>
 	</div>
 </footer>

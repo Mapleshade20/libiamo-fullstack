@@ -9,6 +9,7 @@ const data = {
 	accountScope: "account-a",
 	questHallEdition: "2026-09-04",
 	user: {
+		id: "user_1",
 		name: "Alice",
 		email: "alice@example.com",
 		role: "user",
@@ -31,6 +32,9 @@ const data = {
 	],
 	accountResult: null,
 	accountFailure: null,
+	streak: null,
+	streakQueueEmpty: true,
+	streakDayOffset: 0,
 };
 
 describe("Profile page", () => {
@@ -38,7 +42,6 @@ describe("Profile page", () => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected }, form: null } });
 		expect(body).toContain(t("fr", "profile.passwordMethod"));
 		expect(body).toMatch(/<span[^>]*class="block truncate text-xs text-muted-foreground"[^>]*>alice@example.com<\/span>/);
-		expect(body).not.toContain(`>${t("fr", "profile.connected")}</span>`);
 		expect(body).toContain('action="?/changeEmail"');
 		expect(body).toContain('<dialog aria-labelledby="email-dialog-title"');
 		expect(body).not.toContain("<summary");
@@ -56,6 +59,22 @@ describe("Profile page", () => {
 		});
 		expect(body).toContain('value="saved-model"');
 		expect(body).toMatch(/<option[^>]*value="https:\/\/api.deepseek.com"[^>]*selected/);
+	});
+	it.each(["https://api.deepseek.com", "https://api.openai.com/v1"])("only offers to retain the key for its saved provider (%s)", (apiBaseUrl) => {
+		const { body } = render(ProfilePage, {
+			props: {
+				data: { ...data, hasApiKey: true, apiBaseUrl: "https://api.deepseek.com", apiModel: "saved-model" },
+				form: {
+					errors: { apiKey: ["Required"] },
+					values: { apiBaseUrl, apiModel: "saved-model", name: undefined, nativeLanguage: undefined, feedbackLanguagePreference: undefined },
+				},
+			},
+		});
+		const input = body.match(/<input[^>]*name="apiKey"[^>]*>/)?.[0];
+		expect(input).toBeDefined();
+		const placeholder = apiBaseUrl === "https://api.deepseek.com" ? "profile.apiKeyKeepPlaceholder" : "profile.apiKeyPlaceholder";
+		expect(input).toContain(`placeholder="${t("fr", placeholder)}"`);
+		expect(input).not.toMatch(/value="[^"]+"/);
 	});
 	it("renders connected and available social login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
@@ -155,6 +174,22 @@ describe("Profile page", () => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, accountFailure: failure as never }, form: null } });
 
 		expect(body).toContain(t("fr", key));
+	});
+
+	// Gravatar is probed on mount, so SSR can only ever state the checking line; the
+	// connected/missing branches are unreachable without a browser.
+	it("states the checking avatar line before hydration, already linking Gravatar", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
+		const link =
+			'<a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" class="font-medium text-primary hover:underline">Gravatar</a>';
+
+		const start = body.indexOf('<p class="text-sm text-muted-foreground">');
+		const avatarLine = body.slice(start, body.indexOf("</p>", start));
+
+		expect(avatarLine).toContain(t("fr", "profile.avatarChecking").replace("{link}", link));
+		for (const key of ["profile.avatarConnected", "profile.avatarMissing"]) {
+			expect(body).not.toContain(t("fr", key).split("{link}")[0]);
+		}
 	});
 
 	it("keeps the name form in a closed, labelled dialog instead of expanding the avatar row", () => {

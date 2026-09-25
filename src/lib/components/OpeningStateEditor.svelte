@@ -1,10 +1,11 @@
 <script lang="ts">
 import { getDefaultOpeningState, type OpeningState, type UiVariant } from "$lib/admin/variant-helpers";
+import { validateBeforeSubmit } from "$lib/client/form-attention";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
-import { type FieldDef, getEditorFields } from "$lib/schemas";
+import { type FieldDef, getEditorFields, validateOpeningState } from "$lib/schemas";
 
 interface Props {
 	value: Record<string, unknown>;
@@ -153,7 +154,15 @@ function resetToDefaults() {
 const fields = $derived(getEditorFields(ui));
 </script>
 
-<div class="space-y-4">
+<div
+	class="space-y-4"
+	tabindex="-1"
+	data-validation-group
+	use:validateBeforeSubmit={() => {
+	const result = validateOpeningState(ui, value);
+	return result && !result.success ? result.error.issues : [];
+}}
+>
 	{#if name}
 		<input type="hidden" {name} value={serialized}>
 	{/if}
@@ -180,6 +189,7 @@ const fields = $derived(getEditorFields(ui));
 			<Label>{field.label}</Label>
 			{#if ["tags", "fandoms", "relationships", "characters", "additionalTags", "categories"].includes(field.key)}
 				<Input
+					data-feedback-name={path}
 					value={Array.isArray(getFlatField(path)) ? (getFlatField(path) as string[]).join(", ") : String(getFlatField(path) ?? "")}
 					placeholder={field.placeholder}
 					required={field.required}
@@ -190,6 +200,7 @@ const fields = $derived(getEditorFields(ui));
 				/>
 			{:else}
 				<Input
+					data-feedback-name={path}
 					value={String(getFlatField(path) ?? "")}
 					placeholder={field.placeholder}
 					required={field.required}
@@ -201,6 +212,7 @@ const fields = $derived(getEditorFields(ui));
 		<div class="space-y-1">
 			<Label>{field.label}</Label>
 			<Textarea
+				data-feedback-name={path}
 				rows={field.rows ?? 3}
 				value={String(getFlatField(path) ?? "")}
 				placeholder={field.placeholder}
@@ -212,6 +224,7 @@ const fields = $derived(getEditorFields(ui));
 		<div class="space-y-1">
 			<Label>{field.label}</Label>
 			<Input
+				data-feedback-name={path}
 				type="number"
 				value={getFlatField(path) ?? ""}
 				placeholder={field.placeholder}

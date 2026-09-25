@@ -688,8 +688,12 @@ onMount(() => {
 	--menu-ribbon-reach: 0.62rem;
 	position: relative;
 	min-height: calc(100dvh - 8rem);
-	padding: clamp(1rem, 2.5vw, 2rem);
+	/* The shell owns the hall's side margins so the masthead shares them; only the tail is ours. */
+	padding: 0 0 clamp(1rem, 2.5vw, 2rem);
 	overflow: clip;
+	/* The side padding used to absorb the ribbon tabs, which reach past the spread; the clip margin
+	   now does it without pushing the spread off the hall's margins. */
+	overflow-clip-margin: 1.5rem;
 	color: var(--menu-ink);
 }
 .hall-heading,
@@ -703,8 +707,7 @@ onMount(() => {
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: clamp(1rem, 3vw, 2.5rem);
-	max-width: 74rem;
-	margin: 0 auto clamp(1.25rem, 3vw, 2.25rem);
+	margin: 0 0 clamp(1.25rem, 3vw, 2.25rem);
 }
 
 .heading-copy {
@@ -714,7 +717,7 @@ onMount(() => {
 
 .heading-copy h1 {
 	margin: 0;
-	font-size: clamp(2rem, 4vw, 3.65rem);
+	font-size: clamp(2rem, 4vw, 2.45rem);
 	font-weight: 500;
 	letter-spacing: 0.006em;
 	line-height: 1.02;
@@ -735,13 +738,6 @@ onMount(() => {
 	min-height: clamp(39rem, 68vw, 54rem);
 }
 
-@media (min-width: 64.01rem) {
-	.quest-menu {
-		width: min(90rem, calc(100vw - 2rem));
-		margin-inline: calc((100% - min(90rem, calc(100vw - 2rem))) / 2);
-	}
-}
-
 @media (max-width: 64rem) {
 	.heading-copy h1 {
 		white-space: normal;
@@ -754,16 +750,8 @@ onMount(() => {
 	}
 }
 
-@media (max-width: 56.24rem) {
-	.quest-menu {
-		padding: 1rem;
-	}
-}
-
 @media (width < 56.25rem) {
 	.quest-menu {
-		max-width: 42rem;
-		margin-inline: auto;
 		padding: 0;
 	}
 	.heading-copy h1 {

@@ -4,7 +4,7 @@ import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
 import Star from "@lucide/svelte/icons/star";
 import { base } from "$app/paths";
-import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
+import QuestMenuStatusMark from "$lib/components/quest-hall/quest-menu/QuestMenuStatusMark.svelte";
 import TranslateModal from "$lib/components/translate/TranslateModal.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
@@ -12,6 +12,7 @@ import type { LanguageCode } from "$lib/constants";
 import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { renderMarkdown } from "$lib/markdown";
+import { questState } from "$lib/quest-hall/menu";
 import type { TaskPreparationTask } from "$lib/server/task-preparation";
 
 interface Props {
@@ -26,15 +27,13 @@ interface Props {
 let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, simulated = false }: Props = $props();
 
 let objectives = $derived(task.objectives ?? []);
-let isPracticeEnabled = $derived(isPracticeUiImplemented(task.templateUi));
-let isFinished = $derived(task.sessionStatus === "completed" || task.sessionStatus === "evaluated");
-let isAbandoned = $derived(task.sessionStatus === "abandoned");
+let progress = $derived(questState(task));
 let lang = $derived(task.language as LanguageCode);
 let showTranslateModal = $state(false);
 let showNativeLanguagePrompt = $state(false);
 let expressionsTrigger = $state<HTMLButtonElement | null>(null);
 let hasNativeLanguage = $derived(typeof nativeLanguage === "string" && nativeLanguage.trim().length > 0);
-let canShowUsefulExpressions = $derived(!isFinished && (!hasNativeLanguage || nativeLanguage !== task.language));
+let canShowUsefulExpressions = $derived((progress === "ready" || progress === "active") && (!hasNativeLanguage || nativeLanguage !== task.language));
 let resolvedBackLabel = $derived(backLabel ?? t(lang, "task.returnToHall"));
 let generateExpressionsAction = $derived(`${base}/task/${task.id}?/generateExpressions`);
 let evaluateTranslationAction = $derived(`${base}/task/${task.id}?/evaluateTranslation`);
@@ -81,13 +80,7 @@ function difficultyLabel(level: number): string {
 	<div class="task-preparation-body mt-12 flex flex-1 flex-col">
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
-				{#if isFinished}
-					<Badge class="border-green-500/20 bg-green-500/10 text-[10px] font-bold uppercase tracking-widest text-green-600 hover:bg-green-500/10">
-						{t(lang, "task.completed")}
-					</Badge>
-				{:else if isAbandoned}
-					<Badge variant="destructive" class="text-[10px] font-bold uppercase tracking-widest"> {t(lang, "task.abandoned")} </Badge>
-				{/if}
+				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">
 					{UI_VARIANT_LABELS[task.templateUi as keyof typeof UI_VARIANT_LABELS] ?? task.templateUi}
 				</Badge>
@@ -154,28 +147,27 @@ function difficultyLabel(level: number): string {
 						</Button>
 					{/if}
 
-					{#if isFinished}
+					{#if progress === "finished"}
 						{#if simulated}
-							<Button class="min-h-11 w-full justify-center border border-green-400 bg-green-100 px-4 text-black sm:w-auto sm:px-8" disabled>
-								Bilan simulé
-							</Button>
+							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled>Bilan simulé</Button>
 						{:else}
-							<Button
-								class="min-h-11 w-full justify-center border border-green-400 bg-green-100 px-4 text-black hover:bg-green-200 sm:w-auto sm:px-8"
-								href="{base}/task/{task.id}/feedback"
-							>
+							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback">
 								{t(lang, "hall.reviewReport")}
 							</Button>
 						{/if}
-					{:else if isAbandoned}
+					{:else if progress === "reviewing"}
+						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback">
+							{t(lang, "task.continueEvaluation")}
+						</Button>
+					{:else if progress === "stopped"}
 						<!-- Abuse termination ends the session while still delivering the agent's
 					     parting reply, so the transcript must stay reachable to read it. -->
 						<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
 							{t(lang, "task.viewConversation")}
 						</Button>
-					{:else if isPracticeEnabled}
+					{:else if progress === "active" || progress === "ready"}
 						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
-							{t(lang, "task.startPractice")}
+							{t(lang, progress === "active" ? "task.continuePractice" : "task.startPractice")}
 						</Button>
 					{:else}
 						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled variant="secondary">{t(lang, "task.comingSoon")}</Button>
@@ -184,10 +176,16 @@ function difficultyLabel(level: number): string {
 			</div>
 		</div>
 	</div>
+	{#if progress === "finished"}
+		<!-- Matches the translation details page; clipped separately so edge focus rings are not. -->
+		<div class="completion-watermark" aria-hidden="true"><CheckCircle2 size={280} strokeWidth={1} /></div>
+	{/if}
 </section>
 
 <style>
 .task-preparation {
+	position: relative;
+	isolation: isolate;
 	display: flex;
 	min-width: 0;
 	flex: 1;
@@ -196,6 +194,21 @@ function difficultyLabel(level: number): string {
 
 .task-preparation {
 	min-height: clamp(30rem, 64vh, 42rem);
+}
+
+.completion-watermark {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	overflow: hidden;
+	color: color-mix(in oklab, #278553 7%, transparent);
+	pointer-events: none;
+}
+
+.completion-watermark :global(svg) {
+	position: absolute;
+	right: -5rem;
+	top: -4rem;
 }
 
 .task-preparation .task-preparation-body {

@@ -1,27 +1,7 @@
 import type { LocalCardState, SecondDraftLocalState } from "$lib/components/translate-evaluation/types";
-import type { StudyQueueKind } from "$lib/review";
+import { isTransferQueueState, type TransferQueueState } from "$lib/transfer-queue";
 
 const SCHEMA_VERSION = 3;
-
-export type TranslationTransferQueueItem = { noteId: number; exampleIndex: number; queueKind: StudyQueueKind };
-
-export type TranslationTransferSnapshot = {
-	initialized: boolean;
-	queue: TranslationTransferQueueItem[];
-};
-
-export function advanceTranslationTransferQueue(
-	queue: readonly TranslationTransferQueueItem[],
-	outcome: "incorrect" | "pass",
-	nextExampleIndex?: number,
-): TranslationTransferQueueItem[] {
-	const [active, ...remaining] = queue;
-	if (!active) return [];
-	if (outcome === "pass") return remaining;
-	if (!Number.isInteger(nextExampleIndex) || Number(nextExampleIndex) < 0)
-		throw new Error("A valid next example is required after an incorrect answer.");
-	return [...remaining, { noteId: active.noteId, exampleIndex: Number(nextExampleIndex), queueKind: "learning" }];
-}
 
 export type TranslationFeedbackSnapshot = {
 	schemaVersion: typeof SCHEMA_VERSION;
@@ -31,7 +11,7 @@ export type TranslationFeedbackSnapshot = {
 	currentCardIndex: number;
 	cards: LocalCardState[];
 	secondDraft: SecondDraftLocalState;
-	transfer: TranslationTransferSnapshot;
+	transfer: TransferQueueState;
 };
 
 export function translationFeedbackSnapshotKey(attemptId: number) {
@@ -68,25 +48,6 @@ function isSecondDraftState(value: unknown): value is SecondDraftLocalState {
 	);
 }
 
-function isTransferState(value: unknown): value is TranslationTransferSnapshot {
-	if (!value || typeof value !== "object") return false;
-	const state = value as Partial<TranslationTransferSnapshot>;
-	return (
-		typeof state.initialized === "boolean" &&
-		Array.isArray(state.queue) &&
-		state.queue.every(
-			(item) =>
-				!!item &&
-				typeof item === "object" &&
-				Number.isInteger((item as { noteId?: unknown }).noteId) &&
-				Number((item as { noteId: number }).noteId) > 0 &&
-				Number.isInteger((item as { exampleIndex?: unknown }).exampleIndex) &&
-				Number((item as { exampleIndex: number }).exampleIndex) >= 0 &&
-				["new", "learning", "review"].includes(String((item as { queueKind?: unknown }).queueKind)),
-		)
-	);
-}
-
 export function parseTranslationFeedbackSnapshot(raw: string | null, expected: { attemptId: number; evaluatedAt: string; cardCount: number }) {
 	if (!raw) return null;
 	try {
@@ -103,7 +64,7 @@ export function parseTranslationFeedbackSnapshot(raw: string | null, expected: {
 			(value.currentCardIndex ?? 0) > Math.max(0, expected.cardCount - 1) ||
 			(value.correctionStep !== "overview" && value.correctionStep !== "cards") ||
 			!isSecondDraftState(value.secondDraft) ||
-			!isTransferState(value.transfer)
+			!isTransferQueueState(value.transfer)
 		) {
 			return null;
 		}

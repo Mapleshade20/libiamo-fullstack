@@ -18,6 +18,7 @@ function taskData(id: number) {
 			materialsMd: null,
 			pointReward: 1,
 			sessionStatus: null,
+			evaluationPhase: null,
 		},
 	};
 }

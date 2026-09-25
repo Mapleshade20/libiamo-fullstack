@@ -76,6 +76,9 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
+				if (error.body?.code === "INVALID_EMAIL_OR_PASSWORD" || error.body?.code === "INVALID_PASSWORD") {
+					return fail(400, { errors: { email: undefined, password: ["Invalid email or password"] }, values: raw });
+				}
 				return fail(400, { message: error.message || "Sign in failed", values: raw });
 			}
 			return fail(500, { message: "Unexpected error", values: raw });

@@ -1,7 +1,7 @@
 import { render } from "svelte/server";
 import { describe, expect, it, vi } from "vitest";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
-import TransferPractice from "$lib/components/translate-evaluation/TransferPractice.svelte";
+import TransferStage from "$lib/components/review/TransferStage.svelte";
 
 describe("shared vocabulary study card", () => {
 	it("reserves both target-language answers while keeping them hidden before reveal", () => {
@@ -31,7 +31,7 @@ describe("shared vocabulary study card", () => {
 	});
 
 	it("uses the same hidden-answer component for transfer without an answer input", () => {
-		const { body } = render(TransferPractice, {
+		const { body } = render(TransferStage, {
 			props: {
 				notes: [
 					{

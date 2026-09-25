@@ -5,10 +5,12 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Save from "@lucide/svelte/icons/save";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import { deserialize } from "$app/forms";
+import { showValidationIssues } from "$lib/client/form-attention";
 import type { LanguageCode } from "$lib/constants";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
 import type { ManagedNote } from "$lib/note-management";
+import { managedNoteSetDueSchema, managedNoteUpdateSchema } from "$lib/schemas/review";
 
 let {
 	note,
@@ -36,6 +38,8 @@ let dueDays = $state(0);
 let pending = $state<"save" | "due" | "reset" | "delete" | null>(null);
 let confirmAction = $state<"reset" | "delete" | null>(null);
 let message = $state<{ tone: "success" | "error"; text: string } | null>(null);
+let editorForm: HTMLFormElement;
+let dueGroup: HTMLDivElement;
 
 function formatDate(value: string) {
 	return new Date(value).toLocaleString(lang, { dateStyle: "medium", timeStyle: "short" });
@@ -54,6 +58,11 @@ async function postAction(action: string, values: Record<string, string>) {
 
 async function saveNote() {
 	if (pending) return;
+	const validation = managedNoteUpdateSchema.safeParse({ noteId: note.id, language, vocab, targetDefinition, nativeDefinition, examples });
+	if (!validation.success) {
+		showValidationIssues(editorForm, validation.error.issues);
+		return;
+	}
 	pending = "save";
 	message = null;
 	try {
@@ -77,6 +86,11 @@ async function saveNote() {
 
 async function setDue() {
 	if (pending) return;
+	const validation = managedNoteSetDueSchema.safeParse({ noteId: note.id, days: dueDays });
+	if (!validation.success) {
+		showValidationIssues(dueGroup, validation.error.issues);
+		return;
+	}
 	pending = "due";
 	message = null;
 	try {
@@ -137,6 +151,9 @@ async function deleteCard() {
 	</header>
 
 	<form
+		bind:this={editorForm}
+		tabindex="-1"
+		data-validation-group
 		class="space-y-5 px-5 py-5 sm:px-6"
 		onsubmit={(event) => {
 			event.preventDefault();
@@ -147,6 +164,7 @@ async function deleteCard() {
 			<label class="space-y-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				{t(lang, "review.manage.language")}
 				<select
+					name="language"
 					bind:value={language}
 					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
 				>
@@ -158,6 +176,7 @@ async function deleteCard() {
 			<label class="space-y-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				{t(lang, "review.manage.vocabulary")}
 				<input
+					name="vocab"
 					bind:value={vocab}
 					maxlength={USER_TEXT_MAX_LENGTH}
 					required
@@ -170,6 +189,7 @@ async function deleteCard() {
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				{t(lang, "review.manage.targetDefinition")}
 				<textarea
+					name="targetDefinition"
 					bind:value={targetDefinition}
 					maxlength={USER_TEXT_MAX_LENGTH}
 					rows={4}
@@ -180,6 +200,7 @@ async function deleteCard() {
 			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 				{t(lang, "review.manage.nativeDefinition")}
 				<textarea
+					name="nativeDefinition"
 					bind:value={nativeDefinition}
 					maxlength={USER_TEXT_MAX_LENGTH}
 					rows={4}
@@ -196,6 +217,7 @@ async function deleteCard() {
 					<p class="mb-2 font-serif text-xs italic text-muted-foreground">{t(lang, "review.manage.example")} {index + 1}</p>
 					<div class="grid gap-2 sm:grid-cols-2">
 						<textarea
+							name={`examples.${index}.targetText`}
 							bind:value={example.targetText}
 							maxlength={USER_TEXT_MAX_LENGTH}
 							rows={2}
@@ -204,6 +226,7 @@ async function deleteCard() {
 							class="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed"
 						></textarea>
 						<textarea
+							name={`examples.${index}.nativeText`}
 							bind:value={example.nativeText}
 							maxlength={USER_TEXT_MAX_LENGTH}
 							rows={2}
@@ -234,11 +257,12 @@ async function deleteCard() {
 	</form>
 
 	<section class="grid border-t border-border bg-stone-100/35 sm:grid-cols-3 sm:divide-x sm:divide-border">
-		<div class="space-y-3 p-4">
+		<div class="space-y-3 p-4" data-field-container>
 			<div class="flex items-center gap-2 text-sm font-semibold"><CalendarClock size={16} />{t(lang, "review.manage.setDue")}</div>
 			<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.setDueDescription")}</p>
-			<div class="flex gap-2">
+			<div class="flex gap-2" bind:this={dueGroup}>
 				<input
+					name="days"
 					type="number"
 					min="0"
 					max={REVIEW_MAXIMUM_INTERVAL_DAYS}

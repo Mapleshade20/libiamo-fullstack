@@ -37,6 +37,7 @@ export const load: PageServerLoad = async (event) => {
 		}));
 	} catch (err) {
 		console.error("Failed to load review data:", err);
+		throw error(503, "Review queue unavailable");
 	}
 
 	return { cards, reviewLanguage: language };

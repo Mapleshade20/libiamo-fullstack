@@ -2,7 +2,7 @@ import { desc } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translationAttempt } from "$lib/server/db/schema";
 
-const { mockDb, mockGenerateEvaluation, mockVerifyCorrection } = vi.hoisted(() => {
+const { mockDb, mockGenerateEvaluation, mockVerifyCorrection, mockCreditQuest } = vi.hoisted(() => {
 	const db = {
 		select: vi.fn(),
 		update: vi.fn(),
@@ -10,10 +10,11 @@ const { mockDb, mockGenerateEvaluation, mockVerifyCorrection } = vi.hoisted(() =
 		transaction: vi.fn(),
 	};
 	db.transaction.mockImplementation(async (callback) => callback(db));
-	return { mockDb: db, mockGenerateEvaluation: vi.fn(), mockVerifyCorrection: vi.fn() };
+	return { mockDb: db, mockGenerateEvaluation: vi.fn(), mockVerifyCorrection: vi.fn(), mockCreditQuest: vi.fn() };
 });
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
+vi.mock("$lib/server/streak", () => ({ creditQuestCompletion: mockCreditQuest }));
 vi.mock("$lib/server/translation-evaluation/generation", () => ({ generateTranslationEvaluation: mockGenerateEvaluation }));
 vi.mock("$lib/server/translation-evaluation/verifier", () => ({ verifyCorrection: mockVerifyCorrection }));
 
@@ -214,9 +215,11 @@ describe("correction transitions", () => {
 			generation1Messages: { messages: [{ role: "assistant", content: "history" }] },
 		});
 		const sets = mockUpdateRows([[{ workflowPhase: "completed" }]]);
-		expect(await finishTranslationCorrections(attempt, "2026-07-15T12:00:00.000Z")).toBe("completed");
+		expect(await finishTranslationCorrections(attempt, "2026-07-15T12:00:00.000Z", "UTC")).toBe("completed");
 		expect(sets[0]).toHaveBeenCalledWith(
 			expect.objectContaining({ workflowPhase: "completed", generation1Messages: null, completedAt: expect.any(Date) }),
 		);
+		// Finishing here is the whole quest, so the claim that completes the attempt credits it.
+		expect(mockCreditQuest).toHaveBeenCalledWith(mockDb, attempt.userId, expect.any(Date), "UTC");
 	});
 });

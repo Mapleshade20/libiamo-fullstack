@@ -1,8 +1,9 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, date, index, integer, jsonb, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import type { TranslationWorkflowPhase } from "$lib/constants";
+import type { PracticeEvaluationPhase, TranslationWorkflowPhase } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm";
 import type { Generation1Evaluation } from "$lib/server/translation-evaluation/schema";
+import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak-history";
 import type { TranslationCardWarning } from "$lib/translation-evaluation/types";
 import { user } from "./auth.schema";
 import {
@@ -19,6 +20,24 @@ import {
 	uiVariantEnum,
 	urgencyEnum,
 } from "./enums";
+
+// Sparse outcomes; the composite primary key also serves bounded calendar range queries.
+export const streakDay = pgTable(
+	"streak_day",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		day: date("day").notNull(),
+		state: text("state").$type<StreakDayState>().notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.day] }),
+		// `sql.raw` because a check constraint is serialized into the migration as text: a bound
+		// parameter would not survive. The values are a local literal, never input.
+		check("streak_day_state_check", sql`${t.state} in (${sql.raw(STREAK_DAY_STATES.map((state) => `'${state}'`).join(", "))})`),
+	],
+);
 
 // ── template ─────────────────────────────────────────────────────────
 export const template = pgTable(
@@ -180,12 +199,19 @@ export const practiceSession = pgTable(
 		tutorFeedback: jsonb("tutor_feedback"),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		completedAt: timestamp("completed_at"),
+		/**
+		 * Where the learner is on the evaluation page once the conversation has ended. Authoritative,
+		 * like translation's `workflowPhase`: only the guarded move to `completed` credits the quest.
+		 */
+		evaluationPhase: text("evaluation_phase").$type<PracticeEvaluationPhase>().notNull().default("feedback"),
+		evaluationCompletedAt: timestamp("evaluation_completed_at"),
 	},
 	(t) => [
 		uniqueIndex("practice_session_user_task_idx").on(t.userId, t.taskId),
-		index("practice_session_archive_idx").on(t.userId, t.status, t.completedAt),
+		index("practice_session_archive_idx").on(t.userId, t.evaluationPhase, t.evaluationCompletedAt),
 		index("practice_session_expiry_idx").on(t.status, t.expiresAt),
 		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 2`),
+		check("practice_session_evaluation_phase_check", sql`${t.evaluationPhase} IN ('feedback', 'transfer', 'completed')`),
 	],
 );
 

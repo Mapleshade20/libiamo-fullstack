@@ -1,89 +1,86 @@
 # AGENTS.md
 
-Quick guidance for agents working in this repo.
+Quick guidance for agents working in this repo. See README.md for core concepts.
+
+## What belongs here
+
+Keep this file selective. Record only technical designs, constraints, and non-obvious details that future work will repeatedly need to use or consider, especially when not knowing them would lead to an incorrect implementation. Do not record every technical detail, completed change, component description, styling choice, or fact readily discoverable from the code. Put implementation history and task-specific detail in design/writeup documentation. Consolidate related rules and remove obsolete or low-value entries instead of continually appending.
 
 ## Commands
 
 ```sh
 pnpm build        # production build
-pnpm preview      # preview production build
-pnpm check        # svelte-check + biome check --write (format included, use this instead of build or format for development)
+pnpm check        # svelte-check + biome check --write (format included; use for development)
 pnpm test         # run unit tests
 pnpm db:generate --name migration_name  # generate a migration script (needs tty)
 pnpm db:migrate   # apply migration scripts
 ```
 
-## Overview
+## Product and design
 
-**Libiamo** is a language learning app (en/es/fr/ja) that simulates real scenarios (Reddit, Discord, email, iMessage, AO3). Users complete communication tasks to develop pragmatic language skills.
+**Libiamo** is a language learning app (en/es/fr/ja) that simulates real communication scenarios.
 
-UI design:
+Use a refined retro editorial magazine aesthetic: a light warm paper base, elegant serif headings, and clean sans-serif body text and controls. Prefer calm spacing, subtle borders, soft shadows, and muted contrast. Avoid generic SaaS styling, loud gradients, harsh colors, excessive decoration, and abrupt layout changes.
 
-Adopt a premium, silky-smooth retro editorial magazine aesthetic. Use a very light warm paper-colored base. Let headlines and section titles stand out naturally with elegant serif typography, while all body copy, navigation, controls, and functional UI text should use clean sans-serif fonts for readability.
+- Use native Svelte/CSS motion and existing shared components. Honor reduced motion, visible keyboard focus, and 44px interaction targets; clean up timers/listeners.
+- Reserve loading and answer-reveal geometry. Use `LoadingReveal.svelte` at loading boundaries; pre-render hidden answer slots rather than conditionally mounting them. Typewriter copy must reserve its full geometry and expose the full sentence to assistive technology.
+- Separate scroll ownership from focus (`preventScroll`). Forward menu/detail navigation goes to the top; in-app back must not replay stale browser-restored offsets.
 
-The interface should feel refined, calm, tactile, and highly polished, with appropriate spacing, subtle borders, soft shadows, and muted contrast. Avoid generic modern SaaS styling, loud gradients, harsh colors, or excessive decoration. Utilize smooth, continuous transition animations without abrupt flashes or large layout jumps. The goal is a high-end magazine-like reading experience expressed as a fluid digital interface.
+## Architecture and invariants
 
-## Key areas
+### Quest Hall and navigation
 
-- Routes: `(app)/` authenticated learner pages (home, session, feedback, archive, review, translate, contribute, profile), `(auth)/`, `(admin)/`; `/api/review/` exposes Note-based due/stats/rating endpoints.
-- Quest Hall is the authenticated production root `/` and uses the editorial `quest-hall/quest-menu/QuestMenu.svelte` interface. Daily/weekly quests, a year-filtered translation catalog, and unread replies share the book/sheet experience. Canonical `/task/[id]` and `/translate/[id]` details render that same book-beside-sheet interface, never a standalone detail shell. Root `?view=prepare` URLs only redirect for compatibility. Workflow return links derive synchronously from task identity; no return-context sessionStorage or scroll-coordinate persistence exists. Catalog URLs hold section/leaf/year; `server/quest-hall-details.ts` derives the task's catalog position without requiring current-edition membership. The shared preparation union lives in `lib/quest-hall/preparation.ts`; details use server route data, not a preparation API. Current/future month translations receive full pages; earlier months use compact archive pages. Recommendations use the active language's `user.levelSelfAssign` while preserving unread and in-progress continuity. `/translate` plus `/task` roots redirect to `/`.
-- Server: `src/lib/server/` for auth (`auth/`), scheduling (`scheduling/`), db, LLM, sessions, feedback, notes, Note-based review/FSRS, archive, translate. `src/lib/admin/` for template/variant action helpers.
-- Data model: templates are blueprints; template variants store `slotValues` + UI-specific `openingState`; scheduled tasks store resolved template text and a selected `variantId`; practice sessions/messages store chat runtime state; completed session gets feedback; all feedback paths create FSRS Notes with a target-language `vocab`, target/native dictionary definitions, and four natural bilingual examples in one JSON column; reviewLogs reference Notes directly. There is no Note exercise-variant table or persisted example rotation state. Separate things from this main workflow: templateContributions and translation attempts.
-- Scheduling: `src/lib/server/scheduling/tasks.ts` auto-fills 3 weekly + 3 daily non-translation tasks per user language/date; weekly dates normalize to Monday and admin manual weeks use `YYYY-Www`. Cadence values include `weekly`, `daily`, `none`.
-- Session prompts: `src/lib/server/session.ts` starts practice sessions, builds scenario context from variant `openingState`, prepends random MBTI persona at session start, enforces target-language replies, and owns session message ordering helpers.
-- Conversation read receipts: session/feedback GET loaders must never clear unread state (SvelteKit can preload them on hover). They return a snapshot receipt; `ConversationReadReceipt.svelte` acknowledges it only on a mounted, visible page via authenticated `POST /api/unread`. The endpoint validates the owned assistant message, then advances the watermark monotonically without acknowledging newer arrivals.
-- LLM: calls are centralized in `src/lib/server/llm.ts` and use the official `openai` SDK with `baseURL` for both env and BYOK credentials.
-    - `test/lib/server/llm.test.ts` stubs global `fetch`; this still works because the OpenAI SDK uses fetch under the hood.
-    - Structured calls use the object-form `chatJson({ schema, messages, ... })`, which returns parsed `value` plus provider metadata and performs at most one targeted repair; truncation is never repaired.
-- Translation evaluation LLM contracts live in `src/lib/server/translation-evaluation/` (schemas, prompts, validation, Gen1/verifiers/Gen2, restricted Diff parser). Shared serializable grades/Diff AST types live in `src/lib/translation-evaluation/types.ts`; model Diff markup is never rendered directly.
-- Production translation workflow services live in `translation-workflow.ts` and `translation-practice.ts`. The route split is detail `/translate/[id]`, immutable first draft `/attempt`, and phase-driven evaluation `/feedback`; URLs never expose attempt IDs. `translationAttempt.workflowPhase` is authoritative while card, second-draft, and transfer details stay in a versioned tab-scoped snapshot.
-- Translation transfer and `/review` choose an ordinary random Note example for each display. Transfer snapshot queue entries hold Note/example indexes; Incorrect moves the Note to the queue tail without an attempt cap, while Pass removes it.
-- The dev-only `/translate-eval-live-demo` route runs the production translation-evaluation services without persisting attempts and exposes exact request/response artifacts for qualitative prompt review.
-- Correction Verifier uses only the current card's trusted context; Second Draft Verifier instead appends to the successful Generation 1 history. Keep these context strategies separate.
-- Detailed translation-evaluation protocol decisions and implementation history belong in `docs/plans/2026-07-15-redesign-translate-eval.md`, not this file.
-- Auth: `hooks.server.ts` calls `auth.api.getSession()` and sets `event.locals`. `App.Locals` is in `src/app.d.ts`.
-- Account email: Profile manages one primary email for password login/recovery, independent of OAuth emails. Better Auth verifies the new mailbox before changing it; `auth/options.ts` guards `/change-email` with an authoritative session younger than ten minutes (the built-in endpoint does not check freshness). Keep occupied-email responses non-enumerating and never enable unverified immediate changes.
-- i18n: custom `t(lang, key)` in `src/lib/i18n.ts` (no external library).
-- Validation: Zod schemas live in `src/lib/schemas/` with `index.ts` re-exporting the public API. Admin variant helpers validate slot coverage for `{{slot}}` placeholders.
-- Constants: `src/lib/constants.ts` — single source of truth for enum values/types (`UiVariant`, `LanguageCode`, `InteractionType`, `Cadence`), labels, and language display-name helpers. Do not inline enum unions or duplicate language-name maps/helpers elsewhere.
-- Markdown: when rendering markdown with Svelte's `{@html}`, use safe `renderMarkdown()` in `src/lib/markdown.ts` (or sanitize and test).
-- Practice UI: reusable client code lives under `src/lib/components/practice-ui/`; browser-only helpers live in `src/lib/client/`; shared feedback types live in `src/lib/feedback/`.
-- Flashcard study UI: transfer and `/review` share `src/lib/components/review/StudyCard.svelte`; queue categories/counting use `StudyQueueKind` helpers in `src/lib/review.ts`. Keep answer reveal geometry stable by hiding pre-rendered answer slots rather than conditionally mounting them. `/review` uses Anki's default `1m 10m` / `10m` explicit steps and 20-minute Learn ahead: due Learning cards precede the main queue, future in-window Learning cards follow it, and response `due` values drive client reordering until graduation.
-- Note browsing and editing lives at `/review/manage`, backed by `src/lib/server/note-management.ts`; it searches and filters all user languages and owns content/example edits, due-day offsets, scheduling reset, and deletion. Archive is an activity history and must not expose Note editing.
-- Translation feedback shell: `(app)/+layout.svelte` owns the page's only `<main>`, width, and padding. Feedback/demo pages must not add a nested main or duplicate outer padding; their Waiting/Completed stages use `100dvh - 8rem` for the shell's available height.
-- UI: Tailwind v4, shadcn-svelte components, `cn()` for class merging in `src/lib/utils.ts`.
-- Navigation transitions: root `+layout.svelte` owns the View Transitions API lifecycle. Navbar links set one-shot directional intent through `src/lib/client/page-transition.ts`; same-path query/hash updates skip document transitions, stable sibling shells can keep named controls fixed while their content fades, and other navigations use the fast fade. App/admin layouts expose the shared `page-content` snapshot name, while session pages remain outside it. Review Study/Manage share their heading, language selector, tabs, and max-width through `routes/(app)/review/+layout.svelte`.
-- Notifications: general app/admin/auth interfaces use `ActionNotification`/`ResponsiveNotification`; field-scoped form errors should use `FormErrorFocus` + `handleInvalidField` from `src/lib/client/form-attention.ts`.
-- Svelte 5: runes mode (`$state`, `$props`, `$derived`, etc.); do not use Svelte 4 reactive syntax (`$:`, `export let`).
-- Base path: `kit.paths.base` comes from the `BASE_PATH` build-time env var (empty by default). Every internal URL must go through `base` from `$app/paths` — `href`, `form action`, client `fetch`, and server `redirect()`. Never write a bare absolute `"/..."` internal URL. Comparisons against `page.url.pathname` must also include `base`, since that value carries it. Better Auth needs the full mount point spelled out (`baseURL: ${ORIGIN}${base}/api/auth` with `basePath: "/"`), because it only appends its default `/api/auth` when `baseURL` has no path of its own.
+- The authenticated root `/`, `/task/[id]`, and `/translate/[id]` share the book-beside-sheet interface. The app layout owns a persistent `QuestMenuRoute.svelte` through `App.PageData.questMenu`; page components only render metadata. Never remount or key the book by task/URL.
+- Quest progress has one vocabulary for both task types: `questState`/`translationState` in `quest-hall/menu.ts` map to ready / active (conversation or draft) / reviewing (unfinished evaluation page) / finished / stopped. Recommendations, catalog and both details pages render it only through `QuestMenuStatusMark`; do not add per-surface badges. Unfinished evaluation pages offer no link back to the task.
+- Details use server route data. Return links derive synchronously from task identity, with no persisted return-context or scroll offsets. Catalog URLs hold section/leaf/year; deriving a task's catalog position must not require current-edition membership.
+- Book-to-book routes skip document view transitions and use the existing book timeline from `afterNavigate`, retaining outgoing preparation until completion/resize. Shallow popstate and cross-route navigation must not start competing timelines. Resize may settle a turn without firing its completion callback, so navigation scrolling must not depend on that callback.
+- Static book pages and turning copies must have identical geometry. Disable controls during turns instead of unmounting them, or the sheet handoff will jump.
+- Root `+layout.svelte` owns document view transitions; `client/page-transition.ts` owns one-shot navbar intent. Both responsive navigation rails share `main-nav`, whose snapshot stays above `page-content` without crossfading. Keep home-only controls outside the persistent book so details do not inherit them. The navbar sweep's old/new snapshots share `--page-sweep-duration`/`--page-sweep-ease` so both pages travel as one strip at a constant offset; the curve must start fast, since an eased-in start is indistinguishable from a delay after the click. The sweep slides less than a page, so the two snapshots always overlap: keep `--page-enter-fade`/`--page-exit-fade` short and keep the page snapshot's own `bg-background` paper, or the outgoing page stays legible through the incoming one.
+- The app layout owns the page's `<main>`, outer spacing, and `--app-bottom-nav-height` (including safe area, zero on wide screens). Fixed study footers must use that offset; pages must not add nested mains or duplicate shell padding.
 
-## Codebase conventions
+### Data, review, and streak
 
-## Motion and detail design
+- Templates are blueprints; variants supply `slotValues` and UI-specific `openingState`; scheduled tasks store resolved text and the selected variant. Validate coverage of `{{slot}}` placeholders when editing variants.
+- Feedback paths create FSRS Notes with target-language vocabulary, target/native dictionary definitions, and four bilingual examples. Review logs reference Notes directly; do not add persisted example rotation or exercise-variant state. Review/transfer choose a random example for display.
+- Weekly scheduling normalizes dates to Monday; admin manual weeks use `YYYY-Www`.
+- Transfer and `/review` share `StudyCard.svelte` and queue helpers. Review uses Anki's `1m 10m` / `10m` steps and 20-minute Learn ahead: due Learning cards precede the main queue, future in-window Learning cards follow it, and response due times drive client reordering until graduation. Review cards are day-granular: every scheduling write aligns their due to the start of the learner's local day, and Learn ahead must cover the longest learning step, so an empty queue means the whole day's reviews are done.
+- Every new Note becomes due on the learner's next local day (`insertNotes` requires `availableFrom`). Post-task transfer rates these cards with `rateNote(..., { outOfBand: true })`, which must not pull them into today's review queue. Transfer Incorrect moves a Note to the tail without an attempt cap; Pass removes it. Practice and translation share these rules through `transfer-queue.ts` and `server/transfer.ts`.
+- A practice quest completes when its evaluation page reaches `evaluationPhase = "completed"` (after the final card pass), not when the conversation ends; credit only from the guarded transitions in `server/practice-evaluation.ts`. Both evaluation pages drive the pass through `TransferPass.svelte`.
+- Streak rules in `lib/streak.ts` take `today` explicitly. Only `server/streak.ts` writes streak state, within the transaction that claimed a completion. A day counts when a quest completes **and** the account-wide review queue is observed empty. Missed-day settlement is derived on read and materialized on write; loaders never write.
+- Note editing belongs in `/review/manage`; Archive is activity history and must not expose Note editing.
 
-- Follow https://transitions.dev interaction ideas using native Svelte/CSS implementations: frosted stacked reply banners below navigation, origin-aware reversible dropdowns, and sliding selection surfaces. Skeletons use a 1s half-opacity pulse, then the shared `LoadingReveal.svelte` overlays outgoing and incoming layers for a 400ms / 2px blur cross-fade. Use this wrapper at loading boundaries rather than replacing skeletons abruptly. Do not import React components into the Svelte application.
-- Keep navigation and language menus on the same neutral paper surface; use local stylized SVG flags rather than remote bitmap flags. Reserve wine/olive accents for meaningful states, not large in-progress fills.
-- Prefer 220–350ms ease-out transitions, small distances, stable loading geometry, and restrained shadows. Avoid flashing content, layout jumps, and arbitrary delays. Separate scroll ownership from focus (use `preventScroll`); forward menu/detail navigation goes smoothly to the top and in-app back must not replay browser-restored offsets.
-- QuestMenu book timelines can be settled by resize without firing completion callbacks. Navigation scrolling must happen independently of timeline completion, or opening menus/details can retain stale offsets.
-- The app layout owns a persistent `QuestMenuRoute.svelte` through `App.PageData.questMenu`; home/detail page components only render metadata. Never mount or key the book by task/URL. Book-to-book routes skip document view transitions and drive the unchanged `motion.ts` timeline from `afterNavigate`, retaining outgoing preparation until completion/resize. Root shallow popstate and cross-route navigation must not start competing timelines. Source element and home/catalog origin are live component state, not persisted return context.
-- Static book pages and turning copies must render identical page-header geometry, including the 44px translation year controls. Disable controls during turns rather than unmounting them; otherwise card positions jump at the sheet handoff.
-- Honor `prefers-reduced-motion`, retain keyboard focus indicators and 44px interaction targets, and clean up timers/listeners. Typewriter copy must reserve its complete multiline geometry and expose the full sentence to assistive technology.
-- Task cards use balanced serif titles, centered reading hierarchy, restrained metadata, and quiet pill actions; older translations are compact without shrinking their touch targets.
-- Catalog and home recommendation cards share `QuestMenuItemIndicator.svelte` for platform icons and three difficulty dots; `difficulty.css` owns their level colors, also used by recommendation left borders. Recommendation cards omit rank/cadence labels.
+### LLM and translation
+
+- Centralize LLM calls in `server/llm.ts` for both environment and BYOK credentials. Structured calls use `chatJson({ schema, messages, ... })` with at most one targeted repair; never repair truncation.
+- Translation evaluation contracts live in `server/translation-evaluation/`; shared grades/Diff AST types live in `translation-evaluation/types.ts`. Never render model Diff markup directly.
+- Translation routes use task IDs, never attempt IDs. The first draft is immutable; `translationAttempt.workflowPhase` is authoritative, while card/second-draft/transfer details use a versioned tab-scoped snapshot.
+- Correction Verifier uses only the current card's trusted context; Second Draft Verifier appends to successful Generation 1 history. Keep these strategies separate.
+- Development-only demos live in the `(app)/(demo)` route group (URLs unchanged) and each 404s outside `dev` in its own load and actions. Use `/translate-eval-live-demo` for qualitative prompt review against production services. Detailed protocol decisions belong in `docs/plans/2026-07-15-redesign-translate-eval.md`.
+
+### Read safety and authentication
+
+- Session/feedback GET loaders must never clear unread state: SvelteKit may preload them on hover. Return a snapshot receipt; `ConversationReadReceipt.svelte` acknowledges only on a mounted, visible page through authenticated `POST /api/unread`. Validate message ownership and advance the watermark monotonically without acknowledging newer arrivals.
+- Primary login/recovery email is independent of OAuth emails. Verify a new mailbox before changing it. `auth/options.ts` must guard `/change-email` with an authoritative session younger than ten minutes because the built-in endpoint does not check freshness. Keep occupied-email responses non-enumerating; never enable unverified immediate changes.
 
 ## Implementation conventions
 
-- SSR-visible values must derive from server props synchronously (`$derived` for editable prop-backed defaults, or initialized `$state` for independent drafts). Do not populate them only in `$effect`/`onMount`; those do not run during SSR. Browser-only sessionStorage restoration is separate and must not be mistaken for server-known state.
-- Root `+layout.server.ts` serializes `displayClock` (request time and validated browser-timezone cookie). Root layout exposes it through `src/lib/display-clock.ts`; use this clock for rendered dates/day comparisons and explicit timezones for timestamps, rather than ambient `new Date()` / default locale during rendering. Profile language options are localized on the server, not replaced after hydration.
-- Use tabs for indentation.
-- Refer to `README.md` for core concepts.
-- Run `pnpm check` and `pnpm test` before finishing changes. Write essential unit tests for new ts code but don't write too many.
-- Tests: `test/` mirrors `src/`. DB tests mock `$lib/server/db` via `vi.hoisted()`.
-    - Time-dependent tests: use fixed dates (e.g. `new Date(2025, 5, 11, 12, 0, 0)`) instead of `new Date()` to avoid midnight boundary flakiness.
-    - Do not assert that rendered pages contain or omit specific editorial or UI copy solely to freeze wording. Test semantic structure, navigation targets, accessibility attributes, state-dependent behavior, and data relationships instead. Assert exact text only when the wording is itself a product or protocol contract.
-    - Do not build prompt tests from piles of `toContain()` assertions against fixed prose. Test message roles/order, structured JSON payloads, schemas, and behavioral invariants instead; review qualitative wording through the live-model harness.
-    - Do not assert that prompts contain arbitrary individual words; prompt tests should verify structure, serialized inputs, and behavioral contracts rather than brittle wording.
-- Pre-commit enforces conventional commits (`feat`, `fix`, `chore`, `test`, `ci`, `refactor`, `perf`, `docs`, `style`).
-- The repository follows an issue-plan-implement workflow. Issues and plans are at `docs/`. An issue should present "what to do", which is a detailed description of new features to implement and bugs to fix. Its corresponding plan records "how to do", which goes through technical decisions, implementation specs and work stages.
-    - Issue's frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test) `link` (a GitHub issue link), `status` (needs-review / needs-plan / implementing / done),
-    - Plan's frontmatter: `title`, `related-issue` (a path of the issue from project root)
+- Use Svelte 5 runes, not `$:` or `export let`. Use tabs for indentation.
+- SSR-visible values must derive synchronously from server props; do not initialize them only in `$effect`/`onMount`. Browser-only sessionStorage restoration is separate from server-known state. Slow third-party probes are the exception (`/profile/avatar-status`): self-hosted reverse proxies buffer, so streamed `load` promises cannot be relied on. Probe from a client endpoint and resolve every failure to a definite value instead of stranding the pending copy.
+- Use `lib/display-clock.ts` for rendered dates/day comparisons and explicit timezones for timestamps. Its request-time snapshot and validated browser timezone prevent SSR/hydration disagreement; do not render from ambient `new Date()` or the machine's default timezone.
+- Every internal URL and pathname comparison must include `base` from `$app/paths`. This includes links, form actions, fetches, and redirects. Better Auth needs the full mount point (`baseURL: ${ORIGIN}${base}/api/auth`, `basePath: "/"`); it only appends its default auth path when the base URL has no path.
+- `lib/constants.ts` is the single source for enum values/types, labels, and language display-name helpers. Do not duplicate enum unions or language maps. Use the existing `t(lang, key)` localization API.
+- Markdown passed to `{@html}` must use safe `renderMarkdown()` from `lib/markdown.ts` or be sanitized and tested.
+- Reuse existing UI primitives: Tailwind v4, shadcn-svelte, `cn()`, and `ActionNotification`/`ResponsiveNotification`.
+- Expand/collapse disclosures must use `Accordion.svelte`; anchored dropdowns/popovers must use `FloatingPanel.svelte` and its `floating-menu-item` styles. These own the transitions.dev motion recipes, reduced-motion behavior and accessible interaction; do not copy local animations or click-outside handlers.
+- All invalid-submission feedback must use `client/form-attention.ts`: root layout handles native constraints, `FormErrorFocus` handles server field errors, and `showValidationIssues`/`validateBeforeSubmit` handle custom/schema editors. Associate inline messages with `data-field-error="fieldName"` and nested controls with `data-feedback-name`. Errors shake on rejection and fade on editing, including repeated identical failures. Never shake inputs for provider/network/permission/workflow errors.
+
+## Verification and documentation
+
+- Run `pnpm check` and `pnpm test` before finishing code changes. Write essential tests for new TypeScript behavior; avoid redundant tests.
+- Use chrome to debug and verify changes.
+- Tests mirror `src/` under `test/`; DB tests mock `$lib/server/db` via `vi.hoisted()`. Use fixed dates for time-dependent tests to avoid midnight flakiness.
+- Test semantics, navigation, accessibility, state behavior, and data relationships rather than freezing editorial/UI wording. Prompt tests should verify roles/order, structured inputs, schemas, and behavioral contracts rather than prose fragments or arbitrary words. Assert exact text only when it is a product/protocol contract.
+- For big changes, use `docs/design/` for the proposed work and important decisions, then `docs/writeup/` for a concise human-readable account of what changed.
+    - Design frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test; may be multiple), `status` (needs-approval → wip → done; only a human may mark done).
+    - Writeup frontmatter: `title`, `related-design` (path from project root).
+    - Filename format: `YYYY-MM-DD-some-title.md`.

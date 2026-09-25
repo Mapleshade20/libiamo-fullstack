@@ -6,6 +6,7 @@ import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { getQuestMenuItemHref, type QuestMenuItem, type QuestMenuSection } from "$lib/quest-hall/menu";
 import QuestMenuItemIndicator from "./QuestMenuItemIndicator.svelte";
+import QuestMenuStatusMark from "./QuestMenuStatusMark.svelte";
 import "./difficulty.css";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
 
@@ -65,7 +66,10 @@ function itemObjective(item: QuestMenuItem): string | null {
 							data-level={item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty}
 							class:is-unread={item.hasUnread}
 						>
-							<QuestMenuItemIndicator {item} {lang} />
+							<div class="card-meta">
+								<QuestMenuItemIndicator {item} {lang} />
+								<QuestMenuStatusMark state={item.state} label={t(lang, `hall.menu.status.${item.state}`)} />
+							</div>
 							{#if item.hasUnread}
 								<span class="unread-mark"><Mail size={13} aria-hidden="true" /> {t(lang, "hall.unreadReply")}</span>
 							{/if}
@@ -162,6 +166,15 @@ function itemObjective(item: QuestMenuItem): string | null {
 	box-shadow:
 		0 0 0 1px color-mix(in oklab, var(--menu-wine) 30%, transparent),
 		0 12px 26px rgb(45 41 36 / 8%);
+}
+
+/* Difficulty on the left, progress flush right on the same line. */
+.card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.4rem 0.9rem;
 }
 
 .recommendation-card h2 {

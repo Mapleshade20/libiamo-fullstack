@@ -3,8 +3,10 @@ import { onMount, setContext } from "svelte";
 import { onNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import "./layout.css";
+import "$lib/components/interaction-motion.css";
 import favicon from "$lib/assets/favicon.svg";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
+import { installFormFeedback } from "$lib/client/form-attention";
 import { resolvePageTransition } from "$lib/client/page-transition";
 import { DISPLAY_CLOCK_CONTEXT } from "$lib/display-clock";
 import { resolvePageDocumentLanguage } from "$lib/document-language";
@@ -25,10 +27,11 @@ $effect(() => {
 
 onMount(() => {
 	void syncBrowserTimeZone();
+	return installFormFeedback(document);
 });
 
 onNavigate((navigation) => {
-	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "fade";
+	const transitionKind = navigation.to?.url ? resolvePageTransition(navigation.from?.url ?? null, navigation.to.url) : "none";
 	if (transitionKind === "none") return;
 	if (!document.startViewTransition) return;
 

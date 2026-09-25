@@ -3,6 +3,7 @@ import { type FeedbackLanguageMode, type LanguageCode, resolveFeedbackLanguage }
 import { db } from "$lib/server/db";
 import { type PersistedTranslationEvaluation, template, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import type { ChatMessage } from "$lib/server/llm";
+import { creditQuestCompletion } from "$lib/server/streak";
 import { generateTranslationEvaluation } from "$lib/server/translation-evaluation/generation";
 import { buildGeneration1Messages, type Generation1Input } from "$lib/server/translation-evaluation/prompt";
 import { type ValidatedGeneration1Evaluation, validateGeneration1Evaluation } from "$lib/server/translation-evaluation/validation";
@@ -283,7 +284,7 @@ export async function verifyTranslationCorrection(input: {
 	return response.value;
 }
 
-export async function finishTranslationCorrections(record: TranslationAttemptRecord, evaluatedAt: string) {
+export async function finishTranslationCorrections(record: TranslationAttemptRecord, evaluatedAt: string, timeZone: string) {
 	if (record.workflowPhase !== "correction" || !record.evaluation || !record.evaluatedAt) {
 		throw new TranslationWorkflowError(409, "Corrections cannot be finished from this phase.");
 	}
@@ -292,21 +293,27 @@ export async function finishTranslationCorrections(record: TranslationAttemptRec
 	}
 	const hasCards = record.evaluation.cards.length > 0;
 	const now = new Date();
-	const [updated] = await db
-		.update(translationAttempt)
-		.set(
-			hasCards
-				? { workflowPhase: "second_draft", updatedAt: now }
-				: { workflowPhase: "completed", generation1Messages: null, completedAt: now, updatedAt: now },
-		)
-		.where(
-			and(
-				eq(translationAttempt.id, record.id),
-				eq(translationAttempt.workflowPhase, "correction"),
-				eq(translationAttempt.evaluatedAt, record.evaluatedAt),
-			),
-		)
-		.returning({ workflowPhase: translationAttempt.workflowPhase });
+	// An evaluation with no correction cards completes the attempt right here, so this is a quest
+	// completion entry point. The phase guard fences it, and the credit shares its transaction.
+	const updated = await db.transaction(async (transaction) => {
+		const [claimed] = await transaction
+			.update(translationAttempt)
+			.set(
+				hasCards
+					? { workflowPhase: "second_draft", updatedAt: now }
+					: { workflowPhase: "completed", generation1Messages: null, completedAt: now, updatedAt: now },
+			)
+			.where(
+				and(
+					eq(translationAttempt.id, record.id),
+					eq(translationAttempt.workflowPhase, "correction"),
+					eq(translationAttempt.evaluatedAt, record.evaluatedAt as Date),
+				),
+			)
+			.returning({ workflowPhase: translationAttempt.workflowPhase });
+		if (claimed && !hasCards) await creditQuestCompletion(transaction, record.userId, now, timeZone);
+		return claimed;
+	});
 	if (!updated) throw new TranslationWorkflowError(409, "The attempt changed in another tab. Reload to continue.");
 	return updated.workflowPhase;
 }
