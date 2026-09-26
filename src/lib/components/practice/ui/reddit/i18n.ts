@@ -1,35 +1,61 @@
-export const i18n = {
+import type { LanguageCode } from "$lib/constants";
+
+/** Reddit's own vocabulary; lifecycle copy comes from `practice.*` in `$lib/i18n`. */
+export type RedditText = Record<
+	| "joinConversation"
+	| "cancelReply"
+	| "sendMessage"
+	| "replyPlaceholder"
+	| "posted"
+	| "comments"
+	| "share"
+	| "save"
+	| "award"
+	| "points"
+	| "reply"
+	| "home"
+	| "popular"
+	| "all"
+	| "explore"
+	| "createCommunity"
+	| "gamesOnReddit"
+	| "discoverMore"
+	| "customFeeds"
+	| "createCustomFeed"
+	| "resources"
+	| "aboutReddit"
+	| "advertise"
+	| "helpCenter"
+	| "communityRules"
+	| "joinButton"
+	| "membersLabel"
+	| "online"
+	| "relatedCommunities"
+	| "sortBest"
+	| "searchComments"
+	| "communities"
+	| "searchReddit"
+	| "menu"
+	| "create"
+	| "live"
+	| "notifications"
+	| "upvote"
+	| "downvote"
+	| "collapse"
+	| "expand"
+	| "more"
+	| "open"
+	| "created"
+	| "replyCount",
+	string
+>;
+
+export const i18n: Record<LanguageCode, RedditText> = {
 	en: {
-		// Session controls
-		returnTask: "Return to Task",
-		evaluating: "Evaluating...",
-		finishTask: "Finish Task",
-		turnsLeft: "Turns Left",
-		earlier: "Earlier",
-		retry: "Retry",
-		retryFailedMessage: "Failed to post. Retry?",
-		stillProcessingMessage: "Still processing...",
-		getHint: "Get Hint",
-		hintTitle: "Hints",
-		noHints: "No hints available",
-		thinking: "is posting...",
-		// Evaluation modal
-		questCompleted: "Quest Completed!",
-		tutorReport: "Tutor's Report",
-		overallFeedback: "Overall Feedback",
-		objectiveAssessment: "Objective Assessment",
-		closeReview: "Close Review",
-		returnHall: "Return to Hall",
-		// Input
 		joinConversation: "What are your thoughts?",
-		sessionEnded: "Session ended",
-		turnLimitReached: "Turn limit reached",
-		retryInputPlaceholder: "Retry your comment...",
-		sendMessage: "Post Comment",
 		cancelReply: "Cancel",
-		submitReply: "Comment",
+		sendMessage: "Post Comment",
 		replyPlaceholder: "Reply to u/{author}",
-		// Post actions
 		posted: "Posted by",
 		comments: "Comments",
 		share: "Share",
@@ -37,7 +63,6 @@ export const i18n = {
 		award: "Award",
 		points: "points",
 		reply: "Reply",
-		// Sidebar navigation
 		home: "Home",
 		popular: "Popular",
 		all: "All",
@@ -47,51 +72,36 @@ export const i18n = {
 		discoverMore: "Discover More",
 		customFeeds: "Custom Feeds",
 		createCustomFeed: "Create a custom feed",
-		manageCommunity: "Manage Community",
 		resources: "Resources",
 		aboutReddit: "About Reddit",
 		advertise: "Advertise",
 		helpCenter: "Help Center",
-		// Community panel
 		communityRules: "Community Rules",
-		aboutCommunity: "About Community",
 		joinButton: "Join",
 		membersLabel: "Members",
 		online: "Online",
-		offline: "Offline",
 		relatedCommunities: "Related Communities",
-		// Sort bar
 		sortBest: "Best",
 		searchComments: "Search Comments",
-		// Toast
-		unavailableFeature: "This feature is not available in this simulation",
+		communities: "Communities",
+		searchReddit: "Search Reddit",
+		menu: "Menu",
+		create: "Create",
+		live: "Live",
+		notifications: "Notifications",
+		upvote: "Upvote",
+		downvote: "Downvote",
+		collapse: "Collapse thread",
+		expand: "Expand thread",
+		more: "More options",
+		open: "Open",
+		created: "Created {year}",
+		replyCount: "({count} replies)",
 	},
 	es: {
-		returnTask: "Volver a la tarea",
-		evaluating: "Evaluando...",
-		finishTask: "Finalizar tarea",
-		turnsLeft: "Turnos restantes",
-		earlier: "Antes",
-		retry: "Reintentar",
-		retryFailedMessage: "Error al publicar. ¿Reintentar?",
-		stillProcessingMessage: "Aún procesando...",
-		getHint: "Obtener pista",
-		hintTitle: "Pistas",
-		noHints: "Sin pistas disponibles",
-		thinking: "está publicando...",
-		questCompleted: "¡Misión completada!",
-		tutorReport: "Informe del tutor",
-		overallFeedback: "Retroalimentación general",
-		objectiveAssessment: "Evaluación de objetivos",
-		closeReview: "Cerrar revisión",
-		returnHall: "Volver al salón",
 		joinConversation: "¿Cuáles son tus pensamientos?",
-		sessionEnded: "Sesión finalizada",
-		turnLimitReached: "Límite de turnos alcanzado",
-		retryInputPlaceholder: "Reintenta tu comentario...",
-		sendMessage: "Publicar comentario",
 		cancelReply: "Cancelar",
-		submitReply: "Comentar",
+		sendMessage: "Publicar comentario",
 		replyPlaceholder: "Responder a u/{author}",
 		posted: "Publicado por",
 		comments: "Comentarios",
@@ -109,48 +119,36 @@ export const i18n = {
 		discoverMore: "Descubrir más",
 		customFeeds: "Fuentes personalizadas",
 		createCustomFeed: "Crear fuente personalizada",
-		manageCommunity: "Gestionar comunidad",
 		resources: "Recursos",
 		aboutReddit: "Acerca de Reddit",
 		advertise: "Publicidad",
 		helpCenter: "Centro de ayuda",
 		communityRules: "Reglas de la comunidad",
-		aboutCommunity: "Acerca de la comunidad",
 		joinButton: "Unirse",
 		membersLabel: "Miembros",
 		online: "En línea",
-		offline: "Desconectado",
 		relatedCommunities: "Comunidades relacionadas",
 		sortBest: "Mejor",
 		searchComments: "Buscar comentarios",
-		unavailableFeature: "Esta función no está disponible en esta simulación",
+		communities: "Comunidades",
+		searchReddit: "Buscar en Reddit",
+		menu: "Menú",
+		create: "Crear",
+		live: "En directo",
+		notifications: "Notificaciones",
+		upvote: "Votar a favor",
+		downvote: "Votar en contra",
+		collapse: "Contraer hilo",
+		expand: "Expandir hilo",
+		more: "Más opciones",
+		open: "Abrir",
+		created: "Creada en {year}",
+		replyCount: "({count} respuestas)",
 	},
 	fr: {
-		returnTask: "Retour à la tâche",
-		evaluating: "Évaluation...",
-		finishTask: "Terminer la tâche",
-		turnsLeft: "Tours restants",
-		earlier: "Avant",
-		retry: "Réessayer",
-		retryFailedMessage: "Échec de publication. Réessayer ?",
-		stillProcessingMessage: "Toujours en cours...",
-		getHint: "Obtenir un indice",
-		hintTitle: "Indices",
-		noHints: "Aucun indice disponible",
-		thinking: "publie...",
-		questCompleted: "Quête complétée !",
-		tutorReport: "Rapport du tuteur",
-		overallFeedback: "Retour général",
-		objectiveAssessment: "Évaluation des objectifs",
-		closeReview: "Fermer la revue",
-		returnHall: "Retour au hall",
 		joinConversation: "Quelle est votre opinion ?",
-		sessionEnded: "Session terminée",
-		turnLimitReached: "Limite de tours atteinte",
-		retryInputPlaceholder: "Réessayez votre commentaire...",
-		sendMessage: "Publier le commentaire",
 		cancelReply: "Annuler",
-		submitReply: "Commenter",
+		sendMessage: "Publier le commentaire",
 		replyPlaceholder: "Répondre à u/{author}",
 		posted: "Publié par",
 		comments: "Commentaires",
@@ -168,48 +166,36 @@ export const i18n = {
 		discoverMore: "Découvrir plus",
 		customFeeds: "Flux personnalisés",
 		createCustomFeed: "Créer un flux personnalisé",
-		manageCommunity: "Gérer la communauté",
 		resources: "Ressources",
 		aboutReddit: "À propos de Reddit",
 		advertise: "Faire de la publicité",
 		helpCenter: "Centre d'aide",
 		communityRules: "Règles de la communauté",
-		aboutCommunity: "À propos de la communauté",
 		joinButton: "Rejoindre",
 		membersLabel: "Membres",
 		online: "En ligne",
-		offline: "Hors ligne",
 		relatedCommunities: "Communautés liées",
 		sortBest: "Meilleur",
 		searchComments: "Rechercher des commentaires",
-		unavailableFeature: "Cette fonctionnalité n'est pas disponible dans cette simulation",
+		communities: "Communautés",
+		searchReddit: "Rechercher sur Reddit",
+		menu: "Menu",
+		create: "Créer",
+		live: "En direct",
+		notifications: "Notifications",
+		upvote: "Vote positif",
+		downvote: "Vote négatif",
+		collapse: "Réduire le fil",
+		expand: "Déplier le fil",
+		more: "Plus d’options",
+		open: "Ouvrir",
+		created: "Créée en {year}",
+		replyCount: "({count} réponses)",
 	},
 	ja: {
-		returnTask: "タスクに戻る",
-		evaluating: "評価中...",
-		finishTask: "タスクを終了",
-		turnsLeft: "残りターン",
-		earlier: "以前",
-		retry: "再試行",
-		retryFailedMessage: "投稿に失敗しました。再試行しますか？",
-		stillProcessingMessage: "まだ処理中...",
-		getHint: "ヒントを得る",
-		hintTitle: "ヒント",
-		noHints: "ヒントなし",
-		thinking: "が投稿中...",
-		questCompleted: "クエスト完了！",
-		tutorReport: "チューターレポート",
-		overallFeedback: "総合フィードバック",
-		objectiveAssessment: "目標評価",
-		closeReview: "レビューを閉じる",
-		returnHall: "ホールに戻る",
 		joinConversation: "あなたの考えは？",
-		sessionEnded: "セッション終了",
-		turnLimitReached: "ターン制限に達しました",
-		retryInputPlaceholder: "コメントを再試行...",
-		sendMessage: "コメントを投稿",
 		cancelReply: "キャンセル",
-		submitReply: "コメントする",
+		sendMessage: "コメントを投稿",
 		replyPlaceholder: "u/{author}に返信",
 		posted: "投稿者：",
 		comments: "コメント",
@@ -227,20 +213,30 @@ export const i18n = {
 		discoverMore: "もっと発見",
 		customFeeds: "カスタムフィード",
 		createCustomFeed: "カスタムフィードを作成",
-		manageCommunity: "コミュニティを管理",
 		resources: "リソース",
 		aboutReddit: "Redditについて",
 		advertise: "広告",
 		helpCenter: "ヘルプセンター",
 		communityRules: "コミュニティのルール",
-		aboutCommunity: "コミュニティについて",
 		joinButton: "参加",
 		membersLabel: "メンバー",
 		online: "オンライン",
-		offline: "オフライン",
 		relatedCommunities: "関連コミュニティ",
 		sortBest: "ベスト",
 		searchComments: "コメントを検索",
-		unavailableFeature: "この機能はこのシミュレーションでは利用できません",
+		communities: "コミュニティ",
+		searchReddit: "Redditを検索",
+		menu: "メニュー",
+		create: "作成",
+		live: "ライブ",
+		notifications: "通知",
+		upvote: "高評価",
+		downvote: "低評価",
+		collapse: "スレッドを折りたたむ",
+		expand: "スレッドを展開",
+		more: "その他のオプション",
+		open: "開く",
+		created: "{year}年に作成",
+		replyCount: "（返信 {count} 件）",
 	},
 };

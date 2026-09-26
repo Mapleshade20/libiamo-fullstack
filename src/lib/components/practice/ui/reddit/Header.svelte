@@ -4,107 +4,89 @@ import Menu from "@lucide/svelte/icons/menu";
 import Plus from "@lucide/svelte/icons/plus";
 import Search from "@lucide/svelte/icons/search";
 import Video from "@lucide/svelte/icons/video";
+import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
 import TurnsLeftMobileBadge from "$lib/components/practice/TurnsLeftMobileBadge.svelte";
+import type { LanguageCode } from "$lib/constants";
+import { t as translate } from "$lib/i18n";
+import type { RedditText } from "./i18n";
 
 let {
-	t = {} as Record<string, string>,
-	remainingTurns = null as number | null,
-	isCompleted = false,
-	sessionId = null as number | null,
-	isCompleting = false,
-	isSubmitting = false,
-	isInitializing = false,
-	onComplete = () => {},
-	onMockAction = () => {},
-	onToggleMobileMenu = () => {},
+	session,
+	language,
+	t,
+	onMockAction,
+	onToggleMobileMenu,
 }: {
-	t?: Record<string, string>;
-	remainingTurns?: number | null;
-	isCompleted?: boolean;
-	sessionId?: number | null;
-	isCompleting?: boolean;
-	isSubmitting?: boolean;
-	isInitializing?: boolean;
-	onComplete?: () => void;
-	onMockAction?: () => void;
-	onToggleMobileMenu?: () => void;
+	session: PracticeSession;
+	language: LanguageCode;
+	t: RedditText;
+	onMockAction: () => void;
+	onToggleMobileMenu: () => void;
 } = $props();
+
+const turnsLeft = $derived(translate(language, "practice.turnsLeft"));
+const tools = $derived([
+	[Plus, t.create],
+	[Video, t.live],
+	[Bell, t.notifications],
+] as const);
 </script>
 
-<header class="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEFF1] bg-white px-3">
-	<!-- Mobile menu toggle -->
+<header class="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEFF1] bg-white px-1 md:px-3">
 	<button
 		type="button"
-		class="flex h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] md:hidden"
+		class="grid h-11 w-11 place-items-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] md:hidden"
 		onclick={onToggleMobileMenu}
+		aria-label={t.menu}
 	>
-		<Menu size={20} />
+		<Menu size={20} aria-hidden="true" />
 	</button>
 
-	<!-- Logo -->
-	<button type="button" class="flex shrink-0 items-center gap-1.5" onclick={onMockAction}>
-		<span class="font-bold text-[#1C1C1C]">reddit</span>
-	</button>
+	<span class="shrink-0 font-bold text-[#1C1C1C]">reddit</span>
 
-	<!-- Search bar -->
 	<div class="mx-auto hidden w-full max-w-[480px] md:block">
 		<button
 			type="button"
-			class="flex w-full cursor-pointer items-center gap-2 rounded-full border border-[#EDEFF1] bg-[#F6F7F8] py-1.5 pl-3 pr-4 text-sm text-[#878A8C] hover:border-[#0079D3] hover:bg-white"
+			class="flex w-full items-center gap-2 rounded-full border border-[#EDEFF1] bg-[#F6F7F8] py-1.5 pr-4 pl-3 text-sm text-[#878A8C] hover:border-[#0079D3] hover:bg-white"
 			onclick={onMockAction}
 		>
-			<Search size={14} />
-			<span>Search Reddit</span>
+			<Search size={14} aria-hidden="true" />
+			<span>{t.searchReddit}</span>
 		</button>
 	</div>
 
-	<!-- Right actions -->
 	<div class="ml-auto flex shrink-0 items-center gap-1">
-		<!-- Decorative icon buttons -->
-		<button
-			type="button"
-			class="hidden h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] lg:flex"
-			onclick={onMockAction}
-		>
-			<Plus size={18} />
-		</button>
-		<button
-			type="button"
-			class="hidden h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] lg:flex"
-			onclick={onMockAction}
-		>
-			<Video size={18} />
-		</button>
-		<button
-			type="button"
-			class="hidden h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] lg:flex"
-			onclick={onMockAction}
-		>
-			<Bell size={18} />
-		</button>
+		{#each tools as [ Icon, label ]}
+			<button
+				type="button"
+				class="hidden h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] lg:flex"
+				onclick={onMockAction}
+				aria-label={label}
+			>
+				<Icon size={18} aria-hidden="true" />
+			</button>
+		{/each}
 
-		<!-- Turns counter -->
-		{#if remainingTurns !== null && !isCompleted}
+		{#if session.remainingTurns !== null && !session.isCompleted}
 			<TurnsLeftMobileBadge
-				{remainingTurns}
-				{isCompleted}
-				label={t.turnsLeft}
-				class="rounded-full border border-[#EDEFF1] bg-[#F6F7F8] px-2.5 py-1 text-xs font-bold text-[#1C1C1C]"
+				remainingTurns={session.remainingTurns}
+				isCompleted={session.isCompleted}
+				label={turnsLeft}
+				class="min-h-11 min-w-11 rounded-full border border-[#EDEFF1] bg-[#F6F7F8] px-2.5 text-xs font-bold text-[#1C1C1C]"
 			/>
 			<span class="hidden text-xs text-[#878A8C] md:inline">
-				{t.turnsLeft}: <strong class="{remainingTurns <= 2 ? 'text-[#FF4500]' : 'text-[#1C1C1C]'}">{remainingTurns}</strong>
+				{turnsLeft}: <strong class={session.remainingTurns <= 2 ? "text-[#FF4500]" : "text-[#1C1C1C]"}>{session.remainingTurns}</strong>
 			</span>
 		{/if}
 
-		<!-- Finish task button -->
-		{#if !isCompleted && sessionId}
+		{#if !session.isCompleted && session.sessionId}
 			<button
 				type="button"
-				class="ml-1 rounded-full bg-[#FF4500] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#CC3700] disabled:opacity-50"
-				onclick={onComplete}
-				disabled={isCompleting || isSubmitting || isInitializing}
+				class="ml-1 min-h-11 rounded-full bg-[#FF4500] px-3 text-xs font-bold text-white transition-colors hover:bg-[#CC3700] disabled:opacity-50 md:min-h-8"
+				onclick={session.requestFinish}
+				disabled={!session.canFinish}
 			>
-				{isCompleting ? t.evaluating : t.finishTask}
+				{translate(language, session.isCompleting ? "practice.finishing" : "practice.finish")}
 			</button>
 		{/if}
 	</div>

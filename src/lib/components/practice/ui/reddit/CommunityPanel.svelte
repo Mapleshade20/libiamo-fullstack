@@ -4,14 +4,9 @@ import Shield from "@lucide/svelte/icons/shield";
 import Users from "@lucide/svelte/icons/users";
 import { COMMUNITY_RULES, RELATED_SUBREDDITS } from "./data";
 import { getAvatarColor, seededInt } from "./format";
+import type { RedditText } from "./i18n";
 
-let {
-	subreddit = "AskReddit",
-	t = {} as Record<string, string>,
-}: {
-	subreddit?: string;
-	t?: Record<string, string>;
-} = $props();
+let { subreddit, t, onMockAction }: { subreddit: string; t: RedditText; onMockAction: () => void } = $props();
 
 const subredditColor = $derived(getAvatarColor(subreddit));
 const memberCount = $derived(seededInt(subreddit, 10000, 4900000));
@@ -32,7 +27,7 @@ function formatCount(n: number): string {
 }
 </script>
 
-<aside class="hidden w-[312px] shrink-0 flex-col gap-3 overflow-y-auto p-4 lg:flex hide-scrollbar">
+<aside class="hidden w-[312px] shrink-0 flex-col gap-3 overflow-y-auto p-4 lg:flex">
 	<!-- Community info card -->
 	<div class="overflow-hidden rounded-md border border-[#CFDBD5] bg-white">
 		<!-- Banner -->
@@ -48,7 +43,11 @@ function formatCount(n: number): string {
 				<div>
 					<p class="text-sm font-bold text-[#1C1C1C]">r/{subreddit}</p>
 				</div>
-				<button type="button" class="rounded-full bg-[#FF4500] px-4 py-1 text-xs font-bold text-white hover:bg-[#CC3700] transition-colors">
+				<button
+					type="button"
+					class="rounded-full bg-[#FF4500] px-4 py-1 text-xs font-bold text-white hover:bg-[#CC3700] transition-colors"
+					onclick={onMockAction}
+				>
 					{t.joinButton}
 				</button>
 			</div>
@@ -56,7 +55,7 @@ function formatCount(n: number): string {
 			<!-- Stats -->
 			<div class="mt-3 grid grid-cols-2 gap-2 border-t border-[#EDEFF1] pt-3">
 				<div class="flex flex-col items-center rounded-md bg-[#F6F7F8] p-2">
-					<div class="mb-1 flex items-center gap-1 text-[#878A8C]"><Users size={12} /></div>
+					<div class="mb-1 flex items-center gap-1 text-[#878A8C]"><Users size={12} aria-hidden="true" /></div>
 					<p class="text-sm font-bold text-[#1C1C1C]">{formatCount(memberCount)}</p>
 					<p class="text-[10px] text-[#878A8C]">{t.membersLabel}</p>
 				</div>
@@ -69,8 +68,8 @@ function formatCount(n: number): string {
 
 			<!-- Created date -->
 			<div class="mt-2 flex items-center gap-1.5 text-xs text-[#878A8C]">
-				<CalendarDays size={12} />
-				<span>Created {createdYear}</span>
+				<CalendarDays size={12} aria-hidden="true" />
+				<span>{t.created.replace("{year}", String(createdYear))}</span>
 			</div>
 		</div>
 	</div>
@@ -78,7 +77,7 @@ function formatCount(n: number): string {
 	<!-- Community rules -->
 	<div class="overflow-hidden rounded-md border border-[#CFDBD5] bg-white">
 		<div class="flex items-center gap-2 border-b border-[#EDEFF1] px-3 py-2.5">
-			<Shield size={14} class="shrink-0 text-[#FF4500]" />
+			<Shield size={14} class="shrink-0 text-[#FF4500]" aria-hidden="true" />
 			<p class="text-sm font-bold text-[#1C1C1C]">{t.communityRules}</p>
 		</div>
 		<div class="divide-y divide-[#EDEFF1]">
@@ -112,6 +111,7 @@ function formatCount(n: number): string {
 						<button
 							type="button"
 							class="rounded-full border border-[#FF4500] px-3 py-0.5 text-[10px] font-bold text-[#FF4500] hover:bg-[#FFF2EE] transition-colors"
+							onclick={onMockAction}
 						>
 							{t.joinButton}
 						</button>
@@ -121,13 +121,3 @@ function formatCount(n: number): string {
 		</div>
 	{/if}
 </aside>
-
-<style>
-.hide-scrollbar {
-	-ms-overflow-style: none;
-	scrollbar-width: none;
-}
-.hide-scrollbar::-webkit-scrollbar {
-	display: none;
-}
-</style>

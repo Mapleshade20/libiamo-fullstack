@@ -1,107 +1,86 @@
 <script lang="ts">
-import CheckCircle from "@lucide/svelte/icons/check-circle";
+import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import MarkdownRenderer from "$lib/components/common/MarkdownRenderer.svelte";
-import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
-import type { ChatUser } from "$lib/components/practice/session/chat-users";
-import { getTodayDateString } from "$lib/components/practice/session/message-format";
+import { getTodayDateString, renderEmojiShortcodes } from "$lib/components/practice/session/message-format";
+import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
+import type { LanguageCode } from "$lib/constants";
+import { t as translate } from "$lib/i18n";
 import { getDisplayClock } from "$lib/time/display-clock";
-import { normalizeEmojiTextForDisplay } from "./emoji";
-
-const clock = getDisplayClock();
+import type { DiscordText } from "./i18n";
+import { type DiscordMember, memberColor } from "./members";
 
 let {
-	chatContainer = $bindable(null as HTMLElement | null),
-	messages = [] as ChatMessage[],
-	isTyping = false,
-	isInitializing = false,
-	agentUser,
-	limitReached = false,
-	language = "en",
-	emojiConv = null as any,
-	retryLabel = "Retry",
-	onRetry = (_id: string) => {},
+	session,
+	agent,
+	avatarUrl,
+	language,
+	t,
+	isTyping,
 }: {
-	chatContainer?: HTMLElement | null;
-	messages?: ChatMessage[];
-	isTyping?: boolean;
-	isInitializing?: boolean;
-	agentUser: ChatUser;
-	limitReached?: boolean;
-	language?: string;
-	emojiConv: any;
-	retryLabel?: string;
-	onRetry?: (id: string) => void;
+	session: PracticeSession;
+	agent: DiscordMember;
+	avatarUrl: string;
+	language: LanguageCode;
+	t: DiscordText;
+	isTyping: boolean;
 } = $props();
 
-let visibleMessages = $derived(messages.filter((message) => !message.isHidden && message.deliveryState !== "pending"));
+const clock = getDisplayClock();
+// Pending placeholders only drive polling; Discord shows the typing indicator instead.
+const visibleMessages = $derived(session.messages.filter((message) => message.deliveryState !== "pending"));
 </script>
 
-<div bind:this={chatContainer} class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
+<div bind:this={session.scroller} class="flex-1 overflow-y-auto px-4 py-6 motion-safe:scroll-smooth">
 	<div class="my-4 mt-auto flex items-center justify-center">
 		<div class="h-px flex-1 bg-[#404249]"></div>
 		<span class="px-2 text-xs font-semibold text-[#949BA4]">{getTodayDateString(language, clock())}</span>
 		<div class="h-px flex-1 bg-[#404249]"></div>
 	</div>
 
-	{#each visibleMessages as msg, index (msg.id)}
-		{@const grouped = index > 0 && visibleMessages[index - 1]?.role === msg.role && visibleMessages[index - 1]?.authorName === msg.authorName}
-		<div class:mt-4={!grouped} class:mt-0.5={grouped} class="flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group">
+	{#each visibleMessages as message, index (message.id)}
+		{@const previous = visibleMessages[index - 1]}
+		{@const grouped = previous?.role === message.role && previous.authorName === message.authorName}
+		<div class:mt-4={!grouped} class:mt-0.5={grouped} class="group -mx-4 flex rounded p-1 px-4 hover:bg-[#2E3035]">
 			{#if grouped}
-				<div class="mr-4 w-10 shrink-0 text-right text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100">{msg.timestamp}</div>
+				<div class="mr-4 w-10 shrink-0 text-right text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100">{message.timestamp}</div>
 			{:else}
 				<div
-					class="mr-4 mt-0.5 h-10 w-10 shrink-0 rounded-full {msg.role ===
-				'agent'
-					? msg.avatarColor
-					: 'bg-[#5865F2]'} flex items-center justify-center text-white font-bold overflow-hidden shadow-inner"
+					class="mt-0.5 mr-4 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-inner {message.role === 'user'
+						? 'bg-[#5865F2]'
+						: memberColor(message.authorName)}"
+					aria-hidden="true"
 				>
-					{#if msg.role === "user" && msg.avatar}
-						<img src={msg.avatar} alt="User Avatar" class="h-full w-full object-cover">
+					{#if message.role === "user" && avatarUrl}
+						<img src={avatarUrl} alt="" class="h-full w-full object-cover">
 					{:else}
-						{msg.authorName.charAt(0).toUpperCase()}
+						{message.authorName.charAt(0).toUpperCase()}
 					{/if}
 				</div>
 			{/if}
 			<div class="flex-1 overflow-hidden">
 				{#if !grouped}
 					<div class="flex items-baseline gap-2">
-						<span class="font-medium text-white hover:underline cursor-pointer">{msg.authorName}</span>
-						<span class="text-xs text-[#949BA4]">{msg.timestamp}</span>
+						<span class="font-medium text-white">{message.authorName}</span>
+						<span class="text-xs text-[#949BA4]">{message.timestamp || translate(language, "practice.earlier")}</span>
 					</div>
 				{/if}
-				<div class="mt-0.5 text-[#DBDEE1] break-words leading-normal">
-					{#if msg.role === "agent" && msg.deliveryState === "failed"}
+				<div class="mt-0.5 leading-normal break-words text-[#DBDEE1]">
+					{#if message.deliveryState === "failed"}
 						<div class="mt-1 flex flex-wrap items-center gap-2">
-							<span class="text-[#F28B82] whitespace-pre-wrap">{emojiConv.replace_colons(msg.text)}</span>
-							{#if !limitReached}
+							<span class="whitespace-pre-wrap text-[#F28B82]">{message.error || translate(language, "practice.replyFailed")}</span>
+							{#if !session.limitReached}
 								<button
 									type="button"
-									class="flex items-center gap-2 rounded bg-[#DA373C] px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#B52D31]"
-									onclick={() => onRetry(msg.id)}
+									class="flex min-h-11 items-center gap-2 rounded bg-[#DA373C] px-3 text-sm font-medium text-white transition-colors hover:bg-[#B52D31] disabled:opacity-50 md:min-h-8"
+									onclick={() => session.retry(message.id)}
+									disabled={session.isSubmitting}
 								>
-									<CheckCircle size={16} />{retryLabel}
+									<RotateCcw size={16} aria-hidden="true" />{translate(language, "practice.retry")}
 								</button>
 							{/if}
 						</div>
-					{:else if msg.role === "agent" && msg.deliveryState === "pending"}
-						<div class="mt-1 flex flex-wrap items-center gap-2">
-							<span class="text-[#F0B232] whitespace-pre-wrap">{emojiConv.replace_colons(msg.text)}</span>
-							<button
-								type="button"
-								class="flex items-center gap-2 rounded bg-[#5865F2] px-3 py-1 text-sm font-medium text-white hover:bg-[#4752C4]"
-								onclick={() => onRetry(msg.id)}
-							>
-								{retryLabel}
-							</button>
-						</div>
 					{:else}
-						<div class="markdown-wrapper">
-							<MarkdownRenderer
-								content={normalizeEmojiTextForDisplay(
-									emojiConv.replace_colons(msg.text),
-								)}
-							/>
-						</div>
+						<div class="markdown-wrapper"><MarkdownRenderer content={renderEmojiShortcodes(message.text)} /></div>
 					{/if}
 				</div>
 			</div>
@@ -109,23 +88,19 @@ let visibleMessages = $derived(messages.filter((message) => !message.isHidden &&
 	{/each}
 
 	{#if isTyping}
-		<div class="mt-4 flex hover:bg-[#2E3035] p-1 -mx-4 px-4 rounded group items-center gap-3">
-			<div class="mr-1 h-10 w-10 shrink-0 rounded-full {agentUser.color} flex items-center justify-center text-white font-bold overflow-hidden">
-				{agentUser.name.charAt(0).toUpperCase()}
+		<div class="mt-4 flex items-center gap-3" role="status">
+			<div
+				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-white {memberColor(agent.name)}"
+				aria-hidden="true"
+			>
+				{agent.name.charAt(0).toUpperCase()}
 			</div>
-
-			<div class="flex-1 flex items-center gap-3">
-				<div class="flex gap-1">
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce"></span>
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.2s"></span>
-					<span class="w-2 h-2 rounded-full bg-[#80848E] animate-bounce" style="animation-delay: 0.4s"></span>
-				</div>
-				<span class="text-xs font-semibold text-[#80848E]">
-					{isInitializing
-						? "Agent is joining..."
-						: `${agentUser.name} is typing...`}
-				</span>
+			<div class="flex gap-1" aria-hidden="true">
+				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]"></span>
+				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]" style="animation-delay: 0.2s"></span>
+				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]" style="animation-delay: 0.4s"></span>
 			</div>
+			<span class="text-xs font-semibold text-[#80848E]">{t.typing.replace("{name}", agent.name)}</span>
 		</div>
 	{/if}
 </div>

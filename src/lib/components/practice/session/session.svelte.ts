@@ -1,584 +1,345 @@
-import { onMount, tick } from "svelte";
-import { invalidate } from "$app/navigation";
+import { onMount, tick, untrack } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
+import { goto, invalidate } from "$app/navigation";
 import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
 import { refreshTrialQuota } from "$lib/components/account/trial-quota";
+import type { LanguageCode } from "$lib/constants";
 import { planAgentWorkPolling } from "$lib/practice/agent-work-polling";
+import type { CommentThreadMetadata } from "$lib/practice/comment-thread";
+import {
+	buildChatMessages,
+	buildOpeningMessages,
+	type ChatMessage,
+	type ChatOpeningState,
+	type PersistedPracticeSession,
+	parsePersistedMessageDate,
+	resolveOpeningAgentName,
+} from "$lib/practice/messages";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
-import { prepareMarkdownText } from "$lib/text/markdown";
 import { getDisplayClock } from "$lib/time/display-clock";
-import { buildChatMessages, type ChatMessage, getSessionSnapshot, parsePersistedMessageDate, updateMessageById } from "./chat-messages";
-import { type ChatOpeningState, type ChatUser, initUserPool } from "./chat-users";
-import type { CommentThreadMetadata } from "./comment-thread";
-import { completeAction, postAction } from "./form-actions";
-import { createTimeFormatter, normalizeText } from "./message-format";
-import { type MessageSubmissionResult, submitPracticeMessage } from "./message-submission";
-import { getOpeningStateMessages } from "./opening-messages";
-import { calculateCurrentTurns, isTurnLimitReached } from "./turns";
+import { createHintAssist } from "../hint/hint-assist.svelte";
+import { actionError, postPageAction, type SendResult, sendMessage } from "./actions";
+import { createTimeFormatter } from "./message-format";
 
-export interface PracticeSessionLabels {
-	stillProcessingMessage: string;
-	retryFailedMessage: string;
-	earlier: string;
-}
+/** What the session route passes to every practice surface. */
+export type PracticeSurfaceProps = {
+	taskId: string;
+	userName: string;
+	avatarUrl: string;
+	language: LanguageCode;
+	session: PersistedPracticeSession | null;
+	openingState: unknown;
+	maxTurns: number;
+	/** Task details and the feedback page, pinned to the attempt the URL shows. */
+	returnHref: string;
+	feedbackHref: string;
+};
+
+export type PracticeSession = ReturnType<typeof createPracticeSession>;
+
+export type SendOptions = {
+	/** Extra form fields for the send action (e.g. the reply target). */
+	fields?: Record<string, string>;
+	/** Thread placement of the learner comment and of its reply, once the client id is known. */
+	thread?: (clientMessageId: string) => { user: CommentThreadMetadata; agent: CommentThreadMetadata };
+};
 
 export const SESSION_POLL_INTERVAL_MS = 3_000;
 
-export interface PracticeSessionOptions {
-	userName: string;
-	avatarUrl: string;
-	language: string;
-	existingSession: any;
-	openingState: unknown;
-	maxTurns: number;
-	labels: PracticeSessionLabels;
-	onPoolInit?: (pool: ReturnType<typeof initUserPool>) => void;
-	taskId?: string | number;
+function toTime(value: string | Date | null | undefined): number | null {
+	if (!value) return null;
+	const time = parsePersistedMessageDate(value).getTime();
+	return Number.isNaN(time) ? null : time;
 }
 
 /**
- * Extract the agent display name from opening state's previous messages.
- * Returns the first sender that doesn't match the userName, or the fallback.
+ * The session lifecycle every practice surface shares: start, send, retry, paced delivery,
+ * polling for agent work, and finishing. It knows nothing about names, colours or layout; the
+ * surface supplies the counterpart's fallback name and renders the state.
+ *
+ * Server state is derived from props, so SSR and hydration render the same conversation. Local
+ * state only overlays it: optimistic sends until the server snapshot contains them, failed
+ * placeholders hidden while their retry is in flight, and agent messages held back for pacing.
  */
-export function resolveAgentName(openingStateData: ChatOpeningState, userName: string, fallbackName: string): string {
-	const previousMessages = Array.isArray(openingStateData.previousMessages) ? openingStateData.previousMessages : [];
-	for (const message of previousMessages) {
-		const sender = normalizeText((message as any).sender ?? (message as any).author, "");
-		if (sender && sender !== userName) return sender;
-	}
-	return fallbackName;
-}
-
-function toAgentWorkDueAt(value: unknown): Date | null {
-	if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-	if (typeof value === "string" && value.trim()) {
-		const parsed = parsePersistedMessageDate(value);
-		return Number.isNaN(parsed.getTime()) ? null : parsed;
-	}
-	return null;
-}
-
-export function createPracticeSession(getOptions: () => PracticeSessionOptions) {
+export function createPracticeSession(getProps: () => PracticeSurfaceProps, options: { fallbackAgentName: () => string }) {
 	const clock = getDisplayClock();
-	// Use $derived to keep values reactive after targeted invalidation re-runs getOptions().
-	// One-time destructuring would capture stale values and never update.
-	const userName = $derived(getOptions().userName);
-	const avatarUrl = $derived(getOptions().avatarUrl);
-	const existingSession = $derived(getOptions().existingSession);
-	const openingState = $derived(getOptions().openingState);
-	const maxTurns = $derived(getOptions().maxTurns);
-	const labels = $derived(getOptions().labels);
-	const onPoolInit = $derived(getOptions().onPoolInit);
-	const taskId = $derived(getOptions().taskId);
-
-	const openingStateData = $derived((openingState ?? {}) as ChatOpeningState);
+	const props = $derived(getProps());
 	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
+	const openingState = $derived((props.openingState ?? {}) as ChatOpeningState);
+	const agentName = $derived(resolveOpeningAgentName(openingState, props.userName) ?? options.fallbackAgentName());
 
-	// ── State ──────────────────────────────────────────────────────
+	let startedSessionId = $state<number | null>(null);
+	let completedLocally = $state(false);
+	let submitting = $state(false);
+	let completing = $state(false);
+	let initializing = $state(false);
+	let confirmingFinish = $state(false);
+	let autoFinished = false;
+	let optimistic = $state<ChatMessage[]>([]);
+	let retrying = $state<string[]>([]);
+	let scroller = $state<HTMLElement | null>(null);
 
-	let sessionId = $state<number | null>(null);
-	let lastLoadedSessionId = $state<number | null>(null);
-	let lastSessionSnapshot = $state("");
-	let isSubmitting = $state(false);
-	let isEntering = $state(true);
-	let hasAutoCompleted = $state(false);
-	let isCompleting = $state(false);
-	let isCompleted = $state(false);
-	let isInitializing = $state(false);
-	let messages = $state<ChatMessage[]>([]);
-	let pendingReplyTargetId = $state<string | null>(null);
-	let agentReadUpToMessageId = $state<number | null>(null);
-	let agentUser = $state<ChatUser>({
-		id: "agent",
-		name: "Agent",
-		status: "Online",
-		color: "bg-[#5865F2]",
-		isAgent: true,
-	});
+	const sessionId = $derived(props.session?.id ?? startedSessionId);
+	const opening = $derived(buildOpeningMessages(openingState, props.userName, agentName));
+	const persisted = $derived(
+		props.session ? buildChatMessages({ rawMessages: props.session.messages, formatTimestamp, userName: props.userName, agentName }) : [],
+	);
+	const confirmed = $derived(
+		new Set(persisted.flatMap((message) => (message.role === "user" && message.clientMessageId ? [message.clientMessageId] : []))),
+	);
+	const conversation = $derived([
+		...persisted.filter((message) => !retrying.includes(message.id)),
+		...optimistic.filter((message) => !message.clientMessageId || !confirmed.has(message.clientMessageId)),
+	]);
 
-	let inputText = $state("");
-	let chatContainer = $state<HTMLElement | null>(null);
+	// Replies delivered before mount are history. Later ones are acknowledged one at a time: the
+	// first shows at once, each next one after its own typing time.
+	const isDelivered = (message: ChatMessage) => message.role === "agent" && !message.deliveryState;
+	const acknowledged = new SvelteSet<string>(untrack(() => persisted.filter(isDelivered).map((message) => message.id)));
+	const unrevealed = $derived(conversation.filter((message) => isDelivered(message) && !acknowledged.has(message.id)));
+	const held = $derived(new Set(unrevealed.slice(1).map((message) => message.id)));
+	const messages = $derived([...opening, ...(held.size ? conversation.filter((message) => !held.has(message.id)) : conversation)]);
+	// Primitives, so a poll that rebuilds identical messages does not restart the pacing timer.
+	const revealHeadId = $derived(unrevealed[0]?.id ?? null);
+	const revealNextId = $derived(unrevealed[1]?.id ?? null);
+	const revealNextText = $derived(unrevealed[1]?.text ?? "");
 
-	// ── Staggered reveal ──────────────────────────────────────────
-	/** Agent messages that arrived in one poll and wait for their typing turn. */
-	let revealQueue = $state<ChatMessage[]>([]);
-	let revealTimer: ReturnType<typeof setTimeout> | undefined;
-	/** Full hydrated list from the last snapshot (opening + session messages). */
-	let lastHydratedMessages: ChatMessage[] = [];
-	/** Session messages from the last hydration; the diff base for new deliveries. */
-	let lastSessionMessages: ChatMessage[] = [];
+	const isCompleted = $derived(completedLocally || (props.session !== null && props.session.status !== "in_progress"));
+	const currentTurns = $derived(conversation.filter((message) => message.role === "user").length);
+	const limitReached = $derived(props.maxTurns > 0 && currentTurns >= props.maxTurns);
+	const remainingTurns = $derived(props.maxTurns > 0 ? Math.max(0, props.maxTurns - currentTurns) : null);
+	const isWaitingRetry = $derived(conversation.some((message) => message.deliveryState === "failed"));
+	const replyPending = $derived(conversation.some((message) => message.deliveryState === "pending"));
+	const agentWorkDueAt = $derived(toTime(props.session?.nextAgentWorkDueAt));
+	const busy = $derived(submitting || completing || initializing);
+	const disabled = $derived(busy || isCompleted || limitReached || sessionId === null || isWaitingRetry);
+	const canFinish = $derived(sessionId !== null && currentTurns > 0 && !isCompleted && !busy);
 
-	// ── Derived ────────────────────────────────────────────────────
+	const hint = createHintAssist(() => sessionId);
 
-	const agentName = $derived(resolveAgentName(openingStateData, userName, agentUser.name));
-	const isWaitingRetry = $derived(messages.some((m) => m.deliveryState === "failed" && !m.isHidden));
-	const isAnyMessagePending = $derived(messages.some((m) => m.deliveryState === "pending" && !m.isHidden));
-	const isTyping = $derived((isInitializing || isSubmitting || isAnyMessagePending) && !isWaitingRetry);
-	const currentTurns = $derived(calculateCurrentTurns(messages));
-	const limitReached = $derived(isTurnLimitReached(currentTurns, maxTurns ?? 0));
-	const remainingTurns = $derived(maxTurns > 0 ? Math.max(0, maxTurns - currentTurns) : null);
-	const disabled = $derived(isSubmitting || isCompleting || isCompleted || isInitializing || limitReached || !sessionId || isWaitingRetry);
-	const nextAgentWorkDueAt = $derived(toAgentWorkDueAt((existingSession as { nextAgentWorkDueAt?: unknown } | null)?.nextAgentWorkDueAt));
-
-	// ── Staggered reveal ──────────────────────────────────────────
-
-	/** Messages currently displayed: the last hydrated list minus paced-out entries. */
-	function displayedMessages(): ChatMessage[] {
-		if (revealQueue.length === 0) return [...lastHydratedMessages];
-		const paced = new Set(revealQueue.map((message) => message.id));
-		return lastHydratedMessages.filter((message) => !paced.has(message.id));
-	}
-
-	function scheduleNextReveal() {
-		if (revealTimer !== undefined || revealQueue.length === 0) return;
-		const next = revealQueue[0];
-		if (!next) return;
-		// The wait before a paced message appears scales with its own length,
-		// mirroring the worker's typing-based delivery pacing.
-		revealTimer = setTimeout(() => {
-			revealTimer = undefined;
-			revealQueue = revealQueue.slice(1);
-			messages = displayedMessages();
-			void scrollToBottom();
-			scheduleNextReveal();
-		}, getDeliveryDelayMs(next.text));
-	}
-
-	function clearReveal() {
-		if (revealTimer !== undefined) {
-			clearTimeout(revealTimer);
-			revealTimer = undefined;
-		}
-		revealQueue = [];
-	}
-
-	/**
-	 * Queues newly delivered agent messages for paced reveal: the first lands
-	 * immediately (it is already overdue), the rest replay one at a time so a
-	 * coalesced poll burst still reads as live typing.
-	 */
-	function applyStaggeredReveal(sessionMessages: ChatMessage[]) {
-		const known = new Set([...lastSessionMessages.map((message) => message.id), ...revealQueue.map((message) => message.id)]);
-		const fresh = sessionMessages.filter(
-			(message) => message.role === "agent" && message.deliveryState === undefined && !message.isHidden && !known.has(message.id),
-		);
-		lastSessionMessages = sessionMessages;
-		if (fresh.length === 0) return;
-		revealQueue = revealQueue.length === 0 ? fresh.slice(1) : [...revealQueue, ...fresh];
-		scheduleNextReveal();
-	}
-
-	/** Shows paced-out messages at once, e.g. before appending a new user message. */
-	function flushRevealQueue() {
-		if (revealQueue.length === 0 && revealTimer === undefined) return;
-		clearReveal();
-		messages = [...lastHydratedMessages];
-		void scrollToBottom();
-	}
-
-	// ── Agent message helpers ──────────────────────────────────────
-	function addAgentMessage(params: {
-		text: string;
-		deliveryState: "sent" | "pending" | "failed";
-		clientMessageId?: string;
-		retryText?: string;
-		messagePatch?: Partial<ChatMessage>;
-	}) {
-		pendingReplyTargetId = null;
-		messages = [
-			...messages,
-			{
-				id: crypto.randomUUID(),
-				role: "agent",
-				text: params.text,
-				timestamp: formatTimestamp(new Date()),
-				authorName: agentName,
-				avatarColor: agentUser.color,
-				deliveryState: params.deliveryState,
-				clientMessageId: params.clientMessageId,
-				retryText: params.retryText,
-				...params.messagePatch,
-			},
-		];
-	}
-
-	function applySendResult(result: MessageSubmissionResult, clientMessageId: string, retryText?: string, agentMessagePatch?: Partial<ChatMessage>) {
-		if (result.status === "session_completed") {
-			// The server already finished the session in the send transaction; navigate without calling complete.
-			finishAndNavigateToFeedback(String(taskId ?? ""));
-		} else if (result.status === "pending") {
-			addAgentMessage({ text: labels.stillProcessingMessage, deliveryState: "pending", clientMessageId, messagePatch: agentMessagePatch });
-		} else if (result.status === "failed") {
-			addAgentMessage({
-				text: result.error ?? labels.retryFailedMessage,
-				deliveryState: "failed",
-				clientMessageId,
-				retryText,
-				messagePatch: agentMessagePatch,
-			});
-		} else if (result.status === "rejected") {
-			console.warn("Backend rejected the message");
-		}
-	}
-
-	function actionErrorMessage(result: unknown): string | undefined {
-		if (!result || typeof result !== "object") return undefined;
-		const data = (result as { data?: unknown }).data;
-		if (!data || typeof data !== "object") return undefined;
-		const error = (data as { error?: unknown }).error;
-		return typeof error === "string" && error.trim() ? error : undefined;
-	}
-
-	// ── Actions ────────────────────────────────────────────────────
-
-	function refreshPracticeSession() {
+	function refresh() {
 		return invalidate(PRACTICE_SESSION_DEPENDENCY);
 	}
 
-	function refreshAfterSendResult(result: MessageSubmissionResult) {
-		if (result.status === "pending") {
-			return Promise.all([refreshPracticeSession(), refreshTrialQuota()]);
+	function acknowledgeAll() {
+		for (const message of unrevealed) acknowledged.add(message.id);
+	}
+
+	async function navigateToFeedback() {
+		completedLocally = true;
+		await goto(props.feedbackHref);
+	}
+
+	/** Applies a send result; false when the server rejected the message outright. */
+	async function settle(result: SendResult, placeholder: Omit<ChatMessage, "id" | "role" | "text" | "timestamp">): Promise<boolean> {
+		if (result.status === "session_completed") {
+			await navigateToFeedback();
+			return true;
 		}
-		return refreshTrialQuota();
+		if (result.status === "rejected") return false;
+		const { clientMessageId } = placeholder;
+		optimistic = [
+			...optimistic.filter((message) => !(message.role === "agent" && message.clientMessageId === clientMessageId)),
+			{
+				...placeholder,
+				id: `local-reply-${clientMessageId}`,
+				role: "agent",
+				text: "",
+				timestamp: formatTimestamp(new Date()),
+				deliveryState: result.status,
+				error: result.status === "failed" ? result.error : undefined,
+			},
+		];
+		// Server truth replaces the optimistic copies as soon as it contains the learner message.
+		await Promise.all([refresh(), refreshTrialQuota()]);
+		return true;
 	}
 
-	async function scrollToBottom() {
-		await tick();
-		if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-	}
-
-	async function handleRetry(messageId: string) {
-		if (isSubmitting || isCompleted || isInitializing || !sessionId) return;
-
-		flushRevealQueue();
-
-		const message = messages.find((m) => m.id === messageId);
-		if (!message?.clientMessageId) return;
-
-		messages = updateMessageById(messages, messageId, (m) => ({ ...m, isHidden: true }));
-		await scrollToBottom();
-
-		isSubmitting = true;
-
-		const retryText = message.retryText || message.text;
-		const originalUserMessage = messages.find((m) => m.role === "user" && m.clientMessageId === message.clientMessageId);
-		const retryExtraFields: Record<string, string> = {};
-		if (originalUserMessage?.thread?.targetCommentId) {
-			retryExtraFields.threadTargetCommentId = originalUserMessage.thread.targetCommentId;
-		}
-		const result = await submitPracticeMessage(sessionId, retryText, message.clientMessageId, retryExtraFields);
-
-		applySendResult(result, message.clientMessageId, retryText, {
-			authorName: message.authorName,
-			thread: message.thread,
-		});
-
-		await scrollToBottom();
-		await refreshAfterSendResult(result);
-		isSubmitting = false;
-	}
-
-	async function handleCompleteAndNavigate(taskId: string) {
-		if (!sessionId || isCompleting || isCompleted) return;
-		isCompleting = true;
+	/** Sends a learner message; resolves false when it was not accepted, so the draft can be restored. */
+	async function send(text: string, sendOptions: SendOptions = {}): Promise<boolean> {
+		const body = text.replace(/\r\n?/g, "\n").trim();
+		if (!body || disabled || sessionId === null) return false;
+		// The learner's message must land after the whole agent burst.
+		acknowledgeAll();
+		const clientMessageId = crypto.randomUUID();
+		const thread = sendOptions.thread?.(clientMessageId);
+		optimistic = [
+			...optimistic,
+			{
+				id: `local-${clientMessageId}`,
+				role: "user",
+				text: body,
+				timestamp: formatTimestamp(new Date()),
+				authorName: props.userName,
+				clientMessageId,
+				thread: thread?.user,
+			},
+		];
+		submitting = true;
 		try {
-			const result = await completeAction(sessionId);
+			const result = await sendMessage(sessionId, body, clientMessageId, sendOptions.fields);
+			const accepted = await settle(result, {
+				authorName: thread?.agent.responderName ?? agentName,
+				clientMessageId,
+				retryText: body,
+				thread: thread?.agent,
+			});
+			if (!accepted) optimistic = optimistic.filter((message) => message.clientMessageId !== clientMessageId);
+			return accepted;
+		} finally {
+			submitting = false;
+		}
+	}
 
-			if (result.type === "success") {
-				finishAndNavigateToFeedback(taskId);
-			} else {
-				// A completed session (e.g. finished by the send itself) is still a success for navigation purposes.
-				const error = actionErrorMessage(result) ?? "";
-				if (error.includes("Session not in progress")) {
-					finishAndNavigateToFeedback(taskId);
-				} else {
-					console.error("Completion failed:", error || result);
-				}
-			}
+	async function retry(messageId: string) {
+		const failed = conversation.find((message) => message.id === messageId && message.deliveryState === "failed");
+		if (!failed?.clientMessageId || sessionId === null || busy || isCompleted) return;
+		acknowledgeAll();
+		const original = conversation.find((message) => message.role === "user" && message.clientMessageId === failed.clientMessageId);
+		const target = original?.thread?.targetCommentId;
+		retrying = [...retrying, messageId];
+		optimistic = optimistic.filter((message) => message.id !== messageId);
+		submitting = true;
+		try {
+			const result = await sendMessage(sessionId, failed.retryText ?? "", failed.clientMessageId, target ? { threadTargetCommentId: target } : {});
+			await settle(result, {
+				authorName: failed.authorName,
+				clientMessageId: failed.clientMessageId,
+				retryText: failed.retryText,
+				thread: failed.thread,
+			});
+		} finally {
+			retrying = retrying.filter((id) => id !== messageId);
+			submitting = false;
+		}
+	}
+
+	async function finish() {
+		if (sessionId === null || completing || isCompleted) return;
+		confirmingFinish = false;
+		completing = true;
+		try {
+			const result = await postPageAction("complete", { sessionId });
+			// A session the send already completed is still a finished session.
+			if (result.type === "success" || actionError(result)?.includes("Session not in progress")) await navigateToFeedback();
+			else console.error("Completion failed:", result);
 		} catch (error) {
 			console.error("Completion failed:", error);
 		} finally {
-			isCompleting = false;
+			completing = false;
 		}
 	}
 
-	function finishAndNavigateToFeedback(taskId: string) {
-		isCompleted = true;
-		window.location.href = `/task/${taskId}/feedback`;
-	}
-
-	async function handleSend(
-		text: string,
-		extraFields: Record<string, string> = {},
-		messagePatches: { user?: Partial<ChatMessage>; agent?: Partial<ChatMessage> } = {},
-	) {
-		if (!text.trim() || disabled) return;
-
-		// The optimistic user message must land after the full agent burst, so any
-		// paced-out messages are revealed first.
-		flushRevealQueue();
-
-		const currentText = prepareMarkdownText(text);
-		const clientMessageId = crypto.randomUUID();
-		const resolvedExtraFields = Object.fromEntries(
-			Object.entries(extraFields).map(([key, value]) => [key, value.replaceAll("{clientMessageId}", clientMessageId)]),
-		);
-		const resolveThreadMetadata = <T extends CommentThreadMetadata>(metadata?: T) => {
-			if (!metadata) return metadata;
-			return Object.fromEntries(
-				Object.entries(metadata).map(([key, value]) => [
-					key,
-					typeof value === "string" ? value.replaceAll("{clientMessageId}", clientMessageId) : value,
-				]),
-			) as T;
-		};
-		const resolveMessagePatch = (patch?: Partial<ChatMessage>) =>
-			patch
-				? {
-						...patch,
-						thread: resolveThreadMetadata(patch.thread),
-					}
-				: patch;
-		const userPatch = resolveMessagePatch(messagePatches.user);
-		const agentPatch = resolveMessagePatch(messagePatches.agent);
-
-		isSubmitting = true;
-
-		const userMsgId = crypto.randomUUID();
-		pendingReplyTargetId = userPatch?.thread?.commentId ?? null;
-
-		messages = [
-			...messages,
-			{
-				id: userMsgId,
-				role: "user",
-				text: currentText,
-				timestamp: formatTimestamp(new Date()),
-				authorName: userName,
-				avatar: avatarUrl,
-				clientMessageId,
-				...userPatch,
-			},
-		];
-		await scrollToBottom();
-
-		const result = await submitPracticeMessage(sessionId as number, currentText, clientMessageId, resolvedExtraFields);
-
-		applySendResult(result, clientMessageId, currentText, agentPatch);
-
-		await scrollToBottom();
-		await refreshAfterSendResult(result);
-		isSubmitting = false;
-	}
-
-	function runAutoCompleteIfNeeded() {
-		if (limitReached && !isWaitingRetry && !isCompleting && !isCompleted && sessionId && !hasAutoCompleted && !isSubmitting) {
-			hasAutoCompleted = true;
-			void handleCompleteAndNavigate(String(taskId ?? ""));
-		}
-	}
-
-	function hydrateFromExistingSession(sessionData: any) {
-		const sessionSnapshot = getSessionSnapshot(sessionData);
-
-		if (sessionData.id !== lastLoadedSessionId || sessionSnapshot !== lastSessionSnapshot) {
-			const currentId = sessionData.id;
-			const isNewSession = currentId !== lastLoadedSessionId;
-			lastLoadedSessionId = currentId;
-			lastSessionSnapshot = sessionSnapshot;
-			sessionId = currentId;
-
-			const pool = initUserPool(currentId);
-			agentUser = { ...pool.agentUser };
-			onPoolInit?.(pool);
-
-			isCompleted = sessionData.status === "completed" || sessionData.status === "evaluated" || sessionData.status === "abandoned";
-
-			const openingMessages = getOpeningStateMessages({
-				openingStateData,
-				userName,
-				agentUser,
-				avatarUrl,
-				labels: { earlier: labels.earlier },
-			});
-
-			const sessionMessages = buildChatMessages({
-				rawMessages: sessionData.messages ?? [],
-				formatTimestamp,
-				userName,
-				agentName: agentName,
-				avatarUrl,
-				agentColor: agentUser.color,
-				labels,
-			});
-
-			lastHydratedMessages = [...openingMessages, ...sessionMessages];
-			if (isNewSession) {
-				// First load shows the full history at once; pacing applies only to
-				// messages that arrive while the learner is watching.
-				clearReveal();
-				lastSessionMessages = sessionMessages;
-				messages = [...lastHydratedMessages];
-			} else {
-				applyStaggeredReveal(sessionMessages);
-				messages = displayedMessages();
-			}
-
-			tick().then(() => {
-				if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-			});
-		}
-	}
-
-	async function initializeFreshSession() {
-		if (existingSession) return;
-
-		isInitializing = true;
+	async function start() {
+		initializing = true;
 		try {
-			const startResult = await postAction("start", null);
-
-			if (startResult.type === "success" && startResult.data) {
-				const currentId = startResult.data.sessionId as number;
-				sessionId = currentId;
-				lastLoadedSessionId = currentId;
-
-				const pool = initUserPool(currentId);
-				agentUser = { ...pool.agentUser };
-				onPoolInit?.(pool);
-
-				const openingMessages = getOpeningStateMessages({
-					openingStateData,
-					userName,
-					agentUser,
-					avatarUrl,
-					labels: { earlier: labels.earlier },
-				});
-
-				messages = [...openingMessages];
-				lastSessionMessages = [];
-				lastHydratedMessages = [...openingMessages];
-
-				await scrollToBottom();
-				await refreshTrialQuota();
+			const result = await postPageAction("start");
+			if (result.type === "success" && typeof result.data?.sessionId === "number") {
+				startedSessionId = result.data.sessionId;
+				await Promise.all([refresh(), refreshTrialQuota()]);
+			} else {
+				console.error("Session start was rejected:", result);
 			}
 		} catch (error) {
-			console.error("Initialization failed:", error);
+			console.error("Session start failed:", error);
 		} finally {
-			isInitializing = false;
+			initializing = false;
 		}
 	}
 
-	// ── Effects ────────────────────────────────────────────────────
-
 	$effect(() => {
-		runAutoCompleteIfNeeded();
-	});
-
-	$effect(() => {
-		if (existingSession) {
-			// Read-receipt watermark updates on every poll; unlike hydrateFromExistingSession
-			// it must not be gated by the message snapshot (claiming a batch changes no messages).
-			agentReadUpToMessageId =
-				typeof (existingSession as { agentReadUpToMessageId?: unknown }).agentReadUpToMessageId === "number"
-					? (existingSession as { agentReadUpToMessageId: number }).agentReadUpToMessageId
-					: null;
-			hydrateFromExistingSession(existingSession);
+		const head = revealHeadId;
+		if (!head) return;
+		if (!revealNextId) {
+			acknowledged.add(head);
+			return;
 		}
-	});
-
-	$effect(() => {
-		const hasPendingPlaceholder = messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
-		const plan = planAgentWorkPolling({ hasPendingPlaceholder, agentWorkDueAt: nextAgentWorkDueAt, now: new Date() });
-		if (plan.kind === "none" || !sessionId || isCompleted) return;
-		if (plan.kind === "interval") {
-			if (isSubmitting) return;
-			const interval = setInterval(() => void refreshPracticeSession(), SESSION_POLL_INTERVAL_MS);
-			return () => clearInterval(interval);
-		}
-		// Far-future work (e.g. an idle follow-up): one wake-up at due time instead
-		// of polling the whole window.
-		const timer = setTimeout(() => void refreshPracticeSession(), plan.delayMs);
+		const timer = setTimeout(() => acknowledged.add(head), getDeliveryDelayMs(untrack(() => revealNextText)));
 		return () => clearTimeout(timer);
 	});
 
-	// The worker spends the balance while composing; re-read it once the work settles rather than
-	// on every poll, which would reload the whole app layout every few seconds.
+	$effect(() => {
+		if (limitReached && !isWaitingRetry && !busy && !isCompleted && sessionId !== null && !autoFinished) {
+			autoFinished = true;
+			void finish();
+		}
+	});
+
+	$effect(() => {
+		if (sessionId === null || isCompleted) return;
+		const plan = planAgentWorkPolling({
+			hasPendingPlaceholder: replyPending,
+			agentWorkDueAt: agentWorkDueAt === null ? null : new Date(agentWorkDueAt),
+			now: new Date(),
+		});
+		if (plan.kind === "none") return;
+		if (plan.kind === "interval") {
+			if (submitting) return;
+			const interval = setInterval(() => void refresh(), SESSION_POLL_INTERVAL_MS);
+			return () => clearInterval(interval);
+		}
+		// Far-future work (e.g. an idle follow-up): one wake-up instead of polling the whole window.
+		const timer = setTimeout(() => void refresh(), plan.delayMs);
+		return () => clearTimeout(timer);
+	});
+
+	// The worker spends the trial balance while composing; re-read it once the work settles
+	// rather than on every poll, which would reload the whole app layout every few seconds.
 	let agentWorkWasOutstanding = false;
 	$effect(() => {
-		const outstanding = nextAgentWorkDueAt !== null || messages.some((m) => m.deliveryState === "pending" && !m.isHidden);
+		const outstanding = agentWorkDueAt !== null || replyPending;
 		if (agentWorkWasOutstanding && !outstanding) void refreshTrialQuota();
 		agentWorkWasOutstanding = outstanding;
 	});
 
+	$effect(() => {
+		messages.length;
+		if (!scroller) return;
+		const element = scroller;
+		void tick().then(() => {
+			element.scrollTop = element.scrollHeight;
+		});
+	});
+
 	onMount(() => {
-		const enterTimeout = setTimeout(() => {
-			isEntering = false;
-		}, 300);
-
-		void initializeFreshSession();
-
-		return () => {
-			clearTimeout(enterTimeout);
-			if (revealTimer !== undefined) clearTimeout(revealTimer);
-		};
+		if (!untrack(() => props.session)) void start();
 	});
 
 	return {
-		get replyingToId() {
-			return pendingReplyTargetId;
-		},
 		get sessionId() {
 			return sessionId;
 		},
+		/** Opening history followed by the conversation, minus replies still held for pacing. */
+		get messages() {
+			return messages;
+		},
+		get agentName() {
+			return agentName;
+		},
+		get agentReadUpToMessageId() {
+			return props.session?.agentReadUpToMessageId ?? null;
+		},
 		get isSubmitting() {
-			return isSubmitting;
-		},
-		get isEntering() {
-			return isEntering;
-		},
-		set isEntering(v: boolean) {
-			isEntering = v;
+			return submitting;
 		},
 		get isCompleting() {
-			return isCompleting;
+			return completing;
+		},
+		get isInitializing() {
+			return initializing;
 		},
 		get isCompleted() {
 			return isCompleted;
 		},
-		get isInitializing() {
-			return isInitializing;
-		},
-		get messages() {
-			return messages;
-		},
-		get agentUser() {
-			return agentUser;
-		},
-		get inputText() {
-			return inputText;
-		},
-		set inputText(v: string) {
-			inputText = v;
-		},
-		get chatContainer() {
-			return chatContainer;
-		},
-		set chatContainer(v: HTMLElement | null) {
-			chatContainer = v;
-		},
 		get isWaitingRetry() {
 			return isWaitingRetry;
 		},
-		get isAnyMessagePending() {
-			return isAnyMessagePending;
+		/** The agent is (or is about to be) composing a reply to the learner. */
+		get isTyping() {
+			return (initializing || submitting || replyPending) && !isWaitingRetry;
 		},
 		get hasPendingReveals() {
-			return revealQueue.length > 0;
-		},
-		get agentReadUpToMessageId() {
-			return agentReadUpToMessageId;
-		},
-		get isTyping() {
-			return isTyping;
+			return held.size > 0;
 		},
 		get currentTurns() {
 			return currentTurns;
@@ -589,21 +350,32 @@ export function createPracticeSession(getOptions: () => PracticeSessionOptions) 
 		get remainingTurns() {
 			return remainingTurns;
 		},
+		/** Composers are locked while anything is in flight, after completion, or at the turn limit. */
 		get disabled() {
 			return disabled;
 		},
-		get agentName() {
-			return agentName;
+		get canFinish() {
+			return canFinish;
 		},
-		get openingStateData() {
-			return openingStateData;
+		get confirmingFinish() {
+			return confirmingFinish;
 		},
-		handleSend,
-		handleCompleteAndNavigate,
-		handleRetry,
-		runAutoCompleteIfNeeded,
-		hydrateFromExistingSession,
-		initializeFreshSession,
-		scrollToBottom,
+		/** The element the surface scrolls to its newest message; unset for surfaces that do not. */
+		set scroller(element: HTMLElement | null) {
+			scroller = element;
+		},
+		get scroller() {
+			return scroller;
+		},
+		hint,
+		send,
+		retry,
+		finish,
+		requestFinish() {
+			if (canFinish) confirmingFinish = true;
+		},
+		cancelFinish() {
+			confirmingFinish = false;
+		},
 	};
 }

@@ -1,3 +1,4 @@
+import EmojiConvertor from "emoji-js";
 import type { DisplayClock } from "$lib/time/display-clock";
 
 export function normalizeText(value: unknown, fallback: string) {
@@ -25,4 +26,13 @@ export function getTodayDateString(language: string, clock: DisplayClock) {
 		day: "numeric",
 		timeZone: clock.timeZone,
 	}).format(clock.now);
+}
+
+const emojiConvertor = new EmojiConvertor();
+emojiConvertor.replace_mode = "unified";
+emojiConvertor.allow_native = true;
+
+/** Renders `:shortcode:` emoji as native characters, as chat apps do. */
+export function renderEmojiShortcodes(text: string): string {
+	return text ? emojiConvertor.replace_colons(text) : "";
 }

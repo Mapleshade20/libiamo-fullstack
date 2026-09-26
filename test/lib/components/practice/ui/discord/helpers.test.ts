@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
 import { getFirstUnansweredUserMessageId, hasAgentStartedComposing } from "$lib/components/practice/ui/discord/helpers";
+import type { ChatMessage } from "$lib/practice/messages";
 
 describe("discord typing gate helpers", () => {
 	function msg(id: string, role: "user" | "agent"): ChatMessage {

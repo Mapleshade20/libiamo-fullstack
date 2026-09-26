@@ -9,6 +9,8 @@
  */
 
 import type { UiVariant } from "$lib/constants";
+import { flattenOpeningComments } from "$lib/practice/comment-thread";
+import { parseMailMessage } from "$lib/practice/mail";
 
 export const LEVEL_NAMES: Record<number, string> = { 1: "beginner", 2: "intermediate", 3: "advanced" };
 
@@ -190,7 +192,6 @@ type MessageMetadata = {
 	hidden?: boolean;
 	clientMessageId?: string;
 	displayContent?: string;
-	mailBodyHtml?: string;
 	assistantAuthorName?: string;
 	thread?: {
 		commentId?: string;
@@ -229,38 +230,11 @@ export function resolveCounterpartName(ui: UiVariant, openingState: JsonRecord |
 	return null;
 }
 
-type ThreadComment = { id?: unknown; author?: unknown; username?: unknown; text?: unknown; comment?: unknown; replies?: unknown };
-
-function flattenOpeningComments(ui: "reddit" | "ao3", comments: unknown[], parentId: string | null, path: number[] = []): TranscriptEntry[] {
-	return comments.flatMap((raw, index) => {
-		const comment = record(raw) as ThreadComment;
-		const currentPath = [...path, index];
-		const commentId = text(comment.id) || `opening-${currentPath.join("-")}`;
-		const author = text(ui === "reddit" ? comment.author : comment.username) || (ui === "reddit" ? "deleted" : "Anonymous");
-		const body = text(ui === "reddit" ? comment.text : comment.comment);
-		const entry: TranscriptEntry[] = body ? [{ commentId, replyTo: parentId, opening: true, role: "other", author, text: body }] : [];
-		return [...entry, ...flattenOpeningComments(ui, list(comment.replies), commentId, currentPath)];
-	});
-}
-
-function parseMailDraft(content: string): { to: string; subject: string; body: string } {
-	const lines = content.split("\n");
-	const header = (name: string) => {
-		const line = lines.find((candidate) => candidate.startsWith(name));
-		return line ? line.slice(name.length).trim() : "";
-	};
-	const hasHeaders = lines[0]?.startsWith("To:") && lines[1]?.startsWith("Subject:");
-	const bodyStart = hasHeaders ? (lines[2] === "" ? 3 : 2) : 0;
-	return { to: hasHeaders ? header("To:") : "", subject: hasHeaders ? header("Subject:") : "", body: lines.slice(bodyStart).join("\n").trim() };
-}
-
 export type BuildChatTranscriptInput = {
 	ui: UiVariant;
 	openingState: JsonRecord | null | undefined;
 	messages: TranscriptMessage[];
 	learnerName: string;
-	/** Renders a learner mail body with its layout; injected so this module stays free of UI helpers. */
-	mailBodyLayout?: (html: string) => string;
 };
 
 /**
@@ -303,7 +277,10 @@ export function buildChatTranscript(input: BuildChatTranscriptInput): Transcript
 			});
 		}
 	} else if (threaded) {
-		entries.push(...flattenOpeningComments(ui, list(state.previousComments), null));
+		for (const comment of flattenOpeningComments(ui, state)) {
+			if (comment.text)
+				entries.push({ commentId: comment.id, replyTo: comment.parentId, opening: true, role: "other", author: comment.author, text: comment.text });
+		}
 	}
 
 	for (const message of input.messages) {
@@ -339,16 +316,13 @@ export function buildChatTranscript(input: BuildChatTranscriptInput): Transcript
 		}
 
 		if (ui === "apple_mail" && isLearner) {
-			const draft = parseMailDraft(content);
-			const layout = metadata.mailBodyHtml && input.mailBodyLayout ? input.mailBodyLayout(metadata.mailBodyHtml).trim() : "";
+			const draft = parseMailMessage(content);
 			entries.push({
 				role: "learner",
 				author: learnerName,
 				...(draft.to ? { to: draft.to } : {}),
 				...(draft.subject ? { subject: draft.subject } : {}),
-				// The layout rendering carries the same words plus list and indentation markers; it is
-				// capped, so a longer body falls back to the plain text.
-				text: layout && layout.length < 3500 ? layout : draft.body,
+				text: draft.body,
 			});
 			continue;
 		}

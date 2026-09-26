@@ -2,7 +2,6 @@ import { error, fail } from "@sveltejs/kit";
 import { and, eq, inArray } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
-import { parseDraftFromMessage } from "$lib/components/practice/ui/mail/mail-content";
 import {
 	CLIENT_MESSAGE_ID_MAX_LENGTH,
 	MAIL_TEXT_MAX_LENGTH,
@@ -10,6 +9,8 @@ import {
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
+import { parseMailMessage } from "$lib/practice/mail";
+import type { PersistedPracticeSession } from "$lib/practice/messages";
 import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
@@ -33,7 +34,7 @@ emojiConverter.colons_mode = true;
 
 function isOverlongMessage(ui: string, rawMessage: string) {
 	if (ui === "apple_mail") {
-		return parseDraftFromMessage(rawMessage, "").body.length > MAIL_TEXT_MAX_LENGTH;
+		return parseMailMessage(rawMessage).body.length > MAIL_TEXT_MAX_LENGTH;
 	}
 	return rawMessage.length > PRACTICE_UI_TEXT_MAX_LENGTH;
 }
@@ -111,7 +112,6 @@ export const load: PageServerLoad = async (event) => {
 				columns: {
 					id: true,
 					status: true,
-					tutorFeedback: true,
 					agentReadUpToMessageId: true,
 				},
 				with: {
@@ -153,10 +153,14 @@ export const load: PageServerLoad = async (event) => {
 			})
 		: null;
 
+	const session: PersistedPracticeSession | null = existingSession
+		? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null }
+		: null;
+
 	return {
 		task: taskData,
 		readReceipt: existingSession && latestAssistantMessageId ? { sessionId: existingSession.id, messageId: latestAssistantMessageId } : null,
-		existingSession: existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null } : null,
+		session,
 		taskId: String(taskData.id),
 		maxTurns: taskData.maxTurns ?? 0,
 	};

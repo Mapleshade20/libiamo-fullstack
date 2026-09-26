@@ -8,7 +8,6 @@
  * that starts with the opening messages the learner saw.
  */
 
-import { summarizeMailBodyLayout } from "$lib/components/practice/ui/mail/mail-content";
 import { type ChatUiVariant, getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import type { ChatMessage } from "$lib/server/llm/client";
 import { createSlotRenderer, type LlmSlotDefinition, type SlotRenderer } from "$lib/server/llm/recipe";
@@ -52,7 +51,6 @@ const INTERFACE_RULES: Record<ChatUiVariant, string[]> = {
 	apple_mail: [
 		"Each delivery is one complete email body (greeting, paragraphs, sign-off with the character's usual name); one email per turn is normal. Never write Subject:/From:/To: lines, Markdown fences, or JSON in the body.",
 		"Greet the learner by learner.name until they introduce themselves with another name.",
-		"Learner email bodies may show their layout: '- ' or '1. ' list items, and markers such as [align=center] or [indent=40px].",
 	],
 	reddit: [
 		"You voice several commenters. Answer each unanswered learner comment as its respondAs person, consistent with what that person already wrote. Write only the comment text, as a real Reddit comment reads.",
@@ -193,7 +191,6 @@ export function buildAgentTranscript(input: {
 		openingState: input.task.openingState,
 		messages: input.history,
 		learnerName: input.learnerName,
-		mailBodyLayout: (html) => summarizeMailBodyLayout(html),
 	});
 }
 

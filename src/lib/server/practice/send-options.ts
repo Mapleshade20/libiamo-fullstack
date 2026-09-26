@@ -1,68 +1,47 @@
 import { eq } from "drizzle-orm";
-import type { Ao3OpeningState } from "$lib/components/practice/ui/ao3/helpers";
-import { sanitizeDraftBodyHtml } from "$lib/components/practice/ui/mail/mail-content";
-import type { RedditOpeningState } from "$lib/components/practice/ui/reddit/types";
 import type { UiVariant } from "$lib/constants";
+import { type CommentThreadMetadata, findThreadTarget, newCommentMetadata, type ThreadUi } from "$lib/practice/comment-thread";
+import { buildChatMessages, type PersistedPracticeMessage } from "$lib/practice/messages";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { orderSessionMessagesChronologically, type SubmitMessageOptions } from "$lib/server/practice/session";
-import { buildAo3SendOptions } from "./send-options-ao3";
-import { buildRedditSendOptions } from "./send-options-reddit";
 
 type PracticeUiSendOptionsResult = { ok: true; options: SubmitMessageOptions } | { ok: false; status: number; error: string };
 
-function getFormString(formData: FormData, key: string): string {
-	const value = formData.get(key);
-	return typeof value === "string" ? value.trim() : "";
+type PersistedMetadata = { clientMessageId?: string; failed?: boolean; displayContent?: string; thread?: CommentThreadMetadata };
+
+function metadataOf(value: unknown): PersistedMetadata {
+	return value && typeof value === "object" && !Array.isArray(value) ? (value as PersistedMetadata) : {};
 }
 
-type BuildPracticeUiSendOptionsParams = {
-	formData: FormData;
+/**
+ * Where a Reddit/AO3 comment goes and who answers it. A retry of a failed comment keeps its
+ * original placement; a new comment must target an existing comment (or none, for top level).
+ * Returns null for an unknown target.
+ */
+export function buildThreadSendOptions(params: {
+	ui: ThreadUi;
 	openingState: unknown;
-	sessionId: number;
+	messages: PersistedPracticeMessage[];
+	targetCommentId: string | null;
 	message: string;
 	clientMessageId: string;
 	userName: string;
-};
+}): SubmitMessageOptions | null {
+	const failedOriginal = params.messages
+		.filter((message) => message.role === "user")
+		.map((message) => metadataOf(message.llmMetadata))
+		.find((metadata) => metadata.clientMessageId === params.clientMessageId && metadata.failed === true && metadata.thread);
+	if (failedOriginal?.thread) return { userDisplayContent: failedOriginal.displayContent, userMetadata: { thread: failedOriginal.thread } };
 
-async function getSessionMessages(sessionId: number) {
-	const sessionWithMessages = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, sessionId),
-		with: { messages: { orderBy: orderSessionMessagesChronologically } },
-	});
-	return sessionWithMessages?.messages ?? [];
-}
+	const chatMessages = buildChatMessages({ rawMessages: params.messages, formatTimestamp: () => "", userName: params.userName, agentName: "" });
+	const target = findThreadTarget(params.ui, params.openingState, chatMessages, params.targetCommentId);
+	if (params.targetCommentId && !target) return null;
 
-async function buildAo3PracticeUiSendOptions(params: BuildPracticeUiSendOptionsParams): Promise<PracticeUiSendOptionsResult> {
-	if (!params.clientMessageId) return { ok: false, status: 400, error: "clientMessageId is required for AO3 comments" };
-
-	const options = buildAo3SendOptions({
-		openingState: (params.openingState ?? {}) as Ao3OpeningState,
-		messages: await getSessionMessages(params.sessionId),
-		targetCommentId: getFormString(params.formData, "threadTargetCommentId") || null,
-		message: params.message,
-		clientMessageId: params.clientMessageId,
-		userName: params.userName,
-	});
-
-	if (!options) return { ok: false, status: 400, error: "Invalid AO3 reply target" };
-	return { ok: true, options };
-}
-
-async function buildRedditPracticeUiSendOptions(params: BuildPracticeUiSendOptionsParams): Promise<PracticeUiSendOptionsResult> {
-	if (!params.clientMessageId) return { ok: false, status: 400, error: "clientMessageId is required for Reddit comments" };
-
-	const options = buildRedditSendOptions({
-		openingState: (params.openingState ?? {}) as RedditOpeningState,
-		messages: await getSessionMessages(params.sessionId),
-		targetCommentId: getFormString(params.formData, "threadTargetCommentId") || null,
-		message: params.message,
-		clientMessageId: params.clientMessageId,
-		userName: params.userName,
-	});
-
-	if (!options) return { ok: false, status: 400, error: "Invalid Reddit reply target" };
-	return { ok: true, options };
+	return {
+		userDisplayContent: params.message,
+		userMetadata: { thread: newCommentMetadata(params.ui, params.clientMessageId, target, params.openingState).user },
+	};
 }
 
 export async function buildPracticeUiSendOptions(params: {
@@ -74,16 +53,23 @@ export async function buildPracticeUiSendOptions(params: {
 	clientMessageId: string;
 	userName: string;
 }): Promise<PracticeUiSendOptionsResult> {
-	if (params.ui === "ao3") return buildAo3PracticeUiSendOptions(params);
-	if (params.ui === "reddit") return buildRedditPracticeUiSendOptions(params);
-	if (params.ui === "apple_mail") {
-		const bodyHtml = sanitizeDraftBodyHtml(getFormString(params.formData, "bodyHtml"));
-		return {
-			ok: true,
-			options: {
-				userMetadata: bodyHtml ? { mailBodyHtml: bodyHtml } : undefined,
-			},
-		};
-	}
-	return { ok: true, options: {} };
+	if (params.ui !== "reddit" && params.ui !== "ao3") return { ok: true, options: {} };
+	if (!params.clientMessageId) return { ok: false, status: 400, error: "clientMessageId is required for comments" };
+
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, params.sessionId),
+		with: { messages: { orderBy: orderSessionMessagesChronologically } },
+	});
+	const target = params.formData.get("threadTargetCommentId");
+	const options = buildThreadSendOptions({
+		ui: params.ui,
+		openingState: params.openingState,
+		messages: session?.messages ?? [],
+		targetCommentId: typeof target === "string" && target.trim() ? target.trim() : null,
+		message: params.message,
+		clientMessageId: params.clientMessageId,
+		userName: params.userName,
+	});
+	if (!options) return { ok: false, status: 400, error: "Invalid reply target" };
+	return { ok: true, options };
 }

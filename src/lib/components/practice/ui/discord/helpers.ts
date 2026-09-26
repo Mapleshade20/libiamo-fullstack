@@ -1,4 +1,4 @@
-import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
+import type { ChatMessage } from "$lib/practice/messages";
 
 /**
  * Id of the earliest user message the agent has not answered yet. Only persisted
@@ -10,7 +10,7 @@ export function getFirstUnansweredUserMessageId(messages: ChatMessage[]): number
 		const message = messages[index];
 		// Pending placeholders are polling vessels rendered as nothing; they must
 		// not count as an answer when looking for the first unanswered message.
-		if (message?.role === "agent" && !message.isHidden && message.deliveryState !== "pending") {
+		if (message?.role === "agent" && message.deliveryState !== "pending") {
 			lastAgentIndex = index;
 			break;
 		}

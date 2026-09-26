@@ -5,7 +5,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	test: {
-		include: ["test/**/*.{test,spec}.{js,ts}"],
+		projects: [
+			{ extends: true, test: { name: "node", include: ["test/**/*.test.ts"], exclude: ["test/**/*.dom.test.ts"] } },
+			{ extends: true, resolve: { conditions: ["browser"] }, test: { name: "dom", environment: "jsdom", include: ["test/**/*.dom.test.ts"] } },
+		],
 		coverage: {
 			reporter: ["text", "lcov"],
 			provider: "v8",

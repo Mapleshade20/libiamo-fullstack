@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
-import { resolveAgentName } from "$lib/components/practice/session/session.svelte";
 import {
+	getBubbleCorners,
 	getBubbleGroupPosition,
 	getLastOutgoingMessageId,
 	getRenderableMessages,
 	isLastOutgoingMessageRead,
 } from "$lib/components/practice/ui/imessage/presentation";
+import type { ChatMessage } from "$lib/practice/messages";
 
 function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
 	return {
@@ -20,12 +20,11 @@ function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
 }
 
 describe("getRenderableMessages", () => {
-	it("filters out hidden and pending messages", () => {
+	it("leaves out pending placeholders", () => {
 		const result = getRenderableMessages([
-			createMessage({ id: "1", isHidden: true }),
 			createMessage({ id: "2", deliveryState: "pending" }),
 			createMessage({ id: "3", deliveryState: "failed" }),
-			createMessage({ id: "4", deliveryState: "sent" }),
+			createMessage({ id: "4" }),
 		]);
 
 		expect(result.map((message) => message.id)).toEqual(["3", "4"]);
@@ -45,51 +44,18 @@ describe("getBubbleGroupPosition", () => {
 		expect(getBubbleGroupPosition(messages, 2)).toBe("end");
 	});
 
+	it("tucks the inner corners of grouped bubbles on the sender's side", () => {
+		const messages = [createMessage({ id: "1", role: "user" }), createMessage({ id: "2", role: "user" }), createMessage({ id: "3", role: "agent" })];
+
+		expect(getBubbleCorners(messages, 0)).toBe("rounded-br-md");
+		expect(getBubbleCorners(messages, 1)).toBe("rounded-tr-md");
+		expect(getBubbleCorners(messages, 2)).toBe("");
+	});
+
 	it("returns single when neighbors differ", () => {
 		const messages = [createMessage({ id: "1", role: "agent" }), createMessage({ id: "2", role: "user" }), createMessage({ id: "3", role: "agent" })];
 
 		expect(getBubbleGroupPosition(messages, 1)).toBe("single");
-	});
-});
-
-describe("resolveAgentName", () => {
-	it("prefers first non-user sender in opening messages", () => {
-		const name = resolveAgentName(
-			{
-				previousMessages: [
-					{ sender: "Learner", text: "hey" },
-					{ sender: "Roddy", text: "hello" },
-				],
-			} as any,
-			"Learner",
-			"Agent",
-		);
-
-		expect(name).toBe("Roddy");
-	});
-
-	it("falls back to agent name when no peer sender exists", () => {
-		const name = resolveAgentName(
-			{
-				previousMessages: [{ sender: "Learner", text: "hey" }],
-			} as any,
-			"Learner",
-			"Agent",
-		);
-
-		expect(name).toBe("Agent");
-	});
-
-	it("falls back safely when previousMessages is malformed", () => {
-		const name = resolveAgentName(
-			{
-				previousMessages: "broken" as any,
-			},
-			"Learner",
-			"Agent",
-		);
-
-		expect(name).toBe("Agent");
 	});
 });
 
@@ -113,27 +79,24 @@ describe("getLastOutgoingMessageId", () => {
 
 describe("isLastOutgoingMessageRead", () => {
 	it("is unread while the reply watermark lags behind the persisted message id", () => {
-		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user", deliveryState: "sent" })], 11);
+		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user" })], 11);
 		expect(read).toBe(false);
 	});
 
 	it("is read once the watermark reaches the message id", () => {
-		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user", deliveryState: "sent" })], 12);
+		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user" })], 12);
 		expect(read).toBe(true);
 	});
 
 	it("stays unread for a fresh client-side message with a uuid id, even a digit-prefixed one", () => {
 		for (const id of [crypto.randomUUID(), "8f3a9c2e-1b4d-4e5f-9a2b-6c7d8e9f0a1b"]) {
-			const read = isLastOutgoingMessageRead([createMessage({ id, role: "user", deliveryState: "sent" })], 40);
+			const read = isLastOutgoingMessageRead([createMessage({ id, role: "user" })], 40);
 			expect(read).toBe(false);
 		}
 	});
 
 	it("is read when an agent message follows even without a watermark", () => {
-		const read = isLastOutgoingMessageRead(
-			[createMessage({ id: "12", role: "user", deliveryState: "sent" }), createMessage({ id: "13", role: "agent", deliveryState: "sent" })],
-			null,
-		);
+		const read = isLastOutgoingMessageRead([createMessage({ id: "12", role: "user" }), createMessage({ id: "13", role: "agent" })], null);
 		expect(read).toBe(true);
 	});
 });

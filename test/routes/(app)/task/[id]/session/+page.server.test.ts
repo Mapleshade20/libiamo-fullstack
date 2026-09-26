@@ -131,9 +131,9 @@ describe("session page server", () => {
 
 			expect(mockTaskContext.findPracticeSession).toHaveBeenCalledWith("user_123", 456, context);
 			expect(result.task).toEqual(mockTask);
-			expect(result.existingSession?.id).toBe(789);
+			expect(result.session?.id).toBe(789);
 			// the earliest outstanding agent work drives the client's polling lifecycle
-			expect(result.existingSession.nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
+			expect(result.session.nextAgentWorkDueAt).toEqual(nextAgentWorkDueAt);
 			const batchQuery = mockDb.query.agentResponseBatch.findFirst.mock.calls[0]?.[0];
 			expect(batchQuery.orderBy({ dueAt: "dueAt" }, { asc: (value: string) => `asc:${value}` })).toEqual(["asc:dueAt"]);
 			const sessionQuery = mockDb.query.practiceSession.findFirst.mock.calls[0]?.[0];
@@ -143,12 +143,12 @@ describe("session page server", () => {
 			]);
 		});
 
-		it("returns null existingSession when the learner has no session to show", async () => {
+		it("returns no session when the learner has no session to show", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue(mockTask);
 
 			const result = (await load(loadEvent())) as any;
 
-			expect(result.existingSession).toBeNull();
+			expect(result.session).toBeNull();
 			expect(mockDb.query.practiceSession.findFirst).not.toHaveBeenCalled();
 		});
 
@@ -187,7 +187,7 @@ describe("session page server", () => {
 			const result = (await load(loadEvent())) as any;
 
 			expect(result.task).toEqual(implementedTask);
-			expect(result.existingSession).toBeNull();
+			expect(result.session).toBeNull();
 		});
 	});
 
@@ -277,7 +277,7 @@ describe("session page server", () => {
 			expect(mockSessionService.submitMessage).toHaveBeenCalledWith(789, "Hello", "user_123", "msg-123", {});
 		});
 
-		it("sends Apple Mail messages through chat with sanitized body html metadata", async () => {
+		it("stores Apple Mail messages as the learner wrote them, ignoring any HTML body", async () => {
 			mockDb.query.task.findFirst.mockResolvedValue({
 				...mockTask,
 				ui: "apple_mail" as const,
@@ -304,8 +304,8 @@ describe("session page server", () => {
 				"To: Maya\nSubject: Meeting\n\nHello Maya",
 				"user_123",
 				"mail-1",
-				// Only what the learner wrote is persisted: no prompt wrapper with names or layout instructions.
-				{ userMetadata: { mailBodyHtml: '<div style="text-align: center">Hello Maya</div>' } },
+				// Only what the learner wrote is persisted: no prompt wrapper, no rich-text layout.
+				{},
 			);
 		});
 
@@ -354,7 +354,7 @@ describe("session page server", () => {
 				createFormEvent({ values: { sessionId: "789", message: "Hello", clientMessageId: "ao3-msg", threadTargetCommentId: "missing" } }),
 			);
 
-			expect(result).toMatchObject({ status: 400, data: { error: "Invalid AO3 reply target" } });
+			expect(result).toMatchObject({ status: 400, data: { error: "Invalid reply target" } });
 			expect(mockSessionService.submitMessage).not.toHaveBeenCalled();
 		});
 

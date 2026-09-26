@@ -7,42 +7,34 @@ import X from "@lucide/svelte/icons/x";
 import type { TransitionConfig } from "svelte/transition";
 import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import { getHintLabels } from "./i18n";
+import type { LanguageCode } from "$lib/constants";
+import { t } from "$lib/i18n";
+import type { HintAssist } from "./hint-assist.svelte";
 import { isImeKeyboardEvent } from "./keyboard";
 
 type HintFloatingPlacement = "auto" | "above" | "below";
 
 let {
-	anchorName,
+	hint,
 	layoutReference,
-	motionOrigin,
-	language = "en",
-	expressionQuery = $bindable(""),
-	expressionPhrases = [],
-	contentHint = "",
-	hintError = null,
-	isGettingHint = false,
+	language,
 	disabled = false,
 	placement = "auto",
-	onExpressionSubmit,
-	onContentHint,
-	onClose,
 }: {
-	anchorName: string;
+	hint: HintAssist;
+	/** The editor box the panel is anchored to and matches in width. */
 	layoutReference: HTMLElement | null;
-	motionOrigin: HTMLElement | null;
-	language?: string;
-	expressionQuery?: string;
-	expressionPhrases?: string[];
-	contentHint?: string;
-	hintError?: string | null;
-	isGettingHint?: boolean;
+	language: LanguageCode;
 	disabled?: boolean;
 	placement?: HintFloatingPlacement;
-	onExpressionSubmit: () => void;
-	onContentHint: () => void;
-	onClose: () => void;
 } = $props();
+
+const anchorName = $derived(`--practice-hint-${(hint.owner ?? "none").replace(/[^a-zA-Z0-9_-]/g, "-")}`);
+const motionOrigin = $derived(hint.origin);
+const isGettingHint = $derived(hint.loading);
+const contentHint = $derived(hint.contentHint);
+const expressionPhrases = $derived(hint.phrases);
+const hintError = $derived(hint.error === null ? null : hint.error || t(language, "practice.hint.failed"));
 
 let panelEl = $state<HTMLDivElement | null>(null);
 let resultContentEl = $state<HTMLDivElement | null>(null);
@@ -57,7 +49,16 @@ let contentMode = $state(false);
 let suppressNextOutsideClick = false;
 let submittedExpressionQuery = $state("");
 let expressionResultCleared = $state(false);
-const labels = $derived(getHintLabels(language));
+const labels = $derived({
+	panel: t(language, "practice.hint.panel"),
+	submit: t(language, "practice.hint.submit"),
+	back: t(language, "practice.hint.back"),
+	clear: t(language, "practice.hint.clear"),
+	expressionInput: t(language, "practice.hint.expressionInput"),
+	expressionPlaceholder: t(language, "practice.hint.expressionPlaceholder"),
+	contentIdea: t(language, "practice.hint.contentIdea"),
+});
+const expressionQuery = $derived(hint.expressionQuery);
 const hasExpressionQuery = $derived(Boolean(expressionQuery.trim()));
 const expressionExpanded = $derived(expressionFocused);
 const showContentHintButton = $derived(!contentMode && !expressionFocused && !hasExpressionQuery);
@@ -175,7 +176,7 @@ function submitExpression() {
 	contentMode = false;
 	submittedExpressionQuery = expressionQuery.trim();
 	expressionResultCleared = false;
-	onExpressionSubmit();
+	void hint.requestExpression();
 	expressionInputEl?.blur();
 }
 
@@ -193,7 +194,7 @@ function requestContentHint(event?: MouseEvent) {
 	event?.stopPropagation();
 	if (contentMode || isGettingHint || disabled) return;
 	contentMode = true;
-	onContentHint();
+	void hint.requestContent();
 }
 
 function leaveContentMode() {
@@ -203,12 +204,12 @@ function leaveContentMode() {
 function clearExpression(event?: MouseEvent) {
 	event?.stopPropagation();
 	expressionResultCleared = true;
-	expressionQuery = "";
+	hint.expressionQuery = "";
 	expressionInputEl?.blur();
 }
 
 function handleExpressionInput(event: Event) {
-	expressionQuery = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : expressionQuery;
+	if (event.currentTarget instanceof HTMLInputElement) hint.expressionQuery = event.currentTarget.value;
 	if (submittedExpressionQuery !== "" && expressionQuery.trim() !== submittedExpressionQuery) {
 		expressionResultCleared = true;
 	}
@@ -231,6 +232,13 @@ function handleWindowClickCapture(event: MouseEvent) {
 	event.stopImmediatePropagation();
 }
 
+/** Clicks outside the panel close it; the trigger toggles it itself. */
+function handleWindowClick(event: MouseEvent) {
+	const target = event.target;
+	if (!(target instanceof Node) || panelEl?.contains(target) || motionOrigin?.contains(target)) return;
+	hint.close();
+}
+
 function handleWindowKeydownCapture(event: KeyboardEvent) {
 	if (isImeKeyboardEvent(event)) return;
 	if (event.key !== "Escape") return;
@@ -241,7 +249,7 @@ function handleWindowKeydownCapture(event: KeyboardEvent) {
 		return;
 	}
 
-	onClose();
+	hint.close();
 }
 
 function positionFallback(node: HTMLElement) {
@@ -295,6 +303,7 @@ $effect(() => {
 </script>
 
 <svelte:window
+	onclick={handleWindowClick}
 	onclickcapture={handleWindowClickCapture}
 	onkeydowncapture={handleWindowKeydownCapture}
 	onpointerdowncapture={handleWindowPointerdownCapture}

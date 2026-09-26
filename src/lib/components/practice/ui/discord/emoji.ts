@@ -1,14 +1,3 @@
-import EmojiConvertor from "emoji-js";
-
-const emojiConvertor = new EmojiConvertor();
-emojiConvertor.replace_mode = "unified";
-emojiConvertor.allow_native = true;
-
-export function normalizeEmojiTextForDisplay(text: string): string {
-	if (!text) return "";
-	return emojiConvertor.replace_colons(text);
-}
-
 export function extractEmojiFromPickerEvent(event: CustomEvent | Event): string {
 	const detail = (event as CustomEvent).detail as
 		| {

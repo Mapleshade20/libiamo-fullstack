@@ -1,13 +1,10 @@
-import type { ChatMessage } from "$lib/components/practice/session/chat-messages";
+import type { ChatMessage } from "$lib/practice/messages";
 
 export type BubbleGroupPosition = "single" | "start" | "middle" | "end";
 
-function isRenderableMessage(message: ChatMessage) {
-	return !message.isHidden && message.deliveryState !== "pending";
-}
-
+/** Pending placeholders only drive polling; iMessage shows read receipts and typing instead. */
 export function getRenderableMessages(messages: ChatMessage[]): ChatMessage[] {
-	return messages.filter(isRenderableMessage);
+	return messages.filter((message) => message.deliveryState !== "pending");
 }
 
 export function getBubbleGroupPosition(messages: ChatMessage[], index: number): BubbleGroupPosition {
@@ -53,4 +50,16 @@ export function isLastOutgoingMessageRead(messages: ChatMessage[], agentReadUpTo
 	if (/^\d+$/.test(lastId) && Number.parseInt(lastId, 10) <= (agentReadUpToMessageId ?? 0)) return true;
 
 	return messages.slice(lastIndex + 1).some((message) => message.role === "agent");
+}
+
+const GROUPED_CORNERS: Record<ChatMessage["role"], Record<Exclude<BubbleGroupPosition, "single">, string>> = {
+	user: { start: "rounded-br-md", middle: "rounded-tr-md rounded-br-md", end: "rounded-tr-md" },
+	agent: { start: "rounded-bl-md", middle: "rounded-tl-md rounded-bl-md", end: "rounded-tl-md" },
+};
+
+/** Consecutive bubbles from one side tuck their inner corners together, as in Messages. */
+export function getBubbleCorners(messages: ChatMessage[], index: number): string {
+	const position = getBubbleGroupPosition(messages, index);
+	const role = messages[index]?.role ?? "user";
+	return position === "single" ? "" : GROUPED_CORNERS[role][position];
 }

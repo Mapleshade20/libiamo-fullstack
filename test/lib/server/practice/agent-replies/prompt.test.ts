@@ -133,7 +133,7 @@ describe("agent prompt assembly", () => {
 		]);
 	});
 
-	it("renders learner emails from their headers and layout, without persisted instructions", () => {
+	it("renders learner emails from their headers and plain body, ignoring legacy layout metadata", () => {
 		const [, user] = buildAgentMessages({
 			task: { ...discordTask, ui: "apple_mail", openingState: { emails: [] } },
 			learnerName: "Maple",
@@ -146,8 +146,6 @@ describe("agent prompt assembly", () => {
 				},
 			],
 		});
-		expect(JSON.parse(user.content).transcript).toEqual([
-			{ role: "learner", author: "Maple", to: "Shane", subject: "Booking", text: "- Saturday\n- Two people" },
-		]);
+		expect(JSON.parse(user.content).transcript).toEqual([{ role: "learner", author: "Maple", to: "Shane", subject: "Booking", text: "Hello Shane" }]);
 	});
 });

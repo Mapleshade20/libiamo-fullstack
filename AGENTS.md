@@ -52,6 +52,14 @@ Use a refined retro editorial magazine aesthetic: a light warm paper base, elega
 - Streak rules in `lib/streak/rules.ts` take `today` explicitly. Only `server/streak.ts` writes streak state, within the transaction that claimed a completion. A day counts when a quest completes **and** the account-wide review queue is observed empty. Missed-day settlement is derived on read and materialized on write; loaders never write.
 - Note editing belongs in `/review/manage`; Archive is activity history and must not expose Note editing.
 
+### Practice surfaces
+
+- The five chat surfaces (`components/practice/ui/<variant>/`) differ only in presentation and platform input. The lifecycle (start, send, retry, paced reveal, polling via `planAgentWorkPolling`, finish/feedback navigation, finish sheet, hint panel) lives in `createPracticeSession`; surfaces must not reimplement it or hold their own copy of messages. It stays platform-neutral: surfaces pass the counterpart's fallback name and render state; placeholders carry `deliveryState`/`error`, never copy.
+- Session messages derive synchronously from the loader's `PersistedPracticeSession`, so SSR shows them; local state is only an overlay (optimistic sends until the snapshot contains that `clientMessageId`, failed placeholders hidden during their retry, replies held for pacing). Pacing effects must depend on primitives so identical polls don't restart timers.
+- Shared contracts used by both server and surfaces live in `lib/practice/` (`messages`, `comment-thread`, `mail`). Reddit/AO3 comment ids (`opening-<path>`, `<ui>-user-<clientMessageId>`, …) are persisted in message metadata and matched by the agent transcript; never change the scheme. Mail stores plain text as `To:`/`Subject:` headers plus body.
+- The hint controller is open for one owner at a time; editors pass a unique owner id, `release` it on submit/unmount, and never render a response after their owner changed.
+- Svelte component CSS is unlayered and beats Tailwind utilities regardless of specificity: helper classes in `<style>` must not set properties (display, min-height) that responsive utilities need to override.
+
 ### LLM and translation
 
 - Every LLM call is a recipe (`defineLlmRecipe` in `server/llm/recipe.ts`) run through `runLlmRecipe`; never call `chatJson`/`chatText` from domain code. Recipes are pure: `build`/`finalize` take JSON-plain input (pick task facts, no rows or `Date`s) and never write domain state, so the LLM Lab can store and re-run inputs. Pass `subjects` (task/session/attempt) so traces can be found from pages; bump `version` when the input shape changes. Thinking is always on: every recipe declares `reasoningEffort` (low for light, latency-sensitive calls, medium for judgement-heavy ones, sent as OpenAI-spec `reasoning_effort`), and all calls share `MAX_OUTPUT_TOKENS` because reasoning tokens count against it. Register new recipes in `server/llm/lab/recipes.ts`. The transport (`server/llm/client.ts`) serves environment and BYOK credentials; JSON recipes get at most one targeted repair and truncation is never repaired.
@@ -85,7 +93,7 @@ Use a refined retro editorial magazine aesthetic: a light warm paper base, elega
 - Agents must not sign their work: no `Co-Authored-By` trailers, "Generated with" lines or other agent attribution in commits, PRs or files.
 - Run `pnpm check` and `pnpm test` before finishing code changes. Write essential tests for new TypeScript behavior; avoid redundant tests.
 - Use chrome to debug and verify changes.
-- Tests mirror `src/` under `test/`; DB tests mock `$lib/server/db` via `vi.hoisted()`. Use fixed dates for time-dependent tests to avoid midnight flakiness.
+- Tests mirror `src/` under `test/`; DB tests mock `$lib/server/db` via `vi.hoisted()`. `*.dom.test.ts` files run in a jsdom project with browser conditions (real `mount`, effects and timers); plain tests compile Svelte for the server, where `$effect` never runs. Use fixed dates for time-dependent tests to avoid midnight flakiness.
 - Test semantics, navigation, accessibility, state behavior, and data relationships rather than freezing editorial/UI wording. Prompt tests should verify roles/order, structured inputs, schemas, and behavioral contracts rather than prose fragments or arbitrary words. Assert exact text only when it is a product/protocol contract.
 - For big changes, use `docs/design/` for the proposed work and important decisions, then `docs/writeup/` for a concise human-readable account of what changed.
     - Design frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test; may be multiple), `status` (needs-approval → wip → done; only a human may mark done).
