@@ -7,10 +7,10 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { deserialize } from "$app/forms";
-import NoteCard from "$lib/components/note/NoteCard.svelte";
+import NoteCard from "$lib/components/review/NoteCard.svelte";
 import type { LanguageCode } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
 import { t } from "$lib/i18n";
+import { getDisplayClock } from "$lib/time/display-clock";
 import type { PageData } from "./$types";
 
 type ArchiveGroups = PageData["groups"];

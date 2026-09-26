@@ -1,6 +1,8 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { dev } from "$app/environment";
 import { getRequestEvent } from "$app/server";
+import type { LanguageCode } from "$lib/constants";
+import { calendarDays, historyChanges, monthRange, type StreakCalendarData } from "$lib/streak/history";
 import {
 	applyQuestCompletion,
 	applyReviewObservation,
@@ -9,11 +11,10 @@ import {
 	localDay,
 	type StreakRecord,
 	streakRecordsEqual,
-} from "$lib/streak";
-import { calendarDays, historyChanges, monthRange, type StreakCalendarData } from "$lib/streak-history";
+} from "$lib/streak/rules";
 import { db } from "./db";
 import { note, streakDay, userStreak } from "./db/schema";
-import { ANKI_LEARN_AHEAD_MINUTES } from "./review";
+import { ANKI_LEARN_AHEAD_MINUTES } from "./review/scheduler";
 
 export const DEV_STREAK_DAY_OFFSET_COOKIE = "libiamo-dev-streak-day-offset";
 
@@ -78,7 +79,7 @@ export async function getStreakCalendar(userId: string, month: string, today: st
 }
 
 /**
- * Is any Note of this learner available for study right now, across every language?
+ * The Notes of this learner available for study right now, across every language.
  *
  * This duplicates `isReviewCardAvailable` in SQL, pinned to it by an equivalence test. It compares
  * the stored strings directly instead of casting: `serializeCard` always writes `toISOString()`, so
@@ -87,19 +88,31 @@ export async function getStreakCalendar(userId: string, month: string, today: st
  * `deserializeCard` falls back to "now" for a malformed `due` while this comparison generally does
  * not, so a corrupt row may leave the queue looking empty — the safe direction.
  */
-export async function isReviewQueueEmpty(reader: Pick<typeof db, "select">, userId: string, at: Date): Promise<boolean> {
+function availableNotes(userId: string, at: Date) {
 	const { nowIso, learnAheadIso } = availabilityBounds(at);
-	const rows = await reader
-		.select({ one: sql<number>`1` })
-		.from(note)
-		.where(
-			sql`${note.userId} = ${userId} and (
-				${note.fsrsCard}->>'due' <= ${nowIso}
-				or (${note.fsrsCard}->>'state' in ('1', '3') and ${note.fsrsCard}->>'due' <= ${learnAheadIso})
-			)`,
-		)
-		.limit(1);
+	return sql`${note.userId} = ${userId} and (
+		${note.fsrsCard}->>'due' <= ${nowIso}
+		or (${note.fsrsCard}->>'state' in ('1', '3') and ${note.fsrsCard}->>'due' <= ${learnAheadIso})
+	)`;
+}
+
+/** Is any Note of this learner available for study right now, across every language? */
+export async function isReviewQueueEmpty(reader: Pick<typeof db, "select">, userId: string, at: Date): Promise<boolean> {
+	const rows = await reader.select({ one: sql<number>`1` }).from(note).where(availableNotes(userId, at)).limit(1);
 	return rows.length === 0;
+}
+
+/**
+ * The same queue, counted per language. The streak gate is account-wide while `/review` is
+ * per-language, so this is what tells a learner which language still owes reviews.
+ */
+export async function countAvailableNotesByLanguage(userId: string, at: Date): Promise<Partial<Record<LanguageCode, number>>> {
+	const rows = await db
+		.select({ language: note.language, count: sql<number>`count(*)::int` })
+		.from(note)
+		.where(availableNotes(userId, at))
+		.groupBy(note.language);
+	return Object.fromEntries(rows.map((row) => [row.language, row.count]));
 }
 
 export function availabilityBounds(at: Date) {
@@ -181,8 +194,13 @@ export async function recordQuestCompletion(tx: Transaction, userId: string, at:
  * Runs outside any caller transaction and after `rateNote` returns, so it sees post-rating due
  * dates. Returns the new record only when something actually changed, which is what tells the study
  * UI to invalidate the streak.
+ *
+ * Most ratings leave cards behind, and a non-empty observation can only materialize settlement,
+ * which readers derive anyway. So an unlocked probe answers those without the row lock and write;
+ * an empty queue is still rechecked under the lock before it counts.
  */
 export async function recordReviewObservation(userId: string, at: Date, timeZone: string): Promise<StreakRecord | null> {
+	if (!(await isReviewQueueEmpty(db, userId, at))) return null;
 	return db.transaction(async (tx) => {
 		const before = await lockRecord(tx, userId);
 		const queueEmpty = await isReviewQueueEmpty(tx, userId, at);

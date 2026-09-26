@@ -24,7 +24,7 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	templateContribution: {},
+	taskContribution: {},
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -49,9 +49,8 @@ const validEntries: Record<string, string> = {
 	interactionType: "chat",
 	urgency: "high",
 	ui: "imessage",
-	titleBase: "Chat with {{friend}} about {{topic}}",
-	firstVariantSlotValues: JSON.stringify({ friend: "Alice", topic: "weather" }),
-	firstVariantOpeningState: JSON.stringify({ previousMessages: [] }),
+	title: "Chat with a friend about the weather",
+	openingState: JSON.stringify({ previousMessages: [] }),
 };
 
 describe("Contribute +page.server", () => {
@@ -98,7 +97,7 @@ describe("Contribute +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors).toBeDefined();
-			expect(result.data?.errors?.titleBase).toBeDefined();
+			expect(result.data?.errors?.title).toBeDefined();
 			expect(result.data?.errors?.language).toBeDefined();
 		});
 
@@ -107,9 +106,9 @@ describe("Contribute +page.server", () => {
 				language: "en",
 				interactionType: "translate",
 				ui: "translator",
-				titleBase: "Translate this",
-				agentPromptBase: "a friendly letter between former colleagues",
-				translationReference: "Hello\nWorld\n\nGoodbye\nMoon",
+				title: "Translate this",
+				translationContext: "a friendly letter between former colleagues",
+				referenceParagraphs: "Hello\nWorld\n\nGoodbye\nMoon",
 			};
 
 			const event = createEvent(entries);
@@ -121,12 +120,15 @@ describe("Contribute +page.server", () => {
 
 			expect(mockInsert).toHaveBeenCalled();
 			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
-			expect(inserted?.status).toBe("pending");
-			expect(inserted?.createdBy).toBe("user-1");
-			expect(inserted?.submittedAt).toBeInstanceOf(Date);
+			expect(inserted).toMatchObject({
+				status: "pending",
+				createdBy: "user-1",
+				referenceParagraphs: ["Hello\nWorld", "Goodbye\nMoon"],
+				openingState: null,
+			});
 		});
 
-		it("creates contribution with variant for non-translate type", async () => {
+		it("creates a chat contribution with its opening state", async () => {
 			const event = createEvent(validEntries);
 
 			await expect(actions.default(event)).rejects.toMatchObject({
@@ -136,81 +138,22 @@ describe("Contribute +page.server", () => {
 
 			expect(mockInsert).toHaveBeenCalled();
 			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
-			expect(inserted?.status).toBe("pending");
-			expect(inserted?.createdBy).toBe("user-1");
-			expect(inserted?.submittedAt).toBeInstanceOf(Date);
-			expect(inserted?.slotValues).toBeDefined();
-			expect(inserted?.openingState).toBeDefined();
-		});
-
-		it("returns 400 when variant is missing required slots", async () => {
-			const entries = {
-				...validEntries,
-				firstVariantSlotValues: JSON.stringify({ friend: "Alice" }), // missing topic
-			};
-			const event = createEvent(entries);
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toContain("missing slot values");
-			expect(result.data?.message).toContain("topic");
-		});
-
-		it("returns 400 when slot values are too long", async () => {
-			const entries = {
-				...validEntries,
-				firstVariantSlotValues: JSON.stringify({ friend: "Alice", topic: "x".repeat(10001) }),
-			};
-			const event = createEvent(entries);
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toBe("Slot values are too long");
-			expect(mockInsert).not.toHaveBeenCalled();
+			expect(inserted).toMatchObject({ status: "pending", createdBy: "user-1", openingState: { previousMessages: [] } });
 		});
 
 		it("returns 400 when opening state is invalid for the UI", async () => {
 			const entries = {
 				...validEntries,
 				ui: "discord",
-				firstVariantOpeningState: JSON.stringify({ serverName: "My Server" }), // missing channelName
+				openingState: JSON.stringify({ serverName: "My Server" }), // missing channelName
 			};
 			const event = createEvent(entries);
 
 			const result = (await actions.default(event)) as ActionFailure<any>;
 
 			expect(result.status).toBe(400);
-			expect(result.data?.message).toContain("Invalid opening state for discord");
-		});
-
-		it("handles empty optional fields correctly", async () => {
-			const entries = {
-				...validEntries,
-				titleBase: "Simple title no slots",
-				firstVariantSlotValues: "{}",
-			};
-			const event = createEvent(entries);
-
-			await expect(actions.default(event)).rejects.toMatchObject({
-				status: 302,
-				location: "/contribute?success=1",
-			});
-		});
-
-		it("handles invalid JSON in slot values gracefully", async () => {
-			const entries = {
-				...validEntries,
-				titleBase: "Simple title no slots",
-				firstVariantSlotValues: "not-valid-json",
-			};
-			const event = createEvent(entries);
-
-			await expect(actions.default(event)).rejects.toMatchObject({
-				status: 302,
-				location: "/contribute?success=1",
-			});
+			expect(result.data?.errors?.openingState).toBeDefined();
+			expect(mockInsert).not.toHaveBeenCalled();
 		});
 
 		it("rejects interaction type / ui mismatch", async () => {

@@ -14,7 +14,7 @@ vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
 import { PgDialect } from "drizzle-orm/pg-core";
 import { getStreakCalendar, recordQuestCompletion, recordReviewObservation } from "$lib/server/streak";
-import { emptyStreakRecord } from "$lib/streak";
+import { emptyStreakRecord } from "$lib/streak/rules";
 
 const USER_ID = "user_1";
 // 12:00 UTC is 08:00 in New York, so the local day is the 18th on both sides of the clock.
@@ -134,12 +134,23 @@ describe("recordReviewObservation", () => {
 		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toMatchObject({ streakDays: 1, throughDate: "2026-09-18" });
 	});
 
-	it("writes nothing when the observation changes nothing", async () => {
-		mockReads({ streak: undefined, dueCards: true });
+	it("answers a non-empty queue without locking or writing", async () => {
+		const order = mockReads({ streak: undefined, dueCards: true });
 		const { updateSet } = mockWrites();
 
 		await expect(recordReviewObservation(USER_ID, NOW, TIME_ZONE)).resolves.toBeNull();
+		expect(order).toEqual(["queue"]);
+		expect(mockDb.transaction).not.toHaveBeenCalled();
+		expect(mockDb.insert).not.toHaveBeenCalled();
 		expect(updateSet).not.toHaveBeenCalled();
+	});
+
+	it("rechecks an empty queue under the lock before crediting it", async () => {
+		const order = mockReads({ streak: undefined, dueCards: false });
+		mockWrites();
+
+		await recordReviewObservation(USER_ID, NOW, TIME_ZONE);
+		expect(order).toEqual(["queue", "lock", "queue"]);
 	});
 });
 

@@ -3,13 +3,13 @@ import { onMount, setContext } from "svelte";
 import { onNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import "./layout.css";
-import "$lib/components/interaction-motion.css";
+import "$lib/components/common/interaction-motion.css";
+import { resolvePageDocumentLanguage } from "$lib/app/document-language";
 import favicon from "$lib/assets/favicon.svg";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { installFormFeedback } from "$lib/client/form-attention";
 import { resolvePageTransition } from "$lib/client/page-transition";
-import { DISPLAY_CLOCK_CONTEXT } from "$lib/display-clock";
-import { resolvePageDocumentLanguage } from "$lib/document-language";
+import { DISPLAY_CLOCK_CONTEXT } from "$lib/time/display-clock";
 
 let { children, data } = $props();
 setContext(DISPLAY_CLOCK_CONTEXT, () => data.displayClock);

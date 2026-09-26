@@ -1,5 +1,5 @@
 import { invalidateAll } from "$app/navigation";
-import { BROWSER_TIMEZONE_COOKIE, BROWSER_TIMEZONE_COOKIE_MAX_AGE, isValidTimeZone } from "$lib/browser-timezone";
+import { BROWSER_TIMEZONE_COOKIE, BROWSER_TIMEZONE_COOKIE_MAX_AGE, isValidTimeZone } from "$lib/time/browser-timezone";
 
 function getCookie(name: string): string | undefined {
 	const prefix = `${name}=`;

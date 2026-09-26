@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { ChatMessage, ChatUsage } from "$lib/server/llm";
+import type { ChatMessage, ChatUsage } from "$lib/server/llm/client";
 
 type Metadata = {
 	temperature: number;

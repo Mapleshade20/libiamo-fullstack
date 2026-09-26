@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
+import { hasGravatarAvatar } from "$lib/server/account/gravatar";
 import { requireUser } from "$lib/server/auth/authz";
-import { hasGravatarAvatar } from "$lib/server/gravatar";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async (event) => {

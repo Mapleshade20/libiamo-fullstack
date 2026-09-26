@@ -2,8 +2,8 @@
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Mail from "@lucide/svelte/icons/mail";
 import { base } from "$app/paths";
-import PublicPageSwitcher from "$lib/components/PublicPageSwitcher.svelte";
-import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
+import PublicPageSwitcher from "$lib/components/shell/PublicPageSwitcher.svelte";
+import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 </script>
 
 <svelte:head>

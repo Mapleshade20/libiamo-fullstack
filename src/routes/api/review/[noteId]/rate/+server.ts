@@ -1,8 +1,8 @@
 import { json } from "@sveltejs/kit";
 import { reviewRatingSchema } from "$lib/schemas";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
-import { ReviewCardNotDueError, rateNote } from "$lib/server/review";
+import { ReviewCardNotDueError, rateNote } from "$lib/server/review/scheduler";
 import { observeReviewQueue } from "$lib/server/streak";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { RequestHandler } from "./$types";
 
 export const POST: RequestHandler = async (event) => {

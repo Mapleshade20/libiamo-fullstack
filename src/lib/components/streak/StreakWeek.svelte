@@ -1,12 +1,12 @@
 <script lang="ts">
 import { dev } from "$app/environment";
 import { base } from "$app/paths";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { StreakView } from "$lib/streak";
-import { calendarDays, monthRange, type StreakDayMark } from "$lib/streak-history";
-import { streakWeek } from "$lib/streak-presentation";
+import { calendarDays, monthRange, type StreakDayMark } from "$lib/streak/history";
+import { streakWeek } from "$lib/streak/presentation";
+import type { StreakView } from "$lib/streak/rules";
 
 let { view, today, lang, compact = false }: { view: StreakView; today: string; lang: LanguageCode; compact?: boolean } = $props();
 let marks = $state<StreakDayMark[]>([]);

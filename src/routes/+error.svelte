@@ -3,7 +3,7 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import WineGlassIcon from "$lib/components/WineGlassIcon.svelte";
+import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 
 function errorCopy(status: number) {
 	if (status === 404) {

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 

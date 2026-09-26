@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { templateContribution, user } from "$lib/server/db/schema";
+import { taskContribution, user } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -9,19 +9,19 @@ export const load: PageServerLoad = async (event) => {
 
 	const pendingContributions = await db
 		.select({
-			id: templateContribution.id,
-			titleBase: templateContribution.titleBase,
-			language: templateContribution.language,
-			interactionType: templateContribution.interactionType,
-			ui: templateContribution.ui,
-			submittedAt: templateContribution.submittedAt,
+			id: taskContribution.id,
+			title: taskContribution.title,
+			language: taskContribution.language,
+			interactionType: taskContribution.interactionType,
+			ui: taskContribution.ui,
+			submittedAt: taskContribution.submittedAt,
 			contributorName: user.name,
 			contributorEmail: user.email,
 		})
-		.from(templateContribution)
-		.leftJoin(user, eq(templateContribution.createdBy, user.id))
-		.where(eq(templateContribution.status, "pending"))
-		.orderBy(templateContribution.submittedAt);
+		.from(taskContribution)
+		.leftJoin(user, eq(taskContribution.createdBy, user.id))
+		.where(eq(taskContribution.status, "pending"))
+		.orderBy(taskContribution.submittedAt);
 
 	return { pendingContributions };
 };

@@ -13,7 +13,7 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	templateContribution: {},
+	taskContribution: {},
 	user: {},
 }));
 

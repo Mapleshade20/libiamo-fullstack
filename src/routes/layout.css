@@ -163,6 +163,11 @@
 		@apply text-lg font-medium font-serif;
 	}
 
+	/* Practice surfaces imitate other apps and keep their own type. */
+	.practice-surface :is(h1, h2, h3) {
+		font-family: inherit;
+	}
+
 	strong,
 	b {
 		@apply font-semibold;
@@ -655,3 +660,18 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 .nav-cut-line {
 	fill: none;
 }
+
+/* Practice surfaces imitate other apps' motion (typing dots, sheets, smooth scrolling); all of it stops under reduced motion. */
+/* biome-ignore-start lint/complexity/noImportantStyles: Svelte transitions animate through inline styles, which only !important overrides. */
+@media (prefers-reduced-motion: reduce) {
+	.practice-surface,
+	.practice-surface *,
+	.practice-surface *::before,
+	.practice-surface *::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: see above */

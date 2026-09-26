@@ -1,9 +1,9 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
-import QuestMenu from "$lib/components/quest-hall/quest-menu/QuestMenu.svelte";
-import QuestMenuBook from "$lib/components/quest-hall/quest-menu/QuestMenuBook.svelte";
-import QuestMenuInbox from "$lib/components/quest-hall/quest-menu/QuestMenuInbox.svelte";
-import QuestMenuSheet from "$lib/components/quest-hall/quest-menu/QuestMenuSheet.svelte";
+import QuestMenu from "$lib/components/quest-hall/QuestMenu.svelte";
+import QuestMenuBook from "$lib/components/quest-hall/QuestMenuBook.svelte";
+import QuestMenuInbox from "$lib/components/quest-hall/QuestMenuInbox.svelte";
+import QuestMenuSheet from "$lib/components/quest-hall/QuestMenuSheet.svelte";
 import { t } from "$lib/i18n";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";
@@ -86,7 +86,7 @@ describe("QuestMenu", () => {
 	] as const)("routes an unread %s conversation to %s", (sessionStatus, href) => {
 		const { body } = render(QuestMenuInbox, {
 			props: {
-				items: [{ taskId: 1, title: "Quest 1", ui: "imessage", sessionStatus, unreadCount: 1, latestAgeSeconds: 60 }],
+				items: [{ sessionId: 3, taskId: 1, lineupId: null, title: "Quest 1", ui: "imessage", sessionStatus, unreadCount: 1, latestAgeSeconds: 60 }],
 				total: 1,
 				status: "ready",
 				lang: "en",
@@ -124,7 +124,7 @@ describe("QuestMenu", () => {
 		});
 
 		expect(body).toContain("Current letter");
-		expect(body).toContain('href="/translate/21"');
+		expect(body).toContain('href="/task/21"');
 		expect(body).toContain('datetime="2026"');
 		expect(body).toContain('aria-label="← 2026"');
 		expect(body).toContain('aria-label="2026 →"');
@@ -155,17 +155,15 @@ describe("QuestMenu", () => {
 					kind: "translation",
 					key: "translation-22",
 					data: {
-						template: {
+						task: {
 							id: 22,
 							title: "Archived letter",
 							description: null,
 							language: "en",
-							translationReference: ["Reference"],
+							referenceParagraphs: ["Reference"],
 							context: "A letter",
 							difficulty: 2,
 							estimatedWords: null,
-							pointReward: 3,
-							gemReward: 30,
 						},
 						attempt: null,
 						blockedReason: null,
@@ -223,11 +221,9 @@ describe("QuestMenu", () => {
 							description: "Detailed briefing",
 							objectives: ["Reply naturally"],
 							language: "en",
-							templateInteractionType: "chat",
-							templateUi: "imessage",
-							templateDifficulty: 2,
+							ui: "imessage",
+							difficulty: 2,
 							materialsMd: null,
-							pointReward: 10,
 							sessionStatus: null,
 							evaluationPhase: null,
 						},
@@ -259,7 +255,7 @@ describe("compact mission catalog", () => {
 			},
 		});
 		expect(body.match(/<article\b/g)).toHaveLength(catalog.sections[section].length);
-		for (const item of catalog.sections[section]) expect(body).toContain(`href="/${item.kind === "quest" ? "task" : "translate"}/${item.id}"`);
+		for (const item of catalog.sections[section]) expect(body).toContain(`href="/task/${item.id}"`);
 		expect(body.match(/role="tab"/g)).toHaveLength(3);
 		expect(body).toContain('aria-orientation="horizontal"');
 		expect(body).toContain(`aria-labelledby="mobile-tab-${section}"`);

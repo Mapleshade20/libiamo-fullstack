@@ -11,9 +11,9 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { addDays } from "$lib/local-day";
-import type { StreakDayMark } from "$lib/streak-history";
-import { monthOffset } from "$lib/streak-history";
+import type { StreakDayMark } from "$lib/streak/history";
+import { monthOffset } from "$lib/streak/history";
+import { addDays } from "$lib/time/local-day";
 
 interface Props {
 	/** The month on show, as `YYYY-MM`. */

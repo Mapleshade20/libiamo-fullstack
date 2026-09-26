@@ -1,14 +1,14 @@
 <script lang="ts">
 import { onDestroy, untrack } from "svelte";
-import { getStreakPresentation } from "$lib/client/streak-presentation.svelte";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
+import { getStreakPresentation } from "$lib/components/streak/presentation-state.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
-import { getDisplayClock } from "$lib/display-clock";
-import { addDays, localDay } from "$lib/local-day";
-import { applyQuestCompletion, applyReviewObservation, emptyStreakRecord, type StreakRecord, viewStreak } from "$lib/streak";
-import { historyChanges, type StreakDayMark } from "$lib/streak-history";
-import { completionChange, progressOf } from "$lib/streak-presentation";
+import { historyChanges, type StreakDayMark } from "$lib/streak/history";
+import { completionChange, progressOf } from "$lib/streak/presentation";
+import { applyQuestCompletion, applyReviewObservation, emptyStreakRecord, type StreakRecord, viewStreak } from "$lib/streak/rules";
+import { getDisplayClock } from "$lib/time/display-clock";
+import { addDays, localDay } from "$lib/time/local-day";
 
 const clock = getDisplayClock();
 const presentation = getStreakPresentation();

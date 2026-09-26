@@ -1,15 +1,29 @@
 <script lang="ts">
+import type { Component } from "svelte";
 import { base } from "$app/paths";
-import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
-import AO3UI from "$lib/components/practice-ui/ao3/AO3UI.svelte";
-import DiscordUI from "$lib/components/practice-ui/discord/DiscordUI.svelte";
-import IMessageUI from "$lib/components/practice-ui/imessage/IMessageUI.svelte";
-import MailUI from "$lib/components/practice-ui/mail/MailUI.svelte";
-import RedditUI from "$lib/components/practice-ui/reddit/RedditUI.svelte";
-import type { LanguageCode } from "$lib/constants";
+import { page } from "$app/state";
+import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
+import type { PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
+import AO3UI from "$lib/components/practice/ui/ao3/AO3UI.svelte";
+import DiscordUI from "$lib/components/practice/ui/discord/DiscordUI.svelte";
+import IMessageUI from "$lib/components/practice/ui/imessage/IMessageUI.svelte";
+import MailUI from "$lib/components/practice/ui/mail/MailUI.svelte";
+import RedditUI from "$lib/components/practice/ui/reddit/RedditUI.svelte";
+import type { ChatUiVariant } from "$lib/constants";
+import { lineupQuery } from "$lib/task/attempts";
+
+const SURFACES: Record<ChatUiVariant, Component<PracticeSurfaceProps>> = {
+	discord: DiscordUI,
+	imessage: IMessageUI,
+	apple_mail: MailUI,
+	ao3: AO3UI,
+	reddit: RedditUI,
+};
 
 let { data } = $props();
-let detailsHref = $derived(`${base}/task/${data.taskId}`);
+const Surface = $derived(SURFACES[data.task.ui as ChatUiVariant]);
+// Links keep a pinned `?lineup=`, so feedback and details show the same attempt as this page.
+const pin = $derived(lineupQuery(page.url));
 </script>
 
 <ConversationReadReceipt receipt={data.readReceipt} />
@@ -19,63 +33,17 @@ let detailsHref = $derived(`${base}/task/${data.taskId}`);
 	<meta name="description" content={`Practice “${data.task.title}” in an interactive simulated conversation.`}>
 </svelte:head>
 
-{#if data.task.template.ui === "discord"}
-	<DiscordUI
+<!-- Another attempt is another conversation: never carry one surface's local state into the next. -->
+{#key `${data.taskId}${pin}`}
+	<Surface
 		taskId={data.taskId}
 		userName={data.user.name}
 		avatarUrl={data.avatarUrl}
 		language={data.task.language}
-		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
+		session={data.session}
+		openingState={data.task.openingState}
 		maxTurns={data.maxTurns}
-		returnHref={detailsHref}
+		returnHref={`${base}/task/${data.taskId}${pin}`}
+		feedbackHref={`${base}/task/${data.taskId}/feedback${pin}`}
 	/>
-{:else if data.task.template.ui === "imessage"}
-	<IMessageUI
-		taskId={data.taskId}
-		userName={data.user.name}
-		avatarUrl={data.avatarUrl}
-		language={data.task.language}
-		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
-		maxTurns={data.maxTurns}
-		returnHref={detailsHref}
-	/>
-{:else if data.task.template.ui === "apple_mail"}
-	<MailUI
-		taskId={data.taskId}
-		userName={data.user.name}
-		avatarUrl={data.avatarUrl}
-		language={data.task.language}
-		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
-		maxTurns={data.maxTurns}
-		returnHref={detailsHref}
-	/>
-{:else if data.task.template.ui === "ao3"}
-	<AO3UI
-		taskId={data.taskId}
-		userName={data.user.name}
-		avatarUrl={data.avatarUrl}
-		language={data.task.language}
-		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
-		maxTurns={data.maxTurns}
-		returnHref={detailsHref}
-	/>
-{:else if data.task.template.ui === "reddit"}
-	<RedditUI
-		taskId={data.taskId}
-		userName={data.user.name}
-		avatarUrl={data.avatarUrl}
-		language={data.task.language}
-		existingSession={data.existingSession}
-		openingState={data.task.variant?.openingState}
-		maxTurns={data.maxTurns}
-		returnHref={detailsHref}
-	/>
-{:else}
-	<div class="flex h-screen items-center justify-center bg-background">
-		<p class="text-muted-foreground text-sm uppercase tracking-widest">{data.task.template.ui} interface not yet implemented</p>
-	</div>
-{/if}
+{/key}

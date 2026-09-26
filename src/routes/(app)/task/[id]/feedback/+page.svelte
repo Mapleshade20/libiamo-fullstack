@@ -6,6 +6,12 @@ import { fade } from "svelte/transition";
 import { deserialize } from "$app/forms";
 import { invalidate, invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
+import { PRACTICE_NOTES_DEPENDENCY } from "$lib/app/load-dependencies";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
+import SelectionActionBubble from "$lib/components/practice/feedback/SelectionActionBubble.svelte";
+import TutorQuestionPanel from "$lib/components/practice/feedback/TutorQuestionPanel.svelte";
 import {
 	clearPracticeTransferSnapshot,
 	emptyPracticeTransferSnapshot,
@@ -13,21 +19,16 @@ import {
 	parsePracticeTransferSnapshot,
 	practiceTransferSnapshotKey,
 	savePracticeTransferSnapshot,
-} from "$lib/client/practice-transfer-snapshot";
-import ConversationReadReceipt from "$lib/components/ConversationReadReceipt.svelte";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
-import SelectionActionBubble from "$lib/components/learning-feedback/SelectionActionBubble.svelte";
-import TutorQuestionPanel from "$lib/components/learning-feedback/TutorQuestionPanel.svelte";
-import type { LearningSelection, SelectionAppendRequest } from "$lib/components/learning-feedback/types";
+} from "$lib/components/practice/feedback/transfer-snapshot";
+import type { LearningSelection, SelectionAppendRequest } from "$lib/components/practice/feedback/types";
 import TransferPass from "$lib/components/review/TransferPass.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
-import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/feedback/types";
 import { t } from "$lib/i18n";
-import { PRACTICE_NOTES_DEPENDENCY } from "$lib/load-dependencies";
-import { parseMarkedText } from "$lib/marked-text";
+import type { AnnotationSpan, FeedbackMessage, FeedbackResult, MessageAnnotation } from "$lib/practice/feedback";
+import { parseMarkedText } from "$lib/text/marked-text";
 import AnnotatedMessage from "./AnnotatedMessage.svelte";
 import AnnotatedTutorComment from "./AnnotatedTutorComment.svelte";
 import AnnotationPopup from "./AnnotationPopup.svelte";
@@ -111,6 +112,7 @@ async function triggerGeneration() {
 
 	try {
 		const formData = new FormData();
+		formData.set("sessionId", String(data.sessionId));
 		const response = await fetch("?/generateFeedback", {
 			method: "POST",
 			body: formData,
@@ -158,10 +160,14 @@ function handleAskSelection(selection: LearningSelection) {
 	askAppendRequest = { id: askAppendCounter, selection };
 }
 
+/** The Tutor and Note-writing actions spend the trial balance. */
+const TRIAL_QUOTA_ACTIONS = new Set(["followUp", "saveSelectionNotes", "saveSelectionQaNote"]);
+
 async function postFeedbackAction(action: string, formData: FormData) {
 	const response = await fetch(`?/${action}`, { method: "POST", body: formData }).catch(() => {
 		throw new Error(t(lang, "common.error"));
 	});
+	if (TRIAL_QUOTA_ACTIONS.has(action)) void refreshTrialQuota();
 	const result = deserialize(await response.text());
 	if (result.type !== "success") {
 		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "Request failed");

@@ -1,6 +1,6 @@
 <script lang="ts">
-import { countStudyQueue } from "$lib/review";
-import type { TransferNote } from "$lib/transfer-queue";
+import { countStudyQueue } from "$lib/review/queue";
+import type { TransferNote } from "$lib/review/transfer-queue";
 import StudyCard from "./StudyCard.svelte";
 import type { StudyCardAction } from "./study-card";
 

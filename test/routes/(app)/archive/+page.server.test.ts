@@ -15,9 +15,9 @@ const { mockArchiveService, mockNoteService, mockSessionService } = vi.hoisted((
 }));
 
 vi.mock("$lib/server/archive", () => mockArchiveService);
-vi.mock("$lib/server/note", () => mockNoteService);
-vi.mock("$lib/server/feedback", () => mockSessionService);
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/review/notes", () => mockNoteService);
+vi.mock("$lib/server/practice/feedback", () => mockSessionService);
+vi.mock("$lib/server/llm/client", () => ({
 	llmErrorStatus: () => 500,
 	llmErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "The AI request failed. Please try again."),
 }));
@@ -140,7 +140,7 @@ describe("archive page server", () => {
 				sessionId: 99,
 				userId: "user_123",
 				feedbackLanguage: "en",
-				itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+				itemText: "tomar una decisión",
 				category: "vocabulary",
 				question: "why",
 				currentContext: "elegir qué hacer tras considerar las opciones\n作出决定",
@@ -160,7 +160,7 @@ describe("archive page server", () => {
 			expect(mockSessionService.followUpOnLearningContent).toHaveBeenCalledWith(
 				expect.objectContaining({
 					learningLanguage: "es",
-					itemText: "tomar una decisión\nelegir qué hacer tras considerar las opciones\n作出决定",
+					itemText: "tomar una decisión",
 				}),
 			);
 		});

@@ -2,7 +2,8 @@
 import { untrack } from "svelte";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
+import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
@@ -10,8 +11,7 @@ import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { STREAK_DEPENDENCY } from "$lib/load-dependencies";
-import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review";
+import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review/queue";
 
 let { data } = $props();
 let lang: LanguageCode = $derived(data.reviewLanguage as LanguageCode);

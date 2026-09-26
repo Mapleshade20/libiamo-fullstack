@@ -5,11 +5,13 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Save from "@lucide/svelte/icons/save";
 import Trash2 from "@lucide/svelte/icons/trash-2";
 import { deserialize } from "$app/forms";
+import { invalidate } from "$app/navigation";
+import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
 import { showValidationIssues } from "$lib/client/form-attention";
 import type { LanguageCode } from "$lib/constants";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { ManagedNote } from "$lib/note-management";
+import type { ManagedNote } from "$lib/review/manage";
 import { managedNoteSetDueSchema, managedNoteUpdateSchema } from "$lib/schemas/review";
 
 let {
@@ -53,6 +55,9 @@ async function postAction(action: string, values: Record<string, string>) {
 	if (result.type !== "success") {
 		throw new Error((result.type === "failure" ? (result.data?.error as string | undefined) : undefined) ?? "The action failed");
 	}
+	// Rescheduling or deleting can empty the review queue; the layout's snapshot of it is what
+	// prompts the streak's empty-queue observation, and navigation no longer refreshes it.
+	if (action !== "update") void invalidate(STREAK_DEPENDENCY);
 	return result.data as Record<string, unknown>;
 }
 

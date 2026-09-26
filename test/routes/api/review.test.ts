@@ -1,0 +1,83 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockCountAvailable, mockRateNote, mockObserveReviewQueue, MockReviewCardNotDueError } = vi.hoisted(() => {
+	class MockReviewCardNotDueError extends Error {}
+	return {
+		mockCountAvailable: vi.fn(),
+		mockRateNote: vi.fn(),
+		mockObserveReviewQueue: vi.fn(async () => null),
+		MockReviewCardNotDueError,
+	};
+});
+
+vi.mock("$lib/server/streak", () => ({ observeReviewQueue: mockObserveReviewQueue, countAvailableNotesByLanguage: mockCountAvailable }));
+
+vi.mock("$lib/server/review/scheduler", () => ({
+	rateNote: mockRateNote,
+	ReviewCardNotDueError: MockReviewCardNotDueError,
+}));
+
+import { POST as rateNote } from "../../../src/routes/api/review/[noteId]/rate/+server";
+import { GET as available } from "../../../src/routes/api/review/available/+server";
+
+function mockEvent(overrides: { user?: unknown; body?: unknown; params?: Record<string, string>; invalidJson?: boolean }) {
+	return {
+		locals: { user: overrides.user ?? null },
+		request: {
+			json: overrides.invalidJson ? async () => Promise.reject(new SyntaxError("invalid")) : async () => overrides.body ?? {},
+		},
+		params: overrides.params ?? {},
+		cookies: { get: () => undefined },
+	} as never;
+}
+
+beforeEach(() => {
+	vi.clearAllMocks();
+});
+
+describe("GET /api/review/available", () => {
+	it("requires authentication", async () => {
+		expect((await available(mockEvent({ user: null }))).status).toBe(401);
+	});
+
+	it("reports the account-wide queue per language", async () => {
+		mockCountAvailable.mockResolvedValue({ fr: 3, ja: 1 });
+		const response = await available(mockEvent({ user: { id: "u", activeLanguage: "fr" } }));
+		expect(await response.json()).toEqual({ byLanguage: { fr: 3, ja: 1 } });
+		expect(mockCountAvailable).toHaveBeenCalledWith("u", expect.any(Date));
+	});
+});
+
+describe("POST /api/review/[noteId]/rate", () => {
+	it("requires authentication and validates the Note ID", async () => {
+		expect((await rateNote(mockEvent({ user: null }))).status).toBe(401);
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "xyz" } }))).status).toBe(400);
+	});
+
+	it("rejects invalid JSON and invalid rating data", async () => {
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "1" }, invalidJson: true }))).status).toBe(400);
+		expect((await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "1" }, body: { rating: 9, elapsedSeconds: -1 } }))).status).toBe(400);
+	});
+
+	it("rates an owned Note and reports the streak the rating moved", async () => {
+		mockRateNote.mockResolvedValue({ nextDue: "2026-01-01T00:00:00.000Z" });
+		mockObserveReviewQueue.mockResolvedValue({ streakDays: 4 } as never);
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(200);
+		expect(mockRateNote).toHaveBeenCalledWith(12, "u", 3, 14, { timeZone: "UTC" });
+		// The observation runs after the rating so it sees the card's new due date.
+		expect(await response.json()).toMatchObject({ nextDue: "2026-01-01T00:00:00.000Z", streak: { streakDays: 4 } });
+	});
+
+	it("maps a missing Note to 404", async () => {
+		mockRateNote.mockRejectedValue(new Error("Note not found"));
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(404);
+	});
+
+	it("maps a card outside the review window to 409", async () => {
+		mockRateNote.mockRejectedValue(new MockReviewCardNotDueError("Note is not due for review"));
+		const response = await rateNote(mockEvent({ user: { id: "u" }, params: { noteId: "12" }, body: { rating: 3, elapsedSeconds: 14 } }));
+		expect(response.status).toBe(409);
+	});
+});

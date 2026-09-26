@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { getStreakRecord, recordReviewObservation } from "$lib/server/streak";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { RequestHandler } from "./$types";
 
 /** A visible app confirms an empty loader snapshot; prefetching must never grant credit. */

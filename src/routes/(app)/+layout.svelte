@@ -3,14 +3,14 @@ import { browser, dev } from "$app/environment";
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import { isQuestMenuPath } from "$lib/client/page-transition";
-import { provideStreakPresentation } from "$lib/client/streak-presentation.svelte";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
-import HomeMasthead from "$lib/components/HomeMasthead.svelte";
-import Navbar from "$lib/components/Navbar.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import type { ActionNotificationContent } from "$lib/components/common/notifications";
 import QuestMenuRoute from "$lib/components/quest-hall/QuestMenuRoute.svelte";
+import HomeMasthead from "$lib/components/shell/HomeMasthead.svelte";
+import Navbar from "$lib/components/shell/Navbar.svelte";
+import { provideStreakPresentation } from "$lib/components/streak/presentation-state.svelte";
 import StreakHost from "$lib/components/streak/StreakHost.svelte";
 import type { LanguageCode } from "$lib/constants";
-import type { ActionNotificationContent } from "$lib/notifications";
 
 let { children, data } = $props();
 provideStreakPresentation();
@@ -18,6 +18,8 @@ let isHome = $derived(page.url.pathname === `${base}/`);
 let hasMasthead = $derived(isHome || (dev && page.url.pathname === `${base}/streak-lab`));
 let isHall = $derived(isQuestMenuPath(page.url.pathname));
 let questMenuRoute = $derived(isHall ? page.data.questMenu : null);
+// LLM Lab compares outputs side by side, so it gets the Hall's wide measure.
+let isLab = $derived(page.url.pathname === `${base}/admin/lab` || page.url.pathname.startsWith(`${base}/admin/lab/`));
 let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
@@ -79,6 +81,13 @@ $effect(() => {
 		dayOffset={data.streakDayOffset}
 	/>
 
+	{#if data.user.role === "admin" && browser}
+		<!-- Staff tooling loads on demand, so learners never download it. -->
+		{#await import("$lib/components/llm/LlmInspector.svelte") then inspector}
+			<inspector.default />
+		{/await}
+	{/if}
+
 	{#if isSessionPage}
 		<main class="h-screen w-full">{@render children()}</main>
 	{:else}
@@ -89,7 +98,7 @@ $effect(() => {
 			     the reading measure because the book spread needs the room; owning both edges here is what
 			     keeps the masthead, the hall heading and the spread on one set of margins. -->
 			<main
-				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
+				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : isLab ? 'max-w-5xl nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
 					? 'pt-0'
 					: 'pt-8 nav:pt-24'}"
 			>

@@ -24,8 +24,9 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 	return {
 		id: overrides.id ?? 1,
 		taskId: overrides.taskId ?? 100,
+		lineupId: overrides.lineupId ?? null,
 		evaluationCompletedAt: overrides.completedAt ?? new Date(),
-		task: { title: overrides.taskTitle ?? "Test Task", template: { ui: overrides.ui ?? "discord" } },
+		task: { title: overrides.taskTitle ?? "Test Task", ui: overrides.ui ?? "discord" },
 		notes: overrides.notes ?? [],
 	};
 }
@@ -127,13 +128,21 @@ describe("listCompletedActivities", () => {
 		mockDb.query.translationAttempt.findMany.mockResolvedValue([
 			{
 				id: 7,
+				taskId: 4,
+				lineupId: null,
 				completedAt: new Date(2025, 5, 11, 11, 0, 0),
-				sourceSet: { templateId: 4, template: { titleBase: "Letter translation" } },
+				task: { title: "Letter translation" },
 				notes: [makeNote({ id: 8 })],
 			},
 		]);
 		const result = await listCompletedActivities(USER_ID, now);
 		expect(result[0].activities.map((activity) => activity.activityKey)).toEqual(["translation:7", "practice:1"]);
-		expect(result[0].activities[0]).toMatchObject({ title: "Letter translation", ui: "translator", href: "/translate/4" });
+		expect(result[0].activities[0]).toMatchObject({ title: "Letter translation", ui: "translator", href: "/task/4" });
+	});
+
+	it("pins practice history to the lineup the session belonged to", async () => {
+		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, taskId: 5, lineupId: 12 })]);
+		const result = await listCompletedActivities(USER_ID);
+		expect(result[0].activities[0].href).toBe("/task/5/feedback?lineup=12");
 	});
 });

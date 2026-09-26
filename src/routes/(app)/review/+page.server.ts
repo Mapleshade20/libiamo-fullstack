@@ -1,8 +1,8 @@
 import { error } from "@sveltejs/kit";
 import { LANGUAGE_CODES, type LanguageCode } from "$lib/constants";
-import type { StudyQueueKind } from "$lib/review";
+import type { StudyQueueKind } from "$lib/review/queue";
 import { requireUser } from "$lib/server/auth/authz";
-import { getDueNotes } from "$lib/server/review";
+import { getDueNotes } from "$lib/server/review/scheduler";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {

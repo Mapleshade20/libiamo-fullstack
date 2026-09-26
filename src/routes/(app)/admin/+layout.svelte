@@ -2,8 +2,8 @@
 import { afterNavigate } from "$app/navigation";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import Accordion from "$lib/components/Accordion.svelte";
-import { activeNavIndex } from "$lib/components/nav/nav-routes";
+import Accordion from "$lib/components/common/Accordion.svelte";
+import { activeNavIndex } from "$lib/components/shell/nav/nav-routes";
 
 let { children, data } = $props();
 let toolsOpen = $state(false);
@@ -11,9 +11,10 @@ afterNavigate(() => {
 	toolsOpen = false;
 });
 const sections = [
-	{ href: `${base}/admin/templates`, label: "Templates" },
-	{ href: `${base}/admin/schedule`, label: "Schedule" },
+	{ href: `${base}/admin/tasks`, label: "Tasks" },
+	{ href: `${base}/admin/lineups`, label: "Lineups" },
 	{ href: `${base}/admin/reviews`, label: "Reviews" },
+	{ href: `${base}/admin/lab`, label: "LLM Lab" },
 ];
 const activeIndex = $derived(activeNavIndex(sections, page.url.pathname));
 </script>

@@ -5,9 +5,9 @@ import Search from "@lucide/svelte/icons/search";
 import { base } from "$app/paths";
 import ManageNoteEditor from "$lib/components/review/ManageNoteEditor.svelte";
 import type { LanguageCode } from "$lib/constants";
-import { getDisplayClock, isDisplayDay } from "$lib/display-clock";
 import { t } from "$lib/i18n";
-import type { ManagedNote } from "$lib/note-management";
+import type { ManagedNote } from "$lib/review/manage";
+import { getDisplayClock, isDisplayDay } from "$lib/time/display-clock";
 
 let { data } = $props();
 const clock = getDisplayClock();

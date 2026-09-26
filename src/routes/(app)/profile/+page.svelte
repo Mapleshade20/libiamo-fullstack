@@ -8,12 +8,12 @@ import { afterNavigate, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
+import ProfileNameEditor from "$lib/components/account/ProfileNameEditor.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
-import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
-import FormErrorFocus from "$lib/components/FormErrorFocus.svelte";
-import ModalDialog from "$lib/components/ModalDialog.svelte";
-import ProfileNameEditor from "$lib/components/ProfileNameEditor.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
+import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import ModalDialog from "$lib/components/common/ModalDialog.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
@@ -21,8 +21,8 @@ import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
 import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, BYOK_API_PRESETS, SELF_ASSIGNED_LEVELS } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
 import { t } from "$lib/i18n";
+import { getDisplayClock } from "$lib/time/display-clock";
 
 /**
  * Which notice each refusal gets. The cases a user cannot respond to differently
@@ -647,6 +647,32 @@ function enhancePasswordSetup() {
 						{/if}
 					</div>
 				</form>
+
+				{#if data.llmTraceSetting}
+					<form
+						method="POST"
+						action="?/updateLlmTraceCapture"
+						onchange={autosave}
+						use:enhance={enhanceSilently}
+						class="mt-6 border-t border-border pt-5"
+					>
+						<label class="flex min-h-11 cursor-pointer items-start gap-3">
+							<input
+								type="checkbox"
+								name="llmTraceCapture"
+								class="mt-0.5 size-5 shrink-0 accent-foreground"
+								checked={data.llmTraceSetting.enabled}
+								aria-describedby="llm-trace-capture-help"
+							>
+							<span class="space-y-1">
+								<span class="block text-sm font-medium">{t(lang, "profile.llmTraceCapture")}</span>
+								<span id="llm-trace-capture-help" class="block text-xs leading-relaxed text-muted-foreground"
+									>{t(lang, "profile.llmTraceCaptureHelp")}</span
+								>
+							</span>
+						</label>
+					</form>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	</section>

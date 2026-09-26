@@ -1,5 +1,5 @@
-import { resolveLearnerDocumentLanguage } from "$lib/document-language";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
+import { resolveLearnerDocumentLanguage } from "$lib/app/document-language";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = ({ cookies, locals }) => ({
