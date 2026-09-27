@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockChatJson } = vi.hoisted(() => ({ mockChatJson: vi.fn() }));
 vi.mock("$lib/server/llm/client", () => ({ chatJson: mockChatJson }));
 
+import { formatMailAddress, seededContact } from "$lib/practice/mail";
 import type { AgentHistoryMessage } from "$lib/server/practice/agent-replies/generator";
 import {
 	AgentGenerationError,
@@ -13,6 +14,7 @@ import {
 } from "$lib/server/practice/agent-replies/generator";
 
 const task = {
+	id: 1,
 	title: "Plan a trip",
 	language: "es",
 	ui: "imessage" as const,
@@ -56,13 +58,28 @@ describe("structured agent response", () => {
 
 	it("builds a system message and a transcript user message from the live task", () => {
 		const messages = buildAgentResponseMessages({
-			task,
+			task: { ...task, counterpart: { name: "Lucía", address: "" } },
 			learnerName: "Maple",
 			history: [{ id: 7, role: "user", content: "Gracias, adiós." }],
 		});
 
 		expect(messages.map((message) => message.role)).toEqual(["system", "user"]);
 		expect(JSON.parse(messages[1].content).transcript.at(-1)).toMatchObject({ role: "learner", author: "Maple", text: "Gracias, adiós." });
+	});
+
+	it("names the counterpart as the surface shows it when the task authored no name", async () => {
+		mockChatJson.mockResolvedValue({ value: reply, content: JSON.stringify(reply), requestMessages: [], finishReason: "stop", raw: {} });
+		const history: AgentHistoryMessage[] = [
+			{ id: 1, role: "user", content: "To: x\nSubject: Charter\n\nHi" },
+			{ id: 2, role: "assistant", content: "Hello" },
+		];
+
+		await generateAgentResponse({ task: { ...task, ui: "apple_mail" as const, openingState: { emails: [] } }, learnerName: "Maple", history });
+
+		const [system, user] = mockChatJson.mock.calls[0][0].messages;
+		const contact = seededContact(task.id);
+		expect(system.content).toContain(formatMailAddress(contact));
+		expect(JSON.parse(user.content).transcript.at(-1)).toMatchObject({ role: "counterpart", author: contact.name });
 	});
 
 	it("coerces linear-interface targets to null and rejects unknown threaded targets", () => {

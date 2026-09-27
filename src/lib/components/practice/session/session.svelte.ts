@@ -13,7 +13,6 @@ import {
 	type ChatOpeningState,
 	type PersistedPracticeSession,
 	parsePersistedMessageDate,
-	resolveOpeningAgentName,
 } from "$lib/practice/messages";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
 import { getDisplayClock } from "$lib/time/display-clock";
@@ -55,18 +54,18 @@ function toTime(value: string | Date | null | undefined): number | null {
 /**
  * The session lifecycle every practice surface shares: start, send, retry, paced delivery,
  * polling for agent work, and finishing. It knows nothing about names, colours or layout; the
- * surface supplies the counterpart's fallback name and renders the state.
+ * surface supplies the counterpart's name (see `lib/practice/counterpart.ts`) and renders the state.
  *
  * Server state is derived from props, so SSR and hydration render the same conversation. Local
  * state only overlays it: optimistic sends until the server snapshot contains them, failed
  * placeholders hidden while their retry is in flight, and agent messages held back for pacing.
  */
-export function createPracticeSession(getProps: () => PracticeSurfaceProps, options: { fallbackAgentName: () => string }) {
+export function createPracticeSession(getProps: () => PracticeSurfaceProps, options: { agentName: () => string }) {
 	const clock = getDisplayClock();
 	const props = $derived(getProps());
 	const formatTimestamp = $derived(createTimeFormatter(clock().timeZone));
 	const openingState = $derived((props.openingState ?? {}) as ChatOpeningState);
-	const agentName = $derived(resolveOpeningAgentName(openingState, props.userName) ?? options.fallbackAgentName());
+	const agentName = $derived(options.agentName());
 
 	let startedSessionId = $state<number | null>(null);
 	let completedLocally = $state(false);

@@ -65,7 +65,6 @@ describe("createPracticeSession", () => {
 		const session = start(props);
 
 		expect(texts(session)).toEqual(["hey there", "hi Roddy", "what's up?"]);
-		expect(session.agentName).toBe("Roddy");
 		expect(session.currentTurns).toBe(1);
 		expect(mocks.postPageAction).not.toHaveBeenCalledWith("start");
 	});

@@ -9,6 +9,7 @@ const discordTask: AgentTaskContext = {
 	description: "You finished a speedrun mod.",
 	agentPrompt: "Eres Mario, un speedrunner entusiasta.",
 	openingState: { serverName: "MCSR", channelName: "general-ES", previousMessages: [{ sender: "Mario", text: "Sii ya lo vi" }] },
+	counterpart: { name: "Mario", address: "" },
 };
 
 const redditTask: AgentTaskContext = {
@@ -22,6 +23,7 @@ const redditTask: AgentTaskContext = {
 			{ id: "c1", author: "alex", text: "Voice cloning scams.", replies: [{ id: "c2", author: "luma", text: "We made a family password." }] },
 		],
 	},
+	counterpart: { name: "op_user", address: "" },
 };
 
 describe("agent prompt assembly", () => {

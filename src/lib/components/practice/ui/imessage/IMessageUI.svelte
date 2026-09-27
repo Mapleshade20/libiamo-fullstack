@@ -1,7 +1,7 @@
 <script lang="ts">
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
-import { seededContact } from "$lib/practice/mail";
+import { resolveCounterpart } from "$lib/practice/counterpart";
 import BubbleList from "./BubbleList.svelte";
 import Composer from "./Composer.svelte";
 import ConversationHeader from "./ConversationHeader.svelte";
@@ -11,7 +11,9 @@ import { i18n } from "./i18n";
 let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
-const session = createPracticeSession(() => props, { fallbackAgentName: () => seededContact(props.taskId).name });
+const session = createPracticeSession(() => props, {
+	agentName: () => resolveCounterpart("imessage", props.openingState, props.taskId, props.userName).name,
+});
 </script>
 
 <div class="practice-surface fixed inset-0 z-[999] h-[100dvh] w-full bg-[#F2F2F7] font-inter-stack text-[#1C1C1E] md:bg-[#DDDDE1]">

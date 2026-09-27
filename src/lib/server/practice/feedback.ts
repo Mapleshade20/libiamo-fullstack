@@ -21,7 +21,7 @@ import { practiceSession } from "../db/schema";
 import type { ChatMessage } from "../llm/client";
 import { buildRecipeMessages, createSlotRenderer, defineLlmRecipe, type SlotRenderer } from "../llm/recipe";
 import { runLlmRecipe } from "../llm/run";
-import { pickTaskFacts, renderScenarioSetting, renderTaskBrief, resolveCounterpartName, type TaskFacts } from "./prompt-context";
+import { type ChatTaskFacts, pickChatTaskFacts, pickTaskFacts, renderScenarioSetting, renderTaskBrief, type TaskFacts } from "./prompt-context";
 import { sessionMessageChronologicalOrder } from "./session";
 
 // ── XML extraction helpers ───────────────────────────────────────────
@@ -511,7 +511,7 @@ export function buildFeedbackConversation(messages: SessionMessageRow[], opening
 
 export type AnnotationPromptInput = {
 	conversation: FeedbackConversation;
-	task: TaskFacts & { openingState: Record<string, unknown> | null };
+	task: ChatTaskFacts;
 	feedbackLanguage: string;
 };
 
@@ -570,7 +570,7 @@ function annotationSystemPrompt(input: Omit<AnnotationPromptInput, "conversation
 		learningLanguage,
 		feedbackLanguage,
 		task: renderTaskBrief(input.task, { objectives: true }),
-		setting: renderScenarioSetting(input.task.ui, input.task.openingState),
+		setting: renderScenarioSetting(input.task.ui, input.task.openingState, input.task.counterpart),
 		objectivesInstruction,
 	});
 }
@@ -589,7 +589,7 @@ export function buildAnnotationUserMessage(conversation: FeedbackConversation, c
 
 export const feedbackAnnotationRecipe = defineLlmRecipe({
 	id: "practice.feedback",
-	version: 1,
+	version: 2,
 	title: "Conversation feedback",
 	reasoningEffort: "medium",
 	output: { kind: "text", parse: parseFeedbackXml },
@@ -602,7 +602,7 @@ export const feedbackAnnotationRecipe = defineLlmRecipe({
 	},
 	build: (input: AnnotationPromptInput, slot) => [
 		{ role: "system", content: annotationSystemPrompt(input, slot) },
-		{ role: "user", content: buildAnnotationUserMessage(input.conversation, resolveCounterpartName(input.task.ui, input.task.openingState)) },
+		{ role: "user", content: buildAnnotationUserMessage(input.conversation, input.task.counterpart.name) },
 	],
 	finalize: (value, input): FeedbackResult => {
 		const result = { ...value, feedbackLanguage: input.feedbackLanguage };
@@ -629,6 +629,7 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 		with: {
 			messages: { orderBy: sessionMessageChronologicalOrder },
 			task: true,
+			user: { columns: { name: true } },
 		},
 	});
 
@@ -647,7 +648,11 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	const conversation = buildFeedbackConversation(visibleMessages, openingState, ui);
 	const { value: result } = await runLlmRecipe(
 		feedbackAnnotationRecipe,
-		{ conversation, task: { ...pickTaskFacts(session.task), openingState }, feedbackLanguage: input.feedbackLanguage },
+		{
+			conversation,
+			task: pickChatTaskFacts({ ...session.task, openingState }, session.user?.name || "Learner"),
+			feedbackLanguage: input.feedbackLanguage,
+		},
 		{ userId: session.userId, subjects: { taskId: session.task.id, sessionId: session.id } },
 	);
 

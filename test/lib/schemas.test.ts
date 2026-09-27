@@ -323,18 +323,14 @@ describe("schemas", () => {
 	// ── getEditorFields helper ──────────────────────────────────────────
 
 	it("getEditorFields returns fields for each UI variant", () => {
-		expect(getEditorFields("imessage")).toHaveLength(1);
-		expect(getEditorFields("imessage")[0].type).toBe("message-list");
-
-		expect(getEditorFields("discord")).toHaveLength(2);
-		expect(getEditorFields("discord")[0].type).toBe("row");
+		const keys = (ui: "imessage" | "discord" | "apple_mail") => getEditorFields(ui).map((field) => ("key" in field ? field.key : field.type));
+		expect(keys("imessage")).toEqual(["counterpartName", "previousMessages"]);
+		expect(keys("discord")).toEqual(["row", "counterpartName", "previousMessages"]);
+		expect(keys("apple_mail")).toEqual(["counterpartName", "emails"]);
 
 		expect(getEditorFields("reddit")).toHaveLength(2);
 		expect(getEditorFields("reddit")[0].type).toBe("group");
 		expect(getEditorFields("reddit")[1].type).toBe("comment-tree");
-
-		expect(getEditorFields("apple_mail")).toHaveLength(1);
-		expect(getEditorFields("apple_mail")[0].type).toBe("email-list");
 
 		expect(getEditorFields("ao3")).toHaveLength(10);
 		expect(getEditorFields("ao3")[9].type).toBe("comment-tree");

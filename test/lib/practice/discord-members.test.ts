@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMemberPool, memberColor } from "$lib/components/practice/ui/discord/members";
+import { createMemberPool, memberColor } from "$lib/practice/discord-members";
 
 describe("Discord member pool", () => {
 	it("is stable for one task and varies between tasks", () => {

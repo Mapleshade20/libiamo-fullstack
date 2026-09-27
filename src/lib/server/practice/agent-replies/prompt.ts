@@ -9,6 +9,7 @@
  */
 
 import { type ChatUiVariant, getLanguageEnglishName, type UiVariant } from "$lib/constants";
+import type { Counterpart } from "$lib/practice/counterpart";
 import type { ChatMessage } from "$lib/server/llm/client";
 import { createSlotRenderer, type LlmSlotDefinition, type SlotRenderer } from "$lib/server/llm/recipe";
 import {
@@ -28,6 +29,7 @@ export type AgentTaskContext = {
 	description?: string | null;
 	agentPrompt: string | null;
 	openingState: Record<string, unknown> | null;
+	counterpart: Counterpart;
 };
 
 /** Why the agent is being asked to act now. */
@@ -155,7 +157,7 @@ export function buildAgentPromptSections(
 			name: "CHARACTER",
 			body: tagged("character", agentPrompt || "A friendly person who fits the setting below. Infer a plausible identity from the opening messages."),
 		},
-		{ name: "SETTING", body: renderScenarioSetting(task.ui, task.openingState) },
+		{ name: "SETTING", body: renderScenarioSetting(task.ui, task.openingState, task.counterpart) },
 		{
 			name: "LEARNER'S BRIEF",
 			body: `Why the learner is writing. It is not your goal; do not steer them through it.\n${renderTaskBrief(task)}`,
@@ -182,7 +184,7 @@ export function buildAgentSystemPrompt(input: AgentSystemPromptInput, slot: Slot
 }
 
 export function buildAgentTranscript(input: {
-	task: Pick<AgentTaskContext, "ui" | "openingState">;
+	task: Pick<AgentTaskContext, "ui" | "openingState" | "counterpart">;
 	history: TranscriptMessage[];
 	learnerName: string;
 }): TranscriptEntry[] {
@@ -191,11 +193,12 @@ export function buildAgentTranscript(input: {
 		openingState: input.task.openingState,
 		messages: input.history,
 		learnerName: input.learnerName,
+		counterpart: input.task.counterpart,
 	});
 }
 
 export function buildAgentUserMessage(input: {
-	task: Pick<AgentTaskContext, "ui" | "openingState">;
+	task: Pick<AgentTaskContext, "ui" | "openingState" | "counterpart">;
 	history: TranscriptMessage[];
 	learnerName: string;
 }): string {

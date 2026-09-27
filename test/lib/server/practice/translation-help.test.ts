@@ -10,6 +10,7 @@ vi.mock("$lib/server/db", () => ({ db: {} }));
 vi.mock("$lib/server/llm/client", () => ({ chatJson: mockChatJson }));
 
 const { generateExpressions, evaluateUserTranslation } = await import("$lib/server/practice/translation-help");
+const { pickChatTaskFacts } = await import("$lib/server/practice/prompt-context");
 
 afterEach(() => {
 	mockChatJson.mockReset();
@@ -21,7 +22,7 @@ describe("generateExpressions", () => {
 	it("returns structured expressions from chatJson", async () => {
 		mockChatJson.mockResolvedValueOnce({ value: ["Could I have the check, please?", "Is this seat taken?"] });
 
-		const task = { title: "Ordering at a café", language: "fr", ui: "imessage" as const, objectives: ["Ask for the bill"] };
+		const task = pickChatTaskFacts({ id: 1, title: "Ordering at a café", language: "fr", ui: "imessage", objectives: ["Ask for the bill"] }, "Maple");
 		const result = await generateExpressions(task, lang("en"), lang("fr"), "user-1", 1);
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
@@ -37,12 +38,16 @@ describe("generateExpressions", () => {
 
 	it("includes the opening messages the learner will answer", async () => {
 		mockChatJson.mockResolvedValueOnce({ value: ["Je suis libre samedi."] });
-		const task = {
-			title: "Weekend plans",
-			language: "fr",
-			ui: "imessage" as const,
-			openingState: { previousMessages: [{ sender: "Léa", text: "Tu es libre samedi ?" }] },
-		};
+		const task = pickChatTaskFacts(
+			{
+				id: 1,
+				title: "Weekend plans",
+				language: "fr",
+				ui: "imessage",
+				openingState: { previousMessages: [{ sender: "Léa", text: "Tu es libre samedi ?" }] },
+			},
+			"Maple",
+		);
 
 		await generateExpressions(task, lang("en"), lang("fr"));
 

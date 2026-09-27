@@ -167,11 +167,16 @@ const messageSchema = z.object({
 	text: uiText,
 });
 
+/** The counterpart's display name; without it the interface infers one (see `lib/practice/counterpart.ts`). */
+const counterpartName = uiText.optional();
+
 export const imessageOpeningStateSchema = z.object({
+	counterpartName,
 	previousMessages: z.array(messageSchema).default([]),
 });
 
 export const discordOpeningStateSchema = z.object({
+	counterpartName,
 	serverName: uiText,
 	channelName: uiText,
 	previousMessages: z
@@ -215,6 +220,7 @@ export const redditOpeningStateSchema = z.object({
 });
 
 export const appleMailOpeningStateSchema = z.object({
+	counterpartName,
 	emails: z.array(
 		z.object({
 			from: uiText,
@@ -317,7 +323,10 @@ export type OpeningStateEditorMeta = {
 
 export const openingStateSchemas = {
 	imessage: imessageOpeningStateSchema.meta({
-		fields: [{ type: "message-list", key: "previousMessages", label: "Previous Messages" }],
+		fields: [
+			{ type: "text", key: "counterpartName", label: "Counterpart Name", placeholder: "Captain Shane" },
+			{ type: "message-list", key: "previousMessages", label: "Previous Messages" },
+		],
 	} satisfies OpeningStateEditorMeta),
 	discord: discordOpeningStateSchema.meta({
 		fields: [
@@ -328,6 +337,7 @@ export const openingStateSchemas = {
 					{ type: "text", key: "channelName", label: "Channel Name", placeholder: "general" },
 				],
 			},
+			{ type: "text", key: "counterpartName", label: "Counterpart Username", placeholder: "CaptainShane" },
 			{ type: "message-list", key: "previousMessages", label: "Previous Messages", withTimestamp: true },
 		],
 	} satisfies OpeningStateEditorMeta),
@@ -369,7 +379,10 @@ export const openingStateSchemas = {
 		],
 	} satisfies OpeningStateEditorMeta),
 	apple_mail: appleMailOpeningStateSchema.meta({
-		fields: [{ type: "email-list", key: "emails", label: "Emails" }],
+		fields: [
+			{ type: "text", key: "counterpartName", label: "Counterpart (Name or Name <address>)", placeholder: "Captain Shane <shane@charters.example>" },
+			{ type: "email-list", key: "emails", label: "Emails" },
+		],
 	} satisfies OpeningStateEditorMeta),
 	ao3: ao3OpeningStateSchema.meta({
 		fields: [

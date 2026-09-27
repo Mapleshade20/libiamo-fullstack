@@ -5,9 +5,9 @@ import { getTodayDateString, renderEmojiShortcodes } from "$lib/components/pract
 import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
+import { type DiscordMember, memberColor } from "$lib/practice/discord-members";
 import { getDisplayClock } from "$lib/time/display-clock";
 import type { DiscordText } from "./i18n";
-import { type DiscordMember, memberColor } from "./members";
 
 let {
 	session,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { UiVariant } from "$lib/constants";
+import { resolveCounterpart } from "$lib/practice/counterpart";
 import type { ChatMessage, StructuredOutputErrorDetails } from "$lib/server/llm/client";
 import { defineLlmRecipe } from "$lib/server/llm/recipe";
 import { type LlmRecipeResponse, type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
@@ -116,7 +117,8 @@ export class AgentGenerationError extends Error {
 }
 
 export type GenerateAgentResponseInput = {
-	task: AgentTaskContext;
+	/** The live task row; the counterpart is resolved from it for the learner. */
+	task: Omit<AgentTaskContext, "counterpart"> & { id: number };
 	/** The learner's display name, as the interface shows it. */
 	learnerName: string;
 	history: AgentHistoryMessage[];
@@ -125,7 +127,7 @@ export type GenerateAgentResponseInput = {
 	subjects?: LlmSubjects;
 };
 
-export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "userId" | "subjects">;
+export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "task" | "userId" | "subjects"> & { task: AgentTaskContext };
 
 /**
  * Reply-target normalization stays with the caller: its failures must be persisted with the
@@ -133,7 +135,7 @@ export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "userId" | 
  */
 export const agentReplyRecipe = defineLlmRecipe({
 	id: "practice.agent-reply",
-	version: 1,
+	version: 2,
 	title: "Conversation partner reply",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: agentResponseDecisionSchema },
@@ -141,7 +143,7 @@ export const agentReplyRecipe = defineLlmRecipe({
 	build: (input: AgentReplyRecipeInput, slot) => buildAgentMessages(input, slot),
 });
 
-function agentTaskContext(task: AgentTaskContext): AgentTaskContext {
+function agentTaskContext(task: GenerateAgentResponseInput["task"], learnerName: string): AgentTaskContext {
 	return {
 		title: task.title,
 		language: task.language,
@@ -150,6 +152,7 @@ function agentTaskContext(task: AgentTaskContext): AgentTaskContext {
 		description: task.description ?? null,
 		agentPrompt: task.agentPrompt,
 		openingState: task.openingState,
+		counterpart: resolveCounterpart(task.ui, task.openingState, task.id, learnerName),
 	};
 }
 
@@ -164,7 +167,7 @@ export function supportsIdleFollowUp(ui: UiVariant): boolean {
 	return !isThreadedUi(ui);
 }
 
-export function buildAgentResponseMessages(input: Omit<GenerateAgentResponseInput, "userId">): ChatMessage[] {
+export function buildAgentResponseMessages(input: AgentReplyRecipeInput): ChatMessage[] {
 	return buildAgentMessages(input);
 }
 
@@ -261,7 +264,7 @@ function validationErrorArtifacts(response: LlmRecipeResponse<unknown>, error: u
 
 export async function generateAgentResponse(input: GenerateAgentResponseInput): Promise<AgentGenerationArtifacts> {
 	const { userId, subjects, ...rest } = input;
-	const recipeInput: AgentReplyRecipeInput = { ...rest, task: agentTaskContext(input.task) };
+	const recipeInput: AgentReplyRecipeInput = { ...rest, task: agentTaskContext(input.task, input.learnerName) };
 	let response: LlmRecipeResponse<AgentResponseDecision>;
 	try {
 		response = await runLlmRecipe(agentReplyRecipe, recipeInput, { userId, subjects });

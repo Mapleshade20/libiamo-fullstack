@@ -26,7 +26,7 @@ const post = $derived({
 	author: getThreadOwner("reddit", props.openingState),
 	votes: opening.post?.votes ?? 1,
 });
-const session = createPracticeSession(() => props, { fallbackAgentName: () => post.author });
+const session = createPracticeSession(() => props, { agentName: () => post.author });
 const comments = $derived(buildCommentThread("reddit", props.openingState, session.messages));
 // The post is the root every hint's reply context starts from.
 const postContext = $derived([{ author: post.author, text: post.body || post.title }]);

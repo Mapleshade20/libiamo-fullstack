@@ -4,5 +4,5 @@ import { createPracticeSession, type PracticeSession, type PracticeSurfaceProps 
 let { props, onSession }: { props: PracticeSurfaceProps; onSession: (session: PracticeSession) => void } = $props();
 
 // svelte-ignore state_referenced_locally
-onSession(createPracticeSession(() => props, { fallbackAgentName: () => "Maya" }));
+onSession(createPracticeSession(() => props, { agentName: () => "Maya" }));
 </script>

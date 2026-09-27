@@ -56,6 +56,7 @@ describe("chat transcript", () => {
 				],
 			},
 			learnerName: "Maple",
+			counterpart: { name: "Mario", address: "" },
 			messages: [
 				{ id: 1, role: "user", content: "hice uno" },
 				{ id: 2, role: "assistant", content: "¡genial!" },
@@ -75,14 +76,15 @@ describe("chat transcript", () => {
 	it("keeps opening email headers", () => {
 		const [email] = buildChatTranscript({
 			ui: "apple_mail",
-			openingState: { emails: [{ from: "M. Durand", to: "Vous", subject: "Compteurs", body: "Bonjour", time: "lundi" }] },
+			openingState: { emails: [{ from: "M. Durand <durand@x.example>", to: "Vous", subject: "Compteurs", body: "Bonjour", time: "lundi" }] },
 			learnerName: "Maple",
+			counterpart: { name: "M. Durand", address: "durand@x.example" },
 			messages: [],
 		});
 		expect(email).toEqual({
 			opening: true,
 			role: "counterpart",
-			author: "M. Durand",
+			author: "M. Durand <durand@x.example>",
 			to: "Vous",
 			subject: "Compteurs",
 			time: "lundi",

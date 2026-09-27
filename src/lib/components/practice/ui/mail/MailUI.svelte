@@ -10,7 +10,8 @@ import { createPracticeSession, type PracticeSurfaceProps } from "$lib/component
 import TurnsLeftMobileBadge from "$lib/components/practice/TurnsLeftMobileBadge.svelte";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
-import { formatMailAddress, formatMailMessage, type MailOpeningState, resolveMailCounterpart } from "$lib/practice/mail";
+import { resolveCounterpart } from "$lib/practice/counterpart";
+import { formatMailAddress, formatMailMessage, type MailOpeningState } from "$lib/practice/mail";
 import Composer, { type MailDraftFields } from "./Composer.svelte";
 import { i18n } from "./i18n";
 import MailList from "./MailList.svelte";
@@ -21,8 +22,8 @@ let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
 const opening = $derived((props.openingState ?? {}) as MailOpeningState);
-const counterpart = $derived(resolveMailCounterpart(opening, props.taskId));
-const session = createPracticeSession(() => props, { fallbackAgentName: () => counterpart.name });
+const counterpart = $derived(resolveCounterpart("apple_mail", opening, props.taskId, props.userName));
+const session = createPracticeSession(() => props, { agentName: () => counterpart.name });
 const mailboxes = $derived(buildMailboxes({ opening, messages: session.messages, counterpart, learnerName: props.userName }));
 const failedReply = $derived(session.messages.find((message) => message.deliveryState === "failed") ?? null);
 const turnsLeft = $derived(translate(props.language, "practice.turnsLeft"));

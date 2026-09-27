@@ -8,10 +8,10 @@ import { isImeKeyboardEvent } from "$lib/components/practice/hint/keyboard";
 import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
 import { type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
+import { type DiscordMember, memberColor } from "$lib/practice/discord-members";
 import EmojiPicker from "./EmojiPicker.svelte";
 import { extractEmojiFromPickerEvent } from "./emoji";
 import type { DiscordText } from "./i18n";
-import { type DiscordMember, memberColor } from "./members";
 import ResizeableTextarea from "./ResizeableTextarea.svelte";
 
 const HINT_OWNER = "discord-input";

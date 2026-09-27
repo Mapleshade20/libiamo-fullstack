@@ -16,7 +16,7 @@ let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
 const work = $derived(describeWork((props.openingState ?? {}) as Ao3OpeningState));
-const session = createPracticeSession(() => props, { fallbackAgentName: () => work.author });
+const session = createPracticeSession(() => props, { agentName: () => work.author });
 const comments = $derived(buildCommentThread("ao3", props.openingState, session.messages));
 const turnsLeft = $derived(translate(props.language, "practice.turnsLeft"));
 

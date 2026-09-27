@@ -23,6 +23,8 @@ export type MailOpeningEmail = {
 };
 
 export type MailOpeningState = {
+	/** The person the learner writes to, `Name` or `Name <address>`; overrides the opening senders. */
+	counterpartName?: string;
 	emails?: MailOpeningEmail[];
 };
 
@@ -102,8 +104,8 @@ export function seededContact(seed: string | number): MailContact {
 	return CONTACTS[hash % CONTACTS.length];
 }
 
-/** The person the learner writes to: the first opening email's sender. */
+/** The person the learner writes to: the authored counterpart, else the first opening email's sender. */
 export function resolveMailCounterpart(openingState: MailOpeningState, seed: string | number): MailContact {
-	const sender = openingState.emails?.find((email) => email.from?.trim())?.from;
+	const sender = openingState.counterpartName?.trim() || openingState.emails?.find((email) => email.from?.trim())?.from;
 	return sender ? parseMailAddress(sender) : seededContact(seed);
 }

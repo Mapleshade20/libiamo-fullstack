@@ -5,11 +5,10 @@ import { defineLlmRecipe } from "$lib/server/llm/recipe";
 import { type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
 import {
 	buildChatTranscript,
+	type ChatTaskFacts,
 	describeLevel,
-	pickTaskFacts,
 	renderScenarioSetting,
 	renderTaskBrief,
-	type TaskFacts,
 	tagged,
 } from "$lib/server/practice/prompt-context";
 
@@ -20,8 +19,8 @@ const TranslationFeedbackSchema = z.object({
 	correction: z.string().catch(""),
 });
 
-/** The chat task a translation-help call prepares for. */
-export type TranslationHelpTask = TaskFacts & { openingState?: Record<string, unknown> | null };
+/** The chat task a translation-help call prepares for (`pickChatTaskFacts`). */
+export type TranslationHelpTask = ChatTaskFacts;
 
 /**
  * System prompt for suggesting expressions the learner will need in a task. The expressions are
@@ -50,12 +49,12 @@ Example: for a task about ordering at a restaurant, if the native language were 
 export function buildExpressionsUserMessage(task: TranslationHelpTask, learnerLevel?: number | null): string {
 	const level = describeLevel(learnerLevel);
 	// The opening messages are what the learner will answer, so the expressions can respond to them.
-	const opening = buildChatTranscript({ ui: task.ui, openingState: task.openingState, messages: [], learnerName: "" })
+	const opening = buildChatTranscript({ ui: task.ui, openingState: task.openingState, messages: [], learnerName: "", counterpart: task.counterpart })
 		.map((entry) => `${entry.author}: ${entry.text}`)
 		.join("\n");
 	return [
 		renderTaskBrief(task, { objectives: true }),
-		...(task.openingState !== undefined ? [renderScenarioSetting(task.ui, task.openingState)] : []),
+		renderScenarioSetting(task.ui, task.openingState, task.counterpart),
 		...(opening ? [tagged("opening_messages", opening)] : []),
 		...(level ? [`Learner level in ${getLanguageEnglishName(task.language)}: ${level}, self-assessed.`] : []),
 	].join("\n\n");
@@ -92,7 +91,7 @@ type ExpressionsRecipeInput = { task: TranslationHelpTask; nativeLanguage: strin
 
 export const expressionsRecipe = defineLlmRecipe({
 	id: "practice.translation-help-expressions",
-	version: 1,
+	version: 2,
 	title: "Translation help: expressions",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: ExpressionsSchema },
@@ -113,7 +112,7 @@ type TranslationFeedbackRecipeInput = {
 
 export const translationFeedbackRecipe = defineLlmRecipe({
 	id: "practice.translation-help-feedback",
-	version: 1,
+	version: 2,
 	title: "Translation help: feedback",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: TranslationFeedbackSchema },
@@ -136,7 +135,7 @@ export async function generateExpressions(
 	learnerLevel?: number | null,
 	subjects?: LlmSubjects,
 ): Promise<string[]> {
-	const input = { task: helpTask(task), nativeLanguage: nativeLang, targetLanguage: targetLang, learnerLevel: learnerLevel ?? null };
+	const input = { task, nativeLanguage: nativeLang, targetLanguage: targetLang, learnerLevel: learnerLevel ?? null };
 	const { value } = await runLlmRecipe(expressionsRecipe, input, { userId, subjects });
 	return value;
 }
@@ -153,11 +152,7 @@ export async function evaluateUserTranslation(
 	task?: TranslationHelpTask,
 	subjects?: LlmSubjects,
 ): Promise<{ feedback: string; correction: string }> {
-	const input = { sourceExpression, userTranslation, nativeLanguage: nativeLang, targetLanguage: targetLang, task: task ? helpTask(task) : null };
+	const input = { sourceExpression, userTranslation, nativeLanguage: nativeLang, targetLanguage: targetLang, task: task ?? null };
 	const { value } = await runLlmRecipe(translationFeedbackRecipe, input, { userId, subjects });
 	return value;
-}
-
-function helpTask(task: TranslationHelpTask): TranslationHelpTask {
-	return { ...pickTaskFacts(task), openingState: task.openingState ?? null };
 }

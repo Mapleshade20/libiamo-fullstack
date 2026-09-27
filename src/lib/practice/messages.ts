@@ -21,6 +21,8 @@ export type PersistedPracticeSession = {
 
 /** Opening chat history (iMessage, Discord) authored with the task. */
 export type ChatOpeningState = {
+	/** The counterpart's authored display name; overrides the opening senders. */
+	counterpartName?: string;
 	previousMessages?: Array<{ sender?: string; text?: string; timestamp?: string }>;
 };
 

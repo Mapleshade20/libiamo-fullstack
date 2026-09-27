@@ -3,6 +3,8 @@ import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
 import { normalizeText } from "$lib/components/practice/session/message-format";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
+import { resolveCounterpart } from "$lib/practice/counterpart";
+import { createMemberPool, type DiscordMember } from "$lib/practice/discord-members";
 import ChatHeader from "./ChatHeader.svelte";
 import { hasAgentStartedComposing } from "./helpers";
 import { i18n } from "./i18n";
@@ -10,14 +12,15 @@ import MemberList from "./MemberList.svelte";
 import MessageInput from "./MessageInput.svelte";
 import MessageStream from "./MessageStream.svelte";
 import MobileTopBar from "./MobileTopBar.svelte";
-import { createMemberPool, type DiscordMember } from "./members";
 import Sidebar from "./Sidebar.svelte";
 
 let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
 const pool = $derived(createMemberPool(props.taskId));
-const session = createPracticeSession(() => props, { fallbackAgentName: () => pool.agent.name });
+const session = createPracticeSession(() => props, {
+	agentName: () => resolveCounterpart("discord", props.openingState, props.taskId, props.userName).name,
+});
 const opening = $derived((props.openingState ?? {}) as { serverName?: string; channelName?: string });
 const serverName = $derived(normalizeText(opening.serverName, `${props.userName}'s Server`));
 const channelName = $derived(normalizeText(opening.channelName, t.general));

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { fade, fly } from "svelte/transition";
+import { type DiscordMember, memberColor } from "$lib/practice/discord-members";
 import type { DiscordText } from "./i18n";
-import { type DiscordMember, memberColor } from "./members";
 
 let {
 	agent,

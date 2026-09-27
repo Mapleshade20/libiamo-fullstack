@@ -7,6 +7,7 @@ import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { getTaskPreparationData } from "$lib/server/practice/preparation";
+import { pickChatTaskFacts } from "$lib/server/practice/prompt-context";
 import { evaluateUserTranslation, generateExpressions } from "$lib/server/practice/translation-help";
 import { getTaskIdentity, parseTaskId, resolveRequestLineup, type TaskIdentity } from "$lib/server/task/context";
 import { getTranslationPreparationData, validPromptLanguage } from "$lib/server/translation/preparation";
@@ -29,6 +30,7 @@ async function loadTranslationHelpTask(taskId: number) {
 	return db.query.task.findFirst({
 		where: (tasks, { eq }) => eq(tasks.id, taskId),
 		columns: {
+			id: true,
 			title: true,
 			shortObjective: true,
 			description: true,
@@ -143,7 +145,7 @@ export const actions: Actions = {
 
 		try {
 			const expressions = await generateExpressions(
-				task,
+				pickChatTaskFacts(task, user.name),
 				user.nativeLanguage,
 				task.language,
 				user.id,
@@ -191,7 +193,7 @@ export const actions: Actions = {
 				nativeLang,
 				task.language,
 				user.id,
-				task,
+				pickChatTaskFacts(task, user.name),
 				{ taskId: identity.id },
 			);
 
