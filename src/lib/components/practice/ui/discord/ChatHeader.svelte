@@ -1,4 +1,5 @@
 <script lang="ts">
+import AtSign from "@lucide/svelte/icons/at-sign";
 import CheckCircle from "@lucide/svelte/icons/check-circle";
 import Hash from "@lucide/svelte/icons/hash";
 import Users from "@lucide/svelte/icons/users";
@@ -10,13 +11,16 @@ import { t } from "$lib/i18n";
 let {
 	session,
 	channelName,
+	dm,
 	language,
 	showMembers,
 	membersLabel,
 	onToggleMembers,
 }: {
 	session: PracticeSession;
+	/** The channel, or the other person of a direct message. */
 	channelName: string;
+	dm: boolean;
 	language: LanguageCode;
 	showMembers: boolean;
 	membersLabel: string;
@@ -29,7 +33,11 @@ const turnsColor = $derived((session.remainingTurns ?? 0) <= 2 ? "text-[#DA373C]
 
 <div class="z-10 flex h-12 shrink-0 items-center justify-between border-b border-[#1F2023] px-4 shadow-sm">
 	<div class="flex items-center gap-2 overflow-hidden px-1">
-		<Hash size={24} class="shrink-0 text-[#80848E]" aria-hidden="true" />
+		{#if dm}
+			<AtSign size={22} class="shrink-0 text-[#80848E]" aria-hidden="true" />
+		{:else}
+			<Hash size={24} class="shrink-0 text-[#80848E]" aria-hidden="true" />
+		{/if}
 		<span class="truncate font-semibold text-white">{channelName}</span>
 	</div>
 	<div class="flex items-center gap-2 text-[#B5BAC1] md:gap-4">
@@ -57,14 +65,16 @@ const turnsColor = $derived((session.remainingTurns ?? 0) <= 2 ? "text-[#DA373C]
 				<span class="hidden sm:inline">{t(language, session.isCompleting ? "practice.finishing" : "practice.finish")}</span>
 			</button>
 		{/if}
-		<button
-			type="button"
-			class="grid min-h-11 min-w-11 place-items-center rounded transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
-			onclick={onToggleMembers}
-			aria-label={membersLabel}
-			aria-pressed={showMembers}
-		>
-			<Users size={20} aria-hidden="true" />
-		</button>
+		{#if !dm}
+			<button
+				type="button"
+				class="grid min-h-11 min-w-11 place-items-center rounded transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+				onclick={onToggleMembers}
+				aria-label={membersLabel}
+				aria-pressed={showMembers}
+			>
+				<Users size={20} aria-hidden="true" />
+			</button>
+		{/if}
 	</div>
 </div>

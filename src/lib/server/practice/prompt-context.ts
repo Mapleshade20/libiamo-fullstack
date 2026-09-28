@@ -9,9 +9,9 @@
  */
 
 import type { UiVariant } from "$lib/constants";
-import { flattenOpeningComments } from "$lib/practice/comment-thread";
-import { type Counterpart, resolveCounterpart } from "$lib/practice/counterpart";
+import { type CommentThreadMetadata, flattenOpeningComments, getCommentId } from "$lib/practice/comment-thread";
 import { formatMailAddress, parseMailAddress, parseMailMessage } from "$lib/practice/mail";
+import { resolveScene, type Scene } from "$lib/practice/scene";
 
 export const LEVEL_NAMES: Record<number, string> = { 1: "beginner", 2: "intermediate", 3: "advanced" };
 
@@ -54,15 +54,15 @@ export function pickTaskFacts(task: TaskFacts): TaskFacts {
 	};
 }
 
-/** Task facts of a chat task: the scene and the counterpart as the learner's interface shows them. */
-export type ChatTaskFacts = TaskFacts & { openingState: Record<string, unknown> | null; counterpart: Counterpart };
+/** Task facts of a chat task: the opening state and the people in it as the learner's interface shows them. */
+export type ChatTaskFacts = TaskFacts & { openingState: Record<string, unknown> | null; scene: Scene };
 
 export function pickChatTaskFacts(
 	task: TaskFacts & { id: number; openingState?: Record<string, unknown> | null },
 	learnerName: string,
 ): ChatTaskFacts {
 	const openingState = task.openingState ?? null;
-	return { ...pickTaskFacts(task), openingState, counterpart: resolveCounterpart(task.ui, openingState, task.id, learnerName) };
+	return { ...pickTaskFacts(task), openingState, scene: resolveScene(task.ui, openingState, task.id, learnerName) };
 }
 
 type TaskBriefOptions = {
@@ -114,17 +114,22 @@ function withPrefix(prefix: string, value: string) {
 
 /**
  * The static setting the learner sees when the scenario opens: the surface, channel, post or
- * work, and the counterpart as the interface names them. Opening messages, emails and comments
- * are conversation, rendered by `buildChatTranscript`.
+ * work, and the people as the interface names them. Opening messages, emails and comments are
+ * conversation, rendered by `buildChatTranscript`.
  */
-export function renderScenarioSetting(ui: UiVariant, openingState: JsonRecord | null | undefined, counterpart?: Counterpart | null): string {
+export function renderScenarioSetting(ui: UiVariant, openingState: JsonRecord | null | undefined, scene?: Scene | null): string {
 	const state = record(openingState);
 	const lines: string[] = [];
 	switch (ui) {
 		case "imessage":
-			lines.push("A private iMessage text conversation between the learner and one other person.");
+			lines.push(scene?.group ? "An iMessage group chat." : "A private iMessage text conversation between the learner and one other person.");
+			if (text(state.groupName)) lines.push(`Group: ${text(state.groupName)}`);
 			break;
 		case "discord": {
+			if (state.dm === true) {
+				lines.push("A Discord direct message conversation between the learner and one other person.");
+				break;
+			}
 			const server = text(state.serverName);
 			const channel = text(state.channelName);
 			lines.push("A Discord text channel.");
@@ -133,7 +138,7 @@ export function renderScenarioSetting(ui: UiVariant, openingState: JsonRecord | 
 			break;
 		}
 		case "apple_mail":
-			lines.push("An email exchange in a mail app.");
+			lines.push(scene?.group ? "An email thread with several people in a mail app." : "An email exchange in a mail app.");
 			break;
 		case "reddit": {
 			const post = record(state.post);
@@ -168,22 +173,25 @@ export function renderScenarioSetting(ui: UiVariant, openingState: JsonRecord | 
 		default:
 			break;
 	}
-	// Comment threads name their owner above; replies there may come from anyone in the thread.
-	if (counterpart && ui !== "reddit" && ui !== "ao3")
-		lines.push(`Counterpart as the learner's interface shows them: ${formatMailAddress(counterpart)}`);
+	// Comment threads name their owner above.
+	if (scene && ui !== "reddit" && ui !== "ao3") {
+		lines.push(`Counterpart as the learner's interface shows them: ${formatMailAddress(scene.counterpart)}`);
+		const others = scene.cast.slice(1).map(formatMailAddress);
+		if (others.length) lines.push(`Also present: ${others.join(", ")}`);
+	}
 	return tagged("setting", lines.join("\n"));
 }
 
 // ── Chat transcript ───────────────────────────────────────────────────
 
-export type TranscriptRole = "learner" | "counterpart" | "other";
+/** `cast` is anyone besides the learner: the people the models voice. */
+export type TranscriptRole = "learner" | "cast";
 
 export type TranscriptEntry = {
-	/** Present on learner messages of comment threads: the id a threaded reply must target. */
-	messageId?: number;
-	/** Present on comment threads: this comment's id and the comment it replies to (null = top level). */
-	commentId?: string;
-	replyTo?: string | null;
+	/** 1-based position in the transcript; `replyTo` and reply targets refer to it. */
+	id: number;
+	/** The entry this one answers, where the interface shows it (comment threads, quoted replies). */
+	replyTo?: number;
 	/** True for messages that were already there when the scenario opened. */
 	opening?: true;
 	role: TranscriptRole;
@@ -193,8 +201,6 @@ export type TranscriptEntry = {
 	subject?: string;
 	time?: string;
 	text: string;
-	/** Learner comments on threads: the person who answers this comment. */
-	respondAs?: string;
 };
 
 export type TranscriptMessage = {
@@ -209,12 +215,9 @@ type MessageMetadata = {
 	clientMessageId?: string;
 	displayContent?: string;
 	assistantAuthorName?: string;
-	thread?: {
-		commentId?: string;
-		targetCommentId?: string | null;
-		parentCommentId?: string | null;
-		responderName?: string;
-	};
+	/** A reply's target, as a scene message ref (see `getCommentId`). */
+	replyTo?: string | null;
+	thread?: CommentThreadMetadata;
 };
 
 function metadataOf(value: unknown): MessageMetadata {
@@ -235,54 +238,53 @@ export type BuildChatTranscriptInput = {
 	openingState: JsonRecord | null | undefined;
 	messages: TranscriptMessage[];
 	learnerName: string;
-	/** Resolved by `resolveCounterpart`, so the transcript names them as the interface does. */
-	counterpart: Counterpart;
+	/** Resolved by `resolveScene`, so the transcript names people as the interface does. */
+	scene: Scene;
 };
 
+type Draft = Omit<TranscriptEntry, "id" | "replyTo"> & { ref: string; parent?: string | null };
+
 /**
- * One chronological transcript of everything visible in the scenario: opening messages first,
- * then the session. Roles are relative to the learner (`counterpart` = the simulated person).
+ * One chronological transcript of everything visible in the scenario, opening messages first, with
+ * `refs[i]` the scene message ref (comment id scheme) of `entries[i]`.
  */
-export function buildChatTranscript(input: BuildChatTranscriptInput): TranscriptEntry[] {
+export function buildSceneTranscript(input: BuildChatTranscriptInput): { entries: TranscriptEntry[]; refs: string[] } {
 	const { ui, learnerName } = input;
 	const state = record(input.openingState);
-	const counterpartName = input.counterpart.name;
+	const counterpartName = input.scene.counterpart.name;
 	const threaded = ui === "reddit" || ui === "ao3";
-	const entries: TranscriptEntry[] = [];
+	const role = (author: string): TranscriptRole => (author === learnerName ? "learner" : "cast");
+	const drafts: Draft[] = [];
 
 	if (ui === "imessage" || ui === "discord") {
-		for (const raw of list(state.previousMessages)) {
+		list(state.previousMessages).forEach((raw, index) => {
 			const message = record(raw);
 			// The interface shows an unnamed opening line as the counterpart's.
 			const author = text(message.sender) || counterpartName;
-			const body = text(message.text);
-			if (!body) continue;
-			entries.push({
-				opening: true,
-				role: author === learnerName ? "learner" : author === counterpartName ? "counterpart" : "other",
-				author,
-				...(text(message.timestamp) ? { time: text(message.timestamp) } : {}),
-				text: body,
-			});
-		}
+			if (!text(message.text)) return;
+			const time = text(message.timestamp);
+			drafts.push({ ref: `opening-${index}`, opening: true, role: role(author), author, ...(time ? { time } : {}), text: text(message.text) });
+		});
 	} else if (ui === "apple_mail") {
-		for (const raw of list(state.emails)) {
+		list(state.emails).forEach((raw, index) => {
 			const email = record(raw);
-			const author = text(email.from);
-			entries.push({
+			const author = parseMailAddress(text(email.from)).name || "Unknown";
+			const time = text(email.time);
+			drafts.push({
+				ref: `opening-${index}`,
 				opening: true,
-				role: author && parseMailAddress(author).name === counterpartName ? "counterpart" : "other",
-				author: author || "Unknown",
+				role: role(author),
+				author,
 				to: text(email.to),
 				subject: text(email.subject),
-				...(text(email.time) ? { time: text(email.time) } : {}),
+				...(time ? { time } : {}),
 				text: text(email.body),
 			});
-		}
+		});
 	} else if (threaded) {
 		for (const comment of flattenOpeningComments(ui, state)) {
 			if (comment.text)
-				entries.push({ commentId: comment.id, replyTo: comment.parentId, opening: true, role: "other", author: comment.author, text: comment.text });
+				drafts.push({ ref: comment.id, parent: comment.parentId, opening: true, role: "cast", author: comment.author, text: comment.text });
 		}
 	}
 
@@ -292,50 +294,37 @@ export function buildChatTranscript(input: BuildChatTranscriptInput): Transcript
 		const isLearner = message.role === "user";
 		const content = learnerVisibleContent(message).trim();
 		if (!content) continue;
-
-		if (threaded) {
-			const thread = metadata.thread ?? {};
-			entries.push(
-				isLearner
-					? {
-							messageId: message.id,
-							commentId: thread.commentId ?? `${ui}-user-${metadata.clientMessageId ?? message.id}`,
-							replyTo: thread.targetCommentId ?? null,
-							role: "learner",
-							author: learnerName,
-							text: content,
-							...(thread.responderName ? { respondAs: thread.responderName } : {}),
-						}
-					: {
-							// Matches the id the thread UI derives, so learner replies to it resolve.
-							commentId: thread.commentId ?? `${ui}-agent-${message.id}`,
-							replyTo: thread.parentCommentId ?? null,
-							role: "counterpart",
-							author: metadata.assistantAuthorName ?? thread.responderName ?? counterpartName,
-							text: content,
-						},
-			);
-			continue;
-		}
-
+		const ref = getCommentId(ui, {
+			id: String(message.id),
+			role: isLearner ? "user" : "agent",
+			clientMessageId: metadata.clientMessageId,
+			thread: metadata.thread,
+		});
+		const author = isLearner ? learnerName : (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? counterpartName);
+		const parent = isLearner ? metadata.thread?.targetCommentId : (metadata.thread?.parentCommentId ?? metadata.replyTo);
 		if (ui === "apple_mail" && isLearner) {
 			const draft = parseMailMessage(content);
-			entries.push({
+			drafts.push({
+				ref,
 				role: "learner",
-				author: learnerName,
+				author,
 				...(draft.to ? { to: draft.to } : {}),
 				...(draft.subject ? { subject: draft.subject } : {}),
 				text: draft.body,
 			});
 			continue;
 		}
-
-		entries.push({
-			role: isLearner ? "learner" : "counterpart",
-			author: isLearner ? learnerName : counterpartName,
-			text: content,
-		});
+		drafts.push({ ref, parent, role: isLearner ? "learner" : "cast", author, text: content });
 	}
 
-	return entries;
+	const positions = new Map(drafts.map((draft, index) => [draft.ref, index + 1]));
+	const entries = drafts.map(({ ref: _ref, parent, ...entry }, index): TranscriptEntry => {
+		const replyTo = parent ? positions.get(parent) : undefined;
+		return { id: index + 1, ...(replyTo ? { replyTo } : {}), ...entry };
+	});
+	return { entries, refs: drafts.map((draft) => draft.ref) };
+}
+
+export function buildChatTranscript(input: BuildChatTranscriptInput): TranscriptEntry[] {
+	return buildSceneTranscript(input).entries;
 }

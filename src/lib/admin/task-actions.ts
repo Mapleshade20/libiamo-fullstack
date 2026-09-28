@@ -59,7 +59,14 @@ export function buildTaskExport(task: ExportableTask, rotation: TaskRotation) {
 			tags: task.tags,
 			estimatedWords: task.estimatedWords,
 			...(task.interactionType === "chat"
-				? { urgency: task.urgency, maxTurns: task.maxTurns, agentPrompt: task.agentPrompt, openingState: task.openingState, rotation }
+				? {
+						urgency: task.urgency,
+						maxTurns: task.maxTurns,
+						agentPrompt: task.agentPrompt,
+						openingState: task.openingState,
+						source: task.source,
+						rotation,
+					}
 				: { referenceParagraphs: task.referenceParagraphs, translationContext: task.translationContext }),
 		},
 	};

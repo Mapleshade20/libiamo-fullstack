@@ -25,7 +25,7 @@ export type OpeningState = IMessageState | DiscordState | RedditState | AppleMai
 export function getDefaultOpeningState(ui: ChatUiVariant): OpeningState {
 	switch (ui) {
 		case "imessage":
-			return { counterpartName: "", previousMessages: [] };
+			return { counterpartName: "", groupName: "", members: "", previousMessages: [] };
 		case "discord":
 			return { counterpartName: "", serverName: "", channelName: "", previousMessages: [] };
 		case "reddit":
@@ -34,7 +34,7 @@ export function getDefaultOpeningState(ui: ChatUiVariant): OpeningState {
 				previousComments: [],
 			};
 		case "apple_mail":
-			return { counterpartName: "", emails: [] };
+			return { counterpartName: "", members: "", emails: [] };
 		case "ao3":
 			return {
 				workTitle: "",

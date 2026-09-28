@@ -11,10 +11,10 @@ describe("buildThreadSendOptions", () => {
 	};
 	const base = { ui: "reddit" as const, openingState, messages: [], message: "Can you explain?", userName: "Learner" };
 
-	it("places a reply under its target and has the target's author answer", () => {
+	it("places a reply under its target", () => {
 		expect(buildThreadSendOptions({ ...base, targetCommentId: "c1", clientMessageId: "m1" })).toEqual({
 			userDisplayContent: "Can you explain?",
-			userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1", responderName: "Commenter", mode: "reply" } },
+			userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
 		});
 	});
 
@@ -23,7 +23,7 @@ describe("buildThreadSendOptions", () => {
 	});
 
 	it("keeps a failed comment's original placement when it is retried", () => {
-		const thread = { commentId: "reddit-user-m3", targetCommentId: "c1", responderName: "Commenter", mode: "reply" };
+		const thread = { commentId: "reddit-user-m3", targetCommentId: "c1" };
 		const messages = [
 			{
 				id: 1,

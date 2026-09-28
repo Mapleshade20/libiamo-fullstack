@@ -12,19 +12,20 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock("$lib/server/db", () => ({ db: mockDb }));
 
+import { URGENCY_PRESETS } from "$lib/constants";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
 import type { AgentGenerationArtifacts } from "$lib/server/practice/agent-replies/generator";
-import { supportsIdleFollowUp } from "$lib/server/practice/agent-replies/generator";
 import {
 	AgentReplyWorker,
 	buildDeliveredReplyMetadata,
 	getBatchGenerationEvent,
 	getDeliveryDueAt,
-	getThreadMetadataFromMessage,
 	getUrgencyFollowUpAt,
 	hasEndedByMaxTurns,
 	isStaleGeneration,
+	isUnwatchedTick,
+	LIVE_CHAT_TICKS,
 	MAX_GENERATION_ATTEMPTS,
 	shouldDeliverIntoEndedSession,
 	shouldRetryGeneration,
@@ -71,6 +72,7 @@ function makeFollowUpExecutor(session: Record<string, unknown>) {
 		query: {
 			practiceSession: { findFirst: vi.fn().mockResolvedValue(session) },
 			agentResponseBatch: { findFirst: vi.fn().mockResolvedValue(null) },
+			user: { findFirst: vi.fn().mockResolvedValue({ name: "Maple" }) },
 		},
 		update: () => ({
 			set: () => ({
@@ -209,25 +211,19 @@ describe("agent reply worker scheduling", () => {
 		expect(shouldDeliverIntoEndedSession({ status: "completed", completionReason: "terminated_abuse" }, "pending")).toBe(false);
 	});
 
-	it("carries comment-thread metadata from the answered message onto delivered replies", () => {
-		const thread = getThreadMetadataFromMessage({
-			clientMessageId: "msg-1",
-			thread: { commentId: "ao3-user-msg-1", responderName: "HikariKitsune02", mode: "work" },
+	it("stores a delivered message's author and what it answers the way each surface reads it", () => {
+		expect(buildDeliveredReplyMetadata("ao3", { author: "HikariKitsune02", replyTo: "ao3-user-msg-1" })).toEqual({
+			assistantAuthorName: "HikariKitsune02",
+			thread: { parentCommentId: "ao3-user-msg-1" },
+			asyncDelivery: true,
 		});
-		expect(thread).toEqual({ commentId: "ao3-user-msg-1", responderName: "HikariKitsune02" });
-		// linear surfaces (iMessage/Discord/Mail) store no thread metadata
-		expect(getThreadMetadataFromMessage({ clientMessageId: "msg-2" })).toBeNull();
-		expect(getThreadMetadataFromMessage(null)).toBeNull();
-		expect(getThreadMetadataFromMessage({ thread: { mode: "work" } })).toBeNull();
-
-		const metadata = buildDeliveredReplyMetadata(thread, 101);
-		expect(metadata.assistantAuthorName).toBe("HikariKitsune02");
-		expect(metadata.thread).toEqual({ parentCommentId: "ao3-user-msg-1", responderName: "HikariKitsune02", mode: "reply" });
-		expect(metadata.replyToMessageId).toBe(101);
-		expect(metadata.asyncDelivery).toBe(true);
-
-		// without thread metadata the payload keeps the legacy linear shape
-		expect(buildDeliveredReplyMetadata(null, null)).toEqual({ replyToMessageId: null, asyncDelivery: true });
+		expect(buildDeliveredReplyMetadata("discord", { author: "zote", replyTo: "opening-2" })).toEqual({
+			assistantAuthorName: "zote",
+			replyTo: "opening-2",
+			asyncDelivery: true,
+		});
+		// a top-level comment, and a reply queued before deliveries had authors
+		expect(buildDeliveredReplyMetadata("reddit", { author: null, replyTo: null })).toEqual({ asyncDelivery: true });
 	});
 
 	it("bounds generation retries per batch", () => {
@@ -253,7 +249,7 @@ describe("agent reply worker scheduling", () => {
 			rawResponse: "",
 			parsedResult: {
 				decision: "terminate_abuse",
-				deliveries: [{ content: "Je dois couper court à cette conversation.", replyToMessageId: null }],
+				deliveries: [{ author: "Mario", replyTo: null, content: "Je dois couper court à cette conversation." }],
 				allowIdleFollowUp: false,
 				terminationReason: "Severe abuse",
 			},
@@ -275,7 +271,7 @@ describe("agent reply worker scheduling", () => {
 		expect(inserts).toEqual([
 			{
 				table: agentDelivery,
-				values: { batchId: 31, sequence: 0, content: "Je dois couper court à cette conversation.", replyToMessageId: null, dueAt: now },
+				values: { batchId: 31, sequence: 0, content: "Je dois couper court à cette conversation.", author: "Mario", replyTo: null, dueAt: now },
 			},
 		]);
 
@@ -310,8 +306,8 @@ describe("agent reply worker scheduling", () => {
 			parsedResult: {
 				decision: "reply",
 				deliveries: [
-					{ content: "Salut !", replyToMessageId: null },
-					{ content: "x".repeat(40), replyToMessageId: null },
+					{ author: "Mario", replyTo: null, content: "Salut !" },
+					{ author: "Mario", replyTo: null, content: "x".repeat(40) },
 				],
 				allowIdleFollowUp: false,
 			},
@@ -370,55 +366,53 @@ describe("agent reply worker scheduling", () => {
 		expect(batchUpdate?.set.status).toBe("no_reply");
 	});
 
-	it("restricts idle follow-ups to messaging interfaces", () => {
-		expect(supportsIdleFollowUp("discord")).toBe(true);
-		expect(supportsIdleFollowUp("imessage")).toBe(true);
-		expect(supportsIdleFollowUp("apple_mail")).toBe(true);
-		expect(supportsIdleFollowUp("reddit")).toBe(false);
-		expect(supportsIdleFollowUp("ao3")).toBe(false);
-	});
-
-	it("never schedules idle follow-ups on comment-thread interfaces", async () => {
+	it("schedules idle follow-ups on every interface, and lets live group chats move on every minute or two", async () => {
 		const now = new Date("2026-08-21T12:00:00.000Z");
 		const worker = new AgentReplyWorker({});
-		for (const ui of ["ao3", "reddit"] as const) {
+		const schedule = async (task: Record<string, unknown>, followUpCount = 0, afterReply = false) => {
 			const { executor, inserts } = makeFollowUpExecutor({
 				status: "in_progress",
-				followUpCount: 0,
+				followUpCount,
 				expiresAt: new Date(now.getTime() + 3_600_000),
-				task: { ui, urgency: "high" },
+				task,
 			});
 			await (
 				worker as unknown as {
-					scheduleFollowUp: (executor: unknown, sessionId: number, now: Date) => Promise<void>;
+					scheduleFollowUp: (executor: unknown, sessionId: number, now: Date, afterReply: boolean) => Promise<void>;
 				}
-			).scheduleFollowUp(executor, 5, now);
-			expect(inserts).toEqual([]);
-		}
+			).scheduleFollowUp(executor, 5, now, afterReply);
+			return inserts[0]?.values;
+		};
+		const due = (values: Record<string, unknown> | undefined) => (values?.dueAt as Date).getTime() - now.getTime();
+
+		const nudge = await schedule({ id: 1, ui: "imessage", urgency: "high", openingState: null });
+		expect(nudge).toMatchObject({ sessionId: 5, kind: "follow_up", status: "pending", inputMessageId: null });
+		expect(due(nudge)).toBe(URGENCY_PRESETS.high.idleFollowUpDelayMs);
+		// One-to-one nudges are limited per session, even after a reply.
+		expect(await schedule({ id: 1, ui: "reddit", urgency: "high", openingState: null }, 2, true)).toBeUndefined();
+
+		const channel = { id: 1, ui: "discord", urgency: "high", openingState: { previousMessages: [{ sender: "zote", text: "a" }] } };
+		expect(due(await schedule(channel))).toBeGreaterThanOrEqual(60_000);
+		expect(due(await schedule(channel, 5))).toBeLessThanOrEqual(120_000);
+		expect(await schedule(channel, LIVE_CHAT_TICKS)).toBeUndefined();
+		// Each silence after the cast answers the learner gets its own budget.
+		expect(await schedule(channel, LIVE_CHAT_TICKS, true)).toMatchObject({ kind: "follow_up" });
 	});
 
-	it("schedules idle follow-ups on messaging interfaces", async () => {
-		const now = new Date("2026-08-21T12:00:00.000Z");
-		const worker = new AgentReplyWorker({});
-		const { executor, inserts } = makeFollowUpExecutor({
-			status: "in_progress",
-			followUpCount: 0,
-			expiresAt: new Date(now.getTime() + 3_600_000),
-			task: { ui: "imessage", urgency: "high" },
-		});
-		await (
-			worker as unknown as {
-				scheduleFollowUp: (executor: unknown, sessionId: number, now: Date) => Promise<void>;
-			}
-		).scheduleFollowUp(executor, 5, now);
-		expect(inserts.length).toBe(1);
-		expect(inserts[0]?.values).toMatchObject({ sessionId: 5, kind: "follow_up", status: "pending", inputMessageId: null });
+	it("lets a live chat move on only while the learner has seen its last messages", () => {
+		const tick = { kind: "follow_up", live: true, lastReplyId: 9, lastSeenId: 9 };
+		expect(isUnwatchedTick(tick)).toBe(false);
+		expect(isUnwatchedTick({ ...tick, lastSeenId: 8 })).toBe(true);
+		expect(isUnwatchedTick({ ...tick, lastSeenId: null, lastReplyId: null })).toBe(false);
+		// Replies to the learner and one-to-one nudges (meant to bring them back) always run.
+		expect(isUnwatchedTick({ ...tick, lastSeenId: 8, kind: "reply" })).toBe(false);
+		expect(isUnwatchedTick({ ...tick, lastSeenId: 8, live: false })).toBe(false);
 	});
 
 	it("locks the session and batch rows before claiming, then finalizes the batch after the last delivery", async () => {
 		const now = new Date("2026-08-21T12:00:00.000Z");
 		mockDb.query.agentDelivery.findMany.mockResolvedValue([
-			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", author: "Mario", replyTo: null, dueAt: now },
 		]);
 		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
 			id: 31,
@@ -458,7 +452,7 @@ describe("agent reply worker scheduling", () => {
 	it("leaves the batch delivery_pending while a sibling delivery is still pending", async () => {
 		const now = new Date("2026-08-21T12:00:00.000Z");
 		mockDb.query.agentDelivery.findMany.mockResolvedValue([
-			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", author: "Mario", replyTo: null, dueAt: now },
 		]);
 		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
 			id: 31,
@@ -486,7 +480,7 @@ describe("agent reply worker scheduling", () => {
 	it("finalizes a terminating batch inside the delivery transaction and ends the session", async () => {
 		const now = new Date("2026-08-21T12:00:00.000Z");
 		mockDb.query.agentDelivery.findMany.mockResolvedValue([
-			{ id: 41, batchId: 31, sequence: 0, content: "Je dois couper court.", replyToMessageId: null, dueAt: now },
+			{ id: 41, batchId: 31, sequence: 0, content: "Je dois couper court.", author: "Mario", replyTo: null, dueAt: now },
 		]);
 		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
 			id: 31,
@@ -515,7 +509,7 @@ describe("agent reply worker scheduling", () => {
 	it("cancels the delivery instead of delivering into a user-ended session", async () => {
 		const now = new Date("2026-08-21T12:00:00.000Z");
 		mockDb.query.agentDelivery.findMany.mockResolvedValue([
-			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", replyToMessageId: null, dueAt: now },
+			{ id: 41, batchId: 31, sequence: 0, content: "Salut !", author: "Mario", replyTo: null, dueAt: now },
 		]);
 		mockDb.query.agentResponseBatch.findFirst.mockResolvedValue({
 			id: 31,

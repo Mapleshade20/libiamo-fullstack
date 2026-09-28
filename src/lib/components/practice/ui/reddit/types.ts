@@ -3,7 +3,7 @@ export type RedditPost = {
 	body: string;
 	subreddit: string;
 	author: string;
-	votes?: number;
+	timestamp?: string;
 };
 
 export type RedditOpeningState = {

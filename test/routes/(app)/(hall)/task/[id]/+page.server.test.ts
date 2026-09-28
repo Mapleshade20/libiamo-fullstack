@@ -68,7 +68,7 @@ function createActionEvent(entries: Record<string, string>, userId = "u1", user:
 		formData.append(key, value);
 	}
 	return {
-		locals: { user: userId ? { id: userId, activeLanguage: "fr", nativeLanguage: "en", ...user } : null },
+		locals: { user: userId ? { id: userId, name: "Maple", activeLanguage: "fr", nativeLanguage: "en", ...user } : null },
 		params: { id: "42" },
 		url: new URL("https://libiamo.test/task/42"),
 		cookies: { get: () => undefined },

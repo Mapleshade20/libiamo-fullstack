@@ -109,7 +109,7 @@ describe("generateHint", () => {
 		expect(system.content).toContain("Ask for a refund");
 		// Opening messages are conversation: they travel in the transcript, not the system message.
 		expect(system.content).not.toContain("Hello!");
-		expect(JSON.parse(user.content).transcript).toEqual([{ opening: true, role: "counterpart", author: "Alice", text: "Hello!" }]);
+		expect(JSON.parse(user.content).transcript).toEqual([{ id: 1, opening: true, role: "cast", author: "Alice", text: "Hello!" }]);
 	});
 
 	it("tells the tutor the learner's self-assessed level for the task language", async () => {

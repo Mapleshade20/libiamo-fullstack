@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatVotes, getAvatarColor, seededInt } from "$lib/components/practice/ui/reddit/format";
+import { getAvatarColor, seededInt } from "$lib/components/practice/ui/reddit/format";
 
 describe("reddit format", () => {
 	describe("getAvatarColor", () => {
@@ -23,28 +23,6 @@ describe("reddit format", () => {
 		it("handles empty string", () => {
 			const result = getAvatarColor("");
 			expect(result).toMatch(/^bg-\[#/);
-		});
-	});
-
-	describe("formatVotes", () => {
-		it("formats numbers under 10k as-is", () => {
-			expect(formatVotes(42)).toBe("42");
-			expect(formatVotes(0)).toBe("0");
-			expect(formatVotes(9999)).toBe("9999");
-		});
-
-		it("formats 10k+ with k suffix", () => {
-			expect(formatVotes(10000)).toBe("10.0k");
-			expect(formatVotes(12345)).toBe("12.3k");
-		});
-
-		it("formats large numbers correctly", () => {
-			expect(formatVotes(50000)).toBe("50.0k");
-		});
-
-		it("handles negative numbers", () => {
-			expect(formatVotes(-42)).toBe("-42");
-			expect(formatVotes(-10000)).toBe("-10.0k");
 		});
 	});
 

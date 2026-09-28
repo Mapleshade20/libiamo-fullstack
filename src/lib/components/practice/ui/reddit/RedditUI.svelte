@@ -24,7 +24,7 @@ const post = $derived({
 	body: opening.post?.body || "",
 	subreddit: opening.post?.subreddit || "AskReddit",
 	author: getThreadOwner("reddit", props.openingState),
-	votes: opening.post?.votes ?? 1,
+	timestamp: opening.post?.timestamp,
 });
 const session = createPracticeSession(() => props, { agentName: () => post.author });
 const comments = $derived(buildCommentThread("reddit", props.openingState, session.messages));
@@ -40,7 +40,7 @@ const mock = () => notice?.show();
 function sendComment(text: string, target: ThreadComment | null) {
 	return session.send(text, {
 		fields: target ? { threadTargetCommentId: target.id } : {},
-		thread: (clientMessageId) => newCommentMetadata("reddit", clientMessageId, target, props.openingState),
+		thread: (clientMessageId) => newCommentMetadata("reddit", clientMessageId, target),
 	});
 }
 </script>

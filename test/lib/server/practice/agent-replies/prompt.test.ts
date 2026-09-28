@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { resolveScene } from "$lib/practice/scene";
 import { type AgentTaskContext, buildAgentMessages, buildAgentPromptSections } from "$lib/server/practice/agent-replies/prompt";
+
+const discordOpening = { serverName: "MCSR", channelName: "general-ES", previousMessages: [{ sender: "Mario", text: "Sii ya lo vi" }] };
 
 const discordTask: AgentTaskContext = {
 	title: "Share your mod",
@@ -8,47 +11,48 @@ const discordTask: AgentTaskContext = {
 	shortObjective: "Present your mod",
 	description: "You finished a speedrun mod.",
 	agentPrompt: "Eres Mario, un speedrunner entusiasta.",
-	openingState: { serverName: "MCSR", channelName: "general-ES", previousMessages: [{ sender: "Mario", text: "Sii ya lo vi" }] },
-	counterpart: { name: "Mario", address: "" },
+	openingState: discordOpening,
+	scene: resolveScene("discord", discordOpening, 1, "Maple"),
 };
 
-const redditTask: AgentTaskContext = {
-	title: "Answer a thread",
-	language: "en",
-	ui: "reddit",
-	agentPrompt: "Play the commenters.",
-	openingState: {
-		post: { title: "What will happen soon?", body: "Share predictions", subreddit: "AskReddit", author: "op_user" },
-		previousComments: [
-			{ id: "c1", author: "alex", text: "Voice cloning scams.", replies: [{ id: "c2", author: "luma", text: "We made a family password." }] },
-		],
-	},
-	counterpart: { name: "op_user", address: "" },
+const dmTask: AgentTaskContext = {
+	...discordTask,
+	openingState: { dm: true, counterpartName: "Mario" },
+	scene: resolveScene("discord", { dm: true, counterpartName: "Mario" }, 1, "Maple"),
 };
 
-describe("agent prompt assembly", () => {
-	it("orders the trusted system sections and ends with the response contract", () => {
-		const names = buildAgentPromptSections({ task: discordTask }).map((section) => section.name);
-		expect(names).toEqual([
+const sectionNames = (task: AgentTaskContext) => buildAgentPromptSections({ task }).map((section) => section.name);
+
+describe("scene prompt assembly", () => {
+	it("orders the trusted sections, adding group dynamics only where others can speak", () => {
+		const oneToOne = [
 			"ROLE",
-			"CHARACTER",
+			"CHARACTER NOTES",
+			"CAST",
 			"SETTING",
 			"LEARNER'S BRIEF",
-			"MESSAGE STYLE",
+			"HOW PEOPLE WRITE HERE",
 			"TRANSCRIPT FORMAT",
 			"CURRENT EVENT",
 			"RESPONSE CONTRACT",
+		];
+		expect(sectionNames(dmTask)).toEqual(oneToOne);
+		expect(sectionNames(discordTask)).toEqual([...oneToOne.slice(0, 6), "GROUP DYNAMICS", ...oneToOne.slice(6)]);
+		// A task cut from a real conversation gives the cast how it really went on, after the setting.
+		expect(sectionNames({ ...dmTask, source: { continuation: "Mario: see you at 8" } })).toEqual([
+			...oneToOne.slice(0, 4),
+			"THE REAL CONVERSATION",
+			...oneToOne.slice(4),
 		]);
 	});
 
-	it("keeps the author's character text and the setting in the system message, and the conversation in the user message", () => {
+	it("keeps the author's notes and the setting in the system message, and the conversation in the user message", () => {
 		const [system, user] = buildAgentMessages({
 			task: discordTask,
 			learnerName: "Maple",
 			history: [{ id: 5, role: "user", content: "Hola, hice un mod" }],
 		});
 
-		expect(system.role).toBe("system");
 		expect(system.content).toContain(discordTask.agentPrompt);
 		expect(system.content).toContain("general-ES");
 		expect(system.content).not.toContain("Hola, hice un mod");
@@ -58,27 +62,36 @@ describe("agent prompt assembly", () => {
 		const payload = JSON.parse(user.content);
 		expect(payload.learner).toEqual({ name: "Maple" });
 		expect(payload.transcript).toEqual([
-			{ opening: true, role: "counterpart", author: "Mario", text: "Sii ya lo vi" },
-			{ role: "learner", author: "Maple", text: "Hola, hice un mod" },
+			{ id: 1, opening: true, role: "cast", author: "Mario", text: "Sii ya lo vi" },
+			{ id: 2, role: "learner", author: "Maple", text: "Hola, hice un mod" },
 		]);
+		expect(payload.nextId).toBe(3);
 	});
 
-	it("never gives the counterpart the graded objectives", () => {
-		const system = buildAgentMessages({
+	it("never gives the cast the graded objectives", () => {
+		const [system] = buildAgentMessages({
 			task: { ...discordTask, objectives: ["Pide feedback"] } as AgentTaskContext,
 			learnerName: "Maple",
 			history: [],
-		})[0];
+		});
 		expect(system.content).not.toContain("Pide feedback");
 	});
 
-	it("describes an idle follow-up only in follow-up events", () => {
-		const event = (input: Parameters<typeof buildAgentPromptSections>[0]) =>
-			buildAgentPromptSections(input).find((section) => section.name === "CURRENT EVENT")?.body;
-		const reply = event({ task: discordTask });
-		const firstNudge = event({ task: discordTask, event: { kind: "follow_up", followUpCount: 1 } });
-		const finalNudge = event({ task: discordTask, event: { kind: "follow_up", followUpCount: 2 } });
-		expect(new Set([reply, firstNudge, finalNudge]).size).toBe(3);
+	it("tells a quiet spell apart: a reply, a one-to-one nudge, and time passing in a group", () => {
+		const event = (task: AgentTaskContext, followUpCount?: number) =>
+			buildAgentPromptSections({ task, event: followUpCount ? { kind: "follow_up", followUpCount } : { kind: "reply" } }).find(
+				(section) => section.name === "CURRENT EVENT",
+			)?.body;
+		expect(new Set([event(dmTask), event(dmTask, 1), event(dmTask, 2), event(discordTask, 1)]).size).toBe(4);
+	});
+
+	it("draws the floor for group scenes only, the same way for the same seed", () => {
+		const moment = (task: AgentTaskContext, seed: number) =>
+			JSON.parse(buildAgentMessages({ task, learnerName: "Maple", history: [{ id: 5, role: "user", content: "hola" }], seed })[1].content).moment;
+		expect(moment(discordTask, 7)).toEqual(moment(discordTask, 7));
+		for (const seed of [1, 2, 3])
+			expect(moment(discordTask, seed).around.some((person: { does: string }) => person.does.startsWith("answers #"))).toBe(true);
+		expect(moment(dmTask, 7)).toBeUndefined();
 	});
 
 	it("sends learner text rather than legacy prompt wrappers persisted beside it", () => {
@@ -91,63 +104,14 @@ describe("agent prompt assembly", () => {
 		expect(user.content).not.toContain("Reply as Mario");
 	});
 
-	it("threads comments by id and names who answers each learner comment", () => {
-		const [system, user] = buildAgentMessages({
-			task: redditTask,
-			learnerName: "Maple",
-			history: [
-				{
-					id: 10,
-					role: "user",
-					content: "Same here!",
-					llmMetadata: { clientMessageId: "a", thread: { commentId: "reddit-user-a", targetCommentId: "c2", responderName: "luma" } },
-				},
-				{
-					id: 11,
-					role: "assistant",
-					content: "Glad it helps.",
-					llmMetadata: { assistantAuthorName: "luma", thread: { parentCommentId: "reddit-user-a", responderName: "luma" } },
-				},
-				{
-					id: 12,
-					role: "user",
-					content: "It does.",
-					llmMetadata: { clientMessageId: "b", thread: { commentId: "reddit-user-b", targetCommentId: "reddit-agent-11", responderName: "luma" } },
-				},
-			],
-		});
-
-		expect(system.content).toContain("What will happen soon?");
-		expect(JSON.parse(user.content).transcript).toEqual([
-			{ commentId: "c1", replyTo: null, opening: true, role: "other", author: "alex", text: "Voice cloning scams." },
-			{ commentId: "c2", replyTo: "c1", opening: true, role: "other", author: "luma", text: "We made a family password." },
-			{ messageId: 10, commentId: "reddit-user-a", replyTo: "c2", role: "learner", author: "Maple", text: "Same here!", respondAs: "luma" },
-			{ commentId: "reddit-agent-11", replyTo: "reddit-user-a", role: "counterpart", author: "luma", text: "Glad it helps." },
-			{
-				messageId: 12,
-				commentId: "reddit-user-b",
-				replyTo: "reddit-agent-11",
-				role: "learner",
-				author: "Maple",
-				text: "It does.",
-				respondAs: "luma",
-			},
-		]);
-	});
-
-	it("renders learner emails from their headers and plain body, ignoring legacy layout metadata", () => {
+	it("renders learner emails from their headers and plain body", () => {
 		const [, user] = buildAgentMessages({
-			task: { ...discordTask, ui: "apple_mail", openingState: { emails: [] } },
+			task: { ...discordTask, ui: "apple_mail", openingState: { emails: [] }, scene: resolveScene("apple_mail", { emails: [] }, 1, "Maple") },
 			learnerName: "Maple",
-			history: [
-				{
-					id: 3,
-					role: "user",
-					content: "To: Shane\nSubject: Booking\n\nHello Shane",
-					llmMetadata: { mailBodyHtml: "<ul><li>Saturday</li><li>Two people</li></ul>" },
-				},
-			],
+			history: [{ id: 3, role: "user", content: "To: Shane\nSubject: Booking\n\nHello Shane" }],
 		});
-		expect(JSON.parse(user.content).transcript).toEqual([{ role: "learner", author: "Maple", to: "Shane", subject: "Booking", text: "Hello Shane" }]);
+		expect(JSON.parse(user.content).transcript).toEqual([
+			{ id: 1, role: "learner", author: "Maple", to: "Shane", subject: "Booking", text: "Hello Shane" },
+		]);
 	});
 });

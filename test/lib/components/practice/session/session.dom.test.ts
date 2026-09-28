@@ -173,6 +173,11 @@ describe("createPracticeSession", () => {
 		expect(mocks.invalidate).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(30 * 60_000 + 2_000);
 		expect(mocks.invalidate).toHaveBeenCalledTimes(1);
+
+		// The work is still composing at the wake-up (same due time): polling carries on until it lands.
+		flushSync();
+		vi.advanceTimersByTime(3_000);
+		expect(mocks.invalidate).toHaveBeenCalledTimes(2);
 	});
 
 	it("finishes after confirmation and opens the feedback page under the base path", async () => {

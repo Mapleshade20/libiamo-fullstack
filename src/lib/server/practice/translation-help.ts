@@ -49,12 +49,12 @@ Example: for a task about ordering at a restaurant, if the native language were 
 export function buildExpressionsUserMessage(task: TranslationHelpTask, learnerLevel?: number | null): string {
 	const level = describeLevel(learnerLevel);
 	// The opening messages are what the learner will answer, so the expressions can respond to them.
-	const opening = buildChatTranscript({ ui: task.ui, openingState: task.openingState, messages: [], learnerName: "", counterpart: task.counterpart })
+	const opening = buildChatTranscript({ ui: task.ui, openingState: task.openingState, messages: [], learnerName: "", scene: task.scene })
 		.map((entry) => `${entry.author}: ${entry.text}`)
 		.join("\n");
 	return [
 		renderTaskBrief(task, { objectives: true }),
-		renderScenarioSetting(task.ui, task.openingState, task.counterpart),
+		renderScenarioSetting(task.ui, task.openingState, task.scene),
 		...(opening ? [tagged("opening_messages", opening)] : []),
 		...(level ? [`Learner level in ${getLanguageEnglishName(task.language)}: ${level}, self-assessed.`] : []),
 	].join("\n\n");
@@ -91,7 +91,7 @@ type ExpressionsRecipeInput = { task: TranslationHelpTask; nativeLanguage: strin
 
 export const expressionsRecipe = defineLlmRecipe({
 	id: "practice.translation-help-expressions",
-	version: 2,
+	version: 3,
 	title: "Translation help: expressions",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: ExpressionsSchema },
@@ -112,7 +112,7 @@ type TranslationFeedbackRecipeInput = {
 
 export const translationFeedbackRecipe = defineLlmRecipe({
 	id: "practice.translation-help-feedback",
-	version: 2,
+	version: 3,
 	title: "Translation help: feedback",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: TranslationFeedbackSchema },

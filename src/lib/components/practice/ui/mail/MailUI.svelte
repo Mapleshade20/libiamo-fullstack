@@ -10,8 +10,8 @@ import { createPracticeSession, type PracticeSurfaceProps } from "$lib/component
 import TurnsLeftMobileBadge from "$lib/components/practice/TurnsLeftMobileBadge.svelte";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
-import { resolveCounterpart } from "$lib/practice/counterpart";
 import { formatMailAddress, formatMailMessage, type MailOpeningState } from "$lib/practice/mail";
+import { resolveScene } from "$lib/practice/scene";
 import Composer, { type MailDraftFields } from "./Composer.svelte";
 import { i18n } from "./i18n";
 import MailList from "./MailList.svelte";
@@ -22,9 +22,11 @@ let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
 const opening = $derived((props.openingState ?? {}) as MailOpeningState);
-const counterpart = $derived(resolveCounterpart("apple_mail", opening, props.taskId, props.userName));
-const session = createPracticeSession(() => props, { agentName: () => counterpart.name });
-const mailboxes = $derived(buildMailboxes({ opening, messages: session.messages, counterpart, learnerName: props.userName }));
+const scene = $derived(resolveScene("apple_mail", opening, props.taskId, props.userName));
+const session = createPracticeSession(() => props, { agentName: () => scene.counterpart.name });
+const mailboxes = $derived(buildMailboxes({ opening, messages: session.messages, cast: scene.cast, learnerName: props.userName }));
+/** A group thread is answered to everyone on it. */
+const recipients = $derived(scene.cast.map(formatMailAddress).join(", "));
 const failedReply = $derived(session.messages.find((message) => message.deliveryState === "failed") ?? null);
 const turnsLeft = $derived(translate(props.language, "practice.turnsLeft"));
 
@@ -82,7 +84,7 @@ function compose(subject = "") {
 
 async function send(sending: MailDraftFields) {
 	draft = null;
-	const accepted = await session.send(formatMailMessage({ to: formatMailAddress(counterpart), ...sending }));
+	const accepted = await session.send(formatMailMessage({ to: recipients, ...sending }));
 	if (accepted) {
 		storeDraft(null);
 		openMailbox("sent");
@@ -199,7 +201,7 @@ async function send(sending: MailDraftFields) {
 	{#if draft}
 		<Composer
 			initial={draft}
-			recipient={formatMailAddress(counterpart)}
+			recipient={recipients}
 			{session}
 			language={props.language}
 			{t}

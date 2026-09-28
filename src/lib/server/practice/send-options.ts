@@ -15,7 +15,7 @@ function metadataOf(value: unknown): PersistedMetadata {
 }
 
 /**
- * Where a Reddit/AO3 comment goes and who answers it. A retry of a failed comment keeps its
+ * Where a Reddit/AO3 comment goes. A retry of a failed comment keeps its
  * original placement; a new comment must target an existing comment (or none, for top level).
  * Returns null for an unknown target.
  */
@@ -40,7 +40,7 @@ export function buildThreadSendOptions(params: {
 
 	return {
 		userDisplayContent: params.message,
-		userMetadata: { thread: newCommentMetadata(params.ui, params.clientMessageId, target, params.openingState).user },
+		userMetadata: { thread: newCommentMetadata(params.ui, params.clientMessageId, target) },
 	};
 }
 

@@ -13,8 +13,9 @@ export function getBubbleGroupPosition(messages: ChatMessage[], index: number): 
 
 	const prev = index > 0 ? messages[index - 1] : null;
 	const next = index < messages.length - 1 ? messages[index + 1] : null;
-	const hasPrevSameRole = prev?.role === current.role;
-	const hasNextSameRole = next?.role === current.role;
+	// Bubbles group by sender: in a group chat, two people in a row are two groups.
+	const hasPrevSameRole = prev?.role === current.role && prev.authorName === current.authorName;
+	const hasNextSameRole = next?.role === current.role && next.authorName === current.authorName;
 
 	if (hasPrevSameRole && hasNextSameRole) return "middle";
 	if (hasPrevSameRole) return "end";

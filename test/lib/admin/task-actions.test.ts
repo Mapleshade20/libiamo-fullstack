@@ -19,6 +19,7 @@ const chatForm = {
 	tags: "plans, friends",
 	agentPrompt: "You are Sam.",
 	openingState: JSON.stringify({ previousMessages: [{ sender: "Sam", text: "Free on Saturday?" }] }),
+	source: JSON.stringify({ continuation: " alex: see you there " }),
 	rotation: "daily",
 };
 
@@ -34,9 +35,15 @@ describe("parseTaskForm", () => {
 			objectives: ["Suggest a time", "Agree on a place"],
 			tags: ["plans", "friends"],
 			openingState: { previousMessages: [{ sender: "Sam", text: "Free on Saturday?" }] },
+			source: { continuation: "alex: see you there" },
 			referenceParagraphs: null,
 			translationContext: null,
 		});
+	});
+
+	it("drops a blank source", () => {
+		const result = parseTaskForm(formData({ ...chatForm, source: JSON.stringify({ continuation: " " }) }));
+		expect(result.success && result.task.source).toBeNull();
 	});
 
 	it("reports an invalid opening state against its field", () => {

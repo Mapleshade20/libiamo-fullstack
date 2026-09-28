@@ -5,20 +5,19 @@ import { getTodayDateString, renderEmojiShortcodes } from "$lib/components/pract
 import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
-import { type DiscordMember, memberColor } from "$lib/practice/discord-members";
+import { getCommentId } from "$lib/practice/comment-thread";
+import { memberColor } from "$lib/practice/discord-members";
 import { getDisplayClock } from "$lib/time/display-clock";
 import type { DiscordText } from "./i18n";
 
 let {
 	session,
-	agent,
 	avatarUrl,
 	language,
 	t,
 	isTyping,
 }: {
 	session: PracticeSession;
-	agent: DiscordMember;
 	avatarUrl: string;
 	language: LanguageCode;
 	t: DiscordText;
@@ -39,7 +38,8 @@ const visibleMessages = $derived(session.messages.filter((message) => message.de
 
 	{#each visibleMessages as message, index (message.id)}
 		{@const previous = visibleMessages[index - 1]}
-		{@const grouped = previous?.role === message.role && previous.authorName === message.authorName}
+		{@const quoted = message.replyTo ? visibleMessages.find((candidate) => candidate.id === message.replyTo || getCommentId("discord", candidate) === message.replyTo) : undefined}
+		{@const grouped = !quoted && previous?.role === message.role && previous.authorName === message.authorName}
 		<div class:mt-4={!grouped} class:mt-0.5={grouped} class="group -mx-4 flex rounded p-1 px-4 hover:bg-[#2E3035]">
 			{#if grouped}
 				<div class="mr-4 w-10 shrink-0 text-right text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100">{message.timestamp}</div>
@@ -58,6 +58,13 @@ const visibleMessages = $derived(session.messages.filter((message) => message.de
 				</div>
 			{/if}
 			<div class="flex-1 overflow-hidden">
+				{#if quoted}
+					<p class="mb-0.5 truncate text-xs text-[#949BA4]">
+						<span aria-hidden="true">↪</span>
+						<span class="font-semibold text-[#B5BAC1]">@{quoted.authorName}</span>
+						{quoted.text}
+					</p>
+				{/if}
 				{#if !grouped}
 					<div class="flex items-baseline gap-2">
 						<span class="font-medium text-white">{message.authorName}</span>
@@ -90,17 +97,17 @@ const visibleMessages = $derived(session.messages.filter((message) => message.de
 	{#if isTyping}
 		<div class="mt-4 flex items-center gap-3" role="status">
 			<div
-				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-white {memberColor(agent.name)}"
+				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-white {memberColor(session.typingName)}"
 				aria-hidden="true"
 			>
-				{agent.name.charAt(0).toUpperCase()}
+				{session.typingName.charAt(0).toUpperCase()}
 			</div>
 			<div class="flex gap-1" aria-hidden="true">
 				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]"></span>
 				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]" style="animation-delay: 0.2s"></span>
 				<span class="h-2 w-2 animate-bounce rounded-full bg-[#80848E]" style="animation-delay: 0.4s"></span>
 			</div>
-			<span class="text-xs font-semibold text-[#80848E]">{t.typing.replace("{name}", agent.name)}</span>
+			<span class="text-xs font-semibold text-[#80848E]">{t.typing.replace("{name}", session.typingName)}</span>
 		</div>
 	{/if}
 </div>

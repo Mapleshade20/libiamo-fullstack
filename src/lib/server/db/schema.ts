@@ -16,6 +16,7 @@ import {
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { PracticeEvaluationPhase, TranslationWorkflowPhase } from "$lib/constants";
+import type { TaskSource } from "$lib/practice/messages";
 import type { ChatMessage } from "$lib/server/llm/client";
 import type { Generation1Evaluation } from "$lib/server/translation/evaluation/schema";
 import { STREAK_DAY_STATES, type StreakDayState } from "$lib/streak/history";
@@ -83,6 +84,8 @@ export const task = pgTable(
 		maxTurns: integer("max_turns"),
 		agentPrompt: text("agent_prompt"),
 		openingState: jsonb("opening_state").$type<Record<string, unknown>>(),
+		/** The real conversation the task is cut from, when there is one (`lib/practice/messages.ts`). */
+		source: jsonb("source").$type<TaskSource>(),
 
 		// translate
 		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>(),
@@ -237,7 +240,7 @@ export const practiceSession = pgTable(
 		index("practice_session_task_idx").on(t.taskId),
 		index("practice_session_archive_idx").on(t.userId, t.evaluationPhase, t.evaluationCompletedAt),
 		index("practice_session_expiry_idx").on(t.status, t.expiresAt),
-		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 2`),
+		check("practice_session_follow_up_count_check", sql`${t.followUpCount} >= 0 AND ${t.followUpCount} <= 6`),
 		check("practice_session_evaluation_phase_check", sql`${t.evaluationPhase} IN ('feedback', 'transfer', 'completed')`),
 	],
 );
@@ -289,8 +292,10 @@ export const agentDelivery = pgTable(
 			.references(() => agentResponseBatch.id, { onDelete: "cascade" }),
 		sequence: integer("sequence").notNull(),
 		content: text("content").notNull(),
-		replyToMessageId: integer("reply_to_message_id"),
-		threadMetadata: jsonb("thread_metadata"),
+		/** The cast member who posts it; null on replies queued before scenes had casts. */
+		author: text("author"),
+		/** A scene message ref, or `@n` for the n-th delivery of the same batch. */
+		replyTo: text("reply_to"),
 		status: agentDeliveryStatusEnum("status").default("pending").notNull(),
 		dueAt: timestamp("due_at").notNull(),
 		deliveredAt: timestamp("delivered_at"),

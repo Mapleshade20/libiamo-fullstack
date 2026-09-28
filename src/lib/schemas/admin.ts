@@ -68,6 +68,22 @@ const openingStateInput = z.preprocess((value) => {
 	}
 }, z.record(z.string(), z.unknown()).nullable());
 
+/** The real conversation a task was cut from: JSON from the form's hidden field, an object from JSON import. */
+const sourceInput = z.preprocess(
+	(value) => {
+		if (typeof value !== "string") return value ?? null;
+		try {
+			return value.trim() ? JSON.parse(value) : null;
+		} catch {
+			return value;
+		}
+	},
+	z
+		.object({ continuation: optionalText(USER_LONG_TEXT_MAX_LENGTH) })
+		.nullable()
+		.transform((source) => (source?.continuation ? { continuation: source.continuation } : null)),
+);
+
 const taskContentShape = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
@@ -133,6 +149,7 @@ function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null
 export const taskSchema = z
 	.object({
 		...taskContentShape,
+		source: sourceInput,
 		difficulty: z.coerce.number().int().min(1).max(3),
 		maxTurns: optionalCount,
 		estimatedWords: optionalCount,
@@ -167,16 +184,22 @@ const messageSchema = z.object({
 	text: uiText,
 });
 
-/** The counterpart's display name; without it the interface infers one (see `lib/practice/counterpart.ts`). */
+/** The counterpart's display name; without it the interface infers one (see `lib/practice/scene.ts`). */
 const counterpartName = uiText.optional();
+/** Everyone else in a group conversation, comma-separated. */
+const members = uiText.optional();
 
 export const imessageOpeningStateSchema = z.object({
 	counterpartName,
+	groupName: uiText.optional(),
+	members,
 	previousMessages: z.array(messageSchema).default([]),
 });
 
 export const discordOpeningStateSchema = z.object({
 	counterpartName,
+	/** A direct message with the counterpart instead of a server channel. */
+	dm: z.boolean().optional(),
 	serverName: uiText,
 	channelName: uiText,
 	previousMessages: z
@@ -195,7 +218,6 @@ export type RedditCommentInput = {
 	author: string;
 	text: string;
 	timestamp?: string;
-	votes?: number;
 	replies?: RedditCommentInput[];
 };
 
@@ -204,7 +226,6 @@ const redditCommentSchema: z.ZodType<RedditCommentInput> = z.object({
 	author: uiText,
 	text: uiText,
 	timestamp: uiText.optional(),
-	votes: z.number().optional(),
 	replies: z.lazy(() => z.array(redditCommentSchema)).optional(),
 });
 
@@ -214,13 +235,14 @@ export const redditOpeningStateSchema = z.object({
 		body: uiText,
 		subreddit: uiText,
 		author: uiText,
-		votes: z.number().optional(),
+		timestamp: uiText.optional(),
 	}),
 	previousComments: z.array(redditCommentSchema).optional(),
 });
 
 export const appleMailOpeningStateSchema = z.object({
 	counterpartName,
+	members,
 	emails: z.array(
 		z.object({
 			from: uiText,
@@ -284,6 +306,7 @@ export const ao3OpeningStateSchema = z.object({
 // ── Opening state editor metadata ─────────────────────────────────────
 export type FieldDef =
 	| { type: "text"; key: string; label: string; placeholder?: string; required?: boolean }
+	| { type: "checkbox"; key: string; label: string }
 	| { type: "textarea"; key: string; label: string; rows?: number; placeholder?: string; required?: boolean }
 	| { type: "number"; key: string; label: string; placeholder?: string }
 	| { type: "message-list"; key: string; label: string; withTimestamp?: boolean }
@@ -300,7 +323,6 @@ export type FieldDef =
 			textPlaceholder?: string;
 			withTimestamp?: boolean;
 			withIconUrl?: boolean;
-			withVotes?: boolean;
 	  }
 	| {
 			type: "comment-list";
@@ -310,7 +332,6 @@ export type FieldDef =
 			textField?: string;
 			authorPlaceholder?: string;
 			textPlaceholder?: string;
-			withVotes?: boolean;
 	  }
 	| { type: "group"; key: string; label: string; fields: FieldDef[] }
 	| { type: "row"; fields: FieldDef[] };
@@ -325,6 +346,13 @@ export const openingStateSchemas = {
 	imessage: imessageOpeningStateSchema.meta({
 		fields: [
 			{ type: "text", key: "counterpartName", label: "Counterpart Name", placeholder: "Captain Shane" },
+			{
+				type: "row",
+				fields: [
+					{ type: "text", key: "groupName", label: "Group Name (group chats)", placeholder: "Lisbon 🇵🇹" },
+					{ type: "text", key: "members", label: "Other Members (comma-separated)", placeholder: "Tom, Jess" },
+				],
+			},
 			{ type: "message-list", key: "previousMessages", label: "Previous Messages" },
 		],
 	} satisfies OpeningStateEditorMeta),
@@ -338,6 +366,7 @@ export const openingStateSchemas = {
 				],
 			},
 			{ type: "text", key: "counterpartName", label: "Counterpart Username", placeholder: "CaptainShane" },
+			{ type: "checkbox", key: "dm", label: "Direct message with the counterpart (no server channel)" },
 			{ type: "message-list", key: "previousMessages", label: "Previous Messages", withTimestamp: true },
 		],
 	} satisfies OpeningStateEditorMeta),
@@ -359,7 +388,7 @@ export const openingStateSchemas = {
 						type: "row",
 						fields: [
 							{ type: "text", key: "author", label: "Author" },
-							{ type: "number", key: "votes", label: "Votes" },
+							{ type: "text", key: "timestamp", label: "Posted", placeholder: "5 hr. ago" },
 						],
 					},
 					{ type: "textarea", key: "body", label: "Body", rows: 3 },
@@ -374,13 +403,18 @@ export const openingStateSchemas = {
 				authorLabel: "Author",
 				textLabel: "Comment",
 				withTimestamp: true,
-				withVotes: true,
 			},
 		],
 	} satisfies OpeningStateEditorMeta),
 	apple_mail: appleMailOpeningStateSchema.meta({
 		fields: [
 			{ type: "text", key: "counterpartName", label: "Counterpart (Name or Name <address>)", placeholder: "Captain Shane <shane@charters.example>" },
+			{
+				type: "text",
+				key: "members",
+				label: "Other Recipients (comma-separated, for group threads)",
+				placeholder: "Dana Whitfield <dana@example.com>",
+			},
 			{ type: "email-list", key: "emails", label: "Emails" },
 		],
 	} satisfies OpeningStateEditorMeta),

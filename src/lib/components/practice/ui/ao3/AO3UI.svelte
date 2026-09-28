@@ -74,15 +74,7 @@ async function replyTo(comment: ThreadComment) {
 
 		<section id="comments" aria-labelledby="ao3-comments-title">
 			<h2 id="ao3-comments-title" class="mb-4 border-b border-[#ddd] pb-1 text-2xl font-normal">{t.comments}</h2>
-			<CommentForm
-				bind:this={form}
-				bind:replyTarget
-				{session}
-				userName={props.userName}
-				openingState={props.openingState}
-				language={props.language}
-				{t}
-			/>
+			<CommentForm bind:this={form} bind:replyTarget {session} userName={props.userName} language={props.language} {t} />
 			<ol class="m-0 list-none p-0">
 				{#each comments as comment (comment.id)}
 					<CommentItem

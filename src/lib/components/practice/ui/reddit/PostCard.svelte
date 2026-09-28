@@ -8,7 +8,7 @@ import MessageSquare from "@lucide/svelte/icons/message-square";
 import MoreHorizontal from "@lucide/svelte/icons/more-horizontal";
 import Share2 from "@lucide/svelte/icons/share-2";
 import MarkdownRenderer from "$lib/components/common/MarkdownRenderer.svelte";
-import { formatVotes, getAvatarColor } from "./format";
+import { getAvatarColor } from "./format";
 import type { RedditText } from "./i18n";
 import type { RedditPost } from "./types";
 
@@ -20,7 +20,6 @@ function toggleVote(dir: "up" | "down") {
 	vote = vote === dir ? null : dir;
 }
 
-const displayVotes = $derived((post.votes ?? 1) + (vote === "up" ? 1 : vote === "down" ? -1 : 0));
 const subredditColor = $derived(getAvatarColor(post.subreddit));
 </script>
 
@@ -36,11 +35,6 @@ const subredditColor = $derived(getAvatarColor(post.subreddit));
 			>
 				<ArrowBigUp size={20} fill={vote === "up" ? "currentColor" : "none"} aria-hidden="true" />
 			</button>
-			<span
-				class="min-w-[2ch] text-center text-xs font-bold {vote === 'up' ? 'text-[#FF4500]' : vote === 'down' ? 'text-[#7193FF]' : 'text-[#1C1C1C]'}"
-			>
-				{formatVotes(displayVotes)}
-			</span>
 			<button
 				type="button"
 				class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#EDEFF1] {vote === 'down' ? 'text-[#7193FF]' : 'text-[#878A8C]'}"
@@ -61,6 +55,9 @@ const subredditColor = $derived(getAvatarColor(post.subreddit));
 				<span>•</span>
 				<span>{t.posted}</span>
 				<button type="button" class="hover:underline" onclick={onMockAction}>u/{post.author}</button>
+				{#if post.timestamp}
+					<span>• {post.timestamp}</span>
+				{/if}
 			</div>
 
 			<h1 class="mb-2 text-lg font-medium leading-snug text-[#1C1C1C]">{post.title}</h1>

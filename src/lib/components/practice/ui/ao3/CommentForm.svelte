@@ -13,14 +13,12 @@ let {
 	replyTarget = $bindable(),
 	session,
 	userName,
-	openingState,
 	language,
 	t,
 }: {
 	replyTarget: ThreadComment | null;
 	session: PracticeSession;
 	userName: string;
-	openingState: unknown;
 	language: LanguageCode;
 	t: Ao3Text;
 } = $props();
@@ -56,7 +54,7 @@ async function submit() {
 	session.hint.release(HINT_OWNER);
 	const accepted = await session.send(body, {
 		fields: target ? { threadTargetCommentId: target.id } : {},
-		thread: (clientMessageId) => newCommentMetadata("ao3", clientMessageId, target, openingState),
+		thread: (clientMessageId) => newCommentMetadata("ao3", clientMessageId, target),
 	});
 	if (!accepted && !text) {
 		text = body;

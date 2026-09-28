@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FeedbackResult } from "$lib/practice/feedback";
 
 const { mockDb } = vi.hoisted(() => ({
 	mockDb: {
@@ -17,6 +18,7 @@ vi.mock("$lib/server/llm/client", () => ({
 
 import { chatText } from "$lib/server/llm/client";
 import {
+	alignAnnotations,
 	buildFeedbackConversation,
 	followUpOnFeedback,
 	followUpOnLearningContent,
@@ -31,141 +33,90 @@ beforeEach(() => {
 	mockDb.query.practiceSession.findFirst.mockResolvedValue({ task: { language: "es" } });
 });
 
-type SessionMessageRow = {
-	id: number;
-	role: string;
-	content: string;
-	createdAt: string | Date;
-	llmMetadata: unknown;
-};
-
-function makeMsg(overrides: Partial<SessionMessageRow> = {}): SessionMessageRow {
-	return {
-		id: overrides.id ?? 1,
-		role: overrides.role ?? "user",
-		content: overrides.content ?? "Hello",
-		createdAt: overrides.createdAt ?? new Date(),
-		llmMetadata: overrides.llmMetadata ?? null,
-	};
-}
+const scene = { counterpart: { name: "Mario", address: "" }, cast: [{ name: "Mario", address: "" }], group: false, open: false };
 
 describe("buildFeedbackConversation", () => {
-	it("builds linear conversation for discord", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "Hola" }), makeMsg({ id: 2, role: "agent", content: "¡Hola!" })],
-			{},
-			"discord",
-		);
-		expect(result.chains).toHaveLength(1);
-		expect(result.chains[0].label).toBe("Conversation");
-		expect(result.allMessages).toHaveLength(2);
-		expect(result.allMessages[0].role).toBe("user");
-		expect(result.allMessages[1].role).toBe("agent");
-	});
-
-	it("skips hidden messages", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "visible" }), makeMsg({ id: 2, role: "agent", content: "hidden", llmMetadata: { hidden: true } })],
-			{},
-			"discord",
-		);
-		expect(result.allMessages).toHaveLength(1);
-		expect(result.allMessages[0].text).toBe("visible");
-	});
-
-	it("uses displayContent from llmMetadata when available", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "raw", llmMetadata: { displayContent: "display" } })],
-			{},
-			"discord",
-		);
-		expect(result.allMessages[0].text).toBe("display");
-	});
-
-	it("includes discord openingState previousMessages as context", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "reply" })],
-			{ previousMessages: [{ sender: "Bot", text: "Welcome" }] },
-			"discord",
-		);
-		expect(result.allMessages[0].role).toBe("context");
-		expect(result.allMessages[0].author).toBe("Bot");
-		expect(result.allMessages[1].role).toBe("user");
-	});
-
-	it("includes imessage openingState as context", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "reply" })],
-			{ previousMessages: [{ sender: "Alice", text: "Hey" }] },
-			"imessage",
-		);
-		expect(result.allMessages[0].role).toBe("context");
-	});
-
-	it("includes mail openingState emails as context", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "reply" })],
-			{ emails: [{ from: "boss@co.com", subject: "Meeting", body: "Join at 3pm" }] },
-			"apple_mail",
-		);
-		expect(result.allMessages[0].role).toBe("context");
-		expect(result.allMessages[0].text).toContain("[Meeting]");
-	});
-
-	it("builds tree chains for reddit with opening post and comments", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "My reply", llmMetadata: { thread: { commentId: "c1", targetCommentId: "opening-0" } } })],
-			{
-				post: { title: "AITA", body: "story...", author: "OP" },
-				previousComments: [{ id: "opening-0", author: "Commenter", text: "You're wrong" }],
-			},
-			"reddit",
-		);
-		expect(result.chains.length).toBeGreaterThanOrEqual(1);
-		expect(result.allMessages.some((m) => m.author === "OP")).toBe(true);
-		expect(result.allMessages.some((m) => m.text === "You're wrong")).toBe(true);
-	});
-
-	it("builds tree chains for ao3 with work and comments", () => {
-		const result = buildFeedbackConversation(
-			[makeMsg({ id: 1, role: "user", content: "Great fic!", llmMetadata: { thread: { commentId: "c1" } } })],
-			{ workTitle: "My Story", authorName: "Writer", previousComments: [] },
-			"ao3",
-		);
-		expect(result.allMessages.some((m) => m.text?.includes("My Story"))).toBe(true);
-	});
-
-	it("handles nested reddit comments", () => {
-		const result = buildFeedbackConversation(
-			[
-				makeMsg({
-					id: 1,
-					role: "user",
-					content: "reply to nested",
-					llmMetadata: { thread: { commentId: "c2", targetCommentId: "opening-0-0" } },
-				}),
+	it("reads a chat as one chain: opening lines as context, the cast by name, hidden messages left out", () => {
+		const result = buildFeedbackConversation({
+			ui: "discord",
+			openingState: { previousMessages: [{ sender: "Mario", text: "Sii ya lo vi" }] },
+			learnerName: "Maple",
+			scene,
+			messages: [
+				{ id: 1, role: "user", content: "raw", llmMetadata: { displayContent: "Hola" } },
+				{ id: 2, role: "assistant", content: "¡Qué guapo!", llmMetadata: { assistantAuthorName: "Lucía" } },
+				{ id: 3, role: "user", content: "oculto", llmMetadata: { hidden: true } },
 			],
-			{
-				post: { title: "Post" },
-				previousComments: [
-					{
-						id: "opening-0",
-						author: "A",
-						text: "Top comment",
-						replies: [{ id: "opening-0-0", author: "B", text: "Nested reply" }],
-					},
-				],
-			},
-			"reddit",
-		);
-		expect(result.allMessages.some((m) => m.text === "Top comment")).toBe(true);
-		expect(result.allMessages.some((m) => m.text === "Nested reply")).toBe(true);
+		});
+		expect(result.chains).toEqual([{ label: "Conversation", messages: result.allMessages }]);
+		expect(result.allMessages.map(({ seqId, role, author, text }) => [seqId, role, author, text])).toEqual([
+			[1, "context", "Mario", "Sii ya lo vi"],
+			[2, "user", "Maple", "Hola"],
+			[3, "agent", "Lucía", "¡Qué guapo!"],
+		]);
 	});
 
-	it("builds linear conversation for unknown UI type fallback", () => {
-		const result = buildFeedbackConversation([makeMsg({ id: 1, role: "user", content: "test" })], {}, "unknown_ui" as any);
-		expect(result.chains).toHaveLength(1);
-		expect(result.allMessages).toHaveLength(1);
+	it("splits a comment thread into top-level-to-leaf chains and lists every comment once", () => {
+		const result = buildFeedbackConversation({
+			ui: "reddit",
+			openingState: {
+				previousComments: [{ id: "c1", author: "alex", text: "Voice scams.", replies: [{ id: "c2", author: "luma", text: "Password." }] }],
+			},
+			learnerName: "Maple",
+			scene,
+			messages: [
+				{
+					id: 10,
+					role: "user",
+					content: "Same",
+					llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+				},
+				{ id: 11, role: "assistant", content: "nah", llmMetadata: { assistantAuthorName: "luma", thread: { parentCommentId: "reddit-user-m1" } } },
+			],
+		});
+		expect(result.chains.map((chain) => chain.messages.map((message) => message.seqId))).toEqual([
+			[1, 2],
+			[1, 3, 4],
+		]);
+		expect(result.allMessages.map((message) => message.seqId)).toEqual([1, 2, 3, 4]);
+	});
+
+	it("matches feedback saved with the old thread numbering to learner messages by text", () => {
+		const reply = (id: number, text: string) => ({
+			id,
+			role: "user",
+			content: text,
+			llmMetadata: { clientMessageId: `m${id}`, thread: { commentId: `reddit-user-m${id}` } },
+		});
+		const conversation = buildFeedbackConversation({
+			ui: "reddit",
+			openingState: { post: { title: "Scams?" }, previousComments: [{ id: "c1", author: "alex", text: "Voice scams." }] },
+			learnerName: "Maple",
+			scene,
+			messages: [reply(10, "Thanks!"), reply(11, "Me  too"), reply(12, "Thanks!")],
+		});
+		const annotation = (messageId: number, annotatedText: string) => ({ messageId, annotatedText, spans: [], comment: "" });
+		// The old numbering counted the post and gave both "Thanks!" one number.
+		const saved = {
+			feedbackLanguage: "en",
+			objectives: [],
+			summary: "ok",
+			annotations: [annotation(3, "Thanks!"), annotation(4, "<grammar>Me too</grammar>"), annotation(9, "Gone")],
+		};
+		const ids = (feedback: FeedbackResult) => feedback.annotations.map((item) => item.messageId);
+		expect(ids(alignAnnotations(saved, conversation, "reddit"))).toEqual([2, 4, 3]);
+		expect(ids(alignAnnotations({ ...saved, numbering: "transcript" }, conversation, "reddit"))).toEqual([3, 4, 9]);
+	});
+
+	it("shows an email's subject with its body", () => {
+		const result = buildFeedbackConversation({
+			ui: "apple_mail",
+			openingState: { emails: [{ from: "Boss <boss@co.example>", subject: "Meeting", body: "Join at 3pm" }] },
+			learnerName: "Maple",
+			scene,
+			messages: [],
+		});
+		expect(result.allMessages[0]).toMatchObject({ role: "context", author: "Boss", text: "[Meeting] Join at 3pm" });
 	});
 });
 
@@ -229,7 +180,7 @@ describe("generateFeedback", () => {
 		expect(user.role).toBe("user");
 		expect(user.content.split("\n").slice(0, 3)).toEqual([
 			"[1] [CONTEXT] Mario: Sii ya lo vi",
-			"[2] [LEARNER] You: Hola a todos",
+			"[2] [LEARNER] Learner: Hola a todos",
 			"[3] [PARTNER] Mario: ¡Qué guapo!",
 		]);
 	});

@@ -11,7 +11,6 @@ export type RedditText = Record<
 	| "share"
 	| "save"
 	| "award"
-	| "points"
 	| "reply"
 	| "home"
 	| "popular"
@@ -61,7 +60,6 @@ export const i18n: Record<LanguageCode, RedditText> = {
 		share: "Share",
 		save: "Save",
 		award: "Award",
-		points: "points",
 		reply: "Reply",
 		home: "Home",
 		popular: "Popular",
@@ -108,7 +106,6 @@ export const i18n: Record<LanguageCode, RedditText> = {
 		share: "Compartir",
 		save: "Guardar",
 		award: "Premio",
-		points: "puntos",
 		reply: "Responder",
 		home: "Inicio",
 		popular: "Popular",
@@ -155,7 +152,6 @@ export const i18n: Record<LanguageCode, RedditText> = {
 		share: "Partager",
 		save: "Sauvegarder",
 		award: "Récompense",
-		points: "points",
 		reply: "Répondre",
 		home: "Accueil",
 		popular: "Populaire",
@@ -202,7 +198,6 @@ export const i18n: Record<LanguageCode, RedditText> = {
 		share: "シェア",
 		save: "保存",
 		award: "アワード",
-		points: "ポイント",
 		reply: "返信",
 		home: "ホーム",
 		popular: "人気",

@@ -40,6 +40,8 @@ export type ObjectiveGrade = {
 export type FeedbackResult = {
 	/** Concrete language resolved and frozen when this feedback was generated. */
 	feedbackLanguage: string;
+	/** Set on feedback whose message ids are transcript positions; see `alignAnnotations`. */
+	numbering?: "transcript";
 	annotations: MessageAnnotation[];
 	objectives: ObjectiveGrade[];
 	summary: string;

@@ -8,7 +8,7 @@ import { getDisplayClock } from "$lib/time/display-clock";
 import type { IMessageText } from "./i18n";
 import { getBubbleCorners, getLastOutgoingMessageId, getRenderableMessages, isLastOutgoingMessageRead } from "./presentation";
 
-let { session, language, t }: { session: PracticeSession; language: LanguageCode; t: IMessageText } = $props();
+let { session, group, language, t }: { session: PracticeSession; group: boolean; language: LanguageCode; t: IMessageText } = $props();
 
 const clock = getDisplayClock();
 const messages = $derived(getRenderableMessages(session.messages));
@@ -26,8 +26,9 @@ const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, session.ag
 	{#each messages as message, index (message.id)}
 		{@const outgoing = message.role === "user"}
 		<div class="mb-1.5 flex flex-col {outgoing ? 'items-end' : 'items-start'}">
-			{#if !outgoing && messages[index - 1]?.role !== "agent"}
-				<span class="mb-1 ml-2 hidden text-[11px] text-[#8E8E93] md:block">{message.authorName}</span>
+			{#if !outgoing && messages[index - 1]?.authorName !== message.authorName}
+				<!-- Group chats name every sender; a one-to-one chat names the contact on wide screens only. -->
+				<span class="mb-1 ml-2 text-[11px] text-[#8E8E93] {group ? '' : 'hidden md:block'}">{message.authorName}</span>
 			{/if}
 			{#if message.deliveryState === "failed"}
 				<p class="max-w-[82%] rounded-[20px] border border-[#FF3B30]/30 bg-[#FFF2F1] px-3 py-2 text-[15px] leading-5 text-[#C9281D] md:max-w-[68%]">

@@ -19,6 +19,7 @@ vi.mock("$lib/server/task/context", () => ({
 }));
 vi.mock("$lib/server/practice/feedback", () => ({
 	getExistingFeedback: vi.fn(),
+	alignAnnotations: vi.fn((feedback) => feedback),
 	buildFeedbackConversation: vi.fn(() => ({ chains: [], allMessages: [] })),
 }));
 
@@ -58,27 +59,27 @@ describe("task feedback page load", () => {
 	});
 
 	it("returns 404 for invalid task ID", async () => {
-		await expect(load(mockEvent({ id: "user-1" }, "abc"))).rejects.toMatchObject({ status: 404 });
+		await expect(load(mockEvent({ id: "user-1", name: "Maple" }, "abc"))).rejects.toMatchObject({ status: 404 });
 	});
 
 	it("redirects when session does not exist", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(null);
-		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
+		await expect(load(mockEvent({ id: "user-1", name: "Maple" }))).rejects.toMatchObject({ status: 303 });
 	});
 
 	it("redirects when session is still in_progress", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "in_progress" }));
-		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
+		await expect(load(mockEvent({ id: "user-1", name: "Maple" }))).rejects.toMatchObject({ status: 303 });
 	});
 
 	it("redirects abandoned sessions instead of opening a report", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "abandoned" }));
-		await expect(load(mockEvent({ id: "user-1" }))).rejects.toMatchObject({ status: 303 });
+		await expect(load(mockEvent({ id: "user-1", name: "Maple" }))).rejects.toMatchObject({ status: 303 });
 	});
 
 	it("returns page data for completed session", async () => {
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession());
-		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1" }))) as any;
+		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1", name: "Maple" }))) as any;
 		expect(result).toHaveProperty("sessionId", 42);
 		expect(result).toHaveProperty("taskTitle", "Test Task");
 		expect(result).toHaveProperty("conversation");
@@ -90,7 +91,7 @@ describe("task feedback page load", () => {
 		const feedback = { annotations: [], objectives: [], summary: "Good job" };
 		mockGetExistingFeedback.mockResolvedValue(feedback);
 		mockDb.query.practiceSession.findFirst.mockResolvedValue(mockSession({ status: "evaluated" }));
-		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1" }))) as any;
+		const result: Record<string, unknown> = (await load(mockEvent({ id: "user-1", name: "Maple" }))) as any;
 		expect(result.existingFeedback).toBe(feedback);
 	});
 });

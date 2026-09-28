@@ -3,13 +3,13 @@ import type { ChatMessage } from "./messages";
 /** Surfaces whose conversation is a public comment tree rather than a linear chat. */
 export type ThreadUi = "reddit" | "ao3";
 
-/** Stored on learner messages (and copied to their replies) to place them in the tree. */
+/** Where a message sits in a comment tree: learner comments name their target, replies their parent. */
 export type CommentThreadMetadata = {
 	commentId?: string;
 	targetCommentId?: string | null;
 	parentCommentId?: string | null;
+	/** Replies stored before the author was recorded separately. */
 	responderName?: string;
-	mode?: string;
 };
 
 /** An authored opening comment; Reddit and AO3 name their fields differently. */
@@ -37,10 +37,9 @@ type ThreadPlatform = {
 	author: (comment: OpeningComment) => unknown;
 	text: (comment: OpeningComment) => unknown;
 	anonymous: string;
-	/** Who answers a top-level comment: the post author or the work's author. */
+	/** The post author or the work's author. */
 	owner: (openingState: Record<string, unknown>) => unknown;
 	ownerFallback: string;
-	topLevelMode: string;
 };
 
 const PLATFORMS: Record<ThreadUi, ThreadPlatform> = {
@@ -50,7 +49,6 @@ const PLATFORMS: Record<ThreadUi, ThreadPlatform> = {
 		anonymous: "deleted",
 		owner: (state) => (state.post as Record<string, unknown> | undefined)?.author,
 		ownerFallback: "OP",
-		topLevelMode: "post",
 	},
 	ao3: {
 		author: (comment) => comment.username,
@@ -58,7 +56,6 @@ const PLATFORMS: Record<ThreadUi, ThreadPlatform> = {
 		anonymous: "Anonymous",
 		owner: (state) => state.authorName,
 		ownerFallback: "FicAuthor",
-		topLevelMode: "work",
 	},
 };
 
@@ -74,7 +71,7 @@ function asComments(value: unknown): OpeningComment[] {
 	return Array.isArray(value) ? (value.filter((item) => item && typeof item === "object") as OpeningComment[]) : [];
 }
 
-/** The name that answers comments made directly on the post or work. */
+/** The post or work author. */
 export function getThreadOwner(ui: ThreadUi, openingState: unknown): string {
 	return threadText(PLATFORMS[ui].owner(asRecord(openingState)), PLATFORMS[ui].ownerFallback);
 }
@@ -105,7 +102,8 @@ export function flattenOpeningComments(ui: ThreadUi, openingState: unknown): Thr
 	return flatten(openingTree(ui, asComments(asRecord(openingState).previousComments), 0, null, []));
 }
 
-export function getCommentId(ui: ThreadUi, message: Pick<ChatMessage, "id" | "role" | "clientMessageId" | "thread">): string {
+/** A message's id in the scene; linear surfaces use the same scheme for reply references. */
+export function getCommentId(ui: string, message: Pick<ChatMessage, "id" | "role" | "clientMessageId" | "thread">): string {
 	if (message.thread?.commentId) return message.thread.commentId;
 	return `${ui}-${message.role}-${message.clientMessageId ?? message.id}`;
 }
@@ -168,15 +166,7 @@ export function findThreadTarget(
 	return message ? sessionComment(ui, message) : null;
 }
 
-/**
- * Where a new learner comment sits in the tree and who answers it: the target's author, or the
- * post/work owner for a top-level comment. The reply is placed under the learner's comment.
- */
-export function newCommentMetadata(ui: ThreadUi, clientMessageId: string, target: ThreadTarget | null, openingState: unknown) {
-	const responderName = target?.author || getThreadOwner(ui, openingState);
-	const commentId = `${ui}-user-${clientMessageId}`;
-	return {
-		user: { commentId, targetCommentId: target?.id ?? null, responderName, mode: target ? "reply" : PLATFORMS[ui].topLevelMode },
-		agent: { commentId: `${ui}-agent-${clientMessageId}`, parentCommentId: commentId, responderName, mode: "reply" },
-	} satisfies Record<string, CommentThreadMetadata>;
+/** Where a new learner comment sits in the tree. Who answers it, if anyone, is the server's decision. */
+export function newCommentMetadata(ui: ThreadUi, clientMessageId: string, target: ThreadTarget | null): CommentThreadMetadata {
+	return { commentId: `${ui}-user-${clientMessageId}`, targetCommentId: target?.id ?? null };
 }

@@ -17,6 +17,7 @@ export type TaskFormData = {
 	objectives?: string[] | null;
 	tags?: string[] | null;
 	openingState?: Record<string, unknown> | null;
+	source?: TaskSource | null;
 	referenceParagraphs?: string[] | null;
 	translationContext?: string | null;
 	rotation?: string;
@@ -24,11 +25,13 @@ export type TaskFormData = {
 </script>
 
 <script lang="ts">
-import { untrack } from "svelte";
+import { flushSync, untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
+import type { cutCapture } from "$lib/admin/capture";
 import { getDefaultOpeningState } from "$lib/admin/opening-state";
 import { handleInvalidField } from "$lib/client/form-attention";
+import CaptureImport from "$lib/components/admin/CaptureImport.svelte";
 import OpeningStateEditor from "$lib/components/admin/OpeningStateEditor.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
@@ -50,6 +53,7 @@ import {
 	URGENCIES,
 	URGENCY_LABELS,
 } from "$lib/constants";
+import type { TaskSource } from "$lib/practice/messages";
 import { renderMarkdown } from "$lib/text/markdown";
 
 interface Props {
@@ -117,6 +121,7 @@ const taskFieldOrder = [
 	"materialsMd",
 	"referenceParagraphs",
 	"openingState",
+	"source",
 ];
 
 function taskSourceKey() {
@@ -143,6 +148,7 @@ let title = $state(untrack(() => task.title ?? ""));
 let shortObjective = $state(untrack(() => task.shortObjective ?? ""));
 let description = $state(untrack(() => task.description ?? ""));
 let agentPrompt = $state(untrack(() => task.agentPrompt ?? ""));
+let sourceContinuation = $state(untrack(() => task.source?.continuation ?? ""));
 let translationContext = $state(untrack(() => task.translationContext ?? ""));
 let objectivesText = $state(untrack(() => (task.objectives ?? []).join("\n")));
 let tagsText = $state(untrack(() => (task.tags ?? []).join(", ")));
@@ -152,6 +158,15 @@ let openingState = $state<Record<string, unknown>>(
 );
 
 let isTranslate = $derived(selectedInteractionType === "translate");
+
+/** Fills the interface, opening and continuation from a captured conversation. */
+function importCapture(cut: ReturnType<typeof cutCapture>) {
+	selectedUi = cut.ui;
+	// Switching the interface resets the opening editor to its default: let that happen first.
+	flushSync();
+	openingState = cut.openingState;
+	sourceContinuation = cut.continuation;
+}
 
 // Markdown preview
 let showMdPreview = $state(false);
@@ -171,6 +186,7 @@ function syncTaskDraftFromProps() {
 	shortObjective = task.shortObjective ?? "";
 	description = task.description ?? "";
 	agentPrompt = task.agentPrompt ?? "";
+	sourceContinuation = task.source?.continuation ?? "";
 	translationContext = task.translationContext ?? "";
 	objectivesText = (task.objectives ?? []).join("\n");
 	tagsText = (task.tags ?? []).join(", ");
@@ -381,12 +397,36 @@ $effect(() => {
 			</div>
 		{:else if !hideAdminFields}
 			<div class="space-y-2">
-				<Label for="agentPrompt">Agent Prompt</Label>
-				<Textarea id="agentPrompt" name="agentPrompt" rows={4} bind:value={agentPrompt} />
+				<Label for="agentPrompt">Character notes (optional)</Label>
+				<p id="agentPrompt-help" class="text-xs text-muted-foreground">
+					Who these people are, what each wants, and who knows what the learner needs, as a few facts. Style, length and who replies are handled for
+					you; left empty, the people are inferred from the opening.
+				</p>
+				<Textarea
+					id="agentPrompt"
+					name="agentPrompt"
+					rows={4}
+					aria-describedby="agentPrompt-help"
+					bind:value={agentPrompt}
+					placeholder="Priya is organising and wants decisions made. Tom keeps joking and hasn't checked his calendar. Jess is on a tight budget and hates hostels less than everyone thinks."
+				/>
 				{#if form?.errors?.agentPrompt}
 					<p data-field-error="agentPrompt" class="text-sm text-red-600">{form.errors.agentPrompt[0]}</p>
 				{/if}
 			</div>
+			<fieldset class="space-y-2">
+				<legend class="text-sm font-medium">Real conversation (optional)</legend>
+				<p class="text-xs text-muted-foreground">
+					When the task is cut from a real conversation, the cast draws on how it really went on after the cut; the learner never sees it.
+				</p>
+				<CaptureImport language={selectedLanguage} onimport={importCapture} />
+				<input type="hidden" name="source" value={JSON.stringify({ continuation: sourceContinuation })}>
+				<Label for="sourceContinuation">The rest of the real conversation</Label>
+				<Textarea id="sourceContinuation" rows={6} bind:value={sourceContinuation} placeholder="author: message, one per line" />
+				{#if form?.errors?.source}
+					<p data-field-error="source" data-feedback-name="source" class="text-sm text-red-600">{form.errors.source[0]}</p>
+				{/if}
+			</fieldset>
 		{/if}
 
 		{#if !isTranslate}

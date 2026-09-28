@@ -108,13 +108,10 @@ describe("reply targets and new comments", () => {
 		expect(findThreadTarget("ao3", ao3, [], null)).toBeNull();
 	});
 
-	it("routes a reply to the target's author and a top-level comment to the owner", () => {
+	it("places a new comment under its target, or at the top level", () => {
 		const target = findThreadTarget("reddit", { previousComments: [{ id: "c9", author: "Commenter", text: "Hi" }] }, [], "c9");
 
-		expect(newCommentMetadata("reddit", "m1", target, reddit)).toEqual({
-			user: { commentId: "reddit-user-m1", targetCommentId: "c9", responderName: "Commenter", mode: "reply" },
-			agent: { commentId: "reddit-agent-m1", parentCommentId: "reddit-user-m1", responderName: "Commenter", mode: "reply" },
-		});
-		expect(newCommentMetadata("ao3", "m2", null, ao3).user).toMatchObject({ targetCommentId: null, responderName: "HikariKitsune02", mode: "work" });
+		expect(newCommentMetadata("reddit", "m1", target)).toEqual({ commentId: "reddit-user-m1", targetCommentId: "c9" });
+		expect(newCommentMetadata("ao3", "m2", null)).toEqual({ commentId: "ao3-user-m2", targetCommentId: null });
 	});
 });

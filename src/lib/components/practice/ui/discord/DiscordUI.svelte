@@ -3,8 +3,8 @@ import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
 import { normalizeText } from "$lib/components/practice/session/message-format";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
-import { resolveCounterpart } from "$lib/practice/counterpart";
 import { createMemberPool, type DiscordMember } from "$lib/practice/discord-members";
+import { resolveScene } from "$lib/practice/scene";
 import ChatHeader from "./ChatHeader.svelte";
 import { hasAgentStartedComposing } from "./helpers";
 import { i18n } from "./i18n";
@@ -18,13 +18,24 @@ let props: PracticeSurfaceProps = $props();
 
 const t = $derived(i18n[props.language] ?? i18n.en);
 const pool = $derived(createMemberPool(props.taskId));
-const session = createPracticeSession(() => props, {
-	agentName: () => resolveCounterpart("discord", props.openingState, props.taskId, props.userName).name,
-});
+const scene = $derived(resolveScene("discord", props.openingState, props.taskId, props.userName));
+const session = createPracticeSession(() => props, { agentName: () => scene.counterpart.name });
 const opening = $derived((props.openingState ?? {}) as { serverName?: string; channelName?: string });
 const serverName = $derived(normalizeText(opening.serverName, `${props.userName}'s Server`));
-const channelName = $derived(normalizeText(opening.channelName, t.general));
+const dm = $derived(!scene.group);
+const channelName = $derived(dm ? scene.counterpart.name : normalizeText(opening.channelName, t.general));
 const agent = $derived<DiscordMember>({ ...pool.agent, name: session.agentName });
+// Everyone who can post is online: the cast, and anyone new who joined the channel.
+const online = $derived(
+	[
+		...new Set([
+			...scene.cast.slice(1).map((person) => person.name),
+			...session.messages.flatMap((message) => (message.role === "agent" ? [message.authorName] : [])),
+		]),
+	]
+		.filter((name) => name !== agent.name)
+		.map((name) => pool.online.find((member) => member.name === name) ?? { name, status: "" }),
+);
 
 // Real Discord typing means the person is composing: the indicator appears only once the worker
 // has claimed the reply batch (read watermark advanced), not the moment the learner sends.
@@ -71,6 +82,7 @@ function mention(member: DiscordMember) {
 	<Sidebar
 		{serverName}
 		{channelName}
+		{dm}
 		userName={props.userName}
 		avatarUrl={props.avatarUrl}
 		returnHref={props.returnHref}
@@ -85,6 +97,7 @@ function mention(member: DiscordMember) {
 		<ChatHeader
 			{session}
 			{channelName}
+			{dm}
 			language={props.language}
 			{showMembers}
 			membersLabel={t.members}
@@ -95,7 +108,6 @@ function mention(member: DiscordMember) {
 			<div class="relative flex min-w-0 flex-1 flex-col">
 				<MessageStream
 					{session}
-					{agent}
 					avatarUrl={props.avatarUrl}
 					language={props.language}
 					{t}
@@ -105,16 +117,16 @@ function mention(member: DiscordMember) {
 					bind:inputText
 					{session}
 					language={props.language}
-					placeholder={t.messagePlaceholder.replace("{channel}", channelName)}
-					members={[agent, ...pool.online, ...pool.offline]}
+					placeholder={t.messagePlaceholder.replace("{channel}", `${dm ? "@" : "#"}${channelName}`)}
+					members={dm ? [agent] : [agent, ...online, ...pool.offline]}
 					{t}
 				/>
 			</div>
 
-			{#if showMembers}
+			{#if showMembers && !dm}
 				<MemberList
 					{agent}
-					online={pool.online}
+					{online}
 					offline={pool.offline}
 					userName={props.userName}
 					avatarUrl={props.avatarUrl}

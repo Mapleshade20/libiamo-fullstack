@@ -1,5 +1,3 @@
-import type { ThreadComment } from "$lib/practice/comment-thread";
-
 export const AVATAR_COLORS = [
 	"bg-[#FF4500]",
 	"bg-[#0079D3]",
@@ -19,20 +17,8 @@ export function getAvatarColor(name: string): string {
 	return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 
-export function formatVotes(n: number): string {
-	if (Math.abs(n) >= 10000) return `${(n / 1000).toFixed(1)}k`;
-	return String(n);
-}
-
 export function seededInt(seed: string, min: number, max: number): number {
 	let h = 5381;
 	for (let i = 0; i < seed.length; i++) h = ((h * 33) ^ seed.charCodeAt(i)) >>> 0;
 	return min + (h % (max - min + 1));
-}
-
-/** Authored votes, or a stable made-up score: learner comments start small, others look lived-in. */
-export function commentVotes(comment: ThreadComment): number {
-	const votes = comment.opening?.votes;
-	if (typeof votes === "number") return votes;
-	return comment.message?.role === "user" ? seededInt(comment.id, 1, 60) : seededInt(comment.id, 10, 800);
 }

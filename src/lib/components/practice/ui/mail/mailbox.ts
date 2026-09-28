@@ -22,7 +22,8 @@ export type MailItem = {
 export function buildMailboxes(input: {
 	opening: MailOpeningState;
 	messages: ChatMessage[];
-	counterpart: MailContact;
+	/** Everyone who writes to the learner, counterpart first. */
+	cast: MailContact[];
 	learnerName: string;
 }): Record<Mailbox, MailItem[]> {
 	const inbox: MailItem[] = (input.opening.emails ?? []).map((email, index) => ({
@@ -52,11 +53,13 @@ export function buildMailboxes(input: {
 				time: message.timestamp,
 			});
 		} else {
+			const from = input.cast.find((person) => person.name === message.authorName) ?? { name: message.authorName, address: "" };
 			inbox.push({
 				id: message.id,
 				mailbox: "inbox",
-				from: input.counterpart,
-				to: input.learnerName,
+				from,
+				// A reply in a group thread goes to everyone on it.
+				to: [input.learnerName, ...input.cast.filter((person) => person !== from).map((person) => person.name)].join(", "),
 				subject: replySubject(lastSubject),
 				body: stripMailHeaders(message.text),
 				time: message.timestamp,

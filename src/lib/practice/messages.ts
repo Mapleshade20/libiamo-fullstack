@@ -20,6 +20,13 @@ export type PersistedPracticeSession = {
 };
 
 /** Opening chat history (iMessage, Discord) authored with the task. */
+/**
+ * The real conversation a task is cut from (`lib/admin/capture.ts`). The opening shows what came
+ * before the cut; `continuation` is how it really went on, the cast's background, never shown to
+ * the learner.
+ */
+export type TaskSource = { continuation: string };
+
 export type ChatOpeningState = {
 	/** The counterpart's authored display name; overrides the opening senders. */
 	counterpartName?: string;
@@ -42,6 +49,8 @@ export type ChatMessage = {
 	clientMessageId?: string;
 	retryText?: string;
 	thread?: CommentThreadMetadata;
+	/** The message a reply quotes, as a scene message ref (see `getCommentId`). */
+	replyTo?: string;
 };
 
 type MessageMetadata = {
@@ -52,6 +61,7 @@ type MessageMetadata = {
 	hidden?: boolean;
 	displayContent?: string;
 	assistantAuthorName?: string;
+	replyTo?: string | null;
 	thread?: CommentThreadMetadata;
 };
 
@@ -113,9 +123,9 @@ function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userM
 	return false;
 }
 
-function placeholderCommentId(userCommentId: string | undefined, clientMessageId: string, persistedMessageId: number): string {
-	if (userCommentId?.includes("-user-")) return userCommentId.replace("-user-", "-agent-");
-	return `thread-agent-${clientMessageId || persistedMessageId}`;
+/** Where a reply placeholder sits on a comment thread: under the learner comment it waits on. */
+export function placeholderThread(thread: CommentThreadMetadata | undefined): CommentThreadMetadata | undefined {
+	return thread?.commentId ? { commentId: thread.commentId.replace("-user-", "-agent-"), parentCommentId: thread.commentId } : undefined;
 }
 
 /**
@@ -149,6 +159,7 @@ export function buildChatMessages({
 			authorName: isUser ? userName : responderName,
 			clientMessageId: metadata.clientMessageId,
 			thread: metadata.thread,
+			...(metadata.replyTo ? { replyTo: metadata.replyTo } : {}),
 		};
 
 		if (!isUser || !metadata.clientMessageId || metadata.noReply === true || hasAssistantReplyInSameTurn(sorted, index)) {
@@ -166,11 +177,7 @@ export function buildChatMessages({
 			error: failed ? metadata.failureError || undefined : undefined,
 			clientMessageId: metadata.clientMessageId,
 			retryText: mapped.text,
-			thread: metadata.thread && {
-				...metadata.thread,
-				commentId: placeholderCommentId(metadata.thread.commentId, metadata.clientMessageId, message.id),
-				parentCommentId: metadata.thread.commentId,
-			},
+			thread: placeholderThread(metadata.thread),
 		};
 		return [mapped, placeholder];
 	});

@@ -9,7 +9,14 @@ import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { completePracticeTransfer, finishPracticeFeedback } from "$lib/server/practice/evaluation";
-import { buildFeedbackConversation, followUpOnFeedback, generateFeedback, getExistingFeedback } from "$lib/server/practice/feedback";
+import {
+	alignAnnotations,
+	buildFeedbackConversation,
+	followUpOnFeedback,
+	generateFeedback,
+	getExistingFeedback,
+} from "$lib/server/practice/feedback";
+import { pickChatTaskFacts } from "$lib/server/practice/prompt-context";
 import { getSessionOrFail } from "$lib/server/practice/session";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/review/notes";
 import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/review/transfer";
@@ -83,7 +90,7 @@ export const load: PageServerLoad = async (event) => {
 						},
 						orderBy: (messages, { asc }) => [asc(messages.createdAt)],
 					},
-					task: { columns: { title: true, language: true, ui: true, openingState: true } },
+					task: { columns: { id: true, title: true, language: true, ui: true, openingState: true } },
 				},
 			})
 		: undefined;
@@ -102,25 +109,11 @@ export const load: PageServerLoad = async (event) => {
 
 	const taskData = session.task;
 
-	const visibleMessages = session.messages.filter((m) => {
-		const metadata = m.llmMetadata as { hidden?: boolean } | null;
-		return !metadata?.hidden;
-	});
-
-	const conversation = buildFeedbackConversation(
-		visibleMessages.map((m) => ({
-			id: m.id,
-			role: m.role,
-			content: m.content,
-			createdAt: m.createdAt,
-			llmMetadata: m.llmMetadata,
-		})),
-		taskData.openingState ?? {},
-		taskData.ui,
-	);
+	const conversation = buildFeedbackConversation({ ...pickChatTaskFacts(taskData, user.name), messages: session.messages, learnerName: user.name });
 
 	// Check if feedback already exists
-	const existingFeedback = await getExistingFeedback(session.id);
+	const saved = await getExistingFeedback(session.id);
+	const existingFeedback = saved && alignAnnotations(saved, conversation, taskData.ui);
 	// Every note collected on this page is what the final card pass drills.
 	const transferNotes = await listTransferNotes(user.id, { type: "practice", sessionId: session.id });
 

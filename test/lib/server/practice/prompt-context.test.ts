@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildChatTranscript, describeLevel, renderScenarioSetting, renderTaskBrief } from "$lib/server/practice/prompt-context";
+import {
+	buildChatTranscript,
+	buildSceneTranscript,
+	describeLevel,
+	renderScenarioSetting,
+	renderTaskBrief,
+} from "$lib/server/practice/prompt-context";
 
 const task = {
 	title: "Weekend plans",
@@ -44,6 +50,8 @@ describe("scenario setting", () => {
 	});
 });
 
+const scene = (name: string, address = "") => ({ counterpart: { name, address }, cast: [{ name, address }], group: false, open: false });
+
 describe("chat transcript", () => {
 	it("puts opening messages before the session and labels roles relative to the learner", () => {
 		const transcript = buildChatTranscript({
@@ -56,21 +64,50 @@ describe("chat transcript", () => {
 				],
 			},
 			learnerName: "Maple",
-			counterpart: { name: "Mario", address: "" },
+			scene: scene("Mario"),
 			messages: [
 				{ id: 1, role: "user", content: "hice uno" },
-				{ id: 2, role: "assistant", content: "¡genial!" },
+				{ id: 2, role: "assistant", content: "¡genial!", llmMetadata: { assistantAuthorName: "Lucía", replyTo: "opening-0" } },
 				{ id: 3, role: "user", content: "oculto", llmMetadata: { hidden: true } },
 				{ id: 4, role: "system", content: "internal" },
 			],
 		});
-		expect(transcript.map(({ role, author, text }) => [role, author, text])).toEqual([
-			["counterpart", "Mario", "hola"],
-			["other", "Lucía", "¿mods nuevos?"],
-			["learner", "Maple", "yo"],
-			["learner", "Maple", "hice uno"],
-			["counterpart", "Mario", "¡genial!"],
+		expect(transcript).toEqual([
+			{ id: 1, opening: true, role: "cast", author: "Mario", text: "hola" },
+			{ id: 2, opening: true, role: "cast", author: "Lucía", text: "¿mods nuevos?" },
+			{ id: 3, opening: true, role: "learner", author: "Maple", text: "yo" },
+			{ id: 4, role: "learner", author: "Maple", text: "hice uno" },
+			{ id: 5, replyTo: 1, role: "cast", author: "Lucía", text: "¡genial!" },
 		]);
+	});
+
+	it("numbers a comment thread and points every reply at its parent, with refs back to the stored ids", () => {
+		const { entries, refs } = buildSceneTranscript({
+			ui: "reddit",
+			openingState: {
+				previousComments: [{ id: "c1", author: "alex", text: "Voice scams.", replies: [{ id: "c2", author: "luma", text: "Family password." }] }],
+			},
+			learnerName: "Maple",
+			scene: scene("op_user"),
+			messages: [
+				{
+					id: 10,
+					role: "user",
+					content: "Same here",
+					llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c2" } },
+				},
+				{ id: 11, role: "assistant", content: "nah", llmMetadata: { assistantAuthorName: "alex", thread: { parentCommentId: "reddit-user-m1" } } },
+				{ id: 12, role: "assistant", content: "new take", llmMetadata: { assistantAuthorName: "zed" } },
+			],
+		});
+		expect(entries.map(({ id, replyTo, author }) => [id, replyTo ?? null, author])).toEqual([
+			[1, null, "alex"],
+			[2, 1, "luma"],
+			[3, 2, "Maple"],
+			[4, 3, "alex"],
+			[5, null, "zed"],
+		]);
+		expect(refs).toEqual(["c1", "c2", "reddit-user-m1", "reddit-agent-11", "reddit-agent-12"]);
 	});
 
 	it("keeps opening email headers", () => {
@@ -78,13 +115,14 @@ describe("chat transcript", () => {
 			ui: "apple_mail",
 			openingState: { emails: [{ from: "M. Durand <durand@x.example>", to: "Vous", subject: "Compteurs", body: "Bonjour", time: "lundi" }] },
 			learnerName: "Maple",
-			counterpart: { name: "M. Durand", address: "durand@x.example" },
+			scene: scene("M. Durand", "durand@x.example"),
 			messages: [],
 		});
 		expect(email).toEqual({
+			id: 1,
 			opening: true,
-			role: "counterpart",
-			author: "M. Durand <durand@x.example>",
+			role: "cast",
+			author: "M. Durand",
 			to: "Vous",
 			subject: "Compteurs",
 			time: "lundi",

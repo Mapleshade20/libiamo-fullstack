@@ -1,16 +1,20 @@
 import { z } from "zod";
-import type { UiVariant } from "$lib/constants";
-import { resolveCounterpart } from "$lib/practice/counterpart";
+import type { TaskSource } from "$lib/practice/messages";
+import { isLiveChat } from "$lib/practice/scene";
 import type { ChatMessage, StructuredOutputErrorDetails } from "$lib/server/llm/client";
 import { defineLlmRecipe } from "$lib/server/llm/recipe";
-import { type LlmRecipeResponse, type LlmSubjects, runLlmRecipe } from "$lib/server/llm/run";
+import { executeLlmRecipe, type LlmRecipeResponse, type LlmSubjects, type LlmVariant, runLlmRecipe } from "$lib/server/llm/run";
 import {
 	AGENT_REPLY_SLOTS,
 	type AgentEvent,
 	type AgentTaskContext,
 	buildAgentMessages,
+	buildAgentTranscript,
 	isThreadedUi,
+	supportsReplyReferences,
 } from "$lib/server/practice/agent-replies/prompt";
+import { pickChatTaskFacts, type TaskFacts } from "$lib/server/practice/prompt-context";
+import { sendsBursts } from "./floor";
 
 /**
  * Models often drop a key whose value is null, or echo a numeric id as a string. Neither is worth
@@ -29,8 +33,9 @@ const replyTargetSchema = z
 	.transform((value) => value ?? null);
 
 const deliverySchema = z.object({
+	author: z.string().trim().max(200).default(""),
+	replyTo: replyTargetSchema,
 	content: z.string().trim().min(1).max(50_000),
-	replyToMessageId: replyTargetSchema,
 });
 
 export const agentResponseDecisionSchema = z
@@ -60,6 +65,15 @@ export const agentResponseDecisionSchema = z
 
 export type AgentResponseDecision = z.infer<typeof agentResponseDecisionSchema>;
 
+/**
+ * A message ready to deliver. `replyTo` is a scene message ref (see `getCommentId`), `@n` for the
+ * n-th delivery of the same turn, or null.
+ */
+export type SceneDelivery = { author: string; replyTo: string | null; content: string };
+
+/** The decision with deliveries resolved against the transcript, plus what had to be coerced. */
+export type SceneTurn = Omit<AgentResponseDecision, "deliveries"> & { deliveries: SceneDelivery[]; warnings: string[] };
+
 export type AgentHistoryMessage = {
 	id: number;
 	role: "user" | "assistant";
@@ -70,7 +84,7 @@ export type AgentHistoryMessage = {
 export type AgentGenerationArtifacts = {
 	requestMessages: ChatMessage[];
 	rawResponse: string;
-	parsedResult: AgentResponseDecision;
+	parsedResult: SceneTurn;
 	providerMetadata: {
 		id?: string;
 		model?: string;
@@ -94,7 +108,7 @@ export type AgentGenerationFailureArtifacts = {
 		usage?: unknown;
 		raw: unknown;
 		validationErrors?: string[];
-		failureStage: "provider" | "parse" | "validation";
+		failureStage: "provider" | "parse";
 		attempts?: Array<{
 			stage: "initial" | "repair";
 			requestMessages: ChatMessage[];
@@ -116,82 +130,120 @@ export class AgentGenerationError extends Error {
 	}
 }
 
+type LiveTask = TaskFacts & { id: number; agentPrompt: string | null; openingState: Record<string, unknown> | null; source?: TaskSource | null };
+
 export type GenerateAgentResponseInput = {
-	/** The live task row; the counterpart is resolved from it for the learner. */
-	task: Omit<AgentTaskContext, "counterpart"> & { id: number };
+	/** The live task row; the scene is resolved from it for the learner. */
+	task: LiveTask;
 	/** The learner's display name, as the interface shows it. */
 	learnerName: string;
 	history: AgentHistoryMessage[];
 	event?: AgentEvent;
+	/** Seeds the floor draw; the worker passes the batch id. */
+	seed?: number;
+	/** A Lab variant (slots, provider, options) to run instead of the recipe as declared. */
+	variant?: LlmVariant;
 	userId?: string;
 	subjects?: LlmSubjects;
 };
 
-export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "task" | "userId" | "subjects"> & { task: AgentTaskContext };
+export type AgentReplyRecipeInput = Omit<GenerateAgentResponseInput, "task" | "userId" | "subjects" | "variant"> & { task: AgentTaskContext };
+
+export function agentTaskContext(task: LiveTask, learnerName: string): AgentTaskContext {
+	return { ...pickChatTaskFacts(task, learnerName), agentPrompt: task.agentPrompt, source: task.source ?? null };
+}
 
 /**
- * Reply-target normalization stays with the caller: its failures must be persisted with the
- * response artifacts, which only the caller holds.
+ * Resolves planned messages against the transcript the model saw: the author becomes a cast member
+ * (always the counterpart one-to-one), and a numeric `replyTo` becomes the ref of that entry or
+ * `@n` for an earlier message of the same turn. Anything unusable is coerced, with a warning.
  */
+function resolveMessages<T extends { author: string; replyTo: number | null }>(
+	items: T[],
+	input: AgentReplyRecipeInput,
+	warnings: string[],
+): Array<Omit<T, "replyTo"> & { replyTo: string | null }> {
+	const { task, learnerName } = input;
+	const { entries, refs } = buildAgentTranscript(input);
+	const nextId = refs.length + 1;
+	const castNames = new Set(task.scene.cast.map((person) => person.name.toLowerCase()));
+	const resolved: Array<{ author: string; replyTo: number | null }> = [];
+	const authorOf = (id: number) => (id < nextId ? entries[id - 1]?.author : resolved[id - nextId]?.author);
+	const parentOf = (id: number) => (id < nextId ? (entries[id - 1]?.replyTo ?? null) : (resolved[id - nextId]?.replyTo ?? null));
+	return items.map((item, index) => {
+		let author = item.author.trim();
+		const key = author.toLowerCase();
+		if (!task.scene.group || !author || key === learnerName.trim().toLowerCase()) {
+			if (author !== task.scene.counterpart.name) warnings.push(`Message ${index} author "${author}" became ${task.scene.counterpart.name}`);
+			author = task.scene.counterpart.name;
+		} else if (!task.scene.open && !castNames.has(key)) {
+			warnings.push(`Message ${index} author "${author}" is not in the cast`);
+		}
+		let target = item.replyTo;
+		// Nobody answers themselves: a reply aimed at one's own message goes to the latest answer
+		// someone else gave it (the conversation it continues), else up to its parent.
+		for (let hops = 0; target !== null && hops < 8 && authorOf(target) === author; hops += 1) {
+			warnings.push(`Message ${index} by ${author} answered their own #${target}`);
+			const own = target;
+			const answers = [
+				...entries.filter((entry) => entry.replyTo === own),
+				...resolved.map((message, at) => ({ ...message, id: nextId + at })).filter((message) => message.replyTo === own),
+			];
+			target = answers.findLast((answer) => answer.author !== author)?.id ?? parentOf(own);
+		}
+		// A chat quote of the message right above says nothing; people quote what scrolled away.
+		if (!isThreadedUi(task.ui) && target === nextId + index - 1) target = null;
+		let replyTo: string | null = null;
+		if (target !== null && supportsReplyReferences(task.ui)) {
+			if (target < nextId) replyTo = refs[target - 1];
+			else if (target < nextId + index) replyTo = `@${target - nextId}`;
+		}
+		if (target !== null && replyTo === null) warnings.push(`Message ${index} replyTo ${target} became null`);
+		resolved.push({ author, replyTo: target });
+		return { ...item, author, replyTo };
+	});
+}
+
+/** A thought sent as up to three messages: one per line or sentence, the rest folded into the last. */
+function splitBurst(text: string): string[] {
+	const parts = text
+		.split(/\n+|(?<=[.!?…])\s+/)
+		.map((part) => part.trim())
+		.filter(Boolean);
+	return parts.length <= 3 ? parts : [...parts.slice(0, 2), parts.slice(2).join(" ")];
+}
+
+export function resolveSceneTurn(decision: AgentResponseDecision, input: AgentReplyRecipeInput): SceneTurn {
+	const warnings: string[] = [];
+	const resolved = resolveMessages(decision.deliveries, input, warnings);
+	// People who send bursts post a thought as several messages; `@n` references follow the first piece.
+	const { entries } = buildAgentTranscript(input);
+	const pieces = resolved.map((delivery) =>
+		sendsBursts(input.task.ui, delivery.author, entries) ? splitBurst(delivery.content) : [delivery.content],
+	);
+	const firstPiece = pieces.map((_, index) => pieces.slice(0, index).reduce((count, piece) => count + piece.length, 0));
+	const remap = (replyTo: string | null) => (replyTo?.startsWith("@") ? `@${firstPiece[Number(replyTo.slice(1))]}` : replyTo);
+	const deliveries = resolved.flatMap((delivery, index) =>
+		pieces[index].map((content, at) => ({ author: delivery.author, replyTo: at ? null : remap(delivery.replyTo), content })),
+	);
+	// A public channel never winds down for good: someone always posts again.
+	const allowIdleFollowUp = decision.allowIdleFollowUp || (input.task.scene.open && isLiveChat(input.task.ui, input.task.scene));
+	return { ...decision, allowIdleFollowUp, deliveries, warnings };
+}
+
 export const agentReplyRecipe = defineLlmRecipe({
 	id: "practice.agent-reply",
-	version: 2,
-	title: "Conversation partner reply",
+	version: 3,
+	title: "Scene reply",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: agentResponseDecisionSchema },
 	slots: AGENT_REPLY_SLOTS,
 	build: (input: AgentReplyRecipeInput, slot) => buildAgentMessages(input, slot),
+	finalize: (decision, input): SceneTurn => resolveSceneTurn(decision, input),
 });
-
-function agentTaskContext(task: GenerateAgentResponseInput["task"], learnerName: string): AgentTaskContext {
-	return {
-		title: task.title,
-		language: task.language,
-		ui: task.ui,
-		shortObjective: task.shortObjective ?? null,
-		description: task.description ?? null,
-		agentPrompt: task.agentPrompt,
-		openingState: task.openingState,
-		counterpart: resolveCounterpart(task.ui, task.openingState, task.id, learnerName),
-	};
-}
-
-/**
- * Idle follow-ups chase the learner's silence, which is only natural in
- * point-to-point messaging. On public comment threads silence is a legitimate
- * terminal state and re-pinging a silent stranger models the exact
- * community-norm violation the simulation teaches learners to avoid, so no
- * follow-up is ever scheduled there regardless of the model's allowIdleFollowUp.
- */
-export function supportsIdleFollowUp(ui: UiVariant): boolean {
-	return !isThreadedUi(ui);
-}
 
 export function buildAgentResponseMessages(input: AgentReplyRecipeInput): ChatMessage[] {
 	return buildAgentMessages(input);
-}
-
-export function normalizeReplyTargets(
-	decision: AgentResponseDecision,
-	ui: UiVariant,
-	history: AgentHistoryMessage[],
-): { decision: AgentResponseDecision; warnings: string[] } {
-	// Threaded replies must point at a learner comment: agent messages are the
-	// model's own output and would nest its reply under itself.
-	const validIds = new Set(history.flatMap((message) => (message.role === "user" ? [message.id] : [])));
-	const warnings: string[] = [];
-	const deliveries = decision.deliveries.map((delivery) => {
-		if (delivery.replyToMessageId === null) return delivery;
-		if (!isThreadedUi(ui)) {
-			warnings.push(`Coerced non-null replyToMessageId ${delivery.replyToMessageId} to null for linear interface ${ui}`);
-			return { ...delivery, replyToMessageId: null };
-		}
-		if (!validIds.has(delivery.replyToMessageId)) {
-			throw new Error(`Invalid replyToMessageId: ${delivery.replyToMessageId}`);
-		}
-		return delivery;
-	});
-	return { decision: { ...decision, deliveries }, warnings };
 }
 
 function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentGenerationFailureArtifacts {
@@ -236,57 +288,25 @@ function providerErrorArtifacts(messages: ChatMessage[], error: unknown): AgentG
 	};
 }
 
-function validationErrorArtifacts(response: LlmRecipeResponse<unknown>, error: unknown): AgentGenerationFailureArtifacts {
-	return {
-		requestMessages: response.requestMessages,
-		rawResponse: response.content,
-		providerMetadata: {
-			id: response.id,
-			model: response.model,
-			finishReason: response.finishReason,
-			usage: response.usage,
-			raw: response.raw,
-			validationErrors: [error instanceof Error ? error.message : String(error)],
-			failureStage: "validation",
-			attempts: [
-				{
-					stage: response.repair ? "repair" : "initial",
-					requestMessages: response.requestMessages,
-					content: response.content,
-					raw: response.raw,
-					errors: [error instanceof Error ? error.message : String(error)],
-					finishReason: response.finishReason,
-				},
-			],
-		},
-	};
-}
-
 export async function generateAgentResponse(input: GenerateAgentResponseInput): Promise<AgentGenerationArtifacts> {
-	const { userId, subjects, ...rest } = input;
+	const { userId, subjects, variant, ...rest } = input;
 	const recipeInput: AgentReplyRecipeInput = { ...rest, task: agentTaskContext(input.task, input.learnerName) };
-	let response: LlmRecipeResponse<AgentResponseDecision>;
+	let response: LlmRecipeResponse<SceneTurn>;
 	try {
-		response = await runLlmRecipe(agentReplyRecipe, recipeInput, { userId, subjects });
+		response = variant
+			? await executeLlmRecipe(agentReplyRecipe, recipeInput, { userId, origin: "lab", variant, capture: false })
+			: await runLlmRecipe(agentReplyRecipe, recipeInput, { userId, subjects });
 	} catch (error) {
 		const messages =
 			(error as { details?: StructuredOutputErrorDetails } | null)?.details?.requestMessages ?? buildAgentResponseMessages(recipeInput);
 		const message = error instanceof Error && error.message ? error.message : "Agent generation failed";
 		throw new AgentGenerationError(message, providerErrorArtifacts(messages, error), { cause: error });
 	}
-	let normalized: ReturnType<typeof normalizeReplyTargets>;
-	try {
-		normalized = normalizeReplyTargets(response.value, input.task.ui, input.history);
-	} catch (error) {
-		const message = error instanceof Error && error.message ? error.message : "Agent response target validation failed";
-		throw new AgentGenerationError(message, validationErrorArtifacts(response, error), { cause: error });
-	}
-	const { decision, warnings } = normalized;
-
+	const { warnings } = response.value;
 	return {
 		requestMessages: response.requestMessages,
 		rawResponse: response.content,
-		parsedResult: decision,
+		parsedResult: response.value,
 		providerMetadata: {
 			id: response.id,
 			model: response.model,

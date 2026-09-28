@@ -209,6 +209,16 @@ const fields = $derived(getEditorFields(ui));
 				/>
 			{/if}
 		</div>
+	{:else if field.type === "checkbox"}
+		<label class="flex min-h-11 items-center gap-2 text-sm">
+			<input
+				type="checkbox"
+				class="size-5 accent-foreground"
+				checked={getFlatField(path) === true}
+				onchange={(e) => setFlatField(path, e.currentTarget.checked || undefined)}
+			>
+			{field.label}
+		</label>
 	{:else if field.type === "textarea"}
 		<div class="space-y-1">
 			<Label>{field.label}</Label>
@@ -325,7 +335,6 @@ const fields = $derived(getEditorFields(ui));
 	{:else if field.type === "comment-list"}
 		{@const authorField = field.authorField ?? "author"}
 		{@const textField = field.textField ?? "text"}
-		{@const withVotes = field.withVotes !== false}
 		<fieldset class="space-y-3">
 			<legend class="text-sm font-medium">{field.label}</legend>
 			{#each getList(field.key) as comment, i (i)}
@@ -342,15 +351,6 @@ const fields = $derived(getEditorFields(ui));
 						placeholder={field.textPlaceholder ?? "Comment text"}
 						oninput={(e) => updateListItem(field.key, i, textField, e.currentTarget.value)}
 					/>
-					{#if withVotes}
-						<Input
-							class="w-20"
-							type="number"
-							value={comment.votes ?? ""}
-							placeholder="Votes"
-							oninput={(e) => updateListItem(field.key, i, "votes", e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
-						/>
-					{/if}
 					<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
 				</div>
 			{/each}
@@ -411,16 +411,6 @@ const fields = $derived(getEditorFields(ui));
 						value={String(comment.timestamp ?? "")}
 						placeholder="2 hr. ago"
 						oninput={(e) => updateTreeCommentField(field.key, path, "timestamp", e.currentTarget.value)}
-					/>
-				</div>
-			{/if}
-			{#if field.withVotes}
-				<div class="space-y-1">
-					<Label class="text-xs">Votes</Label>
-					<Input
-						type="number"
-						value={comment.votes ?? ""}
-						oninput={(e) => updateTreeCommentField(field.key, path, "votes", e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
 					/>
 				</div>
 			{/if}

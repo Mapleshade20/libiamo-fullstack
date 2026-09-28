@@ -1,4 +1,5 @@
 <script lang="ts">
+import AtSign from "@lucide/svelte/icons/at-sign";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Hash from "@lucide/svelte/icons/hash";
 import LogOut from "@lucide/svelte/icons/log-out";
@@ -13,6 +14,7 @@ import type { DiscordText } from "./i18n";
 let {
 	serverName,
 	channelName,
+	dm,
 	userName,
 	avatarUrl,
 	returnHref,
@@ -23,7 +25,9 @@ let {
 	onMockAction,
 }: {
 	serverName: string;
+	/** The channel, or the other person of a direct message. */
 	channelName: string;
+	dm: boolean;
 	userName: string;
 	avatarUrl: string;
 	returnHref: string;
@@ -79,9 +83,13 @@ const serverAcronym = $derived(
 			<ChevronDown size={18} aria-hidden="true" />
 		</button>
 		<div class="flex-1 overflow-y-auto p-2">
-			<p class="mt-4 mb-1 px-2 text-xs font-semibold text-[#949BA4]">{t.textChannels}</p>
+			<p class="mt-4 mb-1 px-2 text-xs font-semibold text-[#949BA4]">{dm ? t.directMessages : t.textChannels}</p>
 			<div class="flex w-full items-center gap-1.5 rounded bg-[#404249] px-2 py-1.5 text-[#DBDEE1]" aria-current="page">
-				<Hash size={18} class="text-[#80848E]" aria-hidden="true" />
+				{#if dm}
+					<AtSign size={18} class="text-[#80848E]" aria-hidden="true" />
+				{:else}
+					<Hash size={18} class="text-[#80848E]" aria-hidden="true" />
+				{/if}
 				<span class="text-sm">{channelName}</span>
 			</div>
 		</div>

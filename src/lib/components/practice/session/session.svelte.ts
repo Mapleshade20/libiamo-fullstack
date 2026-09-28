@@ -13,6 +13,7 @@ import {
 	type ChatOpeningState,
 	type PersistedPracticeSession,
 	parsePersistedMessageDate,
+	placeholderThread,
 } from "$lib/practice/messages";
 import { getDeliveryDelayMs } from "$lib/practice/reply-timing";
 import { getDisplayClock } from "$lib/time/display-clock";
@@ -39,8 +40,8 @@ export type PracticeSession = ReturnType<typeof createPracticeSession>;
 export type SendOptions = {
 	/** Extra form fields for the send action (e.g. the reply target). */
 	fields?: Record<string, string>;
-	/** Thread placement of the learner comment and of its reply, once the client id is known. */
-	thread?: (clientMessageId: string) => { user: CommentThreadMetadata; agent: CommentThreadMetadata };
+	/** Thread placement of the learner comment, once the client id is known. */
+	thread?: (clientMessageId: string) => CommentThreadMetadata;
 };
 
 export const SESSION_POLL_INTERVAL_MS = 3_000;
@@ -54,7 +55,7 @@ function toTime(value: string | Date | null | undefined): number | null {
 /**
  * The session lifecycle every practice surface shares: start, send, retry, paced delivery,
  * polling for agent work, and finishing. It knows nothing about names, colours or layout; the
- * surface supplies the counterpart's name (see `lib/practice/counterpart.ts`) and renders the state.
+ * surface supplies the counterpart's name (see `lib/practice/scene.ts`) and renders the state.
  *
  * Server state is derived from props, so SSR and hydration render the same conversation. Local
  * state only overlays it: optimistic sends until the server snapshot contains them, failed
@@ -171,17 +172,17 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 				timestamp: formatTimestamp(new Date()),
 				authorName: props.userName,
 				clientMessageId,
-				thread: thread?.user,
+				thread,
 			},
 		];
 		submitting = true;
 		try {
 			const result = await sendMessage(sessionId, body, clientMessageId, sendOptions.fields);
 			const accepted = await settle(result, {
-				authorName: thread?.agent.responderName ?? agentName,
+				authorName: agentName,
 				clientMessageId,
 				retryText: body,
-				thread: thread?.agent,
+				thread: placeholderThread(thread),
 			});
 			if (!accepted) optimistic = optimistic.filter((message) => message.clientMessageId !== clientMessageId);
 			return accepted;
@@ -264,7 +265,12 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 		}
 	});
 
+	// Bumped when a wake-up fires: work that fell due is usually still composing then, with the same
+	// due time, so the plan must be re-read at the new "now" or polling would stop there.
+	let wakes = $state(0);
+
 	$effect(() => {
+		void wakes;
 		if (sessionId === null || isCompleted) return;
 		const plan = planAgentWorkPolling({
 			hasPendingPlaceholder: replyPending,
@@ -278,7 +284,10 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 			return () => clearInterval(interval);
 		}
 		// Far-future work (e.g. an idle follow-up): one wake-up instead of polling the whole window.
-		const timer = setTimeout(() => void refresh(), plan.delayMs);
+		const timer = setTimeout(() => {
+			wakes += 1;
+			void refresh();
+		}, plan.delayMs);
 		return () => clearTimeout(timer);
 	});
 
@@ -314,6 +323,10 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 		},
 		get agentName() {
 			return agentName;
+		},
+		/** Who the typing indicator names: the author of the next paced reply, else the counterpart. */
+		get typingName() {
+			return unrevealed[1]?.authorName ?? agentName;
 		},
 		get agentReadUpToMessageId() {
 			return props.session?.agentReadUpToMessageId ?? null;

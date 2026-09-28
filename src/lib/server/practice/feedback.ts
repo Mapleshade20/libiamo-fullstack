@@ -21,7 +21,16 @@ import { practiceSession } from "../db/schema";
 import type { ChatMessage } from "../llm/client";
 import { buildRecipeMessages, createSlotRenderer, defineLlmRecipe, type SlotRenderer } from "../llm/recipe";
 import { runLlmRecipe } from "../llm/run";
-import { type ChatTaskFacts, pickChatTaskFacts, pickTaskFacts, renderScenarioSetting, renderTaskBrief, type TaskFacts } from "./prompt-context";
+import {
+	type BuildChatTranscriptInput,
+	buildChatTranscript,
+	type ChatTaskFacts,
+	pickChatTaskFacts,
+	pickTaskFacts,
+	renderScenarioSetting,
+	renderTaskBrief,
+	type TaskFacts,
+} from "./prompt-context";
 import { sessionMessageChronologicalOrder } from "./session";
 
 // ── XML extraction helpers ───────────────────────────────────────────
@@ -175,336 +184,58 @@ export function isFeedbackResultValid(result: FeedbackResult): boolean {
 	return result.annotations.length > 0 && result.summary.length > 0;
 }
 
-// ── Message metadata helpers ─────────────────────────────────────────
+// ── Conversation for the feedback page and the annotation prompt ──
 
-type SessionMessageRow = {
-	id: number;
-	role: string;
-	content: string;
-	createdAt: string | Date;
-	llmMetadata: unknown;
-};
+/**
+ * The visible conversation, numbered as the transcript numbers it. Comment threads split into
+ * top-level-to-leaf chains, so every learner comment is read with what it answers.
+ */
+export function buildFeedbackConversation(input: BuildChatTranscriptInput): FeedbackConversation {
+	const entries = buildChatTranscript(input);
+	const allMessages = entries.map(
+		(entry): FeedbackMessage => ({
+			seqId: entry.id,
+			role: entry.role === "learner" ? "user" : entry.opening ? "context" : "agent",
+			author: entry.author,
+			text: entry.subject ? `[${entry.subject}] ${entry.text}` : entry.text,
+			chainIndex: 0,
+		}),
+	);
+	if (input.ui !== "reddit" && input.ui !== "ao3") return { chains: [{ label: "Conversation", messages: allMessages }], allMessages };
 
-type MessageMetadata = {
-	clientMessageId?: string;
-	hidden?: boolean;
-	displayContent?: string;
-	thread?: {
-		commentId?: string;
-		targetCommentId?: string | null;
-		parentCommentId?: string | null;
-		responderName?: string;
+	const children = new Map<number, FeedbackMessage[]>();
+	for (const [index, entry] of entries.entries()) {
+		const parent = entry.replyTo ?? 0;
+		children.set(parent, [...(children.get(parent) ?? []), allMessages[index]]);
+	}
+	const chains: FeedbackChain[] = [];
+	const walk = (message: FeedbackMessage, path: FeedbackMessage[]) => {
+		const next = [...path, message];
+		const replies = children.get(message.seqId) ?? [];
+		if (!replies.length)
+			chains.push({ label: `Thread ${chains.length + 1}`, messages: next.map((item) => ({ ...item, chainIndex: chains.length })) });
+		for (const reply of replies) walk(reply, next);
 	};
-};
-
-function getMetadata(value: unknown): MessageMetadata {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-	return value as MessageMetadata;
-}
-
-function isHidden(msg: SessionMessageRow): boolean {
-	return getMetadata(msg.llmMetadata).hidden === true;
-}
-
-function getDisplayContent(msg: SessionMessageRow): string {
-	return getMetadata(msg.llmMetadata).displayContent ?? msg.content;
-}
-
-// ── Tree flattening for Reddit/AO3 ──────────────────────────────────
-
-type TreeNode = {
-	id: string;
-	role: "user" | "agent" | "context";
-	author: string;
-	text: string;
-	parentId: string | null;
-	children: TreeNode[];
-};
-
-function buildMessageTree(messages: SessionMessageRow[], openingState: Record<string, unknown>, ui: UiVariant): TreeNode[] {
-	const nodes: TreeNode[] = [];
-	const nodeMap = new Map<string, TreeNode>();
-
-	// Add opening state context as root nodes
-	if (ui === "reddit") {
-		const post = openingState.post as { title?: string; body?: string; author?: string } | undefined;
-		if (post) {
-			const postNode: TreeNode = {
-				id: "post-root",
-				role: "context",
-				author: post.author ?? "OP",
-				text: `[Post] ${post.title ?? ""}${post.body ? `: ${post.body}` : ""}`,
-				parentId: null,
-				children: [],
-			};
-			nodes.push(postNode);
-			nodeMap.set(postNode.id, postNode);
-		}
-
-		// Add opening comments
-		const comments = openingState.previousComments as Array<{ id?: string; author?: string; text?: string; replies?: unknown }> | undefined;
-		if (comments) {
-			addOpeningComments(comments, "post-root", nodes, nodeMap);
-		}
-	} else if (ui === "ao3") {
-		const workTitle = openingState.workTitle as string | undefined;
-		const rootNode: TreeNode = {
-			id: "work-root",
-			role: "context",
-			author: (openingState.authorName as string) ?? "Author",
-			text: `[Work] ${workTitle ?? "Untitled"}`,
-			parentId: null,
-			children: [],
-		};
-		nodes.push(rootNode);
-		nodeMap.set(rootNode.id, rootNode);
-
-		const comments = openingState.previousComments as Array<{ id?: string; username?: string; comment?: string; replies?: unknown }> | undefined;
-		if (comments) {
-			addAo3OpeningComments(comments, "work-root", nodes, nodeMap);
-		}
-	}
-
-	// Add session messages to the tree
-	for (const msg of messages) {
-		if (isHidden(msg)) continue;
-		const metadata = getMetadata(msg.llmMetadata);
-		const thread = metadata.thread;
-		const commentId = thread?.commentId ?? `msg-${msg.id}`;
-		const parentId = msg.role === "user" ? (thread?.targetCommentId ?? null) : (thread?.parentCommentId ?? null);
-
-		const node: TreeNode = {
-			id: commentId,
-			role: msg.role === "user" ? "user" : "agent",
-			author: msg.role === "user" ? "You" : (thread?.responderName ?? "Agent"),
-			text: getDisplayContent(msg),
-			parentId,
-			children: [],
-		};
-
-		nodeMap.set(commentId, node);
-
-		if (parentId && nodeMap.has(parentId)) {
-			nodeMap.get(parentId)?.children.push(node);
-		} else {
-			nodes.push(node);
-		}
-	}
-
-	return nodes;
-}
-
-function addOpeningComments(
-	comments: Array<{ id?: string; author?: string; text?: string; replies?: unknown }>,
-	parentId: string,
-	nodes: TreeNode[],
-	nodeMap: Map<string, TreeNode>,
-	path: number[] = [],
-) {
-	for (const [i, comment] of comments.entries()) {
-		const currentPath = [...path, i];
-		const id = comment.id ?? `opening-${currentPath.join("-")}`;
-		const node: TreeNode = {
-			id,
-			role: "context",
-			author: comment.author ?? "Anonymous",
-			text: comment.text ?? "",
-			parentId,
-			children: [],
-		};
-		nodeMap.set(id, node);
-
-		if (nodeMap.has(parentId)) {
-			nodeMap.get(parentId)?.children.push(node);
-		} else {
-			nodes.push(node);
-		}
-
-		const replies = Array.isArray(comment.replies) ? (comment.replies as typeof comments) : [];
-		if (replies.length) {
-			addOpeningComments(replies, id, nodes, nodeMap, currentPath);
-		}
-	}
-}
-
-function addAo3OpeningComments(
-	comments: Array<{ id?: string; username?: string; comment?: string; replies?: unknown }>,
-	parentId: string,
-	nodes: TreeNode[],
-	nodeMap: Map<string, TreeNode>,
-	path: number[] = [],
-) {
-	for (const [i, comment] of comments.entries()) {
-		const currentPath = [...path, i];
-		const id = comment.id ?? `opening-${currentPath.join("-")}`;
-		const node: TreeNode = {
-			id,
-			role: "context",
-			author: comment.username ?? "Anonymous",
-			text: comment.comment ?? "",
-			parentId,
-			children: [],
-		};
-		nodeMap.set(id, node);
-
-		if (nodeMap.has(parentId)) {
-			nodeMap.get(parentId)?.children.push(node);
-		} else {
-			nodes.push(node);
-		}
-
-		const replies = Array.isArray(comment.replies) ? (comment.replies as typeof comments) : [];
-		if (replies.length) {
-			addAo3OpeningComments(replies, id, nodes, nodeMap, currentPath);
-		}
-	}
+	for (const top of children.get(0) ?? []) walk(top, []);
+	return { chains, allMessages };
 }
 
 /**
- * Flatten a tree into linear chains.
- * Each chain is a path from a root/branch point to a leaf.
- * User messages appear only once (in their first chain occurrence).
+ * Feedback saved before `numbering` numbered comment threads differently: the post first, branch
+ * points repeated, and learner messages with the same text under one number. Its annotations are
+ * matched to learner messages by text instead; one that matches none is left out rather than shown
+ * on another message.
  */
-function flattenTreeToChains(roots: TreeNode[]): FeedbackChain[] {
-	const chains: FeedbackChain[] = [];
-	const visitedUserMessages = new Set<string>();
-	let seqCounter = 0;
-
-	function traceChain(node: TreeNode, ancestorPath: TreeNode[]): void {
-		const currentPath = [...ancestorPath, node];
-
-		if (node.children.length === 0) {
-			// Leaf node — emit this chain
-			const messages: FeedbackMessage[] = currentPath.map((n) => {
-				seqCounter++;
-				if (n.role === "user") visitedUserMessages.add(n.id);
-				return {
-					seqId: seqCounter,
-					role: n.role,
-					author: n.author,
-					text: n.text,
-					chainIndex: chains.length,
-				};
-			});
-			chains.push({
-				label: `Thread ${chains.length + 1}`,
-				messages,
-			});
-		} else if (node.children.length === 1) {
-			// Single child — continue the chain
-			traceChain(node.children[0], currentPath);
-		} else {
-			// Branch point — each child starts a new chain from here
-			for (const child of node.children) {
-				traceChain(child, currentPath);
-			}
-		}
-	}
-
-	for (const root of roots) {
-		traceChain(root, []);
-	}
-
-	return chains;
-}
-
-// ── Linear conversation builder (non-tree UIs) ──────────────────────
-
-function buildLinearConversation(messages: SessionMessageRow[], openingState: Record<string, unknown>, ui: UiVariant): FeedbackConversation {
-	const feedbackMessages: FeedbackMessage[] = [];
-	let seqCounter = 0;
-
-	// Add opening context for non-tree UIs
-	if (ui === "discord") {
-		const prevMsgs = (openingState.previousMessages as Array<{ sender?: string; text?: string }>) ?? [];
-		for (const msg of prevMsgs) {
-			seqCounter++;
-			feedbackMessages.push({
-				seqId: seqCounter,
-				role: "context",
-				author: msg.sender ?? "Unknown",
-				text: msg.text ?? "",
-				chainIndex: 0,
-			});
-		}
-	} else if (ui === "imessage") {
-		const prevMsgs = (openingState.previousMessages as Array<{ sender?: string; text?: string }>) ?? [];
-		for (const msg of prevMsgs) {
-			seqCounter++;
-			feedbackMessages.push({
-				seqId: seqCounter,
-				role: "context",
-				author: msg.sender ?? "Unknown",
-				text: msg.text ?? "",
-				chainIndex: 0,
-			});
-		}
-	} else if (ui === "apple_mail") {
-		const emails = (openingState.emails as Array<{ from?: string; body?: string; subject?: string }>) ?? [];
-		for (const email of emails) {
-			seqCounter++;
-			feedbackMessages.push({
-				seqId: seqCounter,
-				role: "context",
-				author: email.from ?? "Unknown",
-				text: email.subject ? `[${email.subject}] ${email.body ?? ""}` : (email.body ?? ""),
-				chainIndex: 0,
-			});
-		}
-	}
-
-	// Add session messages
-	for (const msg of messages) {
-		if (isHidden(msg)) continue;
-		seqCounter++;
-		feedbackMessages.push({
-			seqId: seqCounter,
-			role: msg.role === "user" ? "user" : "agent",
-			author: msg.role === "user" ? "You" : "Agent",
-			text: getDisplayContent(msg),
-			chainIndex: 0,
-		});
-	}
-
-	return {
-		chains: [{ label: "Conversation", messages: feedbackMessages }],
-		allMessages: feedbackMessages,
-	};
-}
-
-// ── Build conversation for feedback ──────────────────────────────────
-
-export function buildFeedbackConversation(messages: SessionMessageRow[], openingState: Record<string, unknown>, ui: UiVariant): FeedbackConversation {
-	const isTreeUi = ui === "reddit" || ui === "ao3";
-
-	if (isTreeUi) {
-		const tree = buildMessageTree(messages, openingState, ui);
-		const chains = flattenTreeToChains(tree);
-
-		// Rebuild with consistent sequential IDs
-		let seqCounter = 0;
-		const allMessages: FeedbackMessage[] = [];
-		const seenUserTexts = new Set<string>();
-
-		for (const chain of chains) {
-			for (const msg of chain.messages) {
-				// Deduplicate user messages that appear in multiple chains
-				const key = `${msg.role}:${msg.text}`;
-				if (msg.role === "user" && seenUserTexts.has(key)) {
-					// Keep the message in the chain for display but mark with existing seqId
-					continue;
-				}
-				if (msg.role === "user") seenUserTexts.add(key);
-				seqCounter++;
-				msg.seqId = seqCounter;
-				allMessages.push(msg);
-			}
-		}
-
-		return { chains, allMessages };
-	}
-
-	return buildLinearConversation(messages, openingState, ui);
+export function alignAnnotations(feedback: FeedbackResult, conversation: FeedbackConversation, ui: UiVariant): FeedbackResult {
+	if (feedback.numbering || (ui !== "reddit" && ui !== "ao3")) return feedback;
+	const plain = (text: string) => stripAllTags(text).replace(/\s+/g, " ").trim();
+	const learner = conversation.allMessages.filter((message) => message.role === "user");
+	const annotations = feedback.annotations.flatMap((annotation) =>
+		learner
+			.filter((message) => plain(message.text) === plain(annotation.annotatedText))
+			.map((message) => ({ ...annotation, messageId: message.seqId })),
+	);
+	return { ...feedback, annotations };
 }
 
 // ── Prompt building ──────────────────────────────────────────────────
@@ -515,7 +246,7 @@ export type AnnotationPromptInput = {
 	feedbackLanguage: string;
 };
 
-const ANNOTATION_SYSTEM_TEMPLATE = `You are an expert {{learningLanguage}} tutor reviewing a learner's finished practice conversation in Libiamo, an app where learners practise real-life communication through simulated conversations. The learner wrote as themselves; PARTNER lines were written by the simulated person they talked to, and CONTEXT lines were already in the scenario when it opened.
+const ANNOTATION_SYSTEM_TEMPLATE = `You are an expert {{learningLanguage}} tutor reviewing a learner's finished practice conversation in Libiamo, an app where learners practise real-life communication through simulated conversations. The learner wrote as themselves; PARTNER lines were written by the simulated people they talked to, and CONTEXT lines were already in the scenario when it opened.
 
 ## TASK
 {{task}}
@@ -570,18 +301,16 @@ function annotationSystemPrompt(input: Omit<AnnotationPromptInput, "conversation
 		learningLanguage,
 		feedbackLanguage,
 		task: renderTaskBrief(input.task, { objectives: true }),
-		setting: renderScenarioSetting(input.task.ui, input.task.openingState, input.task.counterpart),
+		setting: renderScenarioSetting(input.task.ui, input.task.openingState, input.task.scene),
 		objectivesInstruction,
 	});
 }
 
 /** The conversation under review, one line per message, followed by the learner ids to annotate. */
-export function buildAnnotationUserMessage(conversation: FeedbackConversation, counterpartName: string | null): string {
+export function buildAnnotationUserMessage(conversation: FeedbackConversation): string {
 	const lines = conversation.allMessages.map((msg) => {
 		const roleLabel = msg.role === "user" ? "LEARNER" : msg.role === "agent" ? "PARTNER" : "CONTEXT";
-		// The feedback view labels the partner generically; the prompt uses the name the learner saw.
-		const author = msg.role === "agent" && msg.author === "Agent" && counterpartName ? counterpartName : msg.author;
-		return `[${msg.seqId}] [${roleLabel}] ${author}: ${msg.text}`;
+		return `[${msg.seqId}] [${roleLabel}] ${msg.author}: ${msg.text}`;
 	});
 	const learnerIds = conversation.allMessages.filter((msg) => msg.role === "user").map((msg) => msg.seqId);
 	return `${lines.join("\n")}\n\nLEARNER message ids: ${learnerIds.join(", ")}`;
@@ -602,10 +331,10 @@ export const feedbackAnnotationRecipe = defineLlmRecipe({
 	},
 	build: (input: AnnotationPromptInput, slot) => [
 		{ role: "system", content: annotationSystemPrompt(input, slot) },
-		{ role: "user", content: buildAnnotationUserMessage(input.conversation, input.task.counterpart.name) },
+		{ role: "user", content: buildAnnotationUserMessage(input.conversation) },
 	],
 	finalize: (value, input): FeedbackResult => {
-		const result = { ...value, feedbackLanguage: input.feedbackLanguage };
+		const result = { ...value, feedbackLanguage: input.feedbackLanguage, numbering: "transcript" as const };
 		if (!isFeedbackResultValid(result)) throw new Error("LLM returned invalid feedback format");
 		return result;
 	},
@@ -641,18 +370,12 @@ export async function generateFeedback(input: { sessionId: number; feedbackLangu
 	}
 	if (session.status !== "completed") throw new Error("Session is not ready for feedback");
 
-	const { ui } = session.task;
-	const openingState = session.task.openingState ?? {};
-
-	const visibleMessages = session.messages.filter((m) => !isHidden(m));
-	const conversation = buildFeedbackConversation(visibleMessages, openingState, ui);
+	const learnerName = session.user?.name || "Learner";
+	const task = pickChatTaskFacts(session.task, learnerName);
+	const conversation = buildFeedbackConversation({ ...task, messages: session.messages, learnerName });
 	const { value: result } = await runLlmRecipe(
 		feedbackAnnotationRecipe,
-		{
-			conversation,
-			task: pickChatTaskFacts({ ...session.task, openingState }, session.user?.name || "Learner"),
-			feedbackLanguage: input.feedbackLanguage,
-		},
+		{ conversation, task, feedbackLanguage: input.feedbackLanguage },
 		{ userId: session.userId, subjects: { taskId: session.task.id, sessionId: session.id } },
 	);
 

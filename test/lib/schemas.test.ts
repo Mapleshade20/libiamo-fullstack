@@ -212,10 +212,8 @@ describe("schemas", () => {
 
 	it("redditOpeningStateSchema validates correctly with nested comments", () => {
 		const result = redditOpeningStateSchema.parse({
-			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1", votes: 42 },
-			previousComments: [
-				{ id: "c1", author: "commenter", text: "Nice post", timestamp: "2 hr. ago", votes: 5, replies: [{ author: "op", text: "Thanks!" }] },
-			],
+			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1" },
+			previousComments: [{ id: "c1", author: "commenter", text: "Nice post", timestamp: "2 hr. ago", replies: [{ author: "op", text: "Thanks!" }] }],
 		});
 		expect(result.post.subreddit).toBe("r/test");
 		expect(result.previousComments?.[0].author).toBe("commenter");
@@ -324,9 +322,9 @@ describe("schemas", () => {
 
 	it("getEditorFields returns fields for each UI variant", () => {
 		const keys = (ui: "imessage" | "discord" | "apple_mail") => getEditorFields(ui).map((field) => ("key" in field ? field.key : field.type));
-		expect(keys("imessage")).toEqual(["counterpartName", "previousMessages"]);
-		expect(keys("discord")).toEqual(["row", "counterpartName", "previousMessages"]);
-		expect(keys("apple_mail")).toEqual(["counterpartName", "emails"]);
+		expect(keys("imessage")).toEqual(["counterpartName", "row", "previousMessages"]);
+		expect(keys("discord")).toEqual(["row", "counterpartName", "dm", "previousMessages"]);
+		expect(keys("apple_mail")).toEqual(["counterpartName", "members", "emails"]);
 
 		expect(getEditorFields("reddit")).toHaveLength(2);
 		expect(getEditorFields("reddit")[0].type).toBe("group");

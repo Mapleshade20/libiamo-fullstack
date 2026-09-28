@@ -7,7 +7,14 @@ import { t as translate } from "$lib/i18n";
 import type { IMessageText } from "./i18n";
 import { getRenderableMessages } from "./presentation";
 
-let { session, returnHref, language, t }: { session: PracticeSession; returnHref: string; language: LanguageCode; t: IMessageText } = $props();
+let {
+	session,
+	title,
+	returnHref,
+	language,
+	t,
+}: { session: PracticeSession /** The contact or group name. */; title: string; returnHref: string; language: LanguageCode; t: IMessageText } =
+	$props();
 
 const preview = $derived(normalizeText(getRenderableMessages(session.messages).at(-1)?.text, t.startConversation));
 </script>
@@ -32,10 +39,10 @@ const preview = $derived(normalizeText(getRenderableMessages(session.messages).a
 	<div class="px-2 py-2">
 		<div class="flex w-full items-center gap-3 rounded-xl bg-[#0A84FF] px-3 py-2.5 text-white shadow-sm" aria-current="true">
 			<div class="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-sm font-semibold text-[#1C1C1E]" aria-hidden="true">
-				{session.agentName.charAt(0).toUpperCase()}
+				{title.charAt(0).toUpperCase()}
 			</div>
 			<div class="min-w-0 flex-1">
-				<p class="truncate text-sm font-semibold">{session.agentName}</p>
+				<p class="truncate text-sm font-semibold">{title}</p>
 				<p class="truncate text-[11px] text-white/80">{preview}</p>
 			</div>
 			<p class="text-[10px] text-white/80">{t.now}</p>

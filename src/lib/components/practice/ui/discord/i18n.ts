@@ -3,6 +3,7 @@ import type { LanguageCode } from "$lib/constants";
 /** Discord's own vocabulary; lifecycle copy comes from `practice.*` in `$lib/i18n`. */
 export type DiscordText = {
 	textChannels: string;
+	directMessages: string;
 	general: string;
 	online: string;
 	offline: string;
@@ -21,6 +22,7 @@ export type DiscordText = {
 export const i18n: Record<LanguageCode, DiscordText> = {
 	en: {
 		textChannels: "TEXT CHANNELS",
+		directMessages: "DIRECT MESSAGES",
 		general: "general",
 		online: "Online",
 		offline: "Offline",
@@ -31,12 +33,13 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		mute: "Mute",
 		settings: "User Settings",
 		emoji: "Select emoji",
-		messagePlaceholder: "Message #{channel}",
+		messagePlaceholder: "Message {channel}",
 		mention: "Mention @{name}",
 		typing: "{name} is typing…",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
+		directMessages: "MENSAJES DIRECTOS",
 		general: "general",
 		online: "En línea",
 		offline: "Desconectado",
@@ -47,12 +50,13 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		mute: "Silenciar",
 		settings: "Ajustes de usuario",
 		emoji: "Elegir emoji",
-		messagePlaceholder: "Enviar mensaje a #{channel}",
+		messagePlaceholder: "Enviar mensaje a {channel}",
 		mention: "Mencionar a @{name}",
 		typing: "{name} está escribiendo…",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
+		directMessages: "MESSAGES PRIVÉS",
 		general: "général",
 		online: "En ligne",
 		offline: "Hors ligne",
@@ -63,12 +67,13 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		mute: "Rendre muet",
 		settings: "Paramètres utilisateur",
 		emoji: "Choisir un emoji",
-		messagePlaceholder: "Envoyer un message dans #{channel}",
+		messagePlaceholder: "Envoyer un message à {channel}",
 		mention: "Mentionner @{name}",
 		typing: "{name} est en train d’écrire…",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
+		directMessages: "ダイレクトメッセージ",
 		general: "一般",
 		online: "オンライン",
 		offline: "オフライン",
@@ -79,7 +84,7 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		mute: "ミュート",
 		settings: "ユーザー設定",
 		emoji: "絵文字を選択",
-		messagePlaceholder: "#{channel} へメッセージを送信",
+		messagePlaceholder: "{channel} へメッセージを送信",
 		mention: "@{name} にメンション",
 		typing: "{name}が入力中…",
 	},

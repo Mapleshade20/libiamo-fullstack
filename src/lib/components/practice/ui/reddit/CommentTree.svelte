@@ -12,7 +12,7 @@ import { t as translate } from "$lib/i18n";
 import type { ThreadComment } from "$lib/practice/comment-thread";
 import CommentEditor from "./CommentEditor.svelte";
 import CommentTree from "./CommentTree.svelte";
-import { commentVotes, formatVotes, getAvatarColor } from "./format";
+import { getAvatarColor } from "./format";
 import type { RedditText } from "./i18n";
 
 // Reddit's thread line colours cycle with depth.
@@ -53,8 +53,6 @@ const isCollapsed = $derived(collapsed.has(comment.id));
 const path = $derived([...ancestors, { author: comment.author, text: comment.text }]);
 const failed = $derived(comment.message?.deliveryState === "failed");
 const isLearner = $derived(comment.message?.role === "user");
-const baseVotes = $derived(commentVotes(comment));
-const displayVotes = $derived(baseVotes + (vote === "up" ? 1 : vote === "down" ? -1 : 0));
 </script>
 
 <div class="comment-node">
@@ -73,7 +71,6 @@ const displayVotes = $derived(baseVotes + (vote === "up" ? 1 : vote === "down" ?
 			<span class="font-bold text-[#0079D3]">{comment.author}</span>
 			<span class="text-[#878A8C]" aria-hidden="true">•</span>
 			<span class="text-[#878A8C]">{comment.timestamp || translate(language, "practice.earlier")}</span>
-			<span class="font-bold text-[#878A8C]">{formatVotes(baseVotes)} {t.points}</span>
 			<button
 				type="button"
 				class="min-h-8 rounded px-1 text-[#878A8C] transition-colors hover:bg-[#F6F7F8] hover:text-[#FF4500]"
@@ -125,9 +122,6 @@ const displayVotes = $derived(baseVotes + (vote === "up" ? 1 : vote === "down" ?
 					>
 						<ArrowBigUp size={15} fill={vote === "up" ? "currentColor" : "none"} aria-hidden="true" />
 					</button>
-					<span class="min-w-[2ch] px-0.5 text-center {vote === 'up' ? 'text-[#FF4500]' : vote === 'down' ? 'text-[#7193FF]' : 'text-[#1C1C1C]'}">
-						{formatVotes(displayVotes)}
-					</span>
 					<button
 						type="button"
 						class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#F6F7F8] {vote === 'down' ? 'text-[#7193FF]' : ''}"

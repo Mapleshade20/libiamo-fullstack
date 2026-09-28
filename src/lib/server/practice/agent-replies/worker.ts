@@ -1,17 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, inArray, lte, ne, type SQL } from "drizzle-orm";
-import { URGENCY_PRESETS, type Urgency } from "$lib/constants";
+import { type UiVariant, URGENCY_PRESETS, type Urgency } from "$lib/constants";
+import { getCommentId } from "$lib/practice/comment-thread";
 import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS } from "$lib/practice/reply-timing";
+import { isLiveChat, resolveScene } from "$lib/practice/scene";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
-import {
-	type AgentGenerationArtifacts,
-	AgentGenerationError,
-	generateAgentResponse,
-	supportsIdleFollowUp,
-} from "$lib/server/practice/agent-replies/generator";
-import type { AgentEvent } from "$lib/server/practice/agent-replies/prompt";
+import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/practice/agent-replies/generator";
+import { type AgentEvent, isThreadedUi } from "$lib/server/practice/agent-replies/prompt";
 
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
@@ -76,44 +73,27 @@ function safeError(error: unknown): string {
 }
 
 /**
- * Comment-thread metadata stored on a user message at send time
- * (`{ commentId, responderName, ... }` for AO3/Reddit turns).
+ * Metadata of a delivered cast message: its author, and what it answers. Comment threads nest it
+ * under its parent (null is a top-level comment); Discord shows the quoted message.
  */
-export function getThreadMetadataFromMessage(llmMetadata: unknown): { commentId?: string; responderName?: string } | null {
-	if (!llmMetadata || typeof llmMetadata !== "object") return null;
-	const thread = (llmMetadata as { thread?: unknown }).thread;
-	if (!thread || typeof thread !== "object") return null;
-	const commentId = (thread as { commentId?: unknown }).commentId;
-	const responderName = (thread as { responderName?: unknown }).responderName;
-	const commentIdStr = typeof commentId === "string" && commentId.trim() ? commentId.trim() : undefined;
-	const responderStr = typeof responderName === "string" && responderName.trim() ? responderName.trim() : undefined;
-	return commentIdStr || responderStr ? { commentId: commentIdStr, responderName: responderStr } : null;
-}
-
-/**
- * Presentation metadata for a delivered reply on threaded surfaces (AO3/Reddit):
- * the reply must nest under the comment it answers and carry the responder's
- * name, exactly like the synchronous path (`buildAo3SendOptions`). Linear
- * surfaces (iMessage/Discord/Mail) store no thread metadata and stay unchanged.
- */
-export function buildDeliveredReplyMetadata(
-	thread: { commentId?: string; responderName?: string } | null,
-	replyToMessageId: number | null,
-): Record<string, unknown> {
+export function buildDeliveredReplyMetadata(ui: UiVariant, delivery: { author: string | null; replyTo: string | null }): Record<string, unknown> {
 	return {
-		...(thread
-			? {
-					...(thread.responderName ? { assistantAuthorName: thread.responderName } : {}),
-					thread: {
-						parentCommentId: thread.commentId ?? null,
-						...(thread.responderName ? { responderName: thread.responderName } : {}),
-						mode: "reply",
-					},
-				}
-			: {}),
-		replyToMessageId,
+		...(delivery.author ? { assistantAuthorName: delivery.author } : {}),
+		...(delivery.replyTo ? (isThreadedUi(ui) ? { thread: { parentCommentId: delivery.replyTo } } : { replyTo: delivery.replyTo }) : {}),
 		asyncDelivery: true,
 	};
+}
+
+/** Silent turns a live group chat moves on by itself, each a minute or two after the last. */
+export const LIVE_CHAT_TICKS = 6;
+const LIVE_CHAT_TICK_MS = { min: 60_000, max: 120_000 };
+
+/**
+ * A live chat is written only while the learner watches it: a tick whose last messages they left
+ * unread produces nothing, so an abandoned room spends no calls, and one they return to moves on.
+ */
+export function isUnwatchedTick(input: { kind: string; live: boolean; lastReplyId: number | null; lastSeenId: number | null }): boolean {
+	return input.kind === "follow_up" && input.live && input.lastReplyId !== null && input.lastReplyId > (input.lastSeenId ?? 0);
 }
 
 export function getUrgencyFollowUpAt(now: Date, urgency: Urgency, followUpCount: number): Date {
@@ -320,6 +300,25 @@ export class AgentReplyWorker {
 			await db.update(agentResponseBatch).set({ status: "cancelled", completedAt: now }).where(this.batchClaimFence(batch));
 			return;
 		}
+		const learner = await db.query.user.findFirst({ where: eq(authUser.id, session.userId), columns: { name: true } });
+		const learnerName = learner?.name || "Learner";
+		if (
+			isUnwatchedTick({
+				kind: batch.kind,
+				live: isLiveChat(session.task.ui, resolveScene(session.task.ui, session.task.openingState, session.task.id, learnerName)),
+				lastReplyId: session.messages.findLast((message) => message.role === "assistant")?.id ?? null,
+				lastSeenId: session.lastSeenAssistantMessageId,
+			})
+		) {
+			// Time passes all the same: the tick spends its share of the silence and hands over to the next.
+			const skipped = await db
+				.update(agentResponseBatch)
+				.set({ status: "cancelled", completedAt: now })
+				.where(this.batchClaimFence(batch))
+				.returning({ id: agentResponseBatch.id });
+			if (skipped.length > 0) await this.scheduleFollowUp(db, session.id, now, false);
+			return;
+		}
 
 		// The claim is the moment the agent "notices" the learner's message: advance the
 		// read receipt watermark before generating. GREATEST keeps it monotonic when a
@@ -344,15 +343,16 @@ export class AgentReplyWorker {
 		}
 
 		try {
-			const learner = await db.query.user.findFirst({ where: eq(authUser.id, session.userId), columns: { name: true } });
 			const result = await generateAgentResponse({
 				task: session.task,
 				// The same name the practice interface shows for the learner.
-				learnerName: learner?.name || "Learner",
+				learnerName,
 				history,
 				userId: session.userId,
 				subjects: { taskId: session.taskId, sessionId: session.id },
 				event: getBatchGenerationEvent(batch.kind, session.followUpCount),
+				// Each batch draws its own floor; a retry of the same batch sees the same one.
+				seed: batch.id,
 			});
 			// Anchor every post-generation timestamp at completion time. The scan's `now`
 			// predates the provider call; anchoring there would let generation latency
@@ -489,10 +489,10 @@ export class AgentReplyWorker {
 				if (sequence > 0) dueAt = getDeliveryDueAt(dueAt, delivery.content);
 				await tx
 					.insert(agentDelivery)
-					.values({ batchId: batch.id, sequence, content: delivery.content, replyToMessageId: delivery.replyToMessageId, dueAt });
+					.values({ batchId: batch.id, sequence, content: delivery.content, author: delivery.author, replyTo: delivery.replyTo, dueAt });
 			}
 			if (deliveries.length === 0 && result.parsedResult.allowIdleFollowUp && !terminated) {
-				await this.scheduleFollowUp(tx, batch.sessionId, now);
+				await this.scheduleFollowUp(tx, batch.sessionId, now, batch.kind === "reply");
 			}
 		});
 	}
@@ -543,7 +543,10 @@ export class AgentReplyWorker {
 			limit: this.concurrency,
 		});
 		for (const delivery of deliveries) {
-			const batch = await db.query.agentResponseBatch.findFirst({ where: eq(agentResponseBatch.id, delivery.batchId) });
+			const batch = await db.query.agentResponseBatch.findFirst({
+				where: eq(agentResponseBatch.id, delivery.batchId),
+				with: { session: { columns: {}, with: { task: { columns: { ui: true } } } } },
+			});
 			if (!batch) continue;
 
 			await db.transaction(async (tx) => {
@@ -581,17 +584,8 @@ export class AgentReplyWorker {
 					.returning({ id: agentDelivery.id });
 				if (claimed.length === 0) return;
 
-				// Resolve the comment this reply answers: the model targets a specific
-				// message when threading matters, otherwise the burst anchor (last message)
-				// folds the reply, mirroring the synchronous per-turn parent.
-				const targetMessageId = delivery.replyToMessageId ?? batch.inputMessageId;
-				const targetMessage = targetMessageId
-					? await tx.query.sessionMessage.findFirst({
-							where: eq(sessionMessage.id, targetMessageId),
-							columns: { llmMetadata: true },
-						})
-					: null;
-				const thread = getThreadMetadataFromMessage(targetMessage?.llmMetadata);
+				const ui = batch.session?.task.ui ?? "imessage";
+				const replyTo = await this.resolveBatchReference(tx, ui, batch.id, delivery.replyTo);
 
 				await tx
 					.insert(sessionMessage)
@@ -601,7 +595,7 @@ export class AgentReplyWorker {
 						content: delivery.content,
 						responseBatchId: batch.id,
 						deliveryId: delivery.id,
-						llmMetadata: buildDeliveredReplyMetadata(thread, delivery.replyToMessageId),
+						llmMetadata: buildDeliveredReplyMetadata(ui, { author: delivery.author, replyTo }),
 					})
 					.onConflictDoNothing({ target: sessionMessage.deliveryId });
 
@@ -626,22 +620,35 @@ export class AgentReplyWorker {
 						.set({ status: "abandoned", completionReason: "terminated_abuse", completedAt: now })
 						.where(and(eq(practiceSession.id, batch.sessionId), eq(practiceSession.status, "in_progress")));
 				} else if (batch.allowIdleFollowUp) {
-					await this.scheduleFollowUp(tx, batch.sessionId, now);
+					await this.scheduleFollowUp(tx, batch.sessionId, now, batch.kind === "reply");
 				}
 			});
 		}
 	}
 
-	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow): Promise<void> {
+	/** `@n` names the n-th delivery of the same batch: the message it became, if it was delivered. */
+	private async resolveBatchReference(executor: AgentReplyExecutor, ui: UiVariant, batchId: number, replyTo: string | null): Promise<string | null> {
+		if (!replyTo?.startsWith("@")) return replyTo;
+		const sibling = await executor.query.agentDelivery.findFirst({
+			where: and(eq(agentDelivery.batchId, batchId), eq(agentDelivery.sequence, Number(replyTo.slice(1)))),
+			columns: {},
+			with: { message: { columns: { id: true } } },
+		});
+		return sibling?.message ? getCommentId(ui, { id: String(sibling.message.id), role: "agent" }) : null;
+	}
+
+	/** `afterReply`: the batch answered the learner, so a live chat's silence (and its tick budget) starts over. */
+	private async scheduleFollowUp(executor: AgentReplyExecutor, sessionId: number, now: WorkerNow, afterReply: boolean): Promise<void> {
 		const session = await executor.query.practiceSession.findFirst({
 			where: eq(practiceSession.id, sessionId),
-			with: { task: { columns: { ui: true, urgency: true } } },
+			with: { task: { columns: { id: true, ui: true, openingState: true, urgency: true } } },
 		});
-		if (!session || session.status !== "in_progress" || session.followUpCount >= 2 || session.expiresAt <= now) return;
-		// Comment threads (Reddit/AO3) never chase a silent learner: silence ends a
-		// public thread naturally, and a nudge would model the very norm violation
-		// the simulation teaches learners to avoid.
-		if (!supportsIdleFollowUp(session.task.ui)) return;
+		if (!session) return;
+		const learner = await executor.query.user.findFirst({ where: eq(authUser.id, session.userId), columns: { name: true } });
+		const { task } = session;
+		const live = isLiveChat(task.ui, resolveScene(task.ui, task.openingState, task.id, learner?.name || "Learner"));
+		const used = live && afterReply ? 0 : session.followUpCount;
+		if (session.status !== "in_progress" || used >= (live ? LIVE_CHAT_TICKS : 2) || session.expiresAt <= now) return;
 		const existing = await executor.query.agentResponseBatch.findFirst({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),
@@ -651,7 +658,7 @@ export class AgentReplyWorker {
 		if (existing) return;
 		const claimed = await executor
 			.update(practiceSession)
-			.set({ followUpCount: session.followUpCount + 1 })
+			.set({ followUpCount: used + 1 })
 			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.followUpCount, session.followUpCount)))
 			.returning({ id: practiceSession.id });
 		if (claimed.length === 0) return;
@@ -659,7 +666,9 @@ export class AgentReplyWorker {
 			sessionId,
 			kind: "follow_up",
 			status: "pending",
-			dueAt: getUrgencyFollowUpAt(now, session.task.urgency ?? "high", session.followUpCount + 1),
+			dueAt: live
+				? new Date(now.getTime() + LIVE_CHAT_TICK_MS.min + Math.random() * (LIVE_CHAT_TICK_MS.max - LIVE_CHAT_TICK_MS.min))
+				: getUrgencyFollowUpAt(now, task.urgency ?? "high", used + 1),
 			inputMessageId: null,
 		});
 	}

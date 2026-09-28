@@ -335,7 +335,7 @@ describe("session page server", () => {
 				"ao3-msg",
 				expect.objectContaining({
 					userDisplayContent: "What did you like?",
-					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1", responderName: "ReaderA", mode: "reply" } },
+					userMetadata: { thread: { commentId: "ao3-user-ao3-msg", targetCommentId: "c1" } },
 				}),
 			);
 		});

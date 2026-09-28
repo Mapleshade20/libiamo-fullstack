@@ -6,7 +6,14 @@ import type { LanguageCode } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
 import type { IMessageText } from "./i18n";
 
-let { session, returnHref, language, t }: { session: PracticeSession; returnHref: string; language: LanguageCode; t: IMessageText } = $props();
+let {
+	session,
+	title,
+	returnHref,
+	language,
+	t,
+}: { session: PracticeSession /** The contact or group name. */; title: string; returnHref: string; language: LanguageCode; t: IMessageText } =
+	$props();
 
 const turnsLeft = $derived(translate(language, "practice.turnsLeft"));
 </script>
@@ -20,7 +27,7 @@ const turnsLeft = $derived(translate(language, "practice.turnsLeft"));
 		<ChevronLeft size={22} aria-hidden="true" />
 		<span class="text-sm">{t.back}</span>
 	</a>
-	<h1 class="absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate text-center text-sm font-semibold text-[#1C1C1E]">{session.agentName}</h1>
+	<h1 class="absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate text-center text-sm font-semibold text-[#1C1C1E]">{title}</h1>
 	<div class="ml-auto flex items-center gap-2">
 		{#if session.remainingTurns !== null && !session.isCompleted}
 			<TurnsLeftMobileBadge
