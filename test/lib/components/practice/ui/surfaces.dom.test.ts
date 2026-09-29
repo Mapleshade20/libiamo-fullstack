@@ -32,6 +32,8 @@ beforeAll(() => {
 		removeEventListener() {},
 	})) as never;
 	Element.prototype.scrollIntoView = () => {};
+	// Releasing a body-scroll lock restores the page position, which jsdom cannot do.
+	window.scrollTo = (() => {}) as never;
 	// Svelte transitions drive the Web Animations API, which jsdom lacks.
 	Element.prototype.animate = (() => ({ finished: Promise.resolve(), cancel() {}, onfinish: null })) as never;
 });
