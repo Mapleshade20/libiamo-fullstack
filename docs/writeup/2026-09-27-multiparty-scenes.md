@@ -55,6 +55,18 @@ The session page keeps polling after waking up for work that is still being writ
 messages appear without a reload. Reddit shows no scores anymore; the vote arrows only
 toggle.
 
+## Whom the learner is talking to
+
+- **Discord replies and mentions.** Learners can quote a message (hover or tap, then Reply) and
+  @mention people with autocomplete in any script. Mentions show as pills, and a message that pings
+  the learner is highlighted. A quote is stored with the learner's message, and the floor treats its
+  author like someone the learner named.
+- **Jev beta.** When a Discord channel or iMessage group message quotes and @mentions nobody, learners
+  whose own key is on OpenRouter get TypeSafe's Jev (`~typesafe/jev-latest`) to infer whom it is for.
+  On real Discord excerpts it was right 84% of the time, against 45% for the name matching everyone
+  else keeps. The profile shows the model, read-only, next to the learner's own. It lives in
+  `server/practice/addressee/`, and any failure falls back to name matching.
+
 Hints, feedback and translation help read the same numbered transcript. The feedback conversation
 is now built from it: real names instead of "You"/"Agent", and the duplicated tree code is gone.
 
@@ -68,7 +80,8 @@ is now built from it: real names instead of "You"/"Agent", and the duplicated tr
   Across about 1,500 simulated sessions and continuations, none of these helped:
   - prompt rules, planned beats, casting cards;
   - director and actor calls, per-person calls, voice passes;
-  - real corpus excerpts, cast sheets, native-log continuation, and a decision model (Jev).
+  - real corpus excerpts, cast sheets, native-log continuation, and a decision model (Jev) picking
+    who speaks next.
 - **The final design** came from reading sessions from the learner's seat: whether their message
   lands, whether they get something to answer, progress on their objective, reading load, and
   platform norms.

@@ -4,6 +4,7 @@ import { normalizeText } from "$lib/components/practice/session/message-format";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
 import { createMemberPool, type DiscordMember } from "$lib/practice/discord-members";
+import type { ChatMessage } from "$lib/practice/messages";
 import { resolveScene } from "$lib/practice/scene";
 import ChatHeader from "./ChatHeader.svelte";
 import { hasAgentStartedComposing } from "./helpers";
@@ -41,7 +42,12 @@ const online = $derived(
 // has claimed the reply batch (read watermark advanced), not the moment the learner sends.
 const agentComposing = $derived(hasAgentStartedComposing(session.messages, session.agentReadUpToMessageId));
 
+const members = $derived(dm ? [agent] : [agent, ...online, ...pool.offline]);
+const mentionNames = $derived([props.userName, ...members.map((member) => member.name)]);
+
 let inputText = $state("");
+let replyingTo = $state<ChatMessage | null>(null);
+let textarea = $state<HTMLTextAreaElement>();
 let showMobileMenu = $state(false);
 let showMembers = $state(false);
 let mentionMenu = $state<{ x: number; y: number; member: DiscordMember } | null>(null);
@@ -51,6 +57,12 @@ function mention(member: DiscordMember) {
 	const space = inputText === "" || inputText.endsWith(" ") ? "" : " ";
 	inputText += `${space}@${member.name} `;
 	mentionMenu = null;
+	textarea?.focus({ preventScroll: true });
+}
+
+function reply(message: ChatMessage) {
+	replyingTo = message;
+	textarea?.focus({ preventScroll: true });
 }
 </script>
 
@@ -109,16 +121,22 @@ function mention(member: DiscordMember) {
 				<MessageStream
 					{session}
 					avatarUrl={props.avatarUrl}
+					userName={props.userName}
 					language={props.language}
 					{t}
 					isTyping={(session.isTyping && agentComposing) || session.hasPendingReveals}
+					{mentionNames}
+					{replyingTo}
+					onReply={reply}
 				/>
 				<MessageInput
 					bind:inputText
+					bind:replyingTo
+					bind:textarea
 					{session}
 					language={props.language}
 					placeholder={t.messagePlaceholder.replace("{channel}", `${dm ? "@" : "#"}${channelName}`)}
-					members={dm ? [agent] : [agent, ...online, ...pool.offline]}
+					{members}
 					{t}
 				/>
 			</div>
@@ -158,5 +176,12 @@ function mention(member: DiscordMember) {
 :global(.markdown-wrapper p) {
 	margin: 0;
 	display: inline;
+}
+:global(.markdown-wrapper .discord-mention) {
+	border-radius: 3px;
+	padding: 0 2px;
+	background: rgb(88 101 242 / 0.3);
+	color: #c9cdfb;
+	font-weight: 500;
 }
 </style>

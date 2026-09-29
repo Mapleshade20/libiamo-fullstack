@@ -7,6 +7,7 @@ import { isLiveChat, resolveScene } from "$lib/practice/scene";
 import { db } from "$lib/server/db";
 import { user as authUser } from "$lib/server/db/auth.schema";
 import { agentDelivery, agentResponseBatch, practiceSession, sessionMessage } from "$lib/server/db/schema";
+import { inferAddressees } from "$lib/server/practice/addressee/infer";
 import { type AgentGenerationArtifacts, AgentGenerationError, generateAgentResponse } from "$lib/server/practice/agent-replies/generator";
 import { type AgentEvent, isThreadedUi } from "$lib/server/practice/agent-replies/prompt";
 
@@ -343,6 +344,8 @@ export class AgentReplyWorker {
 		}
 
 		try {
+			// Beta, OpenRouter keys only: whom an unmarked group message is for. Null leaves the floor as it was.
+			const addressees = batch.kind === "reply" ? await inferAddressees({ userId: session.userId, task: session.task, learnerName, history }) : null;
 			const result = await generateAgentResponse({
 				task: session.task,
 				// The same name the practice interface shows for the learner.
@@ -353,6 +356,7 @@ export class AgentReplyWorker {
 				event: getBatchGenerationEvent(batch.kind, session.followUpCount),
 				// Each batch draws its own floor; a retry of the same batch sees the same one.
 				seed: batch.id,
+				...(addressees ? { addressees } : {}),
 			});
 			// Anchor every post-generation timestamp at completion time. The scan's `now`
 			// predates the provider call; anchoring there would let generation latency

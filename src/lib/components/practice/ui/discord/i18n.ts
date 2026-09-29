@@ -17,6 +17,11 @@ export type DiscordText = {
 	messagePlaceholder: string;
 	mention: string;
 	typing: string;
+	reply: string;
+	/** `{name}` is wrapped by the caller, so the name can be styled. */
+	replyingTo: string;
+	cancelReply: string;
+	quoted: string;
 };
 
 export const i18n: Record<LanguageCode, DiscordText> = {
@@ -36,6 +41,10 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		messagePlaceholder: "Message {channel}",
 		mention: "Mention @{name}",
 		typing: "{name} is typing…",
+		reply: "Reply",
+		replyingTo: "Replying to {name}",
+		cancelReply: "Cancel reply",
+		quoted: "Replying to {name}:",
 	},
 	es: {
 		textChannels: "CANALES DE TEXTO",
@@ -53,6 +62,10 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		messagePlaceholder: "Enviar mensaje a {channel}",
 		mention: "Mencionar a @{name}",
 		typing: "{name} está escribiendo…",
+		reply: "Responder",
+		replyingTo: "Respondiendo a {name}",
+		cancelReply: "Cancelar respuesta",
+		quoted: "Respondiendo a {name}:",
 	},
 	fr: {
 		textChannels: "SALONS TEXTUELS",
@@ -70,6 +83,10 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		messagePlaceholder: "Envoyer un message à {channel}",
 		mention: "Mentionner @{name}",
 		typing: "{name} est en train d’écrire…",
+		reply: "Répondre",
+		replyingTo: "Réponse à {name}",
+		cancelReply: "Annuler la réponse",
+		quoted: "En réponse à {name} :",
 	},
 	ja: {
 		textChannels: "テキストチャンネル",
@@ -87,5 +104,9 @@ export const i18n: Record<LanguageCode, DiscordText> = {
 		messagePlaceholder: "{channel} へメッセージを送信",
 		mention: "@{name} にメンション",
 		typing: "{name}が入力中…",
+		reply: "返信",
+		replyingTo: "{name}に返信",
+		cancelReply: "返信をキャンセル",
+		quoted: "{name}への返信：",
 	},
 };

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { UiVariant } from "$lib/constants";
-import { type CommentThreadMetadata, findThreadTarget, newCommentMetadata, type ThreadUi } from "$lib/practice/comment-thread";
-import { buildChatMessages, type PersistedPracticeMessage } from "$lib/practice/messages";
+import { type CommentThreadMetadata, findThreadTarget, getSceneMessageRef, newCommentMetadata, type ThreadUi } from "$lib/practice/comment-thread";
+import { buildChatMessages, buildOpeningMessages, type ChatOpeningState, type PersistedPracticeMessage } from "$lib/practice/messages";
 import { db } from "$lib/server/db";
 import { practiceSession } from "$lib/server/db/schema";
 import { orderSessionMessagesChronologically, type SubmitMessageOptions } from "$lib/server/practice/session";
@@ -44,6 +44,33 @@ export function buildThreadSendOptions(params: {
 	};
 }
 
+/**
+ * The message a Discord reply quotes. It must be one the learner can see: an opening line or a
+ * delivered session message, never a placeholder. Returns null for an unknown target.
+ */
+export function buildChatReplySendOptions(params: {
+	ui: "discord";
+	openingState: unknown;
+	messages: PersistedPracticeMessage[];
+	replyTo: string;
+	userName: string;
+}): SubmitMessageOptions | null {
+	const visible = [
+		...buildOpeningMessages((params.openingState ?? {}) as ChatOpeningState, params.userName, ""),
+		...buildChatMessages({ rawMessages: params.messages, formatTimestamp: () => "", userName: params.userName, agentName: "" }),
+	].filter((message) => !message.deliveryState);
+	if (!visible.some((message) => getSceneMessageRef(params.ui, message) === params.replyTo)) return null;
+	return { userMetadata: { replyTo: params.replyTo } };
+}
+
+async function loadSessionMessages(sessionId: number): Promise<PersistedPracticeMessage[]> {
+	const session = await db.query.practiceSession.findFirst({
+		where: eq(practiceSession.id, sessionId),
+		with: { messages: { orderBy: orderSessionMessagesChronologically } },
+	});
+	return session?.messages ?? [];
+}
+
 export async function buildPracticeUiSendOptions(params: {
 	ui: UiVariant;
 	formData: FormData;
@@ -53,18 +80,27 @@ export async function buildPracticeUiSendOptions(params: {
 	clientMessageId: string;
 	userName: string;
 }): Promise<PracticeUiSendOptionsResult> {
+	if (params.ui === "discord") {
+		const replyTo = params.formData.get("replyTo");
+		if (typeof replyTo !== "string" || !replyTo.trim()) return { ok: true, options: {} };
+		const options = buildChatReplySendOptions({
+			ui: params.ui,
+			openingState: params.openingState,
+			messages: await loadSessionMessages(params.sessionId),
+			replyTo: replyTo.trim(),
+			userName: params.userName,
+		});
+		if (!options) return { ok: false, status: 400, error: "Invalid reply target" };
+		return { ok: true, options };
+	}
 	if (params.ui !== "reddit" && params.ui !== "ao3") return { ok: true, options: {} };
 	if (!params.clientMessageId) return { ok: false, status: 400, error: "clientMessageId is required for comments" };
 
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, params.sessionId),
-		with: { messages: { orderBy: orderSessionMessagesChronologically } },
-	});
 	const target = params.formData.get("threadTargetCommentId");
 	const options = buildThreadSendOptions({
 		ui: params.ui,
 		openingState: params.openingState,
-		messages: session?.messages ?? [],
+		messages: await loadSessionMessages(params.sessionId),
 		targetCommentId: typeof target === "string" && target.trim() ? target.trim() : null,
 		message: params.message,
 		clientMessageId: params.clientMessageId,

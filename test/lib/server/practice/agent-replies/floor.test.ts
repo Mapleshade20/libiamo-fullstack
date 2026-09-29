@@ -44,6 +44,39 @@ describe("the floor of a group scene", () => {
 		}
 	});
 
+	it("has the person a Discord reply quotes answer it, not whoever spoke last", () => {
+		const channel = resolveScene(
+			"discord",
+			{
+				channelName: "general",
+				previousMessages: [
+					{ sender: "rin", text: "a" },
+					{ sender: "kai", text: "b" },
+					{ sender: "theo", text: "c" },
+				],
+			},
+			1,
+			"Maple",
+		);
+		const entries = [cast(1, "rin"), cast(2, "kai"), cast(3, "theo"), learner(4, 1)];
+		const answered = Array.from({ length: 40 }, (_, seed) =>
+			answering(drawSceneMoment({ ui: "discord", language: "en", entries, scene: channel, learnerName: "Maple", seed }), 4).map((p) => p.name),
+		);
+		const count = (name: string) => answered.filter((names) => names.includes(name)).length;
+		expect(count("rin")).toBeGreaterThan(20);
+		expect(count("rin")).toBeGreaterThan(2 * Math.max(count("kai"), count("theo")));
+	});
+
+	it("lets inferred addressees stand in for names in the text", () => {
+		const entries = [cast(1, "alex"), cast(2, "luma"), learner(3, undefined, "alex is right")];
+		const answered = (addressees: string[] | null) =>
+			Array.from({ length: 40 }, (_, seed) =>
+				answering(drawSceneMoment({ ui: "reddit", language: "en", entries, scene, learnerName: "Maple", seed, addressees }), 3).map((p) => p.name),
+			).filter((names) => names.includes("luma")).length;
+		// Naming alex no longer pulls alex in once luma is the one inferred.
+		expect(answered(["luma"])).toBeGreaterThan(answered(null));
+	});
+
 	it("steps back someone who has been the learner's only partner", () => {
 		const entries = [learner(1), cast(2, "alex", 1), learner(3, 2), cast(4, "alex", 3), learner(5, 4)];
 		const draws = Array.from({ length: 40 }, (_, seed) =>

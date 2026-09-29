@@ -260,8 +260,11 @@ export type AgentConversationInput = {
 	learnerName: string;
 };
 
-/** Seeds the floor's draw, so a stored input re-renders the same prompt. */
-export type AgentMomentInput = { seed?: number };
+/**
+ * Seeds the floor's draw, so a stored input re-renders the same prompt. `addressees` is whom an
+ * unmarked learner message is for, when something inferred it (see `drawSceneMoment`).
+ */
+export type AgentMomentInput = { seed?: number; addressees?: string[] | null };
 
 /** The transcript with the scene refs of its entries, so reply targets can be mapped back. */
 export function buildAgentTranscript(input: AgentConversationInput): { entries: TranscriptEntry[]; refs: string[] } {
@@ -284,6 +287,7 @@ export function buildAgentUserMessage(input: AgentConversationInput & AgentMomen
 		scene: task.scene,
 		learnerName,
 		seed: input.seed ?? entries.length,
+		addressees: input.addressees,
 	});
 	return JSON.stringify({ learner: { name: learnerName }, transcript: entries, nextId: entries.length + 1, ...(moment ? { moment } : {}) }, null, 1);
 }

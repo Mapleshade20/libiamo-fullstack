@@ -1,23 +1,30 @@
 <script lang="ts">
+import type { HTMLTextareaAttributes } from "svelte/elements";
+
 let {
 	value = $bindable(""),
+	textarea = $bindable(),
 	maxRows = 10,
 	maxLength,
 	placeholder = "",
 	label,
 	disabled = false,
 	onKeyDown,
+	...rest
 }: {
 	value?: string;
+	textarea?: HTMLTextAreaElement;
 	maxRows?: number;
 	maxLength?: number;
 	placeholder?: string;
 	label: string;
 	disabled?: boolean;
 	onKeyDown?: (event: KeyboardEvent) => void;
-} = $props();
+} & Pick<
+	HTMLTextareaAttributes,
+	"role" | "aria-expanded" | "aria-controls" | "aria-activedescendant" | "aria-autocomplete" | "oninput" | "onclick" | "onkeyup"
+> = $props();
 
-let textarea = $state<HTMLTextAreaElement>();
 let isOverflow = $state(false);
 const LINE_HEIGHT = 24;
 const PADDING = 20;
@@ -40,6 +47,7 @@ $effect(() => {
 	aria-label={label}
 	maxlength={maxLength}
 	onkeydown={onKeyDown}
+	{...rest}
 	rows="1"
 	class="custom-textarea"
 	style:overflow-y={isOverflow ? "auto" : "hidden"}

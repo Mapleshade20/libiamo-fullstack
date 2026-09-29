@@ -108,6 +108,11 @@ export function getCommentId(ui: string, message: Pick<ChatMessage, "id" | "role
 	return `${ui}-${message.role}-${message.clientMessageId ?? message.id}`;
 }
 
+/** The ref a chat reply quotes: opening lines keep their `opening-<index>` id, session messages use `getCommentId`. */
+export function getSceneMessageRef(ui: string, message: Pick<ChatMessage, "id" | "role" | "clientMessageId" | "thread">): string {
+	return message.id.startsWith("opening-") ? message.id : getCommentId(ui, message);
+}
+
 export function getParentCommentId(ui: ThreadUi, message: Pick<ChatMessage, "role" | "clientMessageId" | "thread">): string | null {
 	if (message.role === "user") return message.thread?.targetCommentId ?? null;
 	return message.thread?.parentCommentId ?? (message.clientMessageId ? `${ui}-user-${message.clientMessageId}` : null);

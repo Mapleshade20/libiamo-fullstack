@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("$lib/server/db", () => ({ db: {} }));
 
-import { buildThreadSendOptions } from "$lib/server/practice/send-options";
+import { buildChatReplySendOptions, buildThreadSendOptions } from "$lib/server/practice/send-options";
 
 describe("buildThreadSendOptions", () => {
 	const openingState = {
@@ -38,5 +38,26 @@ describe("buildThreadSendOptions", () => {
 			userDisplayContent: "Original",
 			userMetadata: { thread },
 		});
+	});
+});
+
+describe("buildChatReplySendOptions", () => {
+	const openingState = { previousMessages: [{ sender: "Rin", text: "anyone up?" }] };
+	const messages = [
+		{ id: 7, role: "assistant", content: "yo", createdAt: new Date("2026-01-01T10:00:00Z"), llmMetadata: { assistantAuthorName: "Kai" } },
+		{ id: 8, role: "user", content: "hey", createdAt: new Date("2026-01-01T10:01:00Z"), llmMetadata: { clientMessageId: "c8" } },
+	];
+	const base = { ui: "discord" as const, openingState, messages, userName: "Maple" };
+
+	it("quotes opening lines and delivered messages by their scene ref", () => {
+		for (const replyTo of ["opening-0", "discord-agent-7"]) {
+			expect(buildChatReplySendOptions({ ...base, replyTo })).toEqual({ userMetadata: { replyTo } });
+		}
+	});
+
+	it("rejects unknown targets and reply placeholders", () => {
+		expect(buildChatReplySendOptions({ ...base, replyTo: "opening-5" })).toBeNull();
+		// The learner's unanswered message is followed by a pending placeholder, which is never quotable.
+		expect(buildChatReplySendOptions({ ...base, replyTo: "discord-agent-c8" })).toBeNull();
 	});
 });

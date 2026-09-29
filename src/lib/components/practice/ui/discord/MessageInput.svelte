@@ -1,16 +1,21 @@
 <script lang="ts">
+import CircleX from "@lucide/svelte/icons/circle-x";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import Send from "@lucide/svelte/icons/send";
 import Smile from "@lucide/svelte/icons/smile";
+import { tick } from "svelte";
 import { fade } from "svelte/transition";
 import HintFloatingPanel from "$lib/components/practice/hint/HintFloatingPanel.svelte";
 import { isImeKeyboardEvent } from "$lib/components/practice/hint/keyboard";
 import type { PracticeSession } from "$lib/components/practice/session/session.svelte";
 import { type LanguageCode, PRACTICE_UI_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t as translate } from "$lib/i18n";
+import { getSceneMessageRef } from "$lib/practice/comment-thread";
 import { type DiscordMember, memberColor } from "$lib/practice/discord-members";
+import type { ChatMessage } from "$lib/practice/messages";
 import EmojiPicker from "./EmojiPicker.svelte";
 import { extractEmojiFromPickerEvent } from "./emoji";
+import { getMentionQuery } from "./helpers";
 import type { DiscordText } from "./i18n";
 import ResizeableTextarea from "./ResizeableTextarea.svelte";
 
@@ -22,6 +27,8 @@ let {
 	language,
 	placeholder,
 	members,
+	replyingTo = $bindable(null),
+	textarea = $bindable(),
 	t,
 }: {
 	inputText?: string;
@@ -29,16 +36,25 @@ let {
 	language: LanguageCode;
 	placeholder: string;
 	members: DiscordMember[];
+	/** The message the next send quotes, chosen from its hover toolbar. */
+	replyingTo?: ChatMessage | null;
+	textarea?: HTMLTextAreaElement;
 	t: DiscordText;
 } = $props();
 
+const MENTION_LIST_ID = "discord-mention-list";
 let mentionIndex = $state(0);
+let caret = $state(0);
+/** The `@` position whose suggestions were dismissed with Escape. */
+let dismissedAt = $state<number | null>(null);
 let showEmojiPicker = $state(false);
 let hintLayoutReference = $state<HTMLDivElement | null>(null);
 
-const mentionQuery = $derived(inputText.match(/@([a-zA-Z0-9_]*)$/)?.[1] ?? null);
+const mention = $derived(getMentionQuery(inputText, caret));
 const mentionMembers = $derived(
-	mentionQuery === null ? [] : members.filter((member) => member.name.toLowerCase().includes(mentionQuery.toLowerCase())),
+	!mention || mention.start === dismissedAt
+		? []
+		: members.filter((member) => member.name.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 10),
 );
 const disabled = $derived(session.disabled);
 const canSend = $derived(Boolean(inputText.trim()) && !disabled);
@@ -57,9 +73,25 @@ function limit(value: string) {
 	return value.slice(0, PRACTICE_UI_TEXT_MAX_LENGTH);
 }
 
-function insertMention(member: DiscordMember) {
-	inputText = limit(`${inputText.slice(0, inputText.lastIndexOf("@"))}@${member.name} `);
+function syncCaret() {
+	caret = textarea?.selectionStart ?? inputText.length;
+}
+
+function handleInput() {
+	syncCaret();
 	mentionIndex = 0;
+	// Escape dismisses one `@`; typing a new one offers suggestions again.
+	if (mention?.start !== dismissedAt) dismissedAt = null;
+}
+
+async function insertMention(member: DiscordMember) {
+	if (!mention) return;
+	const before = `${inputText.slice(0, mention.start)}@${member.name} `;
+	inputText = limit(before + inputText.slice(caret));
+	mentionIndex = 0;
+	await tick();
+	textarea?.setSelectionRange(before.length, before.length);
+	syncCaret();
 }
 
 function toggleHint(event: MouseEvent) {
@@ -69,10 +101,15 @@ function toggleHint(event: MouseEvent) {
 async function submit() {
 	if (!canSend) return;
 	const text = limit(inputText);
+	const quoted = replyingTo;
 	inputText = "";
+	replyingTo = null;
 	showEmojiPicker = false;
 	session.hint.release(HINT_OWNER);
-	if (!(await session.send(text)) && !inputText) inputText = text;
+	if (!(await session.send(text, quoted ? { replyTo: getSceneMessageRef("discord", quoted) } : {})) && !inputText) {
+		inputText = text;
+		replyingTo ??= quoted;
+	}
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -86,9 +123,19 @@ function handleKeyDown(event: KeyboardEvent) {
 		}
 		if (event.key === "Enter" || event.key === "Tab") {
 			event.preventDefault();
-			insertMention(mentionMembers[mentionIndex] ?? mentionMembers[0]);
+			void insertMention(mentionMembers[mentionIndex] ?? mentionMembers[0]);
 			return;
 		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			dismissedAt = mention?.start ?? null;
+			return;
+		}
+	}
+	if (event.key === "Escape" && replyingTo) {
+		event.preventDefault();
+		replyingTo = null;
+		return;
 	}
 	if (event.key === "Enter" && !event.shiftKey && !window.matchMedia("(max-width: 768px)").matches) {
 		event.preventDefault();
@@ -105,28 +152,31 @@ function handleKeyDown(event: KeyboardEvent) {
 
 <div class="relative shrink-0 px-3 pt-1 pb-6 md:px-4">
 	{#if mentionMembers.length > 0}
-		<div class="absolute bottom-[100%] left-4 z-50 mb-2 w-72 overflow-hidden rounded border border-[#1E1F22] bg-[#2B2D31] shadow-xl">
-			<div class="bg-[#232428] px-3 py-2 text-xs font-bold text-[#949BA4] uppercase">{t.members}</div>
-			<ul class="max-h-60 overflow-y-auto py-1">
+		<div
+			class="absolute inset-x-3 bottom-full z-50 overflow-hidden rounded-lg bg-[#2B2D31] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_12px_24px_rgba(0,0,0,0.24)] md:inset-x-4"
+		>
+			<p id="{MENTION_LIST_ID}-title" class="px-3 pt-3 pb-1 text-xs font-semibold text-[#B5BAC1] uppercase">{t.members}</p>
+			<ul id={MENTION_LIST_ID} role="listbox" aria-labelledby="{MENTION_LIST_ID}-title" class="max-h-72 overflow-y-auto px-2 pb-2">
 				{#each mentionMembers as member, index (member.name)}
-					<li class="mx-1">
-						<button
-							type="button"
-							class="flex min-h-11 w-full items-center gap-2 rounded px-3 text-left hover:bg-[#35373C] {mentionIndex === index ? 'bg-[#35373C]' : ''}"
-							onmouseenter={() => (mentionIndex = index)}
-							onmousedown={(event) => {
-								event.preventDefault();
-								insertMention(member);
-							}}
+					<li
+						id="{MENTION_LIST_ID}-{index}"
+						role="option"
+						aria-selected={mentionIndex === index}
+						class="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 {mentionIndex === index ? 'bg-[#404249]' : ''}"
+						onmouseenter={() => (mentionIndex = index)}
+						onmousedown={(event) => {
+							// Keep focus (and the caret) in the textarea.
+							event.preventDefault();
+							void insertMention(member);
+						}}
+					>
+						<span
+							class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white {memberColor(member.name)}"
+							aria-hidden="true"
 						>
-							<span
-								class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white {memberColor(member.name)}"
-								aria-hidden="true"
-							>
-								{member.name.charAt(0)}
-							</span>
-							<span class="text-sm font-medium text-[#DBDEE1]">{member.name}</span>
-						</button>
+							{member.name.charAt(0).toUpperCase()}
+						</span>
+						<span class="truncate text-sm font-medium text-[#DBDEE1]">{member.name}</span>
 					</li>
 				{/each}
 			</ul>
@@ -146,10 +196,36 @@ function handleKeyDown(event: KeyboardEvent) {
 		</button>
 
 		<div class="relative min-w-0 flex-1 rounded-lg bg-[#383A40] focus-within:ring-2 focus-within:ring-[#5865F2]/60">
+			{#if replyingTo}
+				{@const [lead, trail] = t.replyingTo.split("{name}")}
+				<div class="flex min-h-11 items-center gap-2 rounded-t-lg bg-[#2B2D31] pr-1 pl-3 text-sm text-[#B5BAC1] md:min-h-9 md:pl-4">
+					<p class="min-w-0 flex-1 truncate">{lead}<span class="font-semibold text-[#DBDEE1]">{replyingTo.authorName}</span>{trail}</p>
+					<button
+						type="button"
+						class="grid h-11 w-11 shrink-0 place-items-center rounded text-[#B5BAC1] transition-colors hover:text-[#DBDEE1] md:h-9 md:w-9"
+						aria-label={t.cancelReply}
+						onclick={() => {
+							replyingTo = null;
+							textarea?.focus({ preventScroll: true });
+						}}
+					>
+						<CircleX size={18} aria-hidden="true" />
+					</button>
+				</div>
+			{/if}
 			<div class="flex items-center px-2 md:px-4 {disabled ? 'opacity-50' : ''}">
 				<div class="min-w-0 flex-1">
 					<ResizeableTextarea
 						bind:value={inputText}
+						bind:textarea
+						role="combobox"
+						aria-autocomplete="list"
+						aria-expanded={mentionMembers.length > 0}
+						aria-controls={mentionMembers.length > 0 ? MENTION_LIST_ID : undefined}
+						aria-activedescendant={mentionMembers.length > 0 ? `${MENTION_LIST_ID}-${mentionIndex}` : undefined}
+						oninput={handleInput}
+						onclick={syncCaret}
+						onkeyup={syncCaret}
 						maxRows={10}
 						maxLength={PRACTICE_UI_TEXT_MAX_LENGTH}
 						{disabled}

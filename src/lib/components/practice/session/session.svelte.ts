@@ -42,6 +42,8 @@ export type SendOptions = {
 	fields?: Record<string, string>;
 	/** Thread placement of the learner comment, once the client id is known. */
 	thread?: (clientMessageId: string) => CommentThreadMetadata;
+	/** The scene message a chat reply quotes (see `getSceneMessageRef`). */
+	replyTo?: string;
 };
 
 export const SESSION_POLL_INTERVAL_MS = 3_000;
@@ -173,11 +175,13 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 				authorName: props.userName,
 				clientMessageId,
 				thread,
+				...(sendOptions.replyTo ? { replyTo: sendOptions.replyTo } : {}),
 			},
 		];
 		submitting = true;
 		try {
-			const result = await sendMessage(sessionId, body, clientMessageId, sendOptions.fields);
+			const fields = sendOptions.replyTo ? { ...sendOptions.fields, replyTo: sendOptions.replyTo } : sendOptions.fields;
+			const result = await sendMessage(sessionId, body, clientMessageId, fields);
 			const accepted = await settle(result, {
 				authorName: agentName,
 				clientMessageId,
@@ -197,11 +201,12 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 		acknowledgeAll();
 		const original = conversation.find((message) => message.role === "user" && message.clientMessageId === failed.clientMessageId);
 		const target = original?.thread?.targetCommentId;
+		const fields = { ...(target ? { threadTargetCommentId: target } : {}), ...(original?.replyTo ? { replyTo: original.replyTo } : {}) };
 		retrying = [...retrying, messageId];
 		optimistic = optimistic.filter((message) => message.id !== messageId);
 		submitting = true;
 		try {
-			const result = await sendMessage(sessionId, failed.retryText ?? "", failed.clientMessageId, target ? { threadTargetCommentId: target } : {});
+			const result = await sendMessage(sessionId, failed.retryText ?? "", failed.clientMessageId, fields);
 			await settle(result, {
 				authorName: failed.authorName,
 				clientMessageId: failed.clientMessageId,

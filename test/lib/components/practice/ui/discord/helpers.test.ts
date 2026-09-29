@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getFirstUnansweredUserMessageId, hasAgentStartedComposing } from "$lib/components/practice/ui/discord/helpers";
+import {
+	getFirstUnansweredUserMessageId,
+	getMentionQuery,
+	hasAgentStartedComposing,
+	highlightMentions,
+	mentionsName,
+} from "$lib/components/practice/ui/discord/helpers";
 import type { ChatMessage } from "$lib/practice/messages";
 
 describe("discord typing gate helpers", () => {
@@ -44,5 +50,30 @@ describe("discord typing gate helpers", () => {
 		const messages = [msg("301", "user"), msg("302", "agent")];
 		expect(getFirstUnansweredUserMessageId(messages)).toBeNull();
 		expect(hasAgentStartedComposing(messages, 302)).toBe(false);
+	});
+});
+
+describe("discord mentions", () => {
+	it("wraps known @names as pills, longest name first, outside code spans", () => {
+		expect(highlightMentions("@Nova and @NovaStar, `@Nova` stays code, email a@Nova no", ["Nova", "NovaStar"])).toBe(
+			'<span class="discord-mention">@Nova</span> and <span class="discord-mention">@NovaStar</span>, `@Nova` stays code, email a@Nova no',
+		);
+	});
+
+	it("escapes names and leaves unknown @words alone", () => {
+		expect(highlightMentions("hi @<b> and @nobody", ["<b>"])).toBe('hi <span class="discord-mention">@&#60;b&#62;</span> and @nobody');
+	});
+
+	it("tells whether a message pings someone, in any script", () => {
+		expect(mentionsName("おい @天元 見て", "天元")).toBe(true);
+		expect(mentionsName("天元 said so", "天元")).toBe(false);
+	});
+
+	it("finds the @query right before the caret, not after it", () => {
+		expect(getMentionQuery("hey @Lu", 7)).toEqual({ start: 4, query: "Lu" });
+		expect(getMentionQuery("hey @Lu and more", 7)).toEqual({ start: 4, query: "Lu" });
+		expect(getMentionQuery("@天", 2)).toEqual({ start: 0, query: "天" });
+		expect(getMentionQuery("mail@host", 9)).toBeNull();
+		expect(getMentionQuery("hey @Lu and more", 16)).toBeNull();
 	});
 });

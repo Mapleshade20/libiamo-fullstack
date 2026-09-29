@@ -219,6 +219,11 @@ export function drawSceneMoment(input: {
 	scene: Scene;
 	learnerName: string;
 	seed: number;
+	/**
+	 * Whom the learner's latest message is for when it quotes and @mentions nobody, inferred
+	 * elsewhere; `[]` is nobody in particular. Without it, names in the text stand in.
+	 */
+	addressees?: string[] | null;
 }): SceneMoment | null {
 	const { entries, scene, learnerName, ui } = input;
 	if (!scene.group) return null;
@@ -306,7 +311,11 @@ export function drawSceneMoment(input: {
 		const addressed = new Set<string>();
 		const target = byId(last.replyTo);
 		if (target && target.author !== learnerName) addressed.add(target.author);
-		for (const person of scene.cast) if (names(last.text, person.name)) addressed.add(person.name);
+		if (input.addressees) {
+			for (const name of input.addressees) if (name !== learnerName) addressed.add(name);
+		} else {
+			for (const person of scene.cast) if (names(last.text, person.name)) addressed.add(person.name);
+		}
 		const ownerWeight =
 			ui === "ao3" ? (!target || target.author === owner ? 6 : 0.5) : ui === "reddit" ? (target ? 0.7 : 1.5) : ui === "apple_mail" ? 2 : 1.2;
 		const nearby = cast(threaded ? branch : recent(6));

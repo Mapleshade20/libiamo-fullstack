@@ -66,7 +66,7 @@ describe("chat transcript", () => {
 			learnerName: "Maple",
 			scene: scene("Mario"),
 			messages: [
-				{ id: 1, role: "user", content: "hice uno" },
+				{ id: 1, role: "user", content: "hice uno", llmMetadata: { replyTo: "opening-1" } },
 				{ id: 2, role: "assistant", content: "¡genial!", llmMetadata: { assistantAuthorName: "Lucía", replyTo: "opening-0" } },
 				{ id: 3, role: "user", content: "oculto", llmMetadata: { hidden: true } },
 				{ id: 4, role: "system", content: "internal" },
@@ -76,7 +76,7 @@ describe("chat transcript", () => {
 			{ id: 1, opening: true, role: "cast", author: "Mario", text: "hola" },
 			{ id: 2, opening: true, role: "cast", author: "Lucía", text: "¿mods nuevos?" },
 			{ id: 3, opening: true, role: "learner", author: "Maple", text: "yo" },
-			{ id: 4, role: "learner", author: "Maple", text: "hice uno" },
+			{ id: 4, replyTo: 2, role: "learner", author: "Maple", text: "hice uno" },
 			{ id: 5, replyTo: 1, role: "cast", author: "Lucía", text: "¡genial!" },
 		]);
 	});

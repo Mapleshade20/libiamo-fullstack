@@ -301,7 +301,7 @@ export function buildSceneTranscript(input: BuildChatTranscriptInput): { entries
 			thread: metadata.thread,
 		});
 		const author = isLearner ? learnerName : (metadata.assistantAuthorName ?? metadata.thread?.responderName ?? counterpartName);
-		const parent = isLearner ? metadata.thread?.targetCommentId : (metadata.thread?.parentCommentId ?? metadata.replyTo);
+		const parent = (isLearner ? metadata.thread?.targetCommentId : metadata.thread?.parentCommentId) ?? metadata.replyTo;
 		if (ui === "apple_mail" && isLearner) {
 			const draft = parseMailMessage(content);
 			drafts.push({

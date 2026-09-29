@@ -141,6 +141,8 @@ export type GenerateAgentResponseInput = {
 	event?: AgentEvent;
 	/** Seeds the floor draw; the worker passes the batch id. */
 	seed?: number;
+	/** Whom the learner's unmarked message is for, if inferred (see `server/practice/addressee`). */
+	addressees?: string[];
 	/** A Lab variant (slots, provider, options) to run instead of the recipe as declared. */
 	variant?: LlmVariant;
 	userId?: string;
@@ -233,7 +235,7 @@ export function resolveSceneTurn(decision: AgentResponseDecision, input: AgentRe
 
 export const agentReplyRecipe = defineLlmRecipe({
 	id: "practice.agent-reply",
-	version: 3,
+	version: 4,
 	title: "Scene reply",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: agentResponseDecisionSchema },

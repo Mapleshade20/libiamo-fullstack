@@ -1,7 +1,7 @@
 ---
 title: Multi-party scenes — one generation architecture for every practice surface
 type: feature, ux, tech-debt
-status: wip
+status: done
 ---
 
 # Multi-party scenes
@@ -439,6 +439,60 @@ Checked end to end in Chrome through the worker:
 - Reddit: nested and top-level replies;
 - an iMessage group with a source;
 - the admin source field, and the source absent from page data.
+
+## Fifth round: whom the learner is talking to
+
+The floor gives the strongest reason to answer to whoever the learner addressed. It knew that only on
+comment threads, where every learner comment has a parent. In group chats it guessed from names in the
+text, which misses most real cases: people answer without naming anyone.
+
+### Explicit: Discord reply quotes and @mentions
+
+- A hover (tap on touch) toolbar on every delivered message offers Reply. The composer shows
+  "Replying to X" attached above the input; Esc or × cancels, and the quoted message is highlighted.
+- The send carries `replyTo`, a scene message ref (`getSceneMessageRef`: `opening-<i>` or the
+  comment-id scheme). The server accepts only messages the learner can see and stores it in the
+  learner message's metadata. The transcript maps it to the entry's `replyTo`, so the floor treats the
+  quoted author as addressed, as on threads.
+- @ autocomplete works at the caret in any script; `@Name` renders as a mention pill, and a cast
+  message that @mentions the learner is highlighted, as Discord does.
+
+### Inferred (beta): Jev on OpenRouter keys
+
+The third round rejected Jev for deciding who speaks next. Whom an unmarked learner message is for is
+a narrower question, so it was measured on its own: 31 real Discord excerpts of 9–15 messages (the
+Spanish-English Learning Server, the Distant Horizons support channel, a Spanish-learning server,
+AstroNvim; gold from the real reply quotes plus hand labels, in the gitignored `tmp/addressee`).
+
+| Reading | Exact | Median latency |
+| --- | --- | --- |
+| Name heuristic (the floor before) | 45% | – |
+| Jev, one Choice (a person or nobody in particular) | 84% | ~130 ms |
+| gpt-6-luna | 90% | ~1.8 s |
+
+- Cost per call is about the same. Jev's scope question (one / several / everyone) and per-person
+  yes/no questions did worse than the single Choice, so only the Choice is asked.
+- Written cases overstate it: on 41 tidy hand-written scenes Jev reached 95% and luna 98%.
+- Both miss the same hard cases: a question in the middle of three interleaved threads, and a
+  developer answering a user right after talking to a colleague.
+
+Decisions:
+- **Who.** Only learners whose BYOK key is on OpenRouter; it bills their key, and the profile shows
+  the fixed model beside theirs. Trial quota and other providers keep the heuristic.
+- **Where.** Discord channels and iMessage groups, for a message without quote or @mention. Threads
+  always place a reply, mail has recipients, and one-to-one scenes have one counterpart.
+- **Isolation.** The model and its alpha API may change.
+  - `server/practice/addressee/` owns the call; `jev.ts` is the only file that knows the wire
+    format, and nothing there throws.
+  - The floor takes only a generic `addressees` list (`[]` = nobody in particular) and does not know
+    where it came from.
+  - Jev is not a chat model, so it is not an LLM recipe. Its answer is recorded in the scene-reply
+    recipe input (version 4), where traces show it and Lab re-runs reproduce it.
+- **Weight.** An inferred or quoted addressee counts like a named one (weight 5), not as a guarantee:
+  the addressed person answers most of the time (about 60% in a four-person channel), not always.
+
+Open: whether a quote should all but guarantee an answer, and a larger labelled set before trusting
+Jev's probabilities (falling back when it is unsure).
 
 ## Looking ahead: custom tasks
 
