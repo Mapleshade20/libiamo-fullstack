@@ -1,7 +1,7 @@
 ---
 title: Consistent LLM prompt structure and task context
 type: tech-debt
-status: wip
+status: done
 ---
 
 # Consistent LLM prompt structure and task context

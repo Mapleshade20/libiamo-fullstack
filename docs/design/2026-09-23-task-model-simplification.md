@@ -3,7 +3,7 @@ title: Flat tasks, decoupled lineups
 type:
     - tech-debt
     - feature
-status: wip
+status: done
 ---
 
 # Flat tasks, decoupled lineups

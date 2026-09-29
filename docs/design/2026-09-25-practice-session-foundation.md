@@ -1,7 +1,7 @@
 ---
 title: One session foundation for the five practice surfaces
 type: tech-debt, bug, ux, accessibility, test
-status: wip
+status: done
 ---
 
 # One session foundation for the five practice surfaces

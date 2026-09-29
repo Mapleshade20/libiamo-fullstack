@@ -1,7 +1,7 @@
 ---
 title: Reorganize src/lib by domain
 type: tech-debt
-status: wip
+status: done
 ---
 
 # Reorganize `src/lib` by domain

@@ -1,7 +1,7 @@
 ---
 title: Reduce per-request and polling load on the server and database
 type: performance
-status: wip
+status: done
 ---
 
 # Reduce per-request and polling load on the server and database
