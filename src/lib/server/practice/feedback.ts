@@ -295,7 +295,7 @@ function annotationSystemPrompt(input: Omit<AnnotationPromptInput, "conversation
 	const feedbackLanguage = getLanguageEnglishName(input.feedbackLanguage);
 	const hasObjectives = (input.task.objectives ?? []).some((objective) => objective.trim());
 	const objectivesInstruction = hasObjectives
-		? `grade each task objective, in order, by what the learner actually achieved in the conversation. Express each objective's learner-facing text in ${feedbackLanguage}, preserving its meaning.`
+		? `grade each task objective, in order, by what the learner actually achieved in the conversation. The grades mean, for these objectives: A = the communicative goal was achieved — everything the objective asks for was conveyed, explicitly or by ordinary inference from what the learner wrote, and the partner understood and, where relevant, acted on it; B = part of what the objective asks for was never conveyed at all, or it took friction — the partner had to ask or work around what the learner wrote; C = the goal was actually missed or misunderstood. The learner's wording differing from the objective's phrasing, the order they did things in, and language errors belong in the objective text and annotations, never in the grade, unless they got in the way of understanding. Express each objective's learner-facing text in ${feedbackLanguage}, preserving its meaning.`
 		: `create one appropriately graded general-fluency objective written in ${feedbackLanguage}.`;
 	return slot("system", {
 		learningLanguage,
