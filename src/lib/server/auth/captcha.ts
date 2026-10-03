@@ -7,8 +7,16 @@ export type CaptchaConfig = { siteKey: string; secretKey: string };
 export const CAPTCHA_FORM_FIELD = "cf-turnstile-response";
 /** The header a direct HTTP call to a protected Better Auth endpoint must carry the token in. */
 export const CAPTCHA_HEADER = "x-captcha-response";
-/** Better Auth endpoints that send mail to an address anyone can type, or create an account. */
-export const CAPTCHA_PROTECTED_PATHS = ["/sign-up/email", "/request-password-reset", "/send-verification-email"] as const;
+/** Better Auth endpoints that send mail to a typed-in address (a signed-in user's new email included), create an account, sign in or set a password. */
+export const CAPTCHA_PROTECTED_PATHS = [
+	"/sign-up/email",
+	"/sign-in/email",
+	"/request-password-reset",
+	"/reset-password",
+	"/send-verification-email",
+	"/change-email",
+	"/change-password",
+] as const;
 
 export const CAPTCHA_FAILED_MESSAGE = "We could not confirm you are human. Please complete the check and try again.";
 

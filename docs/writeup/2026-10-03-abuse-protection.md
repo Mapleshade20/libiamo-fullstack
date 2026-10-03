@@ -12,5 +12,11 @@ failure. Against Postgres, 20 simultaneous calls on a 10,000-token balance produ
 
 New accounts must use a trusted mail domain, pass Cloudflare Turnstile when it is configured, and
 receive the trial in thirds over 48 hours. Sign-ups and email changes can be logged as JSON lines
-for monitoring with `AUTH_AUDIT_LOG=on`. Migration `0027_trial_release` backfills existing learners
+for monitoring with `AUTH_AUDIT_LOG=true`. Migration `0027_trial_release` backfills existing learners
 as fully released.
+
+Passwords set through sign-up, reset or Profile's new change-password dialog must score at least 2
+on zxcvbn, checked on submit and again in Better Auth's hook; the estimator loads only when needed.
+New passwords are capped at 64 characters, refused before the estimator runs. Profile's email and
+password changes and the password reset now pass Turnstile too. The design lists every endpoint the
+reverse proxy should rate-limit, and those pages refuse action URLs a proxy rule could fail to match.

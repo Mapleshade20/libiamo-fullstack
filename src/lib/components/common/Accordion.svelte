@@ -50,6 +50,9 @@ const id = $props.id();
 .panel-inner {
 	min-height: 0;
 	overflow: hidden;
+	/* Room for a flush control's focus ring, which the clip would otherwise cut off. */
+	margin-inline: -4px;
+	padding-inline: 4px;
 	opacity: 0;
 	filter: blur(2px);
 	transition:

@@ -203,6 +203,23 @@ describe("Forgot-password +page.server", () => {
 			});
 		});
 
+		it("resets nothing without a passing Turnstile token once configured", async () => {
+			mockEnv.TURNSTILE_SITE_KEY = "site-key";
+			mockEnv.TURNSTILE_SECRET_KEY = "secret-key";
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => Response.json({ success: false })),
+			);
+
+			const result = (await actions.resetPassword(
+				createEvent({ newPassword: "new-password-123", token: "reset-token", "cf-turnstile-response": "bad" }),
+			)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.resetMessage).toBeTruthy();
+			expect(auth.api.resetPassword).not.toHaveBeenCalled();
+		});
+
 		it("maps APIError to 400", async () => {
 			vi.mocked(auth.api.resetPassword).mockRejectedValueOnce(
 				new (await import("better-auth/api")).APIError("BAD_REQUEST", { message: "Token expired" }),

@@ -6,6 +6,7 @@ import { env } from "$env/dynamic/private";
 import { isSocialProviderId, socialAuthErrorMessage } from "$lib/auth/social";
 import { signInSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
+import { CAPTCHA_FAILED_MESSAGE, captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -17,6 +18,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		resetSuccess: reset === "success",
 		socialProviders: configuredSocialProviderIds(env),
+		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		socialAuthError: socialAuthErrorMessage(event.url.searchParams.get("error")),
 	};
 };
@@ -64,6 +66,10 @@ export const actions: Actions = {
 		const result = signInSchema.safeParse(raw);
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+		}
+		// Guards password guessing, and the verification mail sign-in resends to unverified accounts.
+		if (!(await verifyCaptchaField(env, formData, event))) {
+			return fail(400, { message: CAPTCHA_FAILED_MESSAGE, values: { email: raw.email } });
 		}
 
 		try {

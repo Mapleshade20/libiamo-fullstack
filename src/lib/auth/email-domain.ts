@@ -16,7 +16,11 @@ export const TRUSTED_EMAIL_DOMAINS = [
 	"yahoo.com",
 ] as const;
 
-export const UNTRUSTED_EMAIL_DOMAIN_MESSAGE = "Use a Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina or school (edu) address.";
+/** The full list, for the hint beside an email field; rejections stay short and point back to it. */
+export const ACCEPTED_EMAIL_PROVIDERS_HINT =
+	"We accept Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina and school (edu) addresses.";
+
+export const UNTRUSTED_EMAIL_DOMAIN_MESSAGE = "This email provider is not accepted.";
 
 /**
  * Whether `email` is on a trusted domain: one of the list above exactly, or an educational domain,

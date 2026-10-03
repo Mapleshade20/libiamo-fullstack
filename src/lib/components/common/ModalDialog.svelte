@@ -56,6 +56,9 @@ $effect(() => {
 	if (isOpen && !element.open) {
 		opener = document.activeElement as HTMLElement | null;
 		element.showModal();
+		// `showModal()` focuses the first focusable element, which may be a hint icon
+		// rather than the field the dialog is for; `data-initial-focus` names that field.
+		element.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
 	} else if (!isOpen && element.open) {
 		closing = true;
 		let cancelled = false;

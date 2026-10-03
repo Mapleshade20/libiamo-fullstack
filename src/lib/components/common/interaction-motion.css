@@ -18,6 +18,21 @@
 	animation: floating-panel-out 150ms cubic-bezier(0.22, 1, 0.36, 1);
 	pointer-events: none;
 }
+.info-tip {
+	box-shadow:
+		0 0 0 1px rgb(0 0 0 / 6%),
+		0 2px 6px rgb(0 0 0 / 5%),
+		0 4px 24px rgb(0 0 0 / 6%);
+	transform-origin: var(--bits-tooltip-content-transform-origin);
+}
+.info-tip[data-state="delayed-open"],
+.info-tip[data-state="instant-open"] {
+	animation: info-tip-in 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.info-tip[data-state="closed"] {
+	animation: info-tip-out 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	pointer-events: none;
+}
 .floating-menu-item {
 	display: flex;
 	width: 100%;
@@ -87,8 +102,29 @@
 		transform: scale(0.99) translateZ(0);
 	}
 }
+/* Grows out of the icon to its right rather than popping in place. */
+@keyframes info-tip-in {
+	from {
+		opacity: 0;
+		transform: translateX(-4px) scaleX(0.94) translateZ(0);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes info-tip-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+		transform: translateX(-2px) translateZ(0);
+	}
+}
 @media (prefers-reduced-motion: reduce) {
 	.floating-panel[data-state],
+	.info-tip[data-state],
 	.floating-menu-item,
 	.select-item {
 		animation: none;

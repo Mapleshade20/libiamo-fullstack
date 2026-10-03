@@ -6,12 +6,23 @@ import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
 import { isTrustedEmailDomain } from "$lib/auth/email-domain";
+import { WEAK_PASSWORD_CODE } from "$lib/auth/password-strength";
 import { type AccountActionResult, accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS, socialAuthFailure } from "$lib/auth/social";
-import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
+import {
+	AUTH_EXISTING_PASSWORD_MAX_LENGTH,
+	AUTH_PASSWORD_MAX_LENGTH,
+	AUTH_PASSWORD_MIN_LENGTH,
+	getNativeLanguageOptions,
+	getSelfAssignedLevel,
+	isLanguageCode,
+	isSelfAssignedLevel,
+	type SelfAssignedLevel,
+} from "$lib/constants";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
 import { getTrialQuotaBalance } from "$lib/server/account/trial-quota";
 import { auth } from "$lib/server/auth/auth";
 import { requireUser } from "$lib/server/auth/authz";
+import { captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import { db } from "$lib/server/db";
 import { userApiKey, user as userTable } from "$lib/server/db/schema";
@@ -48,6 +59,7 @@ export const load: PageServerLoad = async (event) => {
 		// after render, because awaiting Gravatar holds navigation for its full timeout.
 		hasApiKey,
 		trialQuota,
+		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		apiBaseUrl: row?.baseUrl ?? "",
 		apiModel: row?.model ?? "",
 		levelSelfAssign: getSelfAssignedLevel(learner?.levelSelfAssign, activeLanguage),
@@ -83,6 +95,10 @@ export const actions: Actions = {
 		if (!isTrustedEmailDomain(result.data)) {
 			return fail(400, { emailChange: "untrusted" as const });
 		}
+		// It mails whatever address is typed, so a hijacked session must not turn it into a mailer.
+		if (!(await verifyCaptchaField(env, data, event))) {
+			return fail(400, { emailChange: "captcha" as const });
+		}
 		try {
 			await auth.api.changeEmail({
 				headers: event.request.headers,
@@ -95,6 +111,31 @@ export const actions: Actions = {
 		}
 		// Better Auth deliberately gives the same response for an occupied address.
 		return { emailChange: "sent" as const };
+	},
+
+	changePassword: async (event) => {
+		requireUser(event);
+		const data = await event.request.formData();
+		const currentPassword = data.get("currentPassword")?.toString() ?? "";
+		const newPassword = data.get("newPassword")?.toString() ?? "";
+		if (!currentPassword || currentPassword.length > AUTH_EXISTING_PASSWORD_MAX_LENGTH) return fail(400, { passwordChange: "wrong" as const });
+		if (newPassword.length < AUTH_PASSWORD_MIN_LENGTH) return fail(400, { passwordChange: "short" as const });
+		if (newPassword.length > AUTH_PASSWORD_MAX_LENGTH) return fail(400, { passwordChange: "long" as const });
+		if (newPassword !== data.get("confirmNewPassword")?.toString()) return fail(400, { passwordChange: "mismatch" as const });
+		if (!(await verifyCaptchaField(env, data, event))) return fail(400, { passwordChange: "captcha" as const });
+		try {
+			// Better Auth's hook rejects a weak new password, so a direct API call cannot skip that either.
+			await auth.api.changePassword({
+				headers: event.request.headers,
+				body: { currentPassword, newPassword, revokeOtherSessions: true },
+			});
+		} catch (error) {
+			if (!(error instanceof APIError)) return fail(500, { passwordChange: "error" as const });
+			if (error.body?.code === "INVALID_PASSWORD") return fail(400, { passwordChange: "wrong" as const });
+			if (error.body?.code === WEAK_PASSWORD_CODE) return fail(400, { passwordChange: "weak" as const, passwordWarning: error.message });
+			return fail(400, { passwordChange: "error" as const });
+		}
+		return { passwordChange: "changed" as const };
 	},
 
 	linkSocialAccount: async (event) => {

@@ -3,6 +3,7 @@ import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
+import { WEAK_PASSWORD_CODE } from "$lib/auth/password-strength";
 import { isSocialProviderId, socialAuthErrorMessage } from "$lib/auth/social";
 import { isLanguageCode } from "$lib/constants";
 import { signUpSchema } from "$lib/schemas";
@@ -93,6 +94,7 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
+				if (error.body?.code === WEAK_PASSWORD_CODE) return fail(400, { errors: { password: [error.message] }, values: raw });
 				return fail(400, { message: error.message || "Registration failed", values: raw });
 			}
 			return fail(500, { message: "Unexpected error", values: raw });

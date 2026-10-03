@@ -45,8 +45,15 @@ vi.mock("$lib/server/auth/auth", () => ({
 			linkSocialAccount: vi.fn(),
 			unlinkAccount: vi.fn(),
 			changeEmail: vi.fn(),
+			changePassword: vi.fn(),
 		},
 	},
+}));
+
+const { mockVerifyCaptchaField } = vi.hoisted(() => ({ mockVerifyCaptchaField: vi.fn() }));
+vi.mock("$lib/server/auth/captcha", async (importOriginal) => ({
+	...(await importOriginal<typeof import("$lib/server/auth/captcha")>()),
+	verifyCaptchaField: mockVerifyCaptchaField,
 }));
 
 vi.mock("$env/dynamic/private", () => ({
@@ -107,6 +114,7 @@ describe("Profile +page.server", () => {
 		mockFindFirst.mockResolvedValue(undefined);
 		mockFindUser.mockResolvedValue(undefined);
 		mockVerifyApiKey.mockResolvedValue({ ok: true });
+		mockVerifyCaptchaField.mockResolvedValue(true);
 		vi.mocked(auth.api.listUserAccounts).mockResolvedValue([
 			{ id: "credential-account", providerId: "credential", accountId: "test-user", userId: "test-user" },
 		] as never);
@@ -241,6 +249,62 @@ describe("Profile +page.server", () => {
 			event.locals.user.email = "old@gmail.com";
 			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "untrusted" } });
 			expect(auth.api.changeEmail).not.toHaveBeenCalled();
+		});
+
+		it("sends no mail without a human check", async () => {
+			const event = createActionEvent({ newEmail: "new@gmail.com" });
+			event.locals.user.email = "old@gmail.com";
+			mockVerifyCaptchaField.mockResolvedValueOnce(false);
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "captcha" } });
+			expect(auth.api.changeEmail).not.toHaveBeenCalled();
+		});
+
+		describe("changePassword", () => {
+			const passwordForm = (overrides: Record<string, string> = {}) =>
+				createActionEvent({
+					currentPassword: "old-secret",
+					newPassword: "Velvet-otter-harbor-92",
+					confirmNewPassword: "Velvet-otter-harbor-92",
+					...overrides,
+				});
+
+			it("changes the password and signs other devices out", async () => {
+				const event = passwordForm();
+				expect(await actions.changePassword(event)).toEqual({ passwordChange: "changed" });
+				expect(auth.api.changePassword).toHaveBeenCalledWith({
+					headers: event.request.headers,
+					body: { currentPassword: "old-secret", newPassword: "Velvet-otter-harbor-92", revokeOtherSessions: true },
+				});
+			});
+
+			it.each([
+				[{ confirmNewPassword: "something-else" }, "mismatch"],
+				[{ newPassword: "short", confirmNewPassword: "short" }, "short"],
+				[{ currentPassword: "" }, "wrong"],
+			])("rejects %o before asking Better Auth", async (overrides, outcome) => {
+				expect(await actions.changePassword(passwordForm(overrides))).toMatchObject({ status: 400, data: { passwordChange: outcome } });
+				expect(auth.api.changePassword).not.toHaveBeenCalled();
+			});
+
+			it("needs a human check", async () => {
+				mockVerifyCaptchaField.mockResolvedValueOnce(false);
+				expect(await actions.changePassword(passwordForm())).toMatchObject({ status: 400, data: { passwordChange: "captcha" } });
+				expect(auth.api.changePassword).not.toHaveBeenCalled();
+			});
+
+			it("reports a wrong current password and a weak new one on their fields", async () => {
+				vi.mocked(auth.api.changePassword).mockRejectedValueOnce(
+					new APIError("BAD_REQUEST", { code: "INVALID_PASSWORD", message: "Invalid password" }),
+				);
+				expect(await actions.changePassword(passwordForm())).toMatchObject({ status: 400, data: { passwordChange: "wrong" } });
+				vi.mocked(auth.api.changePassword).mockRejectedValueOnce(
+					new APIError("BAD_REQUEST", { code: "WEAK_PASSWORD", message: "This is a very common password." }),
+				);
+				expect(await actions.changePassword(passwordForm())).toMatchObject({
+					status: 400,
+					data: { passwordChange: "weak", passwordWarning: "This is a very common password." },
+				});
+			});
 		});
 
 		it("explains when email change requires signing in again", async () => {

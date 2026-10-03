@@ -76,7 +76,9 @@ services:
       TRIAL_TOKEN_HOLD: "${TRIAL_TOKEN_HOLD:-4096}"
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
-      AUTH_AUDIT_LOG: "${AUTH_AUDIT_LOG:-off}"
+      AUTH_AUDIT_LOG: "${AUTH_AUDIT_LOG:-false}"
+      # adapter-node reads the visitor's address from this header (empty: the socket peer).
+      ADDRESS_HEADER: "${ADDRESS_HEADER:-}"
 
       BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-20M}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"

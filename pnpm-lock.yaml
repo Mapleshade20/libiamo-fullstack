@@ -23,6 +23,9 @@ importers:
       motion:
         specifier: ^12.42.2
         version: 12.42.2
+      zxcvbn-typescript:
+        specifier: ^5.0.1
+        version: 5.0.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.4.10
@@ -2768,6 +2771,9 @@ packages:
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
+  zxcvbn-typescript@5.0.1:
+    resolution: {integrity: sha512-If2a6jdm278dfWmn6NL7oC1lNYRHOthBw0C78LsKvtAHHFNsMudvFhDn2fF/b74txWtSosJJiuJ7jBPn/xP6HQ==}
+
 snapshots:
 
   '@asamuzakjp/css-color@5.1.11':
@@ -4970,3 +4976,5 @@ snapshots:
   zimmerframe@1.1.4: {}
 
   zod@4.3.6: {}
+
+  zxcvbn-typescript@5.0.1: {}

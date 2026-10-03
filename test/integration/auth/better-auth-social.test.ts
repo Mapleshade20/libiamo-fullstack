@@ -8,7 +8,17 @@ import { mapOAuthProfileToUser } from "$lib/server/auth/social";
 const AUTH_BASE_URL = "http://localhost:3000/api/auth";
 const APP_URL = "http://localhost:3000";
 
-const { sentMail } = vi.hoisted(() => ({ sentMail: vi.fn() }));
+const { sentMail, zxcvbnCalls } = vi.hoisted(() => ({ sentMail: vi.fn(), zxcvbnCalls: vi.fn() }));
+vi.mock("zxcvbn-typescript", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("zxcvbn-typescript")>();
+	return {
+		...actual,
+		zxcvbn: (...args: Parameters<typeof actual.zxcvbn>) => {
+			zxcvbnCalls(...args);
+			return actual.zxcvbn(...args);
+		},
+	};
+});
 vi.mock("$lib/server/auth/email", () => ({
 	sendEmail: sentMail,
 	emailVerificationHtml: (_email: string, url: string) => url,
@@ -96,9 +106,14 @@ const TEST_ENV = {
 async function createAuthTestInstance(
 	googleIdentity: GithubIdentity = { id: "google-user", email: "google@gmail.com", verified: true },
 	accountStore: AuthAccountStore = createTestAccountStore(() => testInstanceDb),
-	overrides: { deleteUser?: boolean; onResetPasswordToken?: (token: string) => void; env?: Record<string, string> } = {},
+	overrides: {
+		deleteUser?: boolean;
+		onResetPasswordToken?: (token: string) => void;
+		env?: Record<string, string>;
+		requestHeaders?: () => Headers | undefined;
+	} = {},
 ) {
-	const options = createAuthOptions({ ...TEST_ENV, ...overrides.env }, { accountStore });
+	const options = createAuthOptions({ ...TEST_ENV, ...overrides.env }, { accountStore, requestHeaders: overrides.requestHeaders });
 	const google = options.socialProviders.google;
 	if (!google || typeof google === "function") throw new Error("TEST_ENV should configure Google as a static provider");
 
@@ -752,9 +767,53 @@ describe("Better Auth social authentication lifecycle", () => {
 			const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "en" }));
 			expect(callback.status).toBe(302);
 			const error = new URL(callback.headers.get("location") as string).searchParams.get("error");
-			expect(socialAuthErrorMessage(error)).toMatch(/trusted email/);
+			expect(socialAuthErrorMessage(error)).toMatch(/accepted provider/);
 
 			await expect(db.findMany({ model: "user" })).resolves.toHaveLength(0);
+		});
+
+		it("refuses guessable passwords on every endpoint that sets one", async () => {
+			let resetToken: string | undefined;
+			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, {
+				onResetPasswordToken: (token) => {
+					resetToken = token;
+				},
+			});
+			const weak = { body: { code: "WEAK_PASSWORD" } };
+
+			await expect(
+				auth.api.signUpEmail({ body: { name: "Weak", email: "weak@gmail.com", password: "password1", activeLanguage: "en" } }),
+			).rejects.toMatchObject(weak);
+			// Built from the learner's own address, which zxcvbn is told about.
+			await expect(
+				auth.api.signUpEmail({ body: { name: "Weak", email: "lindqvist@gmail.com", password: "lindqvist1", activeLanguage: "en" } }),
+			).rejects.toMatchObject(weak);
+			await expect(db.findMany({ model: "user" })).resolves.toHaveLength(0);
+
+			const signup = await auth.api.signUpEmail({ body: { name: "User", email: "strong@gmail.com", password, activeLanguage: "en" } });
+			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+			const { headers } = await signInWithUser("strong@gmail.com", password);
+			await expect(auth.api.changePassword({ headers, body: { currentPassword: password, newPassword: "qwertyuiop" } })).rejects.toMatchObject(weak);
+
+			await auth.api.requestPasswordReset({ body: { email: "strong@gmail.com", redirectTo: `${APP_URL}/reset-password` } });
+			await expect(auth.api.resetPassword({ body: { newPassword: "12345678", token: resetToken as string } })).rejects.toMatchObject(weak);
+			await expect(auth.api.signInEmail({ body: { email: "strong@gmail.com", password } })).resolves.toMatchObject({ user: { id: signup.user.id } });
+		});
+
+		it("refuses an over-long password without scoring it, ahead of the reset token check", async () => {
+			const { auth } = await createAuthTestInstance();
+			zxcvbnCalls.mockClear();
+
+			const response = await auth.handler(
+				new Request(`${AUTH_BASE_URL}/reset-password`, {
+					method: "POST",
+					headers: { "content-type": "application/json", origin: APP_URL },
+					body: JSON.stringify({ newPassword: "a".repeat(1024), token: "not-a-token" }),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(zxcvbnCalls).not.toHaveBeenCalled();
 		});
 
 		it("refuses an email change to an untrusted domain before sending mail", async () => {
@@ -797,9 +856,18 @@ describe("Better Auth social authentication lifecycle", () => {
 
 			const emails = (await db.findMany<{ email: string }>({ model: "user" })).map(({ email }) => email).sort();
 			expect(emails).toEqual(["form@gmail.com", "human@gmail.com"]);
+
+			const reset = await auth.handler(
+				new Request(`${AUTH_BASE_URL}/reset-password`, {
+					method: "POST",
+					headers: { "content-type": "application/json", origin: APP_URL },
+					body: JSON.stringify({ newPassword: password, token: "not-a-token" }),
+				}),
+			);
+			expect(reset.status).toBe(403);
 		});
 
-		it("logs sign-ups and email changes only when AUTH_AUDIT_LOG is on", async () => {
+		it("logs sign-ups and email changes only when AUTH_AUDIT_LOG is true", async () => {
 			const info = vi.spyOn(console, "info").mockImplementation(() => {});
 			const auditLines = () =>
 				info.mock.calls.map(([line]) => (typeof line === "string" && line.includes('"auth-audit"') ? JSON.parse(line) : null)).filter(Boolean);
@@ -808,7 +876,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			await quiet.auth.api.signUpEmail({ body: { name: "Quiet", email: "quiet@gmail.com", password, activeLanguage: "en" } });
 			expect(auditLines()).toEqual([]);
 
-			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, { env: { AUTH_AUDIT_LOG: "on" } });
+			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, { env: { AUTH_AUDIT_LOG: "true" } });
 			const signup = await auth.api.signUpEmail({ body: { name: "Logged", email: "logged@gmail.com", password, activeLanguage: "en" } });
 			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
 			const { headers } = await signInWithUser("logged@gmail.com", password);
@@ -822,6 +890,46 @@ describe("Better Auth social authentication lifecycle", () => {
 				expect.objectContaining({ event: "auth.email_change_requested", userId: signup.user.id, from: "logged@gmail.com", to: "moved@qq.com" }),
 				expect.objectContaining({ event: "auth.email_changed", userId: signup.user.id, email: "moved@qq.com" }),
 			]);
+			info.mockRestore();
+		});
+
+		it("logs password changes and resets and login-method links, but not a provider sign-up as a link", async () => {
+			const info = vi.spyOn(console, "info").mockImplementation(() => {});
+			const auditLines = () =>
+				info.mock.calls.map(([line]) => (typeof line === "string" && line.includes('"auth-audit"') ? JSON.parse(line) : null)).filter(Boolean);
+			let resetToken: string | undefined;
+			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, {
+				env: { AUTH_AUDIT_LOG: "true" },
+				onResetPasswordToken: (token) => {
+					resetToken = token;
+				},
+				// What `getRequestEvent()` supplies when a form action calls `auth.api` without a request.
+				requestHeaders: () => new Headers({ "x-real-ip": "203.0.113.9" }),
+			});
+			const signup = await auth.api.signUpEmail({ body: { name: "Mover", email: "mover@gmail.com", password, activeLanguage: "en" } });
+			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+			const { headers } = await signInWithUser("mover@gmail.com", password);
+			const newPassword = "velvet-otter-harbor-92";
+			await auth.api.changePassword({ headers, body: { currentPassword: password, newPassword } });
+			mockGithub({ id: "audit-github", email: "mover-elsewhere@gmail.com", verified: true });
+			await finishSocialFlow(auth, "github", await startSocialLink(auth, "github", headers));
+			await auth.api.unlinkAccount({ headers, body: { providerId: "github" } });
+			await auth.api.requestPasswordReset({ body: { email: "mover@gmail.com", redirectTo: `${APP_URL}/reset-password` } });
+			await auth.api.resetPassword({ body: { newPassword: "quiet-lantern-meadow-47", token: resetToken as string } });
+
+			mockGithub({ id: "audit-github-new", email: "newcomer@gmail.com", verified: true });
+			await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "en" }));
+
+			const userId = signup.user.id;
+			expect(auditLines().map(({ at: _, ip: __, type: ___, ...line }) => line)).toEqual([
+				{ event: "auth.sign_up", userId, email: "mover@gmail.com", method: "email" },
+				{ event: "auth.password_changed", userId, email: "mover@gmail.com" },
+				{ event: "auth.account_linked", userId, provider: "github" },
+				{ event: "auth.account_unlinked", userId, provider: "github" },
+				{ event: "auth.password_reset", userId, email: "mover@gmail.com" },
+				expect.objectContaining({ event: "auth.sign_up", email: "newcomer@gmail.com", method: "github" }),
+			]);
+			expect(auditLines().find(({ event }) => event === "auth.password_reset").ip).toBe("203.0.113.9");
 			info.mockRestore();
 		});
 	});

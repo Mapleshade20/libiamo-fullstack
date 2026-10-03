@@ -1,4 +1,4 @@
-import { UNTRUSTED_EMAIL_DOMAIN_MESSAGE } from "$lib/auth/email-domain";
+import { ACCEPTED_EMAIL_PROVIDERS_HINT, UNTRUSTED_EMAIL_DOMAIN_MESSAGE } from "$lib/auth/email-domain";
 
 export const SOCIAL_PROVIDERS = [
 	{ id: "google", label: "Google" },
@@ -86,7 +86,8 @@ export function accountActionErrorResult(code: unknown): AccountActionResult {
 export function socialAuthErrorMessage(code: string | null): string | null {
 	// Only account creation refuses a domain, so only the signed-out pages ever see this.
 	if (code?.toLowerCase() === UNTRUSTED_EMAIL_DOMAIN_PARAM) {
-		return `New accounts need a trusted email address. ${UNTRUSTED_EMAIL_DOMAIN_MESSAGE}`;
+		// The provider chose the address, so there is no field beside it to carry the list.
+		return `New accounts need an email from an accepted provider. ${ACCEPTED_EMAIL_PROVIDERS_HINT}`;
 	}
 	switch (socialAuthFailure(code)) {
 		case null:
