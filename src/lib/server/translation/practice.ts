@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { LanguageCode } from "$lib/constants";
 import { db } from "$lib/server/db";
 import { translationAttempt } from "$lib/server/db/schema";
+import { singleFlight } from "$lib/server/llm/single-flight";
 import { insertNotes } from "$lib/server/review/notes";
 import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/review/transfer";
 import { creditQuestCompletion } from "$lib/server/streak";
@@ -26,45 +27,44 @@ export async function generateTranslationPractice(record: TranslationAttemptReco
 	}
 	assertVersion(record, evaluatedAt);
 	if (record.practiceGeneratedAt) return getTranslationPracticeNotes(record);
-	const { evaluation } = await hydrateTranslationEvaluation(record);
-	if (evaluation.cards.length === 0) throw new TranslationWorkflowError(409, "This evaluation has no correction cards.");
-	const generated = await callGeneration2({
-		cards: evaluation.cards,
-		sourceLanguage: record.promptLanguage,
-		targetLanguage: record.targetLanguage,
-		userId: record.userId,
-		subjects: { taskId: record.taskId, translationAttemptId: record.id },
-	});
-	const now = new Date();
-	const won = await db.transaction(async (transaction) => {
-		const [claimed] = await transaction
-			.update(translationAttempt)
-			.set({ practiceGeneratedAt: now, updatedAt: now })
-			.where(
-				and(
-					eq(translationAttempt.id, record.id),
-					inArray(translationAttempt.workflowPhase, ["second_draft", "transfer"]),
-					eq(translationAttempt.evaluatedAt, record.evaluatedAt as Date),
-					sql`${translationAttempt.practiceGeneratedAt} IS NULL`,
-				),
-			)
-			.returning({ id: translationAttempt.id });
-		if (!claimed) return false;
-		await insertNotes(transaction, {
+	return singleFlight(`translation-practice:${record.id}`, async () => {
+		const { evaluation } = await hydrateTranslationEvaluation(record);
+		if (evaluation.cards.length === 0) throw new TranslationWorkflowError(409, "This evaluation has no correction cards.");
+		const generated = await callGeneration2({
+			cards: evaluation.cards,
+			sourceLanguage: record.promptLanguage,
+			targetLanguage: record.targetLanguage,
 			userId: record.userId,
-			language: record.targetLanguage as LanguageCode,
-			source: { type: "translation", attemptId: record.id },
-			notes: generated.value.notes,
-			availableFrom: startOfNextLocalDay(now, timeZone),
+			subjects: { taskId: record.taskId, translationAttemptId: record.id },
 		});
-		return true;
+		const now = new Date();
+		const won = await db.transaction(async (transaction) => {
+			const [claimed] = await transaction
+				.update(translationAttempt)
+				.set({ practiceGeneratedAt: now, updatedAt: now })
+				.where(
+					and(
+						eq(translationAttempt.id, record.id),
+						inArray(translationAttempt.workflowPhase, ["second_draft", "transfer"]),
+						eq(translationAttempt.evaluatedAt, record.evaluatedAt as Date),
+						sql`${translationAttempt.practiceGeneratedAt} IS NULL`,
+					),
+				)
+				.returning({ id: translationAttempt.id });
+			if (!claimed) return false;
+			await insertNotes(transaction, {
+				userId: record.userId,
+				language: record.targetLanguage as LanguageCode,
+				source: { type: "translation", attemptId: record.id },
+				notes: generated.value.notes,
+				availableFrom: startOfNextLocalDay(now, timeZone),
+			});
+			return true;
+		});
+		const notes = await getTranslationPracticeNotes(record);
+		if (!won && notes.length === 0) throw new TranslationWorkflowError(409, "The evaluation changed while practice was being generated.");
+		return notes;
 	});
-	if (!won) {
-		const existing = await getTranslationPracticeNotes(record);
-		if (existing.length > 0) return existing;
-		throw new TranslationWorkflowError(409, "The evaluation changed while practice was being generated.");
-	}
-	return getTranslationPracticeNotes(record);
 }
 
 export async function verifyTranslationSecondDraft(input: {

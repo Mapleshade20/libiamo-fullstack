@@ -5,7 +5,7 @@ set -eu
 #
 # Migrations run here rather than in a separate job so a plain `docker compose up`
 # or `docker run` always lands on a schema the code expects. Set
-# RUN_MIGRATIONS=false to skip, e.g. when running several replicas and migrating
+# RUN_MIGRATIONS=0 to skip, e.g. when running several replicas and migrating
 # from a dedicated one-shot container instead.
 
 cd /app
@@ -13,7 +13,12 @@ cd /app
 : "${DATABASE_URL:?DATABASE_URL is not set}"
 : "${ORIGIN:?ORIGIN is not set}"
 
-if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+case "$(printf %s "${RUN_MIGRATIONS:-1}" | tr '[:upper:]' '[:lower:]')" in
+    0 | false | no | off) run_migrations=0 ;;
+    *) run_migrations=1 ;;
+esac
+
+if [ "$run_migrations" = 1 ]; then
     echo "entrypoint: applying database migrations"
     attempt=1
     max_attempts="${MIGRATION_MAX_ATTEMPTS:-10}"
@@ -28,7 +33,7 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
     done
     echo "entrypoint: migrations up to date"
 else
-    echo "entrypoint: RUN_MIGRATIONS=false, skipping migrations"
+    echo "entrypoint: RUN_MIGRATIONS=$RUN_MIGRATIONS, skipping migrations"
 fi
 
 # exec so the server becomes the process tini supervises and receives SIGTERM.

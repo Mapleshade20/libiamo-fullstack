@@ -8,7 +8,11 @@ export const PRACTICE_UI_TEXT_MAX_LENGTH = 10000;
 export const MAIL_TEXT_MAX_LENGTH = 50000;
 export const MAIL_BODY_HTML_MAX_LENGTH = MAIL_TEXT_MAX_LENGTH * 10;
 export const AUTH_EMAIL_MAX_LENGTH = 254;
-export const AUTH_PASSWORD_MAX_LENGTH = 1024;
+export const AUTH_PASSWORD_MIN_LENGTH = 8;
+/** For setting a password; the strength estimator slows sharply on longer input. */
+export const AUTH_PASSWORD_MAX_LENGTH = 64;
+/** For checking an existing password, which may predate the cap above (Better Auth's former default). */
+export const AUTH_EXISTING_PASSWORD_MAX_LENGTH = 128;
 export const AUTH_TOKEN_MAX_LENGTH = 2048;
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_TEXT_MAX_LENGTH = 10000;

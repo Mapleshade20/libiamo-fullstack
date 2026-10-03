@@ -7,6 +7,7 @@ import { translationAnswer, translationAttempt, translationSourceSet } from "$li
 import type { ChatMessage } from "$lib/server/llm/client";
 import { defineLlmRecipe } from "$lib/server/llm/recipe";
 import { runLlmRecipe } from "$lib/server/llm/run";
+import { singleFlight } from "$lib/server/llm/single-flight";
 
 export const TRANSLATION_VOTE_THRESHOLD = 30;
 
@@ -136,46 +137,49 @@ export async function getOrCreateTranslationSourceSet(input: {
 	promptLanguage: string;
 }) {
 	const contentFingerprint = translationContentFingerprint(input);
-	const filter = and(
-		eq(translationSourceSet.taskId, input.taskId),
-		eq(translationSourceSet.promptLanguage, input.promptLanguage),
-		eq(translationSourceSet.contentFingerprint, contentFingerprint),
-	);
-	const [cached] = await db.select().from(translationSourceSet).where(filter).limit(1);
-	if (cached) {
-		validateTranslationCandidates(cached.candidates, input.referenceParagraphs.length);
-		return cached;
-	}
+	// Per learner: a request joining another learner's run would surface that learner's key or quota error.
+	return singleFlight(`translation-sources:${input.userId}:${input.taskId}:${input.promptLanguage}:${contentFingerprint}`, async () => {
+		const filter = and(
+			eq(translationSourceSet.taskId, input.taskId),
+			eq(translationSourceSet.promptLanguage, input.promptLanguage),
+			eq(translationSourceSet.contentFingerprint, contentFingerprint),
+		);
+		const [cached] = await db.select().from(translationSourceSet).where(filter).limit(1);
+		if (cached) {
+			validateTranslationCandidates(cached.candidates, input.referenceParagraphs.length);
+			return cached;
+		}
 
-	const candidates = await generateTranslationVariants({
-		userId: input.userId,
-		taskId: input.taskId,
-		paragraphs: input.referenceParagraphs,
-		sourceLanguage: input.sourceLanguage,
-		targetLanguage: input.promptLanguage,
-		context: input.context,
-	});
-	const [inserted] = await db
-		.insert(translationSourceSet)
-		.values({
+		const candidates = await generateTranslationVariants({
+			userId: input.userId,
 			taskId: input.taskId,
+			paragraphs: input.referenceParagraphs,
 			sourceLanguage: input.sourceLanguage,
-			promptLanguage: input.promptLanguage,
-			referenceParagraphs: input.referenceParagraphs,
+			targetLanguage: input.promptLanguage,
 			context: input.context,
-			contentFingerprint,
-			candidates,
-		})
-		.onConflictDoNothing({
-			target: [translationSourceSet.taskId, translationSourceSet.promptLanguage, translationSourceSet.contentFingerprint],
-		})
-		.returning();
-	if (inserted) return inserted;
+		});
+		const [inserted] = await db
+			.insert(translationSourceSet)
+			.values({
+				taskId: input.taskId,
+				sourceLanguage: input.sourceLanguage,
+				promptLanguage: input.promptLanguage,
+				referenceParagraphs: input.referenceParagraphs,
+				context: input.context,
+				contentFingerprint,
+				candidates,
+			})
+			.onConflictDoNothing({
+				target: [translationSourceSet.taskId, translationSourceSet.promptLanguage, translationSourceSet.contentFingerprint],
+			})
+			.returning();
+		if (inserted) return inserted;
 
-	const [winner] = await db.select().from(translationSourceSet).where(filter).limit(1);
-	if (!winner) throw new Error("Translation source generation lost a race but no winning record was found.");
-	validateTranslationCandidates(winner.candidates, input.referenceParagraphs.length);
-	return winner;
+		const [winner] = await db.select().from(translationSourceSet).where(filter).limit(1);
+		if (!winner) throw new Error("Translation source generation lost a race but no winning record was found.");
+		validateTranslationCandidates(winner.candidates, input.referenceParagraphs.length);
+		return winner;
+	});
 }
 
 export function chooseInitialCandidate(votes: number[], random = Math.random) {

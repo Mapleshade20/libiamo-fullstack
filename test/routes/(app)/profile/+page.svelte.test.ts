@@ -21,6 +21,7 @@ const data = {
 	serverNativeLanguages: [{ value: "en" as const, label: "English" }],
 	hasApiKey: false,
 	trialQuota: null,
+	captchaSiteKey: null,
 	apiBaseUrl: "",
 	apiModel: "",
 	levelSelfAssign: 2 as const,

@@ -6,6 +6,7 @@ import { base } from "$app/paths";
 import { isSocialProviderId, type SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import SocialAuthButtons from "$lib/components/auth/SocialAuthButtons.svelte";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
 import { Button } from "$lib/components/ui/button";
@@ -92,6 +93,10 @@ const actionNotification = $derived(
 					<p data-field-error="password" class="field-error-message">{form.errors.password[0]}</p>
 				{/if}
 			</div>
+
+			{#if data.captchaSiteKey}
+				<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+			{/if}
 
 			<Button type="submit" class="w-full">Sign in</Button>
 

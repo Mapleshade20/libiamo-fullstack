@@ -3,18 +3,22 @@ import Check from "@lucide/svelte/icons/check";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import KeyRound from "@lucide/svelte/icons/key-round";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
-import { onDestroy, onMount } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
+import { trialQuotaWarning } from "$lib/account/trial-release";
+import { checkPasswordStrength, preloadPasswordStrength } from "$lib/auth/password-strength";
 import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ProfileNameEditor from "$lib/components/account/ProfileNameEditor.svelte";
 import SocialProviderIcon from "$lib/components/auth/SocialProviderIcon.svelte";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import ChoiceGroup from "$lib/components/common/ChoiceGroup.svelte";
 import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import InfoTip from "$lib/components/common/InfoTip.svelte";
 import ModalDialog from "$lib/components/common/ModalDialog.svelte";
 import Notice from "$lib/components/common/Notice.svelte";
 import Select from "$lib/components/common/Select.svelte";
@@ -27,6 +31,8 @@ import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
 import {
+	AUTH_PASSWORD_MAX_LENGTH,
+	AUTH_PASSWORD_MIN_LENGTH,
 	BYOK_API_BASE_URL_LABELS,
 	BYOK_API_BASE_URLS,
 	BYOK_API_PRESETS,
@@ -124,6 +130,34 @@ let passwordSetupPending = $state(false);
 let emailChangePending = $state(false);
 let emailChangeForm = $state<HTMLFormElement | null>(null);
 let emailDialogOpen = $state(false);
+// The address a verification link just went to; while set, the dialog shows that instead of the form.
+let emailSentTo = $state<string | null>(null);
+let emailDoneButton = $state<HTMLButtonElement | null>(null);
+let newEmailInput = $state<HTMLInputElement | null>(null);
+let passwordChangePending = $state(false);
+let passwordChangeForm = $state<HTMLFormElement | null>(null);
+let passwordDialogOpen = $state(false);
+// Found before the round trip, so they never reach the server or spend the human check.
+let localPasswordError = $state<{ field: "newPassword" | "confirmNewPassword"; message: string } | null>(null);
+// zxcvbn only speaks English; other interfaces get the general advice instead of its specific warning.
+const passwordWarning = (warning: string | undefined) => (lang === "en" && warning ? warning : t(lang, "profile.passwordWeak"));
+const passwordErrors = $derived.by((): Partial<Record<"currentPassword" | "newPassword" | "confirmNewPassword", string[]>> => {
+	if (localPasswordError) return { [localPasswordError.field]: [localPasswordError.message] };
+	switch (form?.passwordChange) {
+		case "wrong":
+			return { currentPassword: [t(lang, "profile.passwordWrong")] };
+		case "short":
+			return { newPassword: [t(lang, "profile.passwordTooShort")] };
+		case "long":
+			return { newPassword: [t(lang, "profile.passwordTooLong")] };
+		case "weak":
+			return { newPassword: [passwordWarning(form.passwordWarning)] };
+		case "mismatch":
+			return { confirmNewPassword: [t(lang, "profile.passwordMismatch")] };
+		default:
+			return {};
+	}
+});
 // The confirmation dialog drives the unlink forms rather than owning the POST, so
 // disconnecting still runs through the same `use:enhance` path as every other action.
 let disconnectForms = $state<Partial<Record<SocialProviderId, HTMLFormElement>>>({});
@@ -204,7 +238,14 @@ function formatConnectedAt(isoDate: string) {
 let trialPercent = $derived(
 	data.trialQuota ? Math.max(0, Math.min(100, Math.round((data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal) * 100))) : 0,
 );
-let trialTone = $derived(!data.trialQuota ? "normal" : data.trialQuota.trialTokensLeft <= 0 ? "depleted" : trialPercent <= 10 ? "low" : "normal");
+let trialTone = $derived((data.trialQuota && trialQuotaWarning(data.trialQuota)) ?? "normal");
+let trialNextRelease = $derived(
+	data.trialQuota?.trialNextReleaseAt
+		? new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short", timeZone: clock().timeZone }).format(
+				data.trialQuota.trialNextReleaseAt,
+			)
+		: null,
+);
 
 function formatTokenCount(value: number) {
 	return new Intl.NumberFormat("en-US").format(Math.max(0, value));
@@ -404,62 +445,226 @@ function enhancePasswordSetup() {
 		</Card.Header>
 		<Card.Content class="space-y-3">
 			<ModalDialog bind:open={emailDialogOpen} busy={emailChangePending} labelledby="email-dialog-title">
-				<h2 id="email-dialog-title" class="mb-2">{t(lang, "profile.changeEmail")}</h2>
-				<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.changeEmailHelp")}</p>
-				<form
-					bind:this={emailChangeForm}
-					method="POST"
-					action="?/changeEmail"
-					class="space-y-4"
-					oninvalidcapture={handleInvalidField}
-					use:enhance={() => {
-							emailChangePending = true;
-							return async ({ update }) => {
-								try { await update({ reset: false }); } finally { emailChangePending = false; }
+				{#if emailSentTo}
+					<h2 id="email-dialog-title" class="mb-2">{t(lang, "profile.emailChangeSentTitle")}</h2>
+					<p class="mb-3 break-all font-medium">{emailSentTo}</p>
+					<p class="mb-3 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.emailChangeSent")}</p>
+					<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.emailChangeUntil").replace("{email}", data.user.email)}</p>
+					<div class="flex flex-wrap justify-end gap-2">
+						<Button
+							type="button"
+							variant="ghost"
+							onclick={async () => {
+								emailSentTo = null;
+								await tick();
+								newEmailInput?.focus();
+							}}
+							>{t(lang, "profile.useDifferentEmail")}</Button
+						>
+						<Button type="button" bind:ref={emailDoneButton} onclick={() => (emailDialogOpen = false)}>{t(lang, "common.done")}</Button>
+					</div>
+				{:else}
+					<h2 id="email-dialog-title" class="mb-2">{t(lang, "profile.changeEmail")}</h2>
+					<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.changeEmailHelp")}</p>
+					<form
+						bind:this={emailChangeForm}
+						method="POST"
+						action="?/changeEmail"
+						class="space-y-4"
+						oninvalidcapture={handleInvalidField}
+						use:enhance={({ formData }) => {
+								emailChangePending = true;
+								const address = String(formData.get("newEmail") ?? "").trim().toLowerCase();
+								return async ({ result, update }) => {
+									try {
+										await update({ reset: result.type === "success" });
+										if (result.type === "success" && result.data?.emailChange === "sent") {
+											emailSentTo = address;
+											// The submit button that held focus is gone with the form.
+											await tick();
+											emailDoneButton?.focus();
+										}
+									} finally {
+										emailChangePending = false;
+									}
+								};
+							}}
+					>
+						<div class="flex items-center gap-1.5">
+							<Label for="newEmail">{t(lang, "profile.newEmail")}</Label>
+							<InfoTip id="newEmail-providers" label={t(lang, "profile.emailProvidersLabel")} text={t(lang, "profile.emailProviders")} />
+						</div>
+						<Input
+							id="newEmail"
+							bind:ref={newEmailInput}
+							data-initial-focus
+							aria-describedby="newEmail-providers"
+							name="newEmail"
+							type="email"
+							autocomplete="email"
+							required
+							readonly={emailChangePending}
+							aria-invalid={form?.emailChange === "invalid" || form?.emailChange === "untrusted"}
+						/>
+						<FormErrorFocus
+							formRef={emailChangeForm}
+							errors={form?.emailChange === "invalid"
+								? { newEmail: [t(lang, "profile.emailChangeInvalid")] }
+								: form?.emailChange === "untrusted"
+									? { newEmail: [t(lang, "profile.emailChangeUntrusted")] }
+									: {}}
+							fieldOrder={["newEmail"]}
+						/>
+						<!-- Mounted only while open, so visiting Profile never runs a challenge nobody asked for. -->
+						{#if data.captchaSiteKey && emailDialogOpen}
+							<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+						{/if}
+						<div class="flex flex-wrap justify-end gap-2 pt-2">
+							<Button type="button" variant="ghost" disabled={emailChangePending} onclick={() => (emailDialogOpen = false)}
+								>{t(lang, "common.cancel")}</Button
+							>
+							<Button type="submit" disabled={emailChangePending}>
+								{#if emailChangePending}
+									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+								{/if}
+								{t(lang, "profile.changeEmail")}
+							</Button>
+						</div>
+						<!-- Field problems show on the field; only the rest needs a notice. -->
+						<ActionNotification
+							notification={form?.emailChange === "stale" || form?.emailChange === "captcha" || form?.emailChange === "error"
+								? {
+										variant: "error",
+										title: t(lang, "profile.changeEmail"),
+										message: t(lang, form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "captcha" ? "profile.emailChangeCaptcha" : "profile.emailChangeError"),
+									}
+								: null}
+						/>
+					</form>
+				{/if}
+			</ModalDialog>
+			{#if data.credentialConnected}
+				<ModalDialog bind:open={passwordDialogOpen} busy={passwordChangePending} labelledby="password-dialog-title">
+					<h2 id="password-dialog-title" class="mb-2">{t(lang, "profile.changePassword")}</h2>
+					<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{t(lang, "profile.changePasswordHelp")}</p>
+					<form
+						bind:this={passwordChangeForm}
+						method="POST"
+						action="?/changePassword"
+						class="space-y-4"
+						oninvalidcapture={handleInvalidField}
+						use:enhance={async ({ formData, cancel }) => {
+							localPasswordError = null;
+							const newPassword = String(formData.get("newPassword") ?? "");
+							if (newPassword !== formData.get("confirmNewPassword")) {
+								localPasswordError = { field: "confirmNewPassword", message: t(lang, "profile.passwordMismatch") };
+							} else if (newPassword.length > AUTH_PASSWORD_MAX_LENGTH) {
+								localPasswordError = { field: "newPassword", message: t(lang, "profile.passwordTooLong") };
+							} else {
+								const strength = await checkPasswordStrength(newPassword, [data.user.name, data.user.email]).catch(() => null);
+								if (strength && !strength.ok) localPasswordError = { field: "newPassword", message: passwordWarning(strength.warning) };
+							}
+							if (localPasswordError) {
+								cancel();
+								return;
+							}
+							passwordChangePending = true;
+							return async ({ result, update }) => {
+								try {
+									await update({ reset: result.type === "success" });
+									// Nothing is left to do in the dialog; the page confirms it instead.
+									if (result.type === "success") passwordDialogOpen = false;
+								} finally {
+									passwordChangePending = false;
+								}
 							};
 						}}
-				>
-					<Label for="newEmail">{t(lang, "profile.newEmail")}</Label>
-					<Input
-						id="newEmail"
-						name="newEmail"
-						type="email"
-						autocomplete="email"
-						required
-						readonly={emailChangePending}
-						aria-invalid={form?.emailChange === "invalid"}
-					/>
-					<FormErrorFocus
-						formRef={emailChangeForm}
-						errors={form?.emailChange === "invalid" ? { newEmail: [t(lang, "profile.emailChangeInvalid")] } : {}}
-						fieldOrder={["newEmail"]}
-					/>
-					<div class="flex flex-wrap justify-end gap-2 pt-2">
-						<Button type="button" variant="ghost" disabled={emailChangePending} onclick={() => (emailDialogOpen = false)}
-							>{t(lang, "common.cancel")}</Button
-						>
-						<Button type="submit" disabled={emailChangePending}>
-							{#if emailChangePending}
-								<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-							{/if}
-							{t(lang, "profile.changeEmail")}
-						</Button>
-					</div>
-					<ActionNotification
-						notification={form?.emailChange ? {
-							variant: form.emailChange === "sent" ? "success" : "error",
-							title: t(lang, "profile.changeEmail"),
-							message: t(lang, form.emailChange === "sent" ? "profile.emailChangeSent" : form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "invalid" ? "profile.emailChangeInvalid" : "profile.emailChangeError"),
-						} : null}
-					/>
-				</form>
-			</ModalDialog>
+					>
+						<!-- Tells password managers which account this is. -->
+						<input type="text" name="username" autocomplete="username" value={data.user.email} hidden readonly>
+						<div class="space-y-2">
+							<Label for="currentPassword">{t(lang, "profile.currentPassword")}</Label>
+							<Input
+								id="currentPassword"
+								name="currentPassword"
+								type="password"
+								autocomplete="current-password"
+								data-initial-focus
+								required
+								readonly={passwordChangePending}
+								aria-invalid={Boolean(passwordErrors.currentPassword)}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="newPassword">{t(lang, "profile.newPassword")}</Label>
+							<Input
+								id="newPassword"
+								name="newPassword"
+								type="password"
+								autocomplete="new-password"
+								minlength={AUTH_PASSWORD_MIN_LENGTH}
+								required
+								readonly={passwordChangePending}
+								onfocus={preloadPasswordStrength}
+								aria-invalid={Boolean(passwordErrors.newPassword)}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="confirmNewPassword">{t(lang, "profile.confirmNewPassword")}</Label>
+							<Input
+								id="confirmNewPassword"
+								name="confirmNewPassword"
+								type="password"
+								autocomplete="new-password"
+								required
+								readonly={passwordChangePending}
+								aria-invalid={Boolean(passwordErrors.confirmNewPassword)}
+							/>
+						</div>
+						<FormErrorFocus
+							formRef={passwordChangeForm}
+							errors={passwordErrors}
+							fieldOrder={["currentPassword", "newPassword", "confirmNewPassword"]}
+						/>
+						{#if data.captchaSiteKey && passwordDialogOpen}
+							<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+						{/if}
+						<div class="flex flex-wrap justify-end gap-2 pt-2">
+							<Button type="button" variant="ghost" disabled={passwordChangePending} onclick={() => (passwordDialogOpen = false)}
+								>{t(lang, "common.cancel")}</Button
+							>
+							<Button type="submit" disabled={passwordChangePending}>
+								{#if passwordChangePending}
+									<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+								{/if}
+								{t(lang, "profile.changePassword")}
+							</Button>
+						</div>
+						<ActionNotification
+							notification={form?.passwordChange === "captcha" || form?.passwordChange === "error"
+								? {
+										variant: "error",
+										title: t(lang, "profile.changePassword"),
+										message: t(lang, form.passwordChange === "captcha" ? "profile.emailChangeCaptcha" : "profile.passwordChangeError"),
+									}
+								: null}
+						/>
+					</form>
+				</ModalDialog>
+			{/if}
+			<!-- Outside the dialog, which has closed by the time this shows. -->
+			<ActionNotification
+				notification={form?.passwordChange === "changed"
+					? { variant: "success", title: t(lang, "profile.changePassword"), message: t(lang, "profile.passwordChanged") }
+					: null}
+			/>
 			<ul class="-mx-6 -mb-6 divide-y divide-border border-t border-border">
 				<li class="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 px-6 py-3">
 					<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
 						<KeyRound class="size-4" />
 					</span>
-					<span class="min-w-0 flex-1 space-y-0.5">
+					<!-- A real basis, not flex-1's zero, so the buttons wrap below before this column collapses. -->
+					<span class="min-w-0 flex-1 basis-40 space-y-0.5">
 						<span class="block truncate font-medium" title={data.user.email}>{data.user.email}</span>
 						{@render methodStatus(data.credentialConnected, t(lang, data.credentialConnected ? "profile.passwordEnabled" : "profile.passwordMissing"))}
 					</span>
@@ -485,7 +690,19 @@ function enhancePasswordSetup() {
 								</form>
 							{/if}
 						{/if}
-						<Button type="button" variant="secondary" aria-haspopup="dialog" onclick={() => (emailDialogOpen = true)}
+						{#if data.credentialConnected}
+							<Button type="button" variant="secondary" aria-haspopup="dialog" onclick={() => (passwordDialogOpen = true)}
+								>{t(lang, "profile.changePassword")}</Button
+							>
+						{/if}
+						<Button
+							type="button"
+							variant="secondary"
+							aria-haspopup="dialog"
+							onclick={() => {
+								emailSentTo = null;
+								emailDialogOpen = true;
+							}}
 							>{t(lang, "profile.changeEmail")}</Button
 						>
 					</span>
@@ -571,6 +788,12 @@ function enhancePasswordSetup() {
 							style="width: {trialPercent}%"
 						></div>
 					</div>
+					{#if trialNextRelease}
+						<p class="text-sm text-muted-foreground">
+							{t(lang, "profile.trialReleaseSchedule")}
+							{t(lang, "profile.trialNextRelease").replace("{date}", trialNextRelease)}
+						</p>
+					{/if}
 				</Card.Content>
 			</Card.Root>
 		{/if}
@@ -593,7 +816,11 @@ function enhancePasswordSetup() {
 			<Card.Content class="space-y-5">
 				{#if !data.hasApiKey}
 					{#if data.trialQuota && trialTone === "depleted"}
-						<Notice tone="danger" role="status" title={t(lang, "profile.trialDepletedTitle")}><p>{t(lang, "profile.trialDepletedBody")}</p></Notice>
+						<Notice tone="danger" role="status" title={t(lang, "profile.trialDepletedTitle")}>
+							<p>
+								{trialNextRelease ? t(lang, "profile.trialWaitingBody").replace("{date}", trialNextRelease) : t(lang, "profile.trialDepletedBody")}
+							</p>
+						</Notice>
 					{:else if data.trialQuota && trialTone === "low"}
 						<Notice tone="warning" role="status" title={t(lang, "profile.trialLowTitle")}><p>{t(lang, "profile.trialLowBody")}</p></Notice>
 					{/if}

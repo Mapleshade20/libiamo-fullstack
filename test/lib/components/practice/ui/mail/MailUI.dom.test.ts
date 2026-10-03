@@ -1,7 +1,7 @@
 import { flushSync, tick } from "svelte";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import MailUI from "$lib/components/practice/ui/mail/MailUI.svelte";
-import { mountSurface, persisted, persistedSession, surfaceProps } from "../../support/surface.svelte";
+import { mountSurface, persisted, persistedSession, settleScrollLocks, surfaceProps } from "../../support/surface.svelte";
 import { button, type } from "../surfaces";
 
 const mocks = vi.hoisted(() => ({
@@ -23,8 +23,9 @@ beforeAll(() => {
 });
 
 let destroy: (() => void) | undefined;
-afterEach(() => {
+afterEach(async () => {
 	destroy?.();
+	await settleScrollLocks();
 	document.body.innerHTML = "";
 	localStorage.clear();
 });

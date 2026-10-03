@@ -3,6 +3,7 @@ import { sequence } from "@sveltejs/kit/hooks";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { building } from "$app/environment";
 import { applyDocumentLanguageToHtml, resolveLearnerDocumentLanguage, resolvePageDocumentLanguage } from "$lib/app/document-language";
+import { isCanonicalActionUrl } from "$lib/server/auth/action-url";
 import { auth } from "$lib/server/auth/auth";
 import { sql } from "$lib/server/db";
 import { ensureLlmLab } from "$lib/server/llm/lab/boot";
@@ -19,6 +20,15 @@ process.on("sveltekit:shutdown", async (reason) => {
 		timeout: 5,
 	});
 });
+
+// Before anything else, so a request shaped to slip past the proxy's per-action limits costs nothing.
+const handleActionUrl: Handle = ({ event, resolve }) => {
+	// Prerendering forbids reading the query, and only POSTs run actions.
+	if (event.request.method === "POST" && !isCanonicalActionUrl(event.request.method, event.route.id, event.url.search)) {
+		return new Response("Bad request", { status: 400 });
+	}
+	return resolve(event);
+};
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const session = await auth.api.getSession({ headers: event.request.headers });
@@ -42,4 +52,4 @@ const handleDocumentLanguage: Handle = ({ event, resolve }) => {
 	});
 };
 
-export const handle: Handle = sequence(handleBetterAuth, handleDocumentLanguage);
+export const handle: Handle = sequence(handleActionUrl, handleBetterAuth, handleDocumentLanguage);

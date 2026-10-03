@@ -2,11 +2,15 @@
 import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
+import { ACCEPTED_EMAIL_PROVIDERS_HINT } from "$lib/auth/email-domain";
+import { checkPasswordStrength, preloadPasswordStrength } from "$lib/auth/password-strength";
 import { isSocialProviderId, type SocialProviderId } from "$lib/auth/social";
 import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import SocialAuthButtons from "$lib/components/auth/SocialAuthButtons.svelte";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import InfoTip from "$lib/components/common/InfoTip.svelte";
 import Select from "$lib/components/common/Select.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -26,10 +30,12 @@ let formState = $derived(form as SignUpFormState | null | undefined);
 let password = $state("");
 let confirmPassword = $state("");
 let confirmPasswordError = $state("");
+let passwordError = $state("");
 let socialPending = $state<SocialProviderId | null>(null);
 
 let signUpForm: HTMLFormElement | null = $state(null);
 let confirmPasswordInput: HTMLInputElement | null = $state(null);
+let passwordInput: HTMLInputElement | null = $state(null);
 
 const actionNotification = $derived(
 	formState?.message
@@ -55,7 +61,7 @@ const actionNotification = $derived(
 			bind:this={signUpForm}
 			method="POST"
 			oninvalidcapture={handleInvalidField}
-			use:enhance={({ cancel, submitter }) => {
+			use:enhance={async ({ cancel, submitter, formData }) => {
 				const provider = submitter?.dataset.socialProvider;
 				if (isSocialProviderId(provider)) {
 					socialPending = provider;
@@ -73,6 +79,16 @@ const actionNotification = $derived(
 					return;
 				}
 				confirmPasswordError = "";
+				// The server checks too; this only spares a round trip and the human check.
+				const strength = await checkPasswordStrength(password, [String(formData.get("name") ?? ""), String(formData.get("email") ?? "")]).catch(() => null);
+				if (strength && !strength.ok) {
+					passwordError = strength.warning;
+					await tick();
+					if (passwordInput) focusAndHighlightField(passwordInput);
+					cancel();
+					return;
+				}
+				passwordError = "";
 			}}
 			class="space-y-4"
 		>
@@ -111,7 +127,10 @@ const actionNotification = $derived(
 						</div>
 
 						<div class="space-y-2">
-							<Label for="email">Email</Label>
+							<div class="flex items-center gap-1.5">
+								<Label for="email">Email</Label>
+								<InfoTip id="email-help" label="Accepted email providers" text={ACCEPTED_EMAIL_PROVIDERS_HINT} />
+							</div>
 							<Input
 								id="email"
 								name="email"
@@ -119,6 +138,7 @@ const actionNotification = $derived(
 								value={formState?.values?.email ?? ""}
 								required
 								aria-invalid={Boolean(formState?.errors?.email)}
+								aria-describedby="email-help"
 							/>
 							{#if formState?.errors?.email}
 								<p data-field-error="email" class="field-error-message">{formState.errors.email[0]}</p>
@@ -131,13 +151,15 @@ const actionNotification = $derived(
 								id="password"
 								name="password"
 								type="password"
+								bind:ref={passwordInput}
 								bind:value={password}
+								onfocus={preloadPasswordStrength}
 								oninput={() => { if (confirmPasswordInput) clearFieldFeedback(confirmPasswordInput); }}
 								required
-								aria-invalid={Boolean(formState?.errors?.password)}
+								aria-invalid={Boolean(passwordError || formState?.errors?.password)}
 							/>
-							{#if formState?.errors?.password}
-								<p data-field-error="password" class="field-error-message">{formState.errors.password[0]}</p>
+							{#if passwordError || formState?.errors?.password}
+								<p data-field-error="password" class="field-error-message">{passwordError || formState?.errors?.password?.[0]}</p>
 							{/if}
 						</div>
 
@@ -156,7 +178,14 @@ const actionNotification = $derived(
 							{/if}
 						</div>
 
+						{#if data.captchaSiteKey}
+							<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+						{/if}
+
 						<Button type="submit" class="w-full">Sign up</Button>
+						<p class="text-sm text-muted-foreground">
+							Your free AI trial arrives in three parts: a third when you sign up, another a day later and the rest on day three.
+						</p>
 
 						{#if data.socialProviders.length > 0}
 							<div class="border-t border-border" aria-hidden="true"></div>
@@ -185,6 +214,10 @@ const actionNotification = $derived(
 }
 .reveal-inner {
 	overflow: hidden;
+	/* Room for the controls' 3px focus ring, which the clip would otherwise cut off at the
+	   card's content edges. The negative margins keep the fields where they were. */
+	margin: 0 -4px -4px;
+	padding: 0 4px 4px;
 	/* Transitioned discretely: applies at once when revealing, and waits for the
 	   row to finish collapsing when hiding. Also drops the fields from the tab
 	   order while they are clipped, which `overflow: hidden` alone does not. */

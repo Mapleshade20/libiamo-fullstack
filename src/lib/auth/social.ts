@@ -1,3 +1,5 @@
+import { ACCEPTED_EMAIL_PROVIDERS_HINT, UNTRUSTED_EMAIL_DOMAIN_MESSAGE } from "$lib/auth/email-domain";
+
 export const SOCIAL_PROVIDERS = [
 	{ id: "google", label: "Google" },
 	{ id: "github", label: "GitHub" },
@@ -22,7 +24,13 @@ export function isSocialProviderId(value: unknown): value is SocialProviderId {
  */
 export const OAUTH_EMAIL_NOT_VERIFIED_MESSAGE = "The provider did not verify this email address.";
 
-const OAUTH_EMAIL_NOT_VERIFIED_PARAM = OAUTH_EMAIL_NOT_VERIFIED_MESSAGE.split(" ").join("_").toLowerCase();
+const OAUTH_EMAIL_NOT_VERIFIED_PARAM = oauthErrorParam(OAUTH_EMAIL_NOT_VERIFIED_MESSAGE);
+/** A new account through Google or GitHub whose address is not on a trusted domain (`user.create.before`). */
+const UNTRUSTED_EMAIL_DOMAIN_PARAM = oauthErrorParam(UNTRUSTED_EMAIL_DOMAIN_MESSAGE);
+
+function oauthErrorParam(message: string) {
+	return message.split(" ").join("_").toLowerCase();
+}
 
 /**
  * Why a social sign-in or account link did not go through, reduced to the cases a
@@ -76,6 +84,11 @@ export function accountActionErrorResult(code: unknown): AccountActionResult {
  * one from `Accept-Language` for four error strings is not worth the machinery.
  */
 export function socialAuthErrorMessage(code: string | null): string | null {
+	// Only account creation refuses a domain, so only the signed-out pages ever see this.
+	if (code?.toLowerCase() === UNTRUSTED_EMAIL_DOMAIN_PARAM) {
+		// The provider chose the address, so there is no field beside it to carry the list.
+		return `New accounts need an email from an accepted provider. ${ACCEPTED_EMAIL_PROVIDERS_HINT}`;
+	}
 	switch (socialAuthFailure(code)) {
 		case null:
 			return null;

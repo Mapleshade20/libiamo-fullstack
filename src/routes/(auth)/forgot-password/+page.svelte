@@ -2,7 +2,9 @@
 import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
+import { checkPasswordStrength, preloadPasswordStrength } from "$lib/auth/password-strength";
 import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
 import Notice from "$lib/components/common/Notice.svelte";
@@ -16,16 +18,20 @@ let { form, data } = $props();
 let newPassword = $state("");
 let confirmNewPassword = $state("");
 let confirmNewPasswordError = $state("");
+let newPasswordError = $state("");
 let resetForm: HTMLFormElement | null = $state(null);
 let requestForm: HTMLFormElement | null = $state(null);
 let confirmNewPasswordInput: HTMLInputElement | null = $state(null);
+let newPasswordInput: HTMLInputElement | null = $state(null);
 
 const actionNotification = $derived(
 	form?.emailSent
 		? { variant: "success" as const, title: "Check your inbox", message: "If an account with that email exists, we've sent a reset link." }
 		: form?.resetMessage
 			? { variant: "error" as const, title: "Unable to reset password", message: form.resetMessage }
-			: null,
+			: form?.captchaMessage
+				? { variant: "error" as const, title: "Unable to send a reset link", message: form.captchaMessage }
+				: null,
 );
 </script>
 
@@ -62,7 +68,7 @@ const actionNotification = $derived(
 					method="POST"
 					action="?/resetPassword"
 					oninvalidcapture={handleInvalidField}
-					use:enhance={({ cancel }) => {
+					use:enhance={async ({ cancel }) => {
 						if (newPassword !== confirmNewPassword) {
 							confirmNewPasswordError = "Passwords do not match";
 							void tick().then(() => {
@@ -72,6 +78,15 @@ const actionNotification = $derived(
 							return;
 						}
 						confirmNewPasswordError = "";
+						const strength = await checkPasswordStrength(newPassword).catch(() => null);
+						if (strength && !strength.ok) {
+							newPasswordError = strength.warning;
+							await tick();
+							if (newPasswordInput) focusAndHighlightField(newPasswordInput);
+							cancel();
+							return;
+						}
+						newPasswordError = "";
 					}}
 					class="space-y-4"
 				>
@@ -83,13 +98,15 @@ const actionNotification = $derived(
 							id="newPassword"
 							name="newPassword"
 							type="password"
+							bind:ref={newPasswordInput}
 							bind:value={newPassword}
+							onfocus={preloadPasswordStrength}
 							oninput={() => { if (confirmNewPasswordInput) clearFieldFeedback(confirmNewPasswordInput); }}
 							required
-							aria-invalid={Boolean(form?.resetErrors?.newPassword)}
+							aria-invalid={Boolean(newPasswordError || form?.resetErrors?.newPassword)}
 						/>
-						{#if form?.resetErrors?.newPassword}
-							<p data-field-error="newPassword" class="field-error-message">{form.resetErrors.newPassword[0]}</p>
+						{#if newPasswordError || form?.resetErrors?.newPassword}
+							<p data-field-error="newPassword" class="field-error-message">{newPasswordError || form?.resetErrors?.newPassword?.[0]}</p>
 						{/if}
 					</div>
 
@@ -108,6 +125,9 @@ const actionNotification = $derived(
 						{/if}
 					</div>
 
+					{#if data.captchaSiteKey}
+						<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+					{/if}
 					<Button type="submit" class="w-full">Reset password</Button>
 				</form>
 			{/if}
@@ -123,6 +143,9 @@ const actionNotification = $derived(
 						<p data-field-error="email" class="field-error-message">{form.errors.email[0]}</p>
 					{/if}
 				</div>
+				{#if data.captchaSiteKey}
+					<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+				{/if}
 				<Button type="submit" class="w-full">Send reset link</Button>
 			</form>
 		{/if}

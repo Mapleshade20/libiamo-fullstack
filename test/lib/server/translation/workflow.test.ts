@@ -199,6 +199,22 @@ describe("Generation 1 lifecycle", () => {
 			expect.objectContaining({ workflowPhase: "correction", evaluation, generation1Messages: { messages: history } }),
 		);
 	});
+
+	it("shares one evaluation between requests that retry the same attempt concurrently", async () => {
+		answerSelect([
+			{ paragraphIndex: 0, translation: "Bonjour.", candidateIndex: 0 },
+			{ paragraphIndex: 1, translation: "Au revoir.", candidateIndex: 2 },
+		]);
+		mockGenerateEvaluation.mockResolvedValue({ value: { overallCommentary: "", ratings: {}, cards: [] }, history: [] });
+		const evaluatedAt = new Date("2026-07-15T12:00:00.000Z");
+		mockUpdateRows([[{ evaluatedAt }]]);
+		const submitted = () => record({ workflowPhase: "submitted", feedbackLanguage: "en" });
+
+		const [first, second] = await Promise.all([retryTranslationEvaluation(submitted()), retryTranslationEvaluation(submitted())]);
+
+		expect(mockGenerateEvaluation).toHaveBeenCalledTimes(1);
+		expect(second).toBe(first);
+	});
 });
 
 describe("correction transitions", () => {

@@ -3,10 +3,12 @@ import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
+import { WEAK_PASSWORD_CODE } from "$lib/auth/password-strength";
 import { isSocialProviderId, socialAuthErrorMessage } from "$lib/auth/social";
 import { isLanguageCode } from "$lib/constants";
 import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
+import { CAPTCHA_FAILED_MESSAGE, captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -16,6 +18,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	return {
 		socialProviders: configuredSocialProviderIds(env),
+		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		socialAuthError: socialAuthErrorMessage(event.url.searchParams.get("error")),
 	};
 };
@@ -75,6 +78,9 @@ export const actions: Actions = {
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
 		}
+		if (!(await verifyCaptchaField(env, formData, event))) {
+			return fail(400, { message: CAPTCHA_FAILED_MESSAGE, values: raw });
+		}
 
 		try {
 			await auth.api.signUpEmail({
@@ -88,6 +94,7 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
+				if (error.body?.code === WEAK_PASSWORD_CODE) return fail(400, { errors: { password: [error.message] }, values: raw });
 				return fail(400, { message: error.message || "Registration failed", values: raw });
 			}
 			return fail(500, { message: "Unexpected error", values: raw });

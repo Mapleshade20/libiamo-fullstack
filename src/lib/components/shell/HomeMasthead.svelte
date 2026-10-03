@@ -3,6 +3,7 @@ import Check from "@lucide/svelte/icons/check";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { page } from "$app/state";
+import { type TrialQuotaBalance, trialQuotaWarning } from "$lib/account/trial-release";
 import { setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import type { StreakRecord } from "$lib/streak/rules";
@@ -10,14 +11,9 @@ import FloatingPanel from "../common/FloatingPanel.svelte";
 import StreakIndicator from "../streak/StreakIndicator.svelte";
 import LanguageFlag from "./LanguageFlag.svelte";
 
-type TrialQuotaNavBalance = {
-	trialTokensLeft: number;
-	trialTokensTotal: number;
-};
-
 interface Props {
 	user: { id?: string; activeLanguage: string };
-	trialQuota?: TrialQuotaNavBalance | null;
+	trialQuota?: TrialQuotaBalance | null;
 	streak?: StreakRecord | null;
 	streakDayOffset?: number;
 }
@@ -28,12 +24,12 @@ function onProfileShortcutClick(event: MouseEvent) {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 	setNavbarTransitionIntent(new URL(`${base}/profile#llm`, page.url), "forward");
 }
-function quotaPercentage(balance: TrialQuotaNavBalance) {
+function quotaPercentage(balance: TrialQuotaBalance) {
 	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
 }
 
 let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
-let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 0 ? "depleted" : quotaPercent <= 10 ? "low" : "normal");
+let quotaTone = $derived((trialQuota && trialQuotaWarning(trialQuota)) ?? "normal");
 </script>
 {#snippet languageSwitcher()}
 	<FloatingPanel
@@ -74,7 +70,7 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 							: quotaTone === 'low'
 								? 'border-warning/30 bg-warning/[0.08] text-warning hover:bg-warning/[0.14]'
 								: 'border-border bg-background/70 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground'}"
-				title="Trial AI balance"
+				title={trialQuota.trialNextReleaseAt ? "Trial AI balance, with more on the way" : "Trial AI balance"}
 			>
 				<span>Trial</span>
 				<span class="tabular-nums">{quotaPercent}%</span>

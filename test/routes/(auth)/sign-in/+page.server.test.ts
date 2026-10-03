@@ -12,6 +12,12 @@ vi.mock("$lib/server/auth/auth", () => ({
 	},
 }));
 
+const { mockVerifyCaptchaField } = vi.hoisted(() => ({ mockVerifyCaptchaField: vi.fn() }));
+vi.mock("$lib/server/auth/captcha", async (importOriginal) => ({
+	...(await importOriginal<typeof import("$lib/server/auth/captcha")>()),
+	verifyCaptchaField: mockVerifyCaptchaField,
+}));
+
 vi.mock("$env/dynamic/private", () => ({
 	env: {
 		GOOGLE_CLIENT_ID: "google-id",
@@ -35,6 +41,7 @@ vi.mock("better-auth/api", () => {
 describe("Sign-in +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockVerifyCaptchaField.mockResolvedValue(true);
 	});
 
 	describe("load function", () => {
@@ -63,6 +70,7 @@ describe("Sign-in +page.server", () => {
 			expect(result).toEqual({
 				resetSuccess: true,
 				socialProviders: ["google", "github"],
+				captchaSiteKey: null,
 				socialAuthError: null,
 			});
 		});
@@ -77,6 +85,7 @@ describe("Sign-in +page.server", () => {
 			expect(result).toEqual({
 				resetSuccess: false,
 				socialProviders: ["google", "github"],
+				captchaSiteKey: null,
 				socialAuthError: "Authentication was canceled. You can try again when you’re ready.",
 			});
 		});
@@ -156,6 +165,14 @@ describe("Sign-in +page.server", () => {
 				},
 				headers: event.request.headers,
 			});
+		});
+
+		it("does not check the password without a human check", async () => {
+			mockVerifyCaptchaField.mockResolvedValueOnce(false);
+			const result = (await actions.default(createEvent({ email: "user@example.com", password: "secure-pass" }))) as ActionFailure<any>;
+			expect(result.status).toBe(400);
+			expect(result.data.values).toEqual({ email: "user@example.com" });
+			expect(auth.api.signInEmail).not.toHaveBeenCalled();
 		});
 
 		it("maps APIError to 400", async () => {

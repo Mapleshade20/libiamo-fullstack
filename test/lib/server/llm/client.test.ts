@@ -13,35 +13,30 @@ const { mockEnv } = vi.hoisted(() => ({
 
 vi.mock("$env/dynamic/private", () => ({ env: mockEnv }));
 
-const { mockUserQuotaFindFirst, mockDbUpdate, mockDbInsert } = vi.hoisted(() => {
-	const mockUserQuotaFindFirst = vi.fn().mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
-	const mockDbUpdate = vi.fn(() => ({
-		set: vi.fn(() => ({
-			where: vi.fn(() => ({
-				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 49_999, trialTokensTotal: 50_000 }]),
-			})),
-		})),
-	}));
-	const mockDbInsert = vi.fn(() => ({
-		values: vi.fn(() => ({
-			onConflictDoNothing: vi.fn(() => ({
-				returning: vi.fn().mockResolvedValue([{ trialTokensLeft: 50_000, trialTokensTotal: 50_000 }]),
-			})),
-		})),
-	}));
-	return { mockUserQuotaFindFirst, mockDbUpdate, mockDbInsert };
-});
+const { mockQuota } = vi.hoisted(() => ({
+	mockQuota: {
+		reserve: vi.fn(),
+		settle: vi.fn(),
+		refund: vi.fn(),
+	},
+}));
+
+vi.mock("$lib/server/account/trial-quota", async (importOriginal) => ({
+	...(await importOriginal<typeof import("$lib/server/account/trial-quota")>()),
+	reserveTrialQuota: mockQuota.reserve,
+	settleTrialQuota: mockQuota.settle,
+	refundTrialQuotaHold: mockQuota.refund,
+}));
 
 vi.mock("$lib/server/db", () => ({
 	db: {
 		query: {
 			userApiKey: { findFirst: vi.fn().mockResolvedValue(null) },
-			userQuota: { findFirst: mockUserQuotaFindFirst },
 		},
-		update: mockDbUpdate,
-		insert: mockDbInsert,
 	},
 }));
+
+const HOLD = { userId: "env-user", tokens: 4_096 };
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -79,9 +74,12 @@ beforeEach(() => {
 	mockEnv.OPENAI_MODEL = "test-model";
 	mockEnv.LLM_DEBUG = "";
 	mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
-	mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 50_000, trialTokensTotal: 50_000 });
-	mockDbUpdate.mockClear();
-	mockDbInsert.mockClear();
+	mockQuota.reserve.mockReset().mockResolvedValue(HOLD);
+	mockQuota.settle.mockReset().mockImplementation(async (_hold, tokens: number, estimated: boolean) => ({
+		trialTokensUsed: Math.ceil(tokens),
+		trialUsageEstimated: estimated,
+	}));
+	mockQuota.refund.mockReset().mockResolvedValue(undefined);
 });
 
 describe("chatText", () => {
@@ -215,7 +213,7 @@ describe("chatText", () => {
 		expect(url).toBe("https://user-api.example.com/v1/chat/completions");
 		expect(getHeader(init.headers, "authorization")).toBe("Bearer user-key");
 		expect(JSON.parse(String(init.body)).model).toBe("user-model");
-		expect(mockDbUpdate).not.toHaveBeenCalled();
+		expect(mockQuota.reserve).not.toHaveBeenCalled();
 	});
 
 	it("falls back to env config when user has no BYOK row and debits all output tokens, including reasoning tokens", async () => {
@@ -231,7 +229,9 @@ describe("chatText", () => {
 
 		const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://example.com/v1/chat/completions");
-		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
+		expect(mockQuota.reserve).toHaveBeenCalledWith("env-user");
+		expect(mockQuota.settle).toHaveBeenCalledWith(HOLD, 12, false);
+		expect(mockQuota.refund).not.toHaveBeenCalled();
 		expect(result.quota).toMatchObject({ trialTokensUsed: 12, trialUsageEstimated: false });
 	});
 
@@ -252,14 +252,47 @@ describe("chatText", () => {
 	it("blocks non-BYOK calls before the provider when trial quota is exhausted", async () => {
 		const { db: mockDb } = await import("$lib/server/db");
 		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
-		mockUserQuotaFindFirst.mockResolvedValueOnce({ trialTokensLeft: 0, trialTokensTotal: 50_000 });
+		const { TrialQuotaExhaustedError } = await import("$lib/server/account/trial-quota");
+		mockQuota.reserve.mockRejectedValueOnce(new TrialQuotaExhaustedError(50_000));
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatText } = await import("$lib/server/llm/client");
-		const { TrialQuotaExhaustedError } = await import("$lib/server/account/trial-quota");
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toBeInstanceOf(TrialQuotaExhaustedError);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("gives the whole hold back when the provider call fails", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () => new Response("Server Error", { status: 500 })),
+		);
+
+		const { chatText } = await import("$lib/server/llm/client");
+		await expect(chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" })).rejects.toThrow();
+
+		expect(mockQuota.refund).toHaveBeenCalledWith(HOLD);
+		expect(mockQuota.settle).not.toHaveBeenCalled();
+	});
+
+	it("returns the completion and keeps the hold debited when settling fails", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () => createChatCompletionResponse("ok")),
+		);
+		mockQuota.settle.mockRejectedValueOnce(new Error("connection reset"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const { chatText } = await import("$lib/server/llm/client");
+		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
+
+		expect(result.content).toBe("ok");
+		expect(result.quota).toBeUndefined();
+		expect(mockQuota.refund).not.toHaveBeenCalled();
 	});
 
 	it("throws config and provider errors clearly", async () => {
@@ -497,16 +530,16 @@ describe("trial quota", () => {
 				model: "user-model",
 			} as any)
 			.mockResolvedValueOnce(undefined);
-		mockUserQuotaFindFirst.mockResolvedValue({ trialTokensLeft: 123, trialTokensTotal: 50_000 });
 		vi.stubGlobal(
 			"fetch",
 			vi.fn<FetchLike>(async () => createChatCompletionResponse("ok")),
 		);
 
 		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "user-1" });
-		expect(mockDbUpdate).not.toHaveBeenCalled();
+		expect(mockQuota.reserve).not.toHaveBeenCalled();
 
 		await chatText({ messages: [{ role: "system", content: "hi" }], userId: "user-1" });
-		expect(mockDbUpdate).toHaveBeenCalledTimes(1);
+		expect(mockQuota.reserve).toHaveBeenCalledTimes(1);
+		expect(mockQuota.settle).toHaveBeenCalledTimes(1);
 	});
 });

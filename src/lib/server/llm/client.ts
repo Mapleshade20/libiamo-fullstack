@@ -11,9 +11,17 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import type { ReasoningEffort } from "$lib/constants";
-import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "../account/trial-quota";
+import {
+	refundTrialQuotaHold,
+	reserveTrialQuota,
+	settleTrialQuota,
+	TrialQuotaExhaustedError,
+	type TrialQuotaHold,
+	type TrialQuotaStatus,
+} from "../account/trial-quota";
 import { db } from "../db";
 import { userApiKey } from "../db/schema";
+import { envFlag } from "../env";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -320,8 +328,7 @@ function createOpenAIClient(config: OpenAIConfig) {
 // ── Debug helpers ─────────────────────────────────────────────────────
 
 function isLlmDebugEnabled() {
-	const value = env.LLM_DEBUG?.trim().toLowerCase();
-	return value === "1" || value === "true" || value === "yes" || value === "on";
+	return envFlag(env.LLM_DEBUG, false);
 }
 
 function debugLog(event: string, details: Record<string, unknown>) {
@@ -505,10 +512,42 @@ async function callChatCompletion(
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId, provider);
-	const shouldApplyTrialQuota = Boolean(userId && config.source === "env");
-	if (userId && shouldApplyTrialQuota) {
-		await assertTrialQuotaAvailable(userId);
+	// Trial calls hold tokens before the request and settle the real usage after it, so a burst of
+	// concurrent calls cannot all pass on one positive balance.
+	const hold = userId && config.source === "env" ? await reserveTrialQuota(userId) : null;
+	let completion: ChatCompletion;
+	try {
+		completion = await requestChatCompletion(config, messages, options);
+	} catch (error) {
+		if (hold) await refundHold(hold);
+		throw error;
 	}
+	const quota = hold ? await settleHold(hold, completion) : undefined;
+	return { completion, quota, route: routeInfo(config) };
+}
+
+/**
+ * The provider has answered, so the learner gets the completion even if recording it fails. The hold
+ * then stays debited in place of the real usage: refunding it would make a paid call free.
+ */
+async function settleHold(hold: TrialQuotaHold, completion: ChatCompletion): Promise<TrialQuotaStatus | undefined> {
+	try {
+		return await settleTrialQuota(hold, ...extractOutputTokenUsage(completion));
+	} catch (error) {
+		console.error("[llm] could not settle a trial quota hold; it stays debited", error);
+		return undefined;
+	}
+}
+
+async function refundHold(hold: TrialQuotaHold) {
+	try {
+		await refundTrialQuotaHold(hold);
+	} catch (error) {
+		console.error("[llm] could not refund a trial quota hold", error);
+	}
+}
+
+async function requestChatCompletion(config: ResolvedOpenAIConfig, messages: ChatMessage[], options: CompletionOptions): Promise<ChatCompletion> {
 	const url = `${config.baseUrl}/chat/completions`;
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
@@ -538,10 +577,7 @@ async function callChatCompletion(
 	}
 
 	debugLog("response", { url, status: response.status, body: completion });
-
-	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractOutputTokenUsage(completion)) : undefined;
-
-	return { completion, quota, route: routeInfo(config) };
+	return completion;
 }
 
 function extractOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {

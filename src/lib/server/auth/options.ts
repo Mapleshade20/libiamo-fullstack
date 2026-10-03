@@ -1,15 +1,28 @@
 import type { BetterAuthOptions } from "better-auth";
-import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from "better-auth/api";
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx, isAPIError } from "better-auth/api";
 import { base } from "$app/paths";
+import { isTrustedEmailDomain, UNTRUSTED_EMAIL_DOMAIN_MESSAGE } from "$lib/auth/email-domain";
+import { checkPasswordStrength, WEAK_PASSWORD_CODE } from "$lib/auth/password-strength";
+import { AUTH_PASSWORD_MAX_LENGTH, AUTH_PASSWORD_MIN_LENGTH } from "$lib/constants";
 import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
+import { clientIp, logAuthEvent } from "$lib/server/auth/audit";
+import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, CAPTCHA_PROTECTED_PATHS, captchaConfig, verifyCaptcha } from "$lib/server/auth/captcha";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
 import { configuredSocialProviders, prepareOAuthUser } from "$lib/server/auth/social";
 
 type Environment = Record<string, string | undefined>;
 
+/** Better Auth endpoints that set a password, and the body field holding it. */
+const PASSWORD_FIELDS = { "/sign-up/email": "password", "/reset-password": "newPassword", "/change-password": "newPassword" } as const;
+
 export interface AuthDependencies {
 	/** Backs the last-login-method guard; production locks the user row in Postgres. */
 	accountStore: AuthAccountStore;
+	/**
+	 * Headers of the request being served, for audit lines from callbacks Better Auth hands no
+	 * request (`onPasswordReset` when a form action calls `auth.api`).
+	 */
+	requestHeaders?: () => Headers | undefined;
 }
 
 /**
@@ -22,7 +35,14 @@ export interface AuthDependencies {
  * account. A test that re-declares these options in its own words cannot catch a
  * change to them.
  */
-export function createAuthOptions(env: Environment, { accountStore }: AuthDependencies) {
+export function createAuthOptions(env: Environment, { accountStore, requestHeaders }: AuthDependencies) {
+	const captcha = captchaConfig(env);
+	// Pairs an email update's `before` with its `after`, which only then knows the user id.
+	const pendingEmailChanges = new WeakMap<object, string>();
+	// Requests that created a user, so the provider account created with it is not also a link.
+	const signUps = new WeakSet<object>();
+	const guardAccountDelete = createAccountDeleteHook(accountStore);
+
 	return {
 		// Better Auth derives its router prefix from `new URL(baseURL).pathname`, and
 		// `withPath()` only appends the default "/api/auth" when baseURL has no path of
@@ -45,6 +65,24 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
+				// Direct HTTP calls must carry a Turnstile pass. The app's own form actions call
+				// `auth.api` without a request and verify the widget's token themselves, which also
+				// lets signed-in flows (Profile's password setup) skip a challenge they cannot show.
+				if (captcha && ctx.request && (CAPTCHA_PROTECTED_PATHS as readonly string[]).includes(ctx.path)) {
+					const passed = await verifyCaptcha(captcha, ctx.request.headers.get(CAPTCHA_HEADER), clientIp(env, ctx.request.headers));
+					if (!passed) throw new APIError("FORBIDDEN", { code: "CAPTCHA_FAILED", message: CAPTCHA_FAILED_MESSAGE });
+				}
+				// Every way to set a password passes through one of these, so the strength rule
+				// holds for direct API calls too; the forms check first only to answer sooner.
+				// This runs before Better Auth's own length and token checks, so the estimator
+				// itself refuses over-long input rather than scoring it.
+				const password = PASSWORD_FIELDS[ctx.path as keyof typeof PASSWORD_FIELDS];
+				if (password) {
+					const value: unknown = ctx.body?.[password];
+					const userInputs = [ctx.body?.name, ctx.body?.email].filter((input): input is string => typeof input === "string");
+					const strength = typeof value === "string" ? await checkPasswordStrength(value, userInputs) : null;
+					if (strength && !strength.ok) throw new APIError("BAD_REQUEST", { code: WEAK_PASSWORD_CODE, message: strength.warning });
+				}
 				if (ctx.path !== "/change-email") return;
 				// The built-in change-email endpoint checks authentication, not freshness.
 				// Guard the API itself, not only the Profile action.
@@ -53,6 +91,26 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 				if (Date.now() - new Date(session.session.createdAt).getTime() >= 10 * 60 * 1000) {
 					throw new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again before changing your email." });
 				}
+				const newEmail: unknown = ctx.body?.newEmail;
+				if (typeof newEmail !== "string" || !isTrustedEmailDomain(newEmail)) {
+					throw new APIError("BAD_REQUEST", { code: "UNTRUSTED_EMAIL_DOMAIN", message: UNTRUSTED_EMAIL_DOMAIN_MESSAGE });
+				}
+				logAuthEvent(env, "auth.email_change_requested", {
+					userId: session.user.id,
+					from: session.user.email,
+					to: newEmail.toLowerCase(),
+					ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
+				});
+			}),
+			after: createAuthMiddleware(async (ctx) => {
+				if (ctx.path !== "/change-password") return;
+				const returned = ctx.context.returned as { user?: { id: string; email: string } } | undefined;
+				if (!returned?.user || isAPIError(returned)) return;
+				logAuthEvent(env, "auth.password_changed", {
+					userId: returned.user.id,
+					email: returned.user.email,
+					ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
+				});
 			}),
 		},
 		// `errorCallbackURL` travels inside the OAuth state, so a state that cannot be
@@ -74,13 +132,64 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 		},
 		databaseHooks: {
 			account: {
+				create: {
+					after: async (account, ctx) => {
+						// A password row comes from a reset, which logs itself; a provider row in the
+						// request that created the user is the sign-up.
+						if (account.providerId === "credential" || !ctx || signUps.has(ctx)) return;
+						logAuthEvent(env, "auth.account_linked", {
+							userId: account.userId,
+							provider: account.providerId,
+							ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
+						});
+					},
+				},
 				delete: {
-					before: createAccountDeleteHook(accountStore),
+					before: async (account, ctx) => {
+						// On an unlink the guard deletes the row itself and returns false, so Better
+						// Auth's own delete, and with it `delete.after`, never runs.
+						const result = await guardAccountDelete(account, ctx);
+						if (result === false && ctx) {
+							logAuthEvent(env, "auth.account_unlinked", {
+								userId: account.userId,
+								provider: account.providerId,
+								ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
+							});
+						}
+						return result;
+					},
 				},
 			},
 			user: {
 				create: {
-					before: prepareOAuthUser,
+					// Every way in (email sign-up and Google/GitHub) creates the user here, so this is
+					// the one place the domain rule cannot be bypassed.
+					before: async (user) => {
+						if (typeof user.email !== "string" || !isTrustedEmailDomain(user.email)) {
+							throw new APIError("BAD_REQUEST", { code: "UNTRUSTED_EMAIL_DOMAIN", message: UNTRUSTED_EMAIL_DOMAIN_MESSAGE });
+						}
+						return prepareOAuthUser(user);
+					},
+					after: async (user, ctx) => {
+						if (ctx) signUps.add(ctx);
+						logAuthEvent(env, "auth.sign_up", {
+							userId: user.id,
+							email: user.email,
+							// `ctx.path` is the route pattern (`/callback/:id`); the provider is its parameter.
+							method: ctx?.path?.startsWith("/callback/") ? String(ctx.params?.id ?? "oauth") : "email",
+							ip: clientIp(env, ctx?.request?.headers ?? ctx?.headers),
+						});
+					},
+				},
+				update: {
+					before: async (data, ctx) => {
+						if (ctx && typeof data.email === "string") pendingEmailChanges.set(ctx, data.email);
+					},
+					after: async (user, ctx) => {
+						if (!ctx || !pendingEmailChanges.has(ctx)) return;
+						pendingEmailChanges.delete(ctx);
+						logAuthEvent(env, "auth.email_changed", { userId: user.id, email: user.email, ip: clientIp(env, ctx.request?.headers ?? ctx.headers) });
+					},
 				},
 			},
 		},
@@ -88,7 +197,8 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			enabled: true,
 			requireEmailVerification: true,
 			resetPasswordTokenExpiresIn: 3600,
-			minPasswordLength: 8,
+			minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+			maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
 			sendResetPassword: async ({ user, url }) => {
 				void sendEmail({
 					to: user.email,
@@ -96,6 +206,10 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 					text: `Click the link to reset your password: ${url}`,
 					html: resetPasswordHtml(user.email, url),
 				});
+			},
+			// Also how an account made through Google or GitHub first gets a password.
+			onPasswordReset: async ({ user }, request) => {
+				logAuthEvent(env, "auth.password_reset", { userId: user.id, email: user.email, ip: clientIp(env, request?.headers ?? requestHeaders?.()) });
 			},
 		},
 		emailVerification: {

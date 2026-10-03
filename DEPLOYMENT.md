@@ -162,15 +162,41 @@ server {
 
 ```caddy
 libiamo.net {
-    reverse_proxy 127.0.0.1:3000
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Real-IP {client_ip}
+    }
 }
 ```
 
-That is the whole config. Caddy's defaults already do what the nginx block spells
-out: automatic TLS, `X-Forwarded-*`, the original `Host` passed upstream, **no**
+Caddy's defaults already do the rest of what the nginx block spells out:
+automatic TLS, `X-Forwarded-*`, the original `Host` passed upstream, **no**
 upstream read timeout, and **no** request body limit. Adding
 `transport http { read_timeout … }` here would only *impose* a ceiling that does
 not otherwise exist, which is the opposite of what long LLM calls need.
+
+### Visitor address
+
+The app sees the proxy as the socket peer, so the proxy must overwrite
+`X-Real-IP` with the address it resolved itself (both blocks above do), and
+`ADDRESS_HEADER=X-Real-IP` tells the app to read it. Turnstile and the audit log
+use it; without `ADDRESS_HEADER` they go without an address rather than trust a
+header the client could have sent. Set the proxy up first: adapter-node throws
+when asked for the address of a request that lacks the header.
+
+With Cloudflare in front, `{client_ip}` is Cloudflare's edge unless Caddy is
+told to trust it, in the global options block:
+
+```caddy
+{
+    servers {
+        trusted_proxies static <Cloudflare's IPv4 and IPv6 ranges>
+        client_ip_headers CF-Connecting-IP
+    }
+}
+```
+
+The per-endpoint rate limits to configure here are listed in
+`docs/design/2026-10-03-abuse-protection.md` ("Proxy rate limits").
 
 `ORIGIN` must match the public URL exactly (bare origin, no trailing path). A
 mismatch shows up as rejected form posts and broken email links.
@@ -344,17 +370,26 @@ database.
 | `DATABASE_URL` | yes | **secret.** Host is `127.0.0.1` in a pod, `database` under compose. |
 | `POSTGRES_DB` / `POSTGRES_USER` | – | Default `libiamo`. Read only at cluster creation. |
 | `POSTGRES_PASSWORD` | yes | **secret.** Must match `DATABASE_URL`. |
-| `RUN_MIGRATIONS` | – | Default `true`. Set `false` to migrate out of band. |
+| `RUN_MIGRATIONS` | – | Default `1`: the entrypoint migrates on every start. `0` to migrate out of band. |
 | `BETTER_AUTH_SECRET` | yes | **secret.** Changing it logs everyone out. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
-| `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. |
+| `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. `SMTP_SECURE=1` for implicit TLS (port 465). |
 | `OPENAI_API_KEY` | yes | **secret.** |
 | `OPENAI_BASE_URL` / `OPENAI_MODEL` | yes | OpenAI-compatible endpoint. |
-| `TRIAL_TOKEN_BUDGET` | – | Default `50000`. Output-token budget for non-BYOK users. |
+| `TRIAL_TOKEN_BUDGET` | – | Default `50000`. Provider-reported output-token budget (reasoning included) for non-BYOK users, released in thirds: at sign-up, after 24 h and after 48 h. |
+| `TRIAL_TOKEN_HOLD` | – | Default `4096`. Tokens each trial call holds before the provider answers, so concurrent calls cannot overspend; settled to actual usage afterwards. |
+| `ADDRESS_HEADER` | – | Header holding the visitor's address; see [Visitor address](#visitor-address). Empty: none. |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on sign-in, sign-up, password reset and Profile's email and password changes. Both empty turns it off; setting only one refuses to start. |
+| `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, email change (requested and completed), password change or reset, and login-method link or unlink. Lines carry email addresses and IPs. |
+| `LLM_LAB` | – | Default `1`. `0` disables LLM tracing, staff prompt overrides and the Lab worker. |
+| `LLM_LAB_PROVIDERS` | – | JSON array of `{"id","label","baseUrl","apiKey","model"}` admins can pick in the Lab; never debits trial quota. |
+| `LLM_LAB_CONCURRENCY` | – | Default `3`. Parallel Lab run calls. |
 | `BODY_SIZE_LIMIT` | – | Default `20M`; adapter-node's own default is only 512K. |
 | `TZ` | – | Default `Asia/Shanghai`. |
-| `LLM_DEBUG` / `DB_DEBUG` | – | Verbose logging. Leave off in production. |
+| `LLM_DEBUG` / `DB_DEBUG` | – | `1` logs LLM request/response bodies or SQL. Leave off in production. |
+
+On/off variables take `1`/`0`; `true`/`false`, `yes`/`no` and `on`/`off` work too.
 
 Compose-only: `APP_IMAGE`, `APP_BIND`, `APP_PORT`.
 

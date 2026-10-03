@@ -2,8 +2,11 @@ import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import { base } from "$app/paths";
+import { env } from "$env/dynamic/private";
+import { WEAK_PASSWORD_CODE } from "$lib/auth/password-strength";
 import { forgotPasswordSchema, resetPasswordSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
+import { CAPTCHA_FAILED_MESSAGE, captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -12,6 +15,7 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		hasToken: !!token,
 		token,
+		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		...(error ? { error } : {}),
 	};
 };
@@ -24,6 +28,9 @@ export const actions: Actions = {
 		const result = forgotPasswordSchema.safeParse(raw);
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+		}
+		if (!(await verifyCaptchaField(env, formData, event))) {
+			return fail(400, { captchaMessage: CAPTCHA_FAILED_MESSAGE, values: raw });
 		}
 
 		try {
@@ -51,6 +58,9 @@ export const actions: Actions = {
 		if (!result.success) {
 			return fail(400, { resetErrors: z.flattenError(result.error).fieldErrors });
 		}
+		if (!(await verifyCaptchaField(env, formData, event))) {
+			return fail(400, { resetMessage: CAPTCHA_FAILED_MESSAGE });
+		}
 
 		try {
 			await auth.api.resetPassword({
@@ -61,6 +71,7 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof APIError) {
+				if (error.body?.code === WEAK_PASSWORD_CODE) return fail(400, { resetErrors: { newPassword: [error.message] } });
 				return fail(400, { resetMessage: error.message || "Reset failed" });
 			}
 			return fail(500, { resetMessage: "Unexpected error" });

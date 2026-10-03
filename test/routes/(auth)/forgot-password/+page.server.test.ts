@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { auth } from "$lib/server/auth/auth";
 import { actions, load } from "$routes/(auth)/forgot-password/+page.server";
 
+const { mockEnv } = vi.hoisted(() => ({ mockEnv: {} as Record<string, string | undefined> }));
+vi.mock("$env/dynamic/private", () => ({ env: mockEnv }));
+
 vi.mock("$lib/server/auth/auth", () => ({
 	auth: {
 		api: {
@@ -33,12 +36,16 @@ const createEvent = (entries: Record<string, string>) => {
 		request: {
 			formData: async () => formData,
 		},
+		getClientAddress: () => "203.0.113.7",
 	} as any;
 };
 
 describe("Forgot-password +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		vi.unstubAllGlobals();
+		delete mockEnv.TURNSTILE_SITE_KEY;
+		delete mockEnv.TURNSTILE_SECRET_KEY;
 	});
 
 	describe("load function", () => {
@@ -47,7 +54,7 @@ describe("Forgot-password +page.server", () => {
 				url: new URL("https://example.com/forgot-password"),
 			} as any);
 
-			expect(result).toEqual({ hasToken: false, token: null });
+			expect(result).toEqual({ hasToken: false, token: null, captchaSiteKey: null });
 		});
 
 		it("returns hasToken true when token exists", async () => {
@@ -55,7 +62,7 @@ describe("Forgot-password +page.server", () => {
 				url: new URL("https://example.com/forgot-password?token=abc123"),
 			} as any);
 
-			expect(result).toEqual({ hasToken: true, token: "abc123" });
+			expect(result).toEqual({ hasToken: true, token: "abc123", captchaSiteKey: null });
 		});
 
 		it("includes error when error query param exists", async () => {
@@ -63,7 +70,7 @@ describe("Forgot-password +page.server", () => {
 				url: new URL("https://example.com/forgot-password?token=abc123&error=INVALID_TOKEN"),
 			} as any);
 
-			expect(result).toEqual({ hasToken: true, token: "abc123", error: "INVALID_TOKEN" });
+			expect(result).toEqual({ hasToken: true, token: "abc123", captchaSiteKey: null, error: "INVALID_TOKEN" });
 		});
 	});
 
@@ -102,6 +109,45 @@ describe("Forgot-password +page.server", () => {
 				},
 			});
 			expect(result).toEqual({ emailSent: true });
+		});
+
+		describe("with Turnstile configured", () => {
+			beforeEach(() => {
+				mockEnv.TURNSTILE_SITE_KEY = "site-key";
+				mockEnv.TURNSTILE_SECRET_KEY = "secret-key";
+			});
+
+			it("hands the site key to the page", async () => {
+				const result = await load({ url: new URL("https://example.com/forgot-password") } as any);
+				expect(result).toMatchObject({ captchaSiteKey: "site-key" });
+			});
+
+			it("sends no mail without a passing token", async () => {
+				const siteverify = vi.fn(async () => Response.json({ success: false }));
+				vi.stubGlobal("fetch", siteverify);
+
+				const missing = (await actions.requestReset(createEvent({ email: "user@example.com" }))) as ActionFailure<any>;
+				expect(missing.status).toBe(400);
+				expect(siteverify).not.toHaveBeenCalled();
+
+				const rejected = (await actions.requestReset(
+					createEvent({ email: "user@example.com", "cf-turnstile-response": "bad" }),
+				)) as ActionFailure<any>;
+				expect(rejected.status).toBe(400);
+				expect(rejected.data?.captchaMessage).toBeTruthy();
+				expect(auth.api.requestPasswordReset).not.toHaveBeenCalled();
+			});
+
+			it("sends the reset mail once Cloudflare accepts the token", async () => {
+				const siteverify = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ success: true }));
+				vi.stubGlobal("fetch", siteverify);
+
+				const result = await actions.requestReset(createEvent({ email: "user@example.com", "cf-turnstile-response": "good" }));
+
+				expect(result).toEqual({ emailSent: true });
+				expect(JSON.parse(siteverify.mock.calls[0][1].body as string)).toEqual({ secret: "secret-key", response: "good", remoteip: "203.0.113.7" });
+				expect(auth.api.requestPasswordReset).toHaveBeenCalledTimes(1);
+			});
 		});
 
 		it("still returns success when auth api throws", async () => {
@@ -155,6 +201,23 @@ describe("Forgot-password +page.server", () => {
 					token: "reset-token",
 				},
 			});
+		});
+
+		it("resets nothing without a passing Turnstile token once configured", async () => {
+			mockEnv.TURNSTILE_SITE_KEY = "site-key";
+			mockEnv.TURNSTILE_SECRET_KEY = "secret-key";
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => Response.json({ success: false })),
+			);
+
+			const result = (await actions.resetPassword(
+				createEvent({ newPassword: "new-password-123", token: "reset-token", "cf-turnstile-response": "bad" }),
+			)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.resetMessage).toBeTruthy();
+			expect(auth.api.resetPassword).not.toHaveBeenCalled();
 		});
 
 		it("maps APIError to 400", async () => {
