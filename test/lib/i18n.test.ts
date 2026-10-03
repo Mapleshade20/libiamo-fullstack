@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 
 const SOURCE_ROOT = resolve("src");
 const TEST_ROOT = resolve("test");
-const DICTIONARY = join(SOURCE_ROOT, "lib/i18n.ts");
+const DICTIONARY_ROOT = join(SOURCE_ROOT, "lib/i18n");
 const LANGUAGES = ["en", "es", "fr", "ja"] as const;
 
 async function findSourceFiles(directory: string): Promise<string[]> {
@@ -35,30 +35,23 @@ async function findSourceFiles(directory: string): Promise<string[]> {
 
 /** Every file whose `t(...)` calls the dictionary serves: the app, and the tests that assert on it. */
 async function callerSources(): Promise<{ file: string; source: string }[]> {
-	const files = [...(await findSourceFiles(SOURCE_ROOT)), ...(await findSourceFiles(TEST_ROOT))].filter((file) => file !== DICTIONARY);
+	const files = [...(await findSourceFiles(SOURCE_ROOT)), ...(await findSourceFiles(TEST_ROOT))].filter(
+		(file) => !file.startsWith(`${DICTIONARY_ROOT}/`),
+	);
 	return Promise.all(files.map(async (file) => ({ file, source: await readFile(file, "utf8") })));
 }
 
-function blockOf(source: string, language: string): string {
-	const starts = [...source.matchAll(/^\t(en|es|fr|ja): \{$/gm)];
-	const index = starts.findIndex((match) => match[1] === language);
-	if (index === -1) throw new Error(`no \`${language}\` block in the dictionary`);
-	const start = starts[index].index ?? 0;
-	const end = index + 1 < starts.length ? (starts[index + 1].index ?? source.length) : source.length;
-	return source.slice(start, end);
-}
-
 /** Values are all single-line; two of them are written on the line below their key. */
-function parseEntries(block: string): Map<string, string> {
+function parseEntries(source: string): Map<string, string> {
 	const entries = new Map<string, string>();
-	const lines = block.split("\n");
+	const lines = source.split("\n");
 	for (let index = 0; index < lines.length; index++) {
-		const inline = lines[index].match(/^\t\t"(?<key>[^"]+)":\s*"(?<value>.*)",?$/);
+		const inline = lines[index].match(/^\t"(?<key>[^"]+)":\s*"(?<value>.*)",?$/);
 		if (inline?.groups) {
 			entries.set(inline.groups.key, inline.groups.value);
 			continue;
 		}
-		const wrapped = lines[index].match(/^\t\t"(?<key>[^"]+)":$/);
+		const wrapped = lines[index].match(/^\t"(?<key>[^"]+)":$/);
 		if (!wrapped?.groups) continue;
 		const value = lines[index + 1]?.trim() ?? "";
 		const parsed = value.match(/^"(?<value>.*)",?$/);
@@ -66,7 +59,7 @@ function parseEntries(block: string): Map<string, string> {
 		entries.set(wrapped.groups.key, parsed.groups.value);
 		index++;
 	}
-	const keyLines = lines.filter((line) => /^\t\t"/.test(line)).length;
+	const keyLines = lines.filter((line) => /^\t"/.test(line)).length;
 	if (keyLines !== entries.size) throw new Error(`parsed ${entries.size} of ${keyLines} dictionary entries`);
 	return entries;
 }
@@ -75,15 +68,14 @@ function placeholdersOf(value: string): string[] {
 	return [...value.matchAll(/\{(?<name>[^{}]+)\}/g)].map((match) => match.groups?.name ?? "").sort();
 }
 
-const dictionary = await readFile(DICTIONARY, "utf8");
-const entriesByLanguage = Object.fromEntries(LANGUAGES.map((language) => [language, parseEntries(blockOf(dictionary, language))])) as Record<
-	(typeof LANGUAGES)[number],
-	Map<string, string>
->;
+const entriesByLanguage = Object.fromEntries(
+	await Promise.all(LANGUAGES.map(async (language) => [language, parseEntries(await readFile(join(DICTIONARY_ROOT, `${language}.ts`), "utf8"))])),
+) as Record<(typeof LANGUAGES)[number], Map<string, string>>;
 
 describe("translation dictionary", () => {
 	it("defines every key in every language, with no empty value", () => {
 		const english = entriesByLanguage.en;
+		expect(english.size).toBeGreaterThan(0);
 		const missing: string[] = [];
 		const empty: string[] = [];
 		for (const language of LANGUAGES) {

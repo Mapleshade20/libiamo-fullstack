@@ -8,16 +8,16 @@ const { mockGenerateTranslationEvaluation, mockGenerateTranslationPractice, mock
 }));
 
 vi.mock("$app/environment", () => ({ dev: true }));
-vi.mock("$lib/server/llm", () => ({
+vi.mock("$lib/server/llm/client", () => ({
 	llmErrorMessage: (cause: unknown) => (cause instanceof Error ? cause.message : "The AI request failed. Please try again."),
 	llmErrorStatus: () => 500,
 }));
-vi.mock("$lib/server/translation-evaluation/generation", () => ({ generateTranslationEvaluation: mockGenerateTranslationEvaluation }));
-vi.mock("$lib/server/translation-evaluation/practice-generation", () => ({
+vi.mock("$lib/server/translation/evaluation/generation", () => ({ generateTranslationEvaluation: mockGenerateTranslationEvaluation }));
+vi.mock("$lib/server/translation/evaluation/practice-generation", () => ({
 	GENERATION_2_TEMPERATURE: 0.6,
 	generateTranslationPractice: mockGenerateTranslationPractice,
 }));
-vi.mock("$lib/server/translation-evaluation/verifier", () => ({
+vi.mock("$lib/server/translation/evaluation/verifier", () => ({
 	verifyCorrection: mockVerifyCorrection,
 	verifySecondDraft: mockVerifySecondDraft,
 }));

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { QuestMenuRouteData } from "$lib/quest-hall/preparation";
-import QuestMenu from "./quest-menu/QuestMenu.svelte";
+import QuestMenu from "./QuestMenu.svelte";
 
 let { route, form = null }: { route: QuestMenuRouteData; form?: { error?: string } | null } = $props();
 </script>

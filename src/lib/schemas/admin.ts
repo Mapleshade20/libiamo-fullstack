@@ -2,164 +2,193 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { z } from "zod";
 import {
-	CADENCES,
+	type ChatUiVariant,
 	INTERACTION_TYPES,
 	LANGUAGE_CODES,
+	LINEUP_KINDS,
 	MAIL_TEXT_MAX_LENGTH,
 	PRACTICE_UI_TEXT_MAX_LENGTH,
 	UI_VARIANTS,
-	type UiVariant,
 	URGENCIES,
 	USER_LONG_TEXT_MAX_LENGTH,
 	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
 
+export const TASK_JSON_VERSION = 4;
+
 dayjs.extend(customParseFormat);
 
-const templateContentFields = {
-	titleBase: z.string().min(1, "Title is required"),
-	shortObjectiveBase: z.string().optional(),
-	descriptionBase: z.string().optional(),
-	materialsMd: z.string().optional(),
-	objectivesBase: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-	translationReference: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return null;
-			const paragraphs = v
-				.split(/\n\s*\n/)
-				.map((paragraph) => paragraph.trim())
-				.filter(Boolean);
-			return paragraphs.length > 0 ? paragraphs : null;
-		}),
-	tags: z
-		.string()
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-};
+const ROTATION_OPTIONS = ["none", ...LINEUP_KINDS] as const;
+export type TaskRotation = (typeof ROTATION_OPTIONS)[number];
 
-const contributionContentFields = {
-	titleBase: z.string().min(1, "Title is required").max(USER_TEXT_MAX_LENGTH),
-	shortObjectiveBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	descriptionBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	materialsMd: z.string().max(USER_LONG_TEXT_MAX_LENGTH).optional(),
-	objectivesBase: z
-		.string()
-		.max(USER_LONG_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split("\n")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-	agentPromptBase: z.string().max(USER_TEXT_MAX_LENGTH).optional(),
-	translationReference: z
-		.string()
-		.max(USER_LONG_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return null;
-			const paragraphs = v
-				.split(/\n\s*\n/)
-				.map((paragraph) => paragraph.trim())
-				.filter(Boolean);
-			return paragraphs.length > 0 ? paragraphs : null;
-		}),
-	tags: z
-		.string()
-		.max(USER_TEXT_MAX_LENGTH)
-		.optional()
-		.transform((v) => {
-			if (!v) return [];
-			return v
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-		}),
-};
+function blankToNull(value: unknown) {
+	return value === undefined || value === null || (typeof value === "string" && value.trim() === "") ? null : value;
+}
 
-const templateCore = {
+/** Optional text: blank input is stored as null. */
+function optionalText(max: number) {
+	return z.preprocess((value) => (typeof value === "string" ? blankToNull(value.trim()) : blankToNull(value)), z.string().max(max).nullable());
+}
+
+/** A form string split by `separator`, or an already-split array (JSON import). Empty becomes null. */
+function textList(separator: RegExp, max: number) {
+	return z.preprocess(
+		(value) => {
+			if (typeof value === "string") {
+				if (value.length > max) return value;
+				return value
+					.split(separator)
+					.map((item) => item.trim())
+					.filter(Boolean);
+			}
+			return Array.isArray(value) ? value.map((item) => (typeof item === "string" ? item.trim() : item)).filter(Boolean) : value;
+		},
+		z
+			.array(z.string().max(max))
+			.nullable()
+			.optional()
+			.transform((items) => (items && items.length > 0 ? items : null)),
+	);
+}
+
+/** An optional positive count; blank and zero mean "none". */
+const optionalCount = z.preprocess((value) => {
+	const blank = blankToNull(value);
+	return blank === null || Number(blank) === 0 ? null : Number(blank);
+}, z.number().int().positive().nullable());
+
+/** Opening state arrives as a JSON string from the editor and as an object from JSON import. */
+const openingStateInput = z.preprocess((value) => {
+	if (typeof value !== "string") return value ?? null;
+	if (!value.trim()) return null;
+	try {
+		return JSON.parse(value);
+	} catch {
+		return value;
+	}
+}, z.record(z.string(), z.unknown()).nullable());
+
+/** The real conversation a task was cut from: JSON from the form's hidden field, an object from JSON import. */
+const sourceInput = z.preprocess(
+	(value) => {
+		if (typeof value !== "string") return value ?? null;
+		try {
+			return value.trim() ? JSON.parse(value) : null;
+		} catch {
+			return value;
+		}
+	},
+	z
+		.object({ continuation: optionalText(USER_LONG_TEXT_MAX_LENGTH) })
+		.nullable()
+		.transform((source) => (source?.continuation ? { continuation: source.continuation } : null)),
+);
+
+const taskContentShape = {
 	language: z.enum(LANGUAGE_CODES),
 	interactionType: z.enum(INTERACTION_TYPES),
 	ui: z.enum(UI_VARIANTS),
-	urgency: z.enum(URGENCIES).nullable().optional(),
-	...templateContentFields,
+	urgency: z.preprocess(blankToNull, z.enum(URGENCIES).nullable()),
+	title: z.string().trim().min(1, "Title is required").max(USER_TEXT_MAX_LENGTH),
+	shortObjective: optionalText(USER_TEXT_MAX_LENGTH),
+	description: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	objectives: textList(/\n/, USER_LONG_TEXT_MAX_LENGTH),
+	agentPrompt: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	openingState: openingStateInput,
+	source: sourceInput,
+	referenceParagraphs: textList(/\n\s*\n/, USER_LONG_TEXT_MAX_LENGTH),
+	translationContext: optionalText(USER_TEXT_MAX_LENGTH),
 };
 
-const templateContributionCore = {
-	language: z.enum(LANGUAGE_CODES),
-	interactionType: z.enum(INTERACTION_TYPES),
-	ui: z.enum(UI_VARIANTS),
-	urgency: z.enum(URGENCIES).nullable().optional(),
-	...contributionContentFields,
+/** Admin-only presentation fields; contributors leave them to the reviewing admin. */
+const adminContentShape = {
+	materialsMd: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	tags: textList(/,/, USER_TEXT_MAX_LENGTH),
 };
 
-const translateUiRefine = (data: { interactionType: string; ui: string }) => (data.interactionType === "translate") === (data.ui === "translator");
+type TaskContent = z.infer<z.ZodObject<typeof taskContentShape>>;
 
-const translateUiMessage = 'UI must be "translator" when interaction type is "translate", and must not be "translator" otherwise';
+/** What a contribution carries into the task editor: the content both forms share. */
+export const TASK_CONTRIBUTION_FIELDS = Object.keys(taskContentShape) as Array<keyof typeof taskContentShape>;
 
-function validateTranslationContent(
-	data: { interactionType: string; urgency?: string | null; agentPromptBase?: string | null; translationReference?: string[] | null },
-	ctx: z.RefinementCtx,
-) {
-	if (data.interactionType !== "translate") {
-		if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+function validateTaskContent(data: TaskContent, ctx: z.RefinementCtx) {
+	if ((data.interactionType === "translate") !== (data.ui === "translator")) {
+		ctx.addIssue({ code: "custom", message: 'UI must be "translator" exactly when the task is a translation', path: ["ui"] });
 		return;
 	}
-	if (!data.agentPromptBase?.trim()) {
-		ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["agentPromptBase"] });
+	if (!data.description) ctx.addIssue({ code: "custom", message: "Description is required", path: ["description"] });
+	if (data.interactionType === "translate") {
+		if (!data.translationContext) ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["translationContext"] });
+		if (!data.referenceParagraphs?.length) {
+			ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["referenceParagraphs"] });
+		}
+		return;
 	}
-	if (!data.translationReference?.length) {
-		ctx.addIssue({ code: "custom", message: "At least one reference paragraph is required", path: ["translationReference"] });
+	if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+	if (!data.shortObjective) ctx.addIssue({ code: "custom", message: "Short objective is required", path: ["shortObjective"] });
+	if (!data.objectives?.length) ctx.addIssue({ code: "custom", message: "At least one objective is required", path: ["objectives"] });
+	const openingState = validateOpeningState(data.ui as ChatUiVariant, data.openingState ?? {});
+	if (!openingState.success) {
+		ctx.addIssue({ code: "custom", message: `Invalid opening state: ${z.prettifyError(openingState.error)}`, path: ["openingState"] });
 	}
 }
 
-function normalizeTranslationContent<T extends { interactionType: string; shortObjectiveBase?: string | null; materialsMd?: string | null }>(
-	data: T,
-) {
-	return data.interactionType === "translate" ? { ...data, shortObjectiveBase: null, materialsMd: null } : data;
+/** Clears the columns the other task kind owns, matching the database's kind constraint. */
+function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null; materialsMd?: string | null }>(data: T): T {
+	if (data.interactionType === "translate") {
+		return {
+			...data,
+			urgency: null,
+			agentPrompt: null,
+			openingState: null,
+			source: null,
+			shortObjective: null,
+			objectives: null,
+			...("materialsMd" in data ? { materialsMd: null } : {}),
+			...("maxTurns" in data ? { maxTurns: null } : {}),
+		};
+	}
+	const openingState = validateOpeningState(data.ui as ChatUiVariant, data.openingState ?? {});
+	return {
+		...data,
+		openingState: openingState.success ? (openingState.data as Record<string, unknown>) : data.openingState,
+		referenceParagraphs: null,
+		translationContext: null,
+	};
 }
 
-export const templateSchema = z
+/** An admin-authored task, from the task form or a JSON import. */
+export const taskSchema = z
 	.object({
-		...templateCore,
-		cadence: z.enum(CADENCES),
+		...taskContentShape,
+		...adminContentShape,
 		difficulty: z.coerce.number().int().min(1).max(3),
-		maxTurns: z.coerce.number().int().min(0).optional(),
-		estimatedWords: z.coerce.number().int().min(0).optional(),
-		pointReward: z.coerce.number().int().min(0),
-		gemReward: z.coerce.number().int().min(0),
-		agentPromptBase: z.string().optional(),
+		maxTurns: optionalCount,
+		estimatedWords: optionalCount,
 	})
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent)
-	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
+	.superRefine(validateTaskContent)
+	.transform(normalizeTaskContent);
 
-export const templateContributionSchema = z
-	.object({ ...templateContributionCore })
-	.refine(translateUiRefine, { message: translateUiMessage, path: ["ui"] })
-	.superRefine(validateTranslationContent)
-	.transform(normalizeTranslationContent)
-	.transform((data) => (data.interactionType === "translate" ? { ...data, urgency: null } : data));
+/**
+ * A learner-proposed task: the same content an admin authors (the same `TaskForm`), minus scheduling,
+ * scoring and presentation extras, which the reviewing admin adds when approving.
+ */
+export const taskContributionSchema = z.object(taskContentShape).superRefine(validateTaskContent).transform(normalizeTaskContent);
+
+/** Auto-rotation pool membership chosen in the admin task editor. */
+export const taskRotationSchema = z.preprocess((value) => blankToNull(value) ?? "none", z.enum(ROTATION_OPTIONS));
+
+/** The single-task JSON document used by admin export and import; `task` is parsed by `taskSchema`. */
+export const taskJsonSchema = z.object({
+	version: z.literal(TASK_JSON_VERSION),
+	task: z.record(z.string(), z.unknown()),
+});
+
+/** Import-only task properties that live outside the task form. */
+export const taskJsonExtrasSchema = z.object({
+	isActive: z.boolean().default(true),
+	rotation: taskRotationSchema.default("none"),
+});
 
 // ── openingState per-UI schemas ───────────────────────────────────────
 const uiText = z.string().max(PRACTICE_UI_TEXT_MAX_LENGTH);
@@ -170,11 +199,22 @@ const messageSchema = z.object({
 	text: uiText,
 });
 
+/** The counterpart's display name; without it the interface infers one (see `lib/practice/scene.ts`). */
+const counterpartName = uiText.optional();
+/** Everyone else in a group conversation, comma-separated. */
+const members = uiText.optional();
+
 export const imessageOpeningStateSchema = z.object({
+	counterpartName,
+	groupName: uiText.optional(),
+	members,
 	previousMessages: z.array(messageSchema).default([]),
 });
 
 export const discordOpeningStateSchema = z.object({
+	counterpartName,
+	/** A direct message with the counterpart instead of a server channel. */
+	dm: z.boolean().optional(),
 	serverName: uiText,
 	channelName: uiText,
 	previousMessages: z
@@ -193,7 +233,6 @@ export type RedditCommentInput = {
 	author: string;
 	text: string;
 	timestamp?: string;
-	votes?: number;
 	replies?: RedditCommentInput[];
 };
 
@@ -202,7 +241,6 @@ const redditCommentSchema: z.ZodType<RedditCommentInput> = z.object({
 	author: uiText,
 	text: uiText,
 	timestamp: uiText.optional(),
-	votes: z.number().optional(),
 	replies: z.lazy(() => z.array(redditCommentSchema)).optional(),
 });
 
@@ -212,12 +250,14 @@ export const redditOpeningStateSchema = z.object({
 		body: uiText,
 		subreddit: uiText,
 		author: uiText,
-		votes: z.number().optional(),
+		timestamp: uiText.optional(),
 	}),
 	previousComments: z.array(redditCommentSchema).optional(),
 });
 
 export const appleMailOpeningStateSchema = z.object({
+	counterpartName,
+	members,
 	emails: z.array(
 		z.object({
 			from: uiText,
@@ -278,13 +318,10 @@ export const ao3OpeningStateSchema = z.object({
 	previousComments: z.array(ao3CommentSchema).optional(),
 });
 
-export const translatorOpeningStateSchema = z.object({
-	sourceText: uiText.min(1, "Source text is required"),
-});
-
 // ── Opening state editor metadata ─────────────────────────────────────
 export type FieldDef =
 	| { type: "text"; key: string; label: string; placeholder?: string; required?: boolean }
+	| { type: "checkbox"; key: string; label: string }
 	| { type: "textarea"; key: string; label: string; rows?: number; placeholder?: string; required?: boolean }
 	| { type: "number"; key: string; label: string; placeholder?: string }
 	| { type: "message-list"; key: string; label: string; withTimestamp?: boolean }
@@ -301,7 +338,6 @@ export type FieldDef =
 			textPlaceholder?: string;
 			withTimestamp?: boolean;
 			withIconUrl?: boolean;
-			withVotes?: boolean;
 	  }
 	| {
 			type: "comment-list";
@@ -311,7 +347,6 @@ export type FieldDef =
 			textField?: string;
 			authorPlaceholder?: string;
 			textPlaceholder?: string;
-			withVotes?: boolean;
 	  }
 	| { type: "group"; key: string; label: string; fields: FieldDef[] }
 	| { type: "row"; fields: FieldDef[] };
@@ -324,7 +359,17 @@ export type OpeningStateEditorMeta = {
 
 export const openingStateSchemas = {
 	imessage: imessageOpeningStateSchema.meta({
-		fields: [{ type: "message-list", key: "previousMessages", label: "Previous Messages" }],
+		fields: [
+			{ type: "text", key: "counterpartName", label: "Counterpart Name", placeholder: "Captain Shane" },
+			{
+				type: "row",
+				fields: [
+					{ type: "text", key: "groupName", label: "Group Name (group chats)", placeholder: "Lisbon 🇵🇹" },
+					{ type: "text", key: "members", label: "Other Members (comma-separated)", placeholder: "Tom, Jess" },
+				],
+			},
+			{ type: "message-list", key: "previousMessages", label: "Previous Messages" },
+		],
 	} satisfies OpeningStateEditorMeta),
 	discord: discordOpeningStateSchema.meta({
 		fields: [
@@ -335,6 +380,8 @@ export const openingStateSchemas = {
 					{ type: "text", key: "channelName", label: "Channel Name", placeholder: "general" },
 				],
 			},
+			{ type: "text", key: "counterpartName", label: "Counterpart Username", placeholder: "CaptainShane" },
+			{ type: "checkbox", key: "dm", label: "Direct message with the counterpart (no server channel)" },
 			{ type: "message-list", key: "previousMessages", label: "Previous Messages", withTimestamp: true },
 		],
 	} satisfies OpeningStateEditorMeta),
@@ -356,7 +403,7 @@ export const openingStateSchemas = {
 						type: "row",
 						fields: [
 							{ type: "text", key: "author", label: "Author" },
-							{ type: "number", key: "votes", label: "Votes" },
+							{ type: "text", key: "timestamp", label: "Posted", placeholder: "5 hr. ago" },
 						],
 					},
 					{ type: "textarea", key: "body", label: "Body", rows: 3 },
@@ -371,12 +418,20 @@ export const openingStateSchemas = {
 				authorLabel: "Author",
 				textLabel: "Comment",
 				withTimestamp: true,
-				withVotes: true,
 			},
 		],
 	} satisfies OpeningStateEditorMeta),
 	apple_mail: appleMailOpeningStateSchema.meta({
-		fields: [{ type: "email-list", key: "emails", label: "Emails" }],
+		fields: [
+			{ type: "text", key: "counterpartName", label: "Counterpart (Name or Name <address>)", placeholder: "Captain Shane <shane@charters.example>" },
+			{
+				type: "text",
+				key: "members",
+				label: "Other Recipients (comma-separated, for group threads)",
+				placeholder: "Dana Whitfield <dana@example.com>",
+			},
+			{ type: "email-list", key: "emails", label: "Emails" },
+		],
 	} satisfies OpeningStateEditorMeta),
 	ao3: ao3OpeningStateSchema.meta({
 		fields: [
@@ -387,9 +442,9 @@ export const openingStateSchemas = {
 					{ type: "text", key: "authorName", label: "Author Name", placeholder: "FicAuthor" },
 				],
 			},
-			{ type: "text", key: "chapterTitle", label: "Chapter Title (optional)" },
-			{ type: "textarea", key: "summary", label: "Summary (optional)", rows: 3 },
-			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt (optional)", rows: 4 },
+			{ type: "text", key: "chapterTitle", label: "Chapter Title" },
+			{ type: "textarea", key: "summary", label: "Summary", rows: 3 },
+			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt", rows: 4 },
 			{
 				type: "row",
 				fields: [
@@ -414,36 +469,33 @@ export const openingStateSchemas = {
 			},
 		],
 	} satisfies OpeningStateEditorMeta),
-	translator: translatorOpeningStateSchema.meta({
-		fields: [{ type: "textarea", key: "sourceText", label: "Source Text", rows: 4, placeholder: "Text to translate...", required: true }],
-	} satisfies OpeningStateEditorMeta),
-} satisfies Record<UiVariant, z.ZodType>;
+} satisfies Record<ChatUiVariant, z.ZodType>;
 
-export function validateOpeningState(ui: UiVariant, data: unknown) {
+export function validateOpeningState(ui: ChatUiVariant, data: unknown) {
 	return openingStateSchemas[ui].safeParse(data);
 }
 
-export function getEditorFields(ui: UiVariant): FieldDef[] {
+export function getEditorFields(ui: ChatUiVariant): FieldDef[] {
 	return (openingStateSchemas[ui].meta() as OpeningStateEditorMeta | undefined)?.fields ?? [];
 }
 
-// ── Schedule ──────────────────────────────────────────────────────────
-export const scheduleManualSchema = z.object({
-	templateId: z.coerce.number().int().positive(),
-	// Validate both ISO week formats and real calendar dates
-	date: z.string().refine((value) => {
-		const standardDateRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-		// Restrict weeks to valid ISO range: 01 to 53
-		const isoWeekRegex = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+// ── Lineups ───────────────────────────────────────────────────────────
+const ISO_WEEK = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+const CALENDAR_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-		if (isoWeekRegex.test(value)) {
-			return true;
+/** A manual lineup entry: daily lineups take a date, weekly lineups an ISO week (`YYYY-Www`). */
+export const lineupEntrySchema = z
+	.object({
+		taskId: z.coerce.number().int().positive(),
+		kind: z.enum(LINEUP_KINDS),
+		date: z.string().trim(),
+	})
+	.superRefine((data, ctx) => {
+		if (data.kind === "weekly" ? !ISO_WEEK.test(data.date) : !(CALENDAR_DATE.test(data.date) && dayjs(data.date, "YYYY-MM-DD", true).isValid())) {
+			ctx.addIssue({
+				code: "custom",
+				message: data.kind === "weekly" ? "Weekly lineups need an ISO week (YYYY-Www)" : "Daily lineups need a valid YYYY-MM-DD date",
+				path: ["date"],
+			});
 		}
-		if (!standardDateRegex.test(value)) {
-			return false;
-		}
-
-		// Ensure the date actually exists (e.g., prevent Feb 30th)
-		return dayjs(value, "YYYY-MM-DD", true).isValid();
-	}, "Date must be a valid YYYY-MM-DD or YYYY-Www format"),
-});
+	});

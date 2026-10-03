@@ -1,6 +1,6 @@
 <script lang="ts">
 import { TextHighlighter } from "$lib/components/ui/text-highlighter";
-import type { AnnotationSpan, MessageAnnotation } from "$lib/feedback/types";
+import type { AnnotationSpan, MessageAnnotation } from "$lib/practice/feedback";
 
 let {
 	annotation,
@@ -68,15 +68,16 @@ function getVariant(kind: string): "box" | "underline" | "strike-through" {
 }
 
 function getColor(kind: string): string {
-	if (kind === "grammar") return "#ef4444";
-	if (kind === "vocab") return "#3b82f6";
-	if (kind === "delete") return "#6b7280";
-	return "#3b82f6";
+	// Muted inks that read as marks on paper; rough-notation needs literal colours.
+	if (kind === "grammar") return "#b4533c";
+	if (kind === "vocab") return "#4d6f8f";
+	if (kind === "delete") return "#8a8580";
+	return "#4d6f8f";
 }
 </script>
 
-<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
-	<p class="text-[#2a2520] [overflow-wrap:anywhere]">
+<div class="rounded-xl border border-border bg-card p-4">
+	<p class="[overflow-wrap:anywhere]">
 		{#each parts as part}
 			{#if part.type === "text"}
 				{part.content}
@@ -94,7 +95,7 @@ function getColor(kind: string): string {
 						<span
 							role="button"
 							tabindex="0"
-							class="inline whitespace-pre-wrap text-left rounded px-1 transition-colors hover:bg-black/15"
+							class="inline whitespace-pre-wrap rounded px-1 text-left outline-none transition-colors hover:bg-foreground/[0.08] focus-visible:ring-3 focus-visible:ring-ring/50"
 							onclick={(e) => handleClick(span, e)}
 							onkeydown={(e) => handleKeydown(span, e)}
 						>

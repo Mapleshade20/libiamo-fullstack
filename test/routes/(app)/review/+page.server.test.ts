@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockGetDueNotes } = vi.hoisted(() => ({ mockGetDueNotes: vi.fn() }));
 
-vi.mock("$lib/server/review", () => ({ getDueNotes: mockGetDueNotes }));
+vi.mock("$lib/server/review/scheduler", () => ({ getDueNotes: mockGetDueNotes }));
 
 import { load } from "$routes/(app)/review/+page.server";
 

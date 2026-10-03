@@ -20,6 +20,9 @@
 	--accent: oklch(0.8 0.06 85);
 	--accent-foreground: oklch(0.25 0.005 285);
 	--destructive: oklch(0.577 0.245 27.325);
+	/* Status words and dots. Muted enough to sit on paper beside ink, never as running text. */
+	--success: oklch(0.52 0.1 155);
+	--warning: oklch(0.58 0.12 65);
 	--border: oklch(0.88 0.02 75);
 	--input: oklch(0.88 0.02 75);
 	--ring: oklch(0.8 0.06 85);
@@ -69,6 +72,8 @@
 	--accent: oklch(0.269 0 0);
 	--accent-foreground: oklch(0.985 0 0);
 	--destructive: oklch(0.704 0.191 22.216);
+	--success: oklch(0.72 0.12 155);
+	--warning: oklch(0.78 0.12 70);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.556 0 0);
@@ -93,6 +98,10 @@
 	 * Below it the app wears a bottom bar; above it, only the top bar.
 	 */
 	--breakpoint-nav: 56.25rem;
+	/* Shared motion (transitions.dev): panels, indicators and disclosures open on --ease-panel;
+	   only the switch thumb overshoots. */
+	--ease-panel: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
 }
 
 @theme inline {
@@ -116,6 +125,8 @@
 	--color-input: var(--input);
 	--color-border: var(--border);
 	--color-destructive: var(--destructive);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent: var(--accent);
 	--color-muted-foreground: var(--muted-foreground);
@@ -139,6 +150,20 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * iOS zooms the page into any focused text field under 16px and keeps that zoom afterwards, which
+ * crops installed apps that have no browser chrome to undo it. Unlayered and important so no field,
+ * practice surfaces included, can opt back below the threshold.
+ */
+@media (pointer: coarse) {
+	input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
+	textarea,
+	select {
+		/* biome-ignore lint/complexity/noImportantStyles: scoped component styles must not undercut the iOS threshold. */
+		font-size: max(1rem, 1em) !important;
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
@@ -147,6 +172,8 @@
 	body {
 		@apply font-sans bg-background text-foreground;
 		font-optical-sizing: auto;
+		/* viewport-fit=cover (app.html) lets the bottom insets reach installed apps; keep landscape content off the notch. */
+		padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 	}
 
 	input,
@@ -155,12 +182,58 @@
 		@apply font-sans;
 	}
 
+	/* Display type: serif only for the page title and section headings (see AGENTS.md). */
 	h1 {
-		@apply text-2xl font-medium font-serif;
+		@apply text-3xl font-medium font-serif tracking-tight;
 	}
 
 	h2 {
-		@apply text-lg font-medium font-serif;
+		@apply text-xl font-medium font-serif;
+	}
+
+	/* Group headings stay in the sans: weight, not a third typeface size, marks the level. */
+	:where(h3):not(:where(.practice-surface *)) {
+		@apply text-base font-semibold;
+	}
+
+	/*
+	 * Content is selectable; controls are not. Browsers disagree about button text, so the rule is
+	 * set here once instead of per component. Never add `select-none` to text.
+	 */
+	:where(
+			button,
+			select,
+			summary,
+			svg,
+			[role="button"],
+			[role="tab"],
+			[role="switch"],
+			[role="radio"],
+			[role="checkbox"],
+			[role="option"],
+			[role="menuitem"],
+			[role="menuitemradio"],
+			[role="slider"],
+			[data-control]
+		) {
+		user-select: none;
+		-webkit-user-select: none;
+	}
+
+	button,
+	[role="button"],
+	summary,
+	a,
+	label,
+	input,
+	select,
+	textarea {
+		touch-action: manipulation;
+	}
+
+	/* Practice surfaces imitate other apps and keep their own type. */
+	.practice-surface :is(h1, h2, h3) {
+		font-family: inherit;
 	}
 
 	strong,
@@ -373,6 +446,13 @@ html[data-page-transition^="navbar-"] {
 	   dissolve instead of being buried under the arriving one. */
 	--page-enter-fade: 140ms;
 	--page-exit-fade: 120ms;
+}
+
+/* Firefox drops the live snapshot of a backdrop-filtered element on some frames, so the bar blinks
+   out during the sweep. While a sweep runs, paint the bar's usual colour over the paper flat. */
+html[data-page-transition^="navbar-"] [data-nav-bar] {
+	backdrop-filter: none;
+	background-color: color-mix(in oklab, var(--color-stone-50) 50%, var(--color-background));
 }
 
 html[data-page-transition^="navbar-"]::view-transition-old(root),
@@ -654,4 +734,54 @@ html[data-page-transition="navbar-backward"]::view-transition-new(page-content) 
 /* Cutting around an open line, which SVG would otherwise fill as though its ends were joined. */
 .nav-cut-line {
 	fill: none;
+}
+
+/* Practice surfaces imitate other apps' motion (typing dots, sheets, smooth scrolling); all of it stops under reduced motion. */
+/* biome-ignore-start lint/complexity/noImportantStyles: Svelte transitions animate through inline styles, which only !important overrides. */
+@media (prefers-reduced-motion: reduce) {
+	.practice-surface,
+	.practice-surface *,
+	.practice-surface *::before,
+	.practice-surface *::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: see above */
+
+/* Vertical section navigation (admin sidebar): muted until current, ink tint when current. */
+@utility nav-item {
+	display: flex;
+	min-height: 2.5rem;
+	align-items: center;
+	gap: 0.5rem;
+	border-radius: var(--radius-lg);
+	padding-inline: 0.75rem;
+	font-size: var(--text-sm);
+	color: var(--muted-foreground);
+	transition:
+		background-color 150ms var(--ease-panel),
+		color 150ms var(--ease-panel);
+
+	&:hover {
+		background-color: color-mix(in oklab, var(--foreground) 4%, transparent);
+		color: var(--foreground);
+	}
+
+	&[aria-current="page"] {
+		background-color: color-mix(in oklab, var(--foreground) 6%, transparent);
+		color: var(--foreground);
+		font-weight: 500;
+	}
+
+	&:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+	}
+
+	@media (pointer: coarse) {
+		min-height: 2.75rem;
+	}
 }

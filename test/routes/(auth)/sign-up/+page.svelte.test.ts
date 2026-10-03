@@ -29,8 +29,8 @@ function collapsibleRegion(body: string) {
 }
 
 /**
- * The reveal is driven entirely by CSS — `form:has(#activeLanguage
- * option[value=""]:checked)` — so that it survives with scripting off and so a
+ * The reveal is driven entirely by CSS — `form:has(select[name="activeLanguage"]
+ * option[value=""]:checked)`, on the Select's native mirror — so that it survives with scripting off and so a
  * server render that echoes a language back is already expanded on the first
  * paint. Nothing here can exercise the stylesheet, but every assumption that
  * selector rests on lives in this markup, and each one fails silently: the
@@ -38,7 +38,7 @@ function collapsibleRegion(body: string) {
  */
 describe("Sign-up progressive reveal", () => {
 	it("leaves the placeholder option selected until a language is chosen", () => {
-		expect(renderPage()).toMatch(/<option value="" disabled=""[^>]*selected/);
+		expect(renderPage()).toMatch(/<select name="activeLanguage"[^>]*>(?:<!--[^>]*-->)*<option value=""[^>]*selected/);
 	});
 
 	it("deselects the placeholder once the server echoes a language back", () => {
@@ -68,7 +68,7 @@ describe("Sign-up progressive reveal", () => {
 		const body = renderPage();
 
 		expect(body.indexOf('id="activeLanguage"')).toBeLessThan(body.indexOf('<div class="reveal '));
-		expect(body).toMatch(/<select id="activeLanguage"[^>]*required/);
+		expect(body).toMatch(/<select name="activeLanguage"[^>]*required/);
 		expect(collapsibleRegion(body)).not.toContain('id="activeLanguage"');
 	});
 });

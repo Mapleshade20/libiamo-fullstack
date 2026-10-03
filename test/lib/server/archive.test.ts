@@ -24,8 +24,9 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 	return {
 		id: overrides.id ?? 1,
 		taskId: overrides.taskId ?? 100,
+		lineupId: overrides.lineupId ?? null,
 		evaluationCompletedAt: overrides.completedAt ?? new Date(),
-		task: { title: overrides.taskTitle ?? "Test Task", template: { ui: overrides.ui ?? "discord" } },
+		task: { title: overrides.taskTitle ?? "Test Task", ui: overrides.ui ?? "discord" },
 		notes: overrides.notes ?? [],
 	};
 }
@@ -127,13 +128,36 @@ describe("listCompletedActivities", () => {
 		mockDb.query.translationAttempt.findMany.mockResolvedValue([
 			{
 				id: 7,
+				taskId: 4,
+				lineupId: null,
 				completedAt: new Date(2025, 5, 11, 11, 0, 0),
-				sourceSet: { templateId: 4, template: { titleBase: "Letter translation" } },
+				task: { title: "Letter translation" },
 				notes: [makeNote({ id: 8 })],
 			},
 		]);
 		const result = await listCompletedActivities(USER_ID, now);
 		expect(result[0].activities.map((activity) => activity.activityKey)).toEqual(["translation:7", "practice:1"]);
-		expect(result[0].activities[0]).toMatchObject({ title: "Letter translation", ui: "translator", href: "/translate/4" });
+		expect(result[0].activities[0]).toMatchObject({ title: "Letter translation", ui: "translator", href: "/task/4?attempt=7" });
+	});
+
+	it("pins practice history to the lineup the session belonged to", async () => {
+		mockDb.query.practiceSession.findMany.mockResolvedValue([makeSession({ id: 1, taskId: 5, lineupId: 12 })]);
+		const result = await listCompletedActivities(USER_ID);
+		expect(result[0].activities[0].href).toBe("/task/5/feedback?lineup=12");
+	});
+
+	it("pins each translation retake in one lineup to its own attempt", async () => {
+		const attempt = (id: number) => ({
+			id,
+			taskId: 4,
+			lineupId: 12,
+			completedAt: new Date(2025, 5, 11, 9 + id, 0, 0),
+			task: { title: "Letter translation" },
+			notes: [],
+		});
+		mockDb.query.practiceSession.findMany.mockResolvedValue([]);
+		mockDb.query.translationAttempt.findMany.mockResolvedValue([attempt(1), attempt(2)]);
+		const result = await listCompletedActivities(USER_ID, new Date(2025, 5, 11, 12, 0, 0));
+		expect(result[0].activities.map((activity) => activity.href)).toEqual(["/task/4?lineup=12&attempt=2", "/task/4?lineup=12&attempt=1"]);
 	});
 });

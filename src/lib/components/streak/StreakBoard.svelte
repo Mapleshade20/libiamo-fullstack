@@ -2,13 +2,13 @@
 import { untrack } from "svelte";
 import { dev } from "$app/environment";
 import { base } from "$app/paths";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
-import ModalDialog from "$lib/components/ModalDialog.svelte";
+import ModalDialog from "$lib/components/common/ModalDialog.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { StreakView } from "$lib/streak";
-import { calendarDays, monthRange, type StreakCalendarData } from "$lib/streak-history";
-import { flameAppearance } from "$lib/streak-presentation";
+import { calendarDays, monthRange, type StreakCalendarData } from "$lib/streak/history";
+import { flameAppearance } from "$lib/streak/presentation";
+import type { StreakView } from "$lib/streak/rules";
 import StreakCalendar from "./StreakCalendar.svelte";
 import StreakDigits from "./StreakDigits.svelte";
 import StreakFlame from "./StreakFlame.svelte";
@@ -26,7 +26,7 @@ $effect(() => {
 	const controller = new AbortController();
 	counts = null;
 	failed = false;
-	fetch(`${base}/api/review/stats?byLanguage=1`, { signal: controller.signal })
+	fetch(`${base}/api/review/available`, { signal: controller.signal })
 		.then(async (response) => {
 			if (!response.ok) throw new Error("Review counts unavailable");
 			const result = await response.json();
@@ -298,7 +298,6 @@ $effect(() => {
 	margin-top: 0.15rem;
 	font-size: 0.8125rem;
 	font-weight: 500;
-	letter-spacing: 0.02em;
 	color: #8b7661;
 }
 
@@ -311,10 +310,8 @@ $effect(() => {
 
 .rule-heading {
 	margin-top: 1.15rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.09em;
-	text-transform: uppercase;
+	font-size: 0.75rem;
+	font-weight: 500;
 	color: #8b7661;
 }
 

@@ -31,6 +31,18 @@ function getTimeGroup(date: Date, now: Date): string {
 	return "Earlier";
 }
 
+/**
+ * Pins a task page to the archived attempt: its lineup, and for translations (which a learner can
+ * redo within one lineup) the attempt itself.
+ */
+function taskHref(path: string, lineupId: number | null, attemptId?: number) {
+	const params = new URLSearchParams();
+	if (lineupId !== null) params.set("lineup", String(lineupId));
+	if (attemptId !== undefined) params.set("attempt", String(attemptId));
+	const query = params.toString();
+	return query ? `${path}?${query}` : path;
+}
+
 export interface ArchiveGroup {
 	label: string;
 	activities: ArchiveActivity[];
@@ -41,18 +53,18 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 		db.query.practiceSession.findMany({
 			// Like translation, a practice session is history only once its evaluation page is done.
 			where: and(eq(practiceSession.userId, userId), eq(practiceSession.evaluationPhase, "completed")),
-			columns: { id: true, taskId: true, evaluationCompletedAt: true },
+			columns: { id: true, taskId: true, lineupId: true, evaluationCompletedAt: true },
 			with: {
-				task: { columns: { title: true }, with: { template: { columns: { ui: true } } } },
+				task: { columns: { title: true, ui: true } },
 				notes: { orderBy: desc(note.id), columns: { id: true, vocab: true, targetDefinition: true, nativeDefinition: true } },
 			},
 			orderBy: desc(practiceSession.evaluationCompletedAt),
 		}),
 		db.query.translationAttempt.findMany({
 			where: and(eq(translationAttempt.userId, userId), eq(translationAttempt.workflowPhase, "completed")),
-			columns: { id: true, completedAt: true },
+			columns: { id: true, taskId: true, lineupId: true, completedAt: true },
 			with: {
-				sourceSet: { columns: { templateId: true }, with: { template: { columns: { titleBase: true } } } },
+				task: { columns: { title: true } },
 				notes: { orderBy: desc(note.id), columns: { id: true, vocab: true, targetDefinition: true, nativeDefinition: true } },
 			},
 			orderBy: desc(translationAttempt.completedAt),
@@ -67,8 +79,8 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 			activityKey: `practice:${session.id}`,
 			type: "practice",
 			title: session.task.title,
-			ui: session.task.template.ui,
-			href: `/task/${session.taskId}/feedback`,
+			ui: session.task.ui,
+			href: taskHref(`/task/${session.taskId}/feedback`, session.lineupId),
 			completedAt: session.evaluationCompletedAt,
 			notes: session.notes,
 		});
@@ -79,9 +91,9 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 			id: attempt.id,
 			activityKey: `translation:${attempt.id}`,
 			type: "translation",
-			title: attempt.sourceSet.template.titleBase,
+			title: attempt.task.title,
 			ui: "translator",
-			href: `/translate/${attempt.sourceSet.templateId}`,
+			href: taskHref(`/task/${attempt.taskId}`, attempt.lineupId, attempt.id),
 			completedAt: attempt.completedAt,
 			notes: attempt.notes,
 		});

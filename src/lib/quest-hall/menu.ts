@@ -1,7 +1,7 @@
-import { isPracticeUiImplemented } from "$lib/components/practice-ui/implementedUi";
 import type { SelfAssignedLevel, TranslationWorkflowPhase } from "$lib/constants";
-import { type HallQuest, type HallQuestSessionStatus, isHallQuestConversationEnded, isHallQuestFinished } from "$lib/quest-hall";
-import type { HallData, HallTranslationTask } from "$lib/server/quest-hall";
+import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
+import { type HallQuest, type HallQuestSessionStatus, isHallQuestConversationEnded, isHallQuestFinished } from "$lib/quest-hall/quest";
+import type { HallData, HallTranslationTask } from "$lib/server/quest-hall/hall";
 
 export const QUEST_MENU_SECTIONS = ["daily", "weekly", "translation"] as const;
 export type QuestMenuSection = (typeof QUEST_MENU_SECTIONS)[number];
@@ -66,12 +66,12 @@ export function getQuestMenuItemId(key: string | null | undefined): number | nul
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-export function questState(task: Pick<HallQuest, "sessionStatus" | "evaluationPhase" | "templateUi">): QuestMenuItemState {
+export function questState(task: Pick<HallQuest, "sessionStatus" | "evaluationPhase" | "ui">): QuestMenuItemState {
 	if (isHallQuestFinished(task)) return "finished";
 	if (isHallQuestConversationEnded(task.sessionStatus)) return "reviewing";
 	if (task.sessionStatus === "in_progress") return "active";
 	if (task.sessionStatus === "abandoned") return "stopped";
-	if (!isPracticeUiImplemented(task.templateUi)) return "informational";
+	if (!isPracticeUiImplemented(task.ui)) return "informational";
 	return "ready";
 }
 
@@ -159,7 +159,7 @@ const RECOMMENDATION_RANK: Record<QuestMenuItemState, number> = {
 };
 
 function itemDifficulty(item: QuestMenuItem): number {
-	return item.kind === "quest" ? item.task.templateDifficulty : item.task.difficulty;
+	return item.task.difficulty;
 }
 
 function recommendationRank(item: QuestMenuItem): number {
@@ -286,7 +286,7 @@ export function getQuestMenuNarrowTarget(
 }
 
 export function getQuestMenuItemHref(item: QuestMenuItem, base: string): string {
-	return item.kind === "translation" ? `${base}/translate/${item.id}` : `${base}/task/${item.id}`;
+	return `${base}/task/${item.id}`;
 }
 
 export function getQuestMenuUnreadCount(catalog: QuestMenuCatalog): number {

@@ -1,8 +1,8 @@
 import { json } from "@sveltejs/kit";
-import { localDay } from "$lib/local-day";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { devStreakDayOffset, getStreakCalendar } from "$lib/server/streak";
-import { validMonth } from "$lib/streak-history";
+import { validMonth } from "$lib/streak/history";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
+import { localDay } from "$lib/time/local-day";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async ({ locals, cookies, url }) => {

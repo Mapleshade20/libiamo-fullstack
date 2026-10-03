@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { ChatMessage, ChatUsage } from "$lib/server/llm";
+import type { ChatMessage, ChatUsage } from "$lib/server/llm/client";
 
 type Metadata = {
 	temperature: number;
@@ -50,8 +50,8 @@ function displayContent(content: string): string {
 >
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 		<div>
-			<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{eyebrow}</p>
-			<h2 id="{sectionId}-title" class="font-serif text-2xl tracking-tight">{title}</h2>
+			<p class="mb-2 text-xs font-medium text-muted-foreground">{eyebrow}</p>
+			<h2 id="{sectionId}-title">{title}</h2>
 			<p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
 				{description ||
 					(metadata
@@ -105,7 +105,7 @@ function displayContent(content: string): string {
 		<div class="space-y-4 border-t border-border px-4 py-5">
 			{#each messages as message, index (index)}
 				<article>
-					<p class="mb-2 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">{index + 1} · {message.role}</p>
+					<p class="mb-2 text-xs font-medium text-muted-foreground">{index + 1} · {message.role}</p>
 					<pre
 						class="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-background/80 p-4 font-mono text-xs leading-relaxed text-foreground/85"
 					>{displayContent(message.content)}</pre>

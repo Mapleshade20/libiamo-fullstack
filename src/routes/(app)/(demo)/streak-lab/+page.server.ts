@@ -2,7 +2,6 @@ import { error, fail } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import { dev } from "$app/environment";
 import { requireUser } from "$lib/server/auth/authz";
-import { getBrowserTimezone } from "$lib/server/browser-timezone";
 import { db } from "$lib/server/db";
 import { userStreak } from "$lib/server/db/schema";
 import {
@@ -12,7 +11,8 @@ import {
 	recordQuestCompletion,
 	recordReviewObservation,
 } from "$lib/server/streak";
-import { STREAK_BANK_MAX, type StreakRecord } from "$lib/streak";
+import { STREAK_BANK_MAX, type StreakRecord } from "$lib/streak/rules";
+import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import type { Actions, PageServerLoad } from "./$types";
 
 function assertDev() {

@@ -1,7 +1,7 @@
 <script lang="ts">
-import MarkedText from "$lib/components/learning-feedback/MarkedText.svelte";
-import type { AnnotationSpan } from "$lib/feedback/types";
-import { parseMarkedText } from "$lib/marked-text";
+import MarkedText from "$lib/components/common/MarkedText.svelte";
+import type { AnnotationSpan } from "$lib/practice/feedback";
+import { parseMarkedText } from "$lib/text/marked-text";
 
 let {
 	comment,

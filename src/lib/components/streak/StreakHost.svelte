@@ -4,13 +4,13 @@ import { dev } from "$app/environment";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import { createStreakDay } from "$lib/client/streak-day.svelte";
-import { getStreakPresentation } from "$lib/client/streak-presentation.svelte";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
+import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
+import { createStreakDay } from "$lib/components/streak/day.svelte";
+import { getStreakPresentation } from "$lib/components/streak/presentation-state.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import type { LanguageCode } from "$lib/constants";
-import { STREAK_DEPENDENCY } from "$lib/load-dependencies";
-import { type StreakRecord, viewStreak } from "$lib/streak";
-import { advancePresentationReceipt, type CelebrationKind, type PresentationReceipt, parsePresentationReceipt } from "$lib/streak-presentation";
+import { advancePresentationReceipt, type CelebrationKind, type PresentationReceipt, parsePresentationReceipt } from "$lib/streak/presentation";
+import { type StreakRecord, viewStreak } from "$lib/streak/rules";
 import StreakCelebration from "./StreakCelebration.svelte";
 
 let {
@@ -86,6 +86,14 @@ $effect(() => {
 			/* Optional receipt. */
 		}
 	});
+});
+// Navigation no longer reloads the layout, so a tab that crosses local midnight re-reads the record
+// and the queue snapshot once for the new day; the observation below then sees the new day's queue.
+let loadedDay: string | null = null;
+$effect(() => {
+	const day = today;
+	if (loadedDay !== null && loadedDay !== day && !lab) void invalidate(STREAK_DEPENDENCY);
+	loadedDay = day;
 });
 $effect(() => {
 	if (lab || (dev && page.url.pathname === `${base}/streak-lab`) || !visible || !queueEmpty || view.reviewCleared) return;

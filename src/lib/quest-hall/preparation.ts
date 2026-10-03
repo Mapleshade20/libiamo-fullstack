@@ -1,12 +1,13 @@
 import type { QuestMenuItemKey } from "$lib/quest-hall/menu";
 import type { HallLocation } from "$lib/quest-hall/navigation";
-import type { HallData } from "$lib/server/quest-hall";
-import type { TaskPreparationData } from "$lib/server/task-preparation";
-import type { TranslationPreparationData } from "$lib/server/translation-preparation";
+import type { TaskPreparationData } from "$lib/server/practice/preparation";
+import type { HallData } from "$lib/server/quest-hall/hall";
+import type { TranslationPreparationData } from "$lib/server/translation/preparation";
 
+/** `pin` is the task URL's attempt pin (see `pinQuery`), which every link and form on the page keeps. */
 export type QuestHallPreparation =
-	| { kind: "quest"; key: QuestMenuItemKey; data: TaskPreparationData }
-	| { kind: "translation"; key: QuestMenuItemKey; data: TranslationPreparationData };
+	| { kind: "quest"; key: QuestMenuItemKey; data: TaskPreparationData; pin: string }
+	| { kind: "translation"; key: QuestMenuItemKey; data: TranslationPreparationData; pin: string };
 
 export interface QuestMenuRouteData {
 	hall: HallData;

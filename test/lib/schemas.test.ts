@@ -6,6 +6,7 @@ import {
 	MAIL_TEXT_MAX_LENGTH,
 	PRACTICE_UI_TEXT_MAX_LENGTH,
 	USER_LONG_TEXT_MAX_LENGTH,
+	USER_TEXT_MAX_LENGTH,
 } from "$lib/constants";
 import {
 	ao3OpeningStateSchema,
@@ -14,14 +15,14 @@ import {
 	forgotPasswordSchema,
 	getEditorFields,
 	imessageOpeningStateSchema,
+	lineupEntrySchema,
 	openingStateSchemas,
 	profileSchema,
 	redditOpeningStateSchema,
 	signInSchema,
 	signUpSchema,
-	templateContributionSchema,
-	templateSchema,
-	translatorOpeningStateSchema,
+	taskContributionSchema,
+	taskSchema,
 	validateOpeningState,
 } from "$lib/schemas";
 
@@ -63,224 +64,155 @@ describe("schemas", () => {
 		expect(profileSchema.safeParse({ ...validByok, apiModel: "m".repeat(BYOK_MODEL_MAX_LENGTH + 1) }).success).toBe(false);
 	});
 
-	const baseTemplate = {
+	const discordOpening = { serverName: "Study group", channelName: "general", previousMessages: [] };
+	const baseTask = {
 		language: "en",
 		interactionType: "chat",
 		urgency: "high",
 		ui: "discord",
-		cadence: "daily",
 		difficulty: 2,
 		maxTurns: 3,
 		estimatedWords: 40,
-		pointReward: 10,
-		gemReward: 1,
-		titleBase: "Hello",
-		descriptionBase: "desc",
-		agentPromptBase: "prompt",
+		title: "Hello",
+		shortObjective: "Say hello.",
+		description: "desc",
+		objectives: "Greet the group",
+		agentPrompt: "prompt",
 		materialsMd: "# Background",
+		openingState: JSON.stringify(discordOpening),
+	};
+	const translationTask = {
+		...baseTask,
+		interactionType: "translate",
+		ui: "translator",
+		translationContext: "a note to a close friend",
+		referenceParagraphs: "An authentic source paragraph.",
 	};
 
-	it("does not accept template isActive through the edit form schema", () => {
-		const parsed = templateSchema.parse({ ...baseTemplate, isActive: "on" });
+	it("does not accept task isActive through the edit form schema", () => {
+		const parsed = taskSchema.parse({ ...baseTask, isActive: "on" });
 		expect("isActive" in parsed).toBe(false);
 	});
 
-	it("transforms objectivesBase newline string to array", () => {
-		const result = templateSchema.parse({
-			...baseTemplate,
-			objectivesBase: "First objective\nSecond objective\n",
-		});
-		expect(result.objectivesBase).toEqual(["First objective", "Second objective"]);
-	});
-
-	it("transforms tags comma string to array", () => {
-		const result = templateSchema.parse({
-			...baseTemplate,
-			tags: "travel, food, culture",
-		});
+	it("splits objectives by line and tags by comma", () => {
+		const result = taskSchema.parse({ ...baseTask, objectives: "First objective\nSecond objective\n", tags: "travel, food, culture" });
+		expect(result.objectives).toEqual(["First objective", "Second objective"]);
 		expect(result.tags).toEqual(["travel", "food", "culture"]);
 	});
 
-	it("returns empty arrays for missing objectivesBase and tags", () => {
-		const result = templateSchema.parse(baseTemplate);
-		expect(result.objectivesBase).toEqual([]);
-		expect(result.tags).toEqual([]);
+	it("stores blank optional content as null", () => {
+		const result = taskSchema.parse({ ...baseTask, agentPrompt: "  ", maxTurns: "", estimatedWords: "0" });
+		expect(result).toMatchObject({ agentPrompt: null, tags: null, maxTurns: null, estimatedWords: null });
 	});
 
-	it("clears unsupported translation template fields", () => {
-		const result = templateSchema.parse({
-			...baseTemplate,
-			interactionType: "translate",
-			ui: "translator",
-			cadence: "none",
-			shortObjectiveBase: "Translate this on the card.",
-			materialsMd: "# Background",
-			agentPromptBase: "a note to a close friend",
-			translationReference: "An authentic source paragraph.",
+	it("requires the content the learner reads: a short objective, description and objectives", () => {
+		const blank = taskSchema.safeParse({ ...baseTask, shortObjective: "  ", description: "", objectives: "\n" });
+		expect(blank.success).toBe(false);
+		if (!blank.success) {
+			expect(blank.error.issues.map((issue) => issue.path[0])).toEqual(expect.arrayContaining(["shortObjective", "description", "objectives"]));
+		}
+		// Translation tasks show neither a card objective nor objectives.
+		expect(taskSchema.safeParse({ ...translationTask, shortObjective: "", objectives: "" }).success).toBe(true);
+		expect(taskSchema.safeParse({ ...translationTask, description: "" }).success).toBe(false);
+	});
+
+	it("validates the opening state for the chosen chat interface", () => {
+		expect(taskSchema.safeParse({ ...baseTask, openingState: JSON.stringify({ serverName: "Only a server" }) }).success).toBe(false);
+		expect(taskSchema.parse(baseTask).openingState).toEqual(discordOpening);
+	});
+
+	it("requires urgency for chat tasks", () => {
+		expect(taskSchema.safeParse({ ...baseTask, urgency: "" }).success).toBe(false);
+	});
+
+	it("keeps only translation content on translation tasks", () => {
+		const result = taskSchema.parse({ ...translationTask, shortObjective: "Translate this on the card.", maxTurns: 3 });
+		expect(result).toMatchObject({
+			urgency: null,
+			maxTurns: null,
+			agentPrompt: null,
+			openingState: null,
+			shortObjective: null,
+			materialsMd: null,
+			translationContext: "a note to a close friend",
+			referenceParagraphs: ["An authentic source paragraph."],
 		});
-
-		expect(result.shortObjectiveBase).toBeNull();
-		expect(result.materialsMd).toBeNull();
 	});
 
-	it("returns error when required template fields are missing", () => {
-		const result = templateSchema.safeParse({
-			language: "en",
-			interactionType: "chat",
-			ui: "discord",
-			cadence: "daily",
-			difficulty: 2,
-			pointReward: 10,
-			gemReward: 1,
-			// titleBase missing
-		});
-		expect(result.success).toBe(false);
+	it("requires context and authentic references for translation tasks", () => {
+		const missing = taskSchema.safeParse({ ...baseTask, interactionType: "translate", ui: "translator" });
+		expect(missing.success).toBe(false);
+		if (!missing.success) {
+			expect(missing.error.issues.map((issue) => issue.path[0])).toEqual(expect.arrayContaining(["translationContext", "referenceParagraphs"]));
+		}
 	});
 
-	it("returns error for invalid interactionType enum value", () => {
-		const result = templateSchema.safeParse({ ...baseTemplate, interactionType: "invalid" });
-		expect(result.success).toBe(false);
+	it("splits reference paragraphs on blank lines", () => {
+		const result = taskSchema.parse({ ...translationTask, referenceParagraphs: "Hello\nWorld\n\nGoodbye" });
+		expect(result.referenceParagraphs).toEqual(["Hello\nWorld", "Goodbye"]);
 	});
 
-	it("returns error for invalid cadence enum value", () => {
-		const result = templateSchema.safeParse({ ...baseTemplate, cadence: "monthly" });
-		expect(result.success).toBe(false);
+	it("rejects ui/interactionType mismatches and invalid enum values", () => {
+		expect(taskSchema.safeParse({ ...translationTask, ui: "discord" }).success).toBe(false);
+		expect(taskSchema.safeParse({ ...baseTask, ui: "translator" }).success).toBe(false);
+		expect(taskSchema.safeParse({ ...baseTask, interactionType: "invalid" }).success).toBe(false);
+		expect(taskSchema.safeParse({ ...baseTask, title: "" }).success).toBe(false);
 	});
 
-	// ── templateContributionSchema ─────────────────────────────────────
+	// ── taskContributionSchema ─────────────────────────────────────────
 
 	const baseContribution = {
 		language: "en",
 		interactionType: "chat",
 		urgency: "high",
 		ui: "discord",
-		titleBase: "Chat with {{friend}}",
+		title: "Chat with a friend",
+		shortObjective: "Make plans.",
+		description: "A friend asks about the weekend.",
+		objectives: "Suggest a plan",
+		openingState: JSON.stringify(discordOpening),
 	};
 
-	it("templateContributionSchema parses minimal valid input", () => {
-		const result = templateContributionSchema.parse(baseContribution);
-		expect(result.titleBase).toBe("Chat with {{friend}}");
-		expect(result.interactionType).toBe("chat");
-	});
-
-	it("requires urgency for non-translation templates and clears it for translation", () => {
-		expect(templateSchema.safeParse({ ...baseTemplate, urgency: undefined }).success).toBe(false);
-		const translation = templateSchema.parse({
-			...baseTemplate,
-			interactionType: "translate",
-			ui: "translator",
-			cadence: "none",
-			urgency: "low",
-			agentPromptBase: "a letter to a friend",
-			translationReference: "Bonjour.",
-		});
-		expect(translation.urgency).toBeNull();
-	});
-
-	it("templateContributionSchema rejects missing required fields", () => {
-		expect(templateContributionSchema.safeParse({}).success).toBe(false);
-		expect(templateContributionSchema.safeParse({ language: "en", interactionType: "chat", ui: "discord" }).success).toBe(false);
-		// missing titleBase
-	});
-
-	it("templateContributionSchema does NOT require admin-only fields", () => {
-		// These fields should NOT be present or required
-		const result = templateContributionSchema.parse(baseContribution) as Record<string, unknown>;
-		expect(result).not.toHaveProperty("cadence");
-		expect(result).not.toHaveProperty("difficulty");
-		expect(result).not.toHaveProperty("pointReward");
-		expect(result).not.toHaveProperty("gemReward");
-		expect(result).not.toHaveProperty("isActive");
-	});
-
-	it("templateContributionSchema transforms objectivesBase newline to array", () => {
-		const result = templateContributionSchema.parse({
+	it("taskContributionSchema leaves scheduling, scoring and presentation extras to the reviewing admin", () => {
+		const result = taskContributionSchema.parse({
 			...baseContribution,
-			objectivesBase: "Be polite\nStay on topic",
-		});
-		expect(result.objectivesBase).toEqual(["Be polite", "Stay on topic"]);
+			difficulty: 3,
+			maxTurns: 4,
+			tags: "a, b",
+			materialsMd: "# Notes",
+		}) as Record<string, unknown>;
+		expect(result.title).toBe("Chat with a friend");
+		for (const field of ["difficulty", "maxTurns", "estimatedWords", "isActive", "rotation", "tags", "materialsMd"])
+			expect(result).not.toHaveProperty(field);
 	});
 
-	it("templateContributionSchema transforms tags comma to array", () => {
-		const result = templateContributionSchema.parse({
+	it("taskContributionSchema takes character notes and the real conversation", () => {
+		const result = taskContributionSchema.parse({
 			...baseContribution,
-			tags: "travel, food",
+			agentPrompt: "Priya wants a decision.",
+			source: JSON.stringify({ continuation: "priya: so, Lisbon?" }),
 		});
-		expect(result.tags).toEqual(["travel", "food"]);
+		expect(result).toMatchObject({ agentPrompt: "Priya wants a decision.", source: { continuation: "priya: so, Lisbon?" } });
 	});
 
-	it("templateContributionSchema transforms translationReference paragraphs", () => {
-		const result = templateContributionSchema.parse({
-			...baseContribution,
-			translationReference: "Hello\nWorld\n\nGoodbye",
-		});
-		expect(result.translationReference).toEqual(["Hello\nWorld", "Goodbye"]);
+	it("taskContributionSchema rejects missing required fields and invalid values", () => {
+		expect(taskContributionSchema.safeParse({}).success).toBe(false);
+		expect(taskContributionSchema.safeParse({ ...baseContribution, title: undefined }).success).toBe(false);
+		expect(taskContributionSchema.safeParse({ ...baseContribution, language: "de" }).success).toBe(false);
 	});
 
-	it("templateContributionSchema requires context and authentic references for translation templates", () => {
-		const missing = templateContributionSchema.safeParse({
-			...baseContribution,
-			interactionType: "translate",
-			ui: "translator",
-		});
-		expect(missing.success).toBe(false);
-		if (!missing.success) {
-			expect(missing.error.issues.map((issue) => issue.path[0])).toEqual(expect.arrayContaining(["agentPromptBase", "translationReference"]));
-		}
-
-		expect(
-			templateContributionSchema.safeParse({
-				...baseContribution,
-				interactionType: "translate",
-				ui: "translator",
-				agentPromptBase: "a message to a close friend",
-				translationReference: "Authentic source paragraph.",
-			}).success,
-		).toBe(true);
+	it("taskContributionSchema rejects overlong user-authored content", () => {
+		expect(taskContributionSchema.safeParse({ ...baseContribution, title: "x".repeat(USER_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+		expect(taskContributionSchema.safeParse({ ...baseContribution, agentPrompt: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
 	});
 
-	it("templateContributionSchema clears unsupported translation content", () => {
-		const result = templateContributionSchema.parse({
-			...baseContribution,
-			interactionType: "translate",
-			ui: "translator",
-			shortObjectiveBase: "Translate this on the card.",
-			materialsMd: "# Background",
-			agentPromptBase: "a message to a close friend",
-			translationReference: "Authentic source paragraph.",
-		});
+	// ── lineupEntrySchema ──────────────────────────────────────────────
 
-		expect(result.shortObjectiveBase).toBeNull();
-		expect(result.materialsMd).toBeNull();
-	});
-
-	it("templateContributionSchema returns empty for optional fields when not provided", () => {
-		const result = templateContributionSchema.parse(baseContribution);
-		expect(result.objectivesBase).toEqual([]);
-		expect(result.tags).toEqual([]);
-		expect(result.translationReference).toBeNull();
-		expect(result.shortObjectiveBase).toBeUndefined();
-		expect(result.descriptionBase).toBeUndefined();
-	});
-
-	it("templateContributionSchema rejects invalid interactionType", () => {
-		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "invalid" }).success).toBe(false);
-	});
-
-	it("templateContributionSchema rejects invalid language", () => {
-		expect(templateContributionSchema.safeParse({ ...baseContribution, language: "de" }).success).toBe(false);
-	});
-
-	it("templateContributionSchema rejects ui/interactionType mismatch", () => {
-		// translate must have ui=translator
-		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "translate", ui: "discord" }).success).toBe(false);
-		// non-translate must not have ui=translator
-		expect(templateContributionSchema.safeParse({ ...baseContribution, interactionType: "chat", ui: "translator" }).success).toBe(false);
-	});
-
-	it("templateContributionSchema rejects overlong user-authored content", () => {
-		expect(templateContributionSchema.safeParse({ ...baseContribution, titleBase: "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
-		expect(templateContributionSchema.safeParse({ ...baseContribution, materialsMd: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+	it("lineupEntrySchema takes dates for daily lineups and ISO weeks for weekly ones", () => {
+		expect(lineupEntrySchema.safeParse({ taskId: "3", kind: "daily", date: "2026-09-24" }).success).toBe(true);
+		expect(lineupEntrySchema.safeParse({ taskId: "3", kind: "daily", date: "2026-02-30" }).success).toBe(false);
+		expect(lineupEntrySchema.safeParse({ taskId: "3", kind: "weekly", date: "2026-W39" }).success).toBe(true);
+		expect(lineupEntrySchema.safeParse({ taskId: "3", kind: "weekly", date: "2026-09-24" }).success).toBe(false);
 	});
 
 	// ── openingState per-UI schemas ───────────────────────────────────
@@ -312,10 +244,8 @@ describe("schemas", () => {
 
 	it("redditOpeningStateSchema validates correctly with nested comments", () => {
 		const result = redditOpeningStateSchema.parse({
-			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1", votes: 42 },
-			previousComments: [
-				{ id: "c1", author: "commenter", text: "Nice post", timestamp: "2 hr. ago", votes: 5, replies: [{ author: "op", text: "Thanks!" }] },
-			],
+			post: { title: "A post", body: "Content", subreddit: "r/test", author: "user1" },
+			previousComments: [{ id: "c1", author: "commenter", text: "Nice post", timestamp: "2 hr. ago", replies: [{ author: "op", text: "Thanks!" }] }],
 		});
 		expect(result.post.subreddit).toBe("r/test");
 		expect(result.previousComments?.[0].author).toBe("commenter");
@@ -382,16 +312,6 @@ describe("schemas", () => {
 		expect(result.previousComments?.[0].replies?.[0].comment).toBe("Thank you!");
 	});
 
-	it("translatorOpeningStateSchema validates correctly", () => {
-		const result = translatorOpeningStateSchema.parse({ sourceText: "Bonjour" });
-		expect(result.sourceText).toBe("Bonjour");
-	});
-
-	it("translatorOpeningStateSchema rejects missing sourceText", () => {
-		const result = translatorOpeningStateSchema.safeParse({});
-		expect(result.success).toBe(false);
-	});
-
 	// ── validateOpeningState helper ───────────────────────────────────
 
 	it("validateOpeningState routes to correct schema for each ui", () => {
@@ -414,18 +334,16 @@ describe("schemas", () => {
 			}).success,
 		).toBe(true);
 		expect(validateOpeningState("ao3", { workTitle: "W" }).success).toBe(true);
-		expect(validateOpeningState("translator", { sourceText: "text" }).success).toBe(true);
 	});
 
 	it("validateOpeningState returns failure for wrong shape", () => {
 		expect(validateOpeningState("discord", { serverName: "S" }).success).toBe(false);
-		expect(validateOpeningState("translator", {}).success).toBe(false);
 	});
 
 	// ── openingStateSchemas registry ────────────────────────────────────
 
 	it("openingStateSchemas covers all UI variants", () => {
-		const uis = ["imessage", "discord", "reddit", "apple_mail", "ao3", "translator"] as const;
+		const uis = ["imessage", "discord", "reddit", "apple_mail", "ao3"] as const;
 		for (const ui of uis) {
 			expect(openingStateSchemas[ui]).toBeDefined();
 			expect(typeof openingStateSchemas[ui].safeParse).toBe("function");
@@ -435,23 +353,16 @@ describe("schemas", () => {
 	// ── getEditorFields helper ──────────────────────────────────────────
 
 	it("getEditorFields returns fields for each UI variant", () => {
-		expect(getEditorFields("imessage")).toHaveLength(1);
-		expect(getEditorFields("imessage")[0].type).toBe("message-list");
-
-		expect(getEditorFields("discord")).toHaveLength(2);
-		expect(getEditorFields("discord")[0].type).toBe("row");
+		const keys = (ui: "imessage" | "discord" | "apple_mail") => getEditorFields(ui).map((field) => ("key" in field ? field.key : field.type));
+		expect(keys("imessage")).toEqual(["counterpartName", "row", "previousMessages"]);
+		expect(keys("discord")).toEqual(["row", "counterpartName", "dm", "previousMessages"]);
+		expect(keys("apple_mail")).toEqual(["counterpartName", "members", "emails"]);
 
 		expect(getEditorFields("reddit")).toHaveLength(2);
 		expect(getEditorFields("reddit")[0].type).toBe("group");
 		expect(getEditorFields("reddit")[1].type).toBe("comment-tree");
 
-		expect(getEditorFields("apple_mail")).toHaveLength(1);
-		expect(getEditorFields("apple_mail")[0].type).toBe("email-list");
-
 		expect(getEditorFields("ao3")).toHaveLength(10);
 		expect(getEditorFields("ao3")[9].type).toBe("comment-tree");
-
-		expect(getEditorFields("translator")).toHaveLength(1);
-		expect(getEditorFields("translator")[0].type).toBe("textarea");
 	});
 });

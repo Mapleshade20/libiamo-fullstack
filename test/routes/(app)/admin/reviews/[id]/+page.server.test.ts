@@ -20,14 +20,15 @@ vi.mock("$lib/server/db", () => ({
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
-	templateContribution: {},
+	taskContribution: {},
 	user: {},
 }));
 
 vi.mock("drizzle-orm", () => {
 	const eq = vi.fn(() => "eq");
 	const and = vi.fn((...args: unknown[]) => args);
-	return { and, eq };
+	const getTableColumns = vi.fn(() => ({}));
+	return { and, eq, getTableColumns };
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -50,11 +51,8 @@ const buildContribution = (overrides: Record<string, unknown> = {}) => ({
 	language: "en",
 	interactionType: "chat",
 	ui: "imessage",
-	titleBase: "Test contribution",
-	cadence: "daily",
-	difficulty: 2,
+	title: "Test contribution",
 	status: "pending",
-	slotValues: { friend: "Bob" },
 	openingState: { previousMessages: [] },
 	...overrides,
 });

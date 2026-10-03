@@ -5,5 +5,5 @@ import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = (event) => {
 	requireAdmin(event);
-	redirect(302, `${base}/admin/templates`);
+	redirect(302, `${base}/admin/tasks`);
 };

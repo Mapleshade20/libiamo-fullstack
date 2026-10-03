@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LANGUAGE_CODES, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
-import { NOTE_EXAMPLE_COUNT } from "$lib/note";
+import { NOTE_EXAMPLE_COUNT } from "$lib/review/note";
 
 export const reviewRatingSchema = z.object({
 	rating: z.number().int().min(1).max(4),

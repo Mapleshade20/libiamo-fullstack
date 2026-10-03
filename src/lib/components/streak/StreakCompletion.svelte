@@ -1,5 +1,5 @@
 <script lang="ts">
-import { getStreakPresentation } from "$lib/client/streak-presentation.svelte";
+import { getStreakPresentation } from "$lib/components/streak/presentation-state.svelte";
 
 let { ready = true }: { ready?: boolean } = $props();
 const presentation = getStreakPresentation();

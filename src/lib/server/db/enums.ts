@@ -1,12 +1,12 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { CADENCES, INTERACTION_TYPES, LANGUAGE_CODES, UI_VARIANTS, URGENCIES } from "$lib/constants";
+import { INTERACTION_TYPES, LANGUAGE_CODES, LINEUP_KINDS, UI_VARIANTS, URGENCIES } from "$lib/constants";
 
 export const userRoleEnum = pgEnum("user_role", ["learner", "admin"]);
 export const languageCodeEnum = pgEnum("language_code", [...LANGUAGE_CODES]);
 export const interactionTypeEnum = pgEnum("interaction_type", [...INTERACTION_TYPES]);
 export const uiVariantEnum = pgEnum("ui_variant", [...UI_VARIANTS]);
-export const cadenceEnum = pgEnum("cadence", [...CADENCES]);
-export const scheduleOriginEnum = pgEnum("schedule_origin", ["manual", "auto"]);
+export const lineupKindEnum = pgEnum("lineup_kind", [...LINEUP_KINDS]);
+export const lineupOriginEnum = pgEnum("lineup_origin", ["manual", "auto"]);
 export const sessionStatusEnum = pgEnum("session_status", ["in_progress", "completed", "evaluated", "abandoned"]);
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const urgencyEnum = pgEnum("urgency", [...URGENCIES]);

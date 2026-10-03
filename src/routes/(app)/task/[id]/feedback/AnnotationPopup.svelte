@@ -4,11 +4,14 @@ import X from "@lucide/svelte/icons/x";
 import { onMount } from "svelte";
 import { fade, scale } from "svelte/transition";
 import { deserialize } from "$app/forms";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
+import { refreshTrialQuota } from "$lib/components/account/trial-quota";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import Notice from "$lib/components/common/Notice.svelte";
+import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
-import type { AnnotationSpan } from "$lib/feedback/types";
-import { renderMarkdown } from "$lib/markdown";
+import type { AnnotationSpan } from "$lib/practice/feedback";
+import { renderMarkdown } from "$lib/text/markdown";
 
 let {
 	annotation,
@@ -115,6 +118,7 @@ async function fetchExplanation() {
 			method: "POST",
 			body: formData,
 		});
+		void refreshTrialQuota();
 
 		const result = deserialize(await response.text());
 
@@ -154,6 +158,7 @@ async function handleSaveNote() {
 			method: "POST",
 			body: formData,
 		});
+		void refreshTrialQuota();
 
 		const result = deserialize(await response.text());
 
@@ -184,7 +189,7 @@ function handleBackdropClick(event: MouseEvent) {
 
 const kindLabel = $derived(
 	explanationMode === "good_expression"
-		? "Good Expression"
+		? "Good expression"
 		: annotation.kind === "grammar"
 			? "Grammar"
 			: annotation.kind === "vocab"
@@ -194,16 +199,14 @@ const kindLabel = $derived(
 					: "Issue",
 );
 
-const kindColor = $derived(
+const kindVariant = $derived(
 	explanationMode === "good_expression"
-		? "text-amber-700 bg-amber-50 border-amber-200"
+		? "success"
 		: annotation.kind === "grammar"
-			? "text-red-600 bg-red-50 border-red-200"
+			? "destructive"
 			: annotation.kind === "vocab"
-				? "text-blue-600 bg-blue-50 border-blue-200"
-				: annotation.kind === "delete"
-					? "text-gray-600 bg-gray-50 border-gray-200"
-					: "text-gray-600 bg-gray-50 border-gray-200",
+				? "secondary"
+				: "outline",
 );
 </script>
 
@@ -220,23 +223,21 @@ const kindColor = $derived(
 <!-- Popup card -->
 <div
 	data-selection-ignore
-	class="fixed z-50 flex w-[calc(100vw-1.5rem)] max-w-[400px] flex-col overflow-hidden rounded-xl border border-[#e8e3db] bg-white shadow-2xl"
+	class="fixed z-50 flex w-[calc(100vw-1.5rem)] max-w-[400px] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-2xl"
 	style="top: {position.top}px; left: {position.left}px; max-height: calc(100vh - {position.top}px - 20px);"
 	transition:scale={{ duration: 200, start: 0.95 }}
 >
 	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-[#e8e3db] p-4 bg-[#fdfcf9]">
-		<div class="flex items-center gap-2">
-			<span class="inline-block rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wider border {kindColor}"> {kindLabel} </span>
-		</div>
-		<button type="button" class="rounded-md p-1 text-[#6b6560] hover:bg-[#e8e3db] transition-colors" onclick={onClose}><X size={18} /></button>
+	<div class="flex items-center justify-between border-b border-border py-2 pr-2 pl-4">
+		<div class="flex items-center gap-2"><Badge variant={kindVariant}>{kindLabel}</Badge></div>
+		<Button variant="ghost" size="icon-sm" aria-label="Close" onclick={onClose}><X aria-hidden="true" /></Button>
 	</div>
 
 	<!-- Content -->
 	<div class="p-4 overflow-y-auto flex-1">
 		<!-- Annotated text -->
-		<div class="mb-4 rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-3">
-			<p class="font-prose text-sm font-medium text-[#2a2520] [overflow-wrap:anywhere]">"{annotation.text}"</p>
+		<div class="mb-4 rounded-lg bg-foreground/[0.04] p-3">
+			<p class="font-prose text-sm font-medium [overflow-wrap:anywhere]">"{annotation.text}"</p>
 		</div>
 
 		<!-- Explanation -->
@@ -249,28 +250,28 @@ const kindColor = $derived(
 				</div>
 			{/snippet}
 			{#if error}
-				<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+				<Notice tone="danger" role="alert"><p>{error}</p></Notice>
 			{:else if explanation}
-				<div class="prose prose-sm max-w-none font-prose text-[#2a2520] [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
+				<div class="prose prose-sm max-w-none font-prose [overflow-wrap:anywhere]">{@html renderMarkdown(explanation)}</div>
 			{/if}
 		</LoadingReveal>
 	</div>
 
 	<!-- Footer -->
 	{#if explanation}
-		<div class="flex items-center justify-between gap-3 border-t border-[#e8e3db] bg-[#fdfcf9] p-4">
+		<div class="flex items-center justify-between gap-3 border-t border-border p-4">
 			{#if saveSuccess}
-				<span class="text-sm text-green-600 font-medium">Saved to notes!</span>
+				<span class="text-sm font-medium text-success">Saved to notes</span>
 			{:else if saveError}
-				<span class="text-sm text-red-600 font-medium">{saveError}</span>
+				<span class="text-sm font-medium text-destructive">{saveError}</span>
 			{:else}
-				<span class="text-xs text-[#9b8f85]"
+				<span class="text-xs text-muted-foreground"
 					>{explanationMode === "good_expression" ? "Save this expression for later review" : "Save this for later review"}</span
 				>
 			{/if}
-			<Button size="sm" variant="outline" onclick={handleSaveNote} disabled={isSaving || saveSuccess}>
-				<BookmarkPlus size={14} class="mr-1.5" />
-				{saveSuccess ? "Saved" : "Save to Notes"}
+			<Button size="sm" variant="secondary" onclick={handleSaveNote} disabled={isSaving || saveSuccess}>
+				<BookmarkPlus aria-hidden="true" />
+				{saveSuccess ? "Saved" : "Save to notes"}
 			</Button>
 		</div>
 	{/if}

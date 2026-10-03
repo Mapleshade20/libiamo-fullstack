@@ -1,6 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
-import ActionNotification from "$lib/components/ActionNotification.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 
@@ -35,7 +35,7 @@ const actionNotification = $derived(
 <ActionNotification notification={actionNotification} />
 
 <Card.Root>
-	<Card.Header> <Card.Title class="text-xl">Email Verification</Card.Title> </Card.Header>
+	<Card.Header> <Card.Title>Email verification</Card.Title> </Card.Header>
 	<Card.Content>
 		{#if data.pending}
 			<div class="space-y-3 text-center">

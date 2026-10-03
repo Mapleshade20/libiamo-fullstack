@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { HallQuest } from "$lib/quest-hall";
 import { adaptHallDataToQuestMenu } from "$lib/quest-hall/menu";
 import { DEFAULT_HALL_LOCATION, hallLocationUrl, normalizeHallLocation, parseHallLocation, reduceHallLocation } from "$lib/quest-hall/navigation";
-import type { HallData } from "$lib/server/quest-hall";
+import type { HallQuest } from "$lib/quest-hall/quest";
+import type { HallData } from "$lib/server/quest-hall/hall";
 
 function quest(id: number): HallQuest {
 	return {
 		id,
+		lineupId: 1,
 		title: `Task ${id}`,
 		shortObjective: null,
-		templateUi: "imessage",
-		templateDifficulty: 1,
-		templateInteractionType: "chat",
-		pointReward: 5,
+		ui: "imessage",
+		difficulty: 1,
 		sessionStatus: null,
 		evaluationPhase: null,
 		unreadCount: 0,
@@ -88,7 +87,7 @@ describe("production Hall navigation", () => {
 
 	it("serializes preparation only as a canonical resource URL", () => {
 		expect(hallLocationUrl({ view: "prepare", section: "weekly", leaf: 2, task: "weekly-11" }, "/libiamo")).toBe("/libiamo/task/11");
-		expect(hallLocationUrl({ view: "prepare", section: "translation", leaf: 1, task: "translation-22" }, "/libiamo")).toBe("/libiamo/translate/22");
+		expect(hallLocationUrl({ view: "prepare", section: "translation", leaf: 1, task: "translation-22" }, "/libiamo")).toBe("/libiamo/task/22");
 		const unchanged = reduceHallLocation({ ...DEFAULT_HALL_LOCATION }, { type: "close-catalog" }, catalog);
 		expect(unchanged.historyIntent).toBe("none");
 	});

@@ -36,6 +36,13 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			defaultCookieAttributes: { path: base || "/" },
 		},
 		secret: env.BETTER_AUTH_SECRET,
+		session: {
+			// Every request resolves the session in `hooks.server.ts`; the signed cache cookie spares
+			// the database that lookup. `updateUser` rewrites the cookie, so session-visible user fields
+			// must change through it; a direct DB write (role, say) shows up within `maxAge`.
+			// Freshness-sensitive checks read `getAuthoritativeSessionFromCtx`, which bypasses the cache.
+			cookieCache: { enabled: true, maxAge: 5 * 60 },
+		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
 				if (ctx.path !== "/change-email") return;

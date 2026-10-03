@@ -32,8 +32,11 @@ const config = {
 		// Base path is baked in at build time. Empty for local dev and root-domain
 		// deploys; set to e.g. "/se-projects/libiamo" when the site is served from a
 		// sub-path. Every internal URL must go through `base` from "$app/paths".
+		// Absolute even during SSR: with relative paths `base` renders as "../..", so every
+		// `page.url.pathname` comparison against it fails on the server and flips after hydration.
 		paths: {
 			base,
+			relative: false,
 		},
 		alias: {
 			$routes: "src/routes",

@@ -2,16 +2,18 @@
 import { untrack } from "svelte";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
-import LoadingReveal from "$lib/components/LoadingReveal.svelte";
+import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
+import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import Notice from "$lib/components/common/Notice.svelte";
 import ReviewSessionSummary from "$lib/components/review/ReviewSessionSummary.svelte";
 import StudyCard from "$lib/components/review/StudyCard.svelte";
 import type { StudyCardAction } from "$lib/components/review/study-card";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
+import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { STREAK_DEPENDENCY } from "$lib/load-dependencies";
-import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review";
+import { advanceReviewQueue, countStudyQueue, type StudyQueueKind } from "$lib/review/queue";
 
 let { data } = $props();
 let lang: LanguageCode = $derived(data.reviewLanguage as LanguageCode);
@@ -134,10 +136,10 @@ async function rate(rating: number) {
 			<div class="space-y-4"><Skeleton class="mx-auto h-80 w-full max-w-md rounded-2xl" /><Skeleton class="mx-auto h-10 w-64" /></div>
 		{/snippet}
 		{#if error}
-			<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700">
-				{error}
-				<button type="button" class="ml-2 underline" onclick={() => { error = null; }}>{t(lang, "common.retry")}</button>
-			</div>
+			<Notice tone="danger" role="alert">
+				<p>{error}</p>
+				<Button variant="secondary" size="sm" class="mt-2" onclick={() => { error = null; }}>{t(lang, "common.retry")}</Button>
+			</Notice>
 		{:else if sessionComplete}
 			<StreakCompletion />
 			<ReviewSessionSummary {cardsReviewed} timeSpentSeconds={Math.round((Date.now() - sessionStart) / 1000)} {lang} />

@@ -1,14 +1,13 @@
-import type { HallQuest } from "$lib/quest-hall";
-import type { HallData } from "$lib/server/quest-hall";
+import type { HallQuest } from "$lib/quest-hall/quest";
+import type { HallData } from "$lib/server/quest-hall/hall";
 export function quest(id: number, overrides: Partial<HallQuest> = {}): HallQuest {
 	return {
 		id,
+		lineupId: 1,
 		title: `Quest ${id}`,
 		shortObjective: `Objective ${id}`,
-		templateUi: "imessage",
-		templateDifficulty: 2,
-		templateInteractionType: "chat",
-		pointReward: 10,
+		ui: "imessage",
+		difficulty: 2,
 		sessionStatus: null,
 		evaluationPhase: null,
 		unreadCount: 0,
@@ -31,8 +30,8 @@ export function hallData(overrides: Partial<HallData> = {}): HallData {
 		dailyTasks: [quest(1, { unreadCount: 2, hasUnreadReply: true })],
 		weeklyTasks: [quest(11)],
 		translationTasks: [
-			{ id: 21, titleBase: "Current letter", descriptionBase: "Translate a short letter.", difficulty: 1, createdMonth: "2026-09" },
-			{ id: 22, titleBase: "Archived letter", descriptionBase: null, difficulty: 2, createdMonth: "2026-08" },
+			{ id: 21, title: "Current letter", description: "Translate a short letter.", difficulty: 1, createdMonth: "2026-09" },
+			{ id: 22, title: "Archived letter", description: null, difficulty: 2, createdMonth: "2026-08" },
 		],
 		translationStatusMap: {},
 		...overrides,

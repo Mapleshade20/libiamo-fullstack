@@ -24,6 +24,7 @@ const data = {
 	apiBaseUrl: "",
 	apiModel: "",
 	levelSelfAssign: 2 as const,
+	llmTraceSetting: null as { enabled: boolean } | null,
 	credentialConnected: true,
 	loginMethodCount: 2,
 	socialLoginMethods: [
@@ -40,8 +41,8 @@ const data = {
 describe("Profile page", () => {
 	it.each([true, false])("renders a concise password row and change form before hydration (connected: %s)", (credentialConnected) => {
 		const { body } = render(ProfilePage, { props: { data: { ...data, credentialConnected }, form: null } });
-		expect(body).toContain(t("fr", "profile.passwordMethod"));
-		expect(body).toMatch(/<span[^>]*class="block truncate text-xs text-muted-foreground"[^>]*>alice@example.com<\/span>/);
+		expect(body).toContain("alice@example.com");
+		expect(body).toContain(t("fr", credentialConnected ? "profile.passwordEnabled" : "profile.passwordMissing"));
 		expect(body).toContain('action="?/changeEmail"');
 		expect(body).toContain('<dialog aria-labelledby="email-dialog-title"');
 		expect(body).not.toContain("<summary");
@@ -76,6 +77,31 @@ describe("Profile page", () => {
 		expect(input).toContain(`placeholder="${t("fr", placeholder)}"`);
 		expect(input).not.toMatch(/value="[^"]+"/);
 	});
+	it("shows the trace capture setting only when the server offers it", () => {
+		expect(render(ProfilePage, { props: { data, form: null } }).body).not.toContain('name="llmTraceCapture"');
+		const { body } = render(ProfilePage, { props: { data: { ...data, hasApiKey: true, llmTraceSetting: { enabled: true } }, form: null } });
+		expect(body).toMatch(/<input(?=[^>]*name="llmTraceCapture")(?=[^>]*\bchecked)[^>]*>/);
+	});
+	it("states each login method's status in words, not only by styling", () => {
+		const { body } = render(ProfilePage, { props: { data, form: null } });
+		expect(body).toContain(t("fr", "profile.notConnected"));
+	});
+
+	it("asks before removing the API key instead of submitting straight away", () => {
+		const { body } = render(ProfilePage, {
+			props: { data: { ...data, hasApiKey: true, apiBaseUrl: "https://api.deepseek.com", apiModel: "m" }, form: null },
+		});
+		expect(body).toContain('action="?/clearApiKey"');
+		expect(body).not.toContain('formaction="?/clearApiKey"');
+	});
+
+	it("shows the fixed group chat model only for OpenRouter keys", () => {
+		const render_ = (apiBaseUrl: string) =>
+			render(ProfilePage, { props: { data: { ...data, hasApiKey: true, apiBaseUrl, apiModel: "m" }, form: null } }).body;
+		expect(render_("https://openrouter.ai/api/v1")).toContain("~typesafe/jev-latest");
+		expect(render_("https://api.deepseek.com")).not.toContain("~typesafe/jev-latest");
+	});
+
 	it("renders connected and available social login methods", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
 
@@ -212,7 +238,8 @@ describe("Profile page", () => {
 
 		expect(fieldPosition).toBeGreaterThan(-1);
 		expect(fieldForm).toContain('action="?/updateProfile"');
-		expect(fieldForm).not.toContain("<button");
+		// Autosaved: nothing in the form submits it.
+		expect(fieldForm).not.toMatch(/<button(?![^>]*type="button")/);
 	});
 
 	it("shows the three self-assignment ranges and selects the saved active-language level", () => {

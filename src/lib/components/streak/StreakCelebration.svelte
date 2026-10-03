@@ -1,10 +1,10 @@
 <script lang="ts">
 import { dev } from "$app/environment";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { StreakView } from "$lib/streak";
-import type { CelebrationKind } from "$lib/streak-presentation";
+import type { CelebrationKind } from "$lib/streak/presentation";
+import type { StreakView } from "$lib/streak/rules";
 import StreakFlame from "./StreakFlame.svelte";
 import StreakWeek from "./StreakWeek.svelte";
 

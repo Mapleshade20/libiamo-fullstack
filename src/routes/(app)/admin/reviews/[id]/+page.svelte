@@ -1,14 +1,15 @@
 <script lang="ts">
+import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Pencil from "@lucide/svelte/icons/pencil";
 import X from "@lucide/svelte/icons/x";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
+import Notice from "$lib/components/common/Notice.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
-import { Label } from "$lib/components/ui/label";
+import { Input } from "$lib/components/ui/input";
 import { LANGUAGE_LABELS, type LanguageCode, type UiVariant } from "$lib/constants";
-import { getDisplayClock } from "$lib/display-clock";
-import { renderMarkdown } from "$lib/markdown";
+import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
 
@@ -18,10 +19,10 @@ let c = $derived(data.contribution);
 let isTranslate = $derived(c.interactionType === "translate");
 let statusBadge = $derived(
 	c.status === "approved"
-		? { label: "Approved", class: "bg-green-100 text-green-700 border-green-200" }
+		? { label: "Approved", variant: "success" as const }
 		: c.status === "rejected"
-			? { label: "Rejected", class: "bg-red-100 text-red-700 border-red-200" }
-			: { label: "Pending", class: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+			? { label: "Rejected", variant: "destructive" as const }
+			: { label: "Pending", variant: "warning" as const },
 );
 
 function fmtDate(d: Date | null): string {
@@ -31,169 +32,110 @@ function fmtDate(d: Date | null): string {
 </script>
 
 <svelte:head>
-	<title>Review: {c.titleBase} · Admin · Libiamo</title>
+	<title>Review: {c.title} · Admin · Libiamo</title>
 	<meta name="description" content="Inspect and manage user-contributed material.">
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<a href="{base}/admin/reviews" class="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
-			>&larr; Back to Review Pool</a
-		>
-		<Badge variant="outline" class={statusBadge.class}>{statusBadge.label}</Badge>
+	<Button href="{base}/admin/reviews" variant="ghost" size="sm" class="-ml-3"><ArrowLeft aria-hidden="true" />Contributions</Button>
+
+	<div class="space-y-2">
+		<div class="flex flex-wrap items-center gap-3">
+			<h1>{c.title}</h1>
+			<Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+		</div>
+		<p class="text-sm text-muted-foreground">
+			Submitted by {c.contributorName ?? "Unknown"} ({c.contributorEmail ?? ""})
+			{#if c.submittedAt}
+				on {fmtDate(c.submittedAt)}
+			{/if}
+		</p>
 	</div>
 
-	<h1 class="text-3xl text-gray-800 font-medium">Review: {c.titleBase}</h1>
-
-	<!-- Contributor info -->
-	<div class="text-sm text-muted-foreground">
-		Submitted by {c.contributorName ?? "Unknown"} ({c.contributorEmail ?? ""})
-		{#if c.submittedAt}
-			on {fmtDate(c.submittedAt)}
-		{/if}
-	</div>
-
-	<!-- Metadata -->
-	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+	{#snippet item(label: string, value: string, pre = false)}
 		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Language</Label>
-			<p class="text-sm">{LANGUAGE_LABELS[c.language as LanguageCode]}</p>
+			<dt class="text-sm text-muted-foreground">{label}</dt>
+			<dd class="text-sm {pre ? 'whitespace-pre-wrap' : ''}">{value}</dd>
 		</div>
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Interaction Type</Label>
-			<p class="text-sm">{c.interactionType}</p>
-		</div>
+	{/snippet}
+
+	<dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		{@render item("Language", LANGUAGE_LABELS[c.language as LanguageCode])}
+		{@render item("Interaction type", c.interactionType)}
 		{#if c.urgency}
+			{@render item("Reply urgency", c.urgency)}
+		{/if}
+		{@render item("Interface", c.ui)}
+	</dl>
+
+	<dl class="space-y-4">
+		{#if !isTranslate && c.shortObjective}
+			{@render item("Short objective", c.shortObjective)}
+		{/if}
+		{#if c.description}
+			{@render item("Description", c.description)}
+		{/if}
+		{#if c.agentPrompt}
+			{@render item("Character notes", c.agentPrompt, true)}
+		{/if}
+		{#if c.objectives && c.objectives.length > 0}
 			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Reply urgency</Label>
-				<p class="text-sm capitalize">{c.urgency}</p>
+				<dt class="text-sm text-muted-foreground">Objectives</dt>
+				<dd>
+					<ul class="list-inside list-disc text-sm">
+						{#each c.objectives as obj}
+							<li>{obj}</li>
+						{/each}
+					</ul>
+				</dd>
 			</div>
 		{/if}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">UI</Label>
-			<p class="text-sm">{c.ui}</p>
-		</div>
-		{#if c.cadence}
+		{#if isTranslate && c.translationContext}
+			{@render item("Translation context", c.translationContext)}
+		{/if}
+		{#if isTranslate && c.referenceParagraphs}
 			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Cadence</Label>
-				<p class="text-sm capitalize">{c.cadence}</p>
+				<dt class="text-sm text-muted-foreground">Reference text</dt>
+				<dd class="space-y-2">
+					{#each c.referenceParagraphs as paragraph}
+						<p class="whitespace-pre-wrap text-sm">{paragraph}</p>
+					{/each}
+				</dd>
 			</div>
 		{/if}
-		{#if c.difficulty}
+		{#if !isTranslate}
 			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Difficulty</Label>
-				<p class="text-sm">{c.difficulty}</p>
+				<dt class="text-sm text-muted-foreground">Opening state</dt>
+				<dd>
+					<pre
+						class="max-h-40 overflow-auto rounded-lg bg-foreground/[0.04] px-3 py-2 font-mono text-xs"
+					>{(c.openingState as object) ? JSON.stringify(c.openingState, null, 2) : ""}</pre>
+				</dd>
 			</div>
+			{#if c.source?.continuation}
+				<div class="space-y-1">
+					<dt class="text-sm text-muted-foreground">The rest of the real conversation</dt>
+					<dd>
+						<pre
+							class="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-foreground/[0.04] px-3 py-2 font-mono text-xs"
+						>{c.source.continuation}</pre>
+					</dd>
+				</div>
+			{/if}
 		{/if}
-	</div>
+	</dl>
 
-	<!-- Content -->
-	{#if !isTranslate && c.shortObjectiveBase}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Short Objective</Label>
-			<p class="text-sm">{c.shortObjectiveBase}</p>
-		</div>
-	{/if}
-
-	{#if c.descriptionBase}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Description</Label>
-			<p class="text-sm">{c.descriptionBase}</p>
-		</div>
-	{/if}
-
-	{#if c.agentPromptBase}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Agent Prompt</Label>
-			<p class="text-sm whitespace-pre-wrap">{c.agentPromptBase}</p>
-		</div>
-	{/if}
-
-	{#if c.objectivesBase && c.objectivesBase.length > 0}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Objectives</Label>
-			<ul class="list-disc list-inside text-sm">
-				{#each c.objectivesBase as obj}
-					<li>{obj}</li>
-				{/each}
-			</ul>
-		</div>
-	{/if}
-
-	{#if c.tags && c.tags.length > 0}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Tags</Label>
-			<div class="flex flex-wrap gap-1">
-				{#each c.tags as tag}
-					<Badge variant="secondary">{tag}</Badge>
-				{/each}
-			</div>
-		</div>
-	{/if}
-
-	{#if !isTranslate && c.materialsMd}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Background Material</Label>
-			<div class="prose prose-neutral max-w-none text-sm">{@html renderMarkdown(c.materialsMd)}</div>
-		</div>
-	{/if}
-
-	{#if isTranslate && c.translationReference}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Source Text</Label>
-			<div class="space-y-2">
-				{#each c.translationReference as paragraph}
-					<p class="text-sm whitespace-pre-wrap">{paragraph}</p>
-				{/each}
-			</div>
-		</div>
-	{/if}
-
-	<!-- Variant -->
-	{#if !isTranslate}
-		<div class="space-y-3">
-			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Slot Values</Label>
-				<pre
-					class="text-xs bg-muted rounded px-2 py-1 overflow-auto max-h-20"
-				>{(c.slotValues as object) ? JSON.stringify(c.slotValues, null, 2) : ""}</pre>
-			</div>
-			<div class="space-y-1">
-				<Label class="text-xs text-muted-foreground">Opening State</Label>
-				<pre
-					class="text-xs bg-muted rounded px-2 py-1 overflow-auto max-h-40"
-				>{(c.openingState as object) ? JSON.stringify(c.openingState, null, 2) : ""}</pre>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Review notes (rejected) -->
 	{#if c.reviewNotes}
-		<div class="rounded-md bg-red-50 p-4 text-sm text-red-700"><span class="font-medium">Review Notes:</span> {c.reviewNotes}</div>
+		<Notice tone="danger" title="Review notes"><p>{c.reviewNotes}</p></Notice>
 	{/if}
 
-	<!-- Actions (only for pending) -->
 	{#if c.status === "pending"}
-		<div class="h-px bg-border"></div>
-		<div class="flex items-center gap-3">
-			<a href="{base}/admin/templates/new?fromContribution={c.id}">
-				<Button class="bg-green-600 hover:bg-green-700 text-white">
-					<Pencil size={16} class="mr-1.5" />
-					Edit &amp; Approve
-				</Button>
-			</a>
+		<div class="flex flex-wrap items-center gap-3 border-t border-border pt-6">
+			<Button href="{base}/admin/tasks/new?fromContribution={c.id}"><Pencil aria-hidden="true" />Edit and approve</Button>
 
-			<form method="POST" action="?/reject" use:enhance class="flex items-center gap-2">
-				<input
-					type="text"
-					name="reviewNotes"
-					placeholder="Reason for rejection (optional)"
-					class="rounded-md border border-input bg-background px-3 py-1.5 text-sm w-64"
-				>
-				<Button type="submit" variant="destructive">
-					<X size={16} class="mr-1.5" />
-					Reject
-				</Button>
+			<form method="POST" action="?/reject" use:enhance class="flex flex-wrap items-center gap-2">
+				<Input name="reviewNotes" aria-label="Reason for rejection" placeholder="Reason for rejection (optional)" class="w-64" />
+				<Button type="submit" variant="destructive"><X aria-hidden="true" />Reject</Button>
 			</form>
 		</div>
 	{/if}

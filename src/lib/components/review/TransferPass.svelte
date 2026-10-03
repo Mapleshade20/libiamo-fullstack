@@ -2,9 +2,9 @@
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { randomExampleIndex } from "$lib/note";
-import type { StudyQueueKind } from "$lib/review";
-import { advanceTransferQueue, type TransferQueueState, transferQueueNotes } from "$lib/transfer-queue";
+import { randomExampleIndex } from "$lib/review/note";
+import type { StudyQueueKind } from "$lib/review/queue";
+import { advanceTransferQueue, type TransferQueueState, transferQueueNotes } from "$lib/review/transfer-queue";
 import TransferStage from "./TransferStage.svelte";
 
 /**
@@ -122,5 +122,5 @@ async function finish() {
 		onpass={() => rate(3)}
 	/>
 {:else if completionFailed}
-	<div class="mx-auto max-w-4xl text-center"><Button variant="outline" onclick={() => void finish()}>{t(lang, "common.retry")}</Button></div>
+	<div class="mx-auto max-w-4xl text-center"><Button variant="secondary" onclick={() => void finish()}>{t(lang, "common.retry")}</Button></div>
 {/if}

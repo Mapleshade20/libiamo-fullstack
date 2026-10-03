@@ -10,20 +10,20 @@ import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
 import { autoGrowTextarea } from "$lib/client/auto-grow-textarea";
-import CorrectionCard from "$lib/components/translate-evaluation/CorrectionCard.svelte";
-import DiffView from "$lib/components/translate-evaluation/DiffView.svelte";
-import EvaluationOverview from "$lib/components/translate-evaluation/EvaluationOverview.svelte";
-import EvaluationWaiting from "$lib/components/translate-evaluation/EvaluationWaiting.svelte";
-import SecondDraft from "$lib/components/translate-evaluation/SecondDraft.svelte";
-import type { EvaluationData, LocalCardState, SecondDraftLocalState } from "$lib/components/translate-evaluation/types";
+import CorrectionCard from "$lib/components/translation/evaluation/CorrectionCard.svelte";
+import DiffView from "$lib/components/translation/evaluation/DiffView.svelte";
+import EvaluationOverview from "$lib/components/translation/evaluation/EvaluationOverview.svelte";
+import EvaluationWaiting from "$lib/components/translation/evaluation/EvaluationWaiting.svelte";
+import SecondDraft from "$lib/components/translation/evaluation/SecondDraft.svelte";
+import type { EvaluationData, LocalCardState, SecondDraftLocalState } from "$lib/components/translation/evaluation/types";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
 import { t } from "$lib/i18n";
-import type { ChatMessage } from "$lib/server/llm";
-import type { Generation2Result } from "$lib/server/translation-evaluation/schema";
-import type { ValidatedGeneration1Evaluation } from "$lib/server/translation-evaluation/validation";
-import { LIVE_DEMO_TEMPERATURE } from "$lib/translation-evaluation/live-demo-fixture";
-import type { TranslationDiffPart } from "$lib/translation-evaluation/types";
+import type { ChatMessage } from "$lib/server/llm/client";
+import type { Generation2Result } from "$lib/server/translation/evaluation/schema";
+import type { ValidatedGeneration1Evaluation } from "$lib/server/translation/evaluation/validation";
+import type { TranslationDiffPart } from "$lib/translation/evaluation";
+import { LIVE_DEMO_TEMPERATURE } from "./fixture";
 import Generation1Inspector from "./Generation1Inspector.svelte";
 import Generation2Review from "./Generation2Review.svelte";
 import {
@@ -580,8 +580,8 @@ async function generatePractice(): Promise<void> {
 	{#if reviewView === "answer"}
 		<section bind:this={answerRoot} class="mx-auto w-full max-w-3xl" aria-labelledby="live-demo-title">
 			<header class="border-b border-border pb-6">
-				<p class="mb-2 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">Generation 1 · Live review</p>
-				<h1 id="live-demo-title" class="font-serif text-3xl tracking-tight sm:text-4xl">{data.task.title}</h1>
+				<p class="mb-2 text-xs font-medium text-muted-foreground">Generation 1 · Live review</p>
+				<h1 id="live-demo-title">{data.task.title}</h1>
 				<p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">{data.task.description}</p>
 			</header>
 
@@ -589,16 +589,14 @@ async function generatePractice(): Promise<void> {
 				{#each data.task.sourceParagraphs as source, index (index)}
 					<article class="grid gap-4 border-b border-border pb-9 last:border-0">
 						<div>
-							<p class="mb-2 text-[10px] font-semibold tracking-[0.17em] text-muted-foreground uppercase">Source · {index + 1}</p>
-							<p class="font-serif text-lg leading-[1.8] text-foreground">{source}</p>
+							<p class="mb-2 text-xs font-medium text-muted-foreground">Source · {index + 1}</p>
+							<p class="font-prose text-lg leading-relaxed">{source}</p>
 						</div>
 						<div>
-							<label for="live-answer-{index}" class="mb-2 block text-[10px] font-semibold tracking-[0.17em] text-muted-foreground uppercase">
-								Your translation
-							</label>
+							<label for="live-answer-{index}" class="mb-2 block text-xs font-medium text-muted-foreground"> Your translation </label>
 							<textarea
 								id="live-answer-{index}"
-								class="min-h-36 w-full resize-none overflow-hidden rounded-xl border border-border bg-card/70 px-4 py-3 text-[0.95rem] leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
+								class="min-h-36 w-full resize-none overflow-hidden rounded-xl border border-border bg-card/70 px-4 py-3 text-base leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
 								value={learnerParagraphs[index]}
 								oninput={(event) => {
 									const textarea = event.currentTarget;
@@ -620,7 +618,7 @@ async function generatePractice(): Promise<void> {
 				<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 					<div class="w-full max-w-xs">
 						<div class="mb-2 flex items-center justify-between gap-3">
-							<label for="live-demo-temperature" class="text-xs font-semibold tracking-[0.12em] text-foreground uppercase">Temperature</label>
+							<label for="live-demo-temperature" class="text-xs font-medium text-foreground">Temperature</label>
 							<output for="live-demo-temperature" class="font-mono text-sm tabular-nums text-foreground">{temperature.toFixed(1)}</output>
 						</div>
 						<input
@@ -681,11 +679,11 @@ async function generatePractice(): Promise<void> {
 		<div class="mx-auto mb-6 flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
 			<div class="flex items-center gap-2">
 				<Button variant="ghost" size="sm" onclick={() => (reviewView = "overview")}><ChevronLeft size={15} /> Overview</Button>
-				<Button variant="outline" size="icon-sm" aria-label="Previous card" disabled={cardIndex === 0} onclick={() => showCard(cardIndex - 1)}>
+				<Button variant="secondary" size="icon-sm" aria-label="Previous card" disabled={cardIndex === 0} onclick={() => showCard(cardIndex - 1)}>
 					<ChevronLeft size={15} />
 				</Button>
 				<Button
-					variant="outline"
+					variant="secondary"
 					size="icon-sm"
 					aria-label="Next card"
 					disabled={cardIndex >= evaluation.cards.length - 1}
@@ -694,7 +692,7 @@ async function generatePractice(): Promise<void> {
 					<ChevronRight size={15} />
 				</Button>
 			</div>
-			<Button variant="outline" size="sm" onclick={() => (revealGeneratedAnswers = !revealGeneratedAnswers)}>
+			<Button variant="secondary" size="sm" onclick={() => (revealGeneratedAnswers = !revealGeneratedAnswers)}>
 				{#if revealGeneratedAnswers}
 					<EyeOff size={14} />
 					Show learner-facing hint
@@ -735,8 +733,8 @@ async function generatePractice(): Promise<void> {
 		{#if activeExperiment}
 			<section class="mx-auto mt-10 w-full max-w-3xl border-t border-border pt-7" aria-labelledby="correction-verifier-experiment-title">
 				<div class="mb-5">
-					<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">Correction Verifier · Live experiment</p>
-					<h2 id="correction-verifier-experiment-title" class="font-serif text-2xl tracking-tight">Verify this revision</h2>
+					<p class="mb-2 text-xs font-medium text-muted-foreground">Correction Verifier · Live experiment</p>
+					<h2 id="correction-verifier-experiment-title">Verify this revision</h2>
 					<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
 						The verifier uses only trusted context from this card and runs at temperature 0.2. Its exact request and raw response remain visible
 						below.
@@ -758,9 +756,9 @@ async function generatePractice(): Promise<void> {
 				</div>
 
 				<article class="mt-6 border border-border bg-card/45 p-4">
-					<p class="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Selected card context</p>
+					<p class="text-xs font-medium text-muted-foreground">Selected card context</p>
 					{#if activeCorrectionCall?.result?.verdict === "accept"}
-						<p class="mt-2 text-sm font-semibold text-emerald-800">Accepted</p>
+						<p class="mt-2 text-sm font-semibold text-success">Accepted</p>
 						<div class="mt-3">
 							{#if activeCorrectionCall.result.acceptedDiffParts}
 								<DiffView parts={activeCorrectionCall.result.acceptedDiffParts} />
@@ -769,11 +767,11 @@ async function generatePractice(): Promise<void> {
 							{/if}
 						</div>
 					{:else if activeCorrectionCall?.result?.verdict === "reject"}
-						<p class="mt-2 text-sm font-semibold text-red-800">Rejected</p>
-						<p class="mt-2 text-sm leading-relaxed text-red-950">{activeCorrectionCall.result.feedback}</p>
+						<p class="mt-2 text-sm font-semibold text-destructive">Rejected</p>
+						<p class="mt-2 text-sm leading-relaxed text-foreground">{activeCorrectionCall.result.feedback}</p>
 					{:else if activeCorrectionCall?.error}
-						<p class="mt-2 text-sm font-semibold text-amber-900">Request failed</p>
-						<p class="mt-2 text-sm leading-relaxed text-amber-950">{activeCorrectionCall.error}</p>
+						<p class="mt-2 text-sm font-semibold text-foreground">Request failed</p>
+						<p class="mt-2 text-sm leading-relaxed text-foreground">{activeCorrectionCall.error}</p>
 					{:else}
 						<p class="mt-2 text-sm text-muted-foreground">Not run for this card.</p>
 					{/if}
@@ -782,7 +780,7 @@ async function generatePractice(): Promise<void> {
 							{#each CORRECTION_CHECK_LABELS as check (check.key)}
 								<div class="flex items-center justify-between gap-3 text-xs">
 									<dt class="text-muted-foreground">{check.label}</dt>
-									<dd class={activeCorrectionCall.result.checks[check.key] ? "font-semibold text-emerald-800" : "font-semibold text-red-800"}>
+									<dd class={activeCorrectionCall.result.checks[check.key] ? "font-semibold text-success" : "font-semibold text-destructive"}>
 										{activeCorrectionCall.result.checks[check.key] ? "Pass" : "Fail"}
 									</dd>
 								</div>

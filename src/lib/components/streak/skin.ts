@@ -1,5 +1,5 @@
 import type { Component } from "svelte";
-import type { FlameAppearance } from "$lib/streak-presentation";
+import type { FlameAppearance } from "$lib/streak/presentation";
 import DefaultFlame from "./DefaultFlame.svelte";
 /** Seasonal art has no dates, streak rules or storage. */
 export interface StreakArtProps {

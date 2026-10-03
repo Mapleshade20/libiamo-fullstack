@@ -1,8 +1,8 @@
 <script lang="ts">
 import { dev } from "$app/environment";
-import { streakPreview } from "$lib/client/streak-preview.svelte";
-import type { StreakStatus } from "$lib/streak";
-import type { FlameAppearance } from "$lib/streak-presentation";
+import { streakPreview } from "$lib/components/streak/preview.svelte";
+import type { FlameAppearance } from "$lib/streak/presentation";
+import type { StreakStatus } from "$lib/streak/rules";
 import { streakSkin } from "./skin";
 
 let {

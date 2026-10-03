@@ -1,6 +1,6 @@
 <script lang="ts">
-import { countStudyQueue } from "$lib/review";
-import type { TransferNote } from "$lib/transfer-queue";
+import { countStudyQueue } from "$lib/review/queue";
+import type { TransferNote } from "$lib/review/transfer-queue";
 import StudyCard from "./StudyCard.svelte";
 import type { StudyCardAction } from "./study-card";
 
@@ -64,10 +64,10 @@ async function rate(kind: "incorrect" | "pass") {
 </script>
 
 <section class="mx-auto w-full max-w-4xl">
-	<header class="mb-6 flex items-end justify-between gap-3 border-b border-stone-400/25 pb-5 sm:mb-8">
+	<header class="mb-6 flex items-end justify-between gap-3 border-b border-border pb-5 sm:mb-8">
 		<div class="min-w-0">
-			<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{stageLabel}</p>
-			<h1 class="font-serif text-3xl leading-tight tracking-tight focus:outline-none" tabindex="-1">{title}</h1>
+			<p class="mb-2 text-xs font-medium text-muted-foreground">{stageLabel}</p>
+			<h1 class="leading-tight focus:outline-none" tabindex="-1">{title}</h1>
 		</div>
 	</header>
 

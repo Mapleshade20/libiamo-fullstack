@@ -1,0 +1,578 @@
+<script lang="ts" module>
+export type TaskFormData = {
+	id?: number;
+	updatedAt?: Date | string;
+	language?: string;
+	interactionType?: string;
+	urgency?: string | null;
+	ui?: string;
+	difficulty?: number;
+	maxTurns?: number | null;
+	estimatedWords?: number | null;
+	title?: string;
+	shortObjective?: string | null;
+	description?: string | null;
+	agentPrompt?: string | null;
+	materialsMd?: string | null;
+	objectives?: string[] | null;
+	tags?: string[] | null;
+	openingState?: Record<string, unknown> | null;
+	source?: TaskSource | null;
+	referenceParagraphs?: string[] | null;
+	translationContext?: string | null;
+	rotation?: string;
+};
+</script>
+
+<script lang="ts">
+import { flushSync, untrack } from "svelte";
+import { enhance } from "$app/forms";
+import { base } from "$app/paths";
+import type { cutCapture } from "$lib/admin/capture";
+import { getDefaultOpeningState } from "$lib/admin/opening-state";
+import { handleInvalidField } from "$lib/client/form-attention";
+import CaptureImport from "$lib/components/admin/CaptureImport.svelte";
+import DifficultyPicker from "$lib/components/admin/DifficultyPicker.svelte";
+import ObjectivesEditor from "$lib/components/admin/ObjectivesEditor.svelte";
+import OpeningStateEditor from "$lib/components/admin/OpeningStateEditor.svelte";
+import RequiredMark from "$lib/components/admin/RequiredMark.svelte";
+import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
+import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import Select from "$lib/components/common/Select.svelte";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
+import { Label } from "$lib/components/ui/label";
+import { Textarea } from "$lib/components/ui/textarea";
+import {
+	CHAT_UI_VARIANTS,
+	type ChatUiVariant,
+	INTERACTION_TYPE_LABELS,
+	INTERACTION_TYPES,
+	LANGUAGE_CODES,
+	LANGUAGE_LABELS,
+	LINEUP_KIND_LABELS,
+	LINEUP_KINDS,
+	UI_VARIANT_LABELS,
+	URGENCIES,
+	URGENCY_LABELS,
+} from "$lib/constants";
+import type { TaskSource } from "$lib/practice/messages";
+import { renderMarkdown } from "$lib/text/markdown";
+
+interface Props {
+	task?: TaskFormData;
+	form?: {
+		message?: string;
+		errors?: Record<string, string[] | undefined>;
+	} | null;
+	action?: string;
+	submitLabel?: string;
+	cancelHref?: string;
+	/**
+	 * The contribution form: the same content an admin authors, without scheduling, scoring and the
+	 * admin-only extras (tags, background material), which the reviewing admin adds.
+	 */
+	hideAdminFields?: boolean;
+	/**
+	 * Learners already have this task (lined up or attempted): its language, kind and interface are
+	 * fixed, since their lineups and conversations depend on them. A different one is a new task.
+	 */
+	identityLocked?: boolean;
+	confirmBeforeSubmit?: boolean;
+	/** Extra hidden fields added inside the form */
+	extraHiddenFields?: Record<string, string>;
+	/** Changes when external task data should replace local draft state */
+	resetKey?: string;
+}
+
+let {
+	task = {} as TaskFormData,
+	form = null,
+	action = "",
+	submitLabel = "Save",
+	cancelHref = `${base}/admin/tasks`,
+	hideAdminFields = false,
+	identityLocked = false,
+	confirmBeforeSubmit = false,
+	extraHiddenFields,
+	resetKey,
+}: Props = $props();
+let mainFormEl: HTMLFormElement | null = $state(null);
+let showConfirm = $state(false);
+let confirmed = $state(false);
+
+$effect(() => {
+	if (!mainFormEl) return;
+	const handler = (e: KeyboardEvent) => {
+		const t = e.target as HTMLInputElement;
+		if (e.key === "Enter" && t instanceof HTMLInputElement && !["checkbox", "radio", "button", "submit", "reset"].includes(t.type))
+			e.preventDefault();
+	};
+	mainFormEl.addEventListener("keydown", handler);
+	return () => mainFormEl?.removeEventListener("keydown", handler);
+});
+
+const actionNotification = $derived(form?.message ? { variant: "error" as const, title: "Unable to save task", message: form.message } : null);
+
+const taskFieldOrder = [
+	"language",
+	"interactionType",
+	"urgency",
+	"ui",
+	"rotation",
+	"difficulty",
+	"maxTurns",
+	"estimatedWords",
+	"title",
+	"shortObjective",
+	"description",
+	"translationContext",
+	"agentPrompt",
+	"objectives",
+	"tags",
+	"materialsMd",
+	"referenceParagraphs",
+	"openingState",
+	"source",
+];
+
+function taskSourceKey() {
+	return resetKey ?? JSON.stringify(task ?? {});
+}
+
+function numberFieldValue(value: number | null | undefined, fallback = "") {
+	return value === null || value === undefined ? fallback : String(value);
+}
+
+function chatUi(value: string | undefined): ChatUiVariant {
+	return CHAT_UI_VARIANTS.includes(value as ChatUiVariant) ? (value as ChatUiVariant) : "reddit";
+}
+
+let selectedLanguage = $state<string>(untrack(() => task.language ?? "en"));
+let selectedInteractionType = $state<string>(untrack(() => task.interactionType ?? "chat"));
+let selectedUrgency = $state<string>(untrack(() => task.urgency ?? "high"));
+let selectedUi = $state<ChatUiVariant>(untrack(() => chatUi(task.ui)));
+let selectedRotation = $state<string>(untrack(() => task.rotation ?? "none"));
+let difficultyValue = $state(untrack(() => task.difficulty ?? 2));
+let maxTurnsValue = $state(untrack(() => numberFieldValue(task.maxTurns)));
+let estimatedWordsValue = $state(untrack(() => numberFieldValue(task.estimatedWords)));
+let title = $state(untrack(() => task.title ?? ""));
+let shortObjective = $state(untrack(() => task.shortObjective ?? ""));
+let description = $state(untrack(() => task.description ?? ""));
+let agentPrompt = $state(untrack(() => task.agentPrompt ?? ""));
+let sourceContinuation = $state(untrack(() => task.source?.continuation ?? ""));
+let translationContext = $state(untrack(() => task.translationContext ?? ""));
+let objectives = $state<string[]>(untrack(() => task.objectives ?? []));
+let tagsText = $state(untrack(() => (task.tags ?? []).join(", ")));
+let referenceText = $state(untrack(() => (task.referenceParagraphs ?? []).join("\n\n")));
+let openingState = $state<Record<string, unknown>>(
+	untrack(() => task.openingState ?? (getDefaultOpeningState(chatUi(task.ui)) as Record<string, unknown>)),
+);
+
+let isTranslate = $derived(selectedInteractionType === "translate");
+// The continuation comes from an import; until there is one, its box would only invite pasting by hand.
+let showContinuation = $state(untrack(() => Boolean(task.source?.continuation)));
+let importError = $state<string | null>(null);
+
+/** Fills the interface, opening and continuation from a captured conversation. */
+function importCapture(cut: ReturnType<typeof cutCapture>) {
+	if (identityLocked && cut.ui !== selectedUi) {
+		importError = `This task's interface is fixed to ${UI_VARIANT_LABELS[selectedUi]}; a ${UI_VARIANT_LABELS[cut.ui]} capture needs a new task.`;
+		return;
+	}
+	importError = null;
+	selectedUi = cut.ui;
+	// Switching the interface resets the opening editor to its default: let that happen first.
+	flushSync();
+	openingState = cut.openingState;
+	sourceContinuation = cut.continuation;
+	showContinuation = true;
+}
+
+// Markdown preview
+let showMdPreview = $state(false);
+let mdSource = $state(untrack(() => task.materialsMd ?? ""));
+let mdHtml = $derived(showMdPreview ? renderMarkdown(mdSource) : "");
+
+function syncTaskDraftFromProps() {
+	selectedLanguage = task.language ?? "en";
+	selectedInteractionType = task.interactionType ?? "chat";
+	selectedUrgency = task.urgency ?? "high";
+	selectedUi = chatUi(task.ui);
+	selectedRotation = task.rotation ?? "none";
+	difficultyValue = task.difficulty ?? 2;
+	maxTurnsValue = numberFieldValue(task.maxTurns);
+	estimatedWordsValue = numberFieldValue(task.estimatedWords);
+	title = task.title ?? "";
+	shortObjective = task.shortObjective ?? "";
+	description = task.description ?? "";
+	agentPrompt = task.agentPrompt ?? "";
+	sourceContinuation = task.source?.continuation ?? "";
+	translationContext = task.translationContext ?? "";
+	objectives = task.objectives ?? [];
+	showContinuation = Boolean(task.source?.continuation);
+	importError = null;
+	tagsText = (task.tags ?? []).join(", ");
+	referenceText = (task.referenceParagraphs ?? []).join("\n\n");
+	openingState = task.openingState ?? (getDefaultOpeningState(chatUi(task.ui)) as Record<string, unknown>);
+	mdSource = task.materialsMd ?? "";
+}
+
+let lastTaskSourceKey = $state<string | null>(null);
+$effect(() => {
+	const key = taskSourceKey();
+	if (key === lastTaskSourceKey) return;
+	lastTaskSourceKey = key;
+	syncTaskDraftFromProps();
+});
+</script>
+
+<ActionNotification notification={actionNotification} />
+<FormErrorFocus formRef={mainFormEl} errors={form?.errors} fieldOrder={taskFieldOrder} />
+
+<form
+	method="POST"
+	{action}
+	use:enhance={({ cancel }) => {
+		if (confirmBeforeSubmit && !confirmed) {
+			cancel();
+			showConfirm = true;
+			return;
+		}
+		confirmed = false;
+		return async ({ update }) => update({ reset: false });
+	}}
+	class="space-y-8"
+	bind:this={mainFormEl}
+	oninvalidcapture={handleInvalidField}
+>
+	{#if extraHiddenFields}
+		{#each Object.entries(extraHiddenFields) as [ name, val ]}
+			<input type="hidden" {name} value={val}>
+		{/each}
+	{/if}
+
+	<!-- Section A: Metadata -->
+	<fieldset class="space-y-4">
+		<h2>Details</h2>
+		{#if identityLocked}
+			<!-- Disabled selects do not submit; the fixed values travel here. -->
+			<input type="hidden" name="language" value={selectedLanguage}>
+			<input type="hidden" name="interactionType" value={selectedInteractionType}>
+			{#if !isTranslate}
+				<input type="hidden" name="ui" value={selectedUi}>
+			{/if}
+			<p id="identity-locked" class="text-xs text-muted-foreground">
+				Learners already have this task, so its language, type and interface are fixed. Create a new task to change them.
+			</p>
+		{/if}
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			<div class="space-y-2">
+				<Label for="language">Language</Label>
+				<Select
+					id="language"
+					name="language"
+					required
+					disabled={identityLocked}
+					aria-describedby={identityLocked ? "identity-locked" : undefined}
+					bind:value={selectedLanguage}
+					items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+				/>
+				{#if form?.errors?.language}
+					<p data-field-error="language" class="field-error-message">{form.errors.language[0]}</p>
+				{/if}
+			</div>
+
+			<div class="space-y-2">
+				<Label for="interactionType">Interaction type</Label>
+				<Select
+					id="interactionType"
+					name="interactionType"
+					required
+					disabled={identityLocked}
+					aria-describedby={identityLocked ? "identity-locked" : undefined}
+					bind:value={selectedInteractionType}
+					items={INTERACTION_TYPES.map((type) => ({ value: type, label: INTERACTION_TYPE_LABELS[type] }))}
+				/>
+				{#if form?.errors?.interactionType}
+					<p data-field-error="interactionType" class="field-error-message">{form.errors.interactionType[0]}</p>
+				{/if}
+			</div>
+
+			{#if isTranslate}
+				<input type="hidden" name="ui" value="translator">
+			{:else}
+				<div class="space-y-2">
+					<Label for="ui">Interface</Label>
+					<Select
+						id="ui"
+						name="ui"
+						required
+						disabled={identityLocked}
+						aria-describedby={identityLocked ? "identity-locked" : undefined}
+						bind:value={selectedUi}
+						items={CHAT_UI_VARIANTS.map((variant) => ({ value: variant, label: UI_VARIANT_LABELS[variant] }))}
+					/>
+					{#if form?.errors?.ui}
+						<p data-field-error="ui" class="field-error-message">{form.errors.ui[0]}</p>
+					{/if}
+				</div>
+
+				<div class="space-y-2">
+					<Label for="urgency">Reply urgency</Label>
+					<Select
+						id="urgency"
+						name="urgency"
+						required
+						bind:value={selectedUrgency}
+						items={URGENCIES.map((urgency) => ({ value: urgency, label: URGENCY_LABELS[urgency] }))}
+					/>
+					{#if form?.errors?.urgency}
+						<p data-field-error="urgency" class="field-error-message">{form.errors.urgency[0]}</p>
+					{/if}
+				</div>
+			{/if}
+
+			{#if !hideAdminFields}
+				{#if !isTranslate}
+					<div class="space-y-2">
+						<Label for="rotation">Auto rotation</Label>
+						<Select
+							id="rotation"
+							name="rotation"
+							bind:value={selectedRotation}
+							items={[{ value: "none", label: "None (manual lineups only)" }, ...LINEUP_KINDS.map((kind) => ({ value: kind, label: LINEUP_KIND_LABELS[kind] }))]}
+						/>
+					</div>
+				{/if}
+
+				{#if !isTranslate}
+					<div class="space-y-2">
+						<Label for="maxTurns">Max turns (blank for no limit)</Label>
+						<Input id="maxTurns" name="maxTurns" type="number" min="0" bind:value={maxTurnsValue} />
+						{#if form?.errors?.maxTurns}
+							<p data-field-error="maxTurns" class="field-error-message">{form.errors.maxTurns[0]}</p>
+						{/if}
+					</div>
+				{/if}
+
+				<div class="space-y-2">
+					<Label for="estimatedWords">Estimated words</Label>
+					<Input id="estimatedWords" name="estimatedWords" type="number" min="0" bind:value={estimatedWordsValue} />
+					{#if form?.errors?.estimatedWords}
+						<p data-field-error="estimatedWords" class="field-error-message">{form.errors.estimatedWords[0]}</p>
+					{/if}
+				</div>
+
+				<DifficultyPicker bind:value={difficultyValue} error={form?.errors?.difficulty?.[0]} />
+
+				<div class="space-y-2">
+					<Label for="tags">Tags (comma-separated)</Label>
+					<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
+				</div>
+			{/if}
+		</div>
+	</fieldset>
+
+	<!-- Section B: Content -->
+	<fieldset class="space-y-4">
+		<h2>Content</h2>
+
+		<div class="space-y-2">
+			<Label for="title"
+				><span>Title<RequiredMark /></span></Label
+			>
+			<Input id="title" name="title" bind:value={title} required />
+			{#if form?.errors?.title}
+				<p data-field-error="title" class="field-error-message">{form.errors.title[0]}</p>
+			{/if}
+		</div>
+
+		{#if !isTranslate}
+			<div class="space-y-2">
+				<Label for="shortObjective"
+					><span>Short objective<RequiredMark /></span></Label
+				>
+				<p id="shortObjective-help" class="text-xs text-muted-foreground">One or two sentences, shown on the quest card.</p>
+				<Textarea id="shortObjective" name="shortObjective" rows={2} aria-describedby="shortObjective-help" required bind:value={shortObjective} />
+				{#if form?.errors?.shortObjective}
+					<p data-field-error="shortObjective" class="field-error-message">{form.errors.shortObjective[0]}</p>
+				{/if}
+			</div>
+		{/if}
+
+		<div class="space-y-2">
+			<Label for="description"
+				><span>Description<RequiredMark /></span></Label
+			>
+			<Textarea id="description" name="description" rows={3} required bind:value={description} />
+			{#if form?.errors?.description}
+				<p data-field-error="description" class="field-error-message">{form.errors.description[0]}</p>
+			{/if}
+		</div>
+
+		{#if isTranslate}
+			<div class="space-y-2">
+				<Label for="translationContext"
+					><span>Translation context<RequiredMark /></span></Label
+				>
+				<div class="grid grid-cols-1 items-center gap-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+					<span class="text-muted-foreground">This is in the context of [</span>
+					<Input id="translationContext" name="translationContext" bind:value={translationContext} required />
+					<span class="text-muted-foreground">].</span>
+				</div>
+				{#if form?.errors?.translationContext}
+					<p data-field-error="translationContext" class="field-error-message">{form.errors.translationContext[0]}</p>
+				{/if}
+			</div>
+		{:else}
+			<div class="space-y-2">
+				<Label for="agentPrompt">Character notes</Label>
+				<p id="agentPrompt-help" class="text-xs text-muted-foreground">
+					Who these people are, what each wants, and who knows what the learner needs, as a few facts. Style, length and who replies are handled for
+					you; left empty, the people are inferred from the opening.
+				</p>
+				<Textarea
+					id="agentPrompt"
+					name="agentPrompt"
+					rows={4}
+					aria-describedby="agentPrompt-help"
+					bind:value={agentPrompt}
+					placeholder="Priya is organising and wants decisions made. Tom keeps joking and hasn't checked his calendar. Jess is on a tight budget and hates hostels less than everyone thinks."
+				/>
+				{#if form?.errors?.agentPrompt}
+					<p data-field-error="agentPrompt" class="field-error-message">{form.errors.agentPrompt[0]}</p>
+				{/if}
+			</div>
+			<div class="space-y-2">
+				<CaptureImport language={selectedLanguage} onimport={importCapture} />
+				{#if importError}
+					<p data-field-error="source" class="field-error-message" role="alert">{importError}</p>
+				{/if}
+				<input type="hidden" name="source" value={JSON.stringify({ continuation: sourceContinuation })}>
+				{#if showContinuation}
+					<Label for="sourceContinuation">The rest of the real conversation</Label>
+					<p id="sourceContinuation-help" class="text-xs text-muted-foreground">
+						What was said after the opening ends. The characters draw on it to reply the way the real people did; learners never see it.
+					</p>
+					<Textarea
+						id="sourceContinuation"
+						rows={6}
+						aria-describedby="sourceContinuation-help"
+						bind:value={sourceContinuation}
+						placeholder="author: message, one per line"
+					/>
+				{/if}
+				{#if form?.errors?.source}
+					<p data-field-error="source" data-feedback-name="source" class="field-error-message">{form.errors.source[0]}</p>
+				{/if}
+			</div>
+		{/if}
+
+		{#if !isTranslate}
+			{#key lastTaskSourceKey}
+				<ObjectivesEditor bind:value={objectives} required error={form?.errors?.objectives?.[0]} />
+			{/key}
+		{/if}
+
+		{#if !isTranslate && !hideAdminFields}
+			<!-- materialsMd with preview -->
+			<div class="space-y-2">
+				<div class="flex items-end justify-between">
+					<Label for="materialsMd">Background material (Markdown)</Label>
+					<Button type="button" variant="ghost" size="sm" aria-pressed={showMdPreview} onclick={() => (showMdPreview = !showMdPreview)}>
+						{showMdPreview ? "Edit" : "Preview"}
+					</Button>
+				</div>
+				{#if showMdPreview}
+					<input type="hidden" name="materialsMd" value={mdSource}>
+					<div class="prose min-h-[100px] max-w-none rounded-lg border border-input bg-white/80 px-3 py-2.5 text-sm">{@html mdHtml}</div>
+				{:else}
+					<Textarea
+						id="materialsMd"
+						name="materialsMd"
+						rows={6}
+						bind:value={mdSource}
+						placeholder="## Background&#10;&#10;Write your learning material in Markdown..."
+					/>
+				{/if}
+			</div>
+		{/if}
+	</fieldset>
+
+	{#if isTranslate}
+		<div class="space-y-2">
+			<Label for="referenceParagraphs"
+				><span>Authentic reference text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})<RequiredMark /></span></Label
+			>
+			<Textarea
+				id="referenceParagraphs"
+				name="referenceParagraphs"
+				rows={10}
+				bind:value={referenceText}
+				required
+				placeholder="The sun was setting behind the mountains. The sky turned a deep shade of orange.&#10;&#10;She walked along the riverbank. The water reflected the fading light."
+			/>
+			<p class="text-xs text-muted-foreground">Separate paragraphs with a blank line. Store only authentic text in the task language.</p>
+			{#if form?.errors?.referenceParagraphs}
+				<p data-field-error="referenceParagraphs" class="field-error-message">{form.errors.referenceParagraphs[0]}</p>
+			{/if}
+		</div>
+	{:else}
+		<fieldset class="space-y-4">
+			<h2>Opening state</h2>
+			<p class="text-xs text-muted-foreground">What the learner sees in the {UI_VARIANT_LABELS[selectedUi]} interface when the scenario opens.</p>
+			<OpeningStateEditor bind:value={openingState} ui={selectedUi} name="openingState" />
+			{#if form?.errors?.openingState}
+				<p data-field-error="openingState" class="field-error-message">{form.errors.openingState[0]}</p>
+			{/if}
+		</fieldset>
+	{/if}
+
+	<!-- Submit -->
+	<div class="flex items-center gap-3">
+		<Button type="submit">{submitLabel}</Button>
+		<Button href={cancelHref} variant="secondary">Cancel</Button>
+	</div>
+</form>
+
+{#if confirmBeforeSubmit}
+	<ConfirmDialog
+		bind:open={showConfirm}
+		tone="default"
+		title="Submit for review?"
+		confirmLabel="Submit"
+		cancelLabel="Go back"
+		onconfirm={() => { confirmed = true; showConfirm = false; mainFormEl?.requestSubmit(); }}
+	>
+		<div class="space-y-3">
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div class="space-y-1">
+					<p class="text-xs">Language</p>
+					<p class="text-sm text-foreground">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</p>
+				</div>
+				<div class="space-y-1">
+					<p class="text-xs">Interaction type</p>
+					<p class="text-sm text-foreground">
+						{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
+					</p>
+				</div>
+				<div class="space-y-1">
+					<p class="text-xs">Interface</p>
+					<p class="text-sm text-foreground">{isTranslate ? UI_VARIANT_LABELS.translator : UI_VARIANT_LABELS[selectedUi]}</p>
+				</div>
+			</div>
+			<div class="space-y-1">
+				<p class="text-xs">Title</p>
+				<p class="text-sm text-foreground">{title}</p>
+			</div>
+			{#if !isTranslate && shortObjective}
+				<div class="space-y-1">
+					<p class="text-xs">Short objective</p>
+					<p class="text-sm text-foreground">{shortObjective}</p>
+				</div>
+			{/if}
+		</div>
+	</ConfirmDialog>
+{/if}

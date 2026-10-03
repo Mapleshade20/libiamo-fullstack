@@ -52,7 +52,10 @@ function errorMessages(element: HTMLElement) {
 }
 
 function visualTarget(element: HTMLElement) {
-	return element.matches('input[type="radio"], input[type="checkbox"]') ? (element.closest("label") ?? element) : element;
+	if (element.matches('input[type="radio"], input[type="checkbox"]')) return element.closest("label") ?? element;
+	// Custom controls (Select, Checkbox) mirror their value into a hidden native control so forms,
+	// constraints and server errors keep working; the visible part takes the feedback.
+	return element.closest("[data-control-root]")?.querySelector<HTMLElement>("[data-control-visual]") ?? element;
 }
 
 export function clearFieldFeedback(element: HTMLElement) {

@@ -11,9 +11,9 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { addDays } from "$lib/local-day";
-import type { StreakDayMark } from "$lib/streak-history";
-import { monthOffset } from "$lib/streak-history";
+import type { StreakDayMark } from "$lib/streak/history";
+import { monthOffset } from "$lib/streak/history";
+import { addDays } from "$lib/time/local-day";
 
 interface Props {
 	/** The month on show, as `YYYY-MM`. */
@@ -133,9 +133,8 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 }
 
 .month-name {
-	font-family: var(--font-serif, serif);
-	font-size: 1rem;
-	letter-spacing: 0.01em;
+	font-size: 0.9375rem;
+	font-weight: 500;
 }
 
 .pager {
@@ -167,7 +166,7 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 
 .weekdays {
 	margin-top: 0.6rem;
-	font-size: 0.6875rem;
+	font-size: 0.75rem;
 	color: #8b7661;
 	text-align: center;
 }
