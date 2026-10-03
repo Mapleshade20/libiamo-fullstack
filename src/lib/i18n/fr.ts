@@ -98,6 +98,11 @@ export const fr: Record<keyof typeof en, string> = {
 		"Ajoutez une clé API de DeepSeek ou d'un autre fournisseur compatible avec OpenAI pour continuer à apprendre sans interruption 😃",
 	"profile.trialLowTitle": "Votre solde d'essai est presque épuisé.",
 	"profile.trialLowBody": "Configurez maintenant votre propre clé API pour éviter toute interruption ☺️",
+	"profile.trialReleaseSchedule":
+		"Les nouveaux comptes reçoivent l’essai en trois parts : une à l’inscription, une après 24 heures et la dernière après 48 heures.",
+	"profile.trialNextRelease": "La prochaine part arrive le {date}.",
+	"profile.trialWaitingBody":
+		"La prochaine part de votre essai arrive le {date}. Pour continuer d’ici là, ajoutez une clé API de DeepSeek ou d’un autre fournisseur compatible OpenAI.",
 	"profile.apiKey": "Clé API",
 	"profile.apiKeyKeepPlaceholder": "•••••••• (laissez vide pour conserver la clé actuelle)",
 	"profile.apiKeyPlaceholder": "Saisissez votre clé API",
@@ -129,6 +134,8 @@ export const fr: Record<keyof typeof en, string> = {
 		"Si cette adresse est disponible, un lien a été envoyé. Consultez votre messagerie et les indésirables. Aucun e-mail n’est envoyé si un autre compte l’utilise déjà.",
 	"profile.emailChangeStale": "Déconnectez-vous puis reconnectez-vous avec une méthode associée. Réessayez sous 10 minutes.",
 	"profile.emailChangeInvalid": "Saisissez une adresse valide différente de l’adresse actuelle.",
+	"profile.emailChangeUntrusted":
+		"Utilisez une adresse Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina ou d’un établissement scolaire (edu).",
 	"profile.emailChangeError": "Impossible de commencer le changement. Réessayez.",
 	"profile.setPassword": "Définir un mot de passe",
 	"profile.passwordSetupSent": "Envoyé",

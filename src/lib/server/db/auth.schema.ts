@@ -125,6 +125,10 @@ export const userQuota = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		trialTokensLeft: integer("trial_tokens_left").notNull(),
 		trialTokensTotal: integer("trial_tokens_total").notNull(),
+		/** How much of the total has been added to `trialTokensLeft`; the rest arrives in parts (`lib/account/trial-release.ts`). */
+		trialTokensReleased: integer("trial_tokens_released").notNull(),
+		/** When the release schedule started: the account's sign-up. */
+		trialReleaseStartedAt: timestamp("trial_release_started_at").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -134,6 +138,7 @@ export const userQuota = pgTable(
 	(t) => [
 		check("user_quota_trial_tokens_left_non_negative", sql`${t.trialTokensLeft} >= 0`),
 		check("user_quota_trial_tokens_total_positive", sql`${t.trialTokensTotal} > 0`),
+		check("user_quota_trial_tokens_released_within_total", sql`${t.trialTokensReleased} between 0 and ${t.trialTokensTotal}`),
 	],
 );
 

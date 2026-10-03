@@ -54,6 +54,7 @@ describe("Sign-up +page.server", () => {
 			const result = await load(event);
 			expect(result).toEqual({
 				socialProviders: ["google", "github"],
+				captchaSiteKey: null,
 				socialAuthError: null,
 			});
 		});
@@ -105,7 +106,7 @@ describe("Sign-up +page.server", () => {
 
 		it("should successfully sign up, then redirect", async () => {
 			const validData = {
-				email: "test@example.com",
+				email: "test@gmail.com",
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "en",
@@ -131,7 +132,7 @@ describe("Sign-up +page.server", () => {
 
 		it("should return 400 on APIError from auth service", async () => {
 			const validData = {
-				email: "taken@example.com",
+				email: "taken@gmail.com",
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "es",
@@ -150,7 +151,7 @@ describe("Sign-up +page.server", () => {
 
 		it("should return 500 on unexpected error", async () => {
 			const validData = {
-				email: "crash@example.com",
+				email: "crash@gmail.com",
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "fr",
@@ -166,7 +167,7 @@ describe("Sign-up +page.server", () => {
 		});
 		it("should return 400 with a generic message on APIError without message", async () => {
 			const validData = {
-				email: "nomessage@example.com",
+				email: "nomessage@gmail.com",
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "es",
@@ -225,7 +226,7 @@ describe("Sign-up +page.server", () => {
 
 		it("should test generic message fallback logic", async () => {
 			const validData = {
-				email: "fallback@example.com",
+				email: "fallback@gmail.com",
 				name: "Test User",
 				password: "securePassword123!",
 				activeLanguage: "es",

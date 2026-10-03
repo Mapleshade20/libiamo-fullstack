@@ -2,6 +2,7 @@
 import { browser, dev } from "$app/environment";
 import { base } from "$app/paths";
 import { page } from "$app/state";
+import { trialQuotaWarning } from "$lib/account/trial-release";
 import { isQuestMenuPath } from "$lib/client/page-transition";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import type { ActionNotificationContent } from "$lib/components/common/notifications";
@@ -24,12 +25,7 @@ let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
 let isSessionPage = $derived(page.url.pathname.includes("/session"));
-let quotaWarning = $derived.by(() => {
-	if (!data.trialQuota) return null;
-	if (data.trialQuota.trialTokensLeft <= 0) return "depleted";
-	if (data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal <= 0.1) return "low";
-	return null;
-});
+let quotaWarning = $derived(data.trialQuota ? trialQuotaWarning(data.trialQuota) : null);
 
 $effect(() => {
 	if (!quotaWarning || !data.trialQuota) {
@@ -38,7 +34,8 @@ $effect(() => {
 	}
 	if (!browser) return;
 
-	const key = `trial-quota:${data.user.email}:${data.trialQuota.trialTokensTotal}:${quotaWarning}`;
+	// Released parts are in the key so an empty balance between parts warns again after the next one.
+	const key = `trial-quota:${data.user.email}:${data.trialQuota.trialTokensTotal}:${data.trialQuota.trialTokensReleased}:${quotaWarning}`;
 	if (localStorage.getItem(key)) return;
 	localStorage.setItem(key, "1");
 
@@ -47,7 +44,9 @@ $effect(() => {
 			? {
 					variant: "error",
 					title: "Trial AI balance depleted",
-					message: "Add your own API key in Profile to continue using AI features.",
+					message: data.trialQuota.trialNextReleaseAt
+						? "The next part of your trial arrives within a day. Add your own API key in Profile to keep going now."
+						: "Add your own API key in Profile to continue using AI features.",
 					key,
 				}
 			: {
