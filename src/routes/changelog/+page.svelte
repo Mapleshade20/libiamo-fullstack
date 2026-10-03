@@ -66,6 +66,25 @@ import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 		<div class="divide-y divide-border">
 			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
 				<header>
+					<p class="font-serif text-xl text-foreground">v0.4.1</p>
+					<time datetime="2026-10-03" class="mt-1 block text-sm text-muted-foreground">October 3, 2026</time>
+				</header>
+				<div>
+					<h2 class="font-serif text-2xl text-foreground">Account security</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
+						<li>You can now change your password from Profile, which signs your other devices out.</li>
+						<li>New passwords must be harder to guess, and sign-up, password reset and email changes include a quick human check.</li>
+						<li>
+							New accounts need an address from a common email provider or a school, and receive the free trial in three parts over their first 48
+							hours.
+						</li>
+						<li>Changing your email now shows where the verification link went and lets you try a different address.</li>
+					</ul>
+				</div>
+			</article>
+
+			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
+				<header>
 					<p class="font-serif text-xl text-foreground">v0.4.0</p>
 					<time datetime="2026-10-03" class="mt-1 block text-sm text-muted-foreground">October 3, 2026</time>
 				</header>
