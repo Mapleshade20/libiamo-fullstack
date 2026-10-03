@@ -80,6 +80,24 @@ describe("traceRow", () => {
 		});
 	});
 
+	it("counts every completion of a call: a repaired answer and a failed one alike", () => {
+		const attempt = (stage: "initial" | "repair", promptTokens: number, completionTokens: number) => ({
+			stage,
+			requestMessages: [],
+			content: "x",
+			finishReason: "stop",
+			usage: { promptTokens, completionTokens },
+			errors: [],
+		});
+		const repaired = record({ attempts: [attempt("initial", 100, 40), attempt("repair", 200, 30)] });
+		expect(traceRow(repaired)).toMatchObject({ promptTokens: 300, completionTokens: 70 });
+
+		const failed = record({ attempts: [attempt("initial", 100, 40)], response: null, value: null, error: new Error("invalid"), errorStage: "parse" });
+		expect(traceRow(failed)).toMatchObject({ promptTokens: 100, completionTokens: 40 });
+
+		expect(traceRow(record({ attempts: [], response: null, value: null, error: new Error("down") }))).toMatchObject({ promptTokens: null });
+	});
+
 	it("ties run outputs to their run and leaves Playground traces unowned", () => {
 		expect(traceRow(record({ origin: "lab" }), { label: "Baseline", runId: 7 })).toMatchObject({ runId: 7, variant: { label: "Baseline" } });
 		expect(traceRow(record({ origin: "lab" }), { label: "playground" }).runId).toBeNull();

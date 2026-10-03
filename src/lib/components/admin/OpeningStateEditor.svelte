@@ -1,6 +1,7 @@
 <script lang="ts">
 import { getDefaultOpeningState, type OpeningState } from "$lib/admin/opening-state";
 import { validateBeforeSubmit } from "$lib/client/form-attention";
+import RequiredMark from "$lib/components/admin/RequiredMark.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
@@ -153,6 +154,8 @@ function resetToDefaults() {
 }
 
 const fields = $derived(getEditorFields(ui));
+const LIST_FIELDS = ["message-list", "email-list", "comment-tree", "comment-list"];
+const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""));
 </script>
 
 <div
@@ -180,14 +183,34 @@ const fields = $derived(getEditorFields(ui));
 		{/if}
 	{/each}
 
-	<div class="pt-2"><Button type="button" variant="ghost" size="sm" onclick={resetToDefaults}> Reset to Defaults </Button></div>
+	{#if !resetsWithList}
+		<div class="flex justify-end">{@render resetButton()}</div>
+	{/if}
 </div>
+
+{#snippet resetButton()}
+	<Button type="button" variant="outline" size="sm" class="ml-auto" onclick={resetToDefaults}>Reset to Defaults</Button>
+{/snippet}
+
+<!-- When the editor ends with a list, Reset shares the row of that list's add button, at its right. -->
+{#snippet resetHere(field: FieldDef)}
+	{#if resetsWithList && field === fields.at(-1)}
+		{@render resetButton()}
+	{/if}
+{/snippet}
 
 {#snippet renderField(field: FieldDef, parentPrefix: string)}
 	{@const path = parentPrefix && "key" in field ? `${parentPrefix}.${field.key}` : "key" in field ? (field as { key: string }).key : ""}
 	{#if field.type === "text"}
 		<div class="space-y-1">
-			<Label>{field.label}</Label>
+			<Label
+				><span class="inline-flex"
+					>{field.label}
+					{#if field.required}
+						<RequiredMark />
+					{/if}</span
+				></Label
+			>
 			{#if ["tags", "fandoms", "relationships", "characters", "additionalTags", "categories"].includes(field.key)}
 				<Input
 					data-feedback-name={path}
@@ -221,7 +244,14 @@ const fields = $derived(getEditorFields(ui));
 		</label>
 	{:else if field.type === "textarea"}
 		<div class="space-y-1">
-			<Label>{field.label}</Label>
+			<Label
+				><span class="inline-flex"
+					>{field.label}
+					{#if field.required}
+						<RequiredMark />
+					{/if}</span
+				></Label
+			>
 			<Textarea
 				data-feedback-name={path}
 				rows={field.rows ?? 3}
@@ -270,7 +300,10 @@ const fields = $derived(getEditorFields(ui));
 					<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
 				</div>
 			{/each}
-			<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { sender: "", text: "" })}>+ Add Message</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { sender: "", text: "" })}>+ Add Message</Button>
+				{@render resetHere(field)}
+			</div>
 		</fieldset>
 	{:else if field.type === "email-list"}
 		<fieldset class="space-y-3">
@@ -317,9 +350,12 @@ const fields = $derived(getEditorFields(ui));
 					</div>
 				</div>
 			{/each}
-			<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { from: "", to: "", subject: "", body: "" })}
-				>+ Add Email</Button
-			>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { from: "", to: "", subject: "", body: "" })}
+					>+ Add Email</Button
+				>
+				{@render resetHere(field)}
+			</div>
 		</fieldset>
 	{:else if field.type === "comment-tree"}
 		{@const authorField = field.authorField ?? "author"}
@@ -330,7 +366,10 @@ const fields = $derived(getEditorFields(ui));
 			{#each getList(field.key) as comment, i (i)}
 				{@render renderTreeComment(field, comment, [i], 0)}
 			{/each}
-			<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, defaultItem)}>+ Add Top-level Comment</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, defaultItem)}>+ Add Top-level Comment</Button>
+				{@render resetHere(field)}
+			</div>
 		</fieldset>
 	{:else if field.type === "comment-list"}
 		{@const authorField = field.authorField ?? "author"}
@@ -354,16 +393,19 @@ const fields = $derived(getEditorFields(ui));
 					<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
 				</div>
 			{/each}
-			<Button
-				type="button"
-				variant="outline"
-				size="sm"
-				onclick={() => {
-				const item: Record<string, unknown> = { [authorField]: "", [textField]: "" };
-				addListItem(field.key, item);
-			}}
-				>+ Add Comment</Button
-			>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onclick={() => {
+					const item: Record<string, unknown> = { [authorField]: "", [textField]: "" };
+					addListItem(field.key, item);
+				}}
+					>+ Add Comment</Button
+				>
+				{@render resetHere(field)}
+			</div>
 		</fieldset>
 	{:else if field.type === "group"}
 		<fieldset class="space-y-3 rounded border border-input p-3">
@@ -417,7 +459,7 @@ const fields = $derived(getEditorFields(ui));
 		</div>
 		{#if field.withIconUrl}
 			<div class="space-y-1">
-				<Label class="text-xs">Icon URL (optional)</Label>
+				<Label class="text-xs">Icon URL</Label>
 				<Input value={String(comment.iconUrl ?? "")} oninput={(e) => updateTreeCommentField(field.key, path, "iconUrl", e.currentTarget.value)} />
 			</div>
 		{/if}

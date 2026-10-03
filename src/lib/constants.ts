@@ -73,8 +73,26 @@ export function isLanguageCode(value: unknown): value is LanguageCode {
 	return typeof value === "string" && LANGUAGE_CODES.includes(value as LanguageCode);
 }
 
-export const SELF_ASSIGNED_LEVELS = [1, 2, 3] as const;
-export type SelfAssignedLevel = (typeof SELF_ASSIGNED_LEVELS)[number];
+/** Task difficulty, and the level a learner picks for recommendations: one scale. */
+export const DIFFICULTY_LEVELS = [1, 2, 3] as const;
+export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
+
+const DIFFICULTY_LABEL_KEYS: Record<DifficultyLevel, string> = {
+	1: "task.difficulty.beginner",
+	2: "task.difficulty.intermediate",
+	3: "task.difficulty.advanced",
+};
+
+/** The CEFR range each level is written for. */
+export const DIFFICULTY_CEFR: Record<DifficultyLevel, string> = { 1: "A2–B1", 2: "B2–C1", 3: "C2+" };
+
+/** The `t()` key naming a level (Beginner, Intermediate, Advanced). */
+export function difficultyLabelKey(level: number): string {
+	return DIFFICULTY_LABEL_KEYS[level as DifficultyLevel] ?? DIFFICULTY_LABEL_KEYS[2];
+}
+
+export const SELF_ASSIGNED_LEVELS = DIFFICULTY_LEVELS;
+export type SelfAssignedLevel = DifficultyLevel;
 
 export type SelfAssignedLevelsByLanguage = Record<LanguageCode, SelfAssignedLevel>;
 

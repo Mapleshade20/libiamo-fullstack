@@ -6,7 +6,7 @@ import TaskForm, { type TaskFormData } from "$lib/components/admin/TaskForm.svel
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
-import { TASK_JSON_VERSION } from "$lib/schemas";
+import { TASK_CONTRIBUTION_FIELDS, TASK_JSON_VERSION } from "$lib/schemas";
 
 let { data, form } = $props();
 
@@ -15,24 +15,7 @@ const importPlaceholder = `{"version":${TASK_JSON_VERSION},"task":{...}}`;
 // Pre-fill from contribution
 let contributed = $derived(data?.contributionData);
 let taskData = $derived<TaskFormData | undefined>(
-	contributed
-		? {
-				language: contributed.language,
-				interactionType: contributed.interactionType,
-				ui: contributed.ui,
-				urgency: contributed.urgency,
-				title: contributed.title,
-				shortObjective: contributed.shortObjective,
-				description: contributed.description,
-				agentPrompt: contributed.agentPrompt,
-				materialsMd: contributed.materialsMd,
-				objectives: contributed.objectives,
-				tags: contributed.tags,
-				openingState: contributed.openingState,
-				referenceParagraphs: contributed.referenceParagraphs,
-				translationContext: contributed.translationContext,
-			}
-		: undefined,
+	contributed ? Object.fromEntries(TASK_CONTRIBUTION_FIELDS.map((field) => [field, contributed[field]])) : undefined,
 );
 let importNotification = $derived(
 	form && "message" in form && form.message && !("errors" in form)
@@ -80,7 +63,7 @@ let importNotification = $derived(
 				class="mt-4 space-y-3"
 			>
 				<p class="text-sm text-muted-foreground">Paste an exported task JSON file to create a new task.</p>
-				<Textarea name="taskJson" rows={10} placeholder={importPlaceholder} required />
+				<Textarea class="h-40 field-sizing-fixed resize-y" name="taskJson" rows={10} placeholder={importPlaceholder} required />
 				<Button type="submit" variant="secondary">Import JSON</Button>
 			</form>
 		</details>

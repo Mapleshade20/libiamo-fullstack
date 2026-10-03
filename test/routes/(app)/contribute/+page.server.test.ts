@@ -50,6 +50,9 @@ const validEntries: Record<string, string> = {
 	urgency: "high",
 	ui: "imessage",
 	title: "Chat with a friend about the weather",
+	shortObjective: "Keep the small talk going.",
+	description: "A friend texts about the weather.",
+	objectives: "Answer the question\nAsk one back",
 	openingState: JSON.stringify({ previousMessages: [] }),
 };
 
@@ -107,6 +110,7 @@ describe("Contribute +page.server", () => {
 				interactionType: "translate",
 				ui: "translator",
 				title: "Translate this",
+				description: "A short letter.",
 				translationContext: "a friendly letter between former colleagues",
 				referenceParagraphs: "Hello\nWorld\n\nGoodbye\nMoon",
 			};
@@ -139,6 +143,22 @@ describe("Contribute +page.server", () => {
 			expect(mockInsert).toHaveBeenCalled();
 			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
 			expect(inserted).toMatchObject({ status: "pending", createdBy: "user-1", openingState: { previousMessages: [] } });
+		});
+
+		it("stores character notes and the real conversation, but no admin-only extras", async () => {
+			const event = createEvent({
+				...validEntries,
+				agentPrompt: "Sam is bored and chatty.",
+				source: JSON.stringify({ continuation: "sam: anyway, rain again" }),
+				tags: "weather",
+				materialsMd: "# Notes",
+			});
+
+			await expect(actions.default(event)).rejects.toMatchObject({ status: 302 });
+			const inserted = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
+			expect(inserted).toMatchObject({ agentPrompt: "Sam is bored and chatty.", source: { continuation: "sam: anyway, rain again" } });
+			expect(inserted).not.toHaveProperty("tags");
+			expect(inserted).not.toHaveProperty("materialsMd");
 		});
 
 		it("returns 400 when opening state is invalid for the UI", async () => {

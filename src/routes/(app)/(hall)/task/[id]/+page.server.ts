@@ -13,7 +13,7 @@ import { getTaskIdentity, parseTaskId, resolveRequestLineup, type TaskIdentity }
 import { getTranslationPreparationData, validPromptLanguage } from "$lib/server/translation/preparation";
 import { getOrCreateTranslationAttempt, getOrCreateTranslationSourceSet } from "$lib/server/translation/sources";
 import { abandonTranslationAttempt, findTranslationAttempt, getTranslationTask, TranslationWorkflowError } from "$lib/server/translation/workflow";
-import { type AttemptContext, lineupQuery } from "$lib/task/attempts";
+import { type AttemptContext, pinQuery } from "$lib/task/attempts";
 import type { Actions, PageServerLoad } from "./$types";
 
 const TRANSLATION_HELP_TEXT_MAX_LENGTH = PRACTICE_UI_TEXT_MAX_LENGTH;
@@ -62,12 +62,12 @@ export const load: PageServerLoad = async (event) => {
 			nativeLanguage: user.nativeLanguage,
 		});
 		if (!data) throw error(404, "Task not found");
-		return { preparation: { kind: "translation", key: `translation-${identity.id}`, data } satisfies QuestHallPreparation };
+		return { preparation: { kind: "translation", key: `translation-${identity.id}`, data, pin: pinQuery(event.url) } satisfies QuestHallPreparation };
 	}
 
 	const data = await getTaskPreparationData({ userId: user.id, taskId: identity.id, context });
 	if (!data) throw error(404, "Task not found");
-	return { preparation: { kind: "quest", key: `daily-${identity.id}`, data } satisfies QuestHallPreparation };
+	return { preparation: { kind: "quest", key: `daily-${identity.id}`, data, pin: pinQuery(event.url) } satisfies QuestHallPreparation };
 };
 
 async function translationContext(event: Parameters<Actions[string]>[0]) {
@@ -110,7 +110,7 @@ export const actions: Actions = {
 		} catch (cause) {
 			return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
-		throw redirect(303, `${base}/task/${context.task.id}/translation${lineupQuery(event.url)}`);
+		throw redirect(303, `${base}/task/${context.task.id}/translation${pinQuery(event.url, { attempt: false })}`);
 	},
 
 	/** Discards an unfinished translation attempt, or starts over after a completed one. */
@@ -129,7 +129,7 @@ export const actions: Actions = {
 		} catch (cause) {
 			return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 		}
-		throw redirect(303, `${base}/task/${context.task.id}/translation${lineupQuery(event.url)}`);
+		throw redirect(303, `${base}/task/${context.task.id}/translation${pinQuery(event.url, { attempt: false })}`);
 	},
 
 	/** Generate 2-3 useful expressions for a practice task in the user's native language */

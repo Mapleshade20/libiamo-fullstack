@@ -124,7 +124,14 @@ function attemptsFromResponse(messages: ChatMessage[], response: LlmRecipeRespon
 	};
 	if (!response.repair) return [final];
 	return [
-		{ stage: "initial", requestMessages: messages, content: response.repair.initialContent, finishReason: null, errors: response.repair.errors },
+		{
+			stage: "initial",
+			requestMessages: messages,
+			content: response.repair.initialContent,
+			finishReason: null,
+			usage: response.repair.initialUsage,
+			errors: response.repair.errors,
+		},
 		final,
 	];
 }

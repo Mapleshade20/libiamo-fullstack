@@ -6,6 +6,7 @@ import SquarePen from "@lucide/svelte/icons/square-pen";
 import { untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
+import SendRejectedNotice from "$lib/components/practice/session/SendRejectedNotice.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import TurnsLeftMobileBadge from "$lib/components/practice/TurnsLeftMobileBadge.svelte";
 import { MAIL_TEXT_MAX_LENGTH } from "$lib/constants";
@@ -212,6 +213,7 @@ async function send(sending: MailDraftFields) {
 	{/if}
 
 	<FinishSheet {session} language={props.language} />
+	<SendRejectedNotice {session} language={props.language} />
 </div>
 
 <style>

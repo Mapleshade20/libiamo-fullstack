@@ -3,7 +3,13 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { state, mockRunLabCall, mockJudge } = vi.hoisted(() => ({
-	state: { updates: [] as Array<{ set: Record<string, unknown>; where: unknown }>, deleted: [] as unknown[], updateResult: [] as unknown[] },
+	state: {
+		updates: [] as Array<{ set: Record<string, unknown>; where: unknown }>,
+		deleted: [] as unknown[],
+		updateResult: [] as unknown[],
+		/** Whether each successive claim check still finds the claim; missing entries hold. */
+		claimHeld: [] as boolean[],
+	},
 	mockRunLabCall: vi.fn(),
 	mockJudge: vi.fn(),
 }));
@@ -12,18 +18,23 @@ vi.mock("$lib/server/db", () => ({
 	db: {
 		query: {
 			llmRunCell: {
-				findFirst: async () => ({
-					id: 11,
-					runId: 3,
-					variantKey: "v1",
-					run: {
-						datasetId: 1,
-						createdBy: "admin",
-						judge: { rubric: "r", providerRef: "default" },
-						variants: [{ key: "v1", label: "Baseline", slots: {}, providerRef: "default", temperature: null }],
-					},
-					case: { input: { n: 1 } },
-				}),
+				findFirst: async (query: { columns?: unknown }) =>
+					query.columns
+						? (state.claimHeld.shift() ?? true)
+							? { id: 11 }
+							: undefined
+						: {
+								id: 11,
+								runId: 3,
+								variantKey: "v1",
+								run: {
+									datasetId: 1,
+									createdBy: "admin",
+									judge: { rubric: "r", providerRef: "default" },
+									variants: [{ key: "v1", label: "Baseline", slots: {}, providerRef: "default", temperature: null }],
+								},
+								case: { input: { n: 1 } },
+							},
 			},
 			llmDataset: { findFirst: async () => ({ recipeId: "test.recipe" }) },
 		},
@@ -53,6 +64,9 @@ const render = (where: unknown) => dialect.sqlToQuery(where as SQL);
 beforeEach(() => {
 	state.updates = [];
 	state.deleted = [];
+	state.claimHeld = [];
+	mockRunLabCall.mockReset();
+	mockJudge.mockReset();
 	mockRunLabCall.mockResolvedValue({ traceId: "trace-out", record: { error: null } });
 	mockJudge.mockResolvedValue({ score: 4, rationale: "ok", traceId: "trace-judge" });
 });
@@ -77,5 +91,22 @@ describe("processCell", () => {
 		await expect(processCell({ id: 11, claimToken: "stale" })).resolves.toBe(false);
 		expect(state.deleted).toHaveLength(1);
 		expect(render(state.deleted[0]).params).toEqual(["trace-out", "trace-judge"]);
+	});
+
+	it("starts no paid call once the claim is gone", async () => {
+		state.claimHeld = [false];
+		await expect(processCell({ id: 11, claimToken: "stale" })).resolves.toBe(false);
+		expect(mockRunLabCall).not.toHaveBeenCalled();
+		expect(mockJudge).not.toHaveBeenCalled();
+		expect(state.updates).toEqual([]);
+	});
+
+	it("skips the judge when the run is cancelled during the main call", async () => {
+		state.claimHeld = [true, false];
+		state.updateResult = [];
+		await expect(processCell({ id: 11, claimToken: "token-b" })).resolves.toBe(false);
+		expect(mockRunLabCall).toHaveBeenCalledTimes(1);
+		expect(mockJudge).not.toHaveBeenCalled();
+		expect(render(state.deleted[0]).params).toEqual(["trace-out"]);
 	});
 });

@@ -3,7 +3,16 @@ import { deserialize } from "$app/forms";
 
 const AGENT_REPLY_TIMEOUT_MS = 25_000;
 
-export type SendResult = { status: "pending" } | { status: "failed"; error?: string } | { status: "rejected" } | { status: "session_completed" };
+/**
+ * `failed`: the message may be resent as is (the reply or the server failed). `rejected`: the
+ * server refused this message (validation, ownership, a session already over), so it was not
+ * stored and resending it would be refused again.
+ */
+export type SendResult =
+	| { status: "pending" }
+	| { status: "failed"; error?: string }
+	| { status: "rejected"; error?: string }
+	| { status: "session_completed" };
 
 type Fields = Record<string, string | number | null | undefined>;
 
@@ -35,8 +44,7 @@ export async function sendMessage(sessionId: number, text: string, clientMessage
 		const result = await postPageAction("send", { ...fields, sessionId, message: text, clientMessageId }, controller.signal);
 		if (result.type === "failure") {
 			const error = actionError(result);
-			if (error) return { status: "failed", error };
-			return result.status < 500 ? { status: "rejected" } : { status: "failed" };
+			return result.status < 500 ? { status: "rejected", error } : { status: "failed", error };
 		}
 		if (result.type === "success" && result.data?.sessionCompleted) return { status: "session_completed" };
 		if (result.type === "success" && result.data?.pending) return { status: "pending" };

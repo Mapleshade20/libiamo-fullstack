@@ -12,9 +12,10 @@ import { handlePreparationActionResult } from "$lib/components/translation/prepa
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode, TranslationWorkflowPhase } from "$lib/constants";
-import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
+import { difficultyLabelKey, INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { translationState } from "$lib/quest-hall/menu";
+import { pinnedActionQuery } from "$lib/task/attempts";
 
 export interface TranslationPreparationTask {
 	id: number;
@@ -33,9 +34,21 @@ interface Props {
 	backHref?: string;
 	backLabel?: string;
 	onback?: () => void;
+	/** The page URL's attempt pin (see `pinQuery`), kept by the workflow link and both forms. */
+	pin?: string;
 }
 
-let { task, attempt, blockedReason, lang, form = null, backHref = `${base}/`, backLabel = t(lang, "task.returnToHall"), onback }: Props = $props();
+let {
+	task,
+	attempt,
+	blockedReason,
+	lang,
+	form = null,
+	backHref = `${base}/`,
+	backLabel = t(lang, "task.returnToHall"),
+	onback,
+	pin = "",
+}: Props = $props();
 
 let starting = $state(false);
 let retaking = $state(false);
@@ -43,7 +56,7 @@ let embeddedError = $state<string | null>(null);
 let progress = $derived(translationState((attempt?.workflowPhase ?? null) as TranslationWorkflowPhase | null));
 let isDraft = $derived(!attempt || attempt.workflowPhase === "draft");
 let isComplete = $derived(progress === "finished");
-let primaryHref = $derived(`${base}/task/${task.id}/translation${isDraft ? "" : "/feedback"}`);
+let primaryHref = $derived(`${base}/task/${task.id}/translation${isDraft ? "" : "/feedback"}${pin}`);
 let primaryLabel = $derived(
 	!attempt
 		? t(lang, "translate.details.begin")
@@ -53,15 +66,8 @@ let primaryLabel = $derived(
 				? t(lang, "translate.details.review")
 				: t(lang, "task.continueEvaluation"),
 );
-let startAction = $derived(`${base}/task/${task.id}?/start`);
-let retakeAction = $derived(`${base}/task/${task.id}?/retake`);
-
-function difficultyLabel(level: number): string {
-	return (
-		[t(lang, "task.difficulty.beginner"), t(lang, "task.difficulty.intermediate"), t(lang, "task.difficulty.advanced")][level - 1] ??
-		`${t(lang, "hall.difficulty")} ${level}`
-	);
-}
+let startAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "start")}`);
+let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "retake")}`);
 </script>
 
 <section class="translation-preparation" aria-labelledby="translation-preparation-title">
@@ -83,7 +89,7 @@ function difficultyLabel(level: number): string {
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS.translator}</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
-				<span class="difficulty">{difficultyLabel(task.difficulty)}</span>
+				<span class="difficulty">{t(lang, difficultyLabelKey(task.difficulty))}</span>
 			</div>
 
 			<h2 id="translation-preparation-title">{task.title}</h2>

@@ -93,21 +93,30 @@ const taskContentShape = {
 	shortObjective: optionalText(USER_TEXT_MAX_LENGTH),
 	description: optionalText(USER_LONG_TEXT_MAX_LENGTH),
 	objectives: textList(/\n/, USER_LONG_TEXT_MAX_LENGTH),
-	materialsMd: optionalText(USER_LONG_TEXT_MAX_LENGTH),
-	tags: textList(/,/, USER_TEXT_MAX_LENGTH),
 	agentPrompt: optionalText(USER_LONG_TEXT_MAX_LENGTH),
 	openingState: openingStateInput,
+	source: sourceInput,
 	referenceParagraphs: textList(/\n\s*\n/, USER_LONG_TEXT_MAX_LENGTH),
 	translationContext: optionalText(USER_TEXT_MAX_LENGTH),
 };
 
+/** Admin-only presentation fields; contributors leave them to the reviewing admin. */
+const adminContentShape = {
+	materialsMd: optionalText(USER_LONG_TEXT_MAX_LENGTH),
+	tags: textList(/,/, USER_TEXT_MAX_LENGTH),
+};
+
 type TaskContent = z.infer<z.ZodObject<typeof taskContentShape>>;
+
+/** What a contribution carries into the task editor: the content both forms share. */
+export const TASK_CONTRIBUTION_FIELDS = Object.keys(taskContentShape) as Array<keyof typeof taskContentShape>;
 
 function validateTaskContent(data: TaskContent, ctx: z.RefinementCtx) {
 	if ((data.interactionType === "translate") !== (data.ui === "translator")) {
 		ctx.addIssue({ code: "custom", message: 'UI must be "translator" exactly when the task is a translation', path: ["ui"] });
 		return;
 	}
+	if (!data.description) ctx.addIssue({ code: "custom", message: "Description is required", path: ["description"] });
 	if (data.interactionType === "translate") {
 		if (!data.translationContext) ctx.addIssue({ code: "custom", message: "Translation context is required", path: ["translationContext"] });
 		if (!data.referenceParagraphs?.length) {
@@ -116,6 +125,8 @@ function validateTaskContent(data: TaskContent, ctx: z.RefinementCtx) {
 		return;
 	}
 	if (!data.urgency) ctx.addIssue({ code: "custom", message: "Urgency is required", path: ["urgency"] });
+	if (!data.shortObjective) ctx.addIssue({ code: "custom", message: "Short objective is required", path: ["shortObjective"] });
+	if (!data.objectives?.length) ctx.addIssue({ code: "custom", message: "At least one objective is required", path: ["objectives"] });
 	const openingState = validateOpeningState(data.ui as ChatUiVariant, data.openingState ?? {});
 	if (!openingState.success) {
 		ctx.addIssue({ code: "custom", message: `Invalid opening state: ${z.prettifyError(openingState.error)}`, path: ["openingState"] });
@@ -123,16 +134,17 @@ function validateTaskContent(data: TaskContent, ctx: z.RefinementCtx) {
 }
 
 /** Clears the columns the other task kind owns, matching the database's kind constraint. */
-function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null }>(data: T): T {
+function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null; materialsMd?: string | null }>(data: T): T {
 	if (data.interactionType === "translate") {
 		return {
 			...data,
 			urgency: null,
 			agentPrompt: null,
 			openingState: null,
+			source: null,
 			shortObjective: null,
-			materialsMd: null,
 			objectives: null,
+			...("materialsMd" in data ? { materialsMd: null } : {}),
 			...("maxTurns" in data ? { maxTurns: null } : {}),
 		};
 	}
@@ -149,7 +161,7 @@ function normalizeTaskContent<T extends TaskContent & { maxTurns?: number | null
 export const taskSchema = z
 	.object({
 		...taskContentShape,
-		source: sourceInput,
+		...adminContentShape,
 		difficulty: z.coerce.number().int().min(1).max(3),
 		maxTurns: optionalCount,
 		estimatedWords: optionalCount,
@@ -157,7 +169,10 @@ export const taskSchema = z
 	.superRefine(validateTaskContent)
 	.transform(normalizeTaskContent);
 
-/** A learner-proposed task. Scheduling-related and scoring fields are left to the reviewing admin. */
+/**
+ * A learner-proposed task: the same content an admin authors (the same `TaskForm`), minus scheduling,
+ * scoring and presentation extras, which the reviewing admin adds when approving.
+ */
 export const taskContributionSchema = z.object(taskContentShape).superRefine(validateTaskContent).transform(normalizeTaskContent);
 
 /** Auto-rotation pool membership chosen in the admin task editor. */
@@ -427,9 +442,9 @@ export const openingStateSchemas = {
 					{ type: "text", key: "authorName", label: "Author Name", placeholder: "FicAuthor" },
 				],
 			},
-			{ type: "text", key: "chapterTitle", label: "Chapter Title (optional)" },
-			{ type: "textarea", key: "summary", label: "Summary (optional)", rows: 3 },
-			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt (optional)", rows: 4 },
+			{ type: "text", key: "chapterTitle", label: "Chapter Title" },
+			{ type: "textarea", key: "summary", label: "Summary", rows: 3 },
+			{ type: "textarea", key: "bodyExcerpt", label: "Body Excerpt", rows: 4 },
 			{
 				type: "row",
 				fields: [

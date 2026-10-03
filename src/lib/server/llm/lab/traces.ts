@@ -27,6 +27,15 @@ function usageNumber(usage: unknown, key: "promptTokens" | "completionTokens"): 
 	return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
 }
 
+/**
+ * Tokens the whole call spent: every completion it made (a rejected first answer and its repair,
+ * failed calls included). Unknown when no completion reported the count.
+ */
+function totalTokens(record: LlmCallRecord, key: "promptTokens" | "completionTokens"): number | null {
+	const known = record.attempts.map((attempt) => usageNumber(attempt.usage, key)).filter((count): count is number => count !== null);
+	return known.length ? known.reduce((sum, count) => sum + count, 0) : usageNumber(record.response?.usage, key);
+}
+
 /** JSON round trip: recipe inputs and outputs are JSON-plain, and jsonb must not see `undefined` or class instances. */
 function plain(value: unknown): unknown {
 	return value === undefined ? null : JSON.parse(JSON.stringify(value));
@@ -56,8 +65,8 @@ export function traceRow(record: LlmCallRecord, owner: TraceOwner = {}): typeof 
 		outputText: record.response?.content ?? lastAttempt?.content ?? null,
 		error: traceError(record),
 		route: record.response?.route ?? null,
-		promptTokens: usageNumber(record.response?.usage, "promptTokens"),
-		completionTokens: usageNumber(record.response?.usage, "completionTokens"),
+		promptTokens: totalTokens(record, "promptTokens"),
+		completionTokens: totalTokens(record, "completionTokens"),
 		latencyMs: record.latencyMs,
 	};
 }

@@ -122,7 +122,7 @@ describe("Task detail +page.server", () => {
 			mocks.getTaskPreparationData.mockResolvedValue(data);
 			const result = (await load(event(undefined, "42"))) as any;
 			expect(mocks.getTaskPreparationData).toHaveBeenCalledWith({ userId: "u1", taskId: 42, context });
-			expect(result).toEqual({ preparation: { kind: "quest", key: "daily-42", data } });
+			expect(result).toEqual({ preparation: { kind: "quest", key: "daily-42", data, pin: "" } });
 			expect(mocks.getTranslationPreparationData).not.toHaveBeenCalled();
 		});
 
@@ -137,7 +137,13 @@ describe("Task detail +page.server", () => {
 				activeLanguage: "fr",
 				nativeLanguage: "en",
 			});
-			expect(result).toEqual({ preparation: { kind: "translation", key: "translation-1", data } });
+			expect(result).toEqual({ preparation: { kind: "translation", key: "translation-1", data, pin: "" } });
+		});
+
+		it("hands the page's attempt pin to the details links and forms", async () => {
+			mocks.getTranslationPreparationData.mockResolvedValue({ task: translationContent, blockedReason: null, attempt: null });
+			const result = (await load(event(undefined, "1", "?lineup=12&attempt=7"))) as any;
+			expect(result.preparation.pin).toBe("?lineup=12&attempt=7");
 		});
 	});
 
@@ -162,6 +168,13 @@ describe("Task detail +page.server", () => {
 
 		it("keeps an Archive lineup pin on the draft redirect", async () => {
 			await expect(actions.start(event(undefined, "1", "?/start&lineup=12"))).rejects.toMatchObject({
+				status: 303,
+				location: "/task/1/translation?lineup=12",
+			});
+		});
+
+		it("drops an attempt pin after starting over, so the new attempt is shown", async () => {
+			await expect(actions.retake(event(undefined, "1", "?lineup=12&attempt=7&/retake"))).rejects.toMatchObject({
 				status: 303,
 				location: "/task/1/translation?lineup=12",
 			});

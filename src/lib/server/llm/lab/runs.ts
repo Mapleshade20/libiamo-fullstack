@@ -173,6 +173,8 @@ export async function processCell(cell: ClaimedCell): Promise<boolean> {
 	const row = await db.query.llmRunCell.findFirst({ where: eq(llmRunCell.id, cell.id), with: { run: true, case: true } });
 	if (!row) return false;
 	const fence = and(eq(llmRunCell.id, cell.id), eq(llmRunCell.status, "running"), eq(llmRunCell.claimToken, cell.claimToken));
+	// Paid calls start only while the claim holds; the final write is fenced as well.
+	const stillClaimed = async () => Boolean(await db.query.llmRunCell.findFirst({ where: fence, columns: { id: true } }));
 	const fail = async (message: string) => {
 		await db.update(llmRunCell).set({ status: "failed", error: message, leaseUntil: null, claimToken: null, completedAt: new Date() }).where(fence);
 		return true;
@@ -182,6 +184,7 @@ export async function processCell(cell: ClaimedCell): Promise<boolean> {
 	const spec = row.run.variants.find((variant) => variant.key === row.variantKey);
 	const actorId = row.run.createdBy;
 	if (!recipe || !spec || !actorId) return fail("The run's recipe, variant or owner no longer exists.");
+	if (!(await stillClaimed())) return false;
 
 	let result: Awaited<ReturnType<typeof runLabCall>>;
 	try {
@@ -191,7 +194,7 @@ export async function processCell(cell: ClaimedCell): Promise<boolean> {
 		return fail(error instanceof Error ? error.message : String(error));
 	}
 	const judge =
-		row.run.judge && !result.record.error
+		row.run.judge && !result.record.error && (await stillClaimed())
 			? await judgeLabOutput({ judge: row.run.judge, recipe, record: result.record, actorId, runId: row.runId })
 			: null;
 	const [updated] = await db

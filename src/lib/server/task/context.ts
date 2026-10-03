@@ -9,7 +9,7 @@ import { db } from "$lib/server/db";
 import { practiceSession, task } from "$lib/server/db/schema";
 import { getLocalDateString } from "$lib/server/task/lineup-dates";
 import { resolveTaskLineup } from "$lib/server/task/lineups";
-import { type AttemptContext, pickShownAttempt } from "$lib/task/attempts";
+import { type AttemptContext, pickShownAttempt, requestedAttemptId } from "$lib/task/attempts";
 import { getBrowserTimezone } from "$lib/time/browser-timezone";
 
 export interface TaskIdentity {
@@ -32,18 +32,23 @@ export async function getTaskIdentity(taskId: number): Promise<TaskIdentity | nu
 	return found ?? null;
 }
 
-/** The lineup context of a task request; `?lineup=` pins it to one lineup containing the task. */
+/**
+ * The lineup context of a task request; `?lineup=` pins it to one lineup containing the task, and
+ * `?attempt=` to one of the learner's attempts (checked against their own when picking).
+ */
 export async function resolveRequestLineup(
 	event: { url: URL; cookies: { get(name: string): string | undefined } },
 	identity: TaskIdentity,
 ): Promise<AttemptContext> {
 	const requested = parseTaskId(event.url.searchParams.get("lineup") ?? "");
-	return resolveTaskLineup({
+	const context = await resolveTaskLineup({
 		taskId: identity.id,
 		language: identity.language,
 		localDate: getLocalDateString(getBrowserTimezone(event.cookies)),
 		requestedLineupId: requested,
 	});
+	const attemptId = requestedAttemptId(event.url);
+	return attemptId ? { ...context, attemptId } : context;
 }
 
 /** The practice session a task URL shows; see `pickShownAttempt`. */

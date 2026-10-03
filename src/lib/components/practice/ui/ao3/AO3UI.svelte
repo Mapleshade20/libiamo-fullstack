@@ -1,6 +1,7 @@
 <script lang="ts">
 import { tick } from "svelte";
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
+import SendRejectedNotice from "$lib/components/practice/session/SendRejectedNotice.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
 import TurnsLeftMobileBadge from "$lib/components/practice/TurnsLeftMobileBadge.svelte";
@@ -92,6 +93,7 @@ async function replyTo(comment: ThreadComment) {
 	</div>
 
 	<FinishSheet {session} language={props.language} />
+	<SendRejectedNotice {session} language={props.language} />
 </div>
 
 <style>

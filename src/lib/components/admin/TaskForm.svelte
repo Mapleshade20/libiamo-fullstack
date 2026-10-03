@@ -32,7 +32,10 @@ import type { cutCapture } from "$lib/admin/capture";
 import { getDefaultOpeningState } from "$lib/admin/opening-state";
 import { handleInvalidField } from "$lib/client/form-attention";
 import CaptureImport from "$lib/components/admin/CaptureImport.svelte";
+import DifficultyPicker from "$lib/components/admin/DifficultyPicker.svelte";
+import ObjectivesEditor from "$lib/components/admin/ObjectivesEditor.svelte";
 import OpeningStateEditor from "$lib/components/admin/OpeningStateEditor.svelte";
+import RequiredMark from "$lib/components/admin/RequiredMark.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
 import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
@@ -65,8 +68,16 @@ interface Props {
 	action?: string;
 	submitLabel?: string;
 	cancelHref?: string;
-	/** Contributors never see scheduling, scoring, or agent-prompt fields. */
+	/**
+	 * The contribution form: the same content an admin authors, without scheduling, scoring and the
+	 * admin-only extras (tags, background material), which the reviewing admin adds.
+	 */
 	hideAdminFields?: boolean;
+	/**
+	 * Learners already have this task (lined up or attempted): its language, kind and interface are
+	 * fixed, since their lineups and conversations depend on them. A different one is a new task.
+	 */
+	identityLocked?: boolean;
 	confirmBeforeSubmit?: boolean;
 	/** Extra hidden fields added inside the form */
 	extraHiddenFields?: Record<string, string>;
@@ -81,6 +92,7 @@ let {
 	submitLabel = "Save",
 	cancelHref = `${base}/admin/tasks`,
 	hideAdminFields = false,
+	identityLocked = false,
 	confirmBeforeSubmit = false,
 	extraHiddenFields,
 	resetKey,
@@ -141,7 +153,7 @@ let selectedInteractionType = $state<string>(untrack(() => task.interactionType 
 let selectedUrgency = $state<string>(untrack(() => task.urgency ?? "high"));
 let selectedUi = $state<ChatUiVariant>(untrack(() => chatUi(task.ui)));
 let selectedRotation = $state<string>(untrack(() => task.rotation ?? "none"));
-let difficultyValue = $state(untrack(() => numberFieldValue(task.difficulty, "1")));
+let difficultyValue = $state(untrack(() => task.difficulty ?? 2));
 let maxTurnsValue = $state(untrack(() => numberFieldValue(task.maxTurns)));
 let estimatedWordsValue = $state(untrack(() => numberFieldValue(task.estimatedWords)));
 let title = $state(untrack(() => task.title ?? ""));
@@ -150,7 +162,7 @@ let description = $state(untrack(() => task.description ?? ""));
 let agentPrompt = $state(untrack(() => task.agentPrompt ?? ""));
 let sourceContinuation = $state(untrack(() => task.source?.continuation ?? ""));
 let translationContext = $state(untrack(() => task.translationContext ?? ""));
-let objectivesText = $state(untrack(() => (task.objectives ?? []).join("\n")));
+let objectives = $state<string[]>(untrack(() => task.objectives ?? []));
 let tagsText = $state(untrack(() => (task.tags ?? []).join(", ")));
 let referenceText = $state(untrack(() => (task.referenceParagraphs ?? []).join("\n\n")));
 let openingState = $state<Record<string, unknown>>(
@@ -158,14 +170,23 @@ let openingState = $state<Record<string, unknown>>(
 );
 
 let isTranslate = $derived(selectedInteractionType === "translate");
+// The continuation comes from an import; until there is one, its box would only invite pasting by hand.
+let showContinuation = $state(untrack(() => Boolean(task.source?.continuation)));
+let importError = $state<string | null>(null);
 
 /** Fills the interface, opening and continuation from a captured conversation. */
 function importCapture(cut: ReturnType<typeof cutCapture>) {
+	if (identityLocked && cut.ui !== selectedUi) {
+		importError = `This task's interface is fixed to ${UI_VARIANT_LABELS[selectedUi]}; a ${UI_VARIANT_LABELS[cut.ui]} capture needs a new task.`;
+		return;
+	}
+	importError = null;
 	selectedUi = cut.ui;
 	// Switching the interface resets the opening editor to its default: let that happen first.
 	flushSync();
 	openingState = cut.openingState;
 	sourceContinuation = cut.continuation;
+	showContinuation = true;
 }
 
 // Markdown preview
@@ -179,7 +200,7 @@ function syncTaskDraftFromProps() {
 	selectedUrgency = task.urgency ?? "high";
 	selectedUi = chatUi(task.ui);
 	selectedRotation = task.rotation ?? "none";
-	difficultyValue = numberFieldValue(task.difficulty, "1");
+	difficultyValue = task.difficulty ?? 2;
 	maxTurnsValue = numberFieldValue(task.maxTurns);
 	estimatedWordsValue = numberFieldValue(task.estimatedWords);
 	title = task.title ?? "";
@@ -188,7 +209,9 @@ function syncTaskDraftFromProps() {
 	agentPrompt = task.agentPrompt ?? "";
 	sourceContinuation = task.source?.continuation ?? "";
 	translationContext = task.translationContext ?? "";
-	objectivesText = (task.objectives ?? []).join("\n");
+	objectives = task.objectives ?? [];
+	showContinuation = Boolean(task.source?.continuation);
+	importError = null;
 	tagsText = (task.tags ?? []).join(", ");
 	referenceText = (task.referenceParagraphs ?? []).join("\n\n");
 	openingState = task.openingState ?? (getDefaultOpeningState(chatUi(task.ui)) as Record<string, unknown>);
@@ -232,14 +255,27 @@ $effect(() => {
 	<!-- Section A: Metadata -->
 	<fieldset class="space-y-4">
 		<h2 class="uppercase tracking-widest text-muted-foreground">Metadata</h2>
+		{#if identityLocked}
+			<!-- Disabled selects do not submit; the fixed values travel here. -->
+			<input type="hidden" name="language" value={selectedLanguage}>
+			<input type="hidden" name="interactionType" value={selectedInteractionType}>
+			{#if !isTranslate}
+				<input type="hidden" name="ui" value={selectedUi}>
+			{/if}
+			<p id="identity-locked" class="text-xs text-muted-foreground">
+				Learners already have this task, so its language, type and interface are fixed. Create a new task to change them.
+			</p>
+		{/if}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
 				<select
 					id="language"
 					name="language"
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 					required
+					disabled={identityLocked}
+					aria-describedby={identityLocked ? "identity-locked" : undefined}
 					bind:value={selectedLanguage}
 				>
 					{#each LANGUAGE_CODES as code}
@@ -256,8 +292,10 @@ $effect(() => {
 				<select
 					id="interactionType"
 					name="interactionType"
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 					required
+					disabled={identityLocked}
+					aria-describedby={identityLocked ? "identity-locked" : undefined}
 					bind:value={selectedInteractionType}
 				>
 					{#each INTERACTION_TYPES as type}
@@ -277,8 +315,10 @@ $effect(() => {
 					<select
 						id="ui"
 						name="ui"
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 						required
+						disabled={identityLocked}
+						aria-describedby={identityLocked ? "identity-locked" : undefined}
 						bind:value={selectedUi}
 					>
 						{#each CHAT_UI_VARIANTS as variant}
@@ -327,14 +367,6 @@ $effect(() => {
 					</div>
 				{/if}
 
-				<div class="space-y-2">
-					<Label for="difficulty">Difficulty (1–3)</Label>
-					<Input id="difficulty" name="difficulty" type="number" min="1" max="3" bind:value={difficultyValue} required />
-					{#if form?.errors?.difficulty}
-						<p data-field-error="difficulty" class="text-sm text-red-600">{form.errors.difficulty[0]}</p>
-					{/if}
-				</div>
-
 				{#if !isTranslate}
 					<div class="space-y-2">
 						<Label for="maxTurns">Max Turns (blank for no limit)</Label>
@@ -352,6 +384,13 @@ $effect(() => {
 						<p data-field-error="estimatedWords" class="text-sm text-red-600">{form.errors.estimatedWords[0]}</p>
 					{/if}
 				</div>
+
+				<DifficultyPicker bind:value={difficultyValue} error={form?.errors?.difficulty?.[0]} />
+
+				<div class="space-y-2">
+					<Label for="tags">Tags (comma-separated)</Label>
+					<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
+				</div>
 			{/if}
 		</div>
 	</fieldset>
@@ -361,7 +400,9 @@ $effect(() => {
 		<h2 class="uppercase tracking-widest text-muted-foreground">Content</h2>
 
 		<div class="space-y-2">
-			<Label for="title">Title</Label>
+			<Label for="title"
+				><span>Title<RequiredMark /></span></Label
+			>
 			<Input id="title" name="title" bind:value={title} required />
 			{#if form?.errors?.title}
 				<p data-field-error="title" class="text-sm text-red-600">{form.errors.title[0]}</p>
@@ -370,14 +411,22 @@ $effect(() => {
 
 		{#if !isTranslate}
 			<div class="space-y-2">
-				<Label for="shortObjective">Short Objective (1–2 sentences, shown on card)</Label>
-				<Textarea id="shortObjective" name="shortObjective" rows={2} bind:value={shortObjective} />
+				<Label for="shortObjective"
+					><span>Short Objective<RequiredMark /></span></Label
+				>
+				<p id="shortObjective-help" class="text-xs text-muted-foreground">One or two sentences, shown on the quest card.</p>
+				<Textarea id="shortObjective" name="shortObjective" rows={2} aria-describedby="shortObjective-help" required bind:value={shortObjective} />
+				{#if form?.errors?.shortObjective}
+					<p data-field-error="shortObjective" class="text-sm text-red-600">{form.errors.shortObjective[0]}</p>
+				{/if}
 			</div>
 		{/if}
 
 		<div class="space-y-2">
-			<Label for="description">Description</Label>
-			<Textarea id="description" name="description" rows={3} bind:value={description} />
+			<Label for="description"
+				><span>Description<RequiredMark /></span></Label
+			>
+			<Textarea id="description" name="description" rows={3} required bind:value={description} />
 			{#if form?.errors?.description}
 				<p data-field-error="description" class="text-sm text-red-600">{form.errors.description[0]}</p>
 			{/if}
@@ -385,7 +434,9 @@ $effect(() => {
 
 		{#if isTranslate}
 			<div class="space-y-2">
-				<Label for="translationContext">Translation Context</Label>
+				<Label for="translationContext"
+					><span>Translation Context<RequiredMark /></span></Label
+				>
 				<div class="grid grid-cols-1 items-start gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
 					<span class="pt-2 text-muted-foreground">This is in the context of [</span>
 					<Input id="translationContext" name="translationContext" bind:value={translationContext} required />
@@ -395,9 +446,9 @@ $effect(() => {
 					<p data-field-error="translationContext" class="text-sm text-red-600">{form.errors.translationContext[0]}</p>
 				{/if}
 			</div>
-		{:else if !hideAdminFields}
+		{:else}
 			<div class="space-y-2">
-				<Label for="agentPrompt">Character notes (optional)</Label>
+				<Label for="agentPrompt">Character notes</Label>
 				<p id="agentPrompt-help" class="text-xs text-muted-foreground">
 					Who these people are, what each wants, and who knows what the learner needs, as a few facts. Style, length and who replies are handled for
 					you; left empty, the people are inferred from the opening.
@@ -414,43 +465,38 @@ $effect(() => {
 					<p data-field-error="agentPrompt" class="text-sm text-red-600">{form.errors.agentPrompt[0]}</p>
 				{/if}
 			</div>
-			<fieldset class="space-y-2">
-				<legend class="text-sm font-medium">Real conversation (optional)</legend>
-				<p class="text-xs text-muted-foreground">
-					When the task is cut from a real conversation, the cast draws on how it really went on after the cut; the learner never sees it.
-				</p>
+			<div class="space-y-2">
 				<CaptureImport language={selectedLanguage} onimport={importCapture} />
+				{#if importError}
+					<p data-field-error="source" class="text-sm text-red-600" role="alert">{importError}</p>
+				{/if}
 				<input type="hidden" name="source" value={JSON.stringify({ continuation: sourceContinuation })}>
-				<Label for="sourceContinuation">The rest of the real conversation</Label>
-				<Textarea id="sourceContinuation" rows={6} bind:value={sourceContinuation} placeholder="author: message, one per line" />
+				{#if showContinuation}
+					<Label for="sourceContinuation">The rest of the real conversation</Label>
+					<p id="sourceContinuation-help" class="text-xs text-muted-foreground">
+						What was said after the opening ends. The characters draw on it to reply the way the real people did; learners never see it.
+					</p>
+					<Textarea
+						id="sourceContinuation"
+						rows={6}
+						aria-describedby="sourceContinuation-help"
+						bind:value={sourceContinuation}
+						placeholder="author: message, one per line"
+					/>
+				{/if}
 				{#if form?.errors?.source}
 					<p data-field-error="source" data-feedback-name="source" class="text-sm text-red-600">{form.errors.source[0]}</p>
-				{/if}
-			</fieldset>
-		{/if}
-
-		{#if !isTranslate}
-			<div class="space-y-2">
-				<Label for="objectives">Objectives (one per line)</Label>
-				<Textarea
-					id="objectives"
-					name="objectives"
-					rows={4}
-					bind:value={objectivesText}
-					placeholder="Give a convincing reason&#10;Do not over-explain&#10;Show you still value the friendship"
-				/>
-				{#if form?.errors?.objectives}
-					<p data-field-error="objectives" class="text-sm text-red-600">{form.errors.objectives[0]}</p>
 				{/if}
 			</div>
 		{/if}
 
-		<div class="space-y-2">
-			<Label for="tags">Tags (comma-separated)</Label>
-			<Input id="tags" name="tags" bind:value={tagsText} placeholder="refusal, politeness, friendship" />
-		</div>
-
 		{#if !isTranslate}
+			{#key lastTaskSourceKey}
+				<ObjectivesEditor bind:value={objectives} required error={form?.errors?.objectives?.[0]} />
+			{/key}
+		{/if}
+
+		{#if !isTranslate && !hideAdminFields}
 			<!-- materialsMd with preview -->
 			<div class="space-y-2">
 				<div class="flex items-center justify-between">
@@ -483,7 +529,9 @@ $effect(() => {
 
 	{#if isTranslate}
 		<div class="space-y-2">
-			<Label for="referenceParagraphs">Authentic Reference Text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})</Label>
+			<Label for="referenceParagraphs"
+				><span>Authentic Reference Text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})<RequiredMark /></span></Label
+			>
 			<Textarea
 				id="referenceParagraphs"
 				name="referenceParagraphs"

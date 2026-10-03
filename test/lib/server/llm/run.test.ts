@@ -76,6 +76,20 @@ describe("runLlmRecipe", () => {
 		expect(records[0]).toMatchObject({ origin: "override", overrideId: 7, value: 2, error: null, subjects: { taskId: 3 } });
 	});
 
+	it("keeps what the rejected first answer cost when a repair succeeds", async () => {
+		const { records } = interceptor({ capture: true });
+		mockChatJson.mockResolvedValueOnce({
+			...jsonResponse({ n: 1 }),
+			usage: { promptTokens: 200, completionTokens: 30 },
+			repair: { initialContent: "{", initialRaw: {}, initialUsage: { promptTokens: 100, completionTokens: 40 }, errors: ["bad"] },
+		});
+		await runLlmRecipe(recipe, { language: "French", n: 1 });
+		expect(records[0].attempts.map((attempt) => [attempt.stage, attempt.usage])).toEqual([
+			["initial", { promptTokens: 100, completionTokens: 40 }],
+			["repair", { promptTokens: 200, completionTokens: 30 }],
+		]);
+	});
+
 	it("records finalize failures with the parsed value and rethrows", async () => {
 		const { records } = interceptor({ capture: true });
 		mockChatJson.mockResolvedValueOnce(jsonResponse({ n: 5 }));

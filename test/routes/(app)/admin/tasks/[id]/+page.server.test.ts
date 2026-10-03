@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	getTaskRotation: vi.fn(),
 	updateTask: vi.fn(),
 	deleteUnusedTask: vi.fn(),
+	isTaskInUse: vi.fn(),
 }));
 
 vi.mock("$lib/server/db", () => {
@@ -21,13 +22,20 @@ vi.mock("$lib/server/db", () => {
 		},
 	};
 });
-vi.mock("$lib/server/admin/tasks", () => ({
-	getTaskRotation: mocks.getTaskRotation,
-	updateTask: mocks.updateTask,
-	deleteUnusedTask: mocks.deleteUnusedTask,
-}));
+vi.mock("$lib/server/admin/tasks", async (importOriginal) => {
+	const original = await importOriginal<typeof import("$lib/server/admin/tasks")>();
+	return {
+		TaskIdentityLockedError: original.TaskIdentityLockedError,
+		TaskNotFoundError: original.TaskNotFoundError,
+		getTaskRotation: mocks.getTaskRotation,
+		updateTask: mocks.updateTask,
+		deleteUnusedTask: mocks.deleteUnusedTask,
+		isTaskInUse: mocks.isTaskInUse,
+	};
+});
 
 import { TASK_JSON_VERSION } from "$lib/schemas";
+import { TaskIdentityLockedError } from "$lib/server/admin/tasks";
 import { actions, load } from "$routes/(app)/admin/tasks/[id]/+page.server";
 
 const admin = { id: "admin-1", role: "admin" };
@@ -38,6 +46,9 @@ const chatFields = {
 	urgency: "low",
 	difficulty: "1",
 	title: "Weekend plans",
+	shortObjective: "Agree on a plan.",
+	description: "Your friends are planning the weekend.",
+	objectives: "Suggest a day\nAgree on a place",
 	openingState: JSON.stringify({ previousMessages: [] }),
 	rotation: "weekly",
 };
@@ -53,6 +64,7 @@ describe("admin task editor", () => {
 		vi.clearAllMocks();
 		mocks.selectRows = [];
 		mocks.getTaskRotation.mockResolvedValue("none");
+		mocks.isTaskInUse.mockResolvedValue(false);
 	});
 
 	it("is admin-only", async () => {
@@ -65,7 +77,13 @@ describe("admin task editor", () => {
 
 		mocks.selectRows = [{ id: 7, title: "Weekend plans" }];
 		mocks.getTaskRotation.mockResolvedValue("daily");
-		expect(await load(event())).toEqual({ task: { id: 7, title: "Weekend plans" }, rotation: "daily" });
+		mocks.isTaskInUse.mockResolvedValue(true);
+		expect(await load(event())).toEqual({ task: { id: 7, title: "Weekend plans" }, rotation: "daily", identityLocked: true });
+	});
+
+	it("explains a refused identity change instead of saving it", async () => {
+		mocks.updateTask.mockRejectedValueOnce(new TaskIdentityLockedError());
+		expect(await actions.save(event(chatFields))).toMatchObject({ status: 409, data: { action: "save", message: expect.any(String) } });
 	});
 
 	it("saves valid form input with the chosen rotation", async () => {

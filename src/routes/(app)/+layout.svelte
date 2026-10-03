@@ -18,8 +18,8 @@ let isHome = $derived(page.url.pathname === `${base}/`);
 let hasMasthead = $derived(isHome || (dev && page.url.pathname === `${base}/streak-lab`));
 let isHall = $derived(isQuestMenuPath(page.url.pathname));
 let questMenuRoute = $derived(isHall ? page.data.questMenu : null);
-// LLM Lab compares outputs side by side, so it gets the Hall's wide measure.
-let isLab = $derived(page.url.pathname === `${base}/admin/lab` || page.url.pathname.startsWith(`${base}/admin/lab/`));
+// Admin tools (tables, the LLM Lab's side-by-side outputs) get the Hall's wide measure.
+let isAdmin = $derived(page.url.pathname === `${base}/admin` || page.url.pathname.startsWith(`${base}/admin/`));
 let quotaNotification = $state<ActionNotificationContent | null>(null);
 
 // Check if current route is a session page (fullscreen immersive mode)
@@ -98,7 +98,7 @@ $effect(() => {
 			     the reading measure because the book spread needs the room; owning both edges here is what
 			     keeps the masthead, the hall heading and the spread on one set of margins. -->
 			<main
-				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : isLab ? 'max-w-5xl nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
+				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : isAdmin ? 'max-w-5xl nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
 					? 'pt-0'
 					: 'pt-8 nav:pt-24'}"
 			>

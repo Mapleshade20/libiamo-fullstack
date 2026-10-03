@@ -22,7 +22,15 @@ import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
 import { Separator } from "$lib/components/ui/separator";
 import type { LanguageCode } from "$lib/constants";
-import { BYOK_API_BASE_URL_LABELS, BYOK_API_BASE_URLS, BYOK_API_PRESETS, type ByokApiBaseUrl, SELF_ASSIGNED_LEVELS } from "$lib/constants";
+import {
+	BYOK_API_BASE_URL_LABELS,
+	BYOK_API_BASE_URLS,
+	BYOK_API_PRESETS,
+	type ByokApiBaseUrl,
+	DIFFICULTY_CEFR,
+	difficultyLabelKey,
+	SELF_ASSIGNED_LEVELS,
+} from "$lib/constants";
 import { t } from "$lib/i18n";
 import { ADDRESSEE_BETA_MODEL, hasAddresseeBeta } from "$lib/practice/addressee";
 import { getDisplayClock } from "$lib/time/display-clock";
@@ -405,8 +413,8 @@ function enhancePasswordSetup() {
 								<input class="sr-only" type="radio" name="levelSelfAssign" value={level} checked={data.levelSelfAssign === level}>
 								<span class={radioDotClass} aria-hidden="true"></span>
 								<span class="flex flex-col">
-									<span class="text-sm font-medium">{t(lang, `profile.proficiency.level${level}`)}</span>
-									<span class="text-sm text-muted-foreground">{t(lang, `profile.proficiency.range${level}`)}</span>
+									<span class="text-sm font-medium">{t(lang, difficultyLabelKey(level))}</span>
+									<span class="text-sm text-muted-foreground">{DIFFICULTY_CEFR[level]}</span>
 								</span>
 							</label>
 						{/each}

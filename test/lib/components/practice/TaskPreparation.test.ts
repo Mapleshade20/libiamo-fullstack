@@ -65,4 +65,14 @@ describe("TaskPreparation", () => {
 
 		expect(body).toContain('<h2 id="task-preparation-title"');
 	});
+
+	it("keeps the page's attempt pin on the report and conversation links", () => {
+		const finished = render(TaskPreparation, {
+			props: { task: task({ sessionStatus: "evaluated", evaluationPhase: "completed" }), nativeLanguage: "en", pin: "?lineup=12" },
+		});
+		expect(finished.body).toContain('href="/task/42/feedback?lineup=12"');
+
+		const ready = render(TaskPreparation, { props: { task: task(), nativeLanguage: "en", pin: "?lineup=12" } });
+		expect(ready.body).toContain('href="/task/42/session?lineup=12"');
+	});
 });

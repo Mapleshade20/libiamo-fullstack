@@ -76,6 +76,7 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 	let completing = $state(false);
 	let initializing = $state(false);
 	let confirmingFinish = $state(false);
+	let rejection = $state<{ message: string; key: number } | null>(null);
 	let autoFinished = false;
 	let optimistic = $state<ChatMessage[]>([]);
 	let retrying = $state<string[]>([]);
@@ -138,7 +139,12 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 			await navigateToFeedback();
 			return true;
 		}
-		if (result.status === "rejected") return false;
+		if (result.status === "rejected") {
+			rejection = { message: result.error ?? "", key: (rejection?.key ?? 0) + 1 };
+			// A refusal can mean the session moved on elsewhere (finished in another tab): re-read it.
+			void refresh();
+			return false;
+		}
 		const { clientMessageId } = placeholder;
 		optimistic = [
 			...optimistic.filter((message) => !(message.role === "agent" && message.clientMessageId === clientMessageId)),
@@ -207,12 +213,14 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 		submitting = true;
 		try {
 			const result = await sendMessage(sessionId, failed.retryText ?? "", failed.clientMessageId, fields);
-			await settle(result, {
+			const accepted = await settle(result, {
 				authorName: failed.authorName,
 				clientMessageId: failed.clientMessageId,
 				retryText: failed.retryText,
 				thread: failed.thread,
 			});
+			// Refused for good: resending would be refused again, so the local copy goes.
+			if (!accepted) optimistic = optimistic.filter((message) => message.clientMessageId !== failed.clientMessageId);
 		} finally {
 			retrying = retrying.filter((id) => id !== messageId);
 			submitting = false;
@@ -376,6 +384,10 @@ export function createPracticeSession(getProps: () => PracticeSurfaceProps, opti
 		},
 		get confirmingFinish() {
 			return confirmingFinish;
+		},
+		/** Why the server last refused a message outright; `key` changes on every refusal. */
+		get rejection() {
+			return rejection;
 		},
 		/** The element the surface scrolls to its newest message; unset for surfaces that do not. */
 		set scroller(element: HTMLElement | null) {

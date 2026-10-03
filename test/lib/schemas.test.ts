@@ -74,7 +74,9 @@ describe("schemas", () => {
 		maxTurns: 3,
 		estimatedWords: 40,
 		title: "Hello",
+		shortObjective: "Say hello.",
 		description: "desc",
+		objectives: "Greet the group",
 		agentPrompt: "prompt",
 		materialsMd: "# Background",
 		openingState: JSON.stringify(discordOpening),
@@ -99,8 +101,19 @@ describe("schemas", () => {
 	});
 
 	it("stores blank optional content as null", () => {
-		const result = taskSchema.parse({ ...baseTask, shortObjective: "  ", objectives: "", maxTurns: "", estimatedWords: "0" });
-		expect(result).toMatchObject({ shortObjective: null, objectives: null, tags: null, maxTurns: null, estimatedWords: null });
+		const result = taskSchema.parse({ ...baseTask, agentPrompt: "  ", maxTurns: "", estimatedWords: "0" });
+		expect(result).toMatchObject({ agentPrompt: null, tags: null, maxTurns: null, estimatedWords: null });
+	});
+
+	it("requires the content the learner reads: a short objective, description and objectives", () => {
+		const blank = taskSchema.safeParse({ ...baseTask, shortObjective: "  ", description: "", objectives: "\n" });
+		expect(blank.success).toBe(false);
+		if (!blank.success) {
+			expect(blank.error.issues.map((issue) => issue.path[0])).toEqual(expect.arrayContaining(["shortObjective", "description", "objectives"]));
+		}
+		// Translation tasks show neither a card objective nor objectives.
+		expect(taskSchema.safeParse({ ...translationTask, shortObjective: "", objectives: "" }).success).toBe(true);
+		expect(taskSchema.safeParse({ ...translationTask, description: "" }).success).toBe(false);
 	});
 
 	it("validates the opening state for the chosen chat interface", () => {
@@ -154,13 +167,32 @@ describe("schemas", () => {
 		urgency: "high",
 		ui: "discord",
 		title: "Chat with a friend",
+		shortObjective: "Make plans.",
+		description: "A friend asks about the weekend.",
+		objectives: "Suggest a plan",
 		openingState: JSON.stringify(discordOpening),
 	};
 
-	it("taskContributionSchema leaves scheduling and scoring to the reviewing admin", () => {
-		const result = taskContributionSchema.parse({ ...baseContribution, difficulty: 3, maxTurns: 4 }) as Record<string, unknown>;
+	it("taskContributionSchema leaves scheduling, scoring and presentation extras to the reviewing admin", () => {
+		const result = taskContributionSchema.parse({
+			...baseContribution,
+			difficulty: 3,
+			maxTurns: 4,
+			tags: "a, b",
+			materialsMd: "# Notes",
+		}) as Record<string, unknown>;
 		expect(result.title).toBe("Chat with a friend");
-		for (const field of ["difficulty", "maxTurns", "estimatedWords", "isActive", "rotation"]) expect(result).not.toHaveProperty(field);
+		for (const field of ["difficulty", "maxTurns", "estimatedWords", "isActive", "rotation", "tags", "materialsMd"])
+			expect(result).not.toHaveProperty(field);
+	});
+
+	it("taskContributionSchema takes character notes and the real conversation", () => {
+		const result = taskContributionSchema.parse({
+			...baseContribution,
+			agentPrompt: "Priya wants a decision.",
+			source: JSON.stringify({ continuation: "priya: so, Lisbon?" }),
+		});
+		expect(result).toMatchObject({ agentPrompt: "Priya wants a decision.", source: { continuation: "priya: so, Lisbon?" } });
 	});
 
 	it("taskContributionSchema rejects missing required fields and invalid values", () => {
@@ -171,7 +203,7 @@ describe("schemas", () => {
 
 	it("taskContributionSchema rejects overlong user-authored content", () => {
 		expect(taskContributionSchema.safeParse({ ...baseContribution, title: "x".repeat(USER_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
-		expect(taskContributionSchema.safeParse({ ...baseContribution, materialsMd: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
+		expect(taskContributionSchema.safeParse({ ...baseContribution, agentPrompt: "x".repeat(USER_LONG_TEXT_MAX_LENGTH + 1) }).success).toBe(false);
 	});
 
 	// ── lineupEntrySchema ──────────────────────────────────────────────

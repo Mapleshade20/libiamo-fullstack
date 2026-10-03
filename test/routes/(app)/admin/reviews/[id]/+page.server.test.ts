@@ -27,7 +27,8 @@ vi.mock("$lib/server/db/schema", () => ({
 vi.mock("drizzle-orm", () => {
 	const eq = vi.fn(() => "eq");
 	const and = vi.fn((...args: unknown[]) => args);
-	return { and, eq };
+	const getTableColumns = vi.fn(() => ({}));
+	return { and, eq, getTableColumns };
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────

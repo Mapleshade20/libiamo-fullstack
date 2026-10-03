@@ -3,6 +3,7 @@ import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Search from "@lucide/svelte/icons/search";
 import { SvelteSet } from "svelte/reactivity";
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
+import SendRejectedNotice from "$lib/components/practice/session/SendRejectedNotice.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
 import { buildCommentThread, countComments, getThreadOwner, newCommentMetadata, type ThreadComment } from "$lib/practice/comment-thread";
@@ -123,6 +124,7 @@ function sendComment(text: string, target: ThreadComment | null) {
 	</div>
 
 	<FinishSheet {session} language={props.language} />
+	<SendRejectedNotice {session} language={props.language} />
 </div>
 
 <style>

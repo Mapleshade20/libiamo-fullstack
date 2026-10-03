@@ -379,8 +379,16 @@ describe("chatJson", () => {
 	it("repairs invalid structured output with the raw response and validation errors", async () => {
 		const fetchMock = vi
 			.fn<FetchLike>()
-			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":": "}'))
-			.mockResolvedValueOnce(createChatCompletionResponse('{"reply":"Recovered","terminate":false}'));
+			.mockResolvedValueOnce(
+				createChatCompletionResponse('{"reply":": "}', {}, { usage: { prompt_tokens: 100, completion_tokens: 40, total_tokens: 140 } }),
+			)
+			.mockResolvedValueOnce(
+				createChatCompletionResponse(
+					'{"reply":"Recovered","terminate":false}',
+					{},
+					{ usage: { prompt_tokens: 200, completion_tokens: 30, total_tokens: 230 } },
+				),
+			);
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { chatJson } = await import("$lib/server/llm/client");
@@ -398,6 +406,8 @@ describe("chatJson", () => {
 			expect.objectContaining({ role: "user", content: expect.any(String) }),
 		]);
 		expect(result.requestMessages).toEqual(secondPayload.messages);
+		expect(result.usage).toMatchObject({ promptTokens: 200, completionTokens: 30 });
+		expect(result.repair?.initialUsage).toMatchObject({ promptTokens: 100, completionTokens: 40 });
 	});
 
 	it("rethrows the first structured-output error when retry cannot recover", async () => {

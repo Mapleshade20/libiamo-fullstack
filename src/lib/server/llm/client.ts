@@ -124,6 +124,8 @@ export type JsonChatResponse<T> = ChatResponse & {
 	repair: null | {
 		initialContent: string;
 		initialRaw: unknown;
+		/** What the rejected first completion cost; `usage` is the repair's own. */
+		initialUsage?: ChatUsage;
 		errors: string[];
 	};
 };
@@ -716,6 +718,6 @@ export async function chatJson<T extends z.ZodType>({
 		...repaired,
 		value: repairedParse.value,
 		requestMessages: repairMessages,
-		repair: { initialContent: first.content, initialRaw: first.raw, errors: firstParse.errors },
+		repair: { initialContent: first.content, initialRaw: first.raw, initialUsage: first.usage, errors: firstParse.errors },
 	};
 }

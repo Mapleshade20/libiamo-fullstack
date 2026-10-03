@@ -1,5 +1,6 @@
 <script lang="ts">
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
+import SendRejectedNotice from "$lib/components/practice/session/SendRejectedNotice.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import { resolveScene } from "$lib/practice/scene";
 import BubbleList from "./BubbleList.svelte";
@@ -32,4 +33,5 @@ const title = $derived(scene.group ? groupName || scene.cast.map((person) => per
 		</div>
 	</div>
 	<FinishSheet {session} language={props.language} />
+	<SendRejectedNotice {session} language={props.language} />
 </div>

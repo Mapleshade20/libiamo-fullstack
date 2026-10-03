@@ -24,7 +24,7 @@ function taskData(id: number) {
 describe("canonical detail catalog context", () => {
 	it("locates a current task on its actual catalog leaf", () => {
 		const hall = hallData({ weeklyTasks: [quest(10), quest(11), quest(12), quest(13)] });
-		const preparation = { kind: "quest", key: "daily-13", data: taskData(13) } satisfies QuestHallPreparation;
+		const preparation = { kind: "quest", key: "daily-13", pin: "", data: taskData(13) } satisfies QuestHallPreparation;
 		const result = questHallDetails(hall, preparation);
 		expect(result.hallLocation).toEqual({ view: "prepare", section: "weekly", leaf: 2, task: "weekly-13" });
 		expect(result.initialPreparation).toEqual({ ...preparation, key: "weekly-13" });
@@ -32,7 +32,7 @@ describe("canonical detail catalog context", () => {
 
 	it("keeps historical task details even when today's catalog is empty", () => {
 		const hall = hallData({ dailyTasks: [], weeklyTasks: [] });
-		const preparation = { kind: "quest", key: "daily-999", data: taskData(999) } satisfies QuestHallPreparation;
+		const preparation = { kind: "quest", key: "daily-999", pin: "", data: taskData(999) } satisfies QuestHallPreparation;
 		const result = questHallDetails(hall, preparation);
 		expect(result.hallLocation).toEqual({ view: "prepare", section: "daily", leaf: 1, task: "daily-999" });
 		expect(result.initialPreparation.data).toBe(preparation.data);
@@ -43,6 +43,7 @@ describe("canonical detail catalog context", () => {
 		const preparation = {
 			kind: "translation",
 			key: "translation-3",
+			pin: "",
 			data: {
 				task: {
 					id: 3,

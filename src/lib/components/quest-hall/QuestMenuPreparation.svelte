@@ -55,6 +55,7 @@ let backLabel = $derived(t(lang, returnView === "home" ? "hall.menu.backToRecomm
 				<TaskPreparation
 					task={preparation.data.task}
 					nativeLanguage={preparation.data.nativeLanguage}
+					pin={preparation.pin}
 					{backLabel}
 					onback={(event) => {
 						event.preventDefault();
@@ -66,6 +67,7 @@ let backLabel = $derived(t(lang, returnView === "home" ? "hall.menu.backToRecomm
 					task={preparation.data.task}
 					attempt={preparation.data.attempt}
 					blockedReason={preparation.data.blockedReason}
+					pin={preparation.pin}
 					{form}
 					{lang}
 					{backLabel}

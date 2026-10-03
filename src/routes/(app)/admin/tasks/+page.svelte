@@ -51,7 +51,7 @@ function submitFilters(event: Event) {
 				<Table.Head>ID</Table.Head>
 				<Table.Head>Title</Table.Head>
 				<Table.Head>Language</Table.Head>
-				<Table.Head>Interaction Type</Table.Head>
+				<Table.Head>Type</Table.Head>
 				<Table.Head>UI Variant</Table.Head>
 				<Table.Head>Rotation</Table.Head>
 				<Table.Head>Tags</Table.Head>
@@ -63,12 +63,14 @@ function submitFilters(event: Event) {
 			{#each data.tasks as item}
 				<Table.Row>
 					<Table.Cell>{item.id}</Table.Cell>
-					<Table.Cell class="max-w-[200px] truncate">{item.title}</Table.Cell>
+					<Table.Cell class="title-cell"> <span class="title" title={item.title}>{item.title}</span> </Table.Cell>
 					<Table.Cell><Badge variant="outline">{item.language.toUpperCase()}</Badge></Table.Cell>
 					<Table.Cell>{INTERACTION_TYPE_LABELS[item.interactionType]}</Table.Cell>
 					<Table.Cell>{UI_VARIANT_LABELS[item.ui]}</Table.Cell>
 					<Table.Cell>{item.rotation ? LINEUP_KIND_LABELS[item.rotation] : "—"}</Table.Cell>
-					<Table.Cell class="text-xs text-muted-foreground">{item.tags?.join(', ') ?? ''}</Table.Cell>
+					<Table.Cell class="text-xs text-muted-foreground">
+						<span class="block w-28 truncate" title={item.tags?.join(", ")}>{item.tags?.join(", ") ?? ""}</span>
+					</Table.Cell>
 					<Table.Cell>
 						<span class="rounded-full px-2 py-0.5 text-xs {item.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
 							{item.isActive ? 'Active' : 'Inactive'}
@@ -84,3 +86,52 @@ function submitFilters(event: Event) {
 		<p class="text-center text-muted-foreground">No tasks found.</p>
 	{/if}
 </div>
+
+<style>
+/* A clipped title unfolds rightwards over its neighbours while hovered, then folds back. */
+:global(.title-cell) {
+	position: relative;
+	width: 14rem;
+	max-width: 14rem;
+}
+
+.title {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	border-radius: var(--radius-md);
+}
+
+/* Out of flow while open, so the column keeps its width and the row its height. */
+.title:hover {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	z-index: 2;
+	width: max-content;
+	max-width: 40rem;
+	padding: 0.25rem 0.5rem;
+	translate: 0 -50%;
+	background: var(--background);
+	box-shadow:
+		0 0 0 1px var(--border),
+		0 4px 14px color-mix(in oklab, var(--foreground) 10%, transparent);
+	animation: title-unfold 180ms ease-out;
+}
+
+@keyframes title-unfold {
+	from {
+		clip-path: inset(0 calc(100% - 14rem) 0 0);
+	}
+	to {
+		clip-path: inset(0 0 0 0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.title:hover {
+		animation: none;
+	}
+}
+</style>

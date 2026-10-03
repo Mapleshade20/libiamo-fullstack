@@ -21,7 +21,7 @@ import { getSessionOrFail } from "$lib/server/practice/session";
 import { createNoteFromSelectionQA, createNotesBatch, createNotesFromSelectionBatch } from "$lib/server/review/notes";
 import { listTransferNotes, rateTransferNote, TransferError } from "$lib/server/review/transfer";
 import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task/context";
-import { lineupQuery } from "$lib/task/attempts";
+import { pinQuery } from "$lib/task/attempts";
 import { getBrowserTimezone } from "$lib/time/browser-timezone";
 import { startOfNextLocalDay } from "$lib/time/local-day";
 import type { Actions, PageServerLoad } from "./$types";
@@ -67,7 +67,7 @@ export const load: PageServerLoad = async (event) => {
 	const taskId = parseTaskId(event.params.id);
 	const identity = taskId ? await getTaskIdentity(taskId) : null;
 	if (!identity || identity.interactionType !== "chat") throw error(404, "Task not found");
-	const sessionPath = `${base}/task/${identity.id}/session${lineupQuery(event.url)}`;
+	const sessionPath = `${base}/task/${identity.id}/session${pinQuery(event.url)}`;
 
 	// Get the session this URL shows. If there is none yet, send the learner to the session flow.
 	const shown = await findPracticeSession(user.id, identity.id, await resolveRequestLineup(event, identity));

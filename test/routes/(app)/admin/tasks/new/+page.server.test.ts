@@ -28,6 +28,7 @@ const translationFields = {
 	ui: "translator",
 	difficulty: "2",
 	title: "A letter",
+	description: "Translate a short letter to a friend.",
 	translationContext: "a warm note",
 	referenceParagraphs: "Bonjour.",
 };

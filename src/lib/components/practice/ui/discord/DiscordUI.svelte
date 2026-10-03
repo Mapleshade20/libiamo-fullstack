@@ -1,6 +1,7 @@
 <script lang="ts">
 import FinishSheet from "$lib/components/practice/session/FinishSheet.svelte";
 import { normalizeText } from "$lib/components/practice/session/message-format";
+import SendRejectedNotice from "$lib/components/practice/session/SendRejectedNotice.svelte";
 import { createPracticeSession, type PracticeSurfaceProps } from "$lib/components/practice/session/session.svelte";
 import UnavailableNotice from "$lib/components/practice/session/UnavailableNotice.svelte";
 import { createMemberPool, type DiscordMember } from "$lib/practice/discord-members";
@@ -162,6 +163,7 @@ function reply(message: ChatMessage) {
 	</div>
 
 	<FinishSheet {session} language={props.language} />
+	<SendRejectedNotice {session} language={props.language} />
 </div>
 
 <style>

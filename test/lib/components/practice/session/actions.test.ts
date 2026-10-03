@@ -56,12 +56,17 @@ describe("sendMessage", () => {
 		expect(await sendMessage(1, "Last", "m2")).toEqual({ status: "session_completed" });
 	});
 
-	it("reports server errors with their message, and bare client errors as rejected", async () => {
-		respond({ type: "failure", status: 402, data: { error: "Trial budget exhausted." } });
-		expect(await sendMessage(1, "Hi", "m3")).toEqual({ status: "failed", error: "Trial budget exhausted." });
+	it("reports client errors as rejected and server errors as failed, keeping their message", async () => {
+		for (const status of [400, 402, 403, 409]) {
+			respond({ type: "failure", status, data: { error: "Refused." } });
+			expect(await sendMessage(1, "Hi", "m3")).toEqual({ status: "rejected", error: "Refused." });
+		}
 
 		respond({ type: "failure", status: 403, data: {} });
 		expect(await sendMessage(1, "Hi", "m3")).toEqual({ status: "rejected" });
+
+		respond({ type: "failure", status: 500, data: { error: "Database unavailable." } });
+		expect(await sendMessage(1, "Hi", "m3")).toEqual({ status: "failed", error: "Database unavailable." });
 
 		respond({ type: "failure", status: 503, data: {} });
 		expect(await sendMessage(1, "Hi", "m3")).toEqual({ status: "failed" });

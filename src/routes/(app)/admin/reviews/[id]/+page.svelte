@@ -7,7 +7,6 @@ import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
 import { LANGUAGE_LABELS, type LanguageCode, type UiVariant } from "$lib/constants";
-import { renderMarkdown } from "$lib/text/markdown";
 import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
@@ -92,7 +91,7 @@ function fmtDate(d: Date | null): string {
 
 	{#if c.agentPrompt}
 		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Agent Prompt</Label>
+			<Label class="text-xs text-muted-foreground">Character notes</Label>
 			<p class="text-sm whitespace-pre-wrap">{c.agentPrompt}</p>
 		</div>
 	{/if}
@@ -105,24 +104,6 @@ function fmtDate(d: Date | null): string {
 					<li>{obj}</li>
 				{/each}
 			</ul>
-		</div>
-	{/if}
-
-	{#if c.tags && c.tags.length > 0}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Tags</Label>
-			<div class="flex flex-wrap gap-1">
-				{#each c.tags as tag}
-					<Badge variant="secondary">{tag}</Badge>
-				{/each}
-			</div>
-		</div>
-	{/if}
-
-	{#if !isTranslate && c.materialsMd}
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Background Material</Label>
-			<div class="prose prose-neutral max-w-none text-sm">{@html renderMarkdown(c.materialsMd)}</div>
 		</div>
 	{/if}
 
@@ -152,6 +133,12 @@ function fmtDate(d: Date | null): string {
 					class="text-xs bg-muted rounded px-2 py-1 overflow-auto max-h-40"
 				>{(c.openingState as object) ? JSON.stringify(c.openingState, null, 2) : ""}</pre>
 			</div>
+			{#if c.source?.continuation}
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">The rest of the real conversation</Label>
+					<pre class="text-xs bg-muted rounded px-2 py-1 overflow-auto max-h-40 whitespace-pre-wrap">{c.source.continuation}</pre>
+				</div>
+			{/if}
 		</div>
 	{/if}
 

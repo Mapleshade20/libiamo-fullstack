@@ -8,7 +8,7 @@ import QuestMenuStatusMark from "$lib/components/quest-hall/QuestMenuStatusMark.
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import type { LanguageCode } from "$lib/constants";
-import { INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
+import { difficultyLabelKey, INTERACTION_TYPE_LABELS, UI_VARIANT_LABELS } from "$lib/constants";
 import { t } from "$lib/i18n";
 import { questState } from "$lib/quest-hall/menu";
 import type { TaskPreparationTask } from "$lib/server/practice/preparation";
@@ -21,9 +21,11 @@ interface Props {
 	backLabel?: string;
 	onback?: (event: MouseEvent) => void;
 	simulated?: boolean;
+	/** The page URL's attempt pin (see `pinQuery`), kept by the session and feedback links. */
+	pin?: string;
 }
 
-let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, simulated = false }: Props = $props();
+let { task, nativeLanguage, backHref = `${base}/`, backLabel, onback, simulated = false, pin = "" }: Props = $props();
 
 let objectives = $derived(task.objectives ?? []);
 let progress = $derived(questState(task));
@@ -50,13 +52,6 @@ function closeTranslationHelpModal() {
 	showTranslationHelpModal = false;
 	queueMicrotask(() => expressionsTrigger?.focus());
 }
-
-function difficultyLabel(level: number): string {
-	return (
-		[t(lang, "task.difficulty.beginner"), t(lang, "task.difficulty.intermediate"), t(lang, "task.difficulty.advanced")][level - 1] ??
-		`${t(lang, "hall.difficulty")} ${level}`
-	);
-}
 </script>
 
 <section class="task-preparation" aria-labelledby="task-preparation-title">
@@ -82,7 +77,7 @@ function difficultyLabel(level: number): string {
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
 				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS[task.ui]}</Badge>
 				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.chat}</Badge>
-				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {difficultyLabel(task.difficulty)} </span>
+				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {t(lang, difficultyLabelKey(task.difficulty))} </span>
 			</div>
 
 			<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
@@ -143,22 +138,22 @@ function difficultyLabel(level: number): string {
 						{#if simulated}
 							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled>Bilan simulé</Button>
 						{:else}
-							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback">
+							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback{pin}">
 								{t(lang, "hall.reviewReport")}
 							</Button>
 						{/if}
 					{:else if progress === "reviewing"}
-						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback">
+						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback{pin}">
 							{t(lang, "task.continueEvaluation")}
 						</Button>
 					{:else if progress === "stopped"}
 						<!-- Abuse termination ends the session while still delivering the agent's
 					     parting reply, so the transcript must stay reachable to read it. -->
-						<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+						<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session{pin}">
 							{t(lang, "task.viewConversation")}
 						</Button>
 					{:else if progress === "active" || progress === "ready"}
-						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session">
+						<Button class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session{pin}">
 							{t(lang, progress === "active" ? "task.continuePractice" : "task.startPractice")}
 						</Button>
 					{:else}

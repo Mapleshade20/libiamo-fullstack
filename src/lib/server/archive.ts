@@ -31,9 +31,16 @@ function getTimeGroup(date: Date, now: Date): string {
 	return "Earlier";
 }
 
-/** Pins a task page to the lineup the archived attempt belongs to. */
-function taskHref(path: string, lineupId: number | null) {
-	return lineupId === null ? path : `${path}?lineup=${lineupId}`;
+/**
+ * Pins a task page to the archived attempt: its lineup, and for translations (which a learner can
+ * redo within one lineup) the attempt itself.
+ */
+function taskHref(path: string, lineupId: number | null, attemptId?: number) {
+	const params = new URLSearchParams();
+	if (lineupId !== null) params.set("lineup", String(lineupId));
+	if (attemptId !== undefined) params.set("attempt", String(attemptId));
+	const query = params.toString();
+	return query ? `${path}?${query}` : path;
 }
 
 export interface ArchiveGroup {
@@ -86,7 +93,7 @@ export async function listCompletedActivities(userId: string, now = new Date()):
 			type: "translation",
 			title: attempt.task.title,
 			ui: "translator",
-			href: taskHref(`/task/${attempt.taskId}`, attempt.lineupId),
+			href: taskHref(`/task/${attempt.taskId}`, attempt.lineupId, attempt.id),
 			completedAt: attempt.completedAt,
 			notes: attempt.notes,
 		});

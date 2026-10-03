@@ -1,5 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { base } from "$app/paths";
 import { requireAdmin } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
@@ -14,24 +14,7 @@ export const load: PageServerLoad = async (event) => {
 
 	const [contribution] = await db
 		.select({
-			id: taskContribution.id,
-			language: taskContribution.language,
-			interactionType: taskContribution.interactionType,
-			urgency: taskContribution.urgency,
-			ui: taskContribution.ui,
-			title: taskContribution.title,
-			shortObjective: taskContribution.shortObjective,
-			description: taskContribution.description,
-			objectives: taskContribution.objectives,
-			agentPrompt: taskContribution.agentPrompt,
-			materialsMd: taskContribution.materialsMd,
-			referenceParagraphs: taskContribution.referenceParagraphs,
-			translationContext: taskContribution.translationContext,
-			tags: taskContribution.tags,
-			openingState: taskContribution.openingState,
-			status: taskContribution.status,
-			submittedAt: taskContribution.submittedAt,
-			reviewNotes: taskContribution.reviewNotes,
+			...getTableColumns(taskContribution),
 			contributorName: user.name,
 			contributorEmail: user.email,
 		})

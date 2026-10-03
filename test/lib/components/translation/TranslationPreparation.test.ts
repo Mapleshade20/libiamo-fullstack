@@ -40,4 +40,14 @@ describe("TranslationPreparation", () => {
 		expect(body).toContain('action="/task/17?/retake"');
 		expect(body).toContain('<h2 id="translation-preparation-title"');
 	});
+
+	it("keeps an Archive pin on the workflow link and on both forms", () => {
+		const props = { task, blockedReason: null, lang: "fr" as const, pin: "?lineup=12&attempt=7" };
+		const finished = render(TranslationPreparation, { props: { ...props, attempt: { workflowPhase: "completed" } } });
+		expect(finished.body).toContain('href="/task/17/translation/feedback?lineup=12&amp;attempt=7"');
+		expect(finished.body).toContain('action="/task/17?lineup=12&amp;attempt=7&amp;/retake"');
+
+		const fresh = render(TranslationPreparation, { props: { ...props, attempt: null } });
+		expect(fresh.body).toContain('action="/task/17?lineup=12&amp;attempt=7&amp;/start"');
+	});
 });

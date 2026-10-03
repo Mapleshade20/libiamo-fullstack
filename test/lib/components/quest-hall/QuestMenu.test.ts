@@ -154,6 +154,7 @@ describe("QuestMenu", () => {
 				initialPreparation: {
 					kind: "translation",
 					key: "translation-22",
+					pin: "",
 					data: {
 						task: {
 							id: 22,
@@ -213,6 +214,7 @@ describe("QuestMenu", () => {
 				initialPreparation: {
 					kind: "quest",
 					key: "daily-1",
+					pin: "",
 					data: {
 						nativeLanguage: "fr",
 						task: {

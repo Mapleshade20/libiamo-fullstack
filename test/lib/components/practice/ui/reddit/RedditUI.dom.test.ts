@@ -9,6 +9,7 @@ vi.mock("$lib/components/account/trial-quota", () => ({ refreshTrialQuota: vi.fn
 vi.mock("$lib/components/practice/session/actions", () => ({ postPageAction: vi.fn(), sendMessage: vi.fn(), actionError: () => undefined }));
 
 beforeAll(() => {
+	window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} })) as never;
 	Element.prototype.animate = (() => ({ finished: Promise.resolve(), cancel() {} })) as never;
 });
 

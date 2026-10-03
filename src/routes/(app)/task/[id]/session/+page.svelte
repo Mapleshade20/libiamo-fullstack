@@ -10,7 +10,7 @@ import IMessageUI from "$lib/components/practice/ui/imessage/IMessageUI.svelte";
 import MailUI from "$lib/components/practice/ui/mail/MailUI.svelte";
 import RedditUI from "$lib/components/practice/ui/reddit/RedditUI.svelte";
 import type { ChatUiVariant } from "$lib/constants";
-import { lineupQuery } from "$lib/task/attempts";
+import { pinQuery } from "$lib/task/attempts";
 
 const SURFACES: Record<ChatUiVariant, Component<PracticeSurfaceProps>> = {
 	discord: DiscordUI,
@@ -23,7 +23,7 @@ const SURFACES: Record<ChatUiVariant, Component<PracticeSurfaceProps>> = {
 let { data } = $props();
 const Surface = $derived(SURFACES[data.task.ui as ChatUiVariant]);
 // Links keep a pinned `?lineup=`, so feedback and details show the same attempt as this page.
-const pin = $derived(lineupQuery(page.url));
+const pin = $derived(pinQuery(page.url));
 </script>
 
 <ConversationReadReceipt receipt={data.readReceipt} />

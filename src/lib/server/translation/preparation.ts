@@ -5,7 +5,7 @@ import { NATIVE_LANGUAGE_CODES } from "$lib/constants";
 import { requireUser } from "$lib/server/auth/authz";
 import { parseTaskId, resolveRequestLineup } from "$lib/server/task/context";
 import { findTranslationAttempt, getTranslationTask } from "$lib/server/translation/workflow";
-import { type AttemptContext, lineupQuery } from "$lib/task/attempts";
+import { type AttemptContext, pinQuery } from "$lib/task/attempts";
 
 export type TranslationPreparationBlockedReason = "missing-native-language" | "same-language" | null;
 
@@ -64,10 +64,11 @@ export async function requireTranslationAttempt(event: {
 	const id = parseTaskId(event.params.id);
 	const task = id ? await getTranslationTask(id, user.activeLanguage) : undefined;
 	if (!task) throw error(404, "Task not found");
-	const detailsPath = `${base}/task/${task.id}${lineupQuery(event.url)}`;
+	const pin = pinQuery(event.url);
+	const detailsPath = `${base}/task/${task.id}${pin}`;
 	if (!user.nativeLanguage) throw redirect(303, detailsPath);
 	const context = await resolveRequestLineup(event, { id: task.id, interactionType: "translate", language: task.language });
 	const attempt = await findTranslationAttempt({ userId: user.id, taskId: task.id, promptLanguage: user.nativeLanguage, context });
 	if (!attempt) throw redirect(303, detailsPath);
-	return { user, task, attempt, detailsPath, workflowPath: `${base}/task/${task.id}/translation`, pin: lineupQuery(event.url) };
+	return { user, task, attempt, detailsPath, workflowPath: `${base}/task/${task.id}/translation`, pin };
 }

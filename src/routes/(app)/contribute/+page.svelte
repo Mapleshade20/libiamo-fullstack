@@ -77,7 +77,14 @@ function fillFromJson() {
 				<p class="text-sm text-muted-foreground">
 					Paste exported task JSON to fill the editor. You can edit everything before submitting for review.
 				</p>
-				<Textarea bind:ref={importInput} bind:value={importJsonText} rows={8} placeholder={importPlaceholder} aria-label="Task JSON" />
+				<Textarea
+					class="h-40 field-sizing-fixed resize-y"
+					bind:ref={importInput}
+					bind:value={importJsonText}
+					rows={8}
+					placeholder={importPlaceholder}
+					aria-label="Task JSON"
+				/>
 				{#if importFeedback}
 					<p class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{importFeedback}</p>
 				{/if}

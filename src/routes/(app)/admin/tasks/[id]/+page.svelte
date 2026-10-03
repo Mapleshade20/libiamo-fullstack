@@ -99,7 +99,7 @@ function confirmStatusChange() {
 				class="space-y-2"
 			>
 				<p class="text-sm text-muted-foreground">Paste exported JSON to replace this task's fields in place.</p>
-				<Textarea name="taskJson" rows={8} placeholder={taskExportJson} required />
+				<Textarea class="h-40 field-sizing-fixed resize-y" name="taskJson" rows={8} placeholder={taskExportJson} required />
 				<Button type="submit" variant="secondary">Import JSON</Button>
 			</form>
 		</div>
@@ -110,6 +110,7 @@ function confirmStatusChange() {
 		form={saveForm}
 		action="?/save"
 		submitLabel="Save Changes"
+		identityLocked={data.identityLocked}
 		resetKey={`${data.task.updatedAt}:${data.rotation}`}
 	/>
 

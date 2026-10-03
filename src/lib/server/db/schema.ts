@@ -109,6 +109,7 @@ export const task = pgTable(
 			sql`CASE ${t.interactionType}
 				WHEN 'chat' THEN ${t.urgency} IS NOT NULL AND ${t.openingState} IS NOT NULL AND ${t.referenceParagraphs} IS NULL AND ${t.translationContext} IS NULL
 				ELSE ${t.urgency} IS NULL AND ${t.maxTurns} IS NULL AND ${t.agentPrompt} IS NULL AND ${t.openingState} IS NULL
+					AND ${t.referenceParagraphs} IS NOT NULL AND ${t.translationContext} IS NOT NULL
 					AND jsonb_typeof(${t.referenceParagraphs}) = 'array' AND jsonb_array_length(${t.referenceParagraphs}) > 0
 					AND length(btrim(${t.translationContext})) > 0
 			END`,
@@ -117,7 +118,10 @@ export const task = pgTable(
 );
 
 // ── taskContribution ──────────────────────────────────────────────────
-/** A learner-proposed task awaiting review. Its content columns mirror `task`. */
+/**
+ * A learner-proposed task awaiting review. Its content columns mirror `task`, minus the admin-only
+ * extras (tags, background material) the reviewing admin adds (`taskContributionSchema`).
+ */
 export const taskContribution = pgTable(
 	"task_contribution",
 	{
@@ -130,12 +134,11 @@ export const taskContribution = pgTable(
 		shortObjective: text("short_objective"),
 		description: text("description"),
 		objectives: text("objectives").array(),
-		materialsMd: text("materials_md"),
-		tags: text("tags").array(),
 
 		urgency: urgencyEnum("urgency"),
 		agentPrompt: text("agent_prompt"),
 		openingState: jsonb("opening_state").$type<Record<string, unknown>>(),
+		source: jsonb("source").$type<TaskSource>(),
 
 		referenceParagraphs: jsonb("reference_paragraphs").$type<string[]>(),
 		translationContext: text("translation_context"),

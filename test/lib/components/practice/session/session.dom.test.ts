@@ -105,10 +105,18 @@ describe("createPracticeSession", () => {
 
 	it("gives the draft back when the server rejects a message", async () => {
 		const session = start(surfaceProps({ session: persistedSession([]) }));
-		mocks.sendMessage.mockResolvedValue({ status: "rejected" });
+		mocks.sendMessage.mockResolvedValue({ status: "rejected", error: "Session not in progress" });
 
 		expect(await session.send("hello")).toBe(false);
 		expect(session.messages).toEqual([]);
+		expect(session.isWaitingRetry).toBe(false);
+		expect(session.rejection?.message).toBe("Session not in progress");
+		// The refusal may mean the session ended elsewhere, so the snapshot is re-read.
+		expect(mocks.invalidate).toHaveBeenCalledWith("app:practice-session");
+
+		const first = session.rejection?.key;
+		await session.send("hello");
+		expect(session.rejection?.key).not.toBe(first);
 	});
 
 	it("hides a failed reply while its retry is in flight and resends the original text and target", async () => {
