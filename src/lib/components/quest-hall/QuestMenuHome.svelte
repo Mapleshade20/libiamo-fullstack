@@ -206,12 +206,7 @@ function itemObjective(item: QuestMenuItem): string | null {
 	transition:
 		color 180ms ease,
 		background-color 180ms ease,
-		box-shadow 180ms ease,
-		transform 180ms ease;
-}
-
-.recommendation-card a :global(svg) {
-	transition: transform 180ms ease;
+		box-shadow 180ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -219,11 +214,6 @@ function itemObjective(item: QuestMenuItem): string | null {
 		color: var(--menu-sheet);
 		background: var(--menu-wine);
 		box-shadow: 0 6px 14px color-mix(in oklab, var(--menu-wine) 22%, transparent);
-		transform: translateY(-2px);
-	}
-
-	.recommendation-card a:hover :global(svg) {
-		transform: translateX(3px);
 	}
 }
 
@@ -338,14 +328,8 @@ function itemObjective(item: QuestMenuItem): string | null {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.recommendation-card a,
-	.recommendation-card a :global(svg) {
+	.recommendation-card a {
 		transition: none;
-	}
-
-	.recommendation-card a:hover,
-	.recommendation-card a:hover :global(svg) {
-		transform: none;
 	}
 }
 </style>
