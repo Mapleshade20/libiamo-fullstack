@@ -1,12 +1,19 @@
 <script lang="ts">
+import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import Accordion from "$lib/components/common/Accordion.svelte";
 import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
+import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
+import Select from "$lib/components/common/Select.svelte";
 import { formatLabTime, formatLatency, ORIGIN_LABELS } from "$lib/components/llm/format";
 import MessagesView from "$lib/components/llm/MessagesView.svelte";
 import OutputView from "$lib/components/llm/OutputView.svelte";
 import ValueView from "$lib/components/llm/ValueView.svelte";
+import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
+import { Textarea } from "$lib/components/ui/textarea";
 import { getDisplayClock } from "$lib/time/display-clock";
 
 let { data, form } = $props();
@@ -15,19 +22,14 @@ const trace = $derived(data.trace);
 let confirmDelete = $state(false);
 let deleting = $state(false);
 let deleteForm: HTMLFormElement | null = $state(null);
-
-const fieldClass =
-	"w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const buttonClass =
-	"inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring";
 </script>
 
 <svelte:head> <title>{data.recipe?.title ?? trace.recipeId} · LLM Lab · Libiamo</title> </svelte:head>
 
 <div class="space-y-8">
 	<header class="space-y-2">
-		<a href="{base}/admin/lab/traces" class="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">← Traces</a>
-		<h1 class="text-3xl">{data.recipe?.title ?? trace.recipeId}</h1>
+		<Button href="{base}/admin/lab/traces" variant="ghost" size="sm" class="-ml-3"><ArrowLeft aria-hidden="true" />Traces</Button>
+		<h1>{data.recipe?.title ?? trace.recipeId}</h1>
 		<dl class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
 			<div>
 				<dt class="inline">When</dt>
@@ -87,25 +89,23 @@ const buttonClass =
 			</div>
 		</dl>
 		{#if trace.variant && (trace.variant.slots || trace.variant.options || trace.variant.messagesEdited)}
-			<p class="text-sm text-[#8a5a1f]">
+			<p class="text-sm text-warning">
 				Deviates from the defaults:
 				{[trace.variant.slots ? `slots ${Object.keys(trace.variant.slots).join(", ")}` : null, trace.variant.options ? `options ${JSON.stringify(trace.variant.options)}` : null, trace.variant.messagesEdited ? "hand-edited messages" : null].filter(Boolean).join(" · ")}
 			</p>
 		{/if}
 		<div class="flex flex-wrap items-center gap-2 pt-2">
-			<a href="{base}/admin/lab/playground?trace={trace.id}" class={buttonClass}>Open in Playground</a>
+			<Button href="{base}/admin/lab/playground?trace={trace.id}" variant="secondary">Open in Playground</Button>
 			{#if trace.runId === null}
-				<button type="button" class="{buttonClass} text-destructive" onclick={() => (confirmDelete = true)}>Delete trace</button>
+				<Button variant="destructive" aria-haspopup="dialog" onclick={() => (confirmDelete = true)}>Delete trace</Button>
 			{:else}
-				<a
-					href="{base}/admin/lab/runs/{trace.runId}"
-					class="inline-flex min-h-11 items-center px-2 text-sm text-muted-foreground underline underline-offset-2"
-					>Part of run #{trace.runId}; delete the run to remove it</a
+				<Button href="{base}/admin/lab/runs/{trace.runId}" variant="link" class="ml-2 text-muted-foreground"
+					>Part of run #{trace.runId}; delete the run to remove it</Button
 				>
 			{/if}
 		</div>
 		{#if form?.deleteError}
-			<p class="text-sm text-destructive" role="alert">{form.deleteError}</p>
+			<p class="field-error-message" role="alert">{form.deleteError}</p>
 		{/if}
 		<form
 			bind:this={deleteForm}
@@ -136,31 +136,35 @@ const buttonClass =
 	</header>
 
 	<section aria-labelledby="output-heading" class="space-y-3">
-		<h2 id="output-heading" class="font-serif text-2xl">Output</h2>
+		<h2 id="output-heading">Output</h2>
 		<OutputView recipeId={trace.recipeId} output={trace.output} outputText={trace.outputText} error={trace.error} />
 	</section>
 
 	<div class="grid gap-6 lg:grid-cols-2">
-		<section aria-labelledby="rate-heading" class="space-y-3 rounded-lg border border-border p-4">
-			<h2 id="rate-heading" class="font-serif text-xl">Rate</h2>
+		<section aria-labelledby="rate-heading" class="space-y-4 rounded-xl border border-border bg-card p-5">
+			<h2 id="rate-heading">Rate</h2>
 			<form method="POST" action="?/rate" use:enhance={() => async ({ update }) => update({ reset: false })} class="space-y-3">
-				<fieldset class="flex flex-wrap gap-2">
-					<legend class="sr-only">Vote</legend>
-					{#each [{ value: 1, label: "👍 Good" }, { value: -1, label: "👎 Bad" }, { value: 0, label: "Note only" }] as option}
-						<label
-							class="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 text-sm has-[:checked]:border-foreground/40 has-[:checked]:bg-secondary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
-						>
-							<input class="sr-only" type="radio" name="vote" value={option.value} checked={(data.myRating?.vote ?? 0) === option.value}>
-							{option.label}
-						</label>
-					{/each}
-				</fieldset>
-				<textarea name="note" rows="3" maxlength="2000" class={fieldClass} placeholder="What is good or wrong here?" aria-label="Note">
-					{data.myRating?.note ?? ""}
-				</textarea>
-				<button type="submit" class={buttonClass}>Save rating</button>
+				<SegmentedControl
+					label="Vote"
+					name="vote"
+					value={String(data.myRating?.vote ?? 0)}
+					items={[
+						{ value: "1", label: "Good" },
+						{ value: "-1", label: "Bad" },
+						{ value: "0", label: "Note only" },
+					]}
+				/>
+				<Textarea
+					name="note"
+					rows={3}
+					maxlength={2000}
+					value={data.myRating?.note ?? ""}
+					placeholder="What is good or wrong here?"
+					aria-label="Note"
+				/>
+				<Button type="submit" variant="secondary">Save rating</Button>
 				{#if form?.rateError}
-					<p class="text-sm text-destructive" role="alert">{form.rateError}</p>
+					<p class="field-error-message" role="alert">{form.rateError}</p>
 				{/if}
 				{#if form?.rated}
 					<p class="text-sm text-muted-foreground" role="status">Saved.</p>
@@ -170,7 +174,10 @@ const buttonClass =
 				<ul class="space-y-2 border-t border-border pt-3 text-sm">
 					{#each trace.ratings as rating}
 						<li>
-							<span class="font-medium">{rating.userName}</span> {rating.vote > 0 ? "👍" : rating.vote < 0 ? "👎" : ""}
+							<span class="font-medium">{rating.userName}</span>
+							{#if rating.vote !== 0}
+								<Badge variant={rating.vote > 0 ? "success" : "destructive"}>{rating.vote > 0 ? "Good" : "Bad"}</Badge>
+							{/if}
 							<span class="text-muted-foreground">{rating.note}</span>
 						</li>
 					{/each}
@@ -178,31 +185,32 @@ const buttonClass =
 			{/if}
 		</section>
 
-		<section aria-labelledby="pin-heading" class="space-y-3 rounded-lg border border-border p-4">
-			<h2 id="pin-heading" class="font-serif text-xl">Pin to a dataset</h2>
+		<section aria-labelledby="pin-heading" class="space-y-4 rounded-xl border border-border bg-card p-5">
+			<h2 id="pin-heading">Pin to a dataset</h2>
 			<p class="text-sm text-muted-foreground">Copies this call's input into a dataset of {trace.recipeId} cases, kept until removed.</p>
 			<form method="POST" action="?/pin" use:enhance class="space-y-3">
 				{#if data.datasets.length}
-					<label class="grid gap-1 text-sm">
-						Dataset
-						<select name="datasetId" class="{fieldClass} h-11">
-							{#each data.datasets as dataset}
-								<option value={dataset.id}>{dataset.name}</option>
-							{/each}
-						</select>
-					</label>
+					<div class="flex flex-col gap-1.5">
+						<label for="pin-dataset" class="text-sm font-medium">Dataset</label>
+						<Select
+							id="pin-dataset"
+							name="datasetId"
+							value={String(data.datasets[0].id)}
+							items={data.datasets.map((dataset) => ({ value: String(dataset.id), label: dataset.name }))}
+						/>
+					</div>
 				{/if}
-				<label class="grid gap-1 text-sm">
-					{data.datasets.length ? "Or create a new dataset" : "New dataset name"}
-					<input name="newDatasetName" class="{fieldClass} h-11" placeholder="e.g. notes-task-leakage" required={data.datasets.length === 0}>
-				</label>
-				<label class="grid gap-1 text-sm">
-					Case label
-					<input name="label" class="{fieldClass} h-11" placeholder="What makes this case interesting">
-				</label>
-				<button type="submit" class={buttonClass}>Pin case</button>
+				<div class="flex flex-col gap-1.5">
+					<label for="pin-new-dataset" class="text-sm font-medium">{data.datasets.length ? "Or create a new dataset" : "New dataset name"}</label>
+					<Input id="pin-new-dataset" name="newDatasetName" placeholder="e.g. notes-task-leakage" required={data.datasets.length === 0} />
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label for="pin-label" class="text-sm font-medium">Case label</label>
+					<Input id="pin-label" name="label" placeholder="What makes this case interesting" />
+				</div>
+				<Button type="submit" variant="secondary">Pin case</Button>
 				{#if form?.pinError}
-					<p class="text-sm text-destructive" role="alert">{form.pinError}</p>
+					<p class="field-error-message" role="alert">{form.pinError}</p>
 				{/if}
 				{#if form?.pinnedTo}
 					<p class="text-sm" role="status">
@@ -214,7 +222,7 @@ const buttonClass =
 	</div>
 
 	<section aria-labelledby="request-heading" class="space-y-3">
-		<h2 id="request-heading" class="font-serif text-2xl">Request</h2>
+		<h2 id="request-heading">Request</h2>
 		<MessagesView messages={trace.messages} />
 		{#if Object.keys(trace.options).length}
 			<p class="text-sm text-muted-foreground">Options: <code>{JSON.stringify(trace.options)}</code></p>
@@ -223,7 +231,7 @@ const buttonClass =
 
 	{#if trace.attempts.length > 1 || trace.attempts.some((attempt) => attempt.errors.length)}
 		<section aria-labelledby="attempts-heading" class="space-y-3">
-			<h2 id="attempts-heading" class="font-serif text-2xl">Attempts</h2>
+			<h2 id="attempts-heading">Attempts</h2>
 			{#each trace.attempts as attempt}
 				<Accordion
 					title={`${attempt.stage === "repair" ? "Repair" : "Initial"} response${attempt.errors.length ? ` · ${attempt.errors.length} error(s)` : ""}`}
@@ -242,7 +250,7 @@ const buttonClass =
 	{/if}
 
 	<section aria-labelledby="input-heading" class="space-y-3">
-		<h2 id="input-heading" class="font-serif text-2xl">Recipe input</h2>
+		<h2 id="input-heading">Recipe input</h2>
 		<Accordion title="Structured input the recipe built its messages from">
 			<div class="text-sm"><ValueView value={trace.input} /></div>
 		</Accordion>

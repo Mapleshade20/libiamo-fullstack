@@ -153,8 +153,8 @@ $effect(() => {
 	<PracticeCapsule status={practiceStatus} {generatingLabel} {failedLabel} {readyLabel} {retryLabel} onretry={onretryPractice} />
 
 	<header class="mb-6 border-b border-border pb-5">
-		<p class="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Stage 2</p>
-		<h1 class="font-serif text-3xl tracking-tight" tabindex="-1">{title}</h1>
+		<p class="mb-2 text-xs font-medium text-muted-foreground">Stage 2</p>
+		<h1 tabindex="-1">{title}</h1>
 	</header>
 
 	<div class="space-y-6">
@@ -162,20 +162,17 @@ $effect(() => {
 			{@const flagged = draft.unresolvedOrdinals.includes(i)}
 			<article class="grid gap-4 border-b border-border pb-6 last:border-0">
 				<div>
-					<p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{sourceLabel} {i + 1}</p>
-					<p class="rounded-xl border border-border/70 bg-muted/35 px-4 py-3 font-prose text-[0.95rem] leading-relaxed break-words">{source}</p>
+					<p class="mb-2 text-xs font-medium text-muted-foreground">{sourceLabel} {i + 1}</p>
+					<p class="rounded-xl border border-border/70 bg-muted/35 px-4 py-3 font-prose text-base leading-relaxed break-words">{source}</p>
 				</div>
 				<div>
-					<label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground" for="second-draft-{i}">
-						{yourDraftLabel}
-					</label>
+					<label class="mb-2 block text-xs font-medium text-muted-foreground" for="second-draft-{i}"> {yourDraftLabel} </label>
 					<textarea
 						id="second-draft-{i}"
 						data-second-draft
 						data-feedback-name={String(i)}
 						maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
-						class="w-full min-h-[7rem] resize-none overflow-hidden rounded-xl border bg-card px-4 py-3 font-inter-stack text-[0.95rem] leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40
-							{flagged ? 'border-amber-400 ring-2 ring-amber-300/40' : 'border-border'}"
+						class="w-full min-h-[7rem] resize-none overflow-hidden rounded-xl border bg-card px-4 py-3 font-inter-stack text-base leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 {flagged ?'border-warning ring-2 ring-warning/25' : 'border-border'}"
 						value={draft.paragraphs[i] ?? ""}
 						readonly={finished || submitting}
 						oninput={(e) => {
@@ -192,9 +189,9 @@ $effect(() => {
 
 	<footer class="space-y-4 border-t border-border pt-6">
 		{#if providerErrorBody}
-			<div class="flex gap-3 border-l-2 border-amber-600 bg-amber-50/55 px-4 py-3" role="alert">
-				<AlertCircle class="mt-0.5 size-4 shrink-0 text-amber-800" />
-				<p class="text-sm leading-relaxed text-amber-950">{providerErrorBody}</p>
+			<div class="flex gap-3 border-l-2 border-warning bg-warning/[0.08] px-4 py-3" role="alert">
+				<AlertCircle class="mt-0.5 size-4 shrink-0 text-warning" />
+				<p class="text-sm leading-relaxed text-foreground">{providerErrorBody}</p>
 			</div>
 		{/if}
 
@@ -207,28 +204,19 @@ $effect(() => {
 				{#if feedbackMounted && displayCommentary}
 					{#key feedbackWipeKey}
 						<div
-							class="feedback-wipe mb-1 flex gap-3 border-l-2 px-4 py-3
-								{displayTone === 'unresolved'
-								? 'border-[#c9a4a4] bg-red-50/45'
-								: 'border-[#8faf8f] bg-emerald-50/40'}"
+							class="feedback-wipe mb-1 flex gap-3 border-l-2 px-4 py-3 {displayTone ==='unresolved'
+								? 'border-destructive/40 bg-destructive/[0.06]'
+								: 'border-success/40 bg-success/[0.07]'}"
 							role="status"
 						>
 							{#if displayTone === "unresolved"}
-								<AlertCircle class="mt-0.5 size-4 shrink-0 text-red-700" />
+								<AlertCircle class="mt-0.5 size-4 shrink-0 text-destructive" />
 							{:else}
-								<CheckCircle2 class="mt-0.5 size-4 shrink-0 text-emerald-800" />
+								<CheckCircle2 class="mt-0.5 size-4 shrink-0 text-success" />
 							{/if}
 							<div class="min-w-0">
-								<p
-									class="mb-1 text-[10px] font-semibold tracking-[0.14em] uppercase
-										{displayTone === 'unresolved' ? 'text-red-800' : 'text-emerald-900'}"
-								>
-									{feedbackLabel}
-								</p>
-								<p
-									class="font-prose text-sm leading-relaxed
-										{displayTone === 'unresolved' ? 'text-red-950' : 'text-emerald-950'}"
-								>
+								<p class="mb-1 text-xs font-medium {displayTone ==='unresolved' ? 'text-destructive' : 'text-success'}">{feedbackLabel}</p>
+								<p class="font-prose text-sm leading-relaxed {displayTone ==='unresolved' ? 'text-foreground' : 'text-foreground'}">
 									{displayCommentary}
 								</p>
 							</div>
@@ -250,7 +238,7 @@ $effect(() => {
 								<p class="text-xs text-muted-foreground">{skipConfirmBody}</p>
 							</div>
 							<div class="flex shrink-0 gap-2">
-								<Button size="sm" variant="outline" onclick={() => (confirmSkip = false)}>{cancelLabel}</Button>
+								<Button size="sm" variant="secondary" onclick={() => (confirmSkip = false)}>{cancelLabel}</Button>
 								<Button
 									size="sm"
 									variant="destructive"

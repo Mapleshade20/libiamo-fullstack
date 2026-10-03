@@ -2,6 +2,8 @@
 import { goto } from "$app/navigation";
 import { base } from "$app/paths";
 import { page } from "$app/state";
+import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
+import Select from "$lib/components/common/Select.svelte";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 
 let { children, data } = $props();
@@ -17,8 +19,12 @@ let studyLanguage = $derived(selectedLanguage === "all" ? (data.user.activeLangu
 let studyHref = $derived(`${base}/review?language=${studyLanguage}`);
 let manageHref = $derived(selectedLanguage === "all" ? `${base}/review/manage` : `${base}/review/manage?language=${selectedLanguage}`);
 
-function changeLanguage(event: Event) {
-	const language = (event.currentTarget as HTMLSelectElement).value;
+let languageItems = $derived([
+	...(isManagePage ? [{ value: "all", label: "All languages" }] : []),
+	...LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] })),
+]);
+
+function changeLanguage(language: string) {
 	const url = new URL(page.url);
 	url.search = "";
 	if (isManagePage) {
@@ -32,40 +38,17 @@ function changeLanguage(event: Event) {
 
 <div class="space-y-7">
 	<header class="review-route-header flex flex-wrap items-center justify-between gap-4">
-		<h1 class="font-serif text-3xl leading-none">Review</h1>
+		<h1>Review</h1>
 		<div class="ml-auto flex max-w-full min-w-0 items-center gap-2 sm:gap-3">
-			<label class="sr-only" for="review-language">Review language</label>
-			<select
-				id="review-language"
-				value={selectedLanguage}
-				class="h-[1.875rem] min-w-0 rounded-full border border-border bg-card px-3 text-xs font-semibold uppercase tracking-wider text-foreground shadow-sm"
-				onchange={changeLanguage}
-			>
-				{#if isManagePage}
-					<option value="all">All languages</option>
-				{/if}
-				{#each LANGUAGE_CODES as code}
-					<option value={code}>{LANGUAGE_LABELS[code]}</option>
-				{/each}
-			</select>
-			<nav class="inline-flex h-[1.875rem] shrink-0 rounded-full border border-border bg-card p-0.5 text-sm shadow-sm" aria-label="Review pages">
-				<a
-					href={studyHref}
-					aria-current={isManagePage ? undefined : "page"}
-					class="inline-flex h-full items-center rounded-full px-4 {isManagePage
-					? 'text-muted-foreground transition-colors hover:text-foreground'
-					: 'bg-foreground font-medium text-background'}"
-					>Study</a
-				>
-				<a
-					href={manageHref}
-					aria-current={isManagePage ? "page" : undefined}
-					class="inline-flex h-full items-center rounded-full px-4 {isManagePage
-					? 'bg-foreground font-medium text-background'
-					: 'text-muted-foreground transition-colors hover:text-foreground'}"
-					>Manage</a
-				>
-			</nav>
+			<Select items={languageItems} value={selectedLanguage} variant="ghost" aria-label="Review language" onValueChange={changeLanguage} />
+			<SegmentedControl
+				label="Review pages"
+				value={isManagePage ? "manage" : "study"}
+				items={[
+					{ value: "study", label: "Study", href: studyHref },
+					{ value: "manage", label: "Manage", href: manageHref },
+				]}
+			/>
 		</div>
 	</header>
 

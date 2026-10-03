@@ -9,6 +9,7 @@ import { base } from "$app/paths";
 import { PRACTICE_NOTES_DEPENDENCY } from "$lib/app/load-dependencies";
 import { refreshTrialQuota } from "$lib/components/account/trial-quota";
 import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import Notice from "$lib/components/common/Notice.svelte";
 import ConversationReadReceipt from "$lib/components/practice/ConversationReadReceipt.svelte";
 import SelectionActionBubble from "$lib/components/practice/feedback/SelectionActionBubble.svelte";
 import TutorQuestionPanel from "$lib/components/practice/feedback/TutorQuestionPanel.svelte";
@@ -23,6 +24,7 @@ import {
 import type { LearningSelection, SelectionAppendRequest } from "$lib/components/practice/feedback/types";
 import TransferPass from "$lib/components/review/TransferPass.svelte";
 import StreakCompletion from "$lib/components/streak/StreakCompletion.svelte";
+import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
 import type { LanguageCode } from "$lib/constants";
@@ -304,7 +306,7 @@ function stripMarkTags(value: string): string {
 
 // Grade color helper
 function gradeColor(grade: "A" | "B" | "C"): string {
-	return grade === "A" ? "bg-green-500" : grade === "B" ? "bg-amber-500" : "bg-red-500";
+	return grade === "A" ? "bg-success" : grade === "B" ? "bg-warning" : "bg-destructive";
 }
 </script>
 
@@ -318,27 +320,26 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<meta name="description" content="Review feedback, corrections, and tutor comments for your completed practice session.">
 </svelte:head>
 
-<div class="min-h-screen bg-[#fdfcf9] text-[#2a2520]">
+<div class="min-h-screen">
 	<!-- Header -->
-	<div data-selection-ignore class="border-b border-[#e8e3db] bg-[#fdfcf9]/80 backdrop-blur-sm sticky top-0 z-10">
-		<div class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+	<div data-selection-ignore class="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur-sm">
+		<div class="mx-auto max-w-7xl px-4 py-3 sm:px-6">
 			<div class="flex items-center justify-between gap-4">
 				{#if data.evaluationPhase === "completed"}
-					<a href={detailsHref} class="group flex items-center gap-2 text-[#6b6560] transition-colors hover:text-[#2a2520]">
-						<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" />
-						<span class="hidden text-sm font-medium uppercase tracking-wide sm:inline">Back to Task</span>
-					</a>
+					<Button href={detailsHref} variant="ghost" class="-ml-3 text-muted-foreground" aria-label="Back to task">
+						<ArrowLeft aria-hidden="true" />
+						<span class="hidden sm:inline">Back to task</span>
+					</Button>
 				{:else}
 					<!-- Like translation, an unfinished evaluation offers no way back to the task, only forward. -->
 					<span aria-hidden="true"></span>
 				{/if}
 				<div class="min-w-0 flex items-center gap-3">
-					<h1 class="min-w-0 truncate text-base">{data.taskTitle}</h1>
+					<h1 class="min-w-0 truncate font-sans text-base font-medium tracking-normal">{data.taskTitle}</h1>
 					<Button
 						href="{base}/task/{data.taskId}/session"
-						variant="outline"
+						variant="secondary"
 						size="icon-sm"
-						class="border-[#d8d0c5] bg-white/70 text-[#2a2520] hover:bg-[#f5f2ed]"
 						aria-label="Open practice session"
 						title="Open practice session"
 					>
@@ -352,10 +353,10 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 	<!-- Main content -->
 	<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
 		{#if generationError}
-			<div class="mb-8 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-				<p class="text-red-800 mb-4">{generationError}</p>
-				<Button onclick={triggerGeneration} variant="outline">Retry</Button>
-			</div>
+			<Notice tone="danger" role="alert" class="mb-8">
+				<p>{generationError}</p>
+				<Button onclick={triggerGeneration} variant="secondary" size="sm" class="mt-2">Retry</Button>
+			</Notice>
 		{/if}
 
 		{#if data.evaluationPhase === "transfer"}
@@ -379,29 +380,27 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			<div class="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-3">
 				<!-- Left: Conversation History (2/3 on wide) -->
 				<div class="min-w-0 space-y-8 lg:col-span-2">
-					<h2 class="text-2xl font-serif text-[#2a2520] mb-6">Conversation Review</h2>
+					<h2>Conversation review</h2>
 
 					{#each data.conversation.chains as chain, chainIdx}
 						<div class="relative min-w-0">
 							<!-- Chain label -->
 							<div class="mb-4 flex items-center gap-3">
-								<div class="h-px flex-1 bg-[#e8e3db]"></div>
-								<span class="text-xs font-bold uppercase tracking-widest text-[#9b8f85]">{chain.label}</span>
-								<div class="h-px flex-1 bg-[#e8e3db]"></div>
+								<div class="h-px flex-1 bg-border"></div>
+								<span class="text-xs font-medium text-muted-foreground">{chain.label}</span>
+								<div class="h-px flex-1 bg-border"></div>
 							</div>
 
 							<!-- Messages in chain -->
-							<div class="relative border-l-2 border-[#e8e3db] pl-4 text-sm sm:pl-6">
+							<div class="relative border-l-2 border-border pl-4 text-sm sm:pl-6">
 								{#each chain.messages as message}
 									<div class="mb-6 relative">
 										<!-- Author badge -->
 										<div class="mb-2 flex items-center gap-2">
-											<span
-												class="inline-block rounded-full px-3 py-1 text-xs font-medium {message.role === 'user' ? 'bg-[#4a7c59]/10 text-[#4a7c59]' : message.role === 'agent' ? 'bg-[#6b6560]/10 text-[#6b6560]' : 'bg-[#9b8f85]/10 text-[#9b8f85]'}"
+											<Badge variant={message.role === "user" ? "default" : message.role === "agent" ? "secondary" : "outline"}
+												>{message.author}</Badge
 											>
-												{message.author}
-											</span>
-											<span class="text-xs text-[#9b8f85]">#{message.seqId}</span>
+											<span class="text-xs text-muted-foreground">#{message.seqId}</span>
 										</div>
 
 										<!-- Message content -->
@@ -418,16 +417,16 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 												{#if annotation}
 													<AnnotatedMessage {annotation} messageId={message.seqId} onAnnotationClick={handleAnnotationClick} />
 												{:else if isGenerating}
-													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+													<div class="rounded-xl border border-border bg-card p-4">
 														<p class="[overflow-wrap:anywhere]">{message.text}</p>
 													</div>
 												{:else}
-													<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+													<div class="rounded-xl border border-border bg-card p-4">
 														<p class="[overflow-wrap:anywhere]">{message.text}</p>
 													</div>
 												{/if}
 											{:else}
-												<div class="rounded-lg border border-[#e8e3db] bg-[#f5f2ed] p-4">
+												<div class="rounded-xl bg-foreground/[0.04] p-4">
 													<p class="[overflow-wrap:anywhere]">{message.text}</p>
 												</div>
 											{/if}
@@ -442,13 +441,13 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 				<!-- Right: Comments (1/3 on wide) -->
 				<div class="min-w-0 lg:col-span-1">
 					<div class="min-w-0 space-y-6 lg:sticky lg:top-24">
-						<h2 class="text-xl font-serif mb-4">Tutor Comments</h2>
+						<h2>Tutor comments</h2>
 
 						<LoadingReveal loading={isGenerating}>
 							{#snippet placeholder()}
 								<div class="min-w-0 space-y-4">
 									{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
-										<div class="rounded-lg border border-[#e8e3db] bg-white p-4">
+										<div class="rounded-xl border border-border bg-card p-4">
 											<Skeleton class="h-4 w-3/4 mb-2" />
 											<Skeleton class="h-4 w-full mb-2" />
 											<Skeleton class="h-4 w-5/6" />
@@ -468,10 +467,10 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 												data-message-id={message.seqId}
 												data-current-context={getCommentContext(message.seqId, comment)}
 												data-previous-context={commentContext.previousContext}
-												class="rounded-lg border border-[#e8e3db] bg-white p-4 font-prose shadow-sm [overflow-wrap:anywhere]"
+												class="rounded-xl border border-border bg-card p-4 font-prose [overflow-wrap:anywhere]"
 												transition:fade={{ duration: 200 }}
 											>
-												<div class="text-sm font-bold text-[#9b8f85] mb-2">Message #{message.seqId}</div>
+												<div class="mb-2 text-xs text-muted-foreground">Message #{message.seqId}</div>
 												<AnnotatedTutorComment
 													{comment}
 													messageId={message.seqId}
@@ -486,8 +485,8 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 						<!-- Objectives & Summary -->
 						{#if feedback}
 							<div class="mt-8 space-y-6">
-								<div class="border-t border-[#e8e3db] pt-6">
-									<h3 class="text-lg font-serif mb-4">Objectives</h3>
+								<div class="border-t border-border pt-6">
+									<h3 class="mb-4 text-base font-semibold">Objectives</h3>
 									<div class="space-y-3">
 										{#each feedback.objectives as objective}
 											<div
@@ -498,18 +497,18 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 												class="flex items-start gap-3"
 											>
 												<span
-													class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white {gradeColor(objective.grade)}"
+													class="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white {gradeColor(objective.grade)}"
 												>
 													{objective.grade}
 												</span>
-												<p class="min-w-0 flex-1 font-prose text-sm text-[#2a2520] [overflow-wrap:anywhere]">{objective.text}</p>
+												<p class="min-w-0 flex-1 font-prose text-sm [overflow-wrap:anywhere]">{objective.text}</p>
 											</div>
 										{/each}
 									</div>
 								</div>
 
-								<div class="border-t border-[#e8e3db] pt-6">
-									<h3 class="text-lg font-serif mb-4">Summary</h3>
+								<div class="border-t border-border pt-6">
+									<h3 class="mb-4 text-base font-semibold">Summary</h3>
 									<p
 										data-learning-selectable
 										data-learning-kind="summary"
@@ -533,11 +532,9 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 			</div>
 			{#if data.evaluationPhase === "feedback" && feedback}
 				<!-- Every note collected above becomes the final card pass. -->
-				<div data-selection-ignore class="mt-10 rounded-lg border border-[#e8e3db] bg-white/70 p-6 text-center">
-					<h2 class="font-serif text-xl text-[#2a2520]">
-						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.title" : "eval.feedback.doneTitle")}
-					</h2>
-					<p class="mx-auto mt-2 max-w-md text-sm text-[#6b6560]">
+				<div data-selection-ignore class="mt-10 rounded-xl border border-border bg-card p-6 text-center">
+					<h2>{t(lang, data.transferNotes.length > 0 ? "eval.transfer.title" : "eval.feedback.doneTitle")}</h2>
+					<p class="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
 						{data.transferNotes.length > 0
 							? t(lang, "eval.transfer.practiceCards").replace("{count}", String(data.transferNotes.length))
 							: t(lang, "eval.feedback.noCards")}
@@ -546,7 +543,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 						{t(lang, data.transferNotes.length > 0 ? "eval.transfer.start" : "eval.feedback.finish")}
 					</Button>
 					{#if stageError}
-						<p class="mt-3 text-sm text-red-700" role="alert">{stageError}</p>
+						<p class="mt-3 text-sm text-destructive" role="alert">{stageError}</p>
 					{/if}
 				</div>
 			{/if}

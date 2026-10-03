@@ -122,5 +122,5 @@ async function finish() {
 		onpass={() => rate(3)}
 	/>
 {:else if completionFailed}
-	<div class="mx-auto max-w-4xl text-center"><Button variant="outline" onclick={() => void finish()}>{t(lang, "common.retry")}</Button></div>
+	<div class="mx-auto max-w-4xl text-center"><Button variant="secondary" onclick={() => void finish()}>{t(lang, "common.retry")}</Button></div>
 {/if}

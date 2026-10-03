@@ -231,7 +231,7 @@ onDestroy(() => {
 		</g>
 	</svg>
 
-	<h1 id="eval-waiting-title" class="font-serif text-3xl tracking-tight text-foreground">{title}</h1>
+	<h1 id="eval-waiting-title">{title}</h1>
 
 	{#if failed}
 		<p class="mt-3 max-w-sm text-sm text-muted-foreground">{failedBody}</p>

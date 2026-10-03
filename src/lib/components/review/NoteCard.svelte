@@ -6,6 +6,8 @@ import X from "@lucide/svelte/icons/x";
 import { browser } from "$app/environment";
 import { deserialize } from "$app/forms";
 import { refreshTrialQuota } from "$lib/components/account/trial-quota";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 
 type Note = {
@@ -64,48 +66,56 @@ async function submitAsk(q: string) {
 }
 </script>
 
-<div class="rounded-lg border border-border bg-card p-4">
+<div class="rounded-xl border border-border bg-card p-4">
 	<div class="flex flex-col sm:flex-row sm:items-start gap-3">
 		<div class="min-w-0 flex-1">
-			<h3 class="font-prose text-lg leading-snug text-foreground">{note.vocab}</h3>
+			<h3 class="font-prose text-base leading-snug font-medium">{note.vocab}</h3>
 			<p class="mt-2 font-prose text-sm leading-relaxed text-foreground/80">{note.nativeDefinition}</p>
 			<p class="mt-1 font-prose text-xs leading-relaxed text-muted-foreground">{note.targetDefinition}</p>
 		</div>
 		<div class="shrink-0 flex flex-row sm:flex-col items-center gap-0.5">
-			<button type="button" class="rounded p-1 text-muted-foreground hover:text-red-600 transition-colors" onclick={ondelete} title="Delete">
-				<Trash2 size={14} />
-			</button>
-			<button
-				type="button"
-				class="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
-				onclick={toggleAsk}
-				title={t.askFollowUp ?? "Ask about this"}
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				class="text-muted-foreground hover:text-destructive"
+				onclick={ondelete}
+				title="Delete"
+				aria-label="Delete"
 			>
-				<MessageCircleQuestion size={14} />
-			</button>
+				<Trash2 aria-hidden="true" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				class="text-muted-foreground"
+				onclick={toggleAsk}
+				aria-expanded={askOpen}
+				title={t.askFollowUp ?? "Ask about this"}
+				aria-label={t.askFollowUp ?? "Ask about this"}
+			>
+				<MessageCircleQuestion aria-hidden="true" />
+			</Button>
 		</div>
 	</div>
 
 	{#if askOpen}
-		<div class="mt-3 rounded-md border border-border bg-muted/40 p-3">
+		<div class="mt-3 rounded-lg bg-foreground/[0.04] p-3">
 			{#if askAnswer}
 				<div class="flex items-start gap-2">
 					<p class="flex-1 whitespace-pre-wrap font-prose text-sm leading-relaxed text-foreground">{askAnswer}</p>
-					<button type="button" class="mt-0.5 text-muted-foreground hover:text-foreground" onclick={toggleAsk} title="Dismiss">
-						<X size={14} />
-					</button>
+					<Button variant="ghost" size="icon-sm" class="-mt-1 -mr-1 text-muted-foreground" onclick={toggleAsk} title="Dismiss" aria-label="Dismiss">
+						<X aria-hidden="true" />
+					</Button>
 				</div>
 			{:else}
 				{#if askError}
-					<p class="mb-2 text-xs text-red-600">{askError}</p>
+					<p class="mb-2 text-xs text-destructive">{askError}</p>
 				{/if}
 				<div class="mb-2 flex flex-wrap gap-1.5">
-					<button type="button" class="rounded-full bg-background px-2.5 py-1 text-xs hover:bg-background/80" onclick={() => submitAsk("why")}>
-						{t.askWhy ?? "Why is this wrong?"}
-					</button>
-					<button type="button" class="rounded-full bg-background px-2.5 py-1 text-xs hover:bg-background/80" onclick={() => submitAsk("examples")}>
+					<Button variant="secondary" size="sm" class="rounded-full" onclick={() => submitAsk("why")}> {t.askWhy ?? "Why is this wrong?"} </Button>
+					<Button variant="secondary" size="sm" class="rounded-full" onclick={() => submitAsk("examples")}>
 						{t.askExamples ?? "Give me more examples"}
-					</button>
+					</Button>
 				</div>
 				<form
 					class="flex gap-1.5"
@@ -115,25 +125,21 @@ async function submitAsk(q: string) {
 						if (q) submitAsk(q);
 					}}
 				>
-					<input
-						type="text"
-						class="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs"
-						placeholder={t.askPlaceholder ?? "Ask a follow-up question..."}
+					<Input
+						class="h-8 flex-1 pointer-coarse:h-10"
+						placeholder={t.askPlaceholder ?? "Ask a follow-up question…"}
+						aria-label={t.askFollowUp ?? "Ask about this"}
 						bind:value={askQuestion}
 						maxlength={USER_TEXT_MAX_LENGTH}
 						disabled={askLoading}
-					>
-					<button
-						type="submit"
-						class="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background disabled:opacity-40"
-						disabled={askLoading || !askQuestion.trim()}
-					>
+					/>
+					<Button type="submit" size="sm" disabled={askLoading || !askQuestion.trim()}>
 						{#if askLoading}
-							<LoaderCircle size={14} class="animate-spin" />
+							<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 						{:else}
 							{t.askSubmit ?? "Ask"}
 						{/if}
-					</button>
+					</Button>
 				</form>
 			{/if}
 		</div>

@@ -298,7 +298,6 @@ $effect(() => {
 	margin-top: 0.15rem;
 	font-size: 0.8125rem;
 	font-weight: 500;
-	letter-spacing: 0.02em;
 	color: #8b7661;
 }
 
@@ -311,10 +310,8 @@ $effect(() => {
 
 .rule-heading {
 	margin-top: 1.15rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.09em;
-	text-transform: uppercase;
+	font-size: 0.75rem;
+	font-weight: 500;
 	color: #8b7661;
 }
 

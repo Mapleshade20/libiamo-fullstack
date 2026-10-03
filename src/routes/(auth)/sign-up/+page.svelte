@@ -7,6 +7,7 @@ import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "
 import SocialAuthButtons from "$lib/components/auth/SocialAuthButtons.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import Select from "$lib/components/common/Select.svelte";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
@@ -45,7 +46,7 @@ const actionNotification = $derived(
 </svelte:head>
 
 <Card.Root>
-	<Card.Header><Card.Title class="text-xl">Sign Up</Card.Title></Card.Header>
+	<Card.Header><Card.Title>Sign up</Card.Title></Card.Header>
 	<Card.Content>
 		<ActionNotification notification={actionNotification} />
 		<FormErrorFocus formRef={signUpForm} errors={formState?.errors} fieldOrder={["activeLanguage", "name", "email", "password"]} />
@@ -77,25 +78,23 @@ const actionNotification = $derived(
 		>
 			<div class="space-y-2">
 				<Label for="activeLanguage">I want to learn</Label>
-				<select
+				<Select
 					id="activeLanguage"
 					name="activeLanguage"
-					class="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
 					required
+					placeholder="Select a language"
+					value={formState?.values?.activeLanguage ?? ""}
 					aria-invalid={Boolean(formState?.errors?.activeLanguage)}
-				>
-					<option value="" disabled selected={!formState?.values?.activeLanguage}>Select a language</option>
-					{#each LANGUAGE_CODES as code}
-						<option value={code} selected={formState?.values?.activeLanguage === code}>{LANGUAGE_LABELS[code]}</option>
-					{/each}
-				</select>
+					items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+				/>
 				{#if formState?.errors?.activeLanguage}
-					<p data-field-error="activeLanguage" class="text-sm text-red-600">{formState.errors.activeLanguage[0]}</p>
+					<p data-field-error="activeLanguage" class="field-error-message">{formState.errors.activeLanguage[0]}</p>
 				{/if}
 			</div>
 
 			<!-- Everything below stays collapsed until a language is chosen. The state
-			     lives entirely in CSS (see the `:has(option[value=""]:checked)` rule) so
+			     lives entirely in CSS (see the `:has(option[value=""]:checked)` rule on the
+			     Select's native mirror) so
 			     the form still works with scripting off, and `visibility: hidden` keeps
 			     the collapsed fields out of the tab order without an `inert` attribute.
 			     They keep their `required` attributes: the select is required too and
@@ -107,7 +106,7 @@ const actionNotification = $derived(
 							<Label for="name">Name</Label>
 							<Input id="name" name="name" value={formState?.values?.name ?? ""} required aria-invalid={Boolean(formState?.errors?.name)} />
 							{#if formState?.errors?.name}
-								<p data-field-error="name" class="text-sm text-red-600">{formState.errors.name[0]}</p>
+								<p data-field-error="name" class="field-error-message">{formState.errors.name[0]}</p>
 							{/if}
 						</div>
 
@@ -122,7 +121,7 @@ const actionNotification = $derived(
 								aria-invalid={Boolean(formState?.errors?.email)}
 							/>
 							{#if formState?.errors?.email}
-								<p data-field-error="email" class="text-sm text-red-600">{formState.errors.email[0]}</p>
+								<p data-field-error="email" class="field-error-message">{formState.errors.email[0]}</p>
 							{/if}
 						</div>
 
@@ -138,12 +137,12 @@ const actionNotification = $derived(
 								aria-invalid={Boolean(formState?.errors?.password)}
 							/>
 							{#if formState?.errors?.password}
-								<p data-field-error="password" class="text-sm text-red-600">{formState.errors.password[0]}</p>
+								<p data-field-error="password" class="field-error-message">{formState.errors.password[0]}</p>
 							{/if}
 						</div>
 
 						<div class="space-y-2">
-							<Label for="confirmPassword">Confirm Password</Label>
+							<Label for="confirmPassword">Confirm password</Label>
 							<Input
 								id="confirmPassword"
 								bind:ref={confirmPasswordInput}
@@ -153,14 +152,14 @@ const actionNotification = $derived(
 								aria-invalid={Boolean(confirmPasswordError)}
 							/>
 							{#if confirmPasswordError}
-								<p data-field-error="confirmPassword" class="text-sm text-red-600">{confirmPasswordError}</p>
+								<p data-field-error="confirmPassword" class="field-error-message">{confirmPasswordError}</p>
 							{/if}
 						</div>
 
-						<Button type="submit" class="w-full">Sign Up</Button>
+						<Button type="submit" class="w-full">Sign up</Button>
 
 						{#if data.socialProviders.length > 0}
-							<div class="border-t border-border/70" aria-hidden="true"></div>
+							<div class="border-t border-border" aria-hidden="true"></div>
 						{/if}
 						<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
 					</div>
@@ -171,7 +170,7 @@ const actionNotification = $derived(
 	<Card.Footer class="text-sm">
 		<p class="text-muted-foreground">
 			Already have an account?
-			<a href="{base}/sign-in" class="font-medium text-foreground hover:underline">Sign In</a>
+			<a href="{base}/sign-in" class="font-medium text-foreground underline-offset-4 hover:underline">Sign in</a>
 		</p>
 	</Card.Footer>
 </Card.Root>
@@ -182,7 +181,7 @@ const actionNotification = $derived(
 .reveal {
 	display: grid;
 	grid-template-rows: 1fr;
-	transition: grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: grid-template-rows 320ms var(--ease-panel);
 }
 .reveal-inner {
 	overflow: hidden;
@@ -197,10 +196,10 @@ const actionNotification = $derived(
    so the whole reveal is driven by the select itself — no JavaScript, and a server
    render that echoes a chosen language back comes out expanded on the first paint
    rather than flashing shut. */
-form:has(#activeLanguage option[value=""]:checked) .reveal {
+form:has(:global(select[name="activeLanguage"] option[value=""]:checked)) .reveal {
 	grid-template-rows: 0fr;
 }
-form:has(#activeLanguage option[value=""]:checked) .reveal-inner {
+form:has(:global(select[name="activeLanguage"] option[value=""]:checked)) .reveal-inner {
 	visibility: hidden;
 }
 

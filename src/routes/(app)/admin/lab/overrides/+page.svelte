@@ -1,5 +1,7 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
+import Select from "$lib/components/common/Select.svelte";
+import { Button } from "$lib/components/ui/button";
 import OverrideEditor from "./OverrideEditor.svelte";
 
 let { data, form } = $props();
@@ -20,7 +22,7 @@ function messageFor(recipeId: string) {
 
 <div class="space-y-8">
 	<div class="space-y-1">
-		<h1 class="text-3xl">My overrides</h1>
+		<h1>My overrides</h1>
 		<p class="text-sm text-muted-foreground">
 			Try a prompt or model in the real app on your own account. Only your calls change; each one is traced as an override so you can review it here.
 			Calls routed to an explicit provider never use trial quota.
@@ -29,20 +31,18 @@ function messageFor(recipeId: string) {
 
 	{#each shown as recipe (recipe.id)}
 		{@const saved = data.overrides.find((override) => override.recipeId === recipe.id) ?? null}
-		<section class="space-y-3 rounded-lg border border-border p-4" aria-labelledby={`override-${recipe.id}`}>
+		<section class="space-y-4 rounded-xl border border-border bg-card p-5" aria-labelledby={`override-${recipe.id}`}>
 			<div class="flex flex-wrap items-baseline justify-between gap-2">
-				<h2 id={`override-${recipe.id}`} class="font-serif text-xl">
+				<h2 id={`override-${recipe.id}`}>
 					{recipe.title}
 					{#if saved && !saved.enabled}
-						<span class="text-sm text-muted-foreground">(off)</span>
+						<span class="font-sans text-sm text-muted-foreground">(off)</span>
 					{/if}
 				</h2>
 				{#if saved}
 					<form method="POST" action="?/delete" use:enhance>
 						<input type="hidden" name="recipeId" value={recipe.id}>
-						<button type="submit" class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-2 hover:underline">
-							Remove override
-						</button>
+						<Button type="submit" variant="destructive" size="sm">Remove override</Button>
 					</form>
 				{/if}
 			</div>
@@ -52,21 +52,18 @@ function messageFor(recipeId: string) {
 			<OverrideEditor {recipe} providers={data.providers} {saved} message={messageFor(recipe.id)} />
 		</section>
 	{:else}
-		<p class="text-muted-foreground">No overrides. Every call you make uses the code defaults.</p>
+		<p class="text-sm text-muted-foreground">No overrides. Every call you make uses the code defaults.</p>
 	{/each}
 
 	{#if available.length}
-		<label class="grid max-w-md gap-1 text-sm">
-			Add an override for
-			<select
-				class="h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+		<div class="flex max-w-md flex-col gap-1.5">
+			<label for="override-add" class="text-sm font-medium">Add an override for</label>
+			<Select
+				id="override-add"
 				bind:value={adding}
-			>
-				<option value="">Choose a recipe…</option>
-				{#each available as recipe}
-					<option value={recipe.id}>{recipe.title}</option>
-				{/each}
-			</select>
-		</label>
+				placeholder="Choose a recipe…"
+				items={available.map((recipe) => ({ value: recipe.id, label: recipe.title }))}
+			/>
+		</div>
 	{/if}
 </div>

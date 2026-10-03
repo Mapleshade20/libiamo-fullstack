@@ -1,7 +1,10 @@
 <script lang="ts">
+import Plus from "@lucide/svelte/icons/plus";
+import X from "@lucide/svelte/icons/x";
 import { getDefaultOpeningState, type OpeningState } from "$lib/admin/opening-state";
 import { validateBeforeSubmit } from "$lib/client/form-attention";
 import RequiredMark from "$lib/components/admin/RequiredMark.svelte";
+import Checkbox from "$lib/components/common/Checkbox.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
@@ -189,7 +192,7 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 </div>
 
 {#snippet resetButton()}
-	<Button type="button" variant="outline" size="sm" class="ml-auto" onclick={resetToDefaults}>Reset to Defaults</Button>
+	<Button type="button" variant="secondary" size="sm" class="ml-auto" onclick={resetToDefaults}>Reset to defaults</Button>
 {/snippet}
 
 <!-- When the editor ends with a list, Reset shares the row of that list's add button, at its right. -->
@@ -233,13 +236,8 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 			{/if}
 		</div>
 	{:else if field.type === "checkbox"}
-		<label class="flex min-h-11 items-center gap-2 text-sm">
-			<input
-				type="checkbox"
-				class="size-5 accent-foreground"
-				checked={getFlatField(path) === true}
-				onchange={(e) => setFlatField(path, e.currentTarget.checked || undefined)}
-			>
+		<label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
+			<Checkbox checked={getFlatField(path) === true} onchange={(e) => setFlatField(path, e.currentTarget.checked || undefined)} />
 			{field.label}
 		</label>
 	{:else if field.type === "textarea"}
@@ -276,7 +274,7 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 		<fieldset class="space-y-3">
 			<legend class="text-sm font-medium">{field.label}</legend>
 			{#each getList(field.key) as msg, i (i)}
-				<div class="flex gap-2 rounded border border-input p-2">
+				<div class="flex gap-2 rounded-lg border border-border p-2">
 					<Input
 						class="w-32"
 						value={String(msg.sender ?? "")}
@@ -297,11 +295,15 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 							oninput={(e) => updateListItem(field.key, i, "timestamp", e.currentTarget.value)}
 						/>
 					{/if}
-					<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
+					<Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onclick={() => removeListItem(field.key, i)}
+						><X aria-hidden="true" /></Button
+					>
 				</div>
 			{/each}
 			<div class="flex flex-wrap items-center gap-2">
-				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { sender: "", text: "" })}>+ Add Message</Button>
+				<Button type="button" variant="secondary" size="sm" onclick={() => addListItem(field.key, { sender: "", text: "" })}
+					><Plus aria-hidden="true" />Add message</Button
+				>
 				{@render resetHere(field)}
 			</div>
 		</fieldset>
@@ -309,14 +311,16 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 		<fieldset class="space-y-3">
 			<legend class="text-sm font-medium">{field.label}</legend>
 			{#each getList(field.key) as email, i (i)}
-				<div class="space-y-2 rounded border border-input p-3">
+				<div class="space-y-2 rounded-lg border border-border p-3">
 					<div class="flex justify-between">
 						<span class="text-xs text-muted-foreground">Email {i + 1}</span>
-						<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
+						<Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onclick={() => removeListItem(field.key, i)}
+							><X aria-hidden="true" /></Button
+						>
 					</div>
 					<div class="grid gap-2 sm:grid-cols-2">
 						<div class="space-y-1">
-							<Label class="text-xs">From</Label>
+							<Label>From</Label>
 							<Input
 								value={String(email.from ?? "")}
 								oninput={(e) => updateListItem(field.key, i, "from", e.currentTarget.value)}
@@ -324,7 +328,7 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 							/>
 						</div>
 						<div class="space-y-1">
-							<Label class="text-xs">To</Label>
+							<Label>To</Label>
 							<Input
 								value={String(email.to ?? "")}
 								oninput={(e) => updateListItem(field.key, i, "to", e.currentTarget.value)}
@@ -332,11 +336,11 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 							/>
 						</div>
 						<div class="space-y-1">
-							<Label class="text-xs">Subject</Label>
+							<Label>Subject</Label>
 							<Input value={String(email.subject ?? "")} oninput={(e) => updateListItem(field.key, i, "subject", e.currentTarget.value)} />
 						</div>
 						<div class="space-y-1">
-							<Label class="text-xs">Time</Label>
+							<Label>Time</Label>
 							<Input
 								value={String(email.time ?? "")}
 								oninput={(e) => updateListItem(field.key, i, "time", e.currentTarget.value)}
@@ -345,14 +349,14 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 						</div>
 					</div>
 					<div class="space-y-1">
-						<Label class="text-xs">Body</Label>
+						<Label>Body</Label>
 						<Textarea rows={2} value={String(email.body ?? "")} oninput={(e) => updateListItem(field.key, i, "body", e.currentTarget.value)} />
 					</div>
 				</div>
 			{/each}
 			<div class="flex flex-wrap items-center gap-2">
-				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, { from: "", to: "", subject: "", body: "" })}
-					>+ Add Email</Button
+				<Button type="button" variant="secondary" size="sm" onclick={() => addListItem(field.key, { from: "", to: "", subject: "", body: "" })}
+					><Plus aria-hidden="true" />Add email</Button
 				>
 				{@render resetHere(field)}
 			</div>
@@ -367,7 +371,9 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 				{@render renderTreeComment(field, comment, [i], 0)}
 			{/each}
 			<div class="flex flex-wrap items-center gap-2">
-				<Button type="button" variant="outline" size="sm" onclick={() => addListItem(field.key, defaultItem)}>+ Add Top-level Comment</Button>
+				<Button type="button" variant="secondary" size="sm" onclick={() => addListItem(field.key, defaultItem)}
+					><Plus aria-hidden="true" />Add top-level comment</Button
+				>
 				{@render resetHere(field)}
 			</div>
 		</fieldset>
@@ -377,7 +383,7 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 		<fieldset class="space-y-3">
 			<legend class="text-sm font-medium">{field.label}</legend>
 			{#each getList(field.key) as comment, i (i)}
-				<div class="flex gap-2 rounded border border-input p-2">
+				<div class="flex gap-2 rounded-lg border border-border p-2">
 					<Input
 						class="w-32"
 						value={String(comment[authorField] ?? "")}
@@ -390,26 +396,28 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 						placeholder={field.textPlaceholder ?? "Comment text"}
 						oninput={(e) => updateListItem(field.key, i, textField, e.currentTarget.value)}
 					/>
-					<Button type="button" variant="ghost" size="sm" onclick={() => removeListItem(field.key, i)}>×</Button>
+					<Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onclick={() => removeListItem(field.key, i)}
+						><X aria-hidden="true" /></Button
+					>
 				</div>
 			{/each}
 			<div class="flex flex-wrap items-center gap-2">
 				<Button
 					type="button"
-					variant="outline"
+					variant="secondary"
 					size="sm"
 					onclick={() => {
 					const item: Record<string, unknown> = { [authorField]: "", [textField]: "" };
 					addListItem(field.key, item);
 				}}
-					>+ Add Comment</Button
+					><Plus aria-hidden="true" />Add comment</Button
 				>
 				{@render resetHere(field)}
 			</div>
 		</fieldset>
 	{:else if field.type === "group"}
-		<fieldset class="space-y-3 rounded border border-input p-3">
-			<legend class="text-sm font-medium px-1">{field.label}</legend>
+		<fieldset class="space-y-3 rounded-lg border border-border p-3">
+			<legend class="px-1 text-sm font-medium">{field.label}</legend>
 			{#each field.fields as sub}
 				{#if sub.type === "row"}
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -429,17 +437,19 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 	{@const authorField = field.authorField ?? "author"}
 	{@const textField = field.textField ?? "text"}
 	{@const defaultReply = { [authorField]: "", [textField]: "", timestamp: "", replies: [] }}
-	<div class="space-y-2 rounded border border-input p-3" style={`margin-left: ${Math.min(depth, 4) * 1.25}rem`}>
+	<div class="space-y-2 rounded-lg border border-border p-3" style={`margin-left: ${Math.min(depth, 4) * 1.25}rem`}>
 		<div class="flex items-center justify-between gap-2">
 			<span class="text-xs text-muted-foreground">Comment {path.map((n) => n + 1).join(".")}</span>
 			<div class="flex gap-1">
 				<Button type="button" variant="ghost" size="sm" onclick={() => addTreeReply(field.key, path, defaultReply)}>Reply</Button>
-				<Button type="button" variant="ghost" size="sm" onclick={() => removeTreeComment(field.key, path)}>×</Button>
+				<Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onclick={() => removeTreeComment(field.key, path)}
+					><X aria-hidden="true" /></Button
+				>
 			</div>
 		</div>
 		<div class="grid gap-2 sm:grid-cols-2">
 			<div class="space-y-1">
-				<Label class="text-xs">{field.authorLabel ?? "Author"}</Label>
+				<Label>{field.authorLabel ?? "Author"}</Label>
 				<Input
 					value={String(comment[authorField] ?? "")}
 					placeholder={field.authorPlaceholder}
@@ -448,7 +458,7 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 			</div>
 			{#if field.withTimestamp}
 				<div class="space-y-1">
-					<Label class="text-xs">Timestamp</Label>
+					<Label>Timestamp</Label>
 					<Input
 						value={String(comment.timestamp ?? "")}
 						placeholder="2 hr. ago"
@@ -459,12 +469,12 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 		</div>
 		{#if field.withIconUrl}
 			<div class="space-y-1">
-				<Label class="text-xs">Icon URL</Label>
+				<Label>Icon URL</Label>
 				<Input value={String(comment.iconUrl ?? "")} oninput={(e) => updateTreeCommentField(field.key, path, "iconUrl", e.currentTarget.value)} />
 			</div>
 		{/if}
 		<div class="space-y-1">
-			<Label class="text-xs">{field.textLabel ?? "Comment"}</Label>
+			<Label>{field.textLabel ?? "Comment"}</Label>
 			<Textarea
 				rows={3}
 				value={String(comment[textField] ?? "")}

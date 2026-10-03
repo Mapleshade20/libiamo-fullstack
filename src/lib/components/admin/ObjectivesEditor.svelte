@@ -108,7 +108,7 @@ function onpaste(event: ClipboardEvent, index: number) {
 		Add objective
 	</button>
 	{#if error}
-		<p id="{name}-error" data-field-error={name} class="mt-2 text-sm text-red-600">{error}</p>
+		<p id="{name}-error" data-field-error={name} class="field-error-message mt-2">{error}</p>
 	{/if}
 </fieldset>
 
@@ -203,8 +203,8 @@ function onpaste(event: ClipboardEvent, index: number) {
 
 .remove:focus-visible,
 .add:focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 2px;
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

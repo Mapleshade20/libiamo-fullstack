@@ -1,5 +1,6 @@
 <script lang="ts">
 import { base } from "$app/paths";
+import Select from "$lib/components/common/Select.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Table from "$lib/components/ui/table";
@@ -18,33 +19,39 @@ function submitFilters(event: Event) {
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<h1 class="text-3xl">Tasks</h1>
-		<Button href="{base}/admin/tasks/new">New Task</Button>
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<h1>Tasks</h1>
+		<Button href="{base}/admin/tasks/new">New task</Button>
 	</div>
 
-	<!-- Filters -->
-	<form method="GET" class="flex flex-wrap gap-3" onchange={submitFilters}>
-		<select name="language" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-			<option value="">All languages</option>
-			{#each LANGUAGE_CODES as code}
-				<option value={code} selected={data.filters.language === code}>{LANGUAGE_LABELS[code]}</option>
-			{/each}
-		</select>
-		<select name="interactionType" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-			<option value="">All types</option>
-			{#each INTERACTION_TYPES as type}
-				<option value={type} selected={data.filters.interactionType === type}>{INTERACTION_TYPE_LABELS[type]}</option>
-			{/each}
-		</select>
-		<select name="active" class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-			<option value="">Active & Inactive</option>
-			<option value="true" selected={data.filters.active === 'true'}>Active only</option>
-			<option value="false" selected={data.filters.active === 'false'}>Inactive only</option>
-		</select>
+	<form method="GET" class="flex flex-wrap gap-2" onchange={submitFilters} aria-label="Filter tasks">
+		<Select
+			name="language"
+			aria-label="Language"
+			class="w-44"
+			value={data.filters.language ?? ""}
+			items={[{ value: "", label: "All languages" }, ...LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))]}
+		/>
+		<Select
+			name="interactionType"
+			aria-label="Type"
+			class="w-36"
+			value={data.filters.interactionType ?? ""}
+			items={[{ value: "", label: "All types" }, ...INTERACTION_TYPES.map((type) => ({ value: type, label: INTERACTION_TYPE_LABELS[type] }))]}
+		/>
+		<Select
+			name="active"
+			aria-label="Status"
+			class="w-44"
+			value={data.filters.active ?? ""}
+			items={[
+				{ value: "", label: "Active and inactive" },
+				{ value: "true", label: "Active only" },
+				{ value: "false", label: "Inactive only" },
+			]}
+		/>
 	</form>
 
-	<!-- Table -->
 	<Table.Root>
 		<Table.Header>
 			<Table.Row>
@@ -52,11 +59,11 @@ function submitFilters(event: Event) {
 				<Table.Head>Title</Table.Head>
 				<Table.Head>Language</Table.Head>
 				<Table.Head>Type</Table.Head>
-				<Table.Head>UI Variant</Table.Head>
+				<Table.Head>Interface</Table.Head>
 				<Table.Head>Rotation</Table.Head>
 				<Table.Head>Tags</Table.Head>
-				<Table.Head>Active</Table.Head>
-				<Table.Head>Actions</Table.Head>
+				<Table.Head>Status</Table.Head>
+				<Table.Head><span class="sr-only">Actions</span></Table.Head>
 			</Table.Row>
 		</Table.Header>
 		<Table.Body>
@@ -71,19 +78,15 @@ function submitFilters(event: Event) {
 					<Table.Cell class="text-xs text-muted-foreground">
 						<span class="block w-28 truncate" title={item.tags?.join(", ")}>{item.tags?.join(", ") ?? ""}</span>
 					</Table.Cell>
-					<Table.Cell>
-						<span class="rounded-full px-2 py-0.5 text-xs {item.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-							{item.isActive ? 'Active' : 'Inactive'}
-						</span>
-					</Table.Cell>
-					<Table.Cell> <a href="{base}/admin/tasks/{item.id}" class="text-sm text-muted-foreground hover:underline">Edit</a> </Table.Cell>
+					<Table.Cell> <Badge variant={item.isActive ? "success" : "outline"}>{item.isActive ? "Active" : "Inactive"}</Badge> </Table.Cell>
+					<Table.Cell class="py-1 text-right"><Button href="{base}/admin/tasks/{item.id}" variant="ghost" size="sm">Edit</Button></Table.Cell>
 				</Table.Row>
 			{/each}
 		</Table.Body>
 	</Table.Root>
 
 	{#if data.tasks.length === 0}
-		<p class="text-center text-muted-foreground">No tasks found.</p>
+		<p class="py-8 text-center text-sm text-muted-foreground">No tasks found.</p>
 	{/if}
 </div>
 
@@ -107,7 +110,7 @@ function submitFilters(event: Event) {
 .title:hover {
 	position: absolute;
 	top: 50%;
-	left: 0;
+	left: 0.25rem;
 	z-index: 2;
 	width: max-content;
 	max-width: 40rem;

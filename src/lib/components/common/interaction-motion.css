@@ -37,6 +37,36 @@
 .floating-menu-item:focus-visible {
 	box-shadow: inset 0 0 0 2px var(--ring);
 }
+/* Select lists share the floating panel; rows are denser than menu actions on a fine pointer. */
+.select-panel {
+	transform-origin: var(--bits-select-content-transform-origin);
+}
+.select-item {
+	display: flex;
+	min-height: 36px;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	cursor: pointer;
+	outline: none;
+	transition: background-color 100ms ease;
+}
+.select-item[data-highlighted] {
+	background: var(--secondary);
+}
+.select-item[data-selected] {
+	font-weight: 500;
+}
+.select-item[data-disabled] {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+@media (pointer: coarse) {
+	.select-item {
+		min-height: 44px;
+	}
+}
 @keyframes floating-panel-in {
 	from {
 		opacity: 0;
@@ -59,7 +89,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
 	.floating-panel[data-state],
-	.floating-menu-item {
+	.floating-menu-item,
+	.select-item {
 		animation: none;
 		transition: none;
 	}

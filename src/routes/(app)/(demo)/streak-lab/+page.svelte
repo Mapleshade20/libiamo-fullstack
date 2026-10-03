@@ -78,10 +78,10 @@ function nextDay() {
 <StreakCompletion ready={surface !== "home"} />
 <div class="lab">
 	<div class="pair motion-toolbar" role="group" aria-label="Micro-motion controls">
-		<Button variant="outline" aria-pressed={streakPreview.microMotion === "moving"} onclick={() => { streakPreview.microMotion = "moving"; }}
+		<Button variant="secondary" aria-pressed={streakPreview.microMotion === "moving"} onclick={() => { streakPreview.microMotion = "moving"; }}
 			>Play micro-motion now</Button
 		>
-		<Button variant="outline" aria-pressed={streakPreview.microMotion === "static"} onclick={() => { streakPreview.microMotion = "static"; }}
+		<Button variant="secondary" aria-pressed={streakPreview.microMotion === "static"} onclick={() => { streakPreview.microMotion = "static"; }}
 			>Settle to static</Button
 		>
 		<Button variant="ghost" aria-pressed={streakPreview.microMotion === "auto"} onclick={() => { streakPreview.microMotion = "auto"; }}
@@ -106,7 +106,7 @@ function nextDay() {
 					<p>
 						{view.status === "lit" ? "Both promises kept. Today’s flame is yours." : "One promise kept. A small blue spark is waiting for the other."}
 					</p>
-					<Button variant="outline" onclick={() => { surface = "home"; }}>Back to the hall</Button>
+					<Button variant="secondary" onclick={() => { surface = "home"; }}>Back to the hall</Button>
 				</div>
 			{/if}
 			<div class="today-progress">
@@ -119,14 +119,14 @@ function nextDay() {
 			<p>Sandbox only. No account or database writes.</p>
 			<div class="events">
 				<Button onclick={() => complete("quest")}>Finish a Quest</Button
-				><Button variant="outline" onclick={() => complete("review")}>Clear all reviews</Button>
+				><Button variant="secondary" onclick={() => complete("review")}>Clear all reviews</Button>
 			</div>
 			<p class="hint">Try either order. Repeating a completed gate must not replay the daily reward. Three quests can still earn a saved day.</p>
 			<div class="rule"></div>
 			<label>Starting streak<input aria-label="Starting streak" type="number" min="0" max="9999" bind:value={initialDays}></label>
 			<label>Saved days<input aria-label="Saved days" type="number" min="0" max="3" bind:value={initialBank}></label>
 			<div class="pair">
-				<Button variant="outline" onclick={reset}>Reset rehearsal</Button><Button variant="outline" onclick={nextDay}>Next day</Button>
+				<Button variant="secondary" onclick={reset}>Reset rehearsal</Button><Button variant="secondary" onclick={nextDay}>Next day</Button>
 			</div>
 			<label
 				>Playback<select bind:value={streakPreview.speed}>

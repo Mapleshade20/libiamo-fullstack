@@ -119,10 +119,8 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 
 .error-header > span {
 	color: var(--error-muted);
-	font-size: 0.68rem;
-	font-weight: 700;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	font-size: 0.8125rem;
+	font-weight: 500;
 }
 
 .error-main {
@@ -176,10 +174,8 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 .error-kicker {
 	margin: 0 0 0.8rem;
 	color: var(--error-wine);
-	font-size: 0.68rem;
-	font-weight: 750;
-	letter-spacing: 0.11em;
-	text-transform: uppercase;
+	font-size: 0.875rem;
+	font-weight: 500;
 }
 
 .error-copy h1 {
@@ -256,8 +252,8 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 .error-primary:focus-visible,
 .error-secondary:focus-visible,
 .error-retry:focus-visible {
-	outline: 2px solid #305f89;
-	outline-offset: 3px;
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 60%, transparent);
 }
 
 @media (max-width: 42rem) {

@@ -43,11 +43,9 @@ let { state, label, variant = "line" }: Props = $props();
 	align-items: center;
 	gap: 0.32rem;
 	font-family: var(--font-sans);
-	font-size: 0.7rem;
-	font-weight: 680;
-	letter-spacing: 0.075em;
+	font-size: 0.75rem;
+	font-weight: 500;
 	line-height: 1;
-	text-transform: uppercase;
 	color: var(--menu-ink-muted, #6d665d);
 }
 

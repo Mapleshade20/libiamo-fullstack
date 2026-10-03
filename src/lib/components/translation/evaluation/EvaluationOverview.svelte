@@ -59,10 +59,10 @@ const segments = $derived(segmentOverviewHighlightedText(evaluation.firstDraft, 
 const hasWarnings = $derived(evaluation.cards.some((c) => c.warnings.length > 0) || showRegenerate);
 
 function gradeTone(grade: Grade): string {
-	if (grade.startsWith("A")) return "text-emerald-800 bg-emerald-500/12 border-emerald-600/20";
-	if (grade.startsWith("B")) return "text-amber-900 bg-amber-500/12 border-amber-700/20";
+	if (grade.startsWith("A")) return "text-success bg-success/12 border-success/20";
+	if (grade.startsWith("B")) return "text-warning bg-warning/12 border-warning/20";
 	if (grade.startsWith("C")) return "text-orange-900 bg-orange-500/12 border-orange-700/20";
-	return "text-red-900 bg-red-500/12 border-red-700/20";
+	return "text-destructive bg-destructive/10 border-destructive/20";
 }
 
 $effect(() => {
@@ -104,18 +104,16 @@ onDestroy(() => stopAll(controls));
 
 <section class="mx-auto w-full max-w-3xl" aria-labelledby="eval-overview-title">
 	<header class="mb-6 border-b border-border pb-5">
-		<p class="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">{subtitle ?? ""}</p>
-		<h1 id="eval-overview-title" bind:this={headingEl} class="origin-left font-serif text-3xl tracking-tight text-foreground" tabindex="-1">
-			{title}
-		</h1>
+		<p class="mb-2 text-xs font-medium text-muted-foreground">{subtitle ?? ""}</p>
+		<h1 id="eval-overview-title" bind:this={headingEl} class="origin-left" tabindex="-1">{title}</h1>
 	</header>
 
 	{#if hasWarnings}
-		<div class="mb-6 rounded-xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-950" role="status">
+		<div class="mb-6 rounded-xl border border-warning/30 bg-warning/[0.08] px-4 py-3 text-sm text-foreground" role="status">
 			<p class="font-medium">{warningTitle}</p>
-			<p class="mt-1 text-amber-900/80">{warningBody}</p>
+			<p class="mt-1 text-foreground/80">{warningBody}</p>
 			{#if showRegenerate || hasWarnings}
-				<div class="mt-3"><Button variant="outline" size="sm" onclick={() => onregenerate?.()}>{regenerateLabel}</Button></div>
+				<div class="mt-3"><Button variant="secondary" size="sm" onclick={() => onregenerate?.()}>{regenerateLabel}</Button></div>
 			{/if}
 		</div>
 	{/if}
@@ -124,9 +122,9 @@ onDestroy(() => stopAll(controls));
 		<div class="grid grid-cols-1 gap-6 @min-[40rem]:grid-cols-2 @min-[40rem]:gap-8">
 			<!-- Left: immutable first draft (sentence-level highlights only) -->
 			<div bind:this={leftCol} class="order-1 min-w-0 space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{yourDraftLabel}</p>
+				<p class="text-xs font-medium text-muted-foreground">{yourDraftLabel}</p>
 				<div class="rounded-2xl border border-border bg-card/70 p-4 shadow-xs sm:p-5">
-					<p class="whitespace-pre-wrap break-words font-prose text-[0.95rem] leading-[1.75] text-foreground">
+					<p class="whitespace-pre-wrap break-words font-prose text-base leading-[1.75] text-foreground">
 						{#each segments as seg, i (i)}
 							{#if seg.kind === "highlight"}
 								<mark data-highlight-mark data-highlight-tone={seg.tone} class="overview-highlight overview-highlight--{seg.tone}">{seg.text}</mark>
@@ -140,18 +138,16 @@ onDestroy(() => stopAll(controls));
 
 			<!-- Right: commentary + ratings -->
 			<div bind:this={rightCol} class="order-2 min-w-0 space-y-4">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{overallLabel}</p>
+				<p class="text-xs font-medium text-muted-foreground">{overallLabel}</p>
 				<div class="rounded-2xl border border-border bg-card/70 p-4 shadow-xs sm:p-5">
-					<p class="font-prose text-[0.95rem] leading-relaxed break-words text-foreground/90">{evaluation.overallCommentary}</p>
+					<p class="font-prose text-base leading-relaxed break-words text-foreground/90">{evaluation.overallCommentary}</p>
 
 					<ul class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
 						{#each RATING_ORDER as key (key)}
 							{@const grade = evaluation.ratings[key]}
 							<li class="flex min-w-0 flex-col gap-1 rounded-lg border px-3 py-2.5 {gradeTone(grade)}">
-								<span class="text-[0.62rem] font-semibold uppercase tracking-wider opacity-80 leading-tight">
-									{ratingLabels[RATING_I18N_KEYS[key]] ?? key}
-								</span>
-								<span class="font-serif text-xl leading-none">{grade}</span>
+								<span class="text-xs font-medium opacity-80 leading-tight"> {ratingLabels[RATING_I18N_KEYS[key]] ?? key} </span>
+								<span class="text-xl font-semibold leading-none">{grade}</span>
 							</li>
 						{/each}
 					</ul>

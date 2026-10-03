@@ -93,11 +93,9 @@ let {
 
 .catalog-toolbar p {
 	font-family: var(--font-sans);
-	font-size: 0.68rem;
-	font-weight: 750;
-	letter-spacing: 0.13em;
-	text-transform: uppercase;
-	color: var(--menu-wine);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--menu-ink-muted);
 }
 
 .catalog-toolbar h2 {
@@ -132,10 +130,8 @@ let {
 .catalog-toolbar > span {
 	justify-self: end;
 	font-family: var(--font-sans);
-	font-size: 0.72rem;
-	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	font-size: 0.8125rem;
+	font-weight: 500;
 	color: var(--menu-ink-muted);
 }
 

@@ -35,7 +35,7 @@ const actionNotification = $derived(
 <ActionNotification notification={actionNotification} />
 
 <Card.Root>
-	<Card.Header> <Card.Title class="text-xl">Email Verification</Card.Title> </Card.Header>
+	<Card.Header> <Card.Title>Email verification</Card.Title> </Card.Header>
 	<Card.Content>
 		{#if data.pending}
 			<div class="space-y-3 text-center">

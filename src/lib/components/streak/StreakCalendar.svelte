@@ -133,9 +133,8 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 }
 
 .month-name {
-	font-family: var(--font-serif, serif);
-	font-size: 1rem;
-	letter-spacing: 0.01em;
+	font-size: 0.9375rem;
+	font-weight: 500;
 }
 
 .pager {
@@ -167,7 +166,7 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 
 .weekdays {
 	margin-top: 0.6rem;
-	font-size: 0.6875rem;
+	font-size: 0.75rem;
 	color: #8b7661;
 	text-align: center;
 }

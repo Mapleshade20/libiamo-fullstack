@@ -174,13 +174,13 @@ onMount(() => {
 {#if captured}
 	<div
 		data-selection-bubble
-		class="fixed z-[60] flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
+		class="fixed z-[60] flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 shadow-xl"
 		style="top: {captured.top}px; left: {captured.left}px;"
 		transition:scale={{ duration: 120, start: 0.95 }}
 	>
 		<button
 			type="button"
-			class="rounded-full p-2 text-foreground hover:bg-muted disabled:opacity-40"
+			class="inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors duration-100 hover:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
 			onclick={handleAsk}
 			disabled={isSaving}
 			title={t(lang, "feedback.selection.ask")}
@@ -190,7 +190,7 @@ onMount(() => {
 		</button>
 		<button
 			type="button"
-			class="rounded-full p-2 text-muted-foreground hover:bg-muted disabled:opacity-40"
+			class="inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
 			onclick={handleSave}
 			disabled={isSaving || savedKeys.has(captured.key)}
 			title={t(lang, "feedback.selection.save")}
@@ -207,7 +207,7 @@ onMount(() => {
 
 {#if saveStatus}
 	<div
-		class="fixed z-[60] max-w-xs rounded-full border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur-md {saveStatus.kind === 'success' ? 'border-green-200 bg-green-50/95 text-green-700' : saveStatus.kind === 'empty' ? 'border-border bg-background/95 text-muted-foreground' : 'border-red-200 bg-red-50/95 text-red-700'}"
+		class="fixed z-[60] max-w-xs rounded-full border px-3 py-2 text-xs font-medium shadow-lg border-border bg-popover {saveStatus.kind === 'success' ? 'text-success' : saveStatus.kind === 'empty' ? 'text-muted-foreground' : 'text-destructive'}"
 		style="top: {saveStatus.top}px; left: {saveStatus.left}px;"
 		transition:fade={{ duration: 150 }}
 	>

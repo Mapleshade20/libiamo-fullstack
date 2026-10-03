@@ -3,8 +3,13 @@ import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { type ValidationIssue, validateBeforeSubmit } from "$lib/client/form-attention";
 import Accordion from "$lib/components/common/Accordion.svelte";
+import Field from "$lib/components/common/Field.svelte";
+import Select from "$lib/components/common/Select.svelte";
+import Switch from "$lib/components/common/Switch.svelte";
 import EffortSelect from "$lib/components/llm/EffortSelect.svelte";
 import SlotEditor from "$lib/components/llm/SlotEditor.svelte";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
 import type { ReasoningEffort } from "$lib/constants";
 import { type LabProviderOption, type RecipeDescriptor, temperaturePlaceholder } from "$lib/llm/lab";
 import { unknownTemplateVariables } from "$lib/llm/template";
@@ -58,58 +63,56 @@ function validate(): ValidationIssue[] {
 	return issues;
 }
 
-const fieldClass =
-	"w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const buttonClass =
-	"inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring";
+const uid = $props.id();
 </script>
 
 <form method="POST" action="?/save" use:enhance={() => async ({ update }) => update({ reset: false })} class="space-y-3">
 	<input type="hidden" name="payload" value={payload}>
 	<div class="space-y-3" use:validateBeforeSubmit={validate}>
-		<label class="flex min-h-11 items-center gap-3 text-sm">
-			<input type="checkbox" class="size-5 accent-foreground" bind:checked={enabled}>
+		<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 			Use this override for my own calls
+			<Switch bind:checked={enabled} />
 		</label>
 		<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_10rem]">
-			<label class="grid gap-1 text-sm">
-				Provider
-				<select class="{fieldClass} h-11" bind:value={providerRef}>
-					<option value="">Normal routing (my key or the shared provider)</option>
-					{#each providers as provider}
-						<option value={provider.ref}>{provider.label} · {provider.model}</option>
-					{/each}
-				</select>
-			</label>
-			<EffortSelect bind:value={reasoningEffort} recipeDefault={recipe.reasoningEffort} class="{fieldClass} h-11" />
-			<label class="grid gap-1 text-sm">
-				Temperature
-				<input
-					class="{fieldClass} h-11"
+			<Field label="Provider" for="{uid}-provider">
+				<Select
+					id="{uid}-provider"
+					bind:value={providerRef}
+					items={[
+						{ value: "", label: "Normal routing (my key or the shared provider)" },
+						...providers.map((provider) => ({ value: provider.ref, label: `${provider.label} · ${provider.model}` })),
+					]}
+				/>
+			</Field>
+			<EffortSelect bind:value={reasoningEffort} recipeDefault={recipe.reasoningEffort} />
+			<Field label="Temperature" for="{uid}-temperature">
+				<Input
+					id="{uid}-temperature"
 					inputmode="decimal"
 					placeholder={temperaturePlaceholder(recipe)}
 					data-feedback-name={`${recipe.id}.temperature`}
 					bind:value={temperature}
-				>
-			</label>
+				/>
+			</Field>
 		</div>
-		{#each recipe.slots as slot (slot.name)}
-			<Accordion title={`${slot.label}${slots[slot.name] !== slot.template ? " · edited" : ""}`} class="bg-background/60">
-				<SlotEditor definition={slot} bind:value={slots[slot.name]} feedbackName={`${recipe.id}.slot.${slot.name}`} />
-			</Accordion>
-		{/each}
-		<label class="grid gap-1 text-sm">
-			Note
-			<input class="{fieldClass} h-11" maxlength="500" bind:value={note} placeholder="What this override tries">
-		</label>
+		{#if recipe.slots.length}
+			<div class="divide-y divide-border border-y border-border">
+				{#each recipe.slots as slot (slot.name)}
+					<Accordion title={`${slot.label}${slots[slot.name] !== slot.template ? " · edited" : ""}`} variant="plain">
+						<SlotEditor definition={slot} bind:value={slots[slot.name]} feedbackName={`${recipe.id}.slot.${slot.name}`} />
+					</Accordion>
+				{/each}
+			</div>
+		{/if}
+		<Field label="Note" for="{uid}-note"> <Input id="{uid}-note" maxlength={500} bind:value={note} placeholder="What this override tries" /> </Field>
 		<div class="flex flex-wrap items-center gap-2">
-			<button type="submit" class={buttonClass}>Save</button>
+			<Button type="submit" variant="secondary">Save</Button>
 			{#if message?.saved}
-				<span class="text-sm text-muted-foreground" role="status">Saved.</span>
+				<span class="text-sm text-success" role="status">Saved.</span>
 			{/if}
 		</div>
 		{#if message?.error}
-			<p class="text-sm text-destructive" role="alert">{message.error}</p>
+			<p class="field-error-message" role="alert">{message.error}</p>
 		{/if}
 	</div>
 </form>

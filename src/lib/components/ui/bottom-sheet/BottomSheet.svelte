@@ -53,7 +53,7 @@ $effect(() => {
 
 			<!-- Bottom sheet -->
 			<div
-				class="absolute inset-x-0 bottom-0 z-10 max-h-[100dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-[#e8e3db] bg-white text-[#2a2520] shadow-2xl"
+				class="absolute inset-x-0 bottom-0 z-10 max-h-[100dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-border bg-card text-foreground shadow-2xl"
 				transition:fly|global={{ y: "100%", duration: 300 }}
 				role="dialog"
 				aria-modal="true"
@@ -61,28 +61,22 @@ $effect(() => {
 			>
 				<div class="mx-auto max-w-lg p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
 					<!-- Handle bar -->
-					<div class="mx-auto mb-4 h-1 w-12 rounded-full bg-[#e8e3db]"></div>
+					<div class="mx-auto mb-4 h-1 w-12 rounded-full bg-border"></div>
 
 					<!-- Content -->
 					<div class="mb-6">
-						<h3 id="bottom-sheet-title" class="mb-2 font-serif text-xl font-medium text-[#2a2520]">{title}</h3>
+						<h2 id="bottom-sheet-title" class="mb-2">{title}</h2>
 						{#if children}
 							{@render children()}
 						{:else}
-							<p class="text-base leading-relaxed text-[#6b6560]">{message}</p>
+							<p class="text-sm leading-relaxed text-muted-foreground">{message}</p>
 						{/if}
 					</div>
 
 					<!-- Actions -->
 					<div class="flex gap-3">
-						<Button variant="outline" class="flex-1" onclick={onCancel}> {cancelLabel} </Button>
-						<Button
-							class="flex-1 bg-gradient-to-br from-[#4a7c59] to-[#3d6849] hover:from-[#3d6849] hover:to-[#2f5237]"
-							onclick={onConfirm}
-							disabled={confirmDisabled}
-						>
-							{confirmLabel}
-						</Button>
+						<Button variant="secondary" class="flex-1" onclick={onCancel}> {cancelLabel} </Button>
+						<Button class="flex-1" onclick={onConfirm} disabled={confirmDisabled}> {confirmLabel} </Button>
 					</div>
 				</div>
 			</div>

@@ -21,7 +21,7 @@ const MARK_CLASS: Record<string, string> = {
 <div class="space-y-4 text-sm">
 	<ol class="space-y-3">
 		{#each feedback.annotations ?? [] as annotation}
-			<li class="rounded-lg border border-border bg-background px-3 py-2.5">
+			<li class="rounded-xl border border-border bg-card px-3 py-2.5">
 				<p class="text-xs text-muted-foreground">Message {annotation.messageId}</p>
 				<p class="mt-1 leading-relaxed">
 					{#each splitTaggedText(annotation.annotatedText ?? "", ["grammar", "vocab", "delete"]) as segment}
@@ -33,7 +33,7 @@ const MARK_CLASS: Record<string, string> = {
 					{/each}
 				</p>
 				{#if annotation.comment}
-					<p class="mt-2 border-l-2 border-[#c9b98f] pl-3 text-muted-foreground">
+					<p class="mt-2 border-l-2 border-border pl-3 text-muted-foreground">
 						{#each splitTaggedText(annotation.comment, ["mark"]) as segment}
 							{#if segment.tag}
 								<span class={MARK_CLASS.mark}>{segment.text}</span>

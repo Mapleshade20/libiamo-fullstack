@@ -1,4 +1,6 @@
 <script lang="ts">
+import type { Snippet } from "svelte";
+import { Button } from "$lib/components/ui/button";
 import ModalDialog from "./ModalDialog.svelte";
 
 /**
@@ -13,16 +15,22 @@ let {
 	confirmLabel,
 	cancelLabel,
 	busy = false,
+	tone = "danger",
 	onconfirm,
+	children,
 }: {
 	open?: boolean;
 	title: string;
-	message: string;
+	message?: string;
 	confirmLabel: string;
 	cancelLabel: string;
 	/** Keeps the dialog up, and both buttons inert, while the action is in flight. */
 	busy?: boolean;
+	/** `danger` for deleting, removing and disconnecting; `default` for anything else. */
+	tone?: "danger" | "default";
 	onconfirm: () => void;
+	/** Detail below the message, such as a summary of what is about to be submitted. */
+	children?: Snippet;
 } = $props();
 
 const titleId = $props.id();
@@ -30,64 +38,16 @@ const titleId = $props.id();
 
 <ModalDialog bind:open={isOpen} {busy} labelledby={titleId}>
 	<div aria-busy={busy}>
-		<h2 id={titleId}>{title}</h2>
-		<p class="message">{message}</p>
-		<div class="actions">
-			<button type="button" disabled={busy} onclick={() => (isOpen = false)}>{cancelLabel}</button>
-			<button type="button" class="confirm-action" disabled={busy} onclick={onconfirm}>{confirmLabel}</button>
+		<h2 id={titleId} class="mb-2">{title}</h2>
+		{#if message}
+			<p class="mb-6 text-sm leading-relaxed text-muted-foreground">{message}</p>
+		{/if}
+		{#if children}
+			<div class="mb-6 text-sm leading-relaxed text-muted-foreground">{@render children()}</div>
+		{/if}
+		<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+			<Button variant="secondary" disabled={busy} onclick={() => (isOpen = false)}>{cancelLabel}</Button>
+			<Button variant={tone === "danger" ? "destructive-solid" : "default"} disabled={busy} onclick={onconfirm}>{confirmLabel}</Button>
 		</div>
 	</div>
 </ModalDialog>
-
-<style>
-h2 {
-	margin: 0 0 1rem;
-	font-family: var(--font-serif);
-	font-size: 1.75rem;
-	font-weight: 500;
-}
-.message {
-	margin: 0 0 1.75rem;
-	font-size: 0.9rem;
-	line-height: 1.6;
-	color: #655d55;
-}
-.actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.75rem;
-}
-.actions button {
-	min-height: 44px;
-	padding: 0.65rem 1rem;
-	border-radius: 10px;
-	font-size: 0.875rem;
-	font-weight: 600;
-	transition:
-		background-color 200ms,
-		opacity 200ms;
-}
-.actions button:hover {
-	background: #eeeae4;
-}
-.actions .confirm-action {
-	background: #713b46;
-	color: #fffaf7;
-}
-.actions .confirm-action:hover {
-	background: #60323c;
-}
-.actions button:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-button:focus-visible {
-	outline: 2px solid #89525e;
-	outline-offset: 3px;
-}
-@media (prefers-reduced-motion: reduce) {
-	.actions button {
-		transition: none;
-	}
-}
-</style>

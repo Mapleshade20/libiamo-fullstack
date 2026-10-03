@@ -128,11 +128,9 @@ function itemObjective(item: QuestMenuItem): string | null {
 	margin: 0;
 	line-height: 1.5;
 	font-family: var(--font-sans);
-	font-size: 0.68rem;
-	font-weight: 750;
-	letter-spacing: 0.13em;
-	text-transform: uppercase;
-	color: var(--menu-wine);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--menu-ink-muted);
 }
 
 .recommendation-list {

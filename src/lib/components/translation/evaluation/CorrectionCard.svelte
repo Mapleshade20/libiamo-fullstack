@@ -229,22 +229,22 @@ function handleRetry() {
 </script>
 
 <section class="mx-auto w-full max-w-3xl" aria-labelledby="correction-card-title">
-	<header class="mb-6 flex items-end justify-between gap-3 border-b border-stone-400/25 pb-5">
+	<header class="mb-6 flex items-end justify-between gap-3 border-b border-border pb-5">
 		<div class="min-w-0">
-			<p class="mb-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">{eyebrowLabel}</p>
-			<h1 id="correction-card-title" class="font-serif text-3xl leading-tight tracking-tight focus:outline-none" tabindex="-1">{titleLabel}</h1>
+			<p class="mb-2 text-xs font-medium text-muted-foreground">{eyebrowLabel}</p>
+			<h1 id="correction-card-title" class="leading-tight focus:outline-none" tabindex="-1">{titleLabel}</h1>
 		</div>
-		<p class="shrink-0 font-serif text-lg tabular-nums">
+		<p class="shrink-0 text-lg tabular-nums">
 			<span class="text-2xl">{cardIndex + 1}</span><span class="mx-1 text-muted-foreground">/</span>{cardTotal}
 		</p>
 	</header>
 
 	<div class="grid gap-4 sm:grid-cols-[4.75rem_minmax(0,1fr)] sm:gap-5">
-		<p class="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{sourceLabel}</p>
+		<p class="text-xs font-medium text-muted-foreground">{sourceLabel}</p>
 		<p class="font-prose text-lg leading-relaxed break-words">{card.sourceText}</p>
 
-		<p class="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{originalLabel}</p>
-		<blockquote class="border-l-2 border-[#c9a4a4] pl-4 font-prose text-base leading-relaxed break-words text-foreground/75">
+		<p class="text-xs font-medium text-muted-foreground">{originalLabel}</p>
+		<blockquote class="border-l-2 border-destructive/40 pl-4 font-prose text-base leading-relaxed break-words text-foreground/75">
 			{card.originalAnswer}
 		</blockquote>
 	</div>
@@ -265,11 +265,11 @@ function handleRetry() {
 	{:else if isSecondReject}
 		<div class="mt-9 space-y-6" in:fade={{ duration: 280 }}>
 			{#if local.feedback}
-				<div class="flex gap-3 border-l-2 border-[#c9a4a4] bg-red-50/45 px-4 py-3" role="status">
-					<AlertCircle class="mt-0.5 size-4 shrink-0 text-red-700" />
+				<div class="flex gap-3 border-l-2 border-destructive/40 bg-destructive/[0.06] px-4 py-3" role="status">
+					<AlertCircle class="mt-0.5 size-4 shrink-0 text-destructive" />
 					<div>
-						<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-red-800 uppercase">{feedbackLabel}</p>
-						<p class="font-prose text-sm leading-relaxed text-red-950">{local.feedback}</p>
+						<p class="mb-1 text-xs font-medium text-destructive">{feedbackLabel}</p>
+						<p class="font-prose text-sm leading-relaxed text-foreground">{local.feedback}</p>
 					</div>
 				</div>
 			{/if}
@@ -285,7 +285,7 @@ function handleRetry() {
 			/>
 		</div>
 	{:else}
-		<div class="mt-7 border-t border-stone-400/25 pt-6" data-field-container>
+		<div class="mt-7 border-t border-border pt-6" data-field-container>
 			{#if !reviewOnly}
 				<label for="correction-input" class="mb-3 block text-sm font-semibold">{reviseLabel}</label>
 
@@ -314,8 +314,7 @@ function handleRetry() {
 					/>
 					<button
 						type="button"
-						class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40
-						{canSubmit || submitting ? 'opacity-100' : 'opacity-40'}
+						class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 {canSubmit || submitting ?'opacity-100' : 'opacity-40'}
 						{submitting ? 'submit-orbit--busy scale-[1.02]' : 'hover:scale-[1.03] active:scale-[0.97]'}"
 						disabled={!canSubmit && !submitting}
 						aria-label={continueLabel}
@@ -324,12 +323,10 @@ function handleRetry() {
 					>
 						<span class="submit-orbit__ring" aria-hidden="true"></span>
 						<span
-							class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300
-							{submitting ? 'bg-primary/90' : ''}"
+							class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300 {submitting ?'bg-primary/90' : ''}"
 						>
 							<ArrowUp
-								class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting
-								? '-translate-y-0.5 opacity-90'
+								class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting ?'-translate-y-0.5 opacity-90'
 								: ''}"
 								strokeWidth={2.25}
 							/>
@@ -341,17 +338,17 @@ function handleRetry() {
 					<div class="provider-slot mt-4" class:provider-slot--open={providerBannerOpen}>
 						<div class="provider-slot__inner">
 							<div
-								class="mb-0 flex flex-col gap-3 border-l-2 border-amber-600 bg-amber-50/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+								class="mb-0 flex flex-col gap-3 border-l-2 border-warning bg-warning/[0.08] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
 								role="alert"
 							>
 								<div class="flex gap-3">
-									<AlertCircle class="mt-0.5 size-4 shrink-0 text-amber-800" />
+									<AlertCircle class="mt-0.5 size-4 shrink-0 text-warning" />
 									<div>
-										<p class="text-sm font-medium text-amber-950">{providerErrorTitle}</p>
-										<p class="mt-0.5 text-sm leading-relaxed text-amber-950/85">{providerErrorBody}</p>
+										<p class="text-sm font-medium text-foreground">{providerErrorTitle}</p>
+										<p class="mt-0.5 text-sm leading-relaxed text-foreground/85">{providerErrorBody}</p>
 									</div>
 								</div>
-								<Button size="sm" variant="outline" class="bg-transparent" disabled={submitting} onclick={handleRetry}>
+								<Button size="sm" variant="secondary" class="bg-transparent" disabled={submitting} onclick={handleRetry}>
 									<RotateCcw />{retryLabel}
 								</Button>
 							</div>
@@ -370,11 +367,11 @@ function handleRetry() {
 				<div class="feedback-slot" class:feedback-slot--open={feedbackSlotOpen && Boolean(local.feedback)}>
 					<div class="feedback-slot__inner">
 						{#if showFeedback && local.feedback}
-							<div class="feedback-wipe mb-4 flex gap-3 border-l-2 border-[#c9a4a4] bg-red-50/45 px-4 py-3" role="status">
-								<AlertCircle class="mt-0.5 size-4 shrink-0 text-red-700" />
+							<div class="feedback-wipe mb-4 flex gap-3 border-l-2 border-destructive/40 bg-destructive/[0.06] px-4 py-3" role="status">
+								<AlertCircle class="mt-0.5 size-4 shrink-0 text-destructive" />
 								<div>
-									<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-red-800 uppercase">{feedbackLabel}</p>
-									<p class="font-prose text-sm leading-relaxed text-red-950">{local.feedback}</p>
+									<p class="mb-1 text-xs font-medium text-destructive">{feedbackLabel}</p>
+									<p class="font-prose text-sm leading-relaxed text-foreground">{local.feedback}</p>
 								</div>
 							</div>
 						{/if}
@@ -384,17 +381,17 @@ function handleRetry() {
 				<div class="hint-rail" bind:this={hintRailEl} aria-live="polite">
 					<div class="hint-track" class:hint-track--deeper={hintShowDeeper} style="--hint-slide-ms: {HINT_SLIDE_MS}ms">
 						<div class="hint-panel" id="correction-hint-{cardIndex}-initial" aria-hidden={hintShowDeeper}>
-							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
+							<Lightbulb class="mt-0.5 size-4 shrink-0 text-success" />
 							<div class="min-w-0">
-								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{hintLabel}</p>
-								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-[#34463a]">{@html initialHintHtml}</div>
+								<p class="mb-1 text-xs font-medium text-success">{hintLabel}</p>
+								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-foreground">{@html initialHintHtml}</div>
 							</div>
 						</div>
 						<div class="hint-panel" id="correction-hint-{cardIndex}-deeper" aria-hidden={!hintShowDeeper}>
-							<Lightbulb class="mt-0.5 size-4 shrink-0 text-[#55705b]" />
+							<Lightbulb class="mt-0.5 size-4 shrink-0 text-success" />
 							<div class="min-w-0">
-								<p class="mb-1 text-[10px] font-semibold tracking-[0.14em] text-[#55705b] uppercase">{deeperHintLabel}</p>
-								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-[#34463a]">{@html deeperHintHtml}</div>
+								<p class="mb-1 text-xs font-medium text-success">{deeperHintLabel}</p>
+								<div class="hint-markdown prose font-prose text-sm leading-relaxed text-foreground">{@html deeperHintHtml}</div>
 							</div>
 						</div>
 					</div>
@@ -404,7 +401,6 @@ function handleRetry() {
 						<Button
 							variant="ghost"
 							size="sm"
-							class="text-[#405b47] hover:bg-[#dce8de]/60 hover:text-[#2f4936]"
 							aria-expanded={hintShowDeeper}
 							aria-controls="correction-hint-{cardIndex}-deeper"
 							onclick={() => (hintShowDeeper = !hintShowDeeper)}

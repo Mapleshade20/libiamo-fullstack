@@ -5,11 +5,17 @@ import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { type ValidationIssue, validateBeforeSubmit } from "$lib/client/form-attention";
 import Accordion from "$lib/components/common/Accordion.svelte";
+import Select from "$lib/components/common/Select.svelte";
+import Switch from "$lib/components/common/Switch.svelte";
 import EffortSelect from "$lib/components/llm/EffortSelect.svelte";
 import { formatLabTime, formatLatency } from "$lib/components/llm/format";
 import MessagesView from "$lib/components/llm/MessagesView.svelte";
 import OutputView from "$lib/components/llm/OutputView.svelte";
 import SlotEditor from "$lib/components/llm/SlotEditor.svelte";
+import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
+import { Textarea } from "$lib/components/ui/textarea";
 import type { ReasoningEffort } from "$lib/constants";
 import { type LabChatMessage, temperaturePlaceholder } from "$lib/llm/lab";
 import { unknownTemplateVariables } from "$lib/llm/template";
@@ -81,18 +87,13 @@ $effect(() => {
 	// A fresh preview seeds the message editor when it is empty.
 	if (form?.preview && editMessages && messages.length === 0) messages = form.preview.map((message) => ({ ...message }));
 });
-
-const fieldClass =
-	"w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const buttonClass =
-	"inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60";
 </script>
 
 <svelte:head> <title>Playground · LLM Lab · Libiamo</title> </svelte:head>
 
 <div class="space-y-6">
 	<div class="space-y-1">
-		<h1 class="text-3xl">Playground</h1>
+		<h1>Playground</h1>
 		<p class="text-sm text-muted-foreground">
 			Re-run one input with other slots, providers or hand-edited messages. Runs are stored as Lab traces and never change learner data or quota.
 			{#if data.source}
@@ -104,10 +105,10 @@ const buttonClass =
 	{#if !data.source && !form}
 		<section
 			aria-labelledby="start-heading"
-			class="grid gap-6 rounded-lg border border-border bg-card/40 p-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
+			class="grid gap-6 rounded-xl border border-border bg-card p-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
 		>
 			<div class="space-y-3">
-				<h2 id="start-heading" class="font-serif text-2xl">Start from a real call</h2>
+				<h2 id="start-heading">Start from a real call</h2>
 				<ol class="list-decimal space-y-2 pl-5 text-sm leading-relaxed">
 					<li>
 						Pick a call on the right, or <a class="underline underline-offset-2" href="{base}/admin/lab/traces">find one in Traces</a> and choose
@@ -127,16 +128,16 @@ const buttonClass =
 			<div class="space-y-2">
 				<h3 class="text-sm font-medium">Recent real calls</h3>
 				{#if data.recentCalls.length}
-					<ul class="divide-y divide-border rounded-md border border-border bg-background">
+					<ul class="-mx-2 divide-y divide-border">
 						{#each data.recentCalls as call (call.id)}
 							<li>
 								<a
 									href="{base}/admin/lab/playground?trace={call.id}"
-									class="flex min-h-11 flex-wrap items-baseline gap-x-3 px-3 py-2 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring"
+									class="flex min-h-11 flex-wrap items-baseline gap-x-3 rounded-md px-2 py-2 text-sm transition-colors duration-100 hover:bg-foreground/[0.03] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 								>
 									<span class="font-medium">{recipeTitles.get(call.recipeId) ?? call.recipeId}</span>
 									{#if call.status === "error"}
-										<span class="text-xs text-[#7d2f22]">error</span>
+										<Badge variant="destructive">Error</Badge>
 									{/if}
 									<span class="ml-auto text-xs text-muted-foreground tabular-nums">
 										{call.userName ?? "—"}{call.taskId ? ` · task #${call.taskId}` : ""}
@@ -172,102 +173,107 @@ const buttonClass =
 	>
 		<input type="hidden" name="payload" value={payload}>
 		<div class="space-y-5" use:validateBeforeSubmit={validate}>
-			<label class="grid gap-1 text-sm">
-				Recipe
-				<select class="{fieldClass} h-11" value={recipeId} onchange={(event) => changeRecipe(event.currentTarget.value)}>
-					{#each data.recipes as option}
-						<option value={option.id}>{option.title}</option>
-					{/each}
-				</select>
-			</label>
+			<div class="flex flex-col gap-1.5">
+				<label for="playground-recipe" class="text-sm font-medium">Recipe</label>
+				<Select
+					id="playground-recipe"
+					value={recipeId}
+					onValueChange={changeRecipe}
+					items={data.recipes.map((option) => ({ value: option.id, label: option.title }))}
+				/>
+			</div>
 			<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_10rem]">
-				<label class="grid gap-1 text-sm">
-					Provider
-					<select class="{fieldClass} h-11" bind:value={providerRef}>
-						{#each data.providers as provider}
-							<option value={provider.ref}>{provider.label} · {provider.model}</option>
-						{/each}
-					</select>
-				</label>
-				<EffortSelect bind:value={reasoningEffort} recipeDefault={recipe.reasoningEffort} class="{fieldClass} h-11" />
-				<label class="grid gap-1 text-sm">
-					Temperature
-					<input
-						class="{fieldClass} h-11"
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label for="playground-provider" class="text-sm font-medium">Provider</label>
+					<Select
+						id="playground-provider"
+						bind:value={providerRef}
+						items={data.providers.map((provider) => ({ value: provider.ref, label: `${provider.label} · ${provider.model}` }))}
+					/>
+				</div>
+				<EffortSelect bind:value={reasoningEffort} recipeDefault={recipe.reasoningEffort} />
+				<div class="flex flex-col gap-1.5">
+					<label for="playground-temperature" class="text-sm font-medium">Temperature</label>
+					<Input
+						id="playground-temperature"
 						name="temperature"
 						inputmode="decimal"
 						placeholder={temperaturePlaceholder(recipe)}
 						bind:value={temperature}
-					>
-				</label>
+					/>
+				</div>
 			</div>
 
-			<label class="grid gap-1 text-sm">
-				Input (JSON)
-				<textarea
+			<div class="flex flex-col gap-1.5">
+				<label for="playground-input" class="text-sm font-medium">Input (JSON)</label>
+				<Textarea
+					id="playground-input"
 					name="input"
 					bind:value={inputText}
-					rows="14"
+					rows={14}
 					spellcheck="false"
-					class="{fieldClass} py-2 font-mono text-xs leading-relaxed"
-				></textarea>
-			</label>
+					class="field-sizing-fixed font-mono text-xs leading-relaxed"
+				/>
+			</div>
 
 			{#if recipe.slots.length}
 				<div class="space-y-2">
-					<h2 class="text-sm font-medium">Slots</h2>
-					{#each recipe.slots as slot (slot.name)}
-						<Accordion title={`${slot.label}${slots[slot.name] !== slot.template ? " · edited" : ""}`} class="bg-card/40">
-							<SlotEditor definition={slot} bind:value={slots[slot.name]} feedbackName={`slot.${slot.name}`} />
-						</Accordion>
-					{/each}
+					<h3 class="text-sm font-medium">Slots</h3>
+					<div class="divide-y divide-border rounded-xl border border-border bg-card px-4">
+						{#each recipe.slots as slot (slot.name)}
+							<Accordion title={`${slot.label}${slots[slot.name] !== slot.template ? " · edited" : ""}`} variant="plain">
+								<SlotEditor definition={slot} bind:value={slots[slot.name]} feedbackName={`slot.${slot.name}`} />
+							</Accordion>
+						{/each}
+					</div>
 				</div>
 			{:else}
 				<p class="text-sm text-muted-foreground">This recipe has no slots; edit the messages directly to change its prompt.</p>
 			{/if}
 
-			<div class="space-y-3 rounded-lg border border-border p-3">
-				<label class="flex min-h-11 items-center gap-3 text-sm">
-					<input type="checkbox" class="size-5 accent-foreground" bind:checked={editMessages}>
+			<div class="space-y-3 border-t border-border pt-4">
+				<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 					Send hand-edited messages instead of the recipe's (one-off)
+					<Switch bind:checked={editMessages} />
 				</label>
 				{#if editMessages}
 					{#if messages.length === 0}
 						<p class="text-sm text-muted-foreground">Preview the messages first; they will appear here for editing.</p>
 					{/if}
 					{#each messages as message, index}
-						<label class="grid gap-1 text-xs uppercase tracking-wider text-muted-foreground">
-							{message.role}
-							<textarea
+						<div class="flex flex-col gap-1.5">
+							<label for="playground-message-{index}" class="text-sm font-medium capitalize">{message.role}</label>
+							<Textarea
+								id="playground-message-{index}"
 								bind:value={messages[index].content}
-								rows="8"
+								rows={8}
 								spellcheck="false"
-								class="{fieldClass} py-2 font-mono text-xs normal-case tracking-normal text-foreground"
-							></textarea>
-						</label>
+								class="field-sizing-fixed font-mono text-xs"
+							/>
+						</div>
 					{/each}
 					{#if messages.length}
-						<button type="button" class={buttonClass} onclick={() => (messages = [])}>Discard edits</button>
+						<Button variant="ghost" onclick={() => (messages = [])}>Discard edits</Button>
 					{/if}
 				{/if}
 			</div>
 
 			<div class="flex flex-wrap gap-2">
-				<button type="submit" formaction="?/preview" class={buttonClass} disabled={pending !== null}>
-					{#if pending === "preview"}
-						<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-					{/if}
-					Preview messages
-				</button>
-				<button type="submit" class="{buttonClass} bg-[#38362f] text-[#faf8f4] hover:bg-[#4b483e]" disabled={pending !== null}>
+				<Button type="submit" disabled={pending !== null}>
 					{#if pending === "run"}
-						<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+						<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 					{/if}
 					Run
-				</button>
+				</Button>
+				<Button type="submit" formaction="?/preview" variant="secondary" disabled={pending !== null}>
+					{#if pending === "preview"}
+						<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+					{/if}
+					Preview messages
+				</Button>
 			</div>
 			{#if form?.error}
-				<p class="text-sm text-destructive" role="alert">{form.error}</p>
+				<p class="field-error-message" role="alert">{form.error}</p>
 			{/if}
 		</div>
 
@@ -275,7 +281,7 @@ const buttonClass =
 			{#if form?.result}
 				<section class="space-y-3">
 					<div class="flex flex-wrap items-baseline justify-between gap-2">
-						<h2 class="font-serif text-2xl">Result</h2>
+						<h2>Result</h2>
 						<p class="text-xs text-muted-foreground">
 							{form.result.route?.model ?? ""}
 							· {formatLatency(form.result.latencyMs)} · {form.result.completionTokens ?? "—"} tokens ·
@@ -287,19 +293,19 @@ const buttonClass =
 			{/if}
 			{#if showSource && data.source?.trace}
 				<section class="space-y-3">
-					<h2 class="font-serif text-2xl">Source output</h2>
+					<h2>Source output</h2>
 					<p class="text-xs text-muted-foreground">{data.source.trace.route?.model ?? ""}</p>
 					<OutputView {recipeId} output={data.source.trace.output} outputText={data.source.trace.outputText} error={data.source.trace.error} />
 				</section>
 			{/if}
 			{#if form?.result}
 				<section class="space-y-3">
-					<h2 class="font-serif text-xl">Sent messages</h2>
+					<h2>Sent messages</h2>
 					<MessagesView messages={form.result.messages} />
 				</section>
 			{:else if form?.preview}
 				<section class="space-y-3">
-					<h2 class="font-serif text-2xl">Preview</h2>
+					<h2>Preview</h2>
 					<MessagesView messages={form.preview} />
 				</section>
 			{:else if !showSource}

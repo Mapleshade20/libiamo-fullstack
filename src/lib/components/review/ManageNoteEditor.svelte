@@ -8,6 +8,12 @@ import { deserialize } from "$app/forms";
 import { invalidate } from "$app/navigation";
 import { STREAK_DEPENDENCY } from "$lib/app/load-dependencies";
 import { showValidationIssues } from "$lib/client/form-attention";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
+import Field from "$lib/components/common/Field.svelte";
+import Select from "$lib/components/common/Select.svelte";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
+import { Textarea } from "$lib/components/ui/textarea";
 import type { LanguageCode } from "$lib/constants";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, REVIEW_MAXIMUM_INTERVAL_DAYS, USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
@@ -38,7 +44,8 @@ let nativeDefinition = $state(note.nativeDefinition);
 let examples = $state(note.examples.map((example) => ({ ...example })));
 let dueDays = $state(0);
 let pending = $state<"save" | "due" | "reset" | "delete" | null>(null);
-let confirmAction = $state<"reset" | "delete" | null>(null);
+let confirmReset = $state(false);
+let confirmDelete = $state(false);
 let message = $state<{ tone: "success" | "error"; text: string } | null>(null);
 let editorForm: HTMLFormElement;
 let dueGroup: HTMLDivElement;
@@ -118,10 +125,11 @@ async function resetScheduling() {
 		const data = await postAction("reset", { noteId: String(note.id) });
 		const scheduling = data.scheduling as Pick<ManagedNote, "due" | "queueKind" | "reps" | "lapses">;
 		onupdate({ ...note, ...scheduling });
-		confirmAction = null;
+		confirmReset = false;
 		message = { tone: "success", text: t(lang, "review.manage.resetDone") };
 	} catch (error) {
 		message = { tone: "error", text: error instanceof Error ? error.message : t(lang, "review.manage.resetFailed") };
+		confirmReset = false;
 	} finally {
 		pending = null;
 	}
@@ -133,25 +141,25 @@ async function deleteCard() {
 	message = null;
 	try {
 		await postAction("delete", { noteId: String(note.id) });
+		confirmDelete = false;
 		ondelete(note.id);
 	} catch (error) {
 		message = { tone: "error", text: error instanceof Error ? error.message : t(lang, "review.manage.deleteFailed") };
+		confirmDelete = false;
 		pending = null;
 	}
 }
 </script>
 
-<div class="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_22px_60px_-48px_rgba(40,32,24,0.7)]">
-	<header class="border-b border-border bg-stone-100/45 px-5 py-4 sm:px-6">
-		<div class="flex flex-wrap items-start justify-between gap-3">
-			<div>
-				<p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t(lang, "review.manage.card")} #{note.id}</p>
-				<h2 class="mt-1 font-serif text-2xl leading-tight">{note.vocab}</h2>
-			</div>
-			<div class="text-right text-xs leading-5 text-muted-foreground">
-				<p>{t(lang, "review.manage.due")} {formatDate(note.due)}</p>
-				<p>{note.reps} {t(lang, "review.manage.reviews")} · {note.lapses} {t(lang, "review.manage.lapses")}</p>
-			</div>
+<div class="overflow-hidden rounded-xl border border-border bg-card">
+	<header class="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
+		<div class="min-w-0">
+			<p class="text-xs text-muted-foreground">{t(lang, "review.manage.card")} #{note.id}</p>
+			<h2 class="mt-0.5 text-2xl leading-tight">{note.vocab}</h2>
+		</div>
+		<div class="text-right text-xs leading-5 text-muted-foreground">
+			<p>{t(lang, "review.manage.due")} {formatDate(note.due)}</p>
+			<p>{note.reps} {t(lang, "review.manage.reviews")} · {note.lapses} {t(lang, "review.manage.lapses")}</p>
 		</div>
 	</header>
 
@@ -159,114 +167,97 @@ async function deleteCard() {
 		bind:this={editorForm}
 		tabindex="-1"
 		data-validation-group
-		class="space-y-5 px-5 py-5 sm:px-6"
+		class="space-y-5 px-5 py-5 outline-none sm:px-6"
 		onsubmit={(event) => {
 			event.preventDefault();
 			void saveNote();
 		}}
 	>
-		<div class="grid gap-4 sm:grid-cols-[9rem_1fr]">
-			<label class="space-y-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				{t(lang, "review.manage.language")}
-				<select
+		<div class="grid gap-4 sm:grid-cols-[10rem_1fr]">
+			<Field label={t(lang, "review.manage.language")} for="note-{note.id}-language">
+				<Select
+					id="note-{note.id}-language"
 					name="language"
 					bind:value={language}
-					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-				>
-					{#each LANGUAGE_CODES as code}
-						<option value={code}>{LANGUAGE_LABELS[code]}</option>
-					{/each}
-				</select>
-			</label>
-			<label class="space-y-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				{t(lang, "review.manage.vocabulary")}
-				<input
-					name="vocab"
-					bind:value={vocab}
-					maxlength={USER_TEXT_MAX_LENGTH}
-					required
-					class="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-base font-normal normal-case tracking-normal text-foreground"
-				>
-			</label>
+					items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+				/>
+			</Field>
+			<Field label={t(lang, "review.manage.vocabulary")} for="note-{note.id}-vocab">
+				<Input id="note-{note.id}-vocab" name="vocab" bind:value={vocab} maxlength={USER_TEXT_MAX_LENGTH} required />
+			</Field>
 		</div>
 
 		<div class="grid gap-4 sm:grid-cols-2">
-			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				{t(lang, "review.manage.targetDefinition")}
-				<textarea
+			<Field label={t(lang, "review.manage.targetDefinition")} for="note-{note.id}-target-definition">
+				<Textarea
+					id="note-{note.id}-target-definition"
 					name="targetDefinition"
 					bind:value={targetDefinition}
 					maxlength={USER_TEXT_MAX_LENGTH}
-					rows={4}
+					rows={3}
 					required
-					class="mt-1.5 w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-normal normal-case leading-relaxed tracking-normal text-foreground"
-				></textarea>
-			</label>
-			<label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-				{t(lang, "review.manage.nativeDefinition")}
-				<textarea
+				/>
+			</Field>
+			<Field label={t(lang, "review.manage.nativeDefinition")} for="note-{note.id}-native-definition">
+				<Textarea
+					id="note-{note.id}-native-definition"
 					name="nativeDefinition"
 					bind:value={nativeDefinition}
 					maxlength={USER_TEXT_MAX_LENGTH}
-					rows={4}
+					rows={3}
 					required
-					class="mt-1.5 w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-normal normal-case leading-relaxed tracking-normal text-foreground"
-				></textarea>
-			</label>
+				/>
+			</Field>
 		</div>
 
 		<fieldset class="space-y-3">
-			<legend class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(lang, "review.manage.examples")}</legend>
+			<legend class="mb-1.5 text-sm font-medium">{t(lang, "review.manage.examples")}</legend>
 			{#each examples as example, index}
-				<div class="rounded-xl border border-border/80 bg-stone-50/55 p-3">
-					<p class="mb-2 font-serif text-xs italic text-muted-foreground">{t(lang, "review.manage.example")} {index + 1}</p>
+				<div class="space-y-1.5">
+					<p class="text-xs text-muted-foreground">{t(lang, "review.manage.example")} {index + 1}</p>
 					<div class="grid gap-2 sm:grid-cols-2">
-						<textarea
+						<Textarea
 							name={`examples.${index}.targetText`}
 							bind:value={example.targetText}
 							maxlength={USER_TEXT_MAX_LENGTH}
 							rows={2}
 							required
 							aria-label={`${t(lang, "review.manage.targetExample")} ${index + 1}`}
-							class="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed"
-						></textarea>
-						<textarea
+							class="min-h-16"
+						/>
+						<Textarea
 							name={`examples.${index}.nativeText`}
 							bind:value={example.nativeText}
 							maxlength={USER_TEXT_MAX_LENGTH}
 							rows={2}
 							required
 							aria-label={`${t(lang, "review.manage.nativeExample")} ${index + 1}`}
-							class="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed"
-						></textarea>
+							class="min-h-16"
+						/>
 					</div>
 				</div>
 			{/each}
 		</fieldset>
 
-		<div class="flex items-center justify-between gap-4 border-t border-border pt-4">
-			<p class="min-h-5 text-sm {message?.tone === 'error' ? 'text-red-700' : 'text-emerald-700'}" role="status">{message?.text ?? ""}</p>
-			<button
-				type="submit"
-				disabled={pending !== null}
-				class="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-45"
-			>
+		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+			<p class="min-h-5 text-sm {message?.tone === 'error' ? 'text-destructive' : 'text-success'}" role="status">{message?.text ?? ""}</p>
+			<Button type="submit" disabled={pending !== null}>
 				{#if pending === "save"}
-					<LoaderCircle class="animate-spin" size={15} />
+					<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 				{:else}
-					<Save size={15} />
+					<Save aria-hidden="true" />
 				{/if}
 				{t(lang, "review.manage.saveCard")}
-			</button>
+			</Button>
 		</div>
 	</form>
 
-	<section class="grid border-t border-border bg-stone-100/35 sm:grid-cols-3 sm:divide-x sm:divide-border">
-		<div class="space-y-3 p-4" data-field-container>
-			<div class="flex items-center gap-2 text-sm font-semibold"><CalendarClock size={16} />{t(lang, "review.manage.setDue")}</div>
+	<section class="grid divide-y divide-border border-t border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+		<div class="space-y-2 p-4 sm:p-5" data-field-container>
+			<h3 class="flex items-center gap-2 text-sm font-medium"><CalendarClock size={16} aria-hidden="true" />{t(lang, "review.manage.setDue")}</h3>
 			<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.setDueDescription")}</p>
-			<div class="flex gap-2" bind:this={dueGroup}>
-				<input
+			<div class="flex gap-2 pt-1" bind:this={dueGroup}>
+				<Input
 					name="days"
 					type="number"
 					min="0"
@@ -274,75 +265,52 @@ async function deleteCard() {
 					step="1"
 					bind:value={dueDays}
 					aria-label={t(lang, "review.manage.daysUntilDue")}
-					class="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
-				>
-				<button
-					type="button"
-					disabled={pending !== null}
-					onclick={() => { void setDue(); }}
-					class="h-8 rounded-md border border-border bg-background px-3 text-xs font-semibold hover:bg-secondary disabled:opacity-45"
-				>
+					class="h-8 flex-1 pointer-coarse:h-10"
+				/>
+				<Button variant="secondary" size="sm" disabled={pending !== null} onclick={() => { void setDue(); }}>
 					{pending === "due" ? t(lang, "review.manage.setting") : t(lang, "review.manage.set")}
-				</button>
+				</Button>
 			</div>
 		</div>
 
-		<div class="space-y-3 p-4">
-			<div class="flex items-center gap-2 text-sm font-semibold"><RotateCcw size={16} />{t(lang, "review.manage.reset")}</div>
-			{#if confirmAction === "reset"}
-				<p class="text-xs leading-relaxed text-amber-800">{t(lang, "review.manage.resetQuestion")}</p>
-				<div class="flex gap-2">
-					<button
-						type="button"
-						disabled={pending !== null}
-						onclick={() => { void resetScheduling(); }}
-						class="h-8 rounded-md bg-amber-700 px-3 text-xs font-semibold text-white disabled:opacity-45"
-					>
-						{pending === "reset" ? t(lang, "review.manage.resetting") : t(lang, "review.manage.confirm")}
-					</button>
-					<button type="button" onclick={() => { confirmAction = null; }} class="h-8 rounded-md border border-border px-3 text-xs">
-						{t(lang, "common.cancel")}
-					</button>
-				</div>
-			{:else}
-				<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.resetDescription")}</p>
-				<button
-					type="button"
-					onclick={() => { confirmAction = "reset"; }}
-					class="h-8 rounded-md border border-border bg-background px-3 text-xs font-semibold hover:bg-secondary"
-				>
+		<div class="space-y-2 p-4 sm:p-5">
+			<h3 class="flex items-center gap-2 text-sm font-medium"><RotateCcw size={16} aria-hidden="true" />{t(lang, "review.manage.reset")}</h3>
+			<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.resetDescription")}</p>
+			<div class="pt-1">
+				<Button variant="secondary" size="sm" disabled={pending !== null} aria-haspopup="dialog" onclick={() => (confirmReset = true)}>
 					{t(lang, "review.manage.resetCard")}
-				</button>
-			{/if}
+				</Button>
+			</div>
 		</div>
 
-		<div class="space-y-3 p-4">
-			<div class="flex items-center gap-2 text-sm font-semibold text-red-800"><Trash2 size={16} />{t(lang, "review.manage.delete")}</div>
-			{#if confirmAction === "delete"}
-				<p class="text-xs leading-relaxed text-red-800">{t(lang, "review.manage.deleteQuestion")}</p>
-				<div class="flex gap-2">
-					<button
-						type="button"
-						disabled={pending !== null}
-						onclick={() => { void deleteCard(); }}
-						class="h-8 rounded-md bg-red-700 px-3 text-xs font-semibold text-white disabled:opacity-45"
-					>
-						{pending === "delete" ? t(lang, "review.manage.deleting") : t(lang, "common.delete")}
-					</button>
-					<button type="button" onclick={() => { confirmAction = null; }} class="h-8 rounded-md border border-border px-3 text-xs">
-						{t(lang, "common.cancel")}
-					</button>
-				</div>
-			{:else}
-				<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.cannotUndo")}</p>
-				<button
-					type="button"
-					onclick={() => { confirmAction = "delete"; }}
-					class="h-8 rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-800 hover:bg-red-100"
-				>
+		<div class="space-y-2 p-4 sm:p-5">
+			<h3 class="flex items-center gap-2 text-sm font-medium"><Trash2 size={16} aria-hidden="true" />{t(lang, "review.manage.delete")}</h3>
+			<p class="text-xs leading-relaxed text-muted-foreground">{t(lang, "review.manage.cannotUndo")}</p>
+			<div class="pt-1">
+				<Button variant="destructive" size="sm" disabled={pending !== null} aria-haspopup="dialog" onclick={() => (confirmDelete = true)}>
 					{t(lang, "review.manage.deleteCard")}
-				</button>
-			{/if}
+				</Button>
+			</div>
 		</div>
 	</section>
 </div>
+
+<ConfirmDialog
+	bind:open={confirmReset}
+	tone="default"
+	title={t(lang, "review.manage.resetCard")}
+	message={t(lang, "review.manage.resetQuestion")}
+	confirmLabel={pending === "reset" ? t(lang, "review.manage.resetting") : t(lang, "review.manage.confirm")}
+	cancelLabel={t(lang, "common.cancel")}
+	busy={pending === "reset"}
+	onconfirm={() => void resetScheduling()}
+/>
+<ConfirmDialog
+	bind:open={confirmDelete}
+	title={t(lang, "review.manage.deleteCard")}
+	message={t(lang, "review.manage.deleteQuestion")}
+	confirmLabel={pending === "delete" ? t(lang, "review.manage.deleting") : t(lang, "common.delete")}
+	cancelLabel={t(lang, "common.cancel")}
+	busy={pending === "delete"}
+	onconfirm={() => void deleteCard()}
+/>

@@ -2,6 +2,9 @@
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
+import Switch from "$lib/components/common/Switch.svelte";
+import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
 import { getDisplayClock } from "$lib/time/display-clock";
 import { formatLabTime, formatLatency, ORIGIN_LABELS } from "./format";
 
@@ -70,23 +73,23 @@ $effect(() => {
 	<FloatingPanel
 		bind:open
 		label="LLM calls"
-		triggerClass="flex-col gap-1 rounded-l-xl rounded-r-none border border-r-0 border-border bg-card/95 px-2 py-3 text-xs font-medium tracking-wider text-muted-foreground shadow-sm hover:text-foreground"
+		triggerClass="flex-col gap-1 rounded-l-xl rounded-r-none border border-r-0 border-border bg-card/95 px-2 py-3 text-xs font-medium text-muted-foreground shadow-sm hover:text-foreground"
 		class="z-[2500] flex w-[22rem] flex-col overflow-hidden [--floating-panel-padding:0.75rem]"
 	>
 		{#snippet trigger()}
 			<span class="[writing-mode:vertical-rl]">LLM</span>
 			{#if activeOverrides > 0}
-				<span class="size-2 rounded-full bg-[#b5652b]" aria-hidden="true"></span>
+				<span class="size-2 rounded-full bg-warning" aria-hidden="true"></span>
 				<span class="sr-only">{activeOverrides} active overrides</span>
 			{/if}
 		{/snippet}
 		<div class="flex min-h-0 flex-1 flex-col gap-3">
 			<div class="flex items-center justify-between gap-2">
-				<p class="text-sm font-semibold">My LLM calls</p>
-				<a href="{base}/admin/lab/traces" class="inline-flex min-h-11 items-center text-xs underline underline-offset-2">All traces</a>
+				<p class="text-sm font-medium">My LLM calls</p>
+				<Button href="{base}/admin/lab/traces" variant="ghost" size="sm">All traces</Button>
 			</div>
 			{#if activeOverrides > 0}
-				<p class="rounded-md bg-[#f6e9d8] px-2 py-1.5 text-xs text-[#6b4318]">
+				<p class="rounded-lg bg-warning/[0.1] px-2.5 py-2 text-xs">
 					{activeOverrides}
 					override{activeOverrides === 1 ? "" : "s"}
 					active on your account.
@@ -94,9 +97,9 @@ $effect(() => {
 				</p>
 			{/if}
 			{#if taskId}
-				<label class="flex min-h-11 items-center gap-2 text-xs">
-					<input type="checkbox" class="size-4 accent-foreground" bind:checked={onlyThisTask}>
+				<label class="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm">
 					Only task #{taskId}
+					<Switch bind:checked={onlyThisTask} />
 				</label>
 			{/if}
 			{#if failed}
@@ -109,16 +112,13 @@ $effect(() => {
 				<ul class="-mx-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain" aria-live="polite">
 					{#each traces as trace (trace.id)}
 						<li>
-							<a
-								href="{base}/admin/lab/traces/{trace.id}"
-								class="flex min-h-11 flex-col justify-center rounded-md px-2 py-1.5 hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring"
-							>
+							<a href="{base}/admin/lab/traces/{trace.id}" class="floating-menu-item flex-col items-stretch gap-0 px-2 py-1.5">
 								<span class="flex items-center justify-between gap-2 text-sm">
 									<span class="truncate">{trace.recipeTitle}</span>
 									{#if trace.status === "error"}
-										<span class="text-xs text-[#7d2f22]">error</span>
+										<Badge variant="destructive">Error</Badge>
 									{:else if trace.repaired}
-										<span class="text-xs text-muted-foreground">repaired</span>
+										<Badge variant="outline">Repaired</Badge>
 									{/if}
 								</span>
 								<span class="text-xs text-muted-foreground tabular-nums">

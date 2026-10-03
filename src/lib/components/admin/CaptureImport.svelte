@@ -1,4 +1,5 @@
 <script lang="ts">
+import Check from "@lucide/svelte/icons/check";
 import { SvelteSet } from "svelte/reactivity";
 import {
 	type Capture,
@@ -12,6 +13,9 @@ import {
 } from "$lib/admin/capture";
 import { CAPTURE_SCRIPTS, type CapturePlatform } from "$lib/admin/capture-scripts";
 import Accordion from "$lib/components/common/Accordion.svelte";
+import Checkbox from "$lib/components/common/Checkbox.svelte";
+import Notice from "$lib/components/common/Notice.svelte";
+import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Label } from "$lib/components/ui/label";
 import { Textarea } from "$lib/components/ui/textarea";
@@ -81,20 +85,15 @@ function chooseAll(on: boolean) {
 </script>
 
 {#snippet thread(parent: string)}
-	<ul class={parent ? "ml-4 border-l pl-2" : "space-y-1"}>
+	<ul class={parent ? "ml-4 border-l border-border pl-2" : "space-y-0.5"}>
 		{#each replies.get(parent) ?? [] as message (message.id)}
 			<li>
 				<label
-					class="flex min-h-11 cursor-pointer items-start gap-2 rounded px-2 py-1 hover:bg-muted {chosen.has(message.id) ? 'bg-emerald-50' : ''}"
+					class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-colors duration-100 {chosen.has(message.id) ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.025]'}"
 				>
-					<input
-						type="checkbox"
-						class="mt-1 size-4 shrink-0 accent-emerald-700"
-						checked={chosen.has(message.id)}
-						onchange={(event) => toggle(message, event.currentTarget.checked)}
-					>
+					<Checkbox class="mt-0.5" checked={chosen.has(message.id)} onchange={(event) => toggle(message, event.currentTarget.checked)} />
 					<span class="min-w-0">
-						<b>{message.author}</b>
+						<span class="font-medium">{message.author}</span>
 						<span class="line-clamp-2 text-muted-foreground">{message.text}</span>
 					</span>
 				</label>
@@ -112,13 +111,11 @@ function chooseAll(on: boolean) {
 		<ul class="space-y-2">
 			{#each PLATFORMS as { platform, label, how }}
 				<li class="flex flex-wrap items-center gap-2">
-					<Button
-						type="button"
-						variant="outline"
-						class="min-h-11 {copied === platform ? 'border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-50' : ''}"
-						onclick={() => copyScript(platform)}
-					>
-						{copied === platform ? `✓ ${label} script copied` : `Copy the ${label} script`}
+					<Button type="button" variant="secondary" onclick={() => copyScript(platform)}>
+						{#if copied === platform}
+							<Check class="text-success" aria-hidden="true" />
+						{/if}
+						{copied === platform ? `${label} script copied` : `Copy the ${label} script`}
 					</Button>
 					<span class="text-xs text-muted-foreground">Run it {how}</span>
 				</li>
@@ -128,7 +125,7 @@ function chooseAll(on: boolean) {
 			<Label for="capture">2. Paste what it copied</Label>
 			<Textarea id="capture" rows={3} class="max-h-40" bind:value={pasted} />
 			{#if parsed && !parsed.success}
-				<p class="text-sm text-red-600">{parsed.error}</p>
+				<p class="field-error-message" role="alert">{parsed.error}</p>
 			{/if}
 		</div>
 		{#if capture?.platform === "discord"}
@@ -136,20 +133,20 @@ function chooseAll(on: boolean) {
 				3. Choose where the learner joins: they take that person's place. The lines before it open the channel; what follows is what the cast knows
 				beyond it.
 			</p>
-			<ol class="max-h-96 space-y-1 overflow-y-auto rounded-md border p-1" aria-label="Captured messages">
+			<ol class="max-h-96 space-y-0.5 overflow-y-auto rounded-lg border border-border bg-white/50 p-1" aria-label="Captured messages">
 				{#each capture.messages as message (message.id)}
 					{@const parent = message.parent ? byId.get(message.parent) : undefined}
 					<li>
 						<button
 							type="button"
-							class="min-h-11 w-full rounded border-l-4 px-2 py-1 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring {message.id === joinedAt ? 'border-emerald-700 bg-emerald-50 ring-1 ring-emerald-600' : chatOpening.has(message.id) ? 'border-emerald-300' : 'border-transparent'}"
+							class="min-h-11 w-full cursor-pointer rounded-md border-l-[3px] px-2 py-1.5 text-left outline-none transition-colors duration-100 hover:bg-foreground/[0.025] focus-visible:ring-3 focus-visible:ring-ring/50 {message.id === joinedAt ? 'border-foreground bg-foreground/[0.06]' : chatOpening.has(message.id) ? 'border-foreground/30' : 'border-transparent'}"
 							aria-pressed={message.id === joinedAt}
 							onclick={() => join(message)}
 						>
 							{#if message.id === joinedAt}
-								<span class="mr-1 rounded bg-emerald-700 px-1.5 text-xs text-white">The learner joins here</span>
+								<Badge variant="default" class="mr-1">The learner joins here</Badge>
 							{/if}
-							<b>{message.author}</b>
+							<span class="font-medium">{message.author}</span>
 							{#if parent}
 								<span class="text-muted-foreground">↪ {parent.author}</span>
 							{/if}
@@ -159,24 +156,29 @@ function chooseAll(on: boolean) {
 				{/each}
 			</ol>
 			{#if joinedAt}
-				<p role="status" class="rounded-md bg-emerald-50 px-3 py-2 text-emerald-900">
-					The opening shows the {chatOpening.size} lines marked green; what follows fills "The rest of the real conversation". Check both before
-					saving.
-				</p>
+				<Notice tone="success" role="status">
+					<p>
+						The opening shows the {chatOpening.size} marked lines; what follows fills "The rest of the real conversation". Check both before saving.
+					</p>
+				</Notice>
 			{/if}
 		{:else if capture}
 			<div class="flex flex-wrap items-center gap-2">
 				<p class="flex-1">
 					3. Tick the comments the opening shows; ticking a reply ticks what it answers. The rest is what the cast knows beyond it.
 				</p>
-				<Button type="button" variant="outline" class="min-h-11" onclick={() => chooseAll(true)}>Tick all</Button>
-				<Button type="button" variant="outline" class="min-h-11" onclick={() => chooseAll(false)}>Clear</Button>
+				<Button type="button" variant="secondary" size="sm" onclick={() => chooseAll(true)}>Tick all</Button>
+				<Button type="button" variant="ghost" size="sm" onclick={() => chooseAll(false)}>Clear</Button>
 			</div>
-			<div class="max-h-[32rem] overflow-y-auto rounded-md border p-1" role="group" aria-label="Captured comments">{@render thread("")}</div>
-			<p role="status" class="rounded-md px-3 py-2 {chosen.size > LARGE_OPENING ? 'bg-amber-50 text-amber-900' : 'bg-muted'}">
-				{chosen.size}
-				of {capture.messages.length} comments in the opening{chosen.size > LARGE_OPENING ? ": a large opening makes every reply slower and costlier" : ""}.
-			</p>
+			<div class="max-h-[32rem] overflow-y-auto rounded-lg border border-border bg-white/50 p-1" role="group" aria-label="Captured comments">
+				{@render thread("")}
+			</div>
+			<Notice tone={chosen.size > LARGE_OPENING ? "warning" : "info"} role="status">
+				<p>
+					{chosen.size}
+					of {capture.messages.length} comments in the opening{chosen.size > LARGE_OPENING ? ": a large opening makes every reply slower and costlier" : ""}.
+				</p>
+			</Notice>
 		{/if}
 	</div>
 </Accordion>

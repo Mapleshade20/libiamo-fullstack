@@ -470,12 +470,12 @@ function updateCardInput(index: number, value: string) {
 {:else if data.attempt.workflowPhase === "completed"}
 	<StreakCompletion />
 	<section class="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center" aria-live="polite">
-		<CheckCircle2 class="mb-7 size-12 text-[#55705b]" strokeWidth={1.25} />
-		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(lang, "eval.complete.eyebrow")}</p>
-		<h1 tabindex="-1" class="font-serif text-4xl tracking-tight focus:outline-none">{t(lang, "eval.complete.title")}</h1>
+		<CheckCircle2 class="mb-7 size-12 text-success" strokeWidth={1.25} />
+		<p class="mb-2 text-xs font-medium text-muted-foreground">{t(lang, "eval.complete.eyebrow")}</p>
+		<h1 tabindex="-1" class="focus:outline-none">{t(lang, "eval.complete.title")}</h1>
 		<p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{t(lang, "eval.complete.body")}</p>
 		<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-			<Button href={detailsHref} variant="outline"><ArrowLeft aria-hidden="true" />{t(lang, "hall.menu.viewDetails")}</Button>
+			<Button href={detailsHref} variant="secondary"><ArrowLeft aria-hidden="true" />{t(lang, "hall.menu.viewDetails")}</Button>
 			<Button href="{base}/" size="icon" class="size-12 rounded-full" aria-label={t(lang, "eval.complete.homeAria")}
 				><Home aria-hidden="true" /></Button
 			>

@@ -21,7 +21,7 @@ let availableProviders = $derived(SOCIAL_PROVIDERS.filter(({ id }) => providers.
 				name="provider"
 				value={provider.id}
 				formnovalidate
-				variant="outline"
+				variant="secondary"
 				class="relative min-h-11 w-full bg-background/80 shadow-sm hover:bg-muted/70"
 				disabled={pending !== null}
 				data-social-provider={provider.id}

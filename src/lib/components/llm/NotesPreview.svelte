@@ -16,12 +16,12 @@ let { notes, compact = false }: { notes: PreviewNote[]; compact?: boolean } = $p
 {:else}
 	<ul class="grid gap-3">
 		{#each notes as note}
-			<li class="rounded-lg border border-border bg-background px-4 py-3 shadow-[0_1px_0_rgba(56,54,47,0.04)]">
-				<p class="font-serif text-lg leading-snug">{String(note.vocab ?? "")}</p>
+			<li class="rounded-xl border border-border bg-card px-4 py-3">
+				<p class="text-base font-medium leading-snug">{String(note.vocab ?? "")}</p>
 				<p class="mt-1 text-sm">{String(note.targetDefinition ?? "")}</p>
 				<p class="text-sm text-muted-foreground">{String(note.nativeDefinition ?? "")}</p>
 				{#if Array.isArray(note.examples) && note.examples.length}
-					<ol class="mt-2 space-y-1 border-t border-border/60 pt-2 text-sm {compact ? 'hidden sm:block' : ''}">
+					<ol class="mt-2 space-y-1 border-t border-border pt-2 text-sm {compact ? 'hidden sm:block' : ''}">
 						{#each note.examples as example}
 							<li>
 								<span>{String(example.targetText ?? "")}</span>

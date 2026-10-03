@@ -3,6 +3,7 @@ import { enhance } from "$app/forms";
 import { parseTaskJson } from "$lib/admin/task-actions";
 import { focusAndHighlightField } from "$lib/client/form-attention";
 import TaskForm, { type TaskFormData } from "$lib/components/admin/TaskForm.svelte";
+import Accordion from "$lib/components/common/Accordion.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
@@ -25,28 +26,21 @@ let importNotification = $derived(
 </script>
 
 <svelte:head>
-	<title>New Task · Admin · Libiamo</title>
+	<title>New task · Admin · Libiamo</title>
 	<meta name="description" content="Create a new Libiamo task.">
 </svelte:head>
 
 <div class="space-y-6">
-	<h1 class="text-3xl">
-		{#if contributed}
-			Edit &amp; Approve Contribution
-		{:else}
-			New Task
-		{/if}
-	</h1>
+	<h1>{contributed ? "Review contribution" : "New task"}</h1>
 
 	{#if contributed}
-		<p class="text-muted-foreground">Reviewing contribution #{contributed.id}. Adjust fields below, then create to approve.</p>
+		<p class="text-sm text-muted-foreground">Reviewing contribution #{contributed.id}. Adjust fields below, then create to approve.</p>
 	{/if}
 
 	<ActionNotification notification={importNotification} />
 
 	{#if !contributed}
-		<details class="rounded-md border border-input bg-background p-4">
-			<summary class="cursor-pointer text-sm font-medium">Import JSON</summary>
+		<Accordion title="Import JSON">
 			<form
 				method="POST"
 				action="?/importJson"
@@ -60,24 +54,31 @@ let importNotification = $derived(
 				}
 				return async ({ update }) => update({ reset: false });
 			}}
-				class="mt-4 space-y-3"
+				class="space-y-2"
 			>
-				<p class="text-sm text-muted-foreground">Paste an exported task JSON file to create a new task.</p>
-				<Textarea class="h-40 field-sizing-fixed resize-y" name="taskJson" rows={10} placeholder={importPlaceholder} required />
+				<label for="task-json" class="block text-sm text-muted-foreground">Paste an exported task JSON file to create a new task.</label>
+				<Textarea
+					id="task-json"
+					class="h-40 field-sizing-fixed resize-y font-mono text-xs"
+					name="taskJson"
+					rows={10}
+					placeholder={importPlaceholder}
+					required
+				/>
 				<Button type="submit" variant="secondary">Import JSON</Button>
 			</form>
-		</details>
+		</Accordion>
 	{/if}
 
 	<TaskForm
 		task={taskData}
 		action="?/create"
 		form={form && "errors" in form ? form : null}
-		submitLabel={contributed ? "Create & Approve" : "Create Task"}
+		submitLabel={contributed ? "Create and approve" : "Create task"}
 		extraHiddenFields={contributed ? { fromContributionId: String(contributed.id) } : undefined}
 	/>
 
 	{#if contributed}
-		<p class="mt-4 text-xs text-muted-foreground">After creation, contribution #{contributed.id} will be automatically marked as approved.</p>
+		<p class="text-xs text-muted-foreground">After creation, contribution #{contributed.id} will be automatically marked as approved.</p>
 	{/if}
 </div>

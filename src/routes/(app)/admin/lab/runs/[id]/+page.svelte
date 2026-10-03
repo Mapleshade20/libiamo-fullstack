@@ -1,5 +1,8 @@
 <script lang="ts">
+import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+import ThumbsDown from "@lucide/svelte/icons/thumbs-down";
+import ThumbsUp from "@lucide/svelte/icons/thumbs-up";
 import { enhance } from "$app/forms";
 import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
@@ -8,6 +11,7 @@ import Accordion from "$lib/components/common/Accordion.svelte";
 import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import { formatLabTime, formatLatency } from "$lib/components/llm/format";
 import OutputView from "$lib/components/llm/OutputView.svelte";
+import { Button } from "$lib/components/ui/button";
 import * as Table from "$lib/components/ui/table";
 import { isRetryableCell, temperaturePlaceholder } from "$lib/llm/lab";
 import { getDisplayClock } from "$lib/time/display-clock";
@@ -40,22 +44,16 @@ const keepValues =
 	() =>
 	async ({ update }: { update: (options?: { reset?: boolean }) => Promise<void> }) =>
 		update({ reset: false });
-const buttonClass =
-	"inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring";
-const voteClass =
-	"inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring aria-pressed:border-foreground/40 aria-pressed:bg-secondary";
 </script>
 
 <svelte:head> <title>{data.run.label || `Run ${data.run.id}`} · LLM Lab · Libiamo</title> </svelte:head>
 
 <div class="space-y-8">
 	<header class="space-y-2">
-		<a
-			href="{base}/admin/lab/datasets/{data.dataset.id}"
-			class="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground"
-			>← {data.dataset.name}</a
+		<Button href="{base}/admin/lab/datasets/{data.dataset.id}" variant="ghost" size="sm" class="-ml-3"
+			><ArrowLeft aria-hidden="true" />{data.dataset.name}</Button
 		>
-		<h1 class="text-3xl">{data.run.label || `Run ${data.run.id}`}</h1>
+		<h1>{data.run.label || `Run ${data.run.id}`}</h1>
 		<p class="text-sm text-muted-foreground">
 			{data.recipe?.title ?? data.dataset.recipeId}
 			· {data.cases.length} cases × {data.run.variants.length} columns × {data.run.repeats} · started
@@ -72,14 +70,14 @@ const voteClass =
 		</p>
 		<div class="flex flex-wrap gap-2">
 			{#if unfinished}
-				<form method="POST" action="?/cancel" use:enhance={keepValues}><button type="submit" class={buttonClass}>Cancel run</button></form>
+				<form method="POST" action="?/cancel" use:enhance={keepValues}><Button type="submit" variant="secondary">Cancel run</Button></form>
 			{/if}
 			{#if retryable && !unfinished}
 				<form method="POST" action="?/retry" use:enhance={keepValues}>
-					<button type="submit" class={buttonClass}>Retry {retryable} failed or cancelled call{retryable === 1 ? "" : "s"}</button>
+					<Button type="submit" variant="secondary">Retry {retryable} failed or cancelled call{retryable === 1 ? "" : "s"}</Button>
 				</form>
 			{/if}
-			<button type="button" class="{buttonClass} text-destructive" onclick={() => (confirmDelete = true)}>Delete run</button>
+			<Button variant="destructive" aria-haspopup="dialog" onclick={() => (confirmDelete = true)}>Delete run</Button>
 		</div>
 		<form bind:this={deleteForm} method="POST" action="?/delete" hidden></form>
 		<ConfirmDialog
@@ -93,7 +91,7 @@ const voteClass =
 	</header>
 
 	<section aria-labelledby="stats-heading" class="space-y-3">
-		<h2 id="stats-heading" class="font-serif text-2xl">Summary</h2>
+		<h2 id="stats-heading">Summary</h2>
 		<Table.Root>
 			<Table.Header>
 				<Table.Row>
@@ -143,24 +141,20 @@ const voteClass =
 	</section>
 
 	<section aria-labelledby="cases-heading" class="space-y-6">
-		<h2 id="cases-heading" class="font-serif text-2xl">Outputs by case</h2>
+		<h2 id="cases-heading">Outputs by case</h2>
 		{#each data.cases as item (item.id)}
 			<article class="space-y-3 border-t border-border pt-4" aria-labelledby={`case-${item.id}`}>
 				<div class="flex flex-wrap items-baseline justify-between gap-2">
 					<h3 id={`case-${item.id}`} class="font-medium">#{item.id} {item.label}</h3>
-					<a
-						href="{base}/admin/lab/playground?case={item.id}"
-						class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-2 hover:underline"
-						>Playground</a
-					>
+					<Button href="{base}/admin/lab/playground?case={item.id}" variant="ghost" size="sm">Playground</Button>
 				</div>
 				<div class="overflow-x-auto pb-2">
 					<div class="grid gap-4" style={`grid-template-columns: repeat(${data.run.variants.length}, minmax(16rem, 1fr));`}>
 						{#each data.run.variants as variant (variant.key)}
 							<div class="min-w-0 space-y-3">
-								<p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{variantLabels.get(variant.key)}</p>
+								<p class="text-sm font-medium">{variantLabels.get(variant.key)}</p>
 								{#each cellsFor(item.id, variant.key) as cell (cell.id)}
-									<div class="space-y-2 rounded-lg border border-border bg-card/40 p-3">
+									<div class="space-y-2 rounded-xl border border-border bg-card p-3">
 										{#if cell.status === "pending" || cell.status === "running"}
 											<p class="flex items-center gap-2 text-sm text-muted-foreground">
 												<LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -187,10 +181,9 @@ const voteClass =
 											</p>
 											{#if cell.judge}
 												{#if "score" in cell.judge}
-													<details class="text-sm">
-														<summary class="min-h-11 cursor-pointer py-2">Judge: <span class="font-medium">{cell.judge.score}/5</span></summary>
-														<p class="text-muted-foreground">{cell.judge.rationale}</p>
-													</details>
+													<Accordion title={`Judge: ${cell.judge.score}/5`} variant="plain">
+														<p class="text-sm text-muted-foreground">{cell.judge.rationale}</p>
+													</Accordion>
 												{:else}
 													<p class="text-xs text-destructive">Judge failed: {cell.judge.error}</p>
 												{/if}
@@ -199,12 +192,30 @@ const voteClass =
 												<form method="POST" action="?/rate" use:enhance={keepValues} class="flex flex-wrap items-center gap-2">
 													<input type="hidden" name="traceId" value={cell.traceId}>
 													<input type="hidden" name="note" value={cell.myRating?.note ?? ""}>
-													<button type="submit" name="vote" value="1" class={voteClass} aria-label="Good" aria-pressed={cell.myRating?.vote === 1}>
-														👍
-													</button>
-													<button type="submit" name="vote" value="-1" class={voteClass} aria-label="Bad" aria-pressed={cell.myRating?.vote === -1}>
-														👎
-													</button>
+													<Button
+														type="submit"
+														name="vote"
+														value="1"
+														variant="ghost"
+														size="icon-sm"
+														class="aria-pressed:bg-foreground/[0.08] aria-pressed:text-success"
+														aria-label="Good"
+														aria-pressed={cell.myRating?.vote === 1}
+													>
+														<ThumbsUp aria-hidden="true" />
+													</Button>
+													<Button
+														type="submit"
+														name="vote"
+														value="-1"
+														variant="ghost"
+														size="icon-sm"
+														class="aria-pressed:bg-foreground/[0.08] aria-pressed:text-destructive"
+														aria-label="Bad"
+														aria-pressed={cell.myRating?.vote === -1}
+													>
+														<ThumbsDown aria-hidden="true" />
+													</Button>
 													{#if cell.votes.length}
 														<span class="text-xs text-muted-foreground tabular-nums"
 															>+{cell.votes.filter((vote) => vote > 0).length}

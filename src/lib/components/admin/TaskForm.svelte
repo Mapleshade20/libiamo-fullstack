@@ -37,8 +37,9 @@ import ObjectivesEditor from "$lib/components/admin/ObjectivesEditor.svelte";
 import OpeningStateEditor from "$lib/components/admin/OpeningStateEditor.svelte";
 import RequiredMark from "$lib/components/admin/RequiredMark.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
-import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
+import Select from "$lib/components/common/Select.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
@@ -254,7 +255,7 @@ $effect(() => {
 
 	<!-- Section A: Metadata -->
 	<fieldset class="space-y-4">
-		<h2 class="uppercase tracking-widest text-muted-foreground">Metadata</h2>
+		<h2>Details</h2>
 		{#if identityLocked}
 			<!-- Disabled selects do not submit; the fixed values travel here. -->
 			<input type="hidden" name="language" value={selectedLanguage}>
@@ -269,41 +270,33 @@ $effect(() => {
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
-				<select
+				<Select
 					id="language"
 					name="language"
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 					required
 					disabled={identityLocked}
 					aria-describedby={identityLocked ? "identity-locked" : undefined}
 					bind:value={selectedLanguage}
-				>
-					{#each LANGUAGE_CODES as code}
-						<option value={code}>{LANGUAGE_LABELS[code]}</option>
-					{/each}
-				</select>
+					items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+				/>
 				{#if form?.errors?.language}
-					<p data-field-error="language" class="text-sm text-red-600">{form.errors.language[0]}</p>
+					<p data-field-error="language" class="field-error-message">{form.errors.language[0]}</p>
 				{/if}
 			</div>
 
 			<div class="space-y-2">
-				<Label for="interactionType">Interaction Type</Label>
-				<select
+				<Label for="interactionType">Interaction type</Label>
+				<Select
 					id="interactionType"
 					name="interactionType"
-					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 					required
 					disabled={identityLocked}
 					aria-describedby={identityLocked ? "identity-locked" : undefined}
 					bind:value={selectedInteractionType}
-				>
-					{#each INTERACTION_TYPES as type}
-						<option value={type}>{INTERACTION_TYPE_LABELS[type]}</option>
-					{/each}
-				</select>
+					items={INTERACTION_TYPES.map((type) => ({ value: type, label: INTERACTION_TYPE_LABELS[type] }))}
+				/>
 				{#if form?.errors?.interactionType}
-					<p data-field-error="interactionType" class="text-sm text-red-600">{form.errors.interactionType[0]}</p>
+					<p data-field-error="interactionType" class="field-error-message">{form.errors.interactionType[0]}</p>
 				{/if}
 			</div>
 
@@ -312,39 +305,31 @@ $effect(() => {
 			{:else}
 				<div class="space-y-2">
 					<Label for="ui">Interface</Label>
-					<select
+					<Select
 						id="ui"
 						name="ui"
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-muted/40 disabled:text-foreground/80"
 						required
 						disabled={identityLocked}
 						aria-describedby={identityLocked ? "identity-locked" : undefined}
 						bind:value={selectedUi}
-					>
-						{#each CHAT_UI_VARIANTS as variant}
-							<option value={variant}>{UI_VARIANT_LABELS[variant]}</option>
-						{/each}
-					</select>
+						items={CHAT_UI_VARIANTS.map((variant) => ({ value: variant, label: UI_VARIANT_LABELS[variant] }))}
+					/>
 					{#if form?.errors?.ui}
-						<p data-field-error="ui" class="text-sm text-red-600">{form.errors.ui[0]}</p>
+						<p data-field-error="ui" class="field-error-message">{form.errors.ui[0]}</p>
 					{/if}
 				</div>
 
 				<div class="space-y-2">
 					<Label for="urgency">Reply urgency</Label>
-					<select
+					<Select
 						id="urgency"
 						name="urgency"
-						class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 						required
 						bind:value={selectedUrgency}
-					>
-						{#each URGENCIES as urgency}
-							<option value={urgency}>{URGENCY_LABELS[urgency]}</option>
-						{/each}
-					</select>
+						items={URGENCIES.map((urgency) => ({ value: urgency, label: URGENCY_LABELS[urgency] }))}
+					/>
 					{#if form?.errors?.urgency}
-						<p data-field-error="urgency" class="text-sm text-red-600">{form.errors.urgency[0]}</p>
+						<p data-field-error="urgency" class="field-error-message">{form.errors.urgency[0]}</p>
 					{/if}
 				</div>
 			{/if}
@@ -353,35 +338,30 @@ $effect(() => {
 				{#if !isTranslate}
 					<div class="space-y-2">
 						<Label for="rotation">Auto rotation</Label>
-						<select
+						<Select
 							id="rotation"
 							name="rotation"
-							class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 							bind:value={selectedRotation}
-						>
-							<option value="none">None (manual lineups only)</option>
-							{#each LINEUP_KINDS as kind}
-								<option value={kind}>{LINEUP_KIND_LABELS[kind]}</option>
-							{/each}
-						</select>
+							items={[{ value: "none", label: "None (manual lineups only)" }, ...LINEUP_KINDS.map((kind) => ({ value: kind, label: LINEUP_KIND_LABELS[kind] }))]}
+						/>
 					</div>
 				{/if}
 
 				{#if !isTranslate}
 					<div class="space-y-2">
-						<Label for="maxTurns">Max Turns (blank for no limit)</Label>
+						<Label for="maxTurns">Max turns (blank for no limit)</Label>
 						<Input id="maxTurns" name="maxTurns" type="number" min="0" bind:value={maxTurnsValue} />
 						{#if form?.errors?.maxTurns}
-							<p data-field-error="maxTurns" class="text-sm text-red-600">{form.errors.maxTurns[0]}</p>
+							<p data-field-error="maxTurns" class="field-error-message">{form.errors.maxTurns[0]}</p>
 						{/if}
 					</div>
 				{/if}
 
 				<div class="space-y-2">
-					<Label for="estimatedWords">Estimated Words</Label>
+					<Label for="estimatedWords">Estimated words</Label>
 					<Input id="estimatedWords" name="estimatedWords" type="number" min="0" bind:value={estimatedWordsValue} />
 					{#if form?.errors?.estimatedWords}
-						<p data-field-error="estimatedWords" class="text-sm text-red-600">{form.errors.estimatedWords[0]}</p>
+						<p data-field-error="estimatedWords" class="field-error-message">{form.errors.estimatedWords[0]}</p>
 					{/if}
 				</div>
 
@@ -397,7 +377,7 @@ $effect(() => {
 
 	<!-- Section B: Content -->
 	<fieldset class="space-y-4">
-		<h2 class="uppercase tracking-widest text-muted-foreground">Content</h2>
+		<h2>Content</h2>
 
 		<div class="space-y-2">
 			<Label for="title"
@@ -405,19 +385,19 @@ $effect(() => {
 			>
 			<Input id="title" name="title" bind:value={title} required />
 			{#if form?.errors?.title}
-				<p data-field-error="title" class="text-sm text-red-600">{form.errors.title[0]}</p>
+				<p data-field-error="title" class="field-error-message">{form.errors.title[0]}</p>
 			{/if}
 		</div>
 
 		{#if !isTranslate}
 			<div class="space-y-2">
 				<Label for="shortObjective"
-					><span>Short Objective<RequiredMark /></span></Label
+					><span>Short objective<RequiredMark /></span></Label
 				>
 				<p id="shortObjective-help" class="text-xs text-muted-foreground">One or two sentences, shown on the quest card.</p>
 				<Textarea id="shortObjective" name="shortObjective" rows={2} aria-describedby="shortObjective-help" required bind:value={shortObjective} />
 				{#if form?.errors?.shortObjective}
-					<p data-field-error="shortObjective" class="text-sm text-red-600">{form.errors.shortObjective[0]}</p>
+					<p data-field-error="shortObjective" class="field-error-message">{form.errors.shortObjective[0]}</p>
 				{/if}
 			</div>
 		{/if}
@@ -428,22 +408,22 @@ $effect(() => {
 			>
 			<Textarea id="description" name="description" rows={3} required bind:value={description} />
 			{#if form?.errors?.description}
-				<p data-field-error="description" class="text-sm text-red-600">{form.errors.description[0]}</p>
+				<p data-field-error="description" class="field-error-message">{form.errors.description[0]}</p>
 			{/if}
 		</div>
 
 		{#if isTranslate}
 			<div class="space-y-2">
 				<Label for="translationContext"
-					><span>Translation Context<RequiredMark /></span></Label
+					><span>Translation context<RequiredMark /></span></Label
 				>
-				<div class="grid grid-cols-1 items-start gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
-					<span class="pt-2 text-muted-foreground">This is in the context of [</span>
+				<div class="grid grid-cols-1 items-center gap-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+					<span class="text-muted-foreground">This is in the context of [</span>
 					<Input id="translationContext" name="translationContext" bind:value={translationContext} required />
-					<span class="pt-2 text-muted-foreground">].</span>
+					<span class="text-muted-foreground">].</span>
 				</div>
 				{#if form?.errors?.translationContext}
-					<p data-field-error="translationContext" class="text-sm text-red-600">{form.errors.translationContext[0]}</p>
+					<p data-field-error="translationContext" class="field-error-message">{form.errors.translationContext[0]}</p>
 				{/if}
 			</div>
 		{:else}
@@ -462,13 +442,13 @@ $effect(() => {
 					placeholder="Priya is organising and wants decisions made. Tom keeps joking and hasn't checked his calendar. Jess is on a tight budget and hates hostels less than everyone thinks."
 				/>
 				{#if form?.errors?.agentPrompt}
-					<p data-field-error="agentPrompt" class="text-sm text-red-600">{form.errors.agentPrompt[0]}</p>
+					<p data-field-error="agentPrompt" class="field-error-message">{form.errors.agentPrompt[0]}</p>
 				{/if}
 			</div>
 			<div class="space-y-2">
 				<CaptureImport language={selectedLanguage} onimport={importCapture} />
 				{#if importError}
-					<p data-field-error="source" class="text-sm text-red-600" role="alert">{importError}</p>
+					<p data-field-error="source" class="field-error-message" role="alert">{importError}</p>
 				{/if}
 				<input type="hidden" name="source" value={JSON.stringify({ continuation: sourceContinuation })}>
 				{#if showContinuation}
@@ -485,7 +465,7 @@ $effect(() => {
 					/>
 				{/if}
 				{#if form?.errors?.source}
-					<p data-field-error="source" data-feedback-name="source" class="text-sm text-red-600">{form.errors.source[0]}</p>
+					<p data-field-error="source" data-feedback-name="source" class="field-error-message">{form.errors.source[0]}</p>
 				{/if}
 			</div>
 		{/if}
@@ -499,21 +479,15 @@ $effect(() => {
 		{#if !isTranslate && !hideAdminFields}
 			<!-- materialsMd with preview -->
 			<div class="space-y-2">
-				<div class="flex items-center justify-between">
-					<Label for="materialsMd">Background Material (Markdown)</Label>
-					<button
-						type="button"
-						onclick={() => (showMdPreview = !showMdPreview)}
-						class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-					>
+				<div class="flex items-end justify-between">
+					<Label for="materialsMd">Background material (Markdown)</Label>
+					<Button type="button" variant="ghost" size="sm" aria-pressed={showMdPreview} onclick={() => (showMdPreview = !showMdPreview)}>
 						{showMdPreview ? "Edit" : "Preview"}
-					</button>
+					</Button>
 				</div>
 				{#if showMdPreview}
 					<input type="hidden" name="materialsMd" value={mdSource}>
-					<div class="prose prose-neutral min-h-[100px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm">
-						{@html mdHtml}
-					</div>
+					<div class="prose min-h-[100px] max-w-none rounded-lg border border-input bg-white/80 px-3 py-2.5 text-sm">{@html mdHtml}</div>
 				{:else}
 					<Textarea
 						id="materialsMd"
@@ -530,7 +504,7 @@ $effect(() => {
 	{#if isTranslate}
 		<div class="space-y-2">
 			<Label for="referenceParagraphs"
-				><span>Authentic Reference Text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})<RequiredMark /></span></Label
+				><span>Authentic reference text ({LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS]})<RequiredMark /></span></Label
 			>
 			<Textarea
 				id="referenceParagraphs"
@@ -542,16 +516,16 @@ $effect(() => {
 			/>
 			<p class="text-xs text-muted-foreground">Separate paragraphs with a blank line. Store only authentic text in the task language.</p>
 			{#if form?.errors?.referenceParagraphs}
-				<p data-field-error="referenceParagraphs" class="text-sm text-red-600">{form.errors.referenceParagraphs[0]}</p>
+				<p data-field-error="referenceParagraphs" class="field-error-message">{form.errors.referenceParagraphs[0]}</p>
 			{/if}
 		</div>
 	{:else}
 		<fieldset class="space-y-4">
-			<h2 class="uppercase tracking-widest text-muted-foreground">Opening State</h2>
+			<h2>Opening state</h2>
 			<p class="text-xs text-muted-foreground">What the learner sees in the {UI_VARIANT_LABELS[selectedUi]} interface when the scenario opens.</p>
 			<OpeningStateEditor bind:value={openingState} ui={selectedUi} name="openingState" />
 			{#if form?.errors?.openingState}
-				<p data-field-error="openingState" class="text-sm text-red-600">{form.errors.openingState[0]}</p>
+				<p data-field-error="openingState" class="field-error-message">{form.errors.openingState[0]}</p>
 			{/if}
 		</fieldset>
 	{/if}
@@ -559,48 +533,46 @@ $effect(() => {
 	<!-- Submit -->
 	<div class="flex items-center gap-3">
 		<Button type="submit">{submitLabel}</Button>
-		<Button href={cancelHref} variant="outline">Cancel</Button>
+		<Button href={cancelHref} variant="secondary">Cancel</Button>
 	</div>
 </form>
 
 {#if confirmBeforeSubmit}
-	<BottomSheet
-		show={showConfirm}
-		title="Submit for Review?"
+	<ConfirmDialog
+		bind:open={showConfirm}
+		tone="default"
+		title="Submit for review?"
 		confirmLabel="Submit"
-		cancelLabel="Go Back"
-		onConfirm={() => { confirmed = true; showConfirm = false; mainFormEl?.requestSubmit(); }}
-		onCancel={() => { showConfirm = false; }}
+		cancelLabel="Go back"
+		onconfirm={() => { confirmed = true; showConfirm = false; mainFormEl?.requestSubmit(); }}
 	>
-		{#snippet children()}
-			<div class="space-y-3">
-				<div class="grid gap-3 sm:grid-cols-2">
-					<div class="space-y-1">
-						<Label class="text-xs text-muted-foreground">Language</Label>
-						<p class="text-sm">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</p>
-					</div>
-					<div class="space-y-1">
-						<Label class="text-xs text-muted-foreground">Interaction Type</Label>
-						<p class="text-sm">
-							{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
-						</p>
-					</div>
-					<div class="space-y-1">
-						<Label class="text-xs text-muted-foreground">Interface</Label>
-						<p class="text-sm">{isTranslate ? UI_VARIANT_LABELS.translator : UI_VARIANT_LABELS[selectedUi]}</p>
-					</div>
+		<div class="space-y-3">
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div class="space-y-1">
+					<p class="text-xs">Language</p>
+					<p class="text-sm text-foreground">{LANGUAGE_LABELS[selectedLanguage as keyof typeof LANGUAGE_LABELS] ?? selectedLanguage}</p>
 				</div>
 				<div class="space-y-1">
-					<Label class="text-xs text-muted-foreground">Title</Label>
-					<p class="text-sm">{title}</p>
+					<p class="text-xs">Interaction type</p>
+					<p class="text-sm text-foreground">
+						{INTERACTION_TYPE_LABELS[selectedInteractionType as keyof typeof INTERACTION_TYPE_LABELS] ?? selectedInteractionType}
+					</p>
 				</div>
-				{#if !isTranslate && shortObjective}
-					<div class="space-y-1">
-						<Label class="text-xs text-muted-foreground">Short Objective</Label>
-						<p class="text-sm">{shortObjective}</p>
-					</div>
-				{/if}
+				<div class="space-y-1">
+					<p class="text-xs">Interface</p>
+					<p class="text-sm text-foreground">{isTranslate ? UI_VARIANT_LABELS.translator : UI_VARIANT_LABELS[selectedUi]}</p>
+				</div>
 			</div>
-		{/snippet}
-	</BottomSheet>
+			<div class="space-y-1">
+				<p class="text-xs">Title</p>
+				<p class="text-sm text-foreground">{title}</p>
+			</div>
+			{#if !isTranslate && shortObjective}
+				<div class="space-y-1">
+					<p class="text-xs">Short objective</p>
+					<p class="text-sm text-foreground">{shortObjective}</p>
+				</div>
+			{/if}
+		</div>
+	</ConfirmDialog>
 {/if}

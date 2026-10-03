@@ -3,8 +3,9 @@ import { enhance } from "$app/forms";
 import { buildTaskExport, parseTaskJson } from "$lib/admin/task-actions";
 import { focusAndHighlightField } from "$lib/client/form-attention";
 import TaskForm from "$lib/components/admin/TaskForm.svelte";
+import Accordion from "$lib/components/common/Accordion.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
-import BottomSheet from "$lib/components/ui/bottom-sheet/BottomSheet.svelte";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Textarea } from "$lib/components/ui/textarea";
 
@@ -34,7 +35,7 @@ const actionNotification = $derived.by(() => {
 
 const taskExportJson = $derived(JSON.stringify(buildTaskExport(data.task, data.rotation), null, 2));
 const exportHref = $derived(`data:application/json;charset=utf-8,${encodeURIComponent(taskExportJson)}`);
-const statusLabel = $derived(data.task.isActive ? "Deactivate Task" : "Activate Task");
+const statusLabel = $derived(data.task.isActive ? "Deactivate task" : "Activate task");
 const saveForm = $derived(form?.action === "save" ? form : null);
 
 function confirmImportJson() {
@@ -57,23 +58,20 @@ function confirmStatusChange() {
 </script>
 
 <svelte:head>
-	<title>Edit Task #{data.task.id} · Admin · Libiamo</title>
+	<title>Edit task #{data.task.id} · Admin · Libiamo</title>
 	<meta name="description" content="Edit task content and scenario configuration.">
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<h1 class="text-3xl">Edit Task #{data.task.id}</h1>
-	</div>
+	<h1>Edit task #{data.task.id}</h1>
 
 	<ActionNotification notification={actionNotification} />
 
-	<details class="rounded-md border border-input bg-background p-4">
-		<summary class="cursor-pointer text-sm font-medium">Export / Import JSON</summary>
-		<div class="mt-4 grid gap-4 lg:grid-cols-2">
+	<Accordion title="Export or import JSON">
+		<div class="grid gap-6 lg:grid-cols-2">
 			<div class="space-y-2">
 				<p class="text-sm text-muted-foreground">Export this task.</p>
-				<Button href={exportHref} download={`task-${data.task.id}.json`} variant="outline">Export JSON</Button>
+				<Button href={exportHref} download={`task-${data.task.id}.json`} variant="secondary">Export JSON</Button>
 			</div>
 
 			<form
@@ -98,27 +96,35 @@ function confirmStatusChange() {
 				}}
 				class="space-y-2"
 			>
-				<p class="text-sm text-muted-foreground">Paste exported JSON to replace this task's fields in place.</p>
-				<Textarea class="h-40 field-sizing-fixed resize-y" name="taskJson" rows={8} placeholder={taskExportJson} required />
+				<label for="task-json" class="block text-sm text-muted-foreground">Paste exported JSON to replace this task's fields in place.</label>
+				<Textarea
+					id="task-json"
+					class="h-40 field-sizing-fixed resize-y font-mono text-xs"
+					name="taskJson"
+					rows={8}
+					placeholder={taskExportJson}
+					required
+				/>
 				<Button type="submit" variant="secondary">Import JSON</Button>
 			</form>
 		</div>
-	</details>
+	</Accordion>
 
 	<TaskForm
 		task={{ ...data.task, rotation: data.rotation }}
 		form={saveForm}
 		action="?/save"
-		submitLabel="Save Changes"
+		submitLabel="Save changes"
 		identityLocked={data.identityLocked}
 		resetKey={`${data.task.updatedAt}:${data.rotation}`}
 	/>
 
-	<div class="grid gap-4 lg:grid-cols-2">
-		<section class="rounded-md border border-input bg-muted/20 p-4">
-			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div class="space-y-1">
-					<h2 class="text-sm font-medium">{statusLabel}</h2>
+	<section class="space-y-3 border-t border-border pt-6">
+		<h2>Status</h2>
+		<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+			<div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-0.5">
+					<h3 class="text-sm font-medium">{statusLabel}</h3>
 					<p class="text-sm text-muted-foreground">
 						{data.task.isActive ? "Stop lining this task up for learners." : "Make this task available for lineups again."}
 					</p>
@@ -139,15 +145,13 @@ function confirmStatusChange() {
 					}}
 				>
 					<input type="hidden" name="isActive" value={String(!data.task.isActive)}>
-					<Button type="submit" variant={data.task.isActive ? "destructive" : "default"}>{statusLabel}</Button>
+					<Button type="submit" variant="secondary">{statusLabel}</Button>
 				</form>
 			</div>
-		</section>
 
-		<section class="rounded-md border border-destructive/20 bg-destructive/5 p-4">
-			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div class="space-y-1">
-					<h2 class="text-sm font-medium text-destructive">Delete Task</h2>
+			<div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-0.5">
+					<h3 class="text-sm font-medium">Delete task</h3>
 					<p class="text-sm text-muted-foreground">Remove this task if no learner has worked on it.</p>
 				</div>
 				<form
@@ -165,61 +169,48 @@ function confirmStatusChange() {
 						return async ({ update }) => update({ reset: false });
 					}}
 				>
-					<Button type="submit" variant="destructive">Delete Task</Button>
+					<Button type="submit" variant="destructive">Delete task</Button>
 				</form>
 			</div>
-		</section>
-	</div>
+		</div>
+	</section>
 </div>
 
-<BottomSheet
-	show={showImportConfirm}
-	title="Replace Task From JSON?"
+<ConfirmDialog
+	bind:open={showImportConfirm}
+	tone="default"
+	title="Replace task from JSON?"
 	confirmLabel="Import JSON"
 	cancelLabel="Cancel"
-	onConfirm={confirmImportJson}
-	onCancel={() => { showImportConfirm = false; }}
+	onconfirm={confirmImportJson}
 >
-	{#snippet children()}
-		<div class="space-y-3 text-sm text-muted-foreground">
-			<p>Every field of task #{data.task.id} will be replaced by the pasted JSON, including its active status and auto rotation.</p>
-			<p>Learners see the change immediately, including in conversations already under way.</p>
-		</div>
-	{/snippet}
-</BottomSheet>
+	<div class="space-y-3">
+		<p>Every field of task #{data.task.id} will be replaced by the pasted JSON, including its active status and auto rotation.</p>
+		<p>Learners see the change immediately, including in conversations already under way.</p>
+	</div>
+</ConfirmDialog>
 
-<BottomSheet
-	show={showStatusConfirm}
+<ConfirmDialog
+	bind:open={showStatusConfirm}
+	tone={data.task.isActive ? "danger" : "default"}
 	title={`${statusLabel}?`}
 	confirmLabel={statusLabel}
 	cancelLabel="Cancel"
-	onConfirm={confirmStatusChange}
-	onCancel={() => { showStatusConfirm = false; }}
+	onconfirm={confirmStatusChange}
 >
-	{#snippet children()}
-		<div class="space-y-3 text-sm text-muted-foreground">
-			{#if data.task.isActive}
-				<p>Task #{data.task.id} will no longer be picked for new lineups or listed among translations.</p>
-				<p>Lineups it already appears in, and learner history, remain unchanged.</p>
-			{:else}
-				<p>Task #{data.task.id} will become available for new lineups again.</p>
-			{/if}
-		</div>
-	{/snippet}
-</BottomSheet>
+	<div class="space-y-3">
+		{#if data.task.isActive}
+			<p>Task #{data.task.id} will no longer be picked for new lineups or listed among translations.</p>
+			<p>Lineups it already appears in, and learner history, remain unchanged.</p>
+		{:else}
+			<p>Task #{data.task.id} will become available for new lineups again.</p>
+		{/if}
+	</div>
+</ConfirmDialog>
 
-<BottomSheet
-	show={showDeleteConfirm}
-	title="Delete Task?"
-	confirmLabel="Delete Task"
-	cancelLabel="Cancel"
-	onConfirm={confirmDeleteTask}
-	onCancel={() => { showDeleteConfirm = false; }}
->
-	{#snippet children()}
-		<div class="space-y-3 text-sm text-muted-foreground">
-			<p>Task #{data.task.id} will be permanently removed, together with its lineup entries, if no learner has worked on it.</p>
-			<p>Used tasks are blocked by the server and can be deactivated instead.</p>
-		</div>
-	{/snippet}
-</BottomSheet>
+<ConfirmDialog bind:open={showDeleteConfirm} title="Delete task?" confirmLabel="Delete task" cancelLabel="Cancel" onconfirm={confirmDeleteTask}>
+	<div class="space-y-3">
+		<p>Task #{data.task.id} will be permanently removed, together with its lineup entries, if no learner has worked on it.</p>
+		<p>Used tasks are blocked by the server and can be deactivated instead.</p>
+	</div>
+</ConfirmDialog>

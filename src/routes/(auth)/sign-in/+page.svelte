@@ -35,7 +35,7 @@ const actionNotification = $derived(
 </svelte:head>
 
 <Card.Root>
-	<Card.Header><Card.Title class="text-xl">Sign In</Card.Title></Card.Header>
+	<Card.Header><Card.Title>Sign in</Card.Title></Card.Header>
 	<Card.Content>
 		<ActionNotification notification={actionNotification} />
 		<FormErrorFocus formRef={signInForm} errors={form?.errors} fieldOrder={["email", "password"]} />
@@ -58,45 +58,53 @@ const actionNotification = $derived(
 				<Label for="email">Email</Label>
 				<Input id="email" name="email" type="email" value={form?.values?.email ?? ""} required aria-invalid={Boolean(form?.errors?.email)} />
 				{#if form?.errors?.email}
-					<p data-field-error="email" class="text-sm text-red-600">{form.errors.email[0]}</p>
+					<p data-field-error="email" class="field-error-message">{form.errors.email[0]}</p>
 				{/if}
 			</div>
 
 			<div class="space-y-2">
 				<Label for="password">Password</Label>
 				<div class="relative">
-					<Input id="password" name="password" type={showPassword ? "text" : "password"} required aria-invalid={Boolean(form?.errors?.password)} />
-					<button
-						type="button"
-						class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+					<Input
+						id="password"
+						name="password"
+						type={showPassword ? "text" : "password"}
+						class="pr-11"
+						required
+						aria-invalid={Boolean(form?.errors?.password)}
+					/>
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						class="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground active:-translate-y-1/2"
 						aria-label={showPassword ? "Hide password" : "Show password"}
 						aria-pressed={showPassword}
 						onclick={() => (showPassword = !showPassword)}
 					>
 						{#if showPassword}
-							<EyeOff size={18} />
+							<EyeOff aria-hidden="true" />
 						{:else}
-							<Eye size={18} />
+							<Eye aria-hidden="true" />
 						{/if}
-					</button>
+					</Button>
 				</div>
 				{#if form?.errors?.password}
-					<p data-field-error="password" class="text-sm text-red-600">{form.errors.password[0]}</p>
+					<p data-field-error="password" class="field-error-message">{form.errors.password[0]}</p>
 				{/if}
 			</div>
 
-			<Button type="submit" class="w-full">Sign In</Button>
+			<Button type="submit" class="w-full">Sign in</Button>
 
 			{#if data.socialProviders.length > 0}
-				<div class="border-t border-border/70" aria-hidden="true"></div>
+				<div class="border-t border-border" aria-hidden="true"></div>
 			{/if}
 			<SocialAuthButtons providers={data.socialProviders} pending={socialPending} />
 		</form>
 	</Card.Content>
 	<Card.Footer class="flex flex-col gap-2 text-sm">
-		<a href="{base}/forgot-password" class="text-muted-foreground hover:underline">Forgot password?</a>
+		<a href="{base}/forgot-password" class="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Forgot password?</a>
 		<p class="text-muted-foreground">
-			Don't have an account? <a href="{base}/sign-up" class="font-medium text-foreground hover:underline">Sign Up</a>
+			Don't have an account? <a href="{base}/sign-up" class="font-medium text-foreground underline-offset-4 hover:underline">Sign up</a>
 		</p>
 	</Card.Footer>
 </Card.Root>

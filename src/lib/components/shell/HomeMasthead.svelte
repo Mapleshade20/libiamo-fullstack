@@ -70,10 +70,10 @@ let quotaTone = $derived(!trialQuota ? "normal" : trialQuota.trialTokensLeft <= 
 				href="{base}/profile#llm"
 				onclick={onProfileShortcutClick}
 				class="flex min-h-11 items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {quotaTone === 'depleted'
-							? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+							? 'border-destructive/25 bg-destructive/[0.07] text-destructive hover:bg-destructive/[0.12]'
 							: quotaTone === 'low'
-								? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-								: 'border-border bg-background/70 text-muted-foreground hover:bg-secondary hover:text-foreground'}"
+								? 'border-warning/30 bg-warning/[0.08] text-warning hover:bg-warning/[0.14]'
+								: 'border-border bg-background/70 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground'}"
 				title="Trial AI balance"
 			>
 				<span>Trial</span>

@@ -3,6 +3,7 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Languages from "@lucide/svelte/icons/languages";
 import { base } from "$app/paths";
+import Notice from "$lib/components/common/Notice.svelte";
 import TranslationHelpModal from "$lib/components/practice/TranslationHelpModal.svelte";
 import QuestMenuStatusMark from "$lib/components/quest-hall/QuestMenuStatusMark.svelte";
 import { Badge } from "$lib/components/ui/badge";
@@ -56,28 +57,18 @@ function closeTranslationHelpModal() {
 
 <section class="task-preparation" aria-labelledby="task-preparation-title">
 	{#if onback}
-		<button
-			type="button"
-			onclick={onback}
-			class="group flex min-h-11 w-fit items-center gap-2 border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-foreground"
-		>
-			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-			<span class="text-sm font-medium uppercase tracking-wide">{resolvedBackLabel}</span>
-		</button>
+		<Button variant="ghost" class="-ml-3 w-fit text-muted-foreground" onclick={onback}> <ArrowLeft aria-hidden="true" />{resolvedBackLabel} </Button>
 	{:else}
-		<a href={backHref} class="group flex min-h-11 w-fit items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
-			<ArrowLeft size={18} strokeWidth={1.5} class="transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-			<span class="text-sm font-medium uppercase tracking-wide">{resolvedBackLabel}</span>
-		</a>
+		<Button href={backHref} variant="ghost" class="-ml-3 w-fit text-muted-foreground"> <ArrowLeft aria-hidden="true" />{resolvedBackLabel} </Button>
 	{/if}
 
 	<div class="task-preparation-body mt-12 flex flex-1 flex-col">
 		<div>
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS[task.ui]}</Badge>
-				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.chat}</Badge>
-				<span class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"> {t(lang, difficultyLabelKey(task.difficulty))} </span>
+				<Badge>{UI_VARIANT_LABELS[task.ui]}</Badge>
+				<Badge>{INTERACTION_TYPE_LABELS.chat}</Badge>
+				<span class="text-xs font-medium text-muted-foreground"> {t(lang, difficultyLabelKey(task.difficulty))} </span>
 			</div>
 
 			<h2 id="task-preparation-title" class="text-2xl md:text-3xl">{task.title}</h2>
@@ -103,19 +94,19 @@ function closeTranslationHelpModal() {
 			<div class="mt-10">
 				<h3 class="mb-2">{t(lang, "task.backgroundMaterial")}</h3>
 
-				<div
-					class="task-background-material prose prose-neutral rounded-lg border border-border bg-card p-5 font-prose text-base leading-normal shadow-sm"
-				>
+				<div class="task-background-material prose rounded-xl border border-border bg-card p-5 font-prose text-base leading-normal">
 					{@html renderMarkdown(task.materialsMd, { headingOffset: 2 })}
 				</div>
 			</div>
 		{/if}
 
 		{#if showNativeLanguagePrompt}
-			<div class="mt-10 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-				{t(lang, "translate.details.missingNative")}
-				<a href="{base}/profile" class="font-medium underline hover:no-underline">{t(lang, "translate.details.settings")}</a>.
-			</div>
+			<Notice tone="warning" class="mt-10">
+				<p>
+					{t(lang, "translate.details.missingNative")}
+					<a href="{base}/profile" class="font-medium underline underline-offset-2">{t(lang, "translate.details.settings")}</a>.
+				</p>
+			</Notice>
 		{/if}
 
 		<div class="mt-auto pt-12 pb-4">
@@ -125,7 +116,7 @@ function closeTranslationHelpModal() {
 					{#if canShowUsefulExpressions}
 						<Button
 							bind:ref={expressionsTrigger}
-							variant="outline"
+							variant="secondary"
 							class="min-h-11 w-full justify-center sm:w-auto"
 							onclick={openTranslationHelpModal}
 						>
@@ -136,9 +127,9 @@ function closeTranslationHelpModal() {
 
 					{#if progress === "finished"}
 						{#if simulated}
-							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled>Bilan simulé</Button>
+							<Button variant="secondary" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" disabled>Bilan simulé</Button>
 						{:else}
-							<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback{pin}">
+							<Button variant="secondary" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/feedback{pin}">
 								{t(lang, "hall.reviewReport")}
 							</Button>
 						{/if}
@@ -149,7 +140,7 @@ function closeTranslationHelpModal() {
 					{:else if progress === "stopped"}
 						<!-- Abuse termination ends the session while still delivering the agent's
 					     parting reply, so the transcript must stay reachable to read it. -->
-						<Button variant="outline" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session{pin}">
+						<Button variant="secondary" class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8" href="{base}/task/{task.id}/session{pin}">
 							{t(lang, "task.viewConversation")}
 						</Button>
 					{:else if progress === "active" || progress === "ready"}
@@ -188,7 +179,7 @@ function closeTranslationHelpModal() {
 	inset: 0;
 	z-index: -1;
 	overflow: hidden;
-	color: color-mix(in oklab, #278553 7%, transparent);
+	color: color-mix(in oklab, var(--success) 7%, transparent);
 	pointer-events: none;
 }
 

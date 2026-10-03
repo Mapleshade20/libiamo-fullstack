@@ -87,8 +87,8 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 		<div>
 			<div class="badge-line">
 				<QuestMenuStatusMark state={progress} label={t(lang, `hall.menu.status.${progress}`)} variant={progress === "finished" ? "stamp" : "line"} />
-				<Badge variant="secondary" class="text-[10px] font-bold uppercase tracking-widest">{UI_VARIANT_LABELS.translator}</Badge>
-				<Badge variant="outline" class="text-[10px] font-bold uppercase tracking-widest">{INTERACTION_TYPE_LABELS.translate}</Badge>
+				<Badge>{UI_VARIANT_LABELS.translator}</Badge>
+				<Badge>{INTERACTION_TYPE_LABELS.translate}</Badge>
 				<span class="difficulty">{t(lang, difficultyLabelKey(task.difficulty))}</span>
 			</div>
 
@@ -124,7 +124,7 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 				</div>
 
 				{#if blockedReason}
-					<Button href={`${base}/profile`} variant="outline" class="min-h-11 w-full justify-center sm:w-auto">
+					<Button href={`${base}/profile`} variant="secondary" class="min-h-11 w-full justify-center sm:w-auto">
 						<AlertCircle size={14} aria-hidden="true" />
 						{t(lang, "translate.details.settings")}
 					</Button>
@@ -159,7 +159,7 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 					</form>
 				{:else}
 					<div class="continue-actions">
-						<Button href={primaryHref} variant={isComplete ? "outline" : "default"} class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8"
+						<Button href={primaryHref} variant={isComplete ? "secondary" : "default"} class="min-h-11 w-full justify-center px-4 sm:w-auto sm:px-8"
 							>{primaryLabel}</Button
 						>
 						{#if !isDraft}
@@ -224,10 +224,8 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 	gap: 0.5rem;
 	border: 0;
 	background: transparent;
-	font-size: 0.78rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	font-size: 0.875rem;
+	font-weight: 500;
 	color: var(--muted-foreground);
 	cursor: pointer;
 	transition: color 160ms ease;
@@ -238,8 +236,9 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 }
 
 .back-link:focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 3px;
+	outline: none;
+	border-radius: var(--radius-lg);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
 }
 
 .preparation-body {
@@ -259,10 +258,8 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 }
 
 .difficulty {
-	font-size: 0.625rem;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.1em;
+	font-size: 0.75rem;
+	font-weight: 500;
 	color: var(--muted-foreground);
 }
 
@@ -285,12 +282,11 @@ h2 {
 	display: flex;
 	gap: 0.75rem;
 	margin-top: 2.5rem;
-	border: 1px solid #f1d49a;
-	border-radius: 0.375rem;
-	padding: 1rem;
-	background: #fff8e8;
+	border-radius: var(--radius-lg);
+	padding: 0.75rem 0.875rem;
+	background: color-mix(in oklab, var(--warning) 10%, transparent);
 	font-size: 0.875rem;
-	color: #6f4f17;
+	color: var(--foreground);
 }
 
 .form-error {
@@ -344,7 +340,7 @@ h2 {
 	right: -5rem;
 	top: -4rem;
 	z-index: -1;
-	color: color-mix(in oklab, #278553 7%, transparent);
+	color: color-mix(in oklab, var(--success) 7%, transparent);
 	pointer-events: none;
 }
 

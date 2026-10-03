@@ -3,10 +3,14 @@ import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
+import Checkbox from "$lib/components/common/Checkbox.svelte";
 import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import type { ActionNotificationContent } from "$lib/components/common/notifications";
+import Select from "$lib/components/common/Select.svelte";
 import { formatLabTime, formatLatency, ORIGIN_LABELS } from "$lib/components/llm/format";
 import { Badge } from "$lib/components/ui/badge";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
 import * as Table from "$lib/components/ui/table";
 import { getDisplayClock } from "$lib/time/display-clock";
 
@@ -83,72 +87,73 @@ function olderHref(): string {
 	if (last) params.set("before", new Date(last.createdAt).toISOString());
 	return `${base}/admin/lab/traces?${params}`;
 }
-
-const buttonClass =
-	"inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50";
-const selectClass =
-	"h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 </script>
 
 <svelte:head> <title>LLM Lab · Admin · Libiamo</title> </svelte:head>
 
 <div class="space-y-6">
 	<div class="space-y-1">
-		<h1 class="text-3xl">LLM Lab</h1>
+		<h1>Traces</h1>
 		<p class="text-sm text-muted-foreground">
 			Captured real-flow calls, plus Lab runs. Real-flow traces are kept for 30 days; pin cases to a dataset to keep them.
 		</p>
 	</div>
 
 	<form method="GET" class="flex flex-wrap items-end gap-3" aria-label="Filter traces">
-		<label class="grid gap-1 text-xs text-muted-foreground">
-			Recipe
-			<select name="recipe" class={selectClass} value={data.filters.recipeId ?? ""}>
-				<option value="">All recipes</option>
-				{#each data.recipes as recipe}
-					<option value={recipe.id}>{recipe.title}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="grid gap-1 text-xs text-muted-foreground">
-			Origin
-			<select name="origin" class={selectClass} value={data.filters.origin ?? ""}>
-				<option value="">Any origin</option>
-				<option value="app">Real flow</option>
-				<option value="override">Override</option>
-				<option value="lab">Lab</option>
-			</select>
-		</label>
-		<label class="grid gap-1 text-xs text-muted-foreground">
-			Status
-			<select name="status" class={selectClass} value={data.filters.status ?? ""}>
-				<option value="">Any status</option>
-				<option value="ok">OK</option>
-				<option value="error">Error</option>
-			</select>
-		</label>
-		<label class="grid gap-1 text-xs text-muted-foreground">
-			Task id
-			<input name="task" inputmode="numeric" class="{selectClass} w-28" value={data.filters.taskId ?? ""}>
-		</label>
+		<div class="flex flex-col gap-1.5">
+			<label for="trace-recipe" class="text-sm font-medium">Recipe</label>
+			<Select
+				id="trace-recipe"
+				name="recipe"
+				class="w-56"
+				value={data.filters.recipeId ?? ""}
+				items={[{ value: "", label: "All recipes" }, ...data.recipes.map((recipe) => ({ value: recipe.id, label: recipe.title }))]}
+			/>
+		</div>
+		<div class="flex flex-col gap-1.5">
+			<label for="trace-origin" class="text-sm font-medium">Origin</label>
+			<Select
+				id="trace-origin"
+				name="origin"
+				class="w-36"
+				value={data.filters.origin ?? ""}
+				items={[
+					{ value: "", label: "Any origin" },
+					{ value: "app", label: "Real flow" },
+					{ value: "override", label: "Override" },
+					{ value: "lab", label: "Lab" },
+				]}
+			/>
+		</div>
+		<div class="flex flex-col gap-1.5">
+			<label for="trace-status" class="text-sm font-medium">Status</label>
+			<Select
+				id="trace-status"
+				name="status"
+				class="w-32"
+				value={data.filters.status ?? ""}
+				items={[
+					{ value: "", label: "Any status" },
+					{ value: "ok", label: "OK" },
+					{ value: "error", label: "Error" },
+				]}
+			/>
+		</div>
+		<div class="flex flex-col gap-1.5">
+			<label for="trace-task" class="text-sm font-medium">Task ID</label>
+			<Input id="trace-task" name="task" inputmode="numeric" class="w-28" value={data.filters.taskId ?? ""} />
+		</div>
 		{#if data.filters.userId}
 			<input type="hidden" name="user" value={data.filters.userId}>
 		{/if}
-		<button
-			type="submit"
-			class="h-11 rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring"
-		>
-			Filter
-		</button>
+		<Button type="submit" variant="secondary">Filter</Button>
 		{#if data.filters.userId}
-			<a href="{base}/admin/lab/traces" class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2"
-				>Clear user filter</a
-			>
+			<Button href="{base}/admin/lab/traces" variant="ghost">Clear user filter</Button>
 		{/if}
 	</form>
 
 	{#if data.traces.length === 0}
-		<p class="text-muted-foreground">
+		<p class="text-sm text-muted-foreground">
 			No traces match. Real-flow calls appear here unless a learner on their own API key turned capture off in their profile.
 		</p>
 	{:else}
@@ -168,20 +173,13 @@ const selectClass =
 				{/if}
 			</span>
 			{#if canSelectMatching}
-				<button type="button" class="min-h-11 text-sm underline underline-offset-2" onclick={() => (allMatching = true)}>
-					Select all {plural(data.matching?.deletable ?? 0, "matching trace")}
-				</button>
+				<Button variant="link" onclick={() => (allMatching = true)}> Select all {plural(data.matching?.deletable ?? 0, "matching trace")} </Button>
 			{:else if allMatching}
-				<button type="button" class="min-h-11 text-sm underline underline-offset-2" onclick={() => (allMatching = false)}>Only this page</button>
+				<Button variant="link" onclick={() => (allMatching = false)}>Only this page</Button>
 			{/if}
-			<button
-				type="button"
-				class="{buttonClass} ml-auto text-destructive"
-				disabled={selectionCount === 0 || deleting}
-				onclick={() => (confirmOpen = true)}
-			>
+			<Button variant="destructive" class="ml-auto" disabled={selectionCount === 0 || deleting} onclick={() => (confirmOpen = true)}>
 				Delete selected
-			</button>
+			</Button>
 		</div>
 
 		<form
@@ -218,16 +216,14 @@ const selectClass =
 			<Table.Header>
 				<Table.Row>
 					<Table.Head class="w-11 px-0">
-						<label class="flex size-11 cursor-pointer items-center justify-center">
-							<input
-								type="checkbox"
-								class="size-4 accent-foreground"
+						<label class="flex size-8 cursor-pointer items-center justify-center">
+							<Checkbox
 								aria-label="Select every deletable trace on this page"
 								checked={pageSelected}
 								indeterminate={!pageSelected && selected.length > 0}
 								disabled={selectable.length === 0}
 								onchange={(event) => togglePage(event.currentTarget.checked)}
-							>
+							/>
 						</label>
 					</Table.Head>
 					<Table.Head>Time</Table.Head>
@@ -245,40 +241,36 @@ const selectClass =
 					<Table.Row data-state={allMatching || selected.includes(trace.id) ? "selected" : undefined}>
 						<Table.Cell class="w-11 px-0">
 							<label
-								class="flex size-11 items-center justify-center {trace.runId === null ? 'cursor-pointer' : 'cursor-not-allowed'}"
+								class="flex size-8 items-center justify-center {trace.runId === null ? 'cursor-pointer' : 'cursor-not-allowed'}"
 								title={trace.runId === null ? undefined : `Part of run #${trace.runId}; delete the run to remove it`}
 							>
-								<input
-									type="checkbox"
-									class="size-4 accent-foreground"
+								<Checkbox
 									aria-label="Select this trace"
 									checked={trace.runId === null && (allMatching || selected.includes(trace.id))}
 									disabled={trace.runId !== null}
 									onchange={(event) => toggle(trace.id, event.currentTarget.checked)}
-								>
+								/>
 							</label>
 						</Table.Cell>
-						<Table.Cell class="whitespace-nowrap text-xs text-muted-foreground tabular-nums"
-							>{formatLabTime(trace.createdAt, clock().timeZone)}</Table.Cell
-						>
+						<Table.Cell class="whitespace-nowrap text-muted-foreground tabular-nums">{formatLabTime(trace.createdAt, clock().timeZone)}</Table.Cell>
 						<Table.Cell>
 							<a href="{base}/admin/lab/traces/{trace.id}" class="font-medium hover:underline"
 								>{recipeTitles.get(trace.recipeId) ?? trace.recipeId}</a
 							>
 							{#if trace.status === "error"}
-								<Badge variant="outline" class="ml-2 border-[#e3c4bd] text-[#7d2f22]">error</Badge>
+								<Badge variant="destructive" class="ml-2">Error</Badge>
 							{/if}
 							{#if trace.attemptCount > 1}
-								<Badge variant="outline" class="ml-2">repaired</Badge>
+								<Badge variant="outline" class="ml-2">Repaired</Badge>
 							{/if}
 						</Table.Cell>
-						<Table.Cell class="text-xs">
+						<Table.Cell>
 							{ORIGIN_LABELS[trace.origin]}
 							{#if trace.variant?.label}
 								<span class="text-muted-foreground"> · {trace.variant.label}</span>
 							{/if}
 						</Table.Cell>
-						<Table.Cell class="text-xs">
+						<Table.Cell>
 							{#if trace.userId}
 								<a href="{base}/admin/lab/traces?user={encodeURIComponent(trace.userId)}" class="hover:underline" title={trace.userEmail ?? ""}
 									>{trace.userName ?? trace.userId}</a
@@ -287,24 +279,24 @@ const selectClass =
 								<span class="text-muted-foreground">—</span>
 							{/if}
 						</Table.Cell>
-						<Table.Cell class="text-xs tabular-nums">
+						<Table.Cell class="tabular-nums">
 							{#if trace.taskId}
 								<a href="{base}/admin/lab/traces?task={trace.taskId}" class="hover:underline">#{trace.taskId}</a>
 							{:else}
 								—
 							{/if}
 						</Table.Cell>
-						<Table.Cell class="max-w-40 truncate text-xs text-muted-foreground" title={trace.route?.host ?? ""}
+						<Table.Cell class="max-w-40 truncate font-mono text-xs text-muted-foreground" title={trace.route?.host ?? ""}
 							>{trace.route?.model ?? "—"}</Table.Cell
 						>
-						<Table.Cell class="text-right text-xs tabular-nums">{formatLatency(trace.latencyMs)}</Table.Cell>
-						<Table.Cell class="text-right text-xs tabular-nums">{trace.completionTokens ?? "—"}</Table.Cell>
+						<Table.Cell class="text-right tabular-nums">{formatLatency(trace.latencyMs)}</Table.Cell>
+						<Table.Cell class="text-right tabular-nums">{trace.completionTokens ?? "—"}</Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>
 		</Table.Root>
 		{#if data.hasMore}
-			<a href={olderHref()} class="inline-flex min-h-11 items-center text-sm underline underline-offset-2">Older traces</a>
+			<Button href={olderHref()} variant="secondary">Older traces</Button>
 		{/if}
 	{/if}
 </div>

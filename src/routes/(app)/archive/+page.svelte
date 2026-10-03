@@ -7,6 +7,7 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import type { Component } from "svelte";
 import { deserialize } from "$app/forms";
+import ConfirmDialog from "$lib/components/common/ConfirmDialog.svelte";
 import NoteCard from "$lib/components/review/NoteCard.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
@@ -23,6 +24,7 @@ let groups = $state<ArchiveGroups>((() => data.groups ?? [])());
 let expandedActivityKeys = $state(new Set<string>());
 let deletingNoteId = $state<number | null>(null);
 let deleteError = $state<string | null>(null);
+let deleteConfirmOpen = $state(false);
 
 $effect(() => {
 	groups = data.groups ?? [];
@@ -69,11 +71,7 @@ function toggleActivity(key: string) {
 function handleDeleteRequest(noteId: number) {
 	deletingNoteId = noteId;
 	deleteError = null;
-}
-
-function handleCancel() {
-	deletingNoteId = null;
-	deleteError = null;
+	deleteConfirmOpen = true;
 }
 
 async function deleteNote(noteId: number) {
@@ -91,6 +89,7 @@ async function deleteNote(noteId: number) {
 
 	removeNote(noteId);
 	deletingNoteId = null;
+	deleteConfirmOpen = false;
 }
 
 function removeNote(noteId: number) {
@@ -113,10 +112,10 @@ function formatDate(d: Date): string {
 	<meta name="description" content="Review saved notes, explanations, and language feedback from past sessions.">
 </svelte:head>
 
-<h1 class="text-3xl text-gray-800 font-medium leading-tight">{t(lang, "archive.title")}</h1>
+<h1>{t(lang, "archive.title")}</h1>
 
 {#if rows.length === 0}
-	<p class="mt-8 text-muted-foreground">{t(lang, "archive.empty")}</p>
+	<p class="mt-8 text-sm text-muted-foreground">{t(lang, "archive.empty")}</p>
 {:else}
 	<div class="mt-10 relative">
 		<!-- Continuous vertical timeline line -->
@@ -128,14 +127,14 @@ function formatDate(d: Date): string {
 			{@const isExpanded = expandedActivityKeys.has(activity.activityKey)}
 			<div class="flex gap-0 pb-8">
 				<!-- Date (left of line, desktop) -->
-				<div class="hidden sm:block w-[72px] shrink-0 pr-3 pt-[7px] text-left text-sm font-serif tabular-nums text-muted-foreground">
+				<div class="hidden w-[72px] shrink-0 pt-[9px] pr-3 text-left text-sm text-muted-foreground tabular-nums sm:block">
 					{showDate ? dateStr : ""}
 				</div>
 				<div class="w-6 sm:hidden shrink-0"></div>
 				<!-- Icon node on the line -->
 				<a href={activity.href} class="shrink-0 flex items-start relative -ml-[18px]">
 					<div
-						class="relative z-10 mt-[5px] flex h-9 w-9 items-center justify-center rounded border-2 border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
+						class="relative z-10 mt-[5px] flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors duration-150 hover:border-foreground/30 hover:text-foreground"
 					>
 						<Icon size={18} strokeWidth={1.5} />
 					</div>
@@ -144,21 +143,21 @@ function formatDate(d: Date): string {
 				<!-- Content -->
 				<div class="min-w-0 flex-1 pl-5 pt-[5px]">
 					{#if showDate}
-						<p class="sm:hidden my-1 text-xs font-serif tabular-nums text-muted-foreground">{dateStr}</p>
+						<p class="my-1 text-xs text-muted-foreground tabular-nums sm:hidden">{dateStr}</p>
 					{/if}
 					<button
 						type="button"
-						class="relative inline-flex items-center text-left font-serif text-lg text-foreground hover:text-muted-foreground transition-colors"
+						class="relative inline-flex min-h-9 cursor-pointer items-center rounded-md text-left text-base font-medium text-foreground transition-colors duration-150 hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						aria-expanded={isExpanded}
 						onclick={() => toggleActivity(activity.activityKey)}
 					>
 						<ChevronRight
 							size={18}
-							class={`absolute -left-5 top-1/2 -translate-y-1/2 shrink-0 text-muted-foreground transition-transform sm:hidden${isExpanded ? ' rotate-90' : ''}`}
+							class={`absolute -left-5 top-1/2 -translate-y-1/2 shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:hidden${isExpanded ? ' rotate-90' : ''}`}
 						/>
 						<ChevronRight
 							size={18}
-							class={`hidden shrink-0 text-muted-foreground transition-transform sm:block sm:mr-1.5${isExpanded ? ' rotate-90' : ''}`}
+							class={`hidden shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:block sm:mr-1.5${isExpanded ? ' rotate-90' : ''}`}
 						/>
 						<span>{activity.title}</span>
 					</button>
@@ -173,32 +172,7 @@ function formatDate(d: Date): string {
 								<p class="text-sm text-muted-foreground">No notes in this activity.</p>
 							{/if}
 							{#each activity.notes as note (note.id)}
-								{#if deletingNoteId === note.id}
-									<div class="rounded-md border border-red-200 bg-red-50 p-4">
-										<p class="mb-3 text-sm text-red-800">Delete this note and its review history? This cannot be undone.</p>
-										{#if deleteError}
-											<p class="mb-3 text-xs font-medium text-red-700">{deleteError}</p>
-										{/if}
-										<div class="flex gap-2">
-											<button
-												type="button"
-												onclick={() => deleteNote(note.id)}
-												class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-											>
-												Delete
-											</button>
-											<button
-												type="button"
-												onclick={handleCancel}
-												class="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700"
-											>
-												Cancel
-											</button>
-										</div>
-									</div>
-								{:else}
-									<NoteCard {note} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
-								{/if}
+								<NoteCard {note} ondelete={() => handleDeleteRequest(note.id)} t={askLabels} />
 							{/each}
 						</div>
 					{/if}
@@ -207,3 +181,16 @@ function formatDate(d: Date): string {
 		{/each}
 	</div>
 {/if}
+
+<ConfirmDialog
+	bind:open={deleteConfirmOpen}
+	title="Delete this note?"
+	message="Its review history is deleted with it. This cannot be undone."
+	confirmLabel="Delete"
+	cancelLabel="Cancel"
+	onconfirm={() => { if (deletingNoteId !== null) void deleteNote(deletingNoteId); }}
+>
+	{#if deleteError}
+		<p class="text-destructive" role="alert">{deleteError}</p>
+	{/if}
+</ConfirmDialog>

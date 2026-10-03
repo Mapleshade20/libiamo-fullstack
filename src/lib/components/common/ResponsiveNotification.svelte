@@ -29,17 +29,17 @@ let navObserver: ResizeObserver | null = null;
 const variantClasses = $derived(
 	variant === "success"
 		? {
-				icon: "text-emerald-600 bg-emerald-50 ring-emerald-100",
-				accent: "from-emerald-500/20 via-emerald-400/8",
+				icon: "text-success bg-success/10 ring-success/15",
+				accent: "from-success/20 via-success/8",
 			}
 		: variant === "error"
 			? {
-					icon: "text-destructive bg-red-50 ring-red-100",
-					accent: "from-red-500/20 via-red-400/8",
+					icon: "text-destructive bg-destructive/10 ring-destructive/15",
+					accent: "from-destructive/20 via-destructive/8",
 				}
 			: {
-					icon: "text-blue-600 bg-blue-50 ring-blue-100",
-					accent: "from-blue-500/20 via-blue-400/8",
+					icon: "text-muted-foreground bg-foreground/[0.05] ring-foreground/10",
+					accent: "from-foreground/10 via-foreground/4",
 				},
 );
 const resolvedTitle = $derived(title ?? (variant === "success" ? "Done" : variant === "error" ? "Something went wrong" : "Notice"));
@@ -99,7 +99,7 @@ onDestroy(clearTimer);
 
 {#if open && message}
 	<div
-		class="fixed inset-0 z-[4000] flex h-dvh w-screen items-center justify-center overscroll-contain bg-stone-200/80 p-4 md:pointer-events-none md:inset-auto md:right-5 md:top-[var(--notification-desktop-top)] md:block md:h-auto md:w-auto md:bg-transparent md:p-0"
+		class="fixed inset-0 z-[4000] flex h-dvh w-screen items-center justify-center overscroll-contain bg-foreground/15 p-4 md:pointer-events-none md:inset-auto md:right-5 md:top-[var(--notification-desktop-top)] md:block md:h-auto md:w-auto md:bg-transparent md:p-0"
 		style="--notification-desktop-top: {desktopTop}px"
 	>
 		<div
@@ -121,7 +121,7 @@ onDestroy(clearTimer);
 						{/if}
 					</div>
 					<div class="min-w-0 flex-1 pt-0.5">
-						<h2 id="notification-title" class="text-base font-semibold tracking-tight">{resolvedTitle}</h2>
+						<h2 id="notification-title" class="font-sans text-base font-semibold">{resolvedTitle}</h2>
 						<p class="mt-1 text-sm leading-6 text-muted-foreground">{message}</p>
 						<button
 							type="button"

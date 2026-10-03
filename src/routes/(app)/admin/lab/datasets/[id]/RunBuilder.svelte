@@ -1,10 +1,17 @@
 <script lang="ts">
+import Plus from "@lucide/svelte/icons/plus";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { type ValidationIssue, validateBeforeSubmit } from "$lib/client/form-attention";
 import Accordion from "$lib/components/common/Accordion.svelte";
+import Field from "$lib/components/common/Field.svelte";
+import Select from "$lib/components/common/Select.svelte";
+import Switch from "$lib/components/common/Switch.svelte";
 import EffortSelect from "$lib/components/llm/EffortSelect.svelte";
 import SlotEditor from "$lib/components/llm/SlotEditor.svelte";
+import { Button } from "$lib/components/ui/button";
+import { Input } from "$lib/components/ui/input";
+import { Textarea } from "$lib/components/ui/textarea";
 import type { ReasoningEffort } from "$lib/constants";
 import { type LabProviderOption, type RecipeDescriptor, temperaturePlaceholder } from "$lib/llm/lab";
 import { unknownTemplateVariables } from "$lib/llm/template";
@@ -95,10 +102,7 @@ function validate(): ValidationIssue[] {
 	return issues;
 }
 
-const fieldClass =
-	"w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const buttonClass =
-	"inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60";
+const uid = $props.id();
 </script>
 
 <form
@@ -117,94 +121,83 @@ const buttonClass =
 	}}
 >
 	<input type="hidden" name="payload" value={payload}>
-	<div class="space-y-4" use:validateBeforeSubmit={validate}>
+	<div class="space-y-5" use:validateBeforeSubmit={validate}>
 		<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-			<label class="grid gap-1 text-sm">
-				Run label
-				<input class="{fieldClass} h-11" bind:value={label} maxlength="120" placeholder="e.g. without task brief">
-			</label>
-			<label class="grid gap-1 text-sm">
-				Repeats
-				<input class="{fieldClass} h-11" type="number" min="1" max="5" bind:value={repeats}>
-			</label>
+			<Field label="Run label" for="{uid}-label">
+				<Input id="{uid}-label" bind:value={label} maxlength={120} placeholder="e.g. without task brief" />
+			</Field>
+			<Field label="Repeats" for="{uid}-repeats"> <Input id="{uid}-repeats" type="number" min="1" max="5" bind:value={repeats} /> </Field>
 		</div>
 
 		<div class="grid gap-4 lg:grid-cols-2">
 			{#each variants as variant, index (variant.key)}
-				<fieldset class="space-y-3 rounded-lg border border-border bg-card/40 p-3">
-					<legend class="px-1 text-xs uppercase tracking-wider text-muted-foreground">Column {index + 1}</legend>
-					<label class="grid gap-1 text-sm">
-						Label
-						<input class="{fieldClass} h-11" data-feedback-name={`variant.${index}.label`} bind:value={variant.label} maxlength="80">
-					</label>
+				<fieldset class="min-w-0 space-y-3 rounded-xl border border-border bg-card p-4">
+					<legend class="px-1 text-sm font-medium">Column {index + 1}</legend>
+					<Field label="Label" for="{uid}-variant-{index}-label">
+						<Input id="{uid}-variant-{index}-label" data-feedback-name={`variant.${index}.label`} bind:value={variant.label} maxlength={80} />
+					</Field>
+					<Field label="Provider" for="{uid}-variant-{index}-provider">
+						<Select
+							id="{uid}-variant-{index}-provider"
+							bind:value={variant.providerRef}
+							items={providers.map((provider) => ({ value: provider.ref, label: `${provider.label} · ${provider.model}` }))}
+						/>
+					</Field>
 					<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-						<label class="grid gap-1 text-sm sm:col-span-2">
-							Provider
-							<select class="{fieldClass} h-11" bind:value={variant.providerRef}>
-								{#each providers as provider}
-									<option value={provider.ref}>{provider.label} · {provider.model}</option>
-								{/each}
-							</select>
-						</label>
-						<EffortSelect bind:value={variant.reasoningEffort} recipeDefault={recipe.reasoningEffort} class="{fieldClass} h-11" />
-						<label class="grid gap-1 text-sm">
-							Temperature
-							<input
-								class="{fieldClass} h-11"
+						<EffortSelect bind:value={variant.reasoningEffort} recipeDefault={recipe.reasoningEffort} />
+						<Field label="Temperature" for="{uid}-variant-{index}-temperature">
+							<Input
+								id="{uid}-variant-{index}-temperature"
 								inputmode="decimal"
 								placeholder={temperaturePlaceholder(recipe)}
 								data-feedback-name={`variant.${index}.temperature`}
 								bind:value={variant.temperature}
-							>
-						</label>
+							/>
+						</Field>
 					</div>
-					{#each recipe.slots as slot (slot.name)}
-						<Accordion title={`${slot.label}${variant.slots[slot.name] !== slot.template ? " · edited" : ""}`} class="bg-background/60">
-							<SlotEditor definition={slot} bind:value={variant.slots[slot.name]} feedbackName={`variant.${index}.slot.${slot.name}`} />
-						</Accordion>
-					{/each}
+					<div class="divide-y divide-border border-t border-border">
+						{#each recipe.slots as slot (slot.name)}
+							<Accordion title={`${slot.label}${variant.slots[slot.name] !== slot.template ? " · edited" : ""}`} variant="plain">
+								<SlotEditor definition={slot} bind:value={variant.slots[slot.name]} feedbackName={`variant.${index}.slot.${slot.name}`} />
+							</Accordion>
+						{/each}
+					</div>
 					{#if variants.length > 1}
-						<button type="button" class={buttonClass} onclick={() => variants.splice(index, 1)}>Remove column</button>
+						<Button variant="destructive" size="sm" onclick={() => variants.splice(index, 1)}>Remove column</Button>
 					{/if}
 				</fieldset>
 			{/each}
 		</div>
 		{#if variants.length < 6}
-			<button type="button" class={buttonClass} onclick={addVariant}>Add column</button>
+			<Button variant="secondary" onclick={addVariant}><Plus aria-hidden="true" />Add column</Button>
 		{/if}
 
-		<div class="space-y-3 rounded-lg border border-border p-3">
-			<label class="flex min-h-11 items-center gap-3 text-sm">
-				<input type="checkbox" class="size-5 accent-foreground" bind:checked={judgeEnabled}>
+		<div class="space-y-3 border-t border-border pt-4">
+			<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 				Score each output with an LLM judge
+				<Switch bind:checked={judgeEnabled} />
 			</label>
 			{#if judgeEnabled}
-				<label class="grid gap-1 text-sm">
-					Rubric
-					<textarea class="{fieldClass} py-2" rows="4" data-feedback-name="rubric" bind:value={rubric}></textarea>
-				</label>
-				<label class="grid gap-1 text-sm">
-					Judge provider
-					<select class="{fieldClass} h-11" bind:value={judgeProvider}>
-						{#each providers as provider}
-							<option value={provider.ref}>{provider.label} · {provider.model}</option>
-						{/each}
-					</select>
-				</label>
+				<Field label="Rubric" for="{uid}-rubric"> <Textarea id="{uid}-rubric" rows={4} data-feedback-name="rubric" bind:value={rubric} /> </Field>
+				<Field label="Judge provider" for="{uid}-judge-provider">
+					<Select
+						id="{uid}-judge-provider"
+						bind:value={judgeProvider}
+						items={providers.map((provider) => ({ value: provider.ref, label: `${provider.label} · ${provider.model}` }))}
+					/>
+				</Field>
 			{/if}
 		</div>
 
 		<div class="flex flex-wrap items-center gap-3">
-			<button type="submit" class="{buttonClass} bg-[#38362f] text-[#faf8f4] hover:bg-[#4b483e]" disabled={submitting || caseCount === 0}>
-				Start run
-			</button>
+			<Button type="submit" disabled={submitting || caseCount === 0}>Start run</Button>
 			<span class="text-sm text-muted-foreground tabular-nums"
 				>{calls}
 				call{calls === 1 ? "" : "s"}{judgeEnabled ? ` + up to ${calls} judge calls` : ""}</span
 			>
 		</div>
 		{#if error}
-			<p class="text-sm text-destructive" role="alert">{error}</p>
+			<p class="field-error-message" role="alert">{error}</p>
 		{/if}
 	</div>
 </form>

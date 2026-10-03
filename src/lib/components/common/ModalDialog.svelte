@@ -104,16 +104,16 @@ dialog {
 	width: min(26rem, calc(100vw - 2rem));
 	max-height: calc(100dvh - 2rem);
 	padding: 1.75rem;
-	border: 1px solid #ded7cd;
-	border-radius: 20px;
-	background: #faf8f4;
-	color: #302c28;
-	box-shadow: 0 24px 80px #241b2033;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-2xl);
+	background: var(--card);
+	color: var(--foreground);
+	box-shadow: 0 24px 80px rgb(36 27 32 / 0.2);
 	opacity: 0;
 	transform: translateY(8px) scale(0.98);
 	transition:
 		opacity calc(220ms * var(--modal-motion-scale)) ease,
-		transform calc(220ms * var(--modal-motion-scale)) cubic-bezier(0.22, 1, 0.36, 1);
+		transform calc(220ms * var(--modal-motion-scale)) var(--ease-panel);
 }
 dialog[open]:not(.closing) {
 	opacity: 1;
@@ -135,7 +135,7 @@ dialog.sheet[open]:not(.closing) {
 	transform: none;
 }
 dialog::backdrop {
-	background: #28232a33;
+	background: rgb(40 35 42 / 0.2);
 	backdrop-filter: blur(4px);
 	opacity: 0;
 	transition: opacity calc(220ms * var(--modal-motion-scale));

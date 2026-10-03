@@ -1,4 +1,6 @@
 <script lang="ts">
+import { Button } from "$lib/components/ui/button";
+import { Textarea } from "$lib/components/ui/textarea";
 import type { RecipeDescriptor } from "$lib/llm/lab";
 import { unknownTemplateVariables } from "$lib/llm/template";
 
@@ -27,20 +29,14 @@ const changed = $derived(value !== slot.template);
 		<label for={id} class="text-sm font-medium"
 			>{slot.label}
 			{#if changed}
-				<span class="ml-1 text-xs font-normal text-[#8a5a1f]">edited</span>
+				<span class="ml-1 text-xs font-normal text-warning">Edited</span>
 			{/if}</label
 		>
 		{#if changed}
-			<button
-				type="button"
-				class="min-h-8 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-				onclick={() => (value = slot.template)}
-			>
-				Reset to default
-			</button>
+			<Button variant="ghost" size="sm" onclick={() => (value = slot.template)}>Reset to default</Button>
 		{/if}
 	</div>
-	<textarea
+	<Textarea
 		{id}
 		{name}
 		data-feedback-name={feedbackName}
@@ -49,13 +45,13 @@ const changed = $derived(value !== slot.template);
 		spellcheck="false"
 		aria-invalid={unknown.length > 0}
 		aria-describedby={`${id}-variables`}
-		class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
-	></textarea>
+		class="font-mono text-xs leading-relaxed"
+	/>
 	<p id={`${id}-variables`} class="text-xs text-muted-foreground">
 		{#if slot.variables.length}
 			Variables:
 			{#each slot.variables as variable, index}
-				<code class="rounded bg-secondary px-1">{`{{${variable}}}`}</code>{index < slot.variables.length - 1 ? " " : ""}
+				<code class="rounded bg-foreground/[0.06] px-1">{`{{${variable}}}`}</code>{index < slot.variables.length - 1 ? " " : ""}
 			{/each}
 		{:else}
 			No variables.

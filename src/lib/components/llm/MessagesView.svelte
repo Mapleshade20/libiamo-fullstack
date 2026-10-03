@@ -1,5 +1,6 @@
 <script lang="ts">
 import Accordion from "$lib/components/common/Accordion.svelte";
+import { Button } from "$lib/components/ui/button";
 import type { LabChatMessage } from "$lib/llm/lab";
 import { parseJsonContent, splitPromptSections } from "$lib/llm/prompt-view";
 import ValueView from "./ValueView.svelte";
@@ -15,24 +16,15 @@ const OPEN_SECTIONS_BELOW = 4_000;
 	{#each messages as message, index}
 		{@const json = parseJsonContent(message.content)}
 		{@const sections = message.role === "system" ? splitPromptSections(message.content) : []}
-		<li class="rounded-lg border border-border bg-card/60">
-			<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
-				<span
-					class="text-xs font-semibold uppercase tracking-wider {message.role === 'system' ? 'text-[#7a5c2e]' : message.role === 'assistant' ? 'text-[#3f5f4a]' : 'text-[#3d4f6b]'}"
-				>
-					{message.role}
-				</span>
+		<li class="overflow-hidden rounded-xl border border-border bg-card">
+			<div class="flex min-h-10 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1">
+				<span class="text-sm font-medium capitalize">{message.role}</span>
 				<span class="flex items-center gap-3 text-xs text-muted-foreground">
 					<span class="tabular-nums">{message.content.length.toLocaleString("en-US")} chars</span>
 					{#if json || sections.length > 1}
-						<button
-							type="button"
-							class="min-h-8 rounded-md px-2 underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-							aria-pressed={raw[index] ?? false}
-							onclick={() => (raw[index] = !raw[index])}
-						>
+						<Button variant="ghost" size="sm" aria-pressed={raw[index] ?? false} onclick={() => (raw[index] = !raw[index])}>
 							{raw[index] ? "Structured" : "Raw"}
-						</button>
+						</Button>
 					{/if}
 				</span>
 			</div>
@@ -42,12 +34,12 @@ const OPEN_SECTIONS_BELOW = 4_000;
 				{:else if json}
 					<ValueView value={json.value} />
 				{:else if sections.length > 1}
-					<div class="space-y-2">
+					<div class="divide-y divide-border">
 						{#each sections as section}
 							{#if section.title === null}
-								<p class="whitespace-pre-wrap">{section.body}</p>
+								<p class="whitespace-pre-wrap pb-3">{section.body}</p>
 							{:else}
-								<Accordion title={section.title} open={message.content.length < OPEN_SECTIONS_BELOW} class="bg-background/60">
+								<Accordion title={section.title} open={message.content.length < OPEN_SECTIONS_BELOW} variant="plain">
 									<p class="whitespace-pre-wrap">{section.body}</p>
 								</Accordion>
 							{/if}

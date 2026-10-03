@@ -7,8 +7,10 @@ import { tick } from "svelte";
 import { fly, scale } from "svelte/transition";
 import { focusAndHighlightField, textValidationMessage } from "$lib/client/form-attention";
 import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
+import Notice from "$lib/components/common/Notice.svelte";
 import { Button } from "$lib/components/ui/button";
 import { Skeleton } from "$lib/components/ui/skeleton";
+import { Textarea } from "$lib/components/ui/textarea";
 import { USER_TEXT_MAX_LENGTH } from "$lib/constants";
 import { renderMarkdown } from "$lib/text/markdown";
 import type { LearningSelection, SelectionAppendRequest } from "./types";
@@ -117,22 +119,20 @@ function handleKeydown(event: KeyboardEvent) {
 {:else}
 	<div
 		data-selection-ignore
-		class="fixed right-4 bottom-4 left-4 z-30 overflow-hidden rounded-lg border border-border bg-background/95 shadow-2xl backdrop-blur-md sm:right-8 sm:bottom-8 sm:left-auto sm:w-[400px]"
+		class="fixed right-4 bottom-4 left-4 z-30 overflow-hidden rounded-xl border border-border bg-popover shadow-2xl sm:right-8 sm:bottom-8 sm:left-auto sm:w-[400px]"
 		transition:fly={{ y: 20, duration: 220 }}
 	>
-		<div class="flex items-center justify-between border-b border-border p-4">
-			<div class="flex items-center gap-2"><MessageCircleQuestion size={19} /><span class="font-medium">Ask the Tutor</span></div>
-			<button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted" onclick={toggleExpanded} aria-label="Close">
-				<X size={18} />
-			</button>
+		<div class="flex items-center justify-between border-b border-border py-2 pr-2 pl-4">
+			<div class="flex items-center gap-2"><MessageCircleQuestion size={18} aria-hidden="true" /><span class="font-medium">Ask the tutor</span></div>
+			<Button variant="ghost" size="icon-sm" onclick={toggleExpanded} aria-label="Close"><X aria-hidden="true" /></Button>
 		</div>
 		<div class="max-h-[min(420px,55dvh)] overflow-y-auto p-4">
 			{#if selection}
 				<blockquote class="mb-4 border-l-2 border-border pl-3 text-sm text-muted-foreground">{selection.text}</blockquote>
 			{/if}
 			{#if answer || isLoading}
-				<div class="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm">{question}</div>
-				<div class="rounded-md border border-border p-4">
+				<div class="mb-4 rounded-lg bg-foreground/[0.04] p-3 text-sm">{question}</div>
+				<div>
 					<LoadingReveal loading={isLoading}>
 						{#snippet placeholder()}
 							<div class="space-y-2"><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /><Skeleton class="h-4 w-2/3" /></div>
@@ -144,8 +144,8 @@ function handleKeydown(event: KeyboardEvent) {
 				</div>
 				{#if answer}
 					<div class="mt-3 flex gap-2">
-						<Button size="sm" variant="outline" class="flex-1" onclick={handleSave} disabled={isSaving || saved}
-							><BookmarkPlus size={14} />{saved ? "Saved" : isSaving ? "Saving..." : "Save Q&A"}</Button
+						<Button size="sm" variant="secondary" class="flex-1" onclick={handleSave} disabled={isSaving || saved}
+							><BookmarkPlus size={14} />{saved ? "Saved" : isSaving ? "Saving…" : "Save Q&A"}</Button
 						>
 						<Button size="sm" variant="ghost" class="flex-1" onclick={reset}>Ask another</Button>
 					</div>
@@ -154,21 +154,22 @@ function handleKeydown(event: KeyboardEvent) {
 				<p class="text-sm text-muted-foreground">Ask about the selected language or the feedback on this page.</p>
 			{/if}
 			{#if error}
-				<p class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>
+				<Notice tone="danger" role="alert" class="mt-3"><p>{error}</p></Notice>
 			{/if}
 		</div>
 		{#if !answer && !isLoading}
 			<div class="border-t border-border p-4" data-field-container>
 				<div class="flex items-end gap-2">
-					<textarea
+					<Textarea
 						maxlength={USER_TEXT_MAX_LENGTH}
-						bind:this={textareaElement}
+						bind:ref={textareaElement}
 						bind:value={question}
 						onkeydown={handleKeydown}
-						placeholder="Type your question..."
-						class="min-w-0 flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/30"
-						rows="2"
-					></textarea>
+						placeholder="Type your question…"
+						aria-label="Your question"
+						class="min-h-0 flex-1 resize-none"
+						rows={2}
+					/>
 					<Button size="icon" onclick={handleSubmit} disabled={!question.trim() || isLoading} aria-label="Send question" title="Send question"
 						><Send size={16} /></Button
 					>

@@ -425,7 +425,7 @@ $effect(() => {
 										<div class="flex h-6 items-center"><Skeleton class="h-2.5 w-full bg-[#d8d3cd]/80" /></div>
 									{/snippet}
 									{#if hintError}
-										<span class="block min-w-0 whitespace-normal leading-5 text-red-600">{hintError}</span>
+										<span class="block min-w-0 whitespace-normal leading-5 text-destructive">{hintError}</span>
 									{:else}
 										<span class="block min-w-0 whitespace-normal leading-5 text-[#2f2a25]">{contentHint}</span>
 									{/if}
@@ -462,7 +462,7 @@ $effect(() => {
 							</div>
 						{/snippet}
 						{#if hintError}
-							<p class="text-xs leading-6 text-red-600">{hintError}</p>
+							<p class="text-xs leading-6 text-destructive">{hintError}</p>
 						{:else if visibleExpressionPhrases.length > 0}
 							<div class="flex flex-wrap gap-2">
 								{#each visibleExpressionPhrases as phrase}

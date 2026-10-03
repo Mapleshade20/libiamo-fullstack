@@ -7,9 +7,11 @@ import { type LanguageCode, USER_NAME_MAX_LENGTH } from "$lib/constants";
 import { t } from "$lib/i18n";
 import FormErrorFocus from "../common/FormErrorFocus.svelte";
 import ModalDialog from "../common/ModalDialog.svelte";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 
 let { name, lang }: { name: string; lang: LanguageCode } = $props();
-let input: HTMLInputElement;
+let input = $state<HTMLInputElement | null>(null);
 let formElement = $state<HTMLFormElement | null>(null);
 let dialogOpen = $state(false);
 let value = $state("");
@@ -26,29 +28,29 @@ function open() {
 		failure = "";
 		dialogOpen = true;
 	});
-	input.focus({ preventScroll: true });
-	input.select();
+	input?.focus({ preventScroll: true });
+	input?.select();
 }
 </script>
 
-<div class="name-display">
-	<h2>{name}</h2>
-	<button
-		type="button"
-		class="edit-trigger"
+<div class="flex min-w-0 items-center gap-1">
+	<h2 class="min-w-0 truncate text-2xl leading-snug">{name}</h2>
+	<Button
+		variant="ghost"
+		size="icon"
+		class="shrink-0 rounded-full text-muted-foreground"
 		onclick={open}
 		aria-label={t(lang, "profile.editName")}
 		title={t(lang, "profile.editName")}
 		aria-haspopup="dialog"
 	>
-		<Pencil size={16} strokeWidth={1.5} aria-hidden="true" />
-	</button>
+		<Pencil strokeWidth={1.5} aria-hidden="true" />
+	</Button>
 </div>
 
 <ModalDialog bind:open={dialogOpen} busy={saving} labelledby="name-dialog-title">
 	<form
 		bind:this={formElement}
-		class="name-form"
 		method="POST"
 		action="?/updateProfile"
 		oninvalidcapture={handleInvalidField}
@@ -77,10 +79,10 @@ function open() {
 		aria-busy={saving}
 	>
 		<FormErrorFocus formRef={formElement} {errors} fieldOrder={["name"]} />
-		<h2 id="name-dialog-title">{t(lang, "profile.editName")}</h2>
-		<label for="profile-name">{t(lang, "profile.name")}</label>
-		<input
-			bind:this={input}
+		<h2 id="name-dialog-title" class="mb-6">{t(lang, "profile.editName")}</h2>
+		<label for="profile-name" class="mb-1.5 block text-sm font-medium">{t(lang, "profile.name")}</label>
+		<Input
+			bind:ref={input}
 			bind:value
 			name="name"
 			id="profile-name"
@@ -89,114 +91,13 @@ function open() {
 			readonly={saving}
 			aria-invalid={Boolean(errors.name)}
 			aria-describedby="name-dialog-error"
-		>
-		<p id="name-dialog-error" data-field-error={errors.name ? "name" : undefined} class="error" role="status">{errors.name?.[0] ?? failure}</p>
-		<div class="actions">
-			<button type="button" disabled={saving} onclick={() => (dialogOpen = false)}>{t(lang, "common.cancel")}</button>
-			<button type="submit" class="save" disabled={saving || value === name}>{t(lang, "profile.saveName")}</button>
+		/>
+		<p id="name-dialog-error" data-field-error={errors.name ? "name" : undefined} class="min-h-11 pt-1.5 text-sm text-destructive" role="status">
+			{errors.name?.[0] ?? failure}
+		</p>
+		<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+			<Button variant="secondary" disabled={saving} onclick={() => (dialogOpen = false)}>{t(lang, "common.cancel")}</Button>
+			<Button type="submit" disabled={saving || value === name}>{t(lang, "profile.saveName")}</Button>
 		</div>
 	</form>
 </ModalDialog>
-
-<style>
-.name-display {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	min-width: 0;
-}
-.name-display h2 {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-family: var(--font-serif);
-	font-size: 1.5rem;
-	line-height: 1.3;
-}
-.edit-trigger {
-	display: grid;
-	place-items: center;
-	width: 44px;
-	height: 44px;
-	flex: 0 0 44px;
-	border-radius: 50%;
-	color: #746c64;
-	transition:
-		background-color 200ms,
-		color 200ms;
-}
-.edit-trigger:hover {
-	background: #eeeae4;
-	color: #713b46;
-}
-.name-form h2 {
-	margin: 0 0 1.75rem;
-	font-family: var(--font-serif);
-	font-size: 1.75rem;
-	font-weight: 500;
-}
-.name-form label {
-	display: block;
-	margin-bottom: 0.5rem;
-	font-size: 0.8rem;
-	font-weight: 600;
-	color: #655d55;
-}
-.name-form input {
-	width: 100%;
-	min-height: 48px;
-	padding: 0.65rem 0.85rem;
-	border: 1px solid #cfc6bb;
-	border-radius: 10px;
-	background: #fffdfa;
-	font-family: var(--font-sans);
-	font-size: 1rem;
-}
-.error {
-	min-height: 2.75rem;
-	padding-top: 0.5rem;
-	font-size: 0.8rem;
-	color: #963e42;
-}
-.actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.75rem;
-}
-.actions button {
-	min-height: 44px;
-	padding: 0.65rem 1rem;
-	border-radius: 10px;
-	font-size: 0.875rem;
-	font-weight: 600;
-	transition:
-		background-color 200ms,
-		opacity 200ms;
-}
-.actions button:hover {
-	background: #eeeae4;
-}
-.actions .save {
-	background: #713b46;
-	color: #fffaf7;
-}
-.actions .save:hover {
-	background: #60323c;
-}
-.actions button:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-button:focus-visible,
-input:focus-visible {
-	outline: 2px solid #89525e;
-	outline-offset: 3px;
-}
-@media (prefers-reduced-motion: reduce) {
-	.edit-trigger,
-	.actions button {
-		transition: none;
-	}
-}
-</style>

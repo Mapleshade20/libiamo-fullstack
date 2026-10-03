@@ -8,7 +8,7 @@ let { ref = $bindable(null), class: className, children, ...restProps }: WithEle
 <tr
 	bind:this={ref}
 	data-slot="table-row"
-	class={cn("hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors", className)}
+	class={cn("hover:bg-foreground/[0.025] data-[state=selected]:bg-foreground/[0.05] border-b transition-colors duration-100", className)}
 	{...restProps}
 >
 	{@render children?.()}

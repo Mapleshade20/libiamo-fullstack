@@ -94,7 +94,7 @@ function actionClasses(tone: StudyCardActionTone) {
 			>
 				{vocab}
 			</p>
-			<div class="absolute inset-x-6 bottom-0 border-t border-stone-400/45 sm:inset-x-10"></div>
+			<div class="absolute inset-x-6 bottom-0 border-t border-border sm:inset-x-10"></div>
 		</section>
 
 		<section class="grid min-h-44 content-center gap-5 px-6 py-8 text-left sm:min-h-48 sm:gap-6 sm:px-12 sm:py-9">
@@ -136,7 +136,7 @@ function actionClasses(tone: StudyCardActionTone) {
 						>
 							<span>{action.label}</span>
 							{#if action.detail}
-								<span class="mt-0.5 text-[11px] font-normal opacity-65 sm:text-xs">{action.detail}</span>
+								<span class="mt-0.5 text-xs font-normal opacity-65">{action.detail}</span>
 							{/if}
 						</button>
 					{/each}

@@ -62,8 +62,8 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 		><ArrowLeft size={15} />{t(lang, "common.back")}</a
 	>
 	<header class="mt-8 border-b border-border pb-7">
-		<p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{t(lang, "translate.draft.title")}</p>
-		<h1 lang={targetLanguageTag} class="font-serif text-3xl tracking-tight">{data.task.title}</h1>
+		<p class="mb-2 text-xs font-medium text-muted-foreground">{t(lang, "translate.draft.title")}</p>
+		<h1 lang={targetLanguageTag}>{data.task.title}</h1>
 		<p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">{t(lang, "translate.draft.body")}</p>
 	</header>
 
@@ -91,9 +91,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 				<article class="grid gap-5 border-b border-border pb-10 lg:grid-cols-2 lg:gap-10">
 					<div>
 						<div class="mb-3 flex items-center justify-between gap-3">
-							<span class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-								>{t(lang, "translate.draft.paragraph")} {index + 1}</span
-							>
+							<span class="text-xs font-medium text-muted-foreground">{t(lang, "translate.draft.paragraph")} {index + 1}</span>
 							<button
 								type="button"
 								onclick={() => (candidatePickerIndex = answer.paragraphIndex)}
@@ -146,7 +144,7 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 			aria-label={t(lang, "translate.draft.choose")}
 		>
 			<div class="mb-5 flex items-center justify-between">
-				<h2 class="font-serif text-2xl">{t(lang, "translate.draft.choose")}</h2>
+				<h2>{t(lang, "translate.draft.choose")}</h2>
 				<Button variant="ghost" onclick={() => (candidatePickerIndex = null)}>{t(lang, "translate.draft.close")}</Button>
 			</div>
 			<div class="space-y-3">

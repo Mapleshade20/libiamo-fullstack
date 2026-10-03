@@ -14,7 +14,7 @@ const isScalar = $derived(value === null || typeof value !== "object");
 	{:else if value === null || value === undefined}
 		<span class="text-muted-foreground italic">null</span>
 	{:else}
-		<span class="font-mono text-[0.8125rem] text-[#5b4a2e]">{String(value)}</span>
+		<span class="font-mono text-xs">{String(value)}</span>
 	{/if}
 {:else if Array.isArray(value)}
 	{#if value.length === 0}
@@ -24,7 +24,7 @@ const isScalar = $derived(value === null || typeof value !== "object");
 			{#each value as item, index}
 				<li class="flex gap-2">
 					<span class="w-5 shrink-0 pt-px text-right font-mono text-xs text-muted-foreground tabular-nums">{index}</span>
-					<div class="min-w-0 flex-1 {item && typeof item === 'object' ? 'rounded-md border border-border/70 bg-background/60 px-2.5 py-2' : ''}">
+					<div class="min-w-0 flex-1 {item && typeof item === 'object' ? 'rounded-lg bg-foreground/[0.03] px-2.5 py-2' : ''}">
 						<ValueView value={item} depth={depth + 1} />
 					</div>
 				</li>

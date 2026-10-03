@@ -1,10 +1,11 @@
 <script lang="ts">
 import { enhance } from "$app/forms";
-import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
+import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
+import Select from "$lib/components/common/Select.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
@@ -19,7 +20,7 @@ let mode = $derived(data.filters.kind);
 let rawDate = $derived(data.filters.rawDate);
 
 // svelte-ignore state_referenced_locally
-let selectedTaskId = $state<number | string>(data.candidates[0]?.id ?? "");
+let selectedTaskId = $state<string>(String(data.candidates[0]?.id ?? ""));
 let lineupForm: HTMLFormElement | null = $state(null);
 
 const actionNotification = $derived(
@@ -35,19 +36,18 @@ $effect(() => {
 	const normalizedSelectedTaskId = Number(selectedTaskId);
 	if (data.candidates.length > 0) {
 		if (!data.candidates.some((candidate) => candidate.id === normalizedSelectedTaskId)) {
-			selectedTaskId = data.candidates[0].id;
+			selectedTaskId = String(data.candidates[0].id);
 		}
 	} else {
 		selectedTaskId = "";
 	}
 });
 
-function toggleMode(newMode: "daily" | "weekly") {
-	if (mode === newMode) return;
+function modeHref(kind: "daily" | "weekly") {
 	const url = new URL(page.url);
-	url.searchParams.set("kind", newMode);
+	url.searchParams.set("kind", kind);
 	url.searchParams.delete("date");
-	goto(url.toString(), { keepFocus: true });
+	return `${url.pathname}${url.search}`;
 }
 
 function submitFilters(event: Event) {
@@ -63,59 +63,43 @@ function submitFilters(event: Event) {
 <div class="space-y-8">
 	<ActionNotification notification={actionNotification} />
 
-	<div class="flex items-center justify-between">
-		<h1 class="text-3xl">Lineups</h1>
-
-		<div class="relative flex h-10 w-48 items-center rounded-md bg-muted p-1">
-			<div
-				class="absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-sm bg-background shadow-sm transition-transform duration-200 ease-in-out"
-				class:translate-x-full={mode === "weekly"}
-			></div>
-
-			<button
-				type="button"
-				class="relative z-10 w-1/2 py-1 text-sm font-medium transition-colors"
-				class:text-foreground={mode === "daily"}
-				class:text-muted-foreground={mode !== "daily"}
-				onclick={() => toggleMode("daily")}
-			>
-				Daily
-			</button>
-
-			<button
-				type="button"
-				class="relative z-10 w-1/2 py-1 text-sm font-medium transition-colors"
-				class:text-foreground={mode === "weekly"}
-				class:text-muted-foreground={mode !== "weekly"}
-				onclick={() => toggleMode("weekly")}
-			>
-				Weekly
-			</button>
-		</div>
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<h1>Lineups</h1>
+		<SegmentedControl
+			label="Lineup kind"
+			value={mode}
+			items={[
+				{ value: "daily", label: "Daily", href: modeHref("daily") },
+				{ value: "weekly", label: "Weekly", href: modeHref("weekly") },
+			]}
+		/>
 	</div>
 
-	<form method="GET" class="flex flex-wrap items-end gap-4" onchange={submitFilters}>
+	<form method="GET" class="flex flex-wrap items-end gap-3" onchange={submitFilters}>
 		<input type="hidden" name="kind" value={mode}>
 
-		<div class="space-y-1">
+		<div class="flex flex-col gap-1.5">
 			<Label for="date">{mode === "daily" ? "Date" : "Week"}</Label>
-			<Input id="date" name="date" type={mode === "daily" ? "date" : "week"} lang="en" value={rawDate} class="h-10 w-48" />
+			<Input id="date" name="date" type={mode === "daily" ? "date" : "week"} lang="en" value={rawDate} class="w-48" />
 		</div>
 
-		<div class="space-y-1">
+		<div class="flex flex-col gap-1.5">
 			<Label for="language">Language</Label>
-			<select id="language" name="language" class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
-				{#each LANGUAGE_CODES as code}
-					<option value={code} selected={data.filters.language === code}>{LANGUAGE_LABELS[code]}</option>
-				{/each}
-			</select>
+			<Select
+				id="language"
+				name="language"
+				class="w-40"
+				value={data.filters.language}
+				items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+			/>
 		</div>
 	</form>
 
-	<div>
-		<h2 class="mb-3 text-lg font-semibold">
+	<section class="space-y-3">
+		<h2>
 			{mode === "daily" ? "Daily" : "Weekly"}
-			lineup starting {data.filters.startsOn} ({data.filters.language.toUpperCase()})
+			lineup from {data.filters.startsOn}
+			<span class="text-muted-foreground">· {LANGUAGE_LABELS[data.filters.language as keyof typeof LANGUAGE_LABELS] ?? data.filters.language}</span>
 		</h2>
 		{#if data.entries.length > 0}
 			<Table.Root>
@@ -134,27 +118,22 @@ function submitFilters(event: Event) {
 							<Table.Cell class="max-w-md truncate" title={t.title}>{t.title}</Table.Cell>
 							<Table.Cell>{UI_VARIANT_LABELS[t.ui]}</Table.Cell>
 							<Table.Cell>
-								<Badge
-									variant={t.origin === "auto"
-										? "secondary"
-										: "default"}
-									>{t.origin}</Badge
-								>
+								<Badge variant={t.origin === "auto" ? "outline" : "secondary"}>{t.origin === "auto" ? "Auto" : "Manual"}</Badge>
 							</Table.Cell>
 						</Table.Row>
 					{/each}
 				</Table.Body>
 			</Table.Root>
 		{:else}
-			<p class="text-muted-foreground">
+			<p class="text-sm text-muted-foreground">
 				No tasks lined up for this
 				{mode === "daily" ? "date" : "week"}.
 			</p>
 		{/if}
-	</div>
+	</section>
 
 	<Card.Root>
-		<Card.Header> <Card.Title>Add a Task to a Lineup</Card.Title> </Card.Header>
+		<Card.Header> <Card.Title>Add a task to a lineup</Card.Title> </Card.Header>
 		<Card.Content>
 			<FormErrorFocus formRef={lineupForm} errors={form?.errors} fieldOrder={["taskId", "date"]} />
 
@@ -163,33 +142,28 @@ function submitFilters(event: Event) {
 				method="POST"
 				action="?/add"
 				use:enhance
-				class="flex flex-wrap items-end gap-4"
+				class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-start"
 				oninvalidcapture={handleInvalidField}
 			>
 				<input type="hidden" name="kind" value={mode}>
-				<div class="space-y-1">
+				<div class="flex min-w-0 flex-col gap-1.5" data-field-container>
 					<Label for="taskId">Task</Label>
-					<select
+					<Select
 						id="taskId"
 						name="taskId"
 						bind:value={selectedTaskId}
-						class="flex h-10 w-64 rounded-md border border-input bg-background px-3 py-2 text-sm aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
 						required
+						disabled={data.candidates.length === 0}
+						placeholder="No other active chat tasks in this language"
 						aria-invalid={Boolean(form?.errors?.taskId)}
-					>
-						{#if data.candidates.length === 0}
-							<option value="" disabled>No other active chat tasks in this language</option>
-						{/if}
-						{#each data.candidates as candidate}
-							<option value={candidate.id}>{candidate.id} — {candidate.title}</option>
-						{/each}
-					</select>
+						items={data.candidates.map((candidate) => ({ value: String(candidate.id), label: `${candidate.id} — ${candidate.title}` }))}
+					/>
 					{#if form?.errors?.taskId}
-						<p data-field-error="taskId" class="text-sm text-red-600">{form.errors.taskId[0]}</p>
+						<p data-field-error="taskId" class="field-error-message">{form.errors.taskId[0]}</p>
 					{/if}
 				</div>
 
-				<div class="space-y-1">
+				<div class="flex flex-col gap-1.5" data-field-container>
 					<Label for="lineupDate">{mode === "daily" ? "Date" : "Week"}</Label>
 					<Input
 						id="lineupDate"
@@ -198,15 +172,14 @@ function submitFilters(event: Event) {
 						lang="en"
 						value={rawDate}
 						required
-						class="h-10"
 						aria-invalid={Boolean(form?.errors?.date)}
 					/>
 					{#if form?.errors?.date}
-						<p data-field-error="date" class="text-sm text-red-600">{form.errors.date[0]}</p>
+						<p data-field-error="date" class="field-error-message">{form.errors.date[0]}</p>
 					{/if}
 				</div>
 
-				<Button type="submit" disabled={data.candidates.length === 0}>Add to Lineup</Button>
+				<Button type="submit" class="sm:mt-[1.625rem]" disabled={data.candidates.length === 0}>Add to lineup</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>

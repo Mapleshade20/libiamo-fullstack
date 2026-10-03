@@ -27,7 +27,7 @@ let { value = $bindable(2), name = "difficulty", error }: { value?: number; name
 		{/each}
 	</div>
 	{#if error}
-		<p id="{name}-error" data-field-error={name} class="text-sm text-red-600">{error}</p>
+		<p id="{name}-error" data-field-error={name} class="field-error-message">{error}</p>
 	{/if}
 </fieldset>
 
@@ -40,10 +40,10 @@ fieldset {
 .segments {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	height: 2.25rem;
+	height: 2.5rem;
 	border: 1px solid var(--input);
-	border-radius: var(--radius-md);
-	background: var(--background);
+	border-radius: var(--radius-lg);
+	background: rgb(255 255 255 / 0.8);
 	overflow: hidden;
 }
 
@@ -55,8 +55,8 @@ fieldset {
 	padding: 0 0.6rem;
 	cursor: pointer;
 	transition:
-		background-color 160ms ease,
-		box-shadow 160ms ease;
+		background-color 150ms var(--ease-panel),
+		box-shadow 150ms var(--ease-panel);
 }
 
 .segment + .segment {
@@ -73,13 +73,12 @@ fieldset {
 }
 
 .segment:has(input:focus-visible) {
-	outline: 2px solid var(--ring);
-	outline-offset: -2px;
+	box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ring) 70%, transparent);
 }
 
 .name {
 	min-width: 0;
-	font-size: 0.8125rem;
+	font-size: 0.875rem;
 	line-height: 1.1;
 	color: var(--foreground);
 }
@@ -112,9 +111,8 @@ fieldset {
 	align-items: center;
 	gap: 0.35rem;
 	margin-top: 0.15rem;
-	font-size: 0.6875rem;
+	font-size: 0.75rem;
 	line-height: 1.1;
-	letter-spacing: 0.03em;
 	color: var(--muted-foreground);
 	font-variant-numeric: tabular-nums;
 }

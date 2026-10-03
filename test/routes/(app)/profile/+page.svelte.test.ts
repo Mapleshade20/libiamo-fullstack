@@ -80,7 +80,7 @@ describe("Profile page", () => {
 	it("shows the trace capture setting only when the server offers it", () => {
 		expect(render(ProfilePage, { props: { data, form: null } }).body).not.toContain('name="llmTraceCapture"');
 		const { body } = render(ProfilePage, { props: { data: { ...data, hasApiKey: true, llmTraceSetting: { enabled: true } }, form: null } });
-		expect(body).toMatch(/<input[^>]*name="llmTraceCapture"[^>]*checked/);
+		expect(body).toMatch(/<input(?=[^>]*name="llmTraceCapture")(?=[^>]*\bchecked)[^>]*>/);
 	});
 	it("states each login method's status in words, not only by styling", () => {
 		const { body } = render(ProfilePage, { props: { data, form: null } });
@@ -238,7 +238,8 @@ describe("Profile page", () => {
 
 		expect(fieldPosition).toBeGreaterThan(-1);
 		expect(fieldForm).toContain('action="?/updateProfile"');
-		expect(fieldForm).not.toContain("<button");
+		// Autosaved: nothing in the form submits it.
+		expect(fieldForm).not.toMatch(/<button(?![^>]*type="button")/);
 	});
 
 	it("shows the three self-assignment ranges and selects the saved active-language level", () => {

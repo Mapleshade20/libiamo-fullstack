@@ -86,10 +86,10 @@ function runsHref(run: string) {
 
 <div class="mx-auto max-w-[1900px] px-4 py-6">
 	<header class="mb-4 flex flex-wrap items-baseline gap-3">
-		<h1 class="font-serif text-3xl">Scene Lab</h1>
+		<h1>Scene Lab</h1>
 		<nav class="flex flex-wrap gap-1.5 text-xs" aria-label="Runs">
 			{#each data.runs as run}
-				<a class="rounded border px-2 py-1 {data.selected.includes(run) ? 'bg-foreground text-background' : ''}" href={runsHref(run)}>{run}</a>
+				<a class="rounded border px-2 py-1 {data.selected.includes(run) ?'bg-foreground text-background' : ''}" href={runsHref(run)}>{run}</a>
 			{/each}
 		</nav>
 	</header>
@@ -100,7 +100,7 @@ function runsHref(run: string) {
 				type="button"
 				role="tab"
 				aria-selected={scenario.id === current}
-				class="min-h-11 rounded-full border px-3 text-sm {scenario.id === current ? 'bg-foreground text-background' : ''}"
+				class="min-h-11 rounded-full border px-3 text-sm {scenario.id === current ?'bg-foreground text-background' : ''}"
 				onclick={() => (scenarioId = scenario.id)}
 			>
 				{scenario.label}
@@ -113,7 +113,7 @@ function runsHref(run: string) {
 		{#each SPEEDS as option}
 			<button
 				type="button"
-				class="min-h-11 rounded border px-3 text-sm {speed === option ? 'bg-foreground text-background' : ''}"
+				class="min-h-11 rounded border px-3 text-sm {speed === option ?'bg-foreground text-background' : ''}"
 				onclick={() => (speed = option)}
 			>
 				{option}×
@@ -125,7 +125,7 @@ function runsHref(run: string) {
 
 	<div class="flex gap-4 overflow-x-auto pb-4">
 		{#if current && data.references[current]}
-			<article class="max-h-[80vh] w-[420px] shrink-0 overflow-y-auto rounded-lg border border-amber-300 bg-amber-50/40 p-3 text-[13px]">
+			<article class="max-h-[80vh] w-[420px] shrink-0 overflow-y-auto rounded-lg border border-warning/30 bg-warning/[0.08] p-3 text-[13px]">
 				<h3 class="font-semibold">The real conversation</h3>
 				<pre class="mt-2 font-sans whitespace-pre-wrap">{data.references[current]}</pre>
 			</article>
@@ -139,7 +139,7 @@ function runsHref(run: string) {
 			>
 				<h3 class="font-semibold">{result.run} · {result.variant} · seed {result.seed}</h3>
 				{#if !result.finishedAt}
-					<p class="mt-1 text-xs text-amber-700">running… {result.turns.length} turns</p>
+					<p class="mt-1 text-xs text-warning">running… {result.turns.length} turns</p>
 				{/if}
 				{#if shown.hidden}
 					<p class="mt-3 text-xs text-muted-foreground">… {shown.hidden} earlier opening messages</p>
@@ -150,13 +150,13 @@ function runsHref(run: string) {
 						{@const before = shown.entries[index - 1]}
 						{@const gap = at !== undefined && before && times.has(before.id) ? at - (times.get(before.id) ?? 0) : 0}
 						{#if gap > 120_000}
-							<li class="py-1 text-center text-[11px] text-muted-foreground">— {formatClock(gap)} later —</li>
+							<li class="py-1 text-center text-xs text-muted-foreground">— {formatClock(gap)} later —</li>
 						{/if}
 						<li
-							class="rounded px-2 py-1 transition-colors duration-700 {entry.role === 'learner' ? 'bg-emerald-50' : entry.opening ? 'text-muted-foreground' : 'bg-sky-50'} {at !== undefined && position - scale(at) < 1_500 * speed ? 'ring-2 ring-amber-300' : ''}"
+							class="rounded px-2 py-1 transition-colors duration-700 {entry.role ==='learner' ? 'bg-success/[0.07]' : entry.opening ? 'text-muted-foreground' : 'bg-sky-50'} {at !== undefined && position - scale(at) < 1_500 * speed ? 'ring-2 ring-amber-300' : ''}"
 							style:margin-left="{Math.min(depth.get(entry.id) ?? 0, 6) * 14}px"
 						>
-							<span class="text-[11px] text-muted-foreground"
+							<span class="text-xs text-muted-foreground"
 								>#{entry.id}{entry.replyTo ? ` ↪${entry.replyTo}` : ""}{at !== undefined ? ` · ${formatClock(at)}` : ""}</span
 							>
 							<b>{entry.author}</b>

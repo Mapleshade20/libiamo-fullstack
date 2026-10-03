@@ -275,8 +275,8 @@ $effect(() => {
 							</div>
 						{:else if generateError}
 							<div class="py-6 text-center">
-								<p class="text-sm text-red-500">{generateError}</p>
-								<Button variant="outline" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
+								<p class="text-sm text-destructive">{generateError}</p>
+								<Button variant="secondary" class="mt-3" onclick={handleGenerate}>{t(lang, "common.retry")}</Button>
 							</div>
 						{:else if expressions.length > 0}
 							<p class="text-xs text-muted-foreground leading-relaxed">{t(lang, "task.usefulExpressions.instructions")}</p>
@@ -325,7 +325,7 @@ $effect(() => {
 												<div class="space-y-1">
 													<p class="font-prose text-xs text-muted-foreground leading-relaxed">{feedback}</p>
 													{#if correction}
-														<p class="font-prose text-xs font-medium text-emerald-600 leading-relaxed">→ {correction}</p>
+														<p class="font-prose text-xs font-medium text-success leading-relaxed">→ {correction}</p>
 													{/if}
 												</div>
 											{/if}
