@@ -5,6 +5,7 @@ import { base } from "$app/paths";
 import { isSocialProviderId, type SocialProviderId } from "$lib/auth/social";
 import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
 import SocialAuthButtons from "$lib/components/auth/SocialAuthButtons.svelte";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
 import Select from "$lib/components/common/Select.svelte";
@@ -119,9 +120,14 @@ const actionNotification = $derived(
 								value={formState?.values?.email ?? ""}
 								required
 								aria-invalid={Boolean(formState?.errors?.email)}
+								aria-describedby={formState?.errors?.email ? undefined : "email-help"}
 							/>
 							{#if formState?.errors?.email}
 								<p data-field-error="email" class="field-error-message">{formState.errors.email[0]}</p>
+							{:else}
+								<p id="email-help" class="text-sm text-muted-foreground">
+									We accept Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina and school (edu) addresses.
+								</p>
 							{/if}
 						</div>
 
@@ -156,7 +162,14 @@ const actionNotification = $derived(
 							{/if}
 						</div>
 
+						{#if data.captchaSiteKey}
+							<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+						{/if}
+
 						<Button type="submit" class="w-full">Sign up</Button>
+						<p class="text-sm text-muted-foreground">
+							Your free AI trial arrives in three parts: a third when you sign up, another a day later and the rest on day three.
+						</p>
 
 						{#if data.socialProviders.length > 0}
 							<div class="border-t border-border" aria-hidden="true"></div>

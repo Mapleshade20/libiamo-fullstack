@@ -11,7 +11,14 @@ import type {
 import type { z } from "zod";
 import { env } from "$env/dynamic/private";
 import type { ReasoningEffort } from "$lib/constants";
-import { assertTrialQuotaAvailable, debitTrialQuota, TrialQuotaExhaustedError, type TrialQuotaStatus } from "../account/trial-quota";
+import {
+	refundTrialQuotaHold,
+	reserveTrialQuota,
+	settleTrialQuota,
+	TrialQuotaExhaustedError,
+	type TrialQuotaHold,
+	type TrialQuotaStatus,
+} from "../account/trial-quota";
 import { db } from "../db";
 import { userApiKey } from "../db/schema";
 
@@ -505,10 +512,28 @@ async function callChatCompletion(
 	validateMessages(messages);
 
 	const config = await resolveOpenAIConfig(userId, provider);
-	const shouldApplyTrialQuota = Boolean(userId && config.source === "env");
-	if (userId && shouldApplyTrialQuota) {
-		await assertTrialQuotaAvailable(userId);
+	// Trial calls hold tokens before the request and settle the real usage after it, so a burst of
+	// concurrent calls cannot all pass on one positive balance.
+	const hold = userId && config.source === "env" ? await reserveTrialQuota(userId) : null;
+	try {
+		const completion = await requestChatCompletion(config, messages, options);
+		const quota = hold ? await settleTrialQuota(hold, ...extractOutputTokenUsage(completion)) : undefined;
+		return { completion, quota, route: routeInfo(config) };
+	} catch (error) {
+		if (hold) await refundHold(hold);
+		throw error;
 	}
+}
+
+async function refundHold(hold: TrialQuotaHold) {
+	try {
+		await refundTrialQuotaHold(hold);
+	} catch (error) {
+		console.error("[llm] could not refund a trial quota hold", error);
+	}
+}
+
+async function requestChatCompletion(config: ResolvedOpenAIConfig, messages: ChatMessage[], options: CompletionOptions): Promise<ChatCompletion> {
 	const url = `${config.baseUrl}/chat/completions`;
 	const request: ChatCompletionCreateParamsNonStreaming = {
 		model: config.model,
@@ -538,10 +563,7 @@ async function callChatCompletion(
 	}
 
 	debugLog("response", { url, status: response.status, body: completion });
-
-	const quota = userId && shouldApplyTrialQuota ? await debitTrialQuota(userId, ...extractOutputTokenUsage(completion)) : undefined;
-
-	return { completion, quota, route: routeInfo(config) };
+	return completion;
 }
 
 function extractOutputTokenUsage(completion: ChatCompletion): [tokens: number, estimated: boolean] {

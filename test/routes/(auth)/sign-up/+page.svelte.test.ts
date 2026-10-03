@@ -6,6 +6,7 @@ const data = {
 	displayClock: { now: 1788480000000, timeZone: "UTC" },
 	learnerDocumentLanguage: "en",
 	socialProviders: ["google" as const, "github" as const],
+	captchaSiteKey: null,
 	socialAuthError: null,
 };
 

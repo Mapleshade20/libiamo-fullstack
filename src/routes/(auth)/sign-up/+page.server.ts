@@ -7,6 +7,7 @@ import { isSocialProviderId, socialAuthErrorMessage } from "$lib/auth/social";
 import { isLanguageCode } from "$lib/constants";
 import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
+import { CAPTCHA_FAILED_MESSAGE, captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -16,6 +17,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	return {
 		socialProviders: configuredSocialProviderIds(env),
+		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		socialAuthError: socialAuthErrorMessage(event.url.searchParams.get("error")),
 	};
 };
@@ -74,6 +76,9 @@ export const actions: Actions = {
 		const result = signUpSchema.safeParse(raw);
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+		}
+		if (!(await verifyCaptchaField(env, formData, event))) {
+			return fail(400, { message: CAPTCHA_FAILED_MESSAGE, values: raw });
 		}
 
 		try {

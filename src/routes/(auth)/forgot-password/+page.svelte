@@ -3,6 +3,7 @@ import { tick } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { clearFieldFeedback, focusAndHighlightField, handleInvalidField } from "$lib/client/form-attention";
+import Turnstile from "$lib/components/auth/Turnstile.svelte";
 import ActionNotification from "$lib/components/common/ActionNotification.svelte";
 import FormErrorFocus from "$lib/components/common/FormErrorFocus.svelte";
 import Notice from "$lib/components/common/Notice.svelte";
@@ -25,7 +26,9 @@ const actionNotification = $derived(
 		? { variant: "success" as const, title: "Check your inbox", message: "If an account with that email exists, we've sent a reset link." }
 		: form?.resetMessage
 			? { variant: "error" as const, title: "Unable to reset password", message: form.resetMessage }
-			: null,
+			: form?.captchaMessage
+				? { variant: "error" as const, title: "Unable to send a reset link", message: form.captchaMessage }
+				: null,
 );
 </script>
 
@@ -123,6 +126,9 @@ const actionNotification = $derived(
 						<p data-field-error="email" class="field-error-message">{form.errors.email[0]}</p>
 					{/if}
 				</div>
+				{#if data.captchaSiteKey}
+					<Turnstile siteKey={data.captchaSiteKey} resetKey={form} />
+				{/if}
 				<Button type="submit" class="w-full">Send reset link</Button>
 			</form>
 		{/if}

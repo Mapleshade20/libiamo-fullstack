@@ -1,6 +1,6 @@
 import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { socialAuthFailure } from "$lib/auth/social";
+import { socialAuthErrorMessage, socialAuthFailure } from "$lib/auth/social";
 import type { AuthAccountStore, LockedAuthAccountTransaction } from "$lib/server/auth/account-deletion";
 import { createAuthOptions } from "$lib/server/auth/options";
 import { mapOAuthProfileToUser } from "$lib/server/auth/social";
@@ -94,11 +94,11 @@ const TEST_ENV = {
  * a signed id_token. The GitHub provider runs unmodified against a stubbed fetch.
  */
 async function createAuthTestInstance(
-	googleIdentity: GithubIdentity = { id: "google-user", email: "google@example.com", verified: true },
+	googleIdentity: GithubIdentity = { id: "google-user", email: "google@gmail.com", verified: true },
 	accountStore: AuthAccountStore = createTestAccountStore(() => testInstanceDb),
-	overrides: { deleteUser?: boolean; onResetPasswordToken?: (token: string) => void } = {},
+	overrides: { deleteUser?: boolean; onResetPasswordToken?: (token: string) => void; env?: Record<string, string> } = {},
 ) {
-	const options = createAuthOptions(TEST_ENV, { accountStore });
+	const options = createAuthOptions({ ...TEST_ENV, ...overrides.env }, { accountStore });
 	const google = options.socialProviders.google;
 	if (!google || typeof google === "function") throw new Error("TEST_ENV should configure Google as a static provider");
 
@@ -284,7 +284,7 @@ describe("Better Auth social authentication lifecycle", () => {
 
 	it("creates a passwordless account from a verified GitHub identity and keeps the selected language", async () => {
 		const { auth, db } = await createAuthTestInstance();
-		mockGithub({ id: "github-new-user", email: "new@example.com", verified: true });
+		mockGithub({ id: "github-new-user", email: "new@gmail.com", verified: true });
 
 		const flow = await startSocialFlow(auth, "github", { activeLanguage: "fr" });
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -294,7 +294,7 @@ describe("Better Auth social authentication lifecycle", () => {
 
 		const user = await db.findOne<{ id: string; activeLanguage: string; emailVerified: boolean }>({
 			model: "user",
-			where: [{ field: "email", value: "new@example.com" }],
+			where: [{ field: "email", value: "new@gmail.com" }],
 		});
 		expect(user).toMatchObject({ activeLanguage: "fr", emailVerified: true });
 		if (!user) throw new Error("Expected the GitHub user to be created");
@@ -309,7 +309,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const returningFlow = await startSocialFlow(auth, "github");
 		const returningCallback = await finishSocialFlow(auth, "github", returningFlow);
 		expect(returningCallback.status, await returningCallback.clone().text()).toBe(302);
-		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "new@example.com" }] })).resolves.toHaveLength(1);
+		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "new@gmail.com" }] })).resolves.toHaveLength(1);
 
 		const sessionHeaders = convertSetCookieToCookie(new Headers(returningCallback.headers));
 		await expect(auth.api.unlinkAccount({ body: { providerId: "github" }, headers: sessionHeaders })).rejects.toMatchObject({
@@ -320,7 +320,7 @@ describe("Better Auth social authentication lifecycle", () => {
 	it("creates a passwordless account from a verified Google identity", async () => {
 		const { auth, db } = await createAuthTestInstance({
 			id: "google-new-user",
-			email: "google-new@example.com",
+			email: "google-new@gmail.com",
 			verified: true,
 		});
 		mockGoogle();
@@ -331,7 +331,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		expect(callback.status, await callback.clone().text()).toBe(302);
 		const user = await db.findOne<{ id: string; activeLanguage: string; emailVerified: boolean }>({
 			model: "user",
-			where: [{ field: "email", value: "google-new@example.com" }],
+			where: [{ field: "email", value: "google-new@gmail.com" }],
 		});
 		expect(user).toMatchObject({ activeLanguage: "ja", emailVerified: true });
 		if (!user) throw new Error("Expected the Google user to be created");
@@ -340,7 +340,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const returningFlow = await startSocialFlow(auth, "google");
 		const returningCallback = await finishSocialFlow(auth, "google", returningFlow);
 		expect(returningCallback.status, await returningCallback.clone().text()).toBe(302);
-		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "google-new@example.com" }] })).resolves.toHaveLength(1);
+		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "google-new@gmail.com" }] })).resolves.toHaveLength(1);
 	});
 
 	it("links a verified GitHub identity to an existing verified account with the same email", async () => {
@@ -348,7 +348,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const signup = await auth.api.signUpEmail({
 			body: {
 				name: "Existing User",
-				email: "existing@example.com",
+				email: "existing@gmail.com",
 				password: "correct-horse-battery-staple",
 				activeLanguage: "es",
 			},
@@ -358,7 +358,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			where: [{ field: "id", value: signup.user.id }],
 			update: { emailVerified: true },
 		});
-		mockGithub({ id: "github-existing-user", email: "existing@example.com", verified: true });
+		mockGithub({ id: "github-existing-user", email: "existing@gmail.com", verified: true });
 
 		const flow = await startSocialFlow(auth, "github");
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -368,7 +368,7 @@ describe("Better Auth social authentication lifecycle", () => {
 
 		const users = await db.findMany<{ id: string }>({
 			model: "user",
-			where: [{ field: "email", value: "existing@example.com" }],
+			where: [{ field: "email", value: "existing@gmail.com" }],
 		});
 		expect(users).toHaveLength(1);
 		expect(users[0]?.id).toBe(signup.user.id);
@@ -386,7 +386,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const signup = await auth.api.signUpEmail({
 			body: {
 				name: "Profile User",
-				email: "profile@example.com",
+				email: "profile@gmail.com",
 				password,
 				activeLanguage: "fr",
 			},
@@ -396,8 +396,8 @@ describe("Better Auth social authentication lifecycle", () => {
 			where: [{ field: "id", value: signup.user.id }],
 			update: { emailVerified: true },
 		});
-		const { headers: sessionHeaders } = await signInWithUser("profile@example.com", password);
-		mockGithub({ id: "github-profile-user", email: "profile@example.com", verified: true });
+		const { headers: sessionHeaders } = await signInWithUser("profile@gmail.com", password);
+		mockGithub({ id: "github-profile-user", email: "profile@gmail.com", verified: true });
 
 		const flow = await startSocialLink(auth, "github", sessionHeaders);
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -415,11 +415,11 @@ describe("Better Auth social authentication lifecycle", () => {
 
 	it("serializes concurrent direct unlink requests so one login method remains", async () => {
 		const instance = await createAuthTestInstance(
-			{ id: "google-concurrent-user", email: "concurrent@example.com", verified: true },
+			{ id: "google-concurrent-user", email: "concurrent@gmail.com", verified: true },
 			createControlledTestAccountStore(() => testInstanceDb),
 		);
 		const { auth, db } = instance;
-		mockGithub({ id: "github-concurrent-user", email: "concurrent@example.com", verified: true });
+		mockGithub({ id: "github-concurrent-user", email: "concurrent@gmail.com", verified: true });
 
 		const signupFlow = await startSocialFlow(auth, "github", { activeLanguage: "es" });
 		const signupCallback = await finishSocialFlow(auth, "github", signupFlow);
@@ -448,7 +448,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			reason: { body: { code: "FAILED_TO_UNLINK_LAST_ACCOUNT" } },
 		});
 
-		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "concurrent@example.com" }] });
+		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "concurrent@gmail.com" }] });
 		expect(user).not.toBeNull();
 		if (!user) throw new Error("Expected the concurrent unlink user to exist");
 		const remainingAccounts = await db.findMany({ model: "account", where: [{ field: "userId", value: user.id }] });
@@ -460,7 +460,7 @@ describe("Better Auth social authentication lifecycle", () => {
 	// rejects the deletion of a user whose only login method is the one it is protecting.
 	it("lets a user with a single login method delete their account", async () => {
 		const instance = await createAuthTestInstance(
-			{ id: "google-deleted-user", email: "deleted@example.com", verified: true },
+			{ id: "google-deleted-user", email: "deleted@gmail.com", verified: true },
 			createTestAccountStore(() => testInstanceDb),
 			{ deleteUser: true },
 		);
@@ -468,10 +468,10 @@ describe("Better Auth social authentication lifecycle", () => {
 
 		const password = "correct-horse-battery-staple";
 		const signup = await auth.api.signUpEmail({
-			body: { name: "Deleted User", email: "deleted@example.com", password, activeLanguage: "ja" },
+			body: { name: "Deleted User", email: "deleted@gmail.com", password, activeLanguage: "ja" },
 		});
 		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
-		const { headers: sessionHeaders } = await signInWithUser("deleted@example.com", password);
+		const { headers: sessionHeaders } = await signInWithUser("deleted@gmail.com", password);
 		await expect(db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] })).resolves.toHaveLength(1);
 
 		await expect(auth.api.deleteUser({ body: { password }, headers: sessionHeaders })).resolves.toMatchObject({ success: true });
@@ -485,33 +485,33 @@ describe("Better Auth social authentication lifecycle", () => {
 	it("verifies a new primary email before changing password login and preserves OAuth identity", async () => {
 		const { auth, db, signInWithUser } = await createAuthTestInstance();
 		const password = "correct-horse-battery-staple";
-		const signup = await auth.api.signUpEmail({ body: { name: "Email User", email: "old@example.com", password, activeLanguage: "fr" } });
+		const signup = await auth.api.signUpEmail({ body: { name: "Email User", email: "old@gmail.com", password, activeLanguage: "fr" } });
 		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
-		const { headers } = await signInWithUser("old@example.com", password);
-		mockGithub({ id: "email-change-github", email: "different@example.com", verified: true });
+		const { headers } = await signInWithUser("old@gmail.com", password);
+		mockGithub({ id: "email-change-github", email: "different@gmail.com", verified: true });
 		await finishSocialFlow(auth, "github", await startSocialLink(auth, "github", headers));
 		const accountsBefore = await db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] });
 		sentMail.mockClear();
-		await auth.api.changeEmail({ headers, body: { newEmail: "new@example.com", callbackURL: "/verify?emailChange=1" } });
+		await auth.api.changeEmail({ headers, body: { newEmail: "new@gmail.com", callbackURL: "/verify?emailChange=1" } });
 		expect(sentMail).toHaveBeenCalledTimes(1);
 		const mail = sentMail.mock.calls[0][0];
-		expect(mail.to).toBe("new@example.com");
+		expect(mail.to).toBe("new@gmail.com");
 		const verification = new URL(mail.html);
 		expect(verification.searchParams.get("callbackURL")).toBe("/verify?success=1&emailChange=1");
 		expect(await db.findOne({ model: "user", where: [{ field: "id", value: signup.user.id }] })).toMatchObject({
-			email: "old@example.com",
+			email: "old@gmail.com",
 			emailVerified: true,
 		});
 		const token = verification.searchParams.get("token") as string;
 		await auth.api.verifyEmail({ query: { token }, headers });
 		expect(await db.findOne({ model: "user", where: [{ field: "id", value: signup.user.id }] })).toMatchObject({
-			email: "new@example.com",
+			email: "new@gmail.com",
 			emailVerified: true,
 			activeLanguage: "fr",
 		});
 		expect(await db.findMany({ model: "account", where: [{ field: "userId", value: signup.user.id }] })).toEqual(accountsBefore);
-		await expect(auth.api.signInEmail({ body: { email: "new@example.com", password } })).resolves.toMatchObject({ user: { id: signup.user.id } });
-		await expect(auth.api.signInEmail({ body: { email: "old@example.com", password } })).rejects.toThrow();
+		await expect(auth.api.signInEmail({ body: { email: "new@gmail.com", password } })).resolves.toMatchObject({ user: { id: signup.user.id } });
+		await expect(auth.api.signInEmail({ body: { email: "old@gmail.com", password } })).rejects.toThrow();
 		await expect(auth.api.verifyEmail({ query: { token } })).rejects.toThrow();
 		expect((await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"))).status).toBe(302);
 		expect(await db.findMany({ model: "user" })).toHaveLength(1);
@@ -520,13 +520,13 @@ describe("Better Auth social authentication lifecycle", () => {
 	it("rejects stale direct email-change calls and does not send mail for occupied addresses", async () => {
 		const { auth, db, signInWithUser } = await createAuthTestInstance();
 		const password = "correct-horse-battery-staple";
-		for (const email of ["first@example.com", "occupied@example.com"]) {
+		for (const email of ["first@gmail.com", "occupied@gmail.com"]) {
 			const signup = await auth.api.signUpEmail({ body: { name: "User", email, password, activeLanguage: "en" } });
 			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
 		}
-		const { headers } = await signInWithUser("first@example.com", password);
+		const { headers } = await signInWithUser("first@gmail.com", password);
 		sentMail.mockClear();
-		await expect(auth.api.changeEmail({ headers, body: { newEmail: "occupied@example.com" } })).resolves.toEqual({ status: true });
+		await expect(auth.api.changeEmail({ headers, body: { newEmail: "occupied@gmail.com" } })).resolves.toEqual({ status: true });
 		expect(sentMail).not.toHaveBeenCalled();
 		const session = await auth.api.getSession({ headers });
 		if (!session) throw new Error("Expected an authenticated session");
@@ -535,11 +535,11 @@ describe("Better Auth social authentication lifecycle", () => {
 			where: [{ field: "id", value: session.session.id }],
 			update: { createdAt: new Date("2025-01-01T00:00:00Z") },
 		});
-		await expect(auth.api.changeEmail({ headers, body: { newEmail: "available@example.com" } })).rejects.toMatchObject({
+		await expect(auth.api.changeEmail({ headers, body: { newEmail: "available@gmail.com" } })).rejects.toMatchObject({
 			body: { code: "SESSION_NOT_FRESH" },
 		});
 		expect(sentMail).not.toHaveBeenCalled();
-		await expect(auth.api.changeEmail({ body: { newEmail: "available@example.com" } })).rejects.toThrow();
+		await expect(auth.api.changeEmail({ body: { newEmail: "available@gmail.com" } })).rejects.toThrow();
 	});
 
 	it("lets an account created through GitHub add a password through the reset flow", async () => {
@@ -549,21 +549,21 @@ describe("Better Auth social authentication lifecycle", () => {
 				resetToken = token;
 			},
 		});
-		mockGithub({ id: "github-passwordless", email: "passwordless@example.com", verified: true });
+		mockGithub({ id: "github-passwordless", email: "passwordless@gmail.com", verified: true });
 		expect((await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "fr" }))).status).toBe(302);
-		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "passwordless@example.com" }] });
+		const user = await db.findOne<{ id: string }>({ model: "user", where: [{ field: "email", value: "passwordless@gmail.com" }] });
 		if (!user) throw new Error("Expected the GitHub sign-up to create a user");
 		const initial = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: user.id }] });
 		expect(initial.map(({ providerId }) => providerId)).toEqual(["github"]);
 
-		await auth.api.requestPasswordReset({ body: { email: "passwordless@example.com", redirectTo: `${APP_URL}/reset-password` } });
+		await auth.api.requestPasswordReset({ body: { email: "passwordless@gmail.com", redirectTo: `${APP_URL}/reset-password` } });
 		expect(resetToken).toBeTruthy();
 		await auth.api.resetPassword({ body: { newPassword: "correct-horse-battery-staple", token: resetToken as string } });
 
 		const accounts = await db.findMany<{ providerId: string }>({ model: "account", where: [{ field: "userId", value: user.id }] });
 		expect(accounts.map(({ providerId }) => providerId).sort()).toEqual(["credential", "github"]);
 		await expect(
-			auth.api.signInEmail({ body: { email: "passwordless@example.com", password: "correct-horse-battery-staple" } }),
+			auth.api.signInEmail({ body: { email: "passwordless@gmail.com", password: "correct-horse-battery-staple" } }),
 		).resolves.toMatchObject({ user: { id: user.id } });
 	});
 
@@ -575,10 +575,10 @@ describe("Better Auth social authentication lifecycle", () => {
 	it("refuses to sign an unverified GitHub identity into a matching existing account", async () => {
 		const { auth, db } = await createAuthTestInstance();
 		const signup = await auth.api.signUpEmail({
-			body: { name: "Target User", email: "target@example.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
+			body: { name: "Target User", email: "target@gmail.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
 		});
 		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
-		mockGithub({ id: "github-impostor", email: "target@example.com", verified: false });
+		mockGithub({ id: "github-impostor", email: "target@gmail.com", verified: false });
 
 		const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"));
 
@@ -591,11 +591,11 @@ describe("Better Auth social authentication lifecycle", () => {
 		const { auth, db, signInWithUser } = await createAuthTestInstance();
 		const password = "correct-horse-battery-staple";
 		const signup = await auth.api.signUpEmail({
-			body: { name: "Target User", email: "target@example.com", password, activeLanguage: "en" },
+			body: { name: "Target User", email: "target@gmail.com", password, activeLanguage: "en" },
 		});
 		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
-		const { headers: sessionHeaders } = await signInWithUser("target@example.com", password);
-		mockGithub({ id: "github-impostor", email: "target@example.com", verified: false });
+		const { headers: sessionHeaders } = await signInWithUser("target@gmail.com", password);
+		mockGithub({ id: "github-impostor", email: "target@gmail.com", verified: false });
 
 		const callback = await finishSocialFlow(auth, "github", await startSocialLink(auth, "github", sessionHeaders));
 
@@ -614,7 +614,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		const signup = await auth.api.signUpEmail({
 			body: {
 				name: "Profile User",
-				email: "profile@example.com",
+				email: "profile@gmail.com",
 				password,
 				activeLanguage: "fr",
 			},
@@ -624,8 +624,8 @@ describe("Better Auth social authentication lifecycle", () => {
 			where: [{ field: "id", value: signup.user.id }],
 			update: { emailVerified: true },
 		});
-		const { headers: sessionHeaders } = await signInWithUser("profile@example.com", password);
-		mockGithub({ id: "github-different-email", email: "different@example.com", verified: true });
+		const { headers: sessionHeaders } = await signInWithUser("profile@gmail.com", password);
+		mockGithub({ id: "github-different-email", email: "different@gmail.com", verified: true });
 
 		const flow = await startSocialLink(auth, "github", sessionHeaders);
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -642,8 +642,8 @@ describe("Better Auth social authentication lifecycle", () => {
 
 		// The Libiamo account keeps its own address: linking is not a merge.
 		const user = await db.findOne<{ email: string }>({ model: "user", where: [{ field: "id", value: signup.user.id }] });
-		expect(user?.email).toBe("profile@example.com");
-		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "different@example.com" }] })).resolves.toHaveLength(0);
+		expect(user?.email).toBe("profile@gmail.com");
+		await expect(db.findMany({ model: "user", where: [{ field: "email", value: "different@gmail.com" }] })).resolves.toHaveLength(0);
 	});
 
 	// `allowDifferentEmails` governs linking that a session asked for. The signed-out
@@ -654,9 +654,9 @@ describe("Better Auth social authentication lifecycle", () => {
 	it("refuses to merge into an account that has not confirmed its own email", async () => {
 		const { auth, db } = await createAuthTestInstance();
 		const signup = await auth.api.signUpEmail({
-			body: { name: "Unconfirmed User", email: "unconfirmed@example.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
+			body: { name: "Unconfirmed User", email: "unconfirmed@gmail.com", password: "correct-horse-battery-staple", activeLanguage: "en" },
 		});
-		mockGithub({ id: "github-unconfirmed", email: "unconfirmed@example.com", verified: true });
+		mockGithub({ id: "github-unconfirmed", email: "unconfirmed@gmail.com", verified: true });
 
 		const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"));
 
@@ -672,7 +672,7 @@ describe("Better Auth social authentication lifecycle", () => {
 	// attached, so they would sign in through it regardless.
 	it("does not create an account when GitHub does not verify the email", async () => {
 		const { auth, db } = await createAuthTestInstance();
-		mockGithub({ id: "github-unverified-user", email: "unverified@example.com", verified: false });
+		mockGithub({ id: "github-unverified-user", email: "unverified@gmail.com", verified: false });
 
 		const flow = await startSocialFlow(auth, "github", { activeLanguage: "ja" });
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -683,7 +683,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		// reads it back from the same constant.
 		const error = new URL(callback.headers.get("location") as string).searchParams.get("error");
 		expect(socialAuthFailure(error)).toBe("provider-email-unverified");
-		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "unverified@example.com" }] })).resolves.toBeNull();
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "unverified@gmail.com" }] })).resolves.toBeNull();
 	});
 
 	// Sign In carries no language — nobody chose one — so an unrecognised identity
@@ -691,7 +691,7 @@ describe("Better Auth social authentication lifecycle", () => {
 	// repeat the whole round-trip. The profile page can change it afterwards.
 	it("creates an account from the Sign In flow using the default language", async () => {
 		const { auth, db } = await createAuthTestInstance();
-		mockGithub({ id: "github-sign-in-only", email: "sign-in-only@example.com", verified: true });
+		mockGithub({ id: "github-sign-in-only", email: "sign-in-only@gmail.com", verified: true });
 
 		const flow = await startSocialFlow(auth, "github");
 		const callback = await finishSocialFlow(auth, "github", flow);
@@ -700,7 +700,7 @@ describe("Better Auth social authentication lifecycle", () => {
 		expect(callback.headers.get("location")).toBe(APP_URL);
 		const user = await db.findOne<{ id: string; activeLanguage: string; emailVerified: boolean }>({
 			model: "user",
-			where: [{ field: "email", value: "sign-in-only@example.com" }],
+			where: [{ field: "email", value: "sign-in-only@gmail.com" }],
 		});
 		expect(user).toMatchObject({ activeLanguage: "en", emailVerified: true });
 	});
@@ -712,13 +712,13 @@ describe("Better Auth social authentication lifecycle", () => {
 	// runs during `getUserInfo`, outside the block whose rejections become redirects.
 	it("rejects a social flow carrying an unsupported language", async () => {
 		const { auth, db } = await createAuthTestInstance();
-		mockGithub({ id: "github-bad-language", email: "bad-language@example.com", verified: true });
+		mockGithub({ id: "github-bad-language", email: "bad-language@gmail.com", verified: true });
 
 		const flow = await startSocialFlow(auth, "github", { activeLanguage: "klingon" });
 		const callback = await finishSocialFlow(auth, "github", flow);
 
 		expect(callback.status).toBe(400);
-		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "bad-language@example.com" }] })).resolves.toBeNull();
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "bad-language@gmail.com" }] })).resolves.toBeNull();
 	});
 
 	it("rejects email sign-up when the learning language is missing", async () => {
@@ -730,12 +730,99 @@ describe("Better Auth social authentication lifecycle", () => {
 				headers: { "content-type": "application/json", origin: APP_URL },
 				body: JSON.stringify({
 					name: "Missing Language",
-					email: "missing-language@example.com",
+					email: "missing-language@gmail.com",
 					password: "correct-horse-battery-staple",
 				}),
 			}),
 		);
 		expect(response.status).toBe(400);
-		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "missing-language@example.com" }] })).resolves.toBeNull();
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "missing-language@gmail.com" }] })).resolves.toBeNull();
+	});
+	describe("abuse protection", () => {
+		const password = "correct-horse-battery-staple";
+
+		it("refuses new accounts on untrusted mail domains, whichever way they arrive", async () => {
+			const { auth, db } = await createAuthTestInstance();
+
+			await expect(
+				auth.api.signUpEmail({ body: { name: "Throwaway", email: "bot@mailinator.com", password, activeLanguage: "en" } }),
+			).rejects.toMatchObject({ body: { code: "UNTRUSTED_EMAIL_DOMAIN" } });
+
+			mockGithub({ id: "github-throwaway", email: "bot@custom-domain.dev", verified: true });
+			const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "en" }));
+			expect(callback.status).toBe(302);
+			const error = new URL(callback.headers.get("location") as string).searchParams.get("error");
+			expect(socialAuthErrorMessage(error)).toMatch(/trusted email/);
+
+			await expect(db.findMany({ model: "user" })).resolves.toHaveLength(0);
+		});
+
+		it("refuses an email change to an untrusted domain before sending mail", async () => {
+			const { auth, db, signInWithUser } = await createAuthTestInstance();
+			const signup = await auth.api.signUpEmail({ body: { name: "User", email: "learner@pku.edu.cn", password, activeLanguage: "en" } });
+			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+			const { headers } = await signInWithUser("learner@pku.edu.cn", password);
+			sentMail.mockClear();
+
+			await expect(auth.api.changeEmail({ headers, body: { newEmail: "learner@edu.com" } })).rejects.toMatchObject({
+				body: { code: "UNTRUSTED_EMAIL_DOMAIN" },
+			});
+			expect(sentMail).not.toHaveBeenCalled();
+		});
+
+		it("requires a Turnstile pass on direct HTTP sign-ups but leaves server calls to their callers", async () => {
+			const { auth, db } = await createAuthTestInstance(undefined, undefined, {
+				env: { TURNSTILE_SITE_KEY: "site-key", TURNSTILE_SECRET_KEY: "secret-key" },
+			});
+			const siteverify = vi.fn(async (_input: string | URL | Request, init?: RequestInit) =>
+				Response.json({ success: JSON.parse(String(init?.body)).response === "good-token" }),
+			);
+			vi.stubGlobal("fetch", siteverify);
+			const signUp = (email: string, token?: string) =>
+				auth.handler(
+					new Request(`${AUTH_BASE_URL}/sign-up/email`, {
+						method: "POST",
+						headers: { "content-type": "application/json", origin: APP_URL, ...(token ? { "x-captcha-response": token } : {}) },
+						body: JSON.stringify({ name: "Visitor", email, password, activeLanguage: "en" }),
+					}),
+				);
+
+			expect((await signUp("no-token@gmail.com")).status).toBe(403);
+			expect((await signUp("bad-token@gmail.com", "forged")).status).toBe(403);
+			expect((await signUp("human@gmail.com", "good-token")).status).toBe(200);
+
+			siteverify.mockClear();
+			await auth.api.signUpEmail({ body: { name: "Form", email: "form@gmail.com", password, activeLanguage: "en" } });
+			expect(siteverify).not.toHaveBeenCalled();
+
+			const emails = (await db.findMany<{ email: string }>({ model: "user" })).map(({ email }) => email).sort();
+			expect(emails).toEqual(["form@gmail.com", "human@gmail.com"]);
+		});
+
+		it("logs sign-ups and email changes only when AUTH_AUDIT_LOG is on", async () => {
+			const info = vi.spyOn(console, "info").mockImplementation(() => {});
+			const auditLines = () =>
+				info.mock.calls.map(([line]) => (typeof line === "string" && line.includes('"auth-audit"') ? JSON.parse(line) : null)).filter(Boolean);
+
+			const quiet = await createAuthTestInstance();
+			await quiet.auth.api.signUpEmail({ body: { name: "Quiet", email: "quiet@gmail.com", password, activeLanguage: "en" } });
+			expect(auditLines()).toEqual([]);
+
+			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, { env: { AUTH_AUDIT_LOG: "on" } });
+			const signup = await auth.api.signUpEmail({ body: { name: "Logged", email: "logged@gmail.com", password, activeLanguage: "en" } });
+			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
+			const { headers } = await signInWithUser("logged@gmail.com", password);
+			sentMail.mockClear();
+			await auth.api.changeEmail({ headers, body: { newEmail: "moved@qq.com", callbackURL: "/verify?emailChange=1" } });
+			const token = new URL(sentMail.mock.calls[0][0].html).searchParams.get("token") as string;
+			await auth.api.verifyEmail({ query: { token }, headers });
+
+			expect(auditLines()).toEqual([
+				expect.objectContaining({ event: "auth.sign_up", userId: signup.user.id, email: "logged@gmail.com", method: "email" }),
+				expect.objectContaining({ event: "auth.email_change_requested", userId: signup.user.id, from: "logged@gmail.com", to: "moved@qq.com" }),
+				expect.objectContaining({ event: "auth.email_changed", userId: signup.user.id, email: "moved@qq.com" }),
+			]);
+			info.mockRestore();
+		});
 	});
 });
