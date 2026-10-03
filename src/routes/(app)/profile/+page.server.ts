@@ -5,6 +5,7 @@ import { z } from "zod";
 import { base } from "$app/paths";
 import { env } from "$env/dynamic/private";
 import { TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
+import { isTrustedEmailDomain } from "$lib/auth/email-domain";
 import { type AccountActionResult, accountActionErrorResult, isSocialProviderId, SOCIAL_PROVIDERS, socialAuthFailure } from "$lib/auth/social";
 import { getNativeLanguageOptions, getSelfAssignedLevel, isLanguageCode, isSelfAssignedLevel, type SelfAssignedLevel } from "$lib/constants";
 import { profileSchema, selfAssignedLevelSchema } from "$lib/schemas";
@@ -78,6 +79,9 @@ export const actions: Actions = {
 		const result = z.email().safeParse(data.get("newEmail")?.toString().trim().toLowerCase());
 		if (!result.success || result.data === user.email.toLowerCase()) {
 			return fail(400, { emailChange: "invalid" as const });
+		}
+		if (!isTrustedEmailDomain(result.data)) {
+			return fail(400, { emailChange: "untrusted" as const });
 		}
 		try {
 			await auth.api.changeEmail({

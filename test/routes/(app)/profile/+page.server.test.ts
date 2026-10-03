@@ -220,25 +220,32 @@ describe("Profile +page.server", () => {
 	// ── Actions ────────────────────────────────────────────────────────
 	describe("Actions", () => {
 		it("normalizes a new account email and passes the authenticated request to Better Auth", async () => {
-			const event = createActionEvent({ newEmail: " NEW@example.com " });
-			event.locals.user.email = "old@example.com";
+			const event = createActionEvent({ newEmail: " NEW@gmail.com " });
+			event.locals.user.email = "old@gmail.com";
 			expect(await actions.changeEmail(event)).toEqual({ emailChange: "sent" });
 			expect(auth.api.changeEmail).toHaveBeenCalledWith({
 				headers: event.request.headers,
-				body: { newEmail: "new@example.com", callbackURL: "/verify?emailChange=1" },
+				body: { newEmail: "new@gmail.com", callbackURL: "/verify?emailChange=1" },
 			});
 		});
 
-		it.each(["invalid", "OLD@example.com"])("rejects invalid or unchanged email %s", async (newEmail) => {
+		it.each(["invalid", "OLD@gmail.com"])("rejects invalid or unchanged email %s", async (newEmail) => {
 			const event = createActionEvent({ newEmail });
-			event.locals.user.email = "old@example.com";
+			event.locals.user.email = "old@gmail.com";
 			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "invalid" } });
 			expect(auth.api.changeEmail).not.toHaveBeenCalled();
 		});
 
+		it("refuses an untrusted mail domain before asking Better Auth", async () => {
+			const event = createActionEvent({ newEmail: "learner@mailinator.com" });
+			event.locals.user.email = "old@gmail.com";
+			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "untrusted" } });
+			expect(auth.api.changeEmail).not.toHaveBeenCalled();
+		});
+
 		it("explains when email change requires signing in again", async () => {
-			const event = createActionEvent({ newEmail: "new@example.com" });
-			event.locals.user.email = "old@example.com";
+			const event = createActionEvent({ newEmail: "new@gmail.com" });
+			event.locals.user.email = "old@gmail.com";
 			vi.mocked(auth.api.changeEmail).mockRejectedValueOnce(new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again" }));
 			expect(await actions.changeEmail(event)).toMatchObject({ status: 400, data: { emailChange: "stale" } });
 		});

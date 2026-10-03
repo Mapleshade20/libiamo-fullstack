@@ -98,6 +98,10 @@ export const en = {
 	"profile.trialDepletedBody": "Add an API key from DeepSeek or another OpenAI-compatible provider to continue learning without interruption 😃",
 	"profile.trialLowTitle": "Your trial balance is running low.",
 	"profile.trialLowBody": "Configure your own API key now to avoid interruption ☺️",
+	"profile.trialReleaseSchedule": "New accounts receive the trial in three parts: one at sign-up, one after 24 hours and the last after 48 hours.",
+	"profile.trialNextRelease": "The next part arrives on {date}.",
+	"profile.trialWaitingBody":
+		"The next part of your trial arrives on {date}. To keep learning before then, add an API key from DeepSeek or another OpenAI-compatible provider.",
 	"profile.apiKey": "API key",
 	"profile.apiKeyKeepPlaceholder": "•••••••• (leave empty to keep current)",
 	"profile.apiKeyPlaceholder": "Enter your API key",
@@ -128,6 +132,7 @@ export const en = {
 		"If this address is available, a verification link has been sent. Check its inbox and spam folder. No email will be sent if another account already uses it.",
 	"profile.emailChangeStale": "Sign out and sign in again using any connected method, then retry within 10 minutes.",
 	"profile.emailChangeInvalid": "Enter a valid email different from your current account email.",
+	"profile.emailChangeUntrusted": "Use a Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina or school (edu) address.",
 	"profile.emailChangeError": "The email change could not be started. Please try again.",
 	"profile.setPassword": "Set a password",
 	"profile.passwordSetupSent": "Sent",

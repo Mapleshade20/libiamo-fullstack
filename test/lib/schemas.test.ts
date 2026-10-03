@@ -37,13 +37,22 @@ describe("schemas", () => {
 
 		expect(() =>
 			signUpSchema.parse({
-				email: "new@example.com",
+				email: "new@gmail.com",
 				password: "password123",
 				confirmPassword: "password123",
 				name: "New User",
 				activeLanguage: "en",
 			}),
 		).not.toThrow();
+	});
+
+	it("only signs up addresses on trusted mail domains", () => {
+		const signUp = (email: string) => signUpSchema.safeParse({ email, password: "password123", name: "New User", activeLanguage: "en" });
+
+		expect(signUp("learner@pku.edu.cn").success).toBe(true);
+		const result = signUp("learner@mailinator.com");
+		expect(result.success).toBe(false);
+		expect(result.error?.issues[0]?.path).toEqual(["email"]);
 	});
 
 	it("validates forgot password email format", () => {

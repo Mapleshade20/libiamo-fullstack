@@ -7,6 +7,7 @@ import { onDestroy, onMount } from "svelte";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
+import { trialQuotaWarning } from "$lib/account/trial-release";
 import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
 import ProfileNameEditor from "$lib/components/account/ProfileNameEditor.svelte";
@@ -204,7 +205,14 @@ function formatConnectedAt(isoDate: string) {
 let trialPercent = $derived(
 	data.trialQuota ? Math.max(0, Math.min(100, Math.round((data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal) * 100))) : 0,
 );
-let trialTone = $derived(!data.trialQuota ? "normal" : data.trialQuota.trialTokensLeft <= 0 ? "depleted" : trialPercent <= 10 ? "low" : "normal");
+let trialTone = $derived((data.trialQuota && trialQuotaWarning(data.trialQuota)) ?? "normal");
+let trialNextRelease = $derived(
+	data.trialQuota?.trialNextReleaseAt
+		? new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short", timeZone: clock().timeZone }).format(
+				data.trialQuota.trialNextReleaseAt,
+			)
+		: null,
+);
 
 function formatTokenCount(value: number) {
 	return new Intl.NumberFormat("en-US").format(Math.max(0, value));
@@ -427,11 +435,15 @@ function enhancePasswordSetup() {
 						autocomplete="email"
 						required
 						readonly={emailChangePending}
-						aria-invalid={form?.emailChange === "invalid"}
+						aria-invalid={form?.emailChange === "invalid" || form?.emailChange === "untrusted"}
 					/>
 					<FormErrorFocus
 						formRef={emailChangeForm}
-						errors={form?.emailChange === "invalid" ? { newEmail: [t(lang, "profile.emailChangeInvalid")] } : {}}
+						errors={form?.emailChange === "invalid"
+							? { newEmail: [t(lang, "profile.emailChangeInvalid")] }
+							: form?.emailChange === "untrusted"
+								? { newEmail: [t(lang, "profile.emailChangeUntrusted")] }
+								: {}}
 						fieldOrder={["newEmail"]}
 					/>
 					<div class="flex flex-wrap justify-end gap-2 pt-2">
@@ -449,7 +461,7 @@ function enhancePasswordSetup() {
 						notification={form?.emailChange ? {
 							variant: form.emailChange === "sent" ? "success" : "error",
 							title: t(lang, "profile.changeEmail"),
-							message: t(lang, form.emailChange === "sent" ? "profile.emailChangeSent" : form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "invalid" ? "profile.emailChangeInvalid" : "profile.emailChangeError"),
+							message: t(lang, form.emailChange === "sent" ? "profile.emailChangeSent" : form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "invalid" ? "profile.emailChangeInvalid" : form.emailChange === "untrusted" ? "profile.emailChangeUntrusted" : "profile.emailChangeError"),
 						} : null}
 					/>
 				</form>
@@ -571,6 +583,12 @@ function enhancePasswordSetup() {
 							style="width: {trialPercent}%"
 						></div>
 					</div>
+					{#if trialNextRelease}
+						<p class="text-sm text-muted-foreground">
+							{t(lang, "profile.trialReleaseSchedule")}
+							{t(lang, "profile.trialNextRelease").replace("{date}", trialNextRelease)}
+						</p>
+					{/if}
 				</Card.Content>
 			</Card.Root>
 		{/if}
@@ -593,7 +611,11 @@ function enhancePasswordSetup() {
 			<Card.Content class="space-y-5">
 				{#if !data.hasApiKey}
 					{#if data.trialQuota && trialTone === "depleted"}
-						<Notice tone="danger" role="status" title={t(lang, "profile.trialDepletedTitle")}><p>{t(lang, "profile.trialDepletedBody")}</p></Notice>
+						<Notice tone="danger" role="status" title={t(lang, "profile.trialDepletedTitle")}>
+							<p>
+								{trialNextRelease ? t(lang, "profile.trialWaitingBody").replace("{date}", trialNextRelease) : t(lang, "profile.trialDepletedBody")}
+							</p>
+						</Notice>
 					{:else if data.trialQuota && trialTone === "low"}
 						<Notice tone="warning" role="status" title={t(lang, "profile.trialLowTitle")}><p>{t(lang, "profile.trialLowBody")}</p></Notice>
 					{/if}

@@ -95,6 +95,10 @@ export const ja: Record<keyof typeof en, string> = {
 	"profile.trialDepletedBody": "DeepSeekまたはOpenAI互換プロバイダーのAPIキーを追加すると、中断せずに学習を続けられます 😃",
 	"profile.trialLowTitle": "トライアル残高が少なくなっています。",
 	"profile.trialLowBody": "中断を避けるため、今すぐご自身のAPIキーを設定してください ☺️",
+	"profile.trialReleaseSchedule": "新しいアカウントのトライアルは3回に分けて付与されます。登録時、24時間後、48時間後です。",
+	"profile.trialNextRelease": "次回の付与は{date}です。",
+	"profile.trialWaitingBody":
+		"次回のトライアル付与は{date}です。それまでに学習を続けるには、DeepSeekまたはOpenAI互換プロバイダーのAPIキーを追加してください。",
 	"profile.apiKey": "APIキー",
 	"profile.apiKeyKeepPlaceholder": "••••••••（空欄のままで現在のキーを保持）",
 	"profile.apiKeyPlaceholder": "APIキーを入力",
@@ -125,6 +129,8 @@ export const ja: Record<keyof typeof en, string> = {
 		"利用可能なアドレスの場合、確認リンクを送信しました。受信箱と迷惑メールをご確認ください。他のアカウントが使用中の場合は送信されません。",
 	"profile.emailChangeStale": "ログアウト後、連携済みの方法で再ログインし、10分以内にもう一度お試しください。",
 	"profile.emailChangeInvalid": "現在とは異なる有効なメールアドレスを入力してください。",
+	"profile.emailChangeUntrusted":
+		"Gmail、iCloud、Apple、Microsoft、Yahoo、QQ、Foxmail、126、163、Sina、または教育機関（edu）のアドレスを使用してください。",
 	"profile.emailChangeError": "変更を開始できませんでした。もう一度お試しください。",
 	"profile.setPassword": "パスワードを設定",
 	"profile.passwordSetupSent": "送信済み",

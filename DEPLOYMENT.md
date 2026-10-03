@@ -351,7 +351,10 @@ database.
 | `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. |
 | `OPENAI_API_KEY` | yes | **secret.** |
 | `OPENAI_BASE_URL` / `OPENAI_MODEL` | yes | OpenAI-compatible endpoint. |
-| `TRIAL_TOKEN_BUDGET` | – | Default `50000`. Output-token budget for non-BYOK users. |
+| `TRIAL_TOKEN_BUDGET` | – | Default `50000`. Output-token budget for non-BYOK users, released in thirds: at sign-up, after 24 h and after 48 h. |
+| `TRIAL_TOKEN_HOLD` | – | Default `4096`. Tokens each trial call holds before the provider answers, so concurrent calls cannot overspend; settled to actual usage afterwards. |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | Cloudflare Turnstile on sign-up and password reset; the secret is sensitive. Both empty turns the check off. |
+| `AUTH_AUDIT_LOG` | – | Default `off`. `on` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, email-change request and completed email change. Lines carry email addresses. |
 | `BODY_SIZE_LIMIT` | – | Default `20M`; adapter-node's own default is only 512K. |
 | `TZ` | – | Default `Asia/Shanghai`. |
 | `LLM_DEBUG` / `DB_DEBUG` | – | Verbose logging. Leave off in production. |

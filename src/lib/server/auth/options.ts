@@ -1,7 +1,10 @@
 import type { BetterAuthOptions } from "better-auth";
 import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from "better-auth/api";
 import { base } from "$app/paths";
+import { isTrustedEmailDomain, UNTRUSTED_EMAIL_DOMAIN_MESSAGE } from "$lib/auth/email-domain";
 import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth/account-deletion";
+import { clientIp, logAuthEvent } from "$lib/server/auth/audit";
+import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, CAPTCHA_PROTECTED_PATHS, captchaConfig, verifyCaptcha } from "$lib/server/auth/captcha";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
 import { configuredSocialProviders, prepareOAuthUser } from "$lib/server/auth/social";
 
@@ -23,6 +26,10 @@ export interface AuthDependencies {
  * change to them.
  */
 export function createAuthOptions(env: Environment, { accountStore }: AuthDependencies) {
+	const captcha = captchaConfig(env);
+	// Pairs an email update's `before` with its `after`, which only then knows the user id.
+	const pendingEmailChanges = new WeakMap<object, string>();
+
 	return {
 		// Better Auth derives its router prefix from `new URL(baseURL).pathname`, and
 		// `withPath()` only appends the default "/api/auth" when baseURL has no path of
@@ -45,6 +52,13 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {
+				// Direct HTTP calls must carry a Turnstile pass. The app's own form actions call
+				// `auth.api` without a request and verify the widget's token themselves, which also
+				// lets signed-in flows (Profile's password setup) skip a challenge they cannot show.
+				if (captcha && ctx.request && (CAPTCHA_PROTECTED_PATHS as readonly string[]).includes(ctx.path)) {
+					const passed = await verifyCaptcha(captcha, ctx.request.headers.get(CAPTCHA_HEADER), clientIp(ctx.request.headers));
+					if (!passed) throw new APIError("FORBIDDEN", { code: "CAPTCHA_FAILED", message: CAPTCHA_FAILED_MESSAGE });
+				}
 				if (ctx.path !== "/change-email") return;
 				// The built-in change-email endpoint checks authentication, not freshness.
 				// Guard the API itself, not only the Profile action.
@@ -53,6 +67,16 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 				if (Date.now() - new Date(session.session.createdAt).getTime() >= 10 * 60 * 1000) {
 					throw new APIError("FORBIDDEN", { code: "SESSION_NOT_FRESH", message: "Sign in again before changing your email." });
 				}
+				const newEmail: unknown = ctx.body?.newEmail;
+				if (typeof newEmail !== "string" || !isTrustedEmailDomain(newEmail)) {
+					throw new APIError("BAD_REQUEST", { code: "UNTRUSTED_EMAIL_DOMAIN", message: UNTRUSTED_EMAIL_DOMAIN_MESSAGE });
+				}
+				logAuthEvent(env, "auth.email_change_requested", {
+					userId: session.user.id,
+					from: session.user.email,
+					to: newEmail.toLowerCase(),
+					ip: clientIp(ctx.request?.headers ?? ctx.headers),
+				});
 			}),
 		},
 		// `errorCallbackURL` travels inside the OAuth state, so a state that cannot be
@@ -80,7 +104,32 @@ export function createAuthOptions(env: Environment, { accountStore }: AuthDepend
 			},
 			user: {
 				create: {
-					before: prepareOAuthUser,
+					// Every way in (email sign-up and Google/GitHub) creates the user here, so this is
+					// the one place the domain rule cannot be bypassed.
+					before: async (user) => {
+						if (typeof user.email !== "string" || !isTrustedEmailDomain(user.email)) {
+							throw new APIError("BAD_REQUEST", { code: "UNTRUSTED_EMAIL_DOMAIN", message: UNTRUSTED_EMAIL_DOMAIN_MESSAGE });
+						}
+						return prepareOAuthUser(user);
+					},
+					after: async (user, ctx) => {
+						logAuthEvent(env, "auth.sign_up", {
+							userId: user.id,
+							email: user.email,
+							method: ctx?.path?.startsWith("/callback/") ? ctx.path.slice("/callback/".length) : "email",
+							ip: clientIp(ctx?.request?.headers ?? ctx?.headers),
+						});
+					},
+				},
+				update: {
+					before: async (data, ctx) => {
+						if (ctx && typeof data.email === "string") pendingEmailChanges.set(ctx, data.email);
+					},
+					after: async (user, ctx) => {
+						if (!ctx || !pendingEmailChanges.has(ctx)) return;
+						pendingEmailChanges.delete(ctx);
+						logAuthEvent(env, "auth.email_changed", { userId: user.id, email: user.email, ip: clientIp(ctx.request?.headers ?? ctx.headers) });
+					},
 				},
 			},
 		},
