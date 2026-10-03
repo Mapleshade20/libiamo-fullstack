@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "$env/dynamic/private";
+import { envFlag } from "$lib/server/env";
 
 function createTransporter() {
 	if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
@@ -8,7 +9,7 @@ function createTransporter() {
 	return nodemailer.createTransport({
 		host: env.SMTP_HOST,
 		port: Number(env.SMTP_PORT || "587"),
-		secure: env.SMTP_SECURE === "true",
+		secure: envFlag(env.SMTP_SECURE, false),
 		auth: {
 			user: env.SMTP_USER,
 			pass: env.SMTP_PASS,

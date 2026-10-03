@@ -19,7 +19,9 @@ all passed on the same positive balance. Instead, each env-provider call:
    may go negative: other holds are already out of it, so flooring at 0 would forget an overspend
    and a later refund would make it spendable again. The debt blocks new calls until refunds or
    releases cover it; readers see 0. Migration 0027 drops the non-negative check for this.
-3. `refundTrialQuotaHold` gives the hold back in full when the call fails.
+3. `refundTrialQuotaHold` gives the hold back in full when the call fails before the provider answers. Once it
+   has answered, a failed settlement only logs: the learner keeps the completion and the hold stays
+   debited in place of the real usage, since refunding it would make a paid call free.
 
 A burst can now overspend by at most one call's worth per hold the balance could cover, not by the
 number of requests. BYOK and explicit (Lab) routes are untouched. No rate limiting, by decision.
@@ -27,7 +29,7 @@ number of requests. BYOK and explicit (Lab) routes are untouched. No rate limiti
 ## Sign-up and email change
 
 - **Cloudflare Turnstile** on sign-in, sign-up, both forgot-password steps and Profile's change email/change password
-  dialogs (`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`; both empty turns it off). Form actions verify
+  dialogs (`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`; both empty turns it off, only one refuses to start). Form actions verify
   the widget token themselves. Direct HTTP calls to `/sign-in/email`, `/sign-up/email`, `/request-password-reset`,
   `/reset-password`, `/send-verification-email`, `/change-email` and `/change-password` must carry the token in
   `x-captcha-response`; the Better Auth `before` hook checks it only when `ctx.request` is present,
@@ -41,11 +43,11 @@ number of requests. BYOK and explicit (Lab) routes are untouched. No rate limiti
   materialised idempotently on read. Existing rows are backfilled as fully released. Sign-up, the
   masthead pill, Profile and the depleted notification tell the learner when the next part arrives;
   "low" no longer fires while a part is still to come.
-- **Audit log**: `AUTH_AUDIT_LOG=true` prints one JSON line (`type: "auth-audit"`) for
+- **Audit log**: `AUTH_AUDIT_LOG=1` prints one JSON line (`type: "auth-audit"`) for
   `auth.sign_up`, `auth.email_change_requested`, `auth.email_changed`, `auth.password_changed`,
   `auth.password_reset` (which also covers an OAuth-only account setting its first password),
   `auth.account_linked` and `auth.account_unlinked`, with user id, addresses or provider and the
-  client IP (`X-Real-IP`, see below). A provider account created with a new user is the sign-up, not
+  client IP (from `ADDRESS_HEADER` only, see below). A provider account created with a new user is the sign-up, not
   a link; the unlink is logged from the last-login-method guard, which deletes the row itself.
 
 ## Password strength
@@ -87,9 +89,10 @@ decode keys differently, either of which would let a request run the action with
 | `POST /api/auth/link-social`, `/unlink-account`, `/update-user` | Login-method and profile changes. |
 | `GET /api/auth/verify-email`, `/reset-password/*`, `GET,POST /api/auth/callback/*` | Token and OAuth-state guessing. |
 
-The proxy must resolve the visitor's address itself (behind Cloudflare: `trusted_proxies` with
-Cloudflare's ranges and `client_ip_headers CF-Connecting-IP`) and pass it on as `X-Real-IP`, which
-`ADDRESS_HEADER` points adapter-node at; Turnstile's `remoteip` and the audit log read it.
+The proxy must resolve the visitor's address itself and pass it on in the header `ADDRESS_HEADER`
+names (setup: DEPLOYMENT.md, "Visitor address"). Turnstile's `remoteip` and the audit log read only
+that header, the same one adapter-node trusts; without it they record no address rather than a
+client-supplied one.
 
 New actions or endpoints that send mail or change credentials belong in this table, and new pages
 with such actions in `RATE_LIMITED_ACTION_ROUTES`.

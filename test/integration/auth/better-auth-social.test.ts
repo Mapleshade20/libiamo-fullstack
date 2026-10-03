@@ -867,7 +867,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			expect(reset.status).toBe(403);
 		});
 
-		it("logs sign-ups and email changes only when AUTH_AUDIT_LOG is true", async () => {
+		it("logs sign-ups and email changes only when AUTH_AUDIT_LOG is on", async () => {
 			const info = vi.spyOn(console, "info").mockImplementation(() => {});
 			const auditLines = () =>
 				info.mock.calls.map(([line]) => (typeof line === "string" && line.includes('"auth-audit"') ? JSON.parse(line) : null)).filter(Boolean);
@@ -876,7 +876,7 @@ describe("Better Auth social authentication lifecycle", () => {
 			await quiet.auth.api.signUpEmail({ body: { name: "Quiet", email: "quiet@gmail.com", password, activeLanguage: "en" } });
 			expect(auditLines()).toEqual([]);
 
-			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, { env: { AUTH_AUDIT_LOG: "true" } });
+			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, { env: { AUTH_AUDIT_LOG: "1" } });
 			const signup = await auth.api.signUpEmail({ body: { name: "Logged", email: "logged@gmail.com", password, activeLanguage: "en" } });
 			await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true } });
 			const { headers } = await signInWithUser("logged@gmail.com", password);
@@ -899,7 +899,7 @@ describe("Better Auth social authentication lifecycle", () => {
 				info.mock.calls.map(([line]) => (typeof line === "string" && line.includes('"auth-audit"') ? JSON.parse(line) : null)).filter(Boolean);
 			let resetToken: string | undefined;
 			const { auth, db, signInWithUser } = await createAuthTestInstance(undefined, undefined, {
-				env: { AUTH_AUDIT_LOG: "true" },
+				env: { AUTH_AUDIT_LOG: "1", ADDRESS_HEADER: "X-Real-IP" },
 				onResetPasswordToken: (token) => {
 					resetToken = token;
 				},

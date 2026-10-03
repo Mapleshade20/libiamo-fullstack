@@ -1,3 +1,5 @@
+import { envFlag } from "$lib/server/env";
+
 type Environment = Record<string, string | undefined>;
 
 export type AuthAuditEvent =
@@ -10,23 +12,23 @@ export type AuthAuditEvent =
 	| "auth.account_unlinked";
 
 export function isAuthAuditLogEnabled(env: Environment): boolean {
-	const value = env.AUTH_AUDIT_LOG?.trim().toLowerCase();
-	return value === "1" || value === "true" || value === "yes" || value === "on";
+	return envFlag(env.AUTH_AUDIT_LOG, false);
 }
 
 /**
- * The visitor's address, for telling bulk sign-ups from one source apart. `X-Real-IP` comes first:
- * the reverse proxy sets it from the address it resolved itself, while the first `X-Forwarded-For`
- * entry is whatever the client (or a CDN in front) put there, and anyone can forge it.
+ * The visitor's address, read from the same `ADDRESS_HEADER` adapter-node trusts (the reverse proxy
+ * overwrites it). Without that header configured any request header is client-supplied, so there is
+ * no address rather than a forgeable one.
  */
-export function clientIp(headers: Headers | null | undefined): string | null {
-	const real = headers?.get("x-real-ip")?.trim();
-	return real || headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+export function clientIp(env: Environment, headers: Headers | null | undefined): string | null {
+	const header = env.ADDRESS_HEADER?.trim();
+	if (!header) return null;
+	return headers?.get(header)?.split(",")[0]?.trim() || null;
 }
 
 /**
  * One JSON line per account event, for operators to ship to whatever watches the logs. Off unless
- * `AUTH_AUDIT_LOG=true`, since the line carries an email address.
+ * `AUTH_AUDIT_LOG=1`, since the line carries an email address.
  */
 export function logAuthEvent(env: Environment, event: AuthAuditEvent, details: Record<string, unknown>): void {
 	if (!isAuthAuditLogEnabled(env)) return;

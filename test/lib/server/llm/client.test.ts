@@ -277,6 +277,24 @@ describe("chatText", () => {
 		expect(mockQuota.settle).not.toHaveBeenCalled();
 	});
 
+	it("returns the completion and keeps the hold debited when settling fails", async () => {
+		const { db: mockDb } = await import("$lib/server/db");
+		vi.mocked(mockDb.query.userApiKey.findFirst).mockResolvedValueOnce(undefined);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(async () => createChatCompletionResponse("ok")),
+		);
+		mockQuota.settle.mockRejectedValueOnce(new Error("connection reset"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const { chatText } = await import("$lib/server/llm/client");
+		const result = await chatText({ messages: [{ role: "system", content: "hi" }], userId: "env-user" });
+
+		expect(result.content).toBe("ok");
+		expect(result.quota).toBeUndefined();
+		expect(mockQuota.refund).not.toHaveBeenCalled();
+	});
+
 	it("throws config and provider errors clearly", async () => {
 		const { chatText } = await import("$lib/server/llm/client");
 		vi.stubGlobal("fetch", vi.fn());

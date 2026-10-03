@@ -1,6 +1,6 @@
 type Environment = Record<string, string | undefined>;
 
-/** Cloudflare Turnstile keys. Without both, captcha is off (local development, tests). */
+/** Cloudflare Turnstile keys. Without either, captcha is off (local development, tests). */
 export type CaptchaConfig = { siteKey: string; secretKey: string };
 
 /** The form field the Turnstile widget fills in. */
@@ -26,7 +26,10 @@ const VERIFY_TIMEOUT_MS = 10_000;
 export function captchaConfig(env: Environment): CaptchaConfig | null {
 	const siteKey = env.TURNSTILE_SITE_KEY?.trim();
 	const secretKey = env.TURNSTILE_SECRET_KEY?.trim();
-	return siteKey && secretKey ? { siteKey, secretKey } : null;
+	if (!siteKey && !secretKey) return null;
+	// Half a configuration must not quietly leave auth unprotected; refusing to start makes it obvious.
+	if (!siteKey || !secretKey) throw new Error("Set both TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY, or neither");
+	return { siteKey, secretKey };
 }
 
 /** Asks Cloudflare whether `token` is a fresh, unused pass. Every failure, network included, is a no. */

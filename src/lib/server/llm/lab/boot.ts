@@ -1,5 +1,6 @@
 import { building } from "$app/environment";
 import { env } from "$env/dynamic/private";
+import { envFlag } from "$lib/server/env";
 import { readPositiveIntEnv } from "$lib/server/practice/agent-replies/boot";
 import { setLlmCallInterceptor } from "../run";
 import { labInterceptor } from "./interceptor";
@@ -15,11 +16,11 @@ declare global {
 const bootTag = Symbol("llm-lab-boot");
 
 export function isLlmLabEnabled(): boolean {
-	return env.LLM_LAB?.trim().toLowerCase() !== "off";
+	return envFlag(env.LLM_LAB, true);
 }
 
 /**
- * Installs tracing/overrides and starts the Lab worker. `LLM_LAB=off` leaves every recipe running
+ * Installs tracing/overrides and starts the Lab worker. `LLM_LAB=0` leaves every recipe running
  * exactly as declared, with no extra queries.
  */
 export function ensureLlmLab(): void {

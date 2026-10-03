@@ -12,7 +12,7 @@ failure. Against Postgres, 20 simultaneous calls on a 10,000-token balance produ
 
 New accounts must use a trusted mail domain, pass Cloudflare Turnstile when it is configured, and
 receive the trial in thirds over 48 hours. Sign-ups and email changes can be logged as JSON lines
-for monitoring with `AUTH_AUDIT_LOG=true`. Migration `0027_trial_release` backfills existing learners
+for monitoring with `AUTH_AUDIT_LOG=1`. Migration `0027_trial_release` backfills existing learners
 as fully released.
 
 Passwords set through sign-up, reset or Profile's new change-password dialog must score at least 2

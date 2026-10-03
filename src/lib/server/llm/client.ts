@@ -21,6 +21,7 @@ import {
 } from "../account/trial-quota";
 import { db } from "../db";
 import { userApiKey } from "../db/schema";
+import { envFlag } from "../env";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -327,8 +328,7 @@ function createOpenAIClient(config: OpenAIConfig) {
 // ── Debug helpers ─────────────────────────────────────────────────────
 
 function isLlmDebugEnabled() {
-	const value = env.LLM_DEBUG?.trim().toLowerCase();
-	return value === "1" || value === "true" || value === "yes" || value === "on";
+	return envFlag(env.LLM_DEBUG, false);
 }
 
 function debugLog(event: string, details: Record<string, unknown>) {
@@ -515,13 +515,27 @@ async function callChatCompletion(
 	// Trial calls hold tokens before the request and settle the real usage after it, so a burst of
 	// concurrent calls cannot all pass on one positive balance.
 	const hold = userId && config.source === "env" ? await reserveTrialQuota(userId) : null;
+	let completion: ChatCompletion;
 	try {
-		const completion = await requestChatCompletion(config, messages, options);
-		const quota = hold ? await settleTrialQuota(hold, ...extractOutputTokenUsage(completion)) : undefined;
-		return { completion, quota, route: routeInfo(config) };
+		completion = await requestChatCompletion(config, messages, options);
 	} catch (error) {
 		if (hold) await refundHold(hold);
 		throw error;
+	}
+	const quota = hold ? await settleHold(hold, completion) : undefined;
+	return { completion, quota, route: routeInfo(config) };
+}
+
+/**
+ * The provider has answered, so the learner gets the completion even if recording it fails. The hold
+ * then stays debited in place of the real usage: refunding it would make a paid call free.
+ */
+async function settleHold(hold: TrialQuotaHold, completion: ChatCompletion): Promise<TrialQuotaStatus | undefined> {
+	try {
+		return await settleTrialQuota(hold, ...extractOutputTokenUsage(completion));
+	} catch (error) {
+		console.error("[llm] could not settle a trial quota hold; it stays debited", error);
+		return undefined;
 	}
 }
 

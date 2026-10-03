@@ -80,7 +80,7 @@ export type LlmCallPlan = {
 
 /**
  * Tracing and staff overrides plug in here, installed once at server boot. Without an interceptor
- * (unit tests, `LLM_LAB=off`) recipes run exactly as declared. Interceptor failures never reach
+ * (unit tests, `LLM_LAB=0`) recipes run exactly as declared. Interceptor failures never reach
  * the caller.
  */
 export type LlmCallInterceptor = {

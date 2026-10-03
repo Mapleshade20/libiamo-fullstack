@@ -69,7 +69,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 				// `auth.api` without a request and verify the widget's token themselves, which also
 				// lets signed-in flows (Profile's password setup) skip a challenge they cannot show.
 				if (captcha && ctx.request && (CAPTCHA_PROTECTED_PATHS as readonly string[]).includes(ctx.path)) {
-					const passed = await verifyCaptcha(captcha, ctx.request.headers.get(CAPTCHA_HEADER), clientIp(ctx.request.headers));
+					const passed = await verifyCaptcha(captcha, ctx.request.headers.get(CAPTCHA_HEADER), clientIp(env, ctx.request.headers));
 					if (!passed) throw new APIError("FORBIDDEN", { code: "CAPTCHA_FAILED", message: CAPTCHA_FAILED_MESSAGE });
 				}
 				// Every way to set a password passes through one of these, so the strength rule
@@ -99,7 +99,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 					userId: session.user.id,
 					from: session.user.email,
 					to: newEmail.toLowerCase(),
-					ip: clientIp(ctx.request?.headers ?? ctx.headers),
+					ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
 				});
 			}),
 			after: createAuthMiddleware(async (ctx) => {
@@ -109,7 +109,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 				logAuthEvent(env, "auth.password_changed", {
 					userId: returned.user.id,
 					email: returned.user.email,
-					ip: clientIp(ctx.request?.headers ?? ctx.headers),
+					ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
 				});
 			}),
 		},
@@ -140,7 +140,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 						logAuthEvent(env, "auth.account_linked", {
 							userId: account.userId,
 							provider: account.providerId,
-							ip: clientIp(ctx.request?.headers ?? ctx.headers),
+							ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
 						});
 					},
 				},
@@ -153,7 +153,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 							logAuthEvent(env, "auth.account_unlinked", {
 								userId: account.userId,
 								provider: account.providerId,
-								ip: clientIp(ctx.request?.headers ?? ctx.headers),
+								ip: clientIp(env, ctx.request?.headers ?? ctx.headers),
 							});
 						}
 						return result;
@@ -177,7 +177,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 							email: user.email,
 							// `ctx.path` is the route pattern (`/callback/:id`); the provider is its parameter.
 							method: ctx?.path?.startsWith("/callback/") ? String(ctx.params?.id ?? "oauth") : "email",
-							ip: clientIp(ctx?.request?.headers ?? ctx?.headers),
+							ip: clientIp(env, ctx?.request?.headers ?? ctx?.headers),
 						});
 					},
 				},
@@ -188,7 +188,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 					after: async (user, ctx) => {
 						if (!ctx || !pendingEmailChanges.has(ctx)) return;
 						pendingEmailChanges.delete(ctx);
-						logAuthEvent(env, "auth.email_changed", { userId: user.id, email: user.email, ip: clientIp(ctx.request?.headers ?? ctx.headers) });
+						logAuthEvent(env, "auth.email_changed", { userId: user.id, email: user.email, ip: clientIp(env, ctx.request?.headers ?? ctx.headers) });
 					},
 				},
 			},
@@ -209,7 +209,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 			},
 			// Also how an account made through Google or GitHub first gets a password.
 			onPasswordReset: async ({ user }, request) => {
-				logAuthEvent(env, "auth.password_reset", { userId: user.id, email: user.email, ip: clientIp(request?.headers ?? requestHeaders?.()) });
+				logAuthEvent(env, "auth.password_reset", { userId: user.id, email: user.email, ip: clientIp(env, request?.headers ?? requestHeaders?.()) });
 			},
 		},
 		emailVerification: {

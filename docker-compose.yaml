@@ -64,7 +64,7 @@ services:
 
       SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
       SMTP_PORT: "${SMTP_PORT:-465}"
-      SMTP_SECURE: "${SMTP_SECURE:-true}"
+      SMTP_SECURE: "${SMTP_SECURE:-1}"
       SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
       SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
       SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
@@ -76,13 +76,12 @@ services:
       TRIAL_TOKEN_HOLD: "${TRIAL_TOKEN_HOLD:-4096}"
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
-      AUTH_AUDIT_LOG: "${AUTH_AUDIT_LOG:-false}"
-      # adapter-node reads the visitor's address from this header (empty: the socket peer).
+      AUTH_AUDIT_LOG: "${AUTH_AUDIT_LOG:-0}"
       ADDRESS_HEADER: "${ADDRESS_HEADER:-}"
 
       BODY_SIZE_LIMIT: "${BODY_SIZE_LIMIT:-20M}"
-      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
-      LLM_DEBUG: "${LLM_DEBUG:-false}"
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-1}"
+      LLM_DEBUG: "${LLM_DEBUG:-0}"
       DB_DEBUG: "${DB_DEBUG:-0}"
 
     depends_on:
