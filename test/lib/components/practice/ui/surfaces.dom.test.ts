@@ -1,6 +1,6 @@
 import { flushSync, tick } from "svelte";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { mountSurface, persisted, persistedSession, surfaceProps } from "../support/surface.svelte";
+import { mountSurface, persisted, persistedSession, settleScrollLocks, surfaceProps } from "../support/surface.svelte";
 import { button, SURFACES } from "./surfaces";
 
 const mocks = vi.hoisted(() => ({
@@ -44,8 +44,9 @@ beforeEach(() => {
 });
 
 let destroy: (() => void) | undefined;
-afterEach(() => {
+afterEach(async () => {
 	destroy?.();
+	await settleScrollLocks();
 	document.body.innerHTML = "";
 	vi.clearAllMocks();
 });

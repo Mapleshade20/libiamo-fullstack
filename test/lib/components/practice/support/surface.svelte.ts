@@ -40,3 +40,12 @@ export function mountSurface(component: any, props: PracticeSurfaceProps) {
 		},
 	};
 }
+
+/**
+ * Waits out bits-ui's body-scroll-lock release, which an unmounted dialog schedules on a 24 ms
+ * timer. Ending a file before it fires lets it run after jsdom is gone, where it throws
+ * `document is not defined` and fails the whole run (seen only on slower CI machines).
+ */
+export function settleScrollLocks() {
+	return new Promise((resolve) => setTimeout(resolve, 50));
+}
