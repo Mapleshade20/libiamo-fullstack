@@ -37,7 +37,7 @@ import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 		<header class="border-b border-border pb-8">
 			<PublicPageSwitcher current="privacy" />
 			<h1 class="mt-3 font-serif text-4xl leading-tight tracking-tight sm:text-5xl">Privacy Policy</h1>
-			<p class="mt-4 text-sm text-muted-foreground">Effective September 14, 2026</p>
+			<p class="mt-4 text-sm text-muted-foreground">Effective October 3, 2026</p>
 		</header>
 
 		<article class="space-y-10 py-10 text-base leading-7 text-foreground/85">

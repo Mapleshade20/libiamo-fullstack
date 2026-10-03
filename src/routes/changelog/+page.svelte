@@ -66,6 +66,29 @@ import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 		<div class="divide-y divide-border">
 			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
 				<header>
+					<p class="font-serif text-xl text-foreground">v0.4.0</p>
+					<time datetime="2026-10-03" class="mt-1 block text-sm text-muted-foreground">October 3, 2026</time>
+				</header>
+				<div>
+					<h2 class="font-serif text-2xl text-foreground">Streaks and group conversations</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
+						<li>Added a daily streak: a day counts when you finish a quest and clear your review queue, and saved days cover the occasional miss.</li>
+						<li>Every finished task now ends with the same flashcard pass, and new cards become due the next day.</li>
+						<li>Added a Mail practice surface, iMessage and mail group conversations, and Discord direct messages.</li>
+						<li>
+							Group scenes feel livelier: the right people answer you, others join in on Reddit and AO3, and chats keep going while you are quiet.
+						</li>
+						<li>
+							Conversations appear immediately without a loading splash, and moving between the Quest Hall and task details is faster and smoother.
+						</li>
+						<li>Libiamo can now be installed as an app on your phone or desktop.</li>
+						<li>Refined typography, colours and controls across the app, and made text easier to select and copy.</li>
+					</ul>
+				</div>
+			</article>
+
+			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
+				<header>
 					<p class="font-serif text-xl text-foreground">v0.3.2</p>
 					<p class="mt-1 text-sm text-muted-foreground">September 15, 2026</p>
 				</header>
