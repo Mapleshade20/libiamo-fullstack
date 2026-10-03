@@ -104,11 +104,8 @@ async function runEvaluation() {
 	evaluationRunning = true;
 	evaluationFailed = false;
 	try {
-		const result = await postAction("retryEvaluation");
-		if (result.type !== "success") {
-			evaluationFailed = true;
-			return;
-		}
+		evaluationFailed = (await postAction("retryEvaluation")).type !== "success";
+		// Even a failure may mean another tab already evaluated the draft; the page follows the attempt.
 		await invalidateAll();
 	} catch {
 		evaluationFailed = true;

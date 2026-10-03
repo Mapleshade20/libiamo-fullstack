@@ -21,6 +21,7 @@ import { practiceSession } from "../db/schema";
 import type { ChatMessage } from "../llm/client";
 import { buildRecipeMessages, createSlotRenderer, defineLlmRecipe, type SlotRenderer } from "../llm/recipe";
 import { runLlmRecipe } from "../llm/run";
+import { singleFlight } from "../llm/single-flight";
 import {
 	type BuildChatTranscriptInput,
 	buildChatTranscript,
@@ -352,50 +353,52 @@ export function buildAnnotationMessages(input: AnnotationPromptInput): ChatMessa
 
 export async function generateFeedback(input: { sessionId: number; feedbackLanguage: string }): Promise<FeedbackResult> {
 	if (!input.feedbackLanguage.trim()) throw new Error("Feedback language is required");
-	const session = await db.query.practiceSession.findFirst({
-		where: eq(practiceSession.id, input.sessionId),
-		columns: { id: true, userId: true, status: true, tutorFeedback: true },
-		with: {
-			messages: { orderBy: sessionMessageChronologicalOrder },
-			task: true,
-			user: { columns: { name: true } },
-		},
+	return singleFlight(`practice-feedback:${input.sessionId}`, async () => {
+		const session = await db.query.practiceSession.findFirst({
+			where: eq(practiceSession.id, input.sessionId),
+			columns: { id: true, userId: true, status: true, tutorFeedback: true },
+			with: {
+				messages: { orderBy: sessionMessageChronologicalOrder },
+				task: true,
+				user: { columns: { name: true } },
+			},
+		});
+
+		if (!session) throw new Error("Session not found");
+		if (!session.task) throw new Error("Task not found");
+		if (session.status === "evaluated" && session.tutorFeedback) {
+			const existing = session.tutorFeedback as unknown;
+			if (existing && typeof existing === "object" && "annotations" in existing) return existing as FeedbackResult;
+		}
+		if (session.status !== "completed") throw new Error("Session is not ready for feedback");
+
+		const learnerName = session.user?.name || "Learner";
+		const task = pickChatTaskFacts(session.task, learnerName);
+		const conversation = buildFeedbackConversation({ ...task, messages: session.messages, learnerName });
+		const { value: result } = await runLlmRecipe(
+			feedbackAnnotationRecipe,
+			{ conversation, task, feedbackLanguage: input.feedbackLanguage },
+			{ userId: session.userId, subjects: { taskId: session.task.id, sessionId: session.id } },
+		);
+
+		// Persist to DB
+		const [updated] = await db
+			.update(practiceSession)
+			.set({
+				status: "evaluated",
+				tutorFeedback: result,
+			})
+			.where(and(eq(practiceSession.id, input.sessionId), eq(practiceSession.status, "completed"), isNull(practiceSession.tutorFeedback)))
+			.returning({ id: practiceSession.id });
+
+		if (!updated) {
+			const winner = await getExistingFeedback(input.sessionId);
+			if (winner) return winner;
+			throw new Error("Feedback generation changed in another request. Reload and try again.");
+		}
+
+		return result;
 	});
-
-	if (!session) throw new Error("Session not found");
-	if (!session.task) throw new Error("Task not found");
-	if (session.status === "evaluated" && session.tutorFeedback) {
-		const existing = session.tutorFeedback as unknown;
-		if (existing && typeof existing === "object" && "annotations" in existing) return existing as FeedbackResult;
-	}
-	if (session.status !== "completed") throw new Error("Session is not ready for feedback");
-
-	const learnerName = session.user?.name || "Learner";
-	const task = pickChatTaskFacts(session.task, learnerName);
-	const conversation = buildFeedbackConversation({ ...task, messages: session.messages, learnerName });
-	const { value: result } = await runLlmRecipe(
-		feedbackAnnotationRecipe,
-		{ conversation, task, feedbackLanguage: input.feedbackLanguage },
-		{ userId: session.userId, subjects: { taskId: session.task.id, sessionId: session.id } },
-	);
-
-	// Persist to DB
-	const [updated] = await db
-		.update(practiceSession)
-		.set({
-			status: "evaluated",
-			tutorFeedback: result,
-		})
-		.where(and(eq(practiceSession.id, input.sessionId), eq(practiceSession.status, "completed"), isNull(practiceSession.tutorFeedback)))
-		.returning({ id: practiceSession.id });
-
-	if (!updated) {
-		const winner = await getExistingFeedback(input.sessionId);
-		if (winner) return winner;
-		throw new Error("Feedback generation changed in another request. Reload and try again.");
-	}
-
-	return result;
 }
 
 /** Get existing feedback from DB, or null if not yet generated */

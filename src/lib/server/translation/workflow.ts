@@ -3,6 +3,7 @@ import { type FeedbackLanguageMode, type LanguageCode, resolveFeedbackLanguage }
 import { db } from "$lib/server/db";
 import { type PersistedTranslationEvaluation, task, translationAnswer, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import type { ChatMessage } from "$lib/server/llm/client";
+import { singleFlight } from "$lib/server/llm/single-flight";
 import { creditQuestCompletion } from "$lib/server/streak";
 import { generateTranslationEvaluation } from "$lib/server/translation/evaluation/generation";
 import { buildGeneration1Messages, type Generation1Input } from "$lib/server/translation/evaluation/prompt";
@@ -176,14 +177,29 @@ async function persistGeneratedEvaluation(input: {
 	return updated.evaluatedAt;
 }
 
-async function runGeneration1(record: TranslationAttemptRecord, answers: TranslationAnswerInput[], feedbackLanguage: string) {
-	const input = generationInput(record, answers, feedbackLanguage);
-	const response = await generateTranslationEvaluation({
-		...input,
-		userId: record.userId,
-		subjects: { taskId: record.taskId, translationAttemptId: record.id },
+/** Generates and persists the attempt's evaluation; concurrent requests (a reload, a second tab) share one run. */
+function runGeneration1Once(
+	record: TranslationAttemptRecord,
+	feedbackLanguage: string,
+	expected: { expectedPhase: "submitted" | "correction"; expectedEvaluatedAt?: Date },
+) {
+	return singleFlight(`translation-evaluation:${record.id}`, async () => {
+		const answers = normalizedCompleteAnswers(await getTranslationAnswers(record.id), record.candidates);
+		const input = generationInput(record, answers, feedbackLanguage);
+		assertGeneration1CallFitsBudget(input);
+		const response = await generateTranslationEvaluation({
+			...input,
+			userId: record.userId,
+			subjects: { taskId: record.taskId, translationAttemptId: record.id },
+		});
+		const evaluatedAt = await persistGeneratedEvaluation({
+			attemptId: record.id,
+			...expected,
+			evaluation: response.value,
+			history: response.history,
+		});
+		return { evaluation: response.value, evaluatedAt };
 	});
-	return { input, response };
 }
 
 export async function submitTranslationAttempt(input: {
@@ -227,17 +243,7 @@ export async function retryTranslationEvaluation(record: TranslationAttemptRecor
 	if (record.workflowPhase !== "submitted" || !record.feedbackLanguage) {
 		throw new TranslationWorkflowError(409, "This attempt is not awaiting evaluation.");
 	}
-	const answers = normalizedCompleteAnswers(await getTranslationAnswers(record.id), record.candidates);
-	const input = generationInput(record, answers, record.feedbackLanguage);
-	assertGeneration1CallFitsBudget(input);
-	const { response } = await runGeneration1(record, answers, record.feedbackLanguage);
-	const evaluatedAt = await persistGeneratedEvaluation({
-		attemptId: record.id,
-		expectedPhase: "submitted",
-		evaluation: response.value,
-		history: response.history,
-	});
-	return { evaluation: response.value, evaluatedAt };
+	return runGeneration1Once(record, record.feedbackLanguage, { expectedPhase: "submitted" });
 }
 
 export async function regenerateTranslationEvaluation(record: TranslationAttemptRecord) {
@@ -245,18 +251,7 @@ export async function regenerateTranslationEvaluation(record: TranslationAttempt
 		throw new TranslationWorkflowError(409, "This evaluation cannot be regenerated.");
 	}
 	if (record.practiceGeneratedAt) throw new TranslationWorkflowError(409, "Practice has already been generated for this evaluation.");
-	const answers = normalizedCompleteAnswers(await getTranslationAnswers(record.id), record.candidates);
-	const input = generationInput(record, answers, record.feedbackLanguage);
-	assertGeneration1CallFitsBudget(input);
-	const { response } = await runGeneration1(record, answers, record.feedbackLanguage);
-	const evaluatedAt = await persistGeneratedEvaluation({
-		attemptId: record.id,
-		expectedPhase: "correction",
-		expectedEvaluatedAt: record.evaluatedAt,
-		evaluation: response.value,
-		history: response.history,
-	});
-	return { evaluation: response.value, evaluatedAt };
+	return runGeneration1Once(record, record.feedbackLanguage, { expectedPhase: "correction", expectedEvaluatedAt: record.evaluatedAt });
 }
 
 export async function hydrateTranslationEvaluation(record: TranslationAttemptRecord) {
