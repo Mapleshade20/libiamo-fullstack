@@ -380,6 +380,13 @@ html[data-page-transition^="navbar-"] {
 	--page-exit-fade: 120ms;
 }
 
+/* Firefox drops the live snapshot of a backdrop-filtered element on some frames, so the bar blinks
+   out during the sweep. While a sweep runs, paint the bar's usual colour over the paper flat. */
+html[data-page-transition^="navbar-"] [data-nav-bar] {
+	backdrop-filter: none;
+	background-color: color-mix(in oklab, var(--color-stone-50) 50%, var(--color-background));
+}
+
 html[data-page-transition^="navbar-"]::view-transition-old(root),
 html[data-page-transition^="navbar-"]::view-transition-new(root) {
 	animation: none;
