@@ -663,7 +663,8 @@ function enhancePasswordSetup() {
 					<span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground" aria-hidden="true">
 						<KeyRound class="size-4" />
 					</span>
-					<span class="min-w-0 flex-1 space-y-0.5">
+					<!-- A real basis, not flex-1's zero, so the buttons wrap below before this column collapses. -->
+					<span class="min-w-0 flex-1 basis-40 space-y-0.5">
 						<span class="block truncate font-medium" title={data.user.email}>{data.user.email}</span>
 						{@render methodStatus(data.credentialConnected, t(lang, data.credentialConnected ? "profile.passwordEnabled" : "profile.passwordMissing"))}
 					</span>
