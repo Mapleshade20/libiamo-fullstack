@@ -14,18 +14,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.2(kysely@0.29.5)(postgres@3.4.8)
-      gsap:
-        specifier: ^3.15.0
-        version: 3.15.0
       isomorphic-dompurify:
         specifier: ^3.9.0
         version: 3.9.0(@noble/hashes@2.0.1)
-      motion:
-        specifier: ^12.42.2
-        version: 12.42.2
-      zxcvbn-typescript:
-        specifier: ^5.0.1
-        version: 5.0.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.4.10
@@ -87,9 +78,15 @@ importers:
       emoji-picker-element:
         specifier: ^1.29.1
         version: 1.29.1
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
       marked:
         specifier: ^18.0.0
         version: 18.0.0
+      motion:
+        specifier: ^12.42.2
+        version: 12.42.2
       nodemailer:
         specifier: ^8.0.4
         version: 8.0.4
@@ -138,6 +135,9 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
+      zxcvbn-typescript:
+        specifier: ^5.0.1
+        version: 5.0.1
 
 packages:
 
