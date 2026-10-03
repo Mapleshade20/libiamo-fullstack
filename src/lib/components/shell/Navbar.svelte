@@ -36,9 +36,9 @@ function onRouteClick(route: NavRoute, index: number, event: MouseEvent) {
 
 <!-- Bottom bar, narrow only: the same clippings, larger, with the account at the end. -->
 <div
-	class="fixed inset-x-0 bottom-0 z-50 flex h-[var(--app-bottom-nav-height)] items-center border-t border-border bg-stone-50/50 px-2 pt-1.5 backdrop-blur-xl nav:hidden"
+	class="fixed inset-x-0 bottom-0 z-50 flex h-[var(--app-bottom-nav-height)] items-center border-t border-border bg-stone-50/50 pt-1.5 backdrop-blur-xl nav:hidden"
 	data-nav-bar
-	style="view-transition-name: main-nav; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); --nav-icon-size: 1.9rem; --nav-icon-pad: 0.5rem; --nav-icon-reach: 0.3rem"
+	style="view-transition-name: main-nav; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); padding-inline: max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-right)); --nav-icon-size: 1.9rem; --nav-icon-pad: 0.5rem; --nav-icon-reach: 0.3rem"
 >
 	<NavIconRail
 		{routes}

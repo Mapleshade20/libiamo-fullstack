@@ -1,11 +1,12 @@
 <script lang="ts">
 import { onMount, setContext } from "svelte";
 import { onNavigate } from "$app/navigation";
+import { base } from "$app/paths";
 import { page } from "$app/state";
 import "./layout.css";
 import "$lib/components/common/interaction-motion.css";
 import { resolvePageDocumentLanguage } from "$lib/app/document-language";
-import favicon from "$lib/assets/favicon.svg";
+import favicon from "$lib/assets/favicon.svg?no-inline";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { installFormFeedback } from "$lib/client/form-attention";
 import { resolvePageTransition } from "$lib/client/page-transition";
@@ -57,6 +58,7 @@ onNavigate((navigation) => {
 	<title>Libiamo</title>
 	<meta name="description" content="Practice real-world language skills through simulated conversations, translation, feedback, and spaced review.">
 	<meta name="application-name" content="Libiamo">
+	<meta name="apple-mobile-web-app-title" content="Libiamo">
 	<meta name="theme-color" content="#f7f0e6">
 	<meta property="og:site_name" content="Libiamo">
 	<meta property="og:title" content="Libiamo">
@@ -66,6 +68,9 @@ onNavigate((navigation) => {
 	>
 	<meta property="og:type" content="website">
 	<meta name="twitter:card" content="summary">
-	<link rel="icon" href={favicon}>
+	<link rel="icon" href="{base}/favicon.ico" sizes="32x32">
+	<link rel="icon" href={favicon} type="image/svg+xml" sizes="any">
+	<link rel="apple-touch-icon" href="{base}/apple-touch-icon.png" sizes="180x180">
+	<link rel="manifest" href="{base}/manifest.webmanifest">
 </svelte:head>
 {@render children()}

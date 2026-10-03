@@ -150,6 +150,20 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * iOS zooms the page into any focused text field under 16px and keeps that zoom afterwards, which
+ * crops installed apps that have no browser chrome to undo it. Unlayered and important so no field,
+ * practice surfaces included, can opt back below the threshold.
+ */
+@media (pointer: coarse) {
+	input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
+	textarea,
+	select {
+		/* biome-ignore lint/complexity/noImportantStyles: scoped component styles must not undercut the iOS threshold. */
+		font-size: max(1rem, 1em) !important;
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
@@ -158,6 +172,8 @@
 	body {
 		@apply font-sans bg-background text-foreground;
 		font-optical-sizing: auto;
+		/* viewport-fit=cover (app.html) lets the bottom insets reach installed apps; keep landscape content off the notch. */
+		padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 	}
 
 	input,
