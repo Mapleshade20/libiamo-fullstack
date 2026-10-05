@@ -10,7 +10,10 @@ import { signUpSchema } from "$lib/schemas";
 import { auth } from "$lib/server/auth/auth";
 import { CAPTCHA_FAILED_MESSAGE, captchaConfig, verifyCaptchaField } from "$lib/server/auth/captcha";
 import { configuredSocialProviderIds } from "$lib/server/auth/social";
+import { disabledLanguages } from "$lib/server/env";
 import type { Actions, PageServerLoad } from "./$types";
+
+const LANGUAGE_OPENING_SOON = "This language is opening soon. Choose another one for now.";
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) {
@@ -20,6 +23,7 @@ export const load: PageServerLoad = async (event) => {
 		socialProviders: configuredSocialProviderIds(env),
 		captchaSiteKey: captchaConfig(env)?.siteKey ?? null,
 		socialAuthError: socialAuthErrorMessage(event.url.searchParams.get("error")),
+		disabledLanguages: disabledLanguages(env.DISABLED_LANGUAGES),
 	};
 };
 
@@ -36,6 +40,9 @@ export const actions: Actions = {
 					errors: { activeLanguage: ["Choose a language before continuing."] },
 					values: { activeLanguage },
 				});
+			}
+			if (disabledLanguages(env.DISABLED_LANGUAGES).includes(activeLanguage)) {
+				return fail(400, { errors: { activeLanguage: [LANGUAGE_OPENING_SOON] }, values: { activeLanguage: "" } });
 			}
 			if (!isSocialProviderId(provider) || !availableProviders.includes(provider)) {
 				return fail(400, { message: "This sign-up method is unavailable.", values: { activeLanguage } });
@@ -77,6 +84,9 @@ export const actions: Actions = {
 		const result = signUpSchema.safeParse(raw);
 		if (!result.success) {
 			return fail(400, { errors: z.flattenError(result.error).fieldErrors, values: raw });
+		}
+		if (disabledLanguages(env.DISABLED_LANGUAGES).includes(result.data.activeLanguage)) {
+			return fail(400, { errors: { activeLanguage: [LANGUAGE_OPENING_SOON] }, values: { ...raw, activeLanguage: "" } });
 		}
 		if (!(await verifyCaptchaField(env, formData, event))) {
 			return fail(400, { message: CAPTCHA_FAILED_MESSAGE, values: raw });

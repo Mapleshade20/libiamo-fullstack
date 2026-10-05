@@ -2,9 +2,16 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import { QUEST_MENU_SECTIONS, type QuestMenuCatalog, type QuestMenuItem, type QuestMenuSection } from "$lib/quest-hall/menu";
+import {
+	QUEST_MENU_SECTIONS,
+	type QuestMenuCatalog,
+	type QuestMenuItem,
+	type QuestMenuSection,
+	showsUpcomingCustomQuests,
+} from "$lib/quest-hall/menu";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
 import QuestMenuMonthFolio from "./QuestMenuMonthFolio.svelte";
+import QuestMenuUpcomingCard from "./QuestMenuUpcomingCard.svelte";
 
 interface Props {
 	sections: QuestMenuCatalog["sections"];
@@ -77,6 +84,9 @@ function moveTab(event: KeyboardEvent, index: number): void {
 			{:else}
 				<div class="mobile-paper"><p class="blank-page">{t(lang, section === "translation" ? "translate.empty" : "hall.noTasks")}</p></div>
 			{/each}
+			{#if showsUpcomingCustomQuests(section, sections[section].length)}
+				<QuestMenuUpcomingCard {lang} />
+			{/if}
 		</div>
 	</div>
 </div>

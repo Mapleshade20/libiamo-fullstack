@@ -116,6 +116,14 @@ function adaptTranslationItems(data: Pick<HallData, "translationTasks" | "transl
 	});
 }
 
+/**
+ * Custom quests are not built yet. The daily lineup holds a single quest, so the space a second one
+ * would take (the right page of the first spread, the second card on narrow screens) announces them.
+ */
+export function showsUpcomingCustomQuests(section: QuestMenuSection, itemCount: number): boolean {
+	return section === "daily" && itemCount <= 1;
+}
+
 export function buildQuestMenuSpreads(items: QuestMenuItem[]): QuestMenuSpread[] {
 	const pagePairs = [
 		{ leftItems: items.slice(0, 1), rightItems: items.slice(1, 3) },

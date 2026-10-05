@@ -33,6 +33,7 @@ const data: HallData = {
 	weeklyTasks: [quest(11)],
 	translationTasks: [],
 	translationStatusMap: {},
+	announcements: [],
 };
 const catalog = adaptHallDataToQuestMenu(data);
 

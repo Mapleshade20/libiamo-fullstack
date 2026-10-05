@@ -15,6 +15,7 @@ import {
 	getQuestMenuUnreadCount,
 	type QuestMenuItem,
 	questState,
+	showsUpcomingCustomQuests,
 	translationState,
 } from "$lib/quest-hall/menu";
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall/quest";
@@ -91,6 +92,7 @@ function hallData(overrides: Partial<HallData> = {}): HallData {
 			{ id: 22, title: "Older month", description: null, difficulty: 2, createdMonth: "2026-08" },
 		],
 		translationStatusMap: { "21": "draft", "22": "completed" },
+		announcements: [],
 		...overrides,
 	};
 }
@@ -388,5 +390,14 @@ describe("Quest menu production pagination", () => {
 		expect(getQuestMenuNarrowTarget(catalog, "daily", 1, "daily-3", -1)).toEqual({ section: "daily", leaf: 1, itemKey: "daily-2" });
 		expect(getQuestMenuNarrowTarget(catalog, "weekly", 1, "weekly-11", -1)).toEqual({ section: "daily", leaf: 2, itemKey: "daily-4" });
 		expect(getQuestMenuNarrowTarget(catalog, "daily", 1, "daily-1", -1)).toBeNull();
+	});
+});
+
+describe("upcoming custom quests", () => {
+	it("take the place of a second daily quest only", () => {
+		expect(showsUpcomingCustomQuests("daily", 0)).toBe(true);
+		expect(showsUpcomingCustomQuests("daily", 1)).toBe(true);
+		expect(showsUpcomingCustomQuests("daily", 3)).toBe(false);
+		expect(showsUpcomingCustomQuests("weekly", 1)).toBe(false);
 	});
 });

@@ -5,9 +5,10 @@ import { base } from "$app/paths";
 import { page } from "$app/state";
 import { type TrialQuotaBalance, trialQuotaPercent, trialQuotaWarning } from "$lib/account/trial-release";
 import { setNavbarTransitionIntent } from "$lib/client/page-transition";
-import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, LANGUAGE_OPENING_SOON_HINT, type LanguageCode } from "$lib/constants";
 import type { StreakRecord } from "$lib/streak/rules";
 import FloatingPanel from "../common/FloatingPanel.svelte";
+import SideTip from "../common/SideTip.svelte";
 import StreakIndicator from "../streak/StreakIndicator.svelte";
 import LanguageFlag from "./LanguageFlag.svelte";
 
@@ -16,10 +17,13 @@ interface Props {
 	trialQuota?: TrialQuotaBalance | null;
 	streak?: StreakRecord | null;
 	streakDayOffset?: number;
+	/** Shown in the switcher but refused until they open. */
+	disabledLanguages?: readonly LanguageCode[];
 }
-let { user, trialQuota = null, streak = null, streakDayOffset = 0 }: Props = $props();
+let { user, trialQuota = null, streak = null, streakDayOffset = 0, disabledLanguages = [] }: Props = $props();
 // --- Language switcher ---
 let langOpen = $state(false);
+let sideTip: SideTip | undefined = $state();
 function onProfileShortcutClick(event: MouseEvent) {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 	setNavbarTransitionIntent(new URL(`${base}/profile#llm`, page.url), "forward");
@@ -45,13 +49,25 @@ let quotaTone = $derived((trialQuota && trialQuotaWarning(trialQuota)) ?? "norma
   }}
 		>
 			{#each LANGUAGE_CODES as lang}
-				<button type="submit" name="language" value={lang} class="floating-menu-item" aria-pressed={user.activeLanguage === lang}>
-					<LanguageFlag language={lang} /><span class="flex-1">{LANGUAGE_LABELS[lang]}</span>
-					<Check size={16} class={user.activeLanguage === lang ? "" : "invisible"} aria-hidden="true" />
-				</button>
+				{#if disabledLanguages.includes(lang) && user.activeLanguage !== lang}
+					<button
+						type="button"
+						class="floating-menu-item cursor-not-allowed text-muted-foreground"
+						aria-disabled="true"
+						onclick={(event) => sideTip?.show(event.currentTarget, LANGUAGE_OPENING_SOON_HINT)}
+					>
+						<span class="flex opacity-50 grayscale"><LanguageFlag language={lang} /></span><span class="flex-1">{LANGUAGE_LABELS[lang]}</span>
+					</button>
+				{:else}
+					<button type="submit" name="language" value={lang} class="floating-menu-item" aria-pressed={user.activeLanguage === lang}>
+						<LanguageFlag language={lang} /><span class="flex-1">{LANGUAGE_LABELS[lang]}</span>
+						<Check size={16} class={user.activeLanguage === lang ? "" : "invisible"} aria-hidden="true" />
+					</button>
+				{/if}
 			{/each}
 		</form>
 	</FloatingPanel>
+	<SideTip bind:this={sideTip} />
 {/snippet}
 
 <div class="home-masthead">

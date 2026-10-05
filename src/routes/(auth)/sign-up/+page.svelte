@@ -16,7 +16,7 @@ import { Button } from "$lib/components/ui/button";
 import * as Card from "$lib/components/ui/card";
 import { Input } from "$lib/components/ui/input";
 import { Label } from "$lib/components/ui/label";
-import { LANGUAGE_CODES, LANGUAGE_LABELS } from "$lib/constants";
+import { LANGUAGE_CODES, LANGUAGE_LABELS, LANGUAGE_OPENING_SOON_HINT } from "$lib/constants";
 
 type SignUpFormState = {
 	message?: string;
@@ -101,7 +101,12 @@ const actionNotification = $derived(
 					placeholder="Select a language"
 					value={formState?.values?.activeLanguage ?? ""}
 					aria-invalid={Boolean(formState?.errors?.activeLanguage)}
-					items={LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }))}
+					items={LANGUAGE_CODES.map((code) => ({
+						value: code,
+						label: LANGUAGE_LABELS[code],
+						disabled: data.disabledLanguages.includes(code),
+						hint: LANGUAGE_OPENING_SOON_HINT,
+					}))}
 				/>
 				{#if formState?.errors?.activeLanguage}
 					<p data-field-error="activeLanguage" class="field-error-message">{formState.errors.activeLanguage[0]}</p>

@@ -55,6 +55,33 @@ export const streakDay = pgTable(
 	],
 );
 
+// ── announcement ──────────────────────────────────────────────────────
+/** A notice from the admins. Learners see it in the Hall until it expires or is deleted. */
+export const announcement = pgTable("announcement", {
+	id: serial("id").primaryKey(),
+	title: text("title").notNull(),
+	body: text("body").notNull(),
+	/** Null keeps it up until an admin deletes it. */
+	expiresAt: timestamp("expires_at"),
+	createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** A learner's acknowledgement of an announcement; it moves from the inbox to the collection. */
+export const announcementRead = pgTable(
+	"announcement_read",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		announcementId: integer("announcement_id")
+			.notNull()
+			.references(() => announcement.id, { onDelete: "cascade" }),
+		readAt: timestamp("read_at").defaultNow().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.announcementId] })],
+);
+
 // ── task ─────────────────────────────────────────────────────────────
 /**
  * One static piece of content. It knows nothing about how it reaches learners (see lineups) and

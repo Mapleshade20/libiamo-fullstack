@@ -4,11 +4,12 @@ import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Wine from "@lucide/svelte/icons/wine";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
-import type { QuestMenuItem, QuestMenuSection, QuestMenuSpread } from "$lib/quest-hall/menu";
+import { type QuestMenuItem, type QuestMenuSection, type QuestMenuSpread, showsUpcomingCustomQuests } from "$lib/quest-hall/menu";
 import QuestMenuCoverEmblem from "./QuestMenuCoverEmblem.svelte";
 import QuestMenuItemCard from "./QuestMenuItemCard.svelte";
 import QuestMenuMonthFolio from "./QuestMenuMonthFolio.svelte";
 import QuestMenuRibbonTabs, { type QuestMenuRibbon } from "./QuestMenuRibbonTabs.svelte";
+import QuestMenuUpcomingCard from "./QuestMenuUpcomingCard.svelte";
 
 export interface QuestMenuTurnPreview {
 	direction: -1 | 1;
@@ -127,7 +128,9 @@ function sectionLabel(value: QuestMenuSection): string {
 				onselect={onselectitem}
 			/>
 		{:else}
-			{#if pageSpread.items.length === 0 && side === "left"}
+			{#if side === "right" && pageSpread.leaf === 1 && showsUpcomingCustomQuests(pageSection, pageSpread.items.length)}
+				<QuestMenuUpcomingCard {lang} />
+			{:else if pageSpread.items.length === 0 && side === "left"}
 				<p class="blank-page">{t(lang, pageSection === "translation" ? "translate.empty" : "hall.noTasks")}</p>
 			{/if}
 		{/each}
@@ -541,6 +544,12 @@ function sectionLabel(value: QuestMenuSection): string {
 .page-items.is-compact {
 	display: grid;
 	grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+/* The teaser takes the whole page a second daily quest would have shared. */
+.page-items > :global(.upcoming-card) {
+	grid-row: 1 / -1;
+	margin: 0.5rem 0.25rem;
 }
 
 .blank-page {

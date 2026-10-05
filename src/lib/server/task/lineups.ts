@@ -44,14 +44,14 @@ async function appendTasks(tx: Transaction, lineupId: number, taskIds: number[],
 }
 
 /**
- * Tops a lineup up to `LINEUP_SIZE` from the rotation pool, least recently lined up first. The
+ * Tops a lineup up to its kind's `LINEUP_SIZE` from the rotation pool, least recently lined up first. The
  * lineup row lock serializes concurrent hall loads so a lineup is never overfilled.
  */
 async function fillLineup(lineupId: number, language: LanguageCode, kind: LineupKind) {
 	await db.transaction(async (tx) => {
 		await tx.select({ id: lineup.id }).from(lineup).where(eq(lineup.id, lineupId)).for("update");
 		const entries = await tx.select({ taskId: lineupTask.taskId }).from(lineupTask).where(eq(lineupTask.lineupId, lineupId));
-		const needed = LINEUP_SIZE - entries.length;
+		const needed = LINEUP_SIZE[kind] - entries.length;
 		if (needed <= 0) return;
 
 		const present = entries.map((entry) => entry.taskId);
@@ -84,7 +84,7 @@ async function fillLineup(lineupId: number, language: LanguageCode, kind: Lineup
 async function ensureLineup(language: LanguageCode, kind: LineupKind, startsOn: string): Promise<number> {
 	const lineupId = await getOrCreateLineup(db, language, kind, startsOn);
 	const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(lineupTask).where(eq(lineupTask.lineupId, lineupId));
-	if (count < LINEUP_SIZE) await fillLineup(lineupId, language, kind);
+	if (count < LINEUP_SIZE[kind]) await fillLineup(lineupId, language, kind);
 	return lineupId;
 }
 

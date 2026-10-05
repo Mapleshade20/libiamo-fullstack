@@ -102,7 +102,13 @@ $effect(() => {
 					: 'pt-8 nav:pt-24'}"
 			>
 				{#if hasMasthead}
-					<HomeMasthead user={data.user} trialQuota={data.trialQuota} streak={data.streak} streakDayOffset={data.streakDayOffset} />
+					<HomeMasthead
+						user={data.user}
+						trialQuota={data.trialQuota}
+						streak={data.streak}
+						streakDayOffset={data.streakDayOffset}
+						disabledLanguages={data.disabledLanguages}
+					/>
 				{/if}
 				{#if questMenuRoute}
 					<QuestMenuRoute route={questMenuRoute} form={page.form} />
