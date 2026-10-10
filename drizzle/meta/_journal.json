@@ -211,6 +211,13 @@
       "when": 1791618064170,
       "tag": "0029_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791662889860,
+      "tag": "0030_async_reply_opportunities",
+      "breakpoints": true
     }
   ]
 }
