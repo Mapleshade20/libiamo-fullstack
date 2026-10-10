@@ -581,7 +581,7 @@ describe("agent reply worker scheduling", () => {
 			parsedResult: { decision: "reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null },
 			providerMetadata: { finishReason: "stop" },
 		} as unknown as AgentGenerationArtifacts;
-		const message = { id: 501, sessionId: 5, role: "user", llmMetadata: { attempt: 0 } };
+		const message = { id: 501, sessionId: 5, role: "user", llmMetadata: { attempt: 0, arrival: true } };
 		const { tx, updates, inserts } = makeRecordingTx(31, [], null, {
 			messageRow: message,
 			siblings: [{ id: 31, status: "no_reply", error: null }],
@@ -599,8 +599,48 @@ describe("agent reply worker scheduling", () => {
 		const batchUpdate = updates.find((update) => update.table === agentResponseBatch);
 		expect(batchUpdate?.set.status).toBe("no_reply");
 		const messageUpdate = updates.find((update) => update.table === sessionMessage);
-		expect(messageUpdate?.set).toEqual({ llmMetadata: { attempt: 0, noReply: true, failed: false, failureError: null } });
+		expect(messageUpdate?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureError: null } });
 		expect(inserts).toEqual([]);
+	});
+
+	it("settles a live message from its own batch alone: a superseded failed batch does not bring the failure back", async () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+		const batch = {
+			id: 32,
+			sessionId: 5,
+			claimToken: "token-32",
+			status: "processing",
+			kind: "reply",
+			generationCount: 1,
+			inputMessageId: 501,
+		} as Parameters<AgentReplyWorker["persistGenerationOutcome"]>[0];
+		const result = {
+			requestMessages: [],
+			rawResponse: "",
+			parsedResult: { decision: "no_reply", deliveries: [], allowIdleFollowUp: false, terminationReason: null },
+			providerMetadata: { finishReason: "stop" },
+		} as unknown as AgentGenerationArtifacts;
+		// A manually retried Discord message: the failure was cleared, the attempt counter never moves.
+		const message = { id: 501, sessionId: 5, role: "user", llmMetadata: { clientMessageId: "m1", failed: false, failureError: null } };
+		const { tx, updates } = makeRecordingTx(32, [], null, {
+			messageRow: message,
+			siblings: [
+				{ id: 31, status: "failed", error: "boom" },
+				{ id: 32, status: "no_reply", error: null },
+			],
+			userMessages: [message],
+			delivered: [],
+		});
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		const worker = new AgentReplyWorker({});
+		await (worker as unknown as { persistGenerationOutcome: (b: unknown, r: unknown, n: Date) => Promise<void> }).persistGenerationOutcome(
+			batch,
+			result,
+			now,
+		);
+
+		const messageUpdate = updates.find((update) => update.table === sessionMessage);
+		expect(messageUpdate?.set).toEqual({ llmMetadata: { clientMessageId: "m1", failed: false, failureError: null, noReply: true } });
 	});
 
 	it("cancels a world batch whose session ended while it was generating, deciding under the session lock", async () => {
@@ -813,7 +853,7 @@ describe("agent reply worker scheduling", () => {
 			providerMetadata: {},
 			session: { task: { id: 1, ui: "reddit", urgency: "high", openingState: { post: { author: "op" } } } },
 		});
-		const message = { id: 501, sessionId: 5, role: "user", llmMetadata: { attempt: 0 } };
+		const message = { id: 501, sessionId: 5, role: "user", llmMetadata: { attempt: 0, arrival: true } };
 		const { tx, operations } = makeDeliveryTx({
 			remainingDelivery: null,
 			settleMessage: message,
@@ -830,7 +870,7 @@ describe("agent reply worker scheduling", () => {
 		expect(operations.some((operation) => operation.kind === "insert" && operation.table === sessionMessage)).toBe(false);
 		// ... and the message settles as if nothing landed, instead of waiting forever
 		const settled = operations.find((operation) => operation.kind === "update" && operation.table === sessionMessage);
-		expect(settled?.set).toEqual({ llmMetadata: { attempt: 0, noReply: true, failed: false, failureError: null } });
+		expect(settled?.set).toEqual({ llmMetadata: { attempt: 0, arrival: true, noReply: true, failed: false, failureError: null } });
 		const warning = operations.find(
 			(operation) => operation.kind === "update" && operation.table === agentResponseBatch && operation.set?.providerMetadata,
 		);

@@ -782,6 +782,62 @@ describe("session service", () => {
 			random.mockRestore();
 		});
 
+		it("settles a message nobody can take up as unanswered instead of leaving it waiting", async () => {
+			// the c1 conversation's takers are all composing or delivering: no room, nothing to join
+			const results: unknown[][] = [[], [{ count: 3 }], [{ count: 3 }], [{ count: 0 }]];
+			mockDb.select.mockImplementation(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() =>
+						Object.assign(Promise.resolve(results.shift() ?? []), {
+							for: vi.fn().mockResolvedValue([{ id: 123, status: "in_progress" }]),
+						}),
+					),
+				})),
+			}));
+			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.9);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+			const updates: { table: unknown; setArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => {
+							updates.push({ table, setArgs });
+							return { where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+
+			await submitMessage(123, "Same here", USER_ID, "m1", {
+				userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+			});
+			random.mockRestore();
+
+			expect(inserts.some((insert) => insert.kind === "reply")).toBe(false);
+			const settled = updates.find((update) => update.table === sessionMessage);
+			expect((settled?.setArgs[0] as { llmMetadata?: Record<string, unknown> }).llmMetadata).toMatchObject({
+				clientMessageId: "m1",
+				arrival: true,
+				noReply: true,
+			});
+		});
+
 		it("may overlap the pending reply wave with one world moment", async () => {
 			mockAsyncSelect();
 			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.1);

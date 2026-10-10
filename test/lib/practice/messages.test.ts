@@ -94,30 +94,12 @@ describe("buildChatMessages", () => {
 		expect(messages.map((entry) => entry.id)).toEqual(["1", "2", "retry-2", "3"]);
 	});
 
-	it("resolves a waiting placeholder only within its own conversation, never a sibling branch", () => {
+	it("clears a pre-arrival thread message's placeholder with any later reply, whatever branch it landed in", () => {
+		// Sessions from before arrival-based replies carry no inputMessageId: their answers may sit
+		// outside the learner's branch, and no batch is left to settle them.
 		const messages = build([
 			message(1, "user", "Question A", { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
-			message(2, "user", "Question B", { clientMessageId: "m2", thread: { commentId: "reddit-user-m2", targetCommentId: "c2" } }),
-			message(3, "assistant", "Answer to A", { thread: { parentCommentId: "reddit-user-m1" } }),
-			message(4, "assistant", "World comment elsewhere", { thread: { parentCommentId: "c3" } }),
-		]);
-
-		// the reply to A clears A's placeholder; B keeps waiting, and the world comment clears nothing
-		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
-	});
-
-	it("resolves the head's placeholder through its folded messages and deeper exchange answers", () => {
-		const messages = build([
-			message(1, "user", "First question", {
-				clientMessageId: "m1",
-				thread: { commentId: "reddit-user-m1", targetCommentId: "c1" },
-				foldedInto: 2,
-			}),
-			message(2, "user", "One more thing", { clientMessageId: "m2", thread: { commentId: "reddit-user-m2", targetCommentId: "reddit-user-m1" } }),
-			// answers the folded first message: the head's shared wait is answered
-			message(3, "assistant", "Answer", { thread: { parentCommentId: "reddit-user-m1" } }),
-			// a world comment answering an unrelated comment resolves nothing
-			message(4, "assistant", "Elsewhere", { thread: { parentCommentId: "c9" } }),
+			message(2, "assistant", "Top-level take", { assistantAuthorName: "alex" }),
 		]);
 
 		expect(messages.some((entry) => entry.deliveryState === "pending")).toBe(false);
@@ -127,8 +109,8 @@ describe("buildChatMessages", () => {
 		// two mail conversations: A's taker is composing when B is sent, so B gets its own; when
 		// A's reply arrives, only A's placeholder resolves
 		const messages = build([
-			message(1, "user", "To: Maya\nSubject: A\n\nA", { clientMessageId: "m1" }),
-			message(2, "user", "To: Maya\nSubject: B\n\nB", { clientMessageId: "m2" }),
+			message(1, "user", "To: Maya\nSubject: A\n\nA", { clientMessageId: "m1", arrival: true }),
+			message(2, "user", "To: Maya\nSubject: B\n\nB", { clientMessageId: "m2", arrival: true }),
 			message(3, "assistant", "Answer to A", { inputMessageId: 1, asyncDelivery: true }),
 			// a world moment names no message: it resolves nothing
 			message(4, "assistant", "Meanwhile", { inputMessageId: null, asyncDelivery: true }),

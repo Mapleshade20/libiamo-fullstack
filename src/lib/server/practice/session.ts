@@ -2,17 +2,15 @@ import { type AnyColumn, and, asc, sql as drizzleSql, eq, inArray, isNull, ne, t
 import { PRACTICE_SESSION_MAX_AGE_SECONDS, type UiVariant, type Urgency } from "$lib/constants";
 import {
 	type CommentThreadMetadata,
-	flattenOpeningComments,
-	getCommentId,
 	joinedConversation,
 	type PendingConversation,
+	persistedMessageRef,
 	targetRefOf,
 } from "$lib/practice/comment-thread";
-import { parseMailAddress, parseMailMessage } from "$lib/practice/mail";
-import type { ChatMessage } from "$lib/practice/messages";
+import { type ChatMessage, foldedChainIds } from "$lib/practice/messages";
 import { getSessionExpiry, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/practice/reply-timing";
 import { isAsyncSurface, resolveScene } from "$lib/practice/scene";
-import { allocateParticipants, drawTakerCount, names } from "$lib/server/practice/agent-replies/floor";
+import { addressedCastParticipants, allocateParticipants, drawTakerCount } from "$lib/server/practice/agent-replies/floor";
 import { scheduleWorldMoment } from "$lib/server/practice/agent-replies/worker";
 import { buildSceneTranscript } from "$lib/server/practice/prompt-context";
 import { db } from "../db";
@@ -26,17 +24,6 @@ export function orderSessionMessagesChronologically<T extends { createdAt: AnyCo
 	operators: { asc: (column: AnyColumn) => SQL },
 ) {
 	return [operators.asc(messages.createdAt), operators.asc(messages.id)];
-}
-
-/** A message's scene ref, as the comment id scheme names it. */
-function commentRefOf(ui: UiVariant, message: ArrivalMessage): string {
-	const metadata = getMessageMetadata(message.llmMetadata);
-	return getCommentId(ui, {
-		id: String(message.id),
-		role: message.role === "user" ? "user" : "agent",
-		clientMessageId: typeof metadata.clientMessageId === "string" ? metadata.clientMessageId : undefined,
-		thread: (metadata.thread ?? undefined) as CommentThreadMetadata | undefined,
-	});
 }
 
 /** Message rows as the comment-id scheme sees them, for conversation joins. */
@@ -55,24 +42,10 @@ function toSceneMessages(messages: ArrivalMessage[], learnerName: string): ChatM
 	});
 }
 
-/** The head plus every message folded into it, transitively, with a cycle guard. */
+/** The head plus every message folded into it, transitively. */
 function foldedChainOf(messages: ArrivalMessage[], headId: number): ArrivalMessage[] {
-	const byHead = new Map<number, number[]>();
-	for (const message of messages) {
-		const foldedInto = getMessageMetadata(message.llmMetadata).foldedInto;
-		if (typeof foldedInto === "number" && foldedInto !== message.id) byHead.set(foldedInto, [...(byHead.get(foldedInto) ?? []), message.id]);
-	}
-	const chain = [headId];
-	const seen = new Set<number>([headId]);
-	for (let at = 0; at < chain.length; at += 1) {
-		for (const next of byHead.get(chain[at]) ?? []) {
-			if (!seen.has(next)) {
-				seen.add(next);
-				chain.push(next);
-			}
-		}
-	}
-	return messages.filter((message) => seen.has(message.id));
+	const ids = foldedChainIds(messages, headId);
+	return messages.filter((message) => ids.has(message.id));
 }
 
 /** The batches serving one input message that have delivered anything. */
@@ -113,39 +86,6 @@ async function countOutstandingTargetBatches(tx: SubmitTx, sessionId: number, ta
 	return rows[0]?.count ?? 0;
 }
 
-/** Whom the message directly addresses among the cast: its reply target, names it writes, or a mail recipient. */
-function addressedCastParticipants(input: {
-	task: { ui: UiVariant; openingState: Record<string, unknown> | null };
-	scene: { cast: Array<{ name: string }> };
-	learnerName: string;
-	content: string;
-	thread?: CommentThreadMetadata;
-	messages: ArrivalMessage[];
-}): string[] {
-	const cast = new Set(input.scene.cast.map((person) => person.name));
-	const addressed: string[] = [];
-	const push = (name: string | null | undefined) => {
-		if (name && cast.has(name) && name !== input.learnerName && !addressed.includes(name)) addressed.push(name);
-	};
-	if (input.task.ui === "apple_mail") {
-		for (const entry of parseMailMessage(input.content).to.split(",")) push(parseMailAddress(entry).name);
-		return addressed;
-	}
-	const targetCommentId = input.thread?.targetCommentId;
-	if (targetCommentId) {
-		const opening = flattenOpeningComments(input.task.ui as "reddit" | "ao3", input.task.openingState).find(
-			(comment) => comment.id === targetCommentId,
-		);
-		if (opening) push(opening.author);
-		else {
-			const target = input.messages.find((message) => commentRefOf(input.task.ui, message) === targetCommentId);
-			if (target?.role === "assistant") push(getMessageMetadata(target.llmMetadata).assistantAuthorName);
-		}
-	}
-	for (const person of input.scene.cast) if (names(input.content, person.name)) push(person.name);
-	return addressed;
-}
-
 /**
  * The arrival-based submit path (reddit, ao3, mail): one batch is one participant's take-up of
  * one conversation target. A supplement joins the pending conversation it answers and re-targets
@@ -171,6 +111,30 @@ async function scheduleArrivalTakeUp(
 		now: Date;
 	},
 ): Promise<void> {
+	const { session, message } = input;
+	await scheduleTakers(tx, input);
+	// Nobody took the message up (the target's takers are all busy composing or delivering, or the
+	// draw came back empty): it settles as unanswered now, or its placeholder would wait forever.
+	const [serving] = await tx
+		.select({ count: drizzleSql<number>`count(*)::int` })
+		.from(agentResponseBatch)
+		.where(
+			and(
+				eq(agentResponseBatch.sessionId, session.id),
+				eq(agentResponseBatch.kind, "reply"),
+				eq(agentResponseBatch.inputMessageId, message.id),
+				inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
+			),
+		);
+	if ((serving?.count ?? 0) === 0) {
+		await tx
+			.update(sessionMessage)
+			.set({ llmMetadata: { ...getMessageMetadata(message.llmMetadata), noReply: true, failed: false, failureError: null } })
+			.where(eq(sessionMessage.id, message.id));
+	}
+}
+
+async function scheduleTakers(tx: SubmitTx, input: Parameters<typeof scheduleArrivalTakeUp>[1]): Promise<void> {
 	const { session, learnerName, message, now } = input;
 	const task = session.task;
 	const messageMetadata = getMessageMetadata(message.llmMetadata);
@@ -185,7 +149,7 @@ async function scheduleArrivalTakeUp(
 	const { entries, refs } = buildSceneTranscript({ ui: task.ui, openingState: task.openingState, messages: history, learnerName, scene });
 	// The conversation target names the thread box this exchange lives in; the allocation
 	// target is the learner's own message, whose branch scopes the candidate pool.
-	const messageRef = commentRefOf(task.ui, message);
+	const messageRef = persistedMessageRef(task.ui, message);
 	const allocationTarget = entries[refs.indexOf(messageRef)] ?? entries.findLast((entry) => entry.role === "learner");
 
 	const insertTaker = async (participant: string, batchTargetRef: string | null) => {
@@ -216,7 +180,7 @@ async function scheduleArrivalTakeUp(
 		const learnerRefs = new Set<string>();
 		for (const batch of reTargetable) {
 			if (batch.targetRef !== key || batch.inputMessageId === null) continue;
-			for (const folded of foldedChainOf(history, batch.inputMessageId)) learnerRefs.add(commentRefOf(task.ui, folded));
+			for (const folded of foldedChainOf(history, batch.inputMessageId)) learnerRefs.add(persistedMessageRef(task.ui, folded));
 		}
 		conversations.push({ targetRef: key, learnerRefs: [...learnerRefs] });
 	}

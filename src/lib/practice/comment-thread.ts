@@ -109,6 +109,20 @@ export function getCommentId(ui: string, message: Pick<ChatMessage, "id" | "role
 	return `${ui}-${message.role}-${message.clientMessageId ?? message.id}`;
 }
 
+/** A persisted message row's scene ref, read off its stored metadata. */
+export function persistedMessageRef(ui: string, row: { id: number; role: string; llmMetadata?: unknown }): string {
+	const metadata = (row.llmMetadata && typeof row.llmMetadata === "object" && !Array.isArray(row.llmMetadata) ? row.llmMetadata : {}) as {
+		clientMessageId?: unknown;
+		thread?: CommentThreadMetadata | null;
+	};
+	return getCommentId(ui, {
+		id: String(row.id),
+		role: row.role === "user" ? "user" : "agent",
+		clientMessageId: typeof metadata.clientMessageId === "string" ? metadata.clientMessageId : undefined,
+		thread: metadata.thread ?? undefined,
+	});
+}
+
 /** The ref a chat reply quotes: opening lines keep their `opening-<index>` id, session messages use `getCommentId`. */
 export function getSceneMessageRef(ui: string, message: Pick<ChatMessage, "id" | "role" | "clientMessageId" | "thread">): string {
 	return message.id.startsWith("opening-") ? message.id : getCommentId(ui, message);

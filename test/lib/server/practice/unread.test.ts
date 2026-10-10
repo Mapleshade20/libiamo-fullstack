@@ -59,6 +59,23 @@ describe("acknowledgeAssistantMessage", () => {
 			},
 		};
 		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		ownedSession([{ taskId: 1, ui: "reddit", openingState: { post: { author: "op" } }, learnerName: "Maple" }]);
+	});
+
+	/** The unlocked ownership read that decides whether the session can resume ambient life. */
+	const ownedSession = (rows: unknown[]) =>
+		mockDb.select.mockImplementation(() => ({
+			from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(rows) })) })) })),
+		}));
+
+	it("advances a live chat's watermark without the session lock or a world moment", async () => {
+		ownedSession([{ taskId: 1, ui: "discord", openingState: { serverName: "s", channelName: "c" }, learnerName: "Maple" }]);
+		mockDb.update.mockImplementation(() => ({ set: setMock }));
+
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: true, worldScheduled: false });
+
+		expect(mockDb.transaction).not.toHaveBeenCalled();
+		expect(sqlText(setMock.mock.calls[0][0].lastSeenAssistantMessageId)).toContain("greatest");
 	});
 
 	// Two acknowledgements can overlap. If the older snapshot's smaller id were
@@ -84,11 +101,7 @@ describe("acknowledgeAssistantMessage", () => {
 	});
 
 	it("reports a session the reader does not own as not acknowledged", async () => {
-		(tx.select as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-			from: vi.fn(() => ({
-				where: vi.fn(() => Object.assign(Promise.resolve([]), { for: vi.fn().mockResolvedValue([]) })),
-			})),
-		}));
+		ownedSession([]);
 		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: false, worldScheduled: false });
 		expect(setMock).not.toHaveBeenCalled();
 	});

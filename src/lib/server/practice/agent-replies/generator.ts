@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isMailHeaderLine, splitMailHeaders } from "$lib/practice/mail";
 import type { TaskSource } from "$lib/practice/messages";
 import { isLiveChat } from "$lib/practice/scene";
 import type { ChatMessage, StructuredOutputErrorDetails } from "$lib/server/llm/client";
@@ -228,18 +229,14 @@ function splitBurst(text: string): string[] {
 
 /** An email body with its leading header lines dropped, without stripMailHeaders' whole-text fallback. */
 function mailBody(content: string): string {
-	const lines = content.replace(/\r\n?/g, "\n").split("\n");
-	let start = 0;
-	while (start < lines.length && (/^(subject|from|to|cc|bcc|date)\s*:/i.test(lines[start].trim()) || lines[start].trim() === "")) start += 1;
-	return lines.slice(start).join("\n").trim();
+	const { lines, bodyStart } = splitMailHeaders(content);
+	return lines.slice(bodyStart).join("\n").trim();
 }
 
 /** Whether a body carries a new email's header block after its first line: an anomaly to record, never a split. */
 function embedsEmailStructure(content: string): boolean {
-	const lines = content.replace(/\r\n?/g, "\n").split("\n");
-	let start = 0;
-	while (start < lines.length && (/^(subject|from|to|cc|bcc|date)\s*:/i.test(lines[start].trim()) || lines[start].trim() === "")) start += 1;
-	return lines.slice(start + 1).some((line) => /^(subject|from|to|cc|bcc|date)\s*:\s*\S/i.test(line));
+	const { lines, bodyStart } = splitMailHeaders(content);
+	return lines.slice(bodyStart + 1).some((line) => isMailHeaderLine(line) && /:\s*\S/.test(line));
 }
 
 /**

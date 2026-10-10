@@ -1,6 +1,8 @@
 import { and, eq, gt, inArray, type SQL, sql } from "drizzle-orm";
+import { isAsyncSurface, resolveScene } from "$lib/practice/scene";
 import type { UnreadInboxItem } from "$lib/practice/unread";
 import { db } from "$lib/server/db";
+import { user as authUser } from "$lib/server/db/auth.schema";
 import { agentResponseBatch, practiceSession, sessionMessage, task } from "$lib/server/db/schema";
 import { scheduleWorldMoment } from "$lib/server/practice/agent-replies/worker";
 
@@ -59,6 +61,18 @@ export async function acknowledgeAssistantMessage(
 	userId: string,
 	messageId: number,
 ): Promise<{ acknowledged: boolean; worldScheduled: boolean }> {
+	// Only async group scenes resume ambient life; everywhere else the watermark write is the whole
+	// job, so a hot endpoint takes neither the session lock nor the session's history for it.
+	const [owned] = await db
+		.select({ taskId: task.id, ui: task.ui, openingState: task.openingState, learnerName: authUser.name })
+		.from(practiceSession)
+		.innerJoin(task, eq(task.id, practiceSession.taskId))
+		.innerJoin(authUser, eq(authUser.id, practiceSession.userId))
+		.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)));
+	if (!owned) return { acknowledged: false, worldScheduled: false };
+	const ambient = isAsyncSurface(owned.ui) && resolveScene(owned.ui, owned.openingState ?? null, owned.taskId, owned.learnerName || "Learner").group;
+	if (!ambient) return { acknowledged: await advanceWatermark(db, sessionId, userId, messageId), worldScheduled: false };
+
 	return db.transaction(async (tx) => {
 		// Lock order session -> batch -> delivery, matching submitMessage and the worker, so the
 		// watermark write and the world resume serialize against concurrent submissions.
@@ -68,18 +82,7 @@ export async function acknowledgeAssistantMessage(
 			.where(and(eq(practiceSession.id, sessionId), eq(practiceSession.userId, userId)))
 			.for("update");
 		if (!locked) return { acknowledged: false, worldScheduled: false };
-		const rows = await tx
-			.update(practiceSession)
-			.set({ lastSeenAssistantMessageId: sql`greatest(coalesce(${practiceSession.lastSeenAssistantMessageId}, 0), ${messageId})` })
-			.where(
-				and(
-					eq(practiceSession.id, sessionId),
-					eq(practiceSession.userId, userId),
-					sql`exists (select 1 from ${sessionMessage} where ${sessionMessage.id} = ${messageId} and ${sessionMessage.sessionId} = ${sessionId} and ${sessionMessage.role} = 'assistant')`,
-				),
-			)
-			.returning({ id: practiceSession.id });
-		if (rows.length === 0) return { acknowledged: false, worldScheduled: false };
+		if (!(await advanceWatermark(tx, sessionId, userId, messageId))) return { acknowledged: false, worldScheduled: false };
 		const outstandingReply = await tx.query.agentResponseBatch.findFirst({
 			where: and(
 				eq(agentResponseBatch.sessionId, sessionId),
@@ -91,6 +94,22 @@ export async function acknowledgeAssistantMessage(
 		const worldScheduled = !outstandingReply && (await scheduleWorldMoment(tx, { sessionId, now: new Date() }));
 		return { acknowledged: true, worldScheduled };
 	});
+}
+
+/** The forward-only watermark write; false when the message is not an assistant reply in the reader's session. */
+async function advanceWatermark(executor: Pick<typeof db, "update">, sessionId: number, userId: string, messageId: number): Promise<boolean> {
+	const rows = await executor
+		.update(practiceSession)
+		.set({ lastSeenAssistantMessageId: sql`greatest(coalesce(${practiceSession.lastSeenAssistantMessageId}, 0), ${messageId})` })
+		.where(
+			and(
+				eq(practiceSession.id, sessionId),
+				eq(practiceSession.userId, userId),
+				sql`exists (select 1 from ${sessionMessage} where ${sessionMessage.id} = ${messageId} and ${sessionMessage.sessionId} = ${sessionId} and ${sessionMessage.role} = 'assistant')`,
+			),
+		)
+		.returning({ id: practiceSession.id });
+	return rows.length > 0;
 }
 
 /**

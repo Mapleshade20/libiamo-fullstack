@@ -10,6 +10,8 @@
  */
 
 import type { UiVariant } from "$lib/constants";
+import { type CommentThreadMetadata, flattenOpeningComments, persistedMessageRef } from "$lib/practice/comment-thread";
+import { parseMailAddress, parseMailMessage } from "$lib/practice/mail";
 import { passersBy } from "$lib/practice/names";
 import type { Scene } from "$lib/practice/scene";
 import type { TranscriptEntry } from "$lib/server/practice/prompt-context";
@@ -414,6 +416,39 @@ export function names(text: string, name: string): boolean {
 		new RegExp(`@${escaped}`, "iu").test(text) ||
 		(name.length >= 4 && new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "iu").test(text))
 	);
+}
+
+/** Whom a learner message directly addresses among the cast: its reply target, names it writes, or a mail recipient. */
+export function addressedCastParticipants(input: {
+	task: { ui: UiVariant; openingState: Record<string, unknown> | null };
+	scene: { cast: Array<{ name: string }> };
+	learnerName: string;
+	content: string;
+	thread?: CommentThreadMetadata;
+	messages: Array<{ id: number; role: string; llmMetadata?: unknown }>;
+}): string[] {
+	const cast = new Set(input.scene.cast.map((person) => person.name));
+	const addressed: string[] = [];
+	const push = (name: unknown) => {
+		if (typeof name === "string" && name && cast.has(name) && name !== input.learnerName && !addressed.includes(name)) addressed.push(name);
+	};
+	if (input.task.ui === "apple_mail") {
+		for (const entry of parseMailMessage(input.content).to.split(",")) push(parseMailAddress(entry).name);
+		return addressed;
+	}
+	const targetCommentId = input.thread?.targetCommentId;
+	if (targetCommentId) {
+		const opening = flattenOpeningComments(input.task.ui as "reddit" | "ao3", input.task.openingState).find(
+			(comment) => comment.id === targetCommentId,
+		);
+		if (opening) push(opening.author);
+		else {
+			const target = input.messages.find((message) => persistedMessageRef(input.task.ui, message) === targetCommentId);
+			if (target?.role === "assistant") push((target.llmMetadata as { assistantAuthorName?: unknown } | null)?.assistantAuthorName);
+		}
+	}
+	for (const person of input.scene.cast) if (names(input.content, person.name)) push(person.name);
+	return addressed;
 }
 
 export function drawSceneMoment(input: {

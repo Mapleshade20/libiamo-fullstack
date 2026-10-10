@@ -98,38 +98,23 @@ function sortChronologically<T extends Pick<PersistedPracticeMessage, "id" | "cr
 }
 
 /**
- * Whether a cast message answered this learner message's exchange: its own branch, including
- * the messages folded into it, never another conversation's. A reply in a sibling branch, and a
- * world comment, resolve nothing here. Returns null when the message carries no comment-thread
- * metadata (linear surfaces), where the whole-burst fold below applies instead.
+ * A learner message's shared wait: its id plus every learner message folded into it, transitively.
+ * Placeholders, submit and settlement must agree on it, so all of them read it from here.
  */
-function exchangeAnswered(messages: PersistedPracticeMessage[], userMessageIndex: number): boolean | null {
-	const userMessage = messages[userMessageIndex];
-	if (!userMessage) return null;
-	const userMetadata = metadataOf(userMessage.llmMetadata);
-	const userCommentId = userMetadata.thread?.commentId;
-	if (!userCommentId?.includes("-user-")) return null;
-	// The ref prefix of this surface's comment ids (`<ui>-user-<client id>`), for naming cast replies.
-	const prefix = userCommentId.slice(0, userCommentId.indexOf("-user-"));
-	const refs = new Set<string>([userCommentId]);
-	for (const message of messages) {
-		const metadata = metadataOf(message.llmMetadata);
-		if (message.role === "user" && metadata.foldedInto === userMessage.id && metadata.thread?.commentId) refs.add(metadata.thread.commentId);
+export function foldedChainIds(messages: Array<{ id: number; role: string; llmMetadata?: unknown }>, headId: number): Set<number> {
+	const ids = new Set<number>([headId]);
+	for (let grew = true; grew; ) {
+		grew = false;
+		for (const message of messages) {
+			if (message.role !== "user" || ids.has(message.id)) continue;
+			const foldedInto = metadataOf(message.llmMetadata).foldedInto;
+			if (typeof foldedInto === "number" && ids.has(foldedInto)) {
+				ids.add(message.id);
+				grew = true;
+			}
+		}
 	}
-	for (let index = 0; index < messages.length; index += 1) {
-		const message = messages[index];
-		if (!isAgentRole(message.role)) continue;
-		const metadata = metadataOf(message.llmMetadata);
-		// A delivery that names its message settles only by that ownership, whatever branch it
-		// happens to sit in; the branch inference below covers legacy data only.
-		if (metadata.inputMessageId !== undefined) continue;
-		const parent = metadata.thread?.parentCommentId ?? metadata.replyTo ?? null;
-		if (!parent || !refs.has(parent)) continue;
-		if (index > userMessageIndex) return true;
-		// A cast reply inside the exchange extends it: deeper answers resolve the head too.
-		refs.add(metadata.thread?.commentId ?? `${prefix}-agent-${message.id}`);
-	}
-	return false;
+	return ids;
 }
 
 function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userMessageIndex: number) {
@@ -145,20 +130,9 @@ function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userM
 
 	// Arrival-based deliveries name the learner message whose conversation they take up (world
 	// moments name none): a reply resolves only that message's shared wait — itself and everything
-	// folded into it — never the whole burst. Explicit ownership comes first; the branch and
-	// positional heuristics below only cover legacy data and live surfaces.
-	const waitIds = new Set<number>([userMessage.id]);
-	for (let grew = true; grew; ) {
-		grew = false;
-		for (const message of messages) {
-			if (message.role !== "user" || waitIds.has(message.id)) continue;
-			const foldedInto = metadataOf(message.llmMetadata).foldedInto;
-			if (typeof foldedInto === "number" && waitIds.has(foldedInto)) {
-				waitIds.add(message.id);
-				grew = true;
-			}
-		}
-	}
+	// folded into it — never the whole burst. The positional fold below covers live surfaces
+	// and messages from before arrival-based replies.
+	const waitIds = foldedChainIds(messages, userMessage.id);
 	for (let index = userMessageIndex + 1; index < messages.length; index += 1) {
 		const message = messages[index];
 		if (!isAgentRole(message.role)) continue;
@@ -166,20 +140,15 @@ function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userM
 		if (typeof answered === "number" && waitIds.has(answered)) return true;
 	}
 
-	// Comment threads answer per conversation: a reply in one branch never resolves another
-	// branch's waiting placeholder, and world comments resolve nothing.
-	const threaded = exchangeAnswered(messages, userMessageIndex);
-	if (threaded !== null) return threaded;
-
 	// An arrival-based message settles within its own conversation only: a later message's
-	// silence or reply is another conversation's business, never this one's.
+	// silence or reply is another conversation's business, never this one's. Older messages keep
+	// the fold below, whatever branch their answer landed in, or they would wait forever.
 	if (metadataOf(userMessage.llmMetadata).arrival === true) return false;
 
 	// A failed turn keeps its own retry affordance until retried: a later reply to
 	// another turn must not clear it. Pending turns are async: the agent generates
 	// from the full history, so one later reply answers every preceding unanswered
 	// user message in the burst (fold), clearing all their placeholders at once.
-	// Deliveries that name their message resolved only above, never by position.
 	const failed = metadataOf(userMessage.llmMetadata).failed === true;
 	for (let index = userMessageIndex + 1; index < messages.length; index += 1) {
 		const message = messages[index];
@@ -189,7 +158,6 @@ function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userM
 			if (metadata.noReply === true) return true;
 		}
 		if (isAgentRole(message.role)) {
-			if (metadata.inputMessageId !== undefined) continue;
 			if (clientMessageId && metadata.clientMessageId && metadata.clientMessageId !== clientMessageId) continue;
 			return true;
 		}

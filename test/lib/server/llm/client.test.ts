@@ -160,6 +160,21 @@ describe("chatText", () => {
 		);
 	});
 
+	it("sends the shared output budget and thinking effort, low unless the caller asks", async () => {
+		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { chatText, MAX_OUTPUT_TOKENS } = await import("$lib/server/llm/client");
+		await chatText({ messages: [{ role: "user", content: "Hi" }] });
+		await chatText({ messages: [{ role: "user", content: "Hi" }], options: { reasoningEffort: "medium" } });
+
+		const payloads = fetchMock.mock.calls.map((call) => JSON.parse(String((call[1] as RequestInit).body)));
+		expect(payloads.map((payload) => [payload.max_tokens, payload.reasoning_effort])).toEqual([
+			[MAX_OUTPUT_TOKENS, "low"],
+			[MAX_OUTPUT_TOKENS, "medium"],
+		]);
+	});
+
 	it("validates messages before provider call", async () => {
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);

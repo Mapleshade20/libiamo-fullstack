@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, sql as drizzleSql, eq, gte, inArray, isNotNull, lte, ne, or, type SQL } from "drizzle-orm";
 import { type UiVariant, URGENCY_PRESETS, type Urgency } from "$lib/constants";
-import { type CommentThreadMetadata, flattenOpeningComments, getCommentId, getSceneMessageRef } from "$lib/practice/comment-thread";
+import { flattenOpeningComments, getCommentId, persistedMessageRef } from "$lib/practice/comment-thread";
+import { foldedChainIds } from "$lib/practice/messages";
 import { getDeliveryDelayMs, RE_ENGAGE_DELAY_MS, sampleReplyDelayMs } from "$lib/practice/reply-timing";
 import { isAsyncSurface, isLiveChat, resolveScene } from "$lib/practice/scene";
 import { db } from "$lib/server/db";
@@ -44,14 +45,7 @@ function messageMetadataOf(value: unknown): Record<string, unknown> {
 /** A learner message's scene ref, as the comment id scheme names it. */
 function userMessageRef(ui: UiVariant, message: { id: number; role?: string; llmMetadata?: unknown } | undefined): string | null {
 	if (!message || (message.role !== undefined && message.role !== "user")) return null;
-	const metadata = messageMetadataOf(message.llmMetadata);
-	const thread = (metadata.thread ?? undefined) as CommentThreadMetadata | undefined;
-	return getCommentId(ui, {
-		id: String(message.id),
-		role: "user",
-		clientMessageId: typeof metadata.clientMessageId === "string" ? metadata.clientMessageId : undefined,
-		thread,
-	});
+	return persistedMessageRef(ui, { ...message, role: "user" });
 }
 
 export function getDeliveryDueAt(previousDueAt: Date, content: string | undefined): Date {
@@ -220,27 +214,44 @@ export async function settleUserMessageFlags(tx: SessionTx, messageId: number): 
 	}
 }
 
-/** The head message plus everything folded into it (transitively, with a cycle guard). */
+/**
+ * Settles a batch's input message when the batch ends or first delivers. Arrival-based messages
+ * summarize their sibling takers; live surfaces (and async messages from before the arrival
+ * marker) keep the direct write of `liveFlags`, since their retries reuse the attempt counter
+ * and a superseded failed batch would otherwise count as a sibling.
+ */
+async function settleInputMessage(
+	tx: SessionTx,
+	batch: Pick<ClaimedBatch, "kind" | "inputMessageId">,
+	liveFlags: Record<string, unknown> | null,
+): Promise<void> {
+	if (batch.inputMessageId === null) return;
+	const message = await tx.query.sessionMessage.findFirst({
+		where: eq(sessionMessage.id, batch.inputMessageId),
+		columns: { llmMetadata: true },
+	});
+	if (!message) return;
+	const metadata = messageMetadataOf(message.llmMetadata);
+	if (batch.kind === "reply" && metadata.arrival === true) {
+		await settleUserMessageFlags(tx, batch.inputMessageId);
+		return;
+	}
+	if (liveFlags) {
+		await tx
+			.update(sessionMessage)
+			.set({ llmMetadata: { ...metadata, ...liveFlags } })
+			.where(eq(sessionMessage.id, batch.inputMessageId));
+	}
+}
+
+/** The head message plus everything folded into it, transitively. */
 async function foldedIntoChain(tx: SessionTx, head: { id: number; sessionId: number }): Promise<Array<{ id: number; llmMetadata: unknown }>> {
 	const messages = await tx.query.sessionMessage.findMany({
 		where: and(eq(sessionMessage.sessionId, head.sessionId), eq(sessionMessage.role, "user")),
-		columns: { id: true, llmMetadata: true },
+		columns: { id: true, role: true, llmMetadata: true },
 	});
-	const foldedInto = new Map<number, number[]>();
-	for (const message of messages) {
-		const headId = messageMetadataOf(message.llmMetadata).foldedInto;
-		if (typeof headId === "number" && headId !== message.id) foldedInto.set(headId, [...(foldedInto.get(headId) ?? []), message.id]);
-	}
-	const chain = [head.id];
-	const seen = new Set<number>([head.id]);
-	for (let at = 0; at < chain.length; at += 1) {
-		for (const next of foldedInto.get(chain[at]) ?? [])
-			if (!seen.has(next)) {
-				seen.add(next);
-				chain.push(next);
-			}
-	}
-	return messages.filter((message) => seen.has(message.id));
+	const ids = foldedChainIds(messages, head.id);
+	return messages.filter((message) => ids.has(message.id));
 }
 
 /**
@@ -349,17 +360,7 @@ async function replyTargetExists(
 		where: eq(sessionMessage.sessionId, sessionId),
 		columns: { id: true, role: true, llmMetadata: true },
 	});
-	return messages.some((message) => {
-		const metadata = messageMetadataOf(message.llmMetadata);
-		return (
-			getSceneMessageRef(ui, {
-				id: String(message.id),
-				role: message.role === "user" ? "user" : "agent",
-				clientMessageId: typeof metadata.clientMessageId === "string" ? metadata.clientMessageId : undefined,
-				thread: (metadata.thread ?? undefined) as CommentThreadMetadata | undefined,
-			}) === ref
-		);
-	});
+	return messages.some((message) => persistedMessageRef(ui, message) === ref);
 }
 
 export class AgentReplyWorker {
@@ -755,21 +756,8 @@ export class AgentReplyWorker {
 			// Every no-delivery terminal state of a reply batch settles the message — a decision
 			// whose deliveries were all filtered out ends as no_reply just the same. Other kinds
 			// keep the live path's direct write.
-			if (deliveries.length === 0 && !terminated && batch.inputMessageId !== null) {
-				if (batch.kind === "reply") {
-					// Arrival-based replies: the flags summarize every sibling taker of the message.
-					await settleUserMessageFlags(tx, batch.inputMessageId);
-				} else if (result.parsedResult.decision === "no_reply") {
-					const inputMessage = await tx.query.sessionMessage.findFirst({
-						where: eq(sessionMessage.id, batch.inputMessageId),
-						columns: { llmMetadata: true },
-					});
-					const metadata = (inputMessage?.llmMetadata ?? {}) as Record<string, unknown>;
-					await tx
-						.update(sessionMessage)
-						.set({ llmMetadata: { ...metadata, noReply: true } })
-						.where(eq(sessionMessage.id, batch.inputMessageId));
-				}
+			if (deliveries.length === 0 && !terminated) {
+				await settleInputMessage(tx, batch, result.parsedResult.decision === "no_reply" ? { noReply: true } : null);
 			}
 
 			// Abuse termination ends the session the moment the decision is made,
@@ -849,23 +837,8 @@ export class AgentReplyWorker {
 					})
 					.where(this.batchClaimFence(batch))
 					.returning({ id: agentResponseBatch.id });
-				if (!retry && stillClaimed.length > 0 && batch.inputMessageId !== null) {
-					if (batch.kind === "reply") {
-						// Arrival-based replies: the flags summarize every sibling taker of the message.
-						await settleUserMessageFlags(tx, batch.inputMessageId);
-					} else {
-						const message = await tx.query.sessionMessage.findFirst({
-							where: eq(sessionMessage.id, batch.inputMessageId),
-							columns: { llmMetadata: true },
-						});
-						if (message) {
-							const metadata = (message.llmMetadata ?? {}) as Record<string, unknown>;
-							await tx
-								.update(sessionMessage)
-								.set({ llmMetadata: { ...metadata, failed: true, failureError: safeError(error) } })
-								.where(eq(sessionMessage.id, batch.inputMessageId));
-						}
-					}
+				if (!retry && stillClaimed.length > 0) {
+					await settleInputMessage(tx, batch, { failed: true, failureError: safeError(error) });
 				}
 			});
 		} catch (persistenceError) {
@@ -972,7 +945,7 @@ export class AgentReplyWorker {
 					.where(and(eq(agentDelivery.batchId, batch.id), eq(agentDelivery.status, "delivered")));
 				const firstDelivered = (delivered[0]?.count ?? 0) === 1;
 				if (firstDelivered) {
-					if (batch.kind === "reply" && batch.inputMessageId !== null) await settleUserMessageFlags(tx, batch.inputMessageId);
+					await settleInputMessage(tx, batch, null);
 					await this.createMailFollowOn(tx, batch, now);
 				}
 
@@ -991,10 +964,10 @@ export class AgentReplyWorker {
 					.where(and(eq(agentResponseBatch.id, batch.id), eq(agentResponseBatch.status, "delivery_pending")))
 					.returning({ id: agentResponseBatch.id });
 				if (finalized.length === 0) return;
-				if (batch.kind === "reply" && batch.inputMessageId !== null && (delivered[0]?.count ?? 0) === 0) {
+				if ((delivered[0]?.count ?? 0) === 0) {
 					// Every delivery was dropped (missing targets): the message settles as if
 					// nothing landed, instead of waiting forever.
-					await settleUserMessageFlags(tx, batch.inputMessageId);
+					await settleInputMessage(tx, batch, null);
 				}
 				if (terminated) {
 					await tx
