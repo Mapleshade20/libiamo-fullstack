@@ -1,3 +1,4 @@
+import type { UiVariant } from "$lib/constants";
 import type { ChatMessage } from "./messages";
 
 /** Surfaces whose conversation is a public comment tree rather than a linear chat. */
@@ -108,6 +109,20 @@ export function getCommentId(ui: string, message: Pick<ChatMessage, "id" | "role
 	return `${ui}-${message.role}-${message.clientMessageId ?? message.id}`;
 }
 
+/** A persisted message row's scene ref, read off its stored metadata. */
+export function persistedMessageRef(ui: string, row: { id: number; role: string; llmMetadata?: unknown }): string {
+	const metadata = (row.llmMetadata && typeof row.llmMetadata === "object" && !Array.isArray(row.llmMetadata) ? row.llmMetadata : {}) as {
+		clientMessageId?: unknown;
+		thread?: CommentThreadMetadata | null;
+	};
+	return getCommentId(ui, {
+		id: String(row.id),
+		role: row.role === "user" ? "user" : "agent",
+		clientMessageId: typeof metadata.clientMessageId === "string" ? metadata.clientMessageId : undefined,
+		thread: metadata.thread ?? undefined,
+	});
+}
+
 /** The ref a chat reply quotes: opening lines keep their `opening-<index>` id, session messages use `getCommentId`. */
 export function getSceneMessageRef(ui: string, message: Pick<ChatMessage, "id" | "role" | "clientMessageId" | "thread">): string {
 	return message.id.startsWith("opening-") ? message.id : getCommentId(ui, message);
@@ -174,4 +189,82 @@ export function findThreadTarget(
 /** Where a new learner comment sits in the tree. Who answers it, if anyone, is the server's decision. */
 export function newCommentMetadata(ui: ThreadUi, clientMessageId: string, target: ThreadTarget | null): CommentThreadMetadata {
 	return { commentId: `${ui}-user-${clientMessageId}`, targetCommentId: target?.id ?? null };
+}
+
+/** The conversation a learner message serves: the ref it replies to, or its own ref at the top level. */
+export function targetRefOf(message: Pick<ChatMessage, "thread">): string | null {
+	return message.thread?.targetCommentId ?? message.thread?.commentId ?? null;
+}
+
+/** `opening-0-1` → `opening-0`; refs without a numeric path have no derivable parent. */
+function openingParentRef(ref: string): string | null {
+	const path = /^opening-(\d+(?:-\d+)*)$/.exec(ref)?.[1];
+	if (!path) return null;
+	const segments = path.split("-");
+	return segments.length > 1 ? `opening-${segments.slice(0, -1).join("-")}` : null;
+}
+
+/**
+ * A ref's ancestors, nearest first. Session messages walk parent refs (a learner comment's
+ * target, a reply's parent); `opening-<path>` refs pop path segments. Authored opening ids carry
+ * no derivable ancestry, and a cycle in parent refs stops the walk.
+ */
+export function ancestorRefs(ui: ThreadUi, messages: ChatMessage[], ref: string | null): string[] {
+	const byRef = new Map(messages.map((message) => [getCommentId(ui, message), message]));
+	const ancestors: string[] = [];
+	const seen = new Set<string>();
+	let current = ref;
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		const message = byRef.get(current);
+		const parent = message ? getParentCommentId(ui, message) : openingParentRef(current);
+		if (!parent || seen.has(parent)) break;
+		ancestors.push(parent);
+		current = parent;
+	}
+	return ancestors;
+}
+
+/** A pending async conversation: the takers serving one target, keyed by its learner messages. */
+export type PendingConversation = {
+	/** The comment ref the conversation serves; null on mail and on legacy rows. */
+	targetRef: string | null;
+	/** The conversation's learner messages, oldest first; the current head is the last entry. */
+	learnerRefs: string[];
+};
+
+/**
+ * The pending conversation a new learner message with target `targetRef` supplements, if any.
+ * Joining is by exchange, not comment box: the message targets the conversation's comment, or
+ * something that grew from its learner messages (a cast reply under them, or one of them).
+ * Sibling sub-threads and replies above the exchange open their own conversations instead, and
+ * nothing ever merges. Mail folds by null target; on threaded surfaces a legacy null-target
+ * conversation joins nothing. Should several match (an invariant violation), the one with the
+ * newest head message wins.
+ */
+export function joinedConversation(
+	ui: UiVariant,
+	messages: ChatMessage[],
+	conversations: PendingConversation[],
+	targetRef: string | null,
+): PendingConversation | null {
+	if (ui !== "reddit" && ui !== "ao3") {
+		// Mail is one conversation: a new message folds into the pending null-target one.
+		return targetRef === null ? (conversations.find((conversation) => conversation.targetRef === null) ?? null) : null;
+	}
+	if (targetRef === null) return null;
+	const ancestors = ancestorRefs(ui, messages, targetRef);
+	const matches = conversations.filter((conversation) => {
+		// Legacy null-target conversations join nothing on threaded surfaces until they drain.
+		if (conversation.targetRef === null) return false;
+		if (conversation.targetRef === targetRef) return true;
+		const learnerRefs = new Set(conversation.learnerRefs);
+		return learnerRefs.has(targetRef) || ancestors.some((ref) => learnerRefs.has(ref));
+	});
+	if (matches.length <= 1) return matches[0] ?? null;
+	const positionOf = (conversation: PendingConversation) => {
+		const head = conversation.learnerRefs.at(-1);
+		return head ? messages.findIndex((message) => getCommentId(ui, message) === head) : -1;
+	};
+	return matches.reduce((best, current) => (positionOf(current) >= positionOf(best) ? current : best));
 }

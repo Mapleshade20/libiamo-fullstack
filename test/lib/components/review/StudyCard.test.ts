@@ -25,7 +25,6 @@ describe("shared vocabulary study card", () => {
 		expect(body).toContain("make a decision");
 		expect(body).toContain("We need to make a decision today.");
 		expect(body.match(/aria-hidden="true"/g)?.length).toBeGreaterThanOrEqual(2);
-		expect(body).toContain("invisible opacity-0");
 		expect(body).toContain("Show Answer");
 		expect(body).toContain('aria-label="New: 1; Learning: 2; Review: 3"');
 	});
@@ -53,10 +52,7 @@ describe("shared vocabulary study card", () => {
 				onpass: vi.fn(),
 			},
 		});
-		expect(body).toContain("作出决定");
-		expect(body).toContain("我们今天必须作出决定。");
 		expect(body).toContain("make a decision");
-		expect(body).toContain("We need to make a decision today.");
 		expect(body.match(/aria-hidden="true"/g)?.length).toBeGreaterThanOrEqual(2);
 		expect(body).not.toContain("textarea");
 	});

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isMailHeaderLine, splitMailHeaders } from "$lib/practice/mail";
 import type { TaskSource } from "$lib/practice/messages";
 import { isLiveChat } from "$lib/practice/scene";
 import type { ChatMessage, StructuredOutputErrorDetails } from "$lib/server/llm/client";
@@ -72,7 +73,15 @@ export type AgentResponseDecision = z.infer<typeof agentResponseDecisionSchema>;
 export type SceneDelivery = { author: string; replyTo: string | null; content: string };
 
 /** The decision with deliveries resolved against the transcript, plus what had to be coerced. */
-export type SceneTurn = Omit<AgentResponseDecision, "deliveries"> & { deliveries: SceneDelivery[]; warnings: string[] };
+export type SceneTurn = Omit<AgentResponseDecision, "deliveries"> & {
+	deliveries: SceneDelivery[];
+	warnings: string[];
+	/** A complete extra email held for a later take-up (mail only); the worker schedules it once the first lands. */
+	preservedFollowOn?: PreservedDelivery;
+};
+
+/** A complete extra email held for a later take-up (mail only). */
+export type PreservedDelivery = { author: string; replyTo: string | null; content: string };
 
 export type AgentHistoryMessage = {
 	id: number;
@@ -143,6 +152,9 @@ export type GenerateAgentResponseInput = {
 	seed?: number;
 	/** Whom the learner's unmarked message is for, if inferred (see `server/practice/addressee`). */
 	addressees?: string[];
+	/** The async opportunity's identity: its fixed participant and the conversation it serves. */
+	participant?: string;
+	targetRef?: string | null;
 	/** A Lab variant (slots, provider, options) to run instead of the recipe as declared. */
 	variant?: LlmVariant;
 	userId?: string;
@@ -215,9 +227,102 @@ function splitBurst(text: string): string[] {
 	return parts.length <= 3 ? parts : [...parts.slice(0, 2), parts.slice(2).join(" ")];
 }
 
+/** An email body with its leading header lines dropped, without stripMailHeaders' whole-text fallback. */
+function mailBody(content: string): string {
+	const { lines, bodyStart } = splitMailHeaders(content);
+	return lines.slice(bodyStart).join("\n").trim();
+}
+
+/** Whether a body carries a new email's header block after its first line: an anomaly to record, never a split. */
+function embedsEmailStructure(content: string): boolean {
+	const { lines, bodyStart } = splitMailHeaders(content);
+	return lines.slice(bodyStart + 1).some((line) => isMailHeaderLine(line) && /:\s*\S/.test(line));
+}
+
+/**
+ * Mail, one email per author per take-up: the first complete email is the delivery, one further
+ * complete email is preserved for a later take-up, and anything else — further complete emails,
+ * or fragments without a substantive body — is dropped with a warning. Bodies are never split:
+ * quoted header lines inside a body are the body's own text, recorded as an anomaly when they
+ * look like a new email.
+ */
+function mailTakeUp(deliveries: SceneDelivery[], warnings: string[]): { deliveries: SceneDelivery[]; preservedFollowOn?: PreservedDelivery } {
+	const kept: SceneDelivery[] = [];
+	const authors = new Set<string>();
+	let preservedFollowOn: PreservedDelivery | undefined;
+	for (const [index, delivery] of deliveries.entries()) {
+		if (!mailBody(delivery.content)) {
+			warnings.push(`Delivery ${index} has no substantive email body; dropped`);
+			continue;
+		}
+		const key = delivery.author.trim().toLowerCase();
+		if (!authors.has(key)) {
+			authors.add(key);
+			kept.push(delivery);
+			if (embedsEmailStructure(delivery.content)) warnings.push(`Delivery ${index} embeds email structure mid-body; delivered as one email`);
+		} else if (!preservedFollowOn) {
+			preservedFollowOn = { author: delivery.author, replyTo: delivery.replyTo, content: delivery.content };
+		} else {
+			warnings.push(`Delivery ${index} is a further complete email beyond the one preserved; dropped`);
+		}
+	}
+	return { deliveries: kept, ...(preservedFollowOn ? { preservedFollowOn } : {}) };
+}
+
+/**
+ * Same-turn references keep the numbering the model used, but the single-author filter may
+ * have removed deliveries between a reference and its target. Map each reference onto the
+ * surviving delivery it named; a reference into a dropped delivery follows the conversation
+ * that delivery continued (its own target), so a reply never becomes a top-level comment by
+ * accident.
+ */
+function remapSameTurnReferences(
+	items: AgentResponseDecision["deliveries"],
+	originalItems: AgentResponseDecision["deliveries"],
+	survivors: Map<number, number>,
+	input: AgentReplyRecipeInput,
+	warnings: string[],
+): AgentResponseDecision["deliveries"] {
+	const nextId = buildAgentTranscript(input).refs.length + 1;
+	const targetOf = (original: number): number | null => {
+		for (let hops = 0; hops < 8; hops += 1) {
+			const survivor = survivors.get(original);
+			if (survivor !== undefined) return nextId + survivor;
+			const dropped = originalItems[original];
+			if (!dropped || dropped.replyTo === null) return null;
+			if (dropped.replyTo < nextId) return dropped.replyTo;
+			original = dropped.replyTo - nextId;
+		}
+		return null;
+	};
+	return items.map((item, index) => {
+		if (item.replyTo === null || item.replyTo < nextId || item.replyTo - nextId >= originalItems.length) return item;
+		const target = targetOf(item.replyTo - nextId);
+		if (target === item.replyTo) return item;
+		if (target === null) warnings.push(`Delivery ${index} replyTo named dropped delivery ${item.replyTo - nextId}; became null`);
+		return { ...item, replyTo: target };
+	});
+}
+
 export function resolveSceneTurn(decision: AgentResponseDecision, input: AgentReplyRecipeInput): SceneTurn {
 	const warnings: string[] = [];
-	const resolved = resolveMessages(decision.deliveries, input, warnings);
+	let items = decision.deliveries;
+	// An async batch is one participant's take-up: words the model put in anyone else's mouth are
+	// the persona theft this guards against, dropped with a warning rather than reattributed.
+	if (input.participant !== undefined) {
+		const expected = input.participant.trim().toLowerCase();
+		const survivors = new Map<number, number>();
+		items = items.filter((item, index) => {
+			if (item.author.trim().toLowerCase() === expected) {
+				survivors.set(index, survivors.size);
+				return true;
+			}
+			warnings.push(`Delivery ${index} author "${item.author}" is not the participant ${input.participant}; dropped`);
+			return false;
+		});
+		items = remapSameTurnReferences(items, decision.deliveries, survivors, input, warnings);
+	}
+	const resolved = resolveMessages(items, input, warnings);
 	// People who send bursts post a thought as several messages; `@n` references follow the first piece.
 	const { entries } = buildAgentTranscript(input);
 	const pieces = resolved.map((delivery) =>
@@ -230,12 +335,19 @@ export function resolveSceneTurn(decision: AgentResponseDecision, input: AgentRe
 	);
 	// A public channel never winds down for good: someone always posts again.
 	const allowIdleFollowUp = decision.allowIdleFollowUp || (input.task.scene.open && isLiveChat(input.task.ui, input.task.scene));
-	return { ...decision, allowIdleFollowUp, deliveries, warnings };
+	const mail = input.task.ui === "apple_mail" ? mailTakeUp(deliveries, warnings) : undefined;
+	return {
+		...decision,
+		allowIdleFollowUp,
+		deliveries: mail?.deliveries ?? deliveries,
+		...(mail?.preservedFollowOn ? { preservedFollowOn: mail.preservedFollowOn } : {}),
+		warnings,
+	};
 }
 
 export const agentReplyRecipe = defineLlmRecipe({
 	id: "practice.agent-reply",
-	version: 4,
+	version: 5,
 	title: "Scene reply",
 	reasoningEffort: "low",
 	output: { kind: "json", schema: agentResponseDecisionSchema },

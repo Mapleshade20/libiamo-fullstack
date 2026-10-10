@@ -63,6 +63,12 @@ type MessageMetadata = {
 	assistantAuthorName?: string;
 	replyTo?: string | null;
 	thread?: CommentThreadMetadata;
+	/** Arrival-based replies: the learner message whose conversation this delivery takes up (null for world moments). */
+	inputMessageId?: number | null;
+	/** Arrival-based surfaces: this message's wait settles within its own conversation, never the whole burst. */
+	arrival?: boolean;
+	/** Arrival-based replies: this message's wait belongs to the head it folded into. */
+	foldedInto?: number;
 };
 
 function metadataOf(value: unknown): MessageMetadata {
@@ -91,6 +97,26 @@ function sortChronologically<T extends Pick<PersistedPracticeMessage, "id" | "cr
 		.map(({ message }) => message);
 }
 
+/**
+ * A learner message's shared wait: its id plus every learner message folded into it, transitively.
+ * Placeholders, submit and settlement must agree on it, so all of them read it from here.
+ */
+export function foldedChainIds(messages: Array<{ id: number; role: string; llmMetadata?: unknown }>, headId: number): Set<number> {
+	const ids = new Set<number>([headId]);
+	for (let grew = true; grew; ) {
+		grew = false;
+		for (const message of messages) {
+			if (message.role !== "user" || ids.has(message.id)) continue;
+			const foldedInto = metadataOf(message.llmMetadata).foldedInto;
+			if (typeof foldedInto === "number" && ids.has(foldedInto)) {
+				ids.add(message.id);
+				grew = true;
+			}
+		}
+	}
+	return ids;
+}
+
 function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userMessageIndex: number) {
 	const userMessage = messages[userMessageIndex];
 	if (!userMessage) return false;
@@ -101,6 +127,23 @@ function hasAssistantReplyInSameTurn(messages: PersistedPracticeMessage[], userM
 	) {
 		return true;
 	}
+
+	// Arrival-based deliveries name the learner message whose conversation they take up (world
+	// moments name none): a reply resolves only that message's shared wait — itself and everything
+	// folded into it — never the whole burst. The positional fold below covers live surfaces
+	// and messages from before arrival-based replies.
+	const waitIds = foldedChainIds(messages, userMessage.id);
+	for (let index = userMessageIndex + 1; index < messages.length; index += 1) {
+		const message = messages[index];
+		if (!isAgentRole(message.role)) continue;
+		const answered = metadataOf(message.llmMetadata).inputMessageId;
+		if (typeof answered === "number" && waitIds.has(answered)) return true;
+	}
+
+	// An arrival-based message settles within its own conversation only: a later message's
+	// silence or reply is another conversation's business, never this one's. Older messages keep
+	// the fold below, whatever branch their answer landed in, or they would wait forever.
+	if (metadataOf(userMessage.llmMetadata).arrival === true) return false;
 
 	// A failed turn keeps its own retry affordance until retried: a later reply to
 	// another turn must not clear it. Pending turns are async: the agent generates
@@ -162,7 +205,15 @@ export function buildChatMessages({
 			...(metadata.replyTo ? { replyTo: metadata.replyTo } : {}),
 		};
 
-		if (!isUser || !metadata.clientMessageId || metadata.noReply === true || hasAssistantReplyInSameTurn(sorted, index)) {
+		// A folded message's wait is its head's wait: no separate placeholder or retry affordance
+		// of its own; the head's takers answer for the whole chain.
+		if (
+			!isUser ||
+			!metadata.clientMessageId ||
+			metadata.noReply === true ||
+			typeof metadata.foldedInto === "number" ||
+			hasAssistantReplyInSameTurn(sorted, index)
+		) {
 			return [mapped];
 		}
 

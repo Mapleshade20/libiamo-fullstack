@@ -16,7 +16,7 @@ export const sessionCompletionReasonEnum = pgEnum("session_completion_reason", [
 	"max_session_age",
 	"terminated_abuse",
 ]);
-export const agentResponseBatchKindEnum = pgEnum("agent_response_batch_kind", ["opening", "reply", "follow_up"]);
+export const agentResponseBatchKindEnum = pgEnum("agent_response_batch_kind", ["opening", "reply", "follow_up", "world"]);
 export const agentResponseBatchStatusEnum = pgEnum("agent_response_batch_status", [
 	"pending",
 	"processing",

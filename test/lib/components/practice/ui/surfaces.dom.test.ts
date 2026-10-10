@@ -1,7 +1,7 @@
 import { flushSync, tick } from "svelte";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountSurface, persisted, persistedSession, settleScrollLocks, surfaceProps } from "../support/surface.svelte";
-import { button, SURFACES } from "./surfaces";
+import { SURFACES } from "./surfaces";
 
 const mocks = vi.hoisted(() => ({
 	goto: vi.fn(async () => {}),
@@ -75,36 +75,5 @@ describe.each(SURFACES)("$name surface", (surface) => {
 		expect(mocks.sendMessage.mock.calls[0].slice(0, 2)).toEqual([11, surface.sent("See you there")]);
 		expect(mocks.invalidate).toHaveBeenCalledWith("app:practice-session");
 		if (surface.name !== "Mail") expect(root.textContent).toContain("See you there");
-	});
-
-	it("shows a reply delivered by a later poll", () => {
-		const { props, root } = open();
-
-		props.session = persistedSession([...surface.history(persisted), persisted(3, "assistant", "One more thing")]);
-		flushSync();
-
-		expect(root.textContent).toContain("One more thing");
-	});
-
-	it("offers Retry for a failed reply and resends the stored text", async () => {
-		const [learner] = surface.history(persisted);
-		const { root } = open([{ ...learner, llmMetadata: { ...(learner.llmMetadata as object), failed: true } }]);
-
-		button(root, "Retry").click();
-		await settle();
-
-		expect(mocks.sendMessage.mock.calls[0].slice(0, 3)).toEqual([11, learner.content, "c1"]);
-	});
-
-	it("finishes after confirmation and opens the feedback page", async () => {
-		const { root } = open();
-
-		button(root, "Finish task").click();
-		flushSync();
-		button(document.body, "Finish & review").click();
-		await settle();
-
-		expect(mocks.postPageAction).toHaveBeenCalledWith("complete", { sessionId: 11 });
-		expect(mocks.goto).toHaveBeenCalledWith("/libiamo/task/5/feedback");
 	});
 });

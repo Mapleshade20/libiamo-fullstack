@@ -1,5 +1,7 @@
 <script lang="ts">
+import { invalidate } from "$app/navigation";
 import { base } from "$app/paths";
+import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
 
 let { receipt }: { receipt: { sessionId: number; messageId: number } | null } = $props();
 
@@ -19,7 +21,14 @@ $effect(() => {
 				body: JSON.stringify(snapshot),
 				signal: controller.signal,
 			});
-			if (!response.ok) sent = false;
+			if (!response.ok) {
+				sent = false;
+				return;
+			}
+			// Reading may have resumed ambient life (a world moment): refresh the session so its
+			// polling plan picks up the new work instead of staying stopped.
+			const payload = (await response.json().catch(() => null)) as { worldScheduled?: boolean } | null;
+			if (payload?.worldScheduled) await invalidate(PRACTICE_SESSION_DEPENDENCY);
 		} catch {
 			sent = false;
 		}

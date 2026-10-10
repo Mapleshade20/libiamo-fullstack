@@ -12,16 +12,17 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "$env/dynamic/private";
 import { getLanguageEnglishName, URGENCY_PRESETS } from "$lib/constants";
-import { getCommentId } from "$lib/practice/comment-thread";
+import { type CommentThreadMetadata, getCommentId, persistedMessageRef, targetRefOf } from "$lib/practice/comment-thread";
 import { formatMailAddress, formatMailMessage } from "$lib/practice/mail";
 import { getDeliveryDelayMs, sampleReplyDelayMs } from "$lib/practice/reply-timing";
-import { isLiveChat } from "$lib/practice/scene";
+import { isAsyncSurface, isLiveChat } from "$lib/practice/scene";
 import { db } from "$lib/server/db";
 import { task as taskTable } from "$lib/server/db/schema";
 import type { ChatOptions } from "$lib/server/llm/client";
 import { defineLlmRecipe } from "$lib/server/llm/recipe";
 import type { LlmVariant } from "$lib/server/llm/run";
 import { runLlmRecipe } from "$lib/server/llm/run";
+import { addressedCastParticipants, allocateParticipants, drawTakerCount, drawWorldParticipant } from "$lib/server/practice/agent-replies/floor";
 import { type AgentHistoryMessage, agentTaskContext, generateAgentResponse, type SceneTurn } from "$lib/server/practice/agent-replies/generator";
 import { type AgentEvent, buildAgentTranscript, isThreadedUi } from "$lib/server/practice/agent-replies/prompt";
 import { buildDeliveredReplyMetadata, LIVE_CHAT_TICKS } from "$lib/server/practice/agent-replies/worker";
@@ -225,8 +226,16 @@ export async function simulate(
 	// As in the worker, a terminated scene takes no more turns.
 	let ended = false;
 
-	/** One cast turn, landing `delay` after `from`; returns whether it produced messages. */
-	const castTurn = async (event: AgentEvent, from: number, delay: number) => {
+	/**
+	 * One cast turn, landing `delay` after `from`. On async surfaces a turn is one participant's
+	 * take-up, serving one learner message's conversation, as the worker runs it.
+	 */
+	const castTurn = async (
+		event: AgentEvent,
+		from: number,
+		delay: number,
+		takeUp: { participant?: string; targetRef?: string | null; inputMessageId?: number } = {},
+	) => {
 		const started = performance.now();
 		try {
 			const generated = await generateAgentResponse({
@@ -236,6 +245,8 @@ export async function simulate(
 				event,
 				variant: labVariant(variant),
 				seed: seed * 1000 + result.turns.length,
+				...(takeUp.participant ? { participant: takeUp.participant } : {}),
+				...(takeUp.targetRef ? { targetRef: takeUp.targetRef } : {}),
 			});
 			const latencyMs = Math.round(performance.now() - started);
 			const { decision, deliveries, warnings, allowIdleFollowUp } = generated.parsedResult;
@@ -253,7 +264,7 @@ export async function simulate(
 					id,
 					role: "assistant",
 					content: delivery.content,
-					llmMetadata: buildDeliveredReplyMetadata(task.ui, { author: delivery.author, replyTo }),
+					llmMetadata: buildDeliveredReplyMetadata(task.ui, { author: delivery.author, replyTo }, takeUp.inputMessageId ?? null),
 				});
 				delivered.push(getCommentId(task.ui, { id: String(id), role: "agent" }));
 			}
@@ -265,7 +276,43 @@ export async function simulate(
 		result.transcript = transcript().entries;
 		await onProgress(result);
 	};
-	const timePasses = (from: number, delay: number) => castTurn({ kind: "follow_up", followUpCount: ++idles }, from, delay);
+	const arrival = isAsyncSurface(task.ui);
+	const timePasses = (from: number, delay: number) => {
+		idles += 1;
+		if (!arrival || !task.scene.group) return castTurn({ kind: "follow_up", followUpCount: idles }, from, delay);
+		// Async groups live on world moments: one participant carrying on with their own business.
+		const participant = drawWorldParticipant({
+			ui: task.ui,
+			language: task.language,
+			entries: transcript().entries,
+			scene: task.scene,
+			learnerName,
+			seed: seed * 1000 + result.turns.length,
+		});
+		return participant ? castTurn({ kind: "world" }, from, delay, { participant }) : Promise.resolve();
+	};
+	/** The arrival-based reply wave: each taker of the learner's message on its own sampled clock. */
+	const takeUp = async (message: AgentHistoryMessage, thread: CommentThreadMetadata | undefined, from: number) => {
+		const { entries, refs } = transcript();
+		const target = entries[refs.indexOf(persistedMessageRef(task.ui, message))];
+		if (!target) return;
+		const takers = allocateParticipants({
+			ui: task.ui,
+			language: task.language,
+			entries,
+			scene: task.scene,
+			learnerName,
+			seed: message.id,
+			count: task.scene.group ? drawTakerCount(task.ui, message.id) : 1,
+			target,
+		});
+		for (const name of addressedCastParticipants({ task, scene: task.scene, learnerName, content: message.content, thread, messages: history }))
+			if (!takers.includes(name) && takers.length < 3) takers.push(name);
+		const targetRef = targetRefOf({ thread });
+		const clocks = takers.map((participant) => ({ participant, delay: sampleReplyDelayMs(urgency, random) })).sort((a, b) => a.delay - b.delay);
+		for (const { participant, delay } of clocks)
+			await castTurn({ kind: "reply" }, from, delay, { participant, targetRef, inputMessageId: message.id });
+	};
 	const tickDelay = () => 60_000 + random() * 60_000;
 
 	const lines = script ? Math.min(script.length, 5) : 5;
@@ -294,22 +341,22 @@ export async function simulate(
 								body: value.text,
 							})
 						: value.text;
-				history.push({
+				const thread = isThreadedUi(task.ui) ? { commentId: `${task.ui}-user-${clientMessageId}`, targetCommentId: target } : undefined;
+				const message: AgentHistoryMessage = {
 					id: nextMessageId++,
 					role: "user",
 					content,
-					llmMetadata: {
-						clientMessageId,
-						...(isThreadedUi(task.ui) ? { thread: { commentId: `${task.ui}-user-${clientMessageId}`, targetCommentId: target } } : {}),
-					},
-				});
+					llmMetadata: { clientMessageId, ...(thread ? { thread } : {}), ...(arrival ? { arrival: true } : {}) },
+				};
+				history.push(message);
 				result.turns.push({
 					event: { kind: "learner" },
 					learner: { replyTo: value.replyTo, text: value.text },
 					at: Math.max(sendAt, clock),
 					latencyMs: Math.round(performance.now() - started),
 				});
-				await castTurn({ kind: "reply" }, Math.max(sendAt, clock), sampleReplyDelayMs(urgency, random));
+				if (arrival) await takeUp(message, thread, Math.max(sendAt, clock));
+				else await castTurn({ kind: "reply" }, Math.max(sendAt, clock), sampleReplyDelayMs(urgency, random));
 			} else if (!live) await timePasses(clock, URGENCY_PRESETS[urgency].idleFollowUpDelayMs);
 		} catch (error) {
 			result.turns.push({ event: { kind: "learner" }, latencyMs: 0, error: String(error) });
