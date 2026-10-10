@@ -133,6 +133,11 @@ export const userQuota = pgTable(
 		trialTokensReleased: integer("trial_tokens_released").notNull(),
 		/** When the release schedule started: the account's sign-up. */
 		trialReleaseStartedAt: timestamp("trial_release_started_at").notNull(),
+		/**
+		 * The mailbox the grant was given to (`trialEmailKey`), so aliases of one inbox share a single
+		 * grant. Null on accounts that got none because another account already holds that mailbox's.
+		 */
+		trialEmailKey: text("trial_email_key").unique(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -140,7 +145,7 @@ export const userQuota = pgTable(
 			.notNull(),
 	},
 	(t) => [
-		check("user_quota_trial_tokens_total_positive", sql`${t.trialTokensTotal} > 0`),
+		check("user_quota_trial_tokens_total_non_negative", sql`${t.trialTokensTotal} >= 0`),
 		check("user_quota_trial_tokens_released_within_total", sql`${t.trialTokensReleased} between 0 and ${t.trialTokensTotal}`),
 	],
 );

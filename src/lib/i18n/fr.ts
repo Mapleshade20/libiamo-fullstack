@@ -131,7 +131,7 @@ export const fr: Record<keyof typeof en, string> = {
 	"profile.newEmail": "Nouvel e-mail",
 	"profile.emailProvidersLabel": "Fournisseurs de messagerie acceptés",
 	"profile.emailProviders":
-		"Nous acceptons les adresses Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina et d’établissements scolaires (edu).",
+		"Nous acceptons les adresses Gmail, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina et d’établissements scolaires (edu).",
 	"profile.changeEmailHelp": "Votre e-mail changera après vérification de la nouvelle adresse.",
 	"profile.emailChangeSent":
 		"Si cette adresse est disponible, un lien a été envoyé. Consultez votre messagerie et les indésirables. Aucun e-mail n’est envoyé si un autre compte l’utilise déjà.",

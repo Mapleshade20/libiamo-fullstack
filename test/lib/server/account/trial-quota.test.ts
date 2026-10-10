@@ -70,7 +70,7 @@ beforeEach(() => {
 	lockedRows.length = 0;
 	mockDb.updateReturning.length = 0;
 	mockDb.query.userQuota.findFirst.mockResolvedValue(undefined);
-	mockDb.query.user.findFirst.mockResolvedValue({ createdAt: NOW });
+	mockDb.query.user.findFirst.mockResolvedValue({ createdAt: NOW, email: "learner@gmail.com" });
 });
 
 describe("getTrialTokenBudget", () => {
@@ -114,7 +114,7 @@ describe("getTrialQuotaBalance", () => {
 	it("grants a new account the first third, timed from sign-up", async () => {
 		mockEnv.TRIAL_TOKEN_BUDGET = "75000";
 		const signedUp = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
-		mockDb.query.user.findFirst.mockResolvedValueOnce({ createdAt: signedUp });
+		mockDb.query.user.findFirst.mockResolvedValueOnce({ createdAt: signedUp, email: "j.ohn+1@gmail.com" });
 		mockInsertReturning.mockResolvedValueOnce([
 			row({ trialTokensLeft: 25_000, trialTokensTotal: 75_000, trialTokensReleased: 25_000, trialReleaseStartedAt: signedUp }),
 		]);
@@ -132,7 +132,35 @@ describe("getTrialQuotaBalance", () => {
 			trialTokensTotal: 75_000,
 			trialTokensReleased: 25_000,
 			trialReleaseStartedAt: signedUp,
+			trialEmailKey: "john@gmail.com",
 		});
+	});
+
+	it("gives no grant to an alias of a mailbox that already has one", async () => {
+		// The keyed insert hits the mailbox's unique key, and this user has no row of their own yet.
+		mockInsertReturning.mockResolvedValueOnce([]);
+		mockInsertReturning.mockImplementationOnce(async () => {
+			const values = (mockInsertValues.mock.calls.at(-1) as unknown[])[0] as Record<string, unknown>;
+			return [row({ ...values })];
+		});
+		const { getTrialQuotaBalance } = await import("$lib/server/account/trial-quota");
+
+		await expect(getTrialQuotaBalance("user-2")).resolves.toEqual({
+			trialTokensLeft: 0,
+			trialTokensTotal: 0,
+			trialTokensReleased: 0,
+			trialNextReleaseAt: null,
+		});
+		expect(mockInsertValues).toHaveBeenLastCalledWith(expect.not.objectContaining({ trialEmailKey: expect.anything() }));
+	});
+
+	it("returns the row a concurrent request created instead of withholding the grant", async () => {
+		mockInsertReturning.mockResolvedValueOnce([]);
+		mockDb.query.userQuota.findFirst.mockResolvedValueOnce(undefined).mockResolvedValueOnce(row());
+		const { getTrialQuotaBalance } = await import("$lib/server/account/trial-quota");
+
+		await expect(getTrialQuotaBalance("user-1")).resolves.toMatchObject({ trialTokensTotal: 50_000 });
+		expect(mockInsertValues).toHaveBeenCalledTimes(1);
 	});
 
 	it("adds the parts that came due since the last read", async () => {

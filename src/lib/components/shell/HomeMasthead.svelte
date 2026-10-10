@@ -3,7 +3,7 @@ import Check from "@lucide/svelte/icons/check";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
 import { page } from "$app/state";
-import { type TrialQuotaBalance, trialQuotaWarning } from "$lib/account/trial-release";
+import { type TrialQuotaBalance, trialQuotaPercent, trialQuotaWarning } from "$lib/account/trial-release";
 import { setNavbarTransitionIntent } from "$lib/client/page-transition";
 import { LANGUAGE_CODES, LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import type { StreakRecord } from "$lib/streak/rules";
@@ -24,11 +24,7 @@ function onProfileShortcutClick(event: MouseEvent) {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 	setNavbarTransitionIntent(new URL(`${base}/profile#llm`, page.url), "forward");
 }
-function quotaPercentage(balance: TrialQuotaBalance) {
-	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
-}
-
-let quotaPercent = $derived(trialQuota ? quotaPercentage(trialQuota) : 0);
+let quotaPercent = $derived(trialQuota ? trialQuotaPercent(trialQuota) : 0);
 let quotaTone = $derived((trialQuota && trialQuotaWarning(trialQuota)) ?? "normal");
 </script>
 {#snippet languageSwitcher()}

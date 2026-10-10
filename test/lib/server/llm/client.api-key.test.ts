@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 const { mockEnv } = vi.hoisted(() => ({
@@ -50,6 +51,21 @@ describe("LLM API key helpers", () => {
 			const tamperedHex = parts[2].replace(/[0-9a-f]/, (c) => (c === "f" ? "0" : "f"));
 			const tampered = `${parts[0]}:${parts[1]}:${tamperedHex}`;
 			expect(() => decryptApiKey(tampered)).toThrow();
+		});
+
+		it("derives the key once per secret instead of on every call", () => {
+			const scrypt = vi.spyOn(crypto, "scryptSync");
+			const encrypted = encryptApiKey("sk-cached");
+			decryptApiKey(encrypted);
+			decryptApiKey(encrypted);
+			expect(scrypt.mock.calls.length).toBeLessThanOrEqual(1);
+
+			mockEnv.BETTER_AUTH_SECRET = "another-secret";
+			expect(() => decryptApiKey(encrypted)).toThrow();
+			expect(scrypt).toHaveBeenCalled();
+			mockEnv.BETTER_AUTH_SECRET = "test-secret-for-api-key-encryption";
+			expect(decryptApiKey(encrypted)).toBe("sk-cached");
+			scrypt.mockRestore();
 		});
 
 		it("throws when BETTER_AUTH_SECRET is not set", async () => {
