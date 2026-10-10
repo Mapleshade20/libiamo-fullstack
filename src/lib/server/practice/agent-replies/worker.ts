@@ -109,13 +109,19 @@ function safeError(error: unknown): string {
 }
 
 /**
- * Metadata of a delivered cast message: its author, and what it answers. Comment threads nest it
- * under its parent (null is a top-level comment); Discord shows the quoted message.
+ * Metadata of a delivered cast message: its author, what it answers, and — on arrival-based
+ * surfaces — the learner message whose conversation it takes up (null for world moments), so
+ * the client can tell each waiting placeholder which reply is its own.
  */
-export function buildDeliveredReplyMetadata(ui: UiVariant, delivery: { author: string | null; replyTo: string | null }): Record<string, unknown> {
+export function buildDeliveredReplyMetadata(
+	ui: UiVariant,
+	delivery: { author: string | null; replyTo: string | null },
+	answersMessageId: number | null,
+): Record<string, unknown> {
 	return {
 		...(delivery.author ? { assistantAuthorName: delivery.author } : {}),
 		...(delivery.replyTo ? (isThreadedUi(ui) ? { thread: { parentCommentId: delivery.replyTo } } : { replyTo: delivery.replyTo }) : {}),
+		...(isAsyncSurface(ui) ? { inputMessageId: answersMessageId } : {}),
 		asyncDelivery: true,
 	};
 }
@@ -955,7 +961,7 @@ export class AgentReplyWorker {
 							content: delivery.content,
 							responseBatchId: batch.id,
 							deliveryId: delivery.id,
-							llmMetadata: buildDeliveredReplyMetadata(ui, { author: delivery.author, replyTo }),
+							llmMetadata: buildDeliveredReplyMetadata(ui, { author: delivery.author, replyTo }, batch.inputMessageId),
 						})
 						.onConflictDoNothing({ target: sessionMessage.deliveryId });
 				}

@@ -253,7 +253,7 @@ export async function simulate(
 					id,
 					role: "assistant",
 					content: delivery.content,
-					llmMetadata: buildDeliveredReplyMetadata(task.ui, { author: delivery.author, replyTo }),
+					llmMetadata: buildDeliveredReplyMetadata(task.ui, { author: delivery.author, replyTo }, null),
 				});
 				delivered.push(getCommentId(task.ui, { id: String(id), role: "agent" }));
 			}

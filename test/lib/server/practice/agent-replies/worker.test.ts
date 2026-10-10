@@ -265,18 +265,19 @@ describe("agent reply worker scheduling", () => {
 	});
 
 	it("stores a delivered message's author and what it answers the way each surface reads it", () => {
-		expect(buildDeliveredReplyMetadata("ao3", { author: "HikariKitsune02", replyTo: "ao3-user-msg-1" })).toEqual({
+		expect(buildDeliveredReplyMetadata("ao3", { author: "HikariKitsune02", replyTo: "ao3-user-msg-1" }, 501)).toEqual({
 			assistantAuthorName: "HikariKitsune02",
 			thread: { parentCommentId: "ao3-user-msg-1" },
+			inputMessageId: 501,
 			asyncDelivery: true,
 		});
-		expect(buildDeliveredReplyMetadata("discord", { author: "zote", replyTo: "opening-2" })).toEqual({
+		expect(buildDeliveredReplyMetadata("discord", { author: "zote", replyTo: "opening-2" }, 501)).toEqual({
 			assistantAuthorName: "zote",
 			replyTo: "opening-2",
 			asyncDelivery: true,
 		});
-		// a top-level comment, and a reply queued before deliveries had authors
-		expect(buildDeliveredReplyMetadata("reddit", { author: null, replyTo: null })).toEqual({ asyncDelivery: true });
+		// a top-level comment, a reply queued before deliveries had authors, and a world moment (no message of its own)
+		expect(buildDeliveredReplyMetadata("reddit", { author: null, replyTo: null }, null)).toEqual({ inputMessageId: null, asyncDelivery: true });
 	});
 
 	it("bounds generation retries per batch", () => {

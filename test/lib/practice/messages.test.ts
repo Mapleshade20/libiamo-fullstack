@@ -80,6 +80,117 @@ describe("buildChatMessages", () => {
 		expect(parsePersistedMessageDate("2026-01-01 10:00:00").toISOString()).toBe("2026-01-01T10:00:00.000Z");
 	});
 
+	it("gives a folded message no placeholder of its own: its wait is the head's wait", () => {
+		const messages = build([
+			message(1, "user", "First question", { clientMessageId: "m1", foldedInto: 2 }),
+			message(2, "user", "Actually, one more thing", { clientMessageId: "m2" }),
+			message(3, "user", "Failed but folded", { clientMessageId: "m3", failed: true, failureError: "boom", foldedInto: 2 }),
+		]);
+
+		// the head carries the chain's shared wait; the folded messages get neither a pending
+		// placeholder nor a failed retry affordance
+		expect(messages.filter((entry) => entry.deliveryState === "pending")).toHaveLength(1);
+		expect(messages.filter((entry) => entry.deliveryState === "failed")).toHaveLength(0);
+		expect(messages.map((entry) => entry.id)).toEqual(["1", "2", "retry-2", "3"]);
+	});
+
+	it("resolves a waiting placeholder only within its own conversation, never a sibling branch", () => {
+		const messages = build([
+			message(1, "user", "Question A", { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
+			message(2, "user", "Question B", { clientMessageId: "m2", thread: { commentId: "reddit-user-m2", targetCommentId: "c2" } }),
+			message(3, "assistant", "Answer to A", { thread: { parentCommentId: "reddit-user-m1" } }),
+			message(4, "assistant", "World comment elsewhere", { thread: { parentCommentId: "c3" } }),
+		]);
+
+		// the reply to A clears A's placeholder; B keeps waiting, and the world comment clears nothing
+		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
+	});
+
+	it("resolves the head's placeholder through its folded messages and deeper exchange answers", () => {
+		const messages = build([
+			message(1, "user", "First question", {
+				clientMessageId: "m1",
+				thread: { commentId: "reddit-user-m1", targetCommentId: "c1" },
+				foldedInto: 2,
+			}),
+			message(2, "user", "One more thing", { clientMessageId: "m2", thread: { commentId: "reddit-user-m2", targetCommentId: "reddit-user-m1" } }),
+			// answers the folded first message: the head's shared wait is answered
+			message(3, "assistant", "Answer", { thread: { parentCommentId: "reddit-user-m1" } }),
+			// a world comment answering an unrelated comment resolves nothing
+			message(4, "assistant", "Elsewhere", { thread: { parentCommentId: "c9" } }),
+		]);
+
+		expect(messages.some((entry) => entry.deliveryState === "pending")).toBe(false);
+	});
+
+	it("keeps a newer mail message waiting when an older conversation's reply lands", () => {
+		// two mail conversations: A's taker is composing when B is sent, so B gets its own; when
+		// A's reply arrives, only A's placeholder resolves
+		const messages = build([
+			message(1, "user", "To: Maya\nSubject: A\n\nA", { clientMessageId: "m1" }),
+			message(2, "user", "To: Maya\nSubject: B\n\nB", { clientMessageId: "m2" }),
+			message(3, "assistant", "Answer to A", { inputMessageId: 1, asyncDelivery: true }),
+			// a world moment names no message: it resolves nothing
+			message(4, "assistant", "Meanwhile", { inputMessageId: null, asyncDelivery: true }),
+		]);
+
+		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
+	});
+
+	it("resolves a folded mail message's shared wait when the head's reply lands", () => {
+		const messages = build([
+			message(1, "user", "To: Maya\nSubject: A\n\nFirst", { clientMessageId: "m1", foldedInto: 2 }),
+			message(2, "user", "To: Maya\nSubject: A\n\nMore", { clientMessageId: "m2" }),
+			message(3, "assistant", "Answer", { inputMessageId: 2, asyncDelivery: true }),
+		]);
+
+		expect(messages.some((entry) => entry.deliveryState === "pending")).toBe(false);
+	});
+
+	it("does not clear an earlier mail message's wait when a later conversation goes silent", () => {
+		// A is still generating when B is sent as its own conversation; B's takers choose
+		// silence, which settles B (and only B) — A keeps waiting
+		const messages = build([
+			message(1, "user", "To: Maya\nSubject: A\n\nA", { clientMessageId: "m1", arrival: true }),
+			message(2, "user", "To: Maya\nSubject: B\n\nB", { clientMessageId: "m2", arrival: true, noReply: true }),
+		]);
+
+		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-1"]);
+	});
+
+	it("resolves a threaded message by explicit ownership even when its reply lands top-level", () => {
+		// the protocol allows a reply to be delivered as a top-level comment: the explicit
+		// inputMessageId ownership decides, not the branch it happens to sit in
+		const answered = build([
+			message(1, "user", "Question A", { clientMessageId: "m1", arrival: true, thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
+			message(2, "user", "Question B", { clientMessageId: "m2", arrival: true, thread: { commentId: "reddit-user-m2", targetCommentId: "c2" } }),
+			message(3, "assistant", "A's answer, delivered top level", { inputMessageId: 1, asyncDelivery: true }),
+		]);
+		expect(answered.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
+
+		// ownership naming another conversation resolves nothing
+		const elsewhere = build([
+			message(1, "user", "Question A", { clientMessageId: "m1", arrival: true, thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
+			message(2, "assistant", "Another conversation's reply, top level", { inputMessageId: 7, asyncDelivery: true }),
+		]);
+		expect(elsewhere.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-1"]);
+	});
+
+	it("settles a marked delivery only by its ownership, never by the branch it sits in", () => {
+		// the reply names B but is nested under A's comment: B resolves, A keeps waiting
+		const messages = build([
+			message(1, "user", "Question A", { clientMessageId: "m1", arrival: true, thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
+			message(2, "user", "Question B", { clientMessageId: "m2", arrival: true, thread: { commentId: "reddit-user-m2", targetCommentId: "c2" } }),
+			message(3, "assistant", "B's answer, nested under A", {
+				inputMessageId: 2,
+				asyncDelivery: true,
+				thread: { parentCommentId: "reddit-user-m1" },
+			}),
+		]);
+
+		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-1"]);
+	});
+
 	it("places a threaded placeholder under the learner comment it answers", () => {
 		const thread = { commentId: "reddit-user-c1", targetCommentId: "opening-0", responderName: "OP" };
 		const result = build([message(1, "user", "Reply", { clientMessageId: "c1", failed: true, thread })]);

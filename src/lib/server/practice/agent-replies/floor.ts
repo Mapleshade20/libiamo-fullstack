@@ -408,7 +408,7 @@ export function allocateParticipants(input: {
 const asks = (text: string) => /[?？]\s*\S{0,2}$/u.test(text.trim());
 
 /** Whether a message names someone: an @mention, or a name long enough not to be an ordinary word. */
-function names(text: string, name: string): boolean {
+export function names(text: string, name: string): boolean {
 	const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	return (
 		new RegExp(`@${escaped}`, "iu").test(text) ||
