@@ -153,6 +153,33 @@ export function drawTakerCount(ui: UiVariant, seed: number): number {
 	return pick(RESPONDERS[ui] ?? [[1, 1]], random(seed)());
 }
 
+/**
+ * The participant a world moment belongs to: someone whose own business it is to carry on — a
+ * recent cast voice, a quiet member, or occasionally a passer-by. Drawn under the session lock
+ * when the moment is created; what they do is decided at claim.
+ */
+export function drawWorldParticipant(input: {
+	ui: UiVariant;
+	language: string;
+	entries: TranscriptEntry[];
+	scene: Scene;
+	learnerName: string;
+	seed: number;
+}): string | null {
+	const { entries, scene, learnerName, ui } = input;
+	if (!scene.group) return scene.counterpart.name;
+	const draw = random(input.seed);
+	const owner = scene.counterpart.name;
+	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
+	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
+	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
+	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;
+	const people = [...new Set([...entries.slice(-20).map((entry) => entry.author), ...(quiet ? [quiet] : [])])].filter((name) => name !== learnerName);
+	if (strangers.length && draw() < 0.12) return strangers[0];
+	return people.length ? people[Math.floor(draw() * people.length)] : owner;
+}
+
 /** Messages when time passes without the learner. */
 const WORLD_WHEN_IDLE: Weighted<number> = [
 	[1, 0.5],
