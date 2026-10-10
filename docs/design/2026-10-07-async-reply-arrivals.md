@@ -3,14 +3,14 @@ title: Arrival-based replies on asynchronous surfaces
 type:
     - bug
     - ux
-status: wip
+status: done
 ---
 
 # Arrival-based replies on asynchronous surfaces
 
 Issue: [#97](https://github.com/Mapleshade20/libiamo-fullstack/issues/97).
 
-Reddit, AO3 and mail use participant response opportunities to represent when someone takes up a conversation, what information they have seen and when their message is composed. The learner can continue posting and participate in several branches while other people respond.
+Scope: Reddit, AO3 and mail adopt separately scheduled replies. iMessage and Discord keep their existing reply lifecycle. Removing the learner's private task brief from role prompts applies to all five platforms.
 
 ## User-visible problem
 
@@ -20,80 +20,48 @@ Other activity shares this response wave: a newcomer's separate top-level commen
 
 The [issue's symptom descriptions](https://github.com/Mapleshade20/libiamo-fullstack/issues/97#symptoms-and-triggering-conditions) specify the triggering conditions and timing for verification.
 
-## Current implementation
+## Design decisions
 
-One generation writes a batch from a single transcript. `worker.ts::persistGenerationOutcome` schedules successive deliveries using text-length delays. `prompt.ts` permits replies to earlier deliveries in the batch, giving some messages causal dependencies.
+### One person, one scheduled reply
 
-A newer learner message cancels delivery-pending output in `session.ts` or restarts a stale generation in `worker.ts::processClaimedBatch`. Additional messages share the active-batch machinery across branches.
+Each reply batch belongs to one participant and one conversation. Participants are chosen when work is scheduled; retries keep the batch's participant. A group conversation can have up to three outstanding replies, each with its own delay drawn from the existing urgency settings. One-to-one scenes schedule at most one at a time.
 
-The responder floor draws nearby authors from the learner's branch and quiet members from cast members yet to speak. A fresh top-level comment can consequently draw its responders from the owner and a stranger. World activity can accompany a reply, and idle scheduling waits for active batches to finish.
+When generation starts, the participant sees the current published conversation. Later messages do not restart that generation or erase its composed output. A participant can answer someone else's reply only after it has been published. Deliveries by an author other than the allocated participant are dropped with a recorded warning.
 
-These paths are under `src/lib/server/practice/`.
+Separate schedules do **not** mean parallel model calls: the existing one-generation-per-learner limit remains, across all sessions. A slow call can delay other participants and the learner's live chats; delivery can still overlap later generation. The 150-second request timeout bounds each call, not the entire reply wave. This resource constraint remains a timing tradeoff to review, not a guarantee of independent actual start times.
 
-## Response lifecycle
+### Supplements and separate branches
 
-### Response opportunity
+A supplement joins only the pending conversation it addresses, including replies inside that conversation's learner branch. Sibling branches remain separate, even under the same top-level comment. Mail shares one conversation.
 
-An opportunity identifies a participant, conversation and relevant target. When the participant takes it up, the response uses the context available at that point. Relevant additions and corrections enter that context. Each branch retains its targets.
+Only work that has not started can move to the supplement, keeping its participants and scheduled times. Earlier messages share the supplement's wait only if they have neither received a reply nor retained work of their own. Already composing or delivering replies proceed unchanged.
 
-Several participants can hold independent opportunities concurrently. Participation includes choosing silence when the exchange has wound down or the person has little to add.
+If no participant can take a new message up, it settles as unanswered rather than waiting forever. The message is not queued for a future vacancy.
 
-### Composed message
+### Participation and knowledge
 
-A composed message retains the context it was written against and proceeds through delivery. It can cross a newer learner message in transit. Publication fixes the message's content.
+Top-level questions can draw authored participants introduced anywhere in the opening thread, including nested comments. Directly addressed participants can receive their own reply slot within the same cap. Knowledge-weighted speaker selection is outside this change.
 
-Session completion, expiry and abuse termination apply their delivery guards. Context, targets and dependencies stay consistent across pending, processing and delivery-pending states.
+The allocated participant follows their authored role and what they can see in the conversation. Missing learner details should prompt questions, not invented answers. Across all platforms, the learner's private task brief is omitted from role prompts to avoid revealing facts they are meant to communicate. Public setting and character notes remain available.
 
-### Dependent continuation
+### Outcomes, retries and compatibility
 
-A participant answering another message takes up that response after the target is published and available. Prerequisite cancellation triggers dependency resolution. Persisted comment IDs and the existing reference scheme identify targets.
+The result of a new asynchronous message summarizes its current set of reply attempts: a delivered reply resolves the wait; outstanding work keeps it pending; all-silent outcomes settle as unanswered; failure is shown only when no reply landed and no work remains. Messages sharing that wait settle together.
 
-Generation can group opportunities sharing suitable context. Decisions concerning subsequent conversation use that conversation when taken up. The generation strategy operates within an explicit call budget.
+Manual retries use a new attempt number so superseded failures cannot affect the new result. Settlement follows the existing session-before-batch lock order. Live messages retain their own batch's result instead of aggregating old retries. Historical messages keep the old positional waiting rule; pending legacy batches acquire a participant when claimed, while already-running legacy multi-author output can finish with a compatibility warning.
 
-## Participation
+### Background activity, mail and closure
 
-The server chooses speakers using authored roles, relevant knowledge and the message being addressed. Top-level questions can reach relevant cast members introduced anywhere in the opening conversation. Direct replies give their recipients a reason to respond; other participants join according to their relationship to the exchange.
+Asynchronous group scenes can schedule separate background comments while replies are pending, then continue or resume activity after reading. There is at most one outstanding background batch and a budget of three per learner-silence window. Unread replies suspend new background generation without spending a call; no new background work is scheduled within five minutes of expiry.
 
-For example, a scene may contain an owner asking for help and a regular with relevant experience. The regular is eligible to answer using that experience, while the owner responds from their own role and knowledge. The floor accounts for these roles when choosing speakers.
+One mail reply is a complete email. If the model returns extras, at most one complete follow-on is preserved and scheduled only after the first email actually lands; further extras are dropped with warnings. Mail bodies are never split at embedded header lines.
 
-Reddit and AO3 scenarios receive separate participation review, covering discussions among readers, readers addressing a work's author and nested exchanges.
+At the turn limit, composed learner replies retain their existing delivery rules, but background activity ends. Expiry, abuse termination and explicit completion retain their guards. Missing reply targets cause threaded deliveries to be dropped rather than moved to an unrelated branch. Polling considers actual delivery times as well as generation times; read receipts load full history only where background resumption needs it.
 
-## Timing and visible activity
+## Verification
 
-Independent opportunities have separate schedules. Timing supports short intervals and long gaps according to the scenario. Same-author follow-ons distinguish a quick correction from a later return.
+Use deterministic tests for supplements during generation, sibling branches, current-attempt settlement, empty allocation, legacy history, background budgets and closure, and mail follow-on dependencies. Keep live-chat retry and lifecycle regression coverage.
 
-Visible activity can overlap learner responses. Each action has a participant, reason, target and schedule, and can receive subsequent responses. An activity budget defines duration, volume and stopping conditions.
+Qualitative replay must cover corrections during a wait and background comments crossing pending replies. Scene Lab currently supports single-participant generation and background events, but still completes a reply wave before the next learner message; it does not yet prove those timing scenarios.
 
-Urgency configures the scheduling model. Timing parameters receive review alongside learner-visible behavior and generation cost.
-
-## Mail
-
-One-to-one opportunities support silence or a complete email response. A correction or additional information can motivate a subsequent email. Output validation distinguishes separate emails and handles malformed output explicitly while preserving substantive content.
-
-Group-mail participation follows recipients and relevant context. Each recipient responds according to their role in the exchange. The mail representation retains this recipient context through generation and delivery.
-
-## Implementation decisions
-
-The runtime scope covers Reddit, AO3 and mail. Regression verification covers iMessage and Discord.
-
-The implementation design specifies:
-
-1. The composition boundary and context available at each lifecycle state.
-2. Representation of opportunities, branches and causal dependencies, including concurrency and reference resolution.
-3. Authored-role handling in server-side participation.
-4. The visible-activity budget and stopping conditions.
-5. Timing parameters, generation strategy and call budget.
-
-## Acceptance scenarios
-
-1. **Parallel answers:** A and B independently answer a top-level question through separate opportunities and schedules.
-2. **Dependent continuation:** B answers A after A's message is published and available. Reference resolution handles intervening messages and prerequisite cancellation.
-3. **Correction during the wait:** B receives a relevant correction when taking up a response after that correction. A's already composed response retains its context while crossing the correction in transit.
-4. **Separate branches:** learner posts on two branches retain each branch's outstanding opportunities, composed messages and targets.
-5. **Authored knowledge:** a knowledgeable regular introduced in a nested opening exchange is eligible for a top-level question. Both the regular and an owner asking for help respond according to their authored roles.
-6. **Overlapping activity:** a visible top-level comment arrives during a pending learner response and receives a later reply within the activity budget.
-7. **Same-author follow-on:** quick corrections and later contributions follow schedules appropriate to their context.
-8. **Mail:** the lifecycle supports silence, a complete response and a separately motivated subsequent email. Output validation handles malformed results explicitly. Group recipients participate according to their roles.
-9. **Lifecycle:** closure, expiry, abuse guards, unread receipts, activity budgets and persisted references pass verification. Live surfaces pass regression checks.
-
-Verify mechanics with deterministic lifecycle and dependency tests. Replay correction, branch, participation and overlapping-activity scenarios in Scene Lab from the learner's view.
+Implementation and verification results: [writeup](../writeup/2026-10-10-async-reply-arrivals.md).
