@@ -9,6 +9,7 @@
 
 import { type ChatUiVariant, getLanguageEnglishName, type UiVariant } from "$lib/constants";
 import type { TaskSource } from "$lib/practice/messages";
+import { isAsyncSurface } from "$lib/practice/scene";
 import type { ChatMessage } from "$lib/server/llm/client";
 import { createSlotRenderer, type LlmSlotDefinition, type SlotRenderer } from "$lib/server/llm/recipe";
 import {
@@ -25,7 +26,15 @@ import { drawSceneMoment } from "./floor";
 export type AgentTaskContext = ChatTaskFacts & { agentPrompt: string | null; source?: TaskSource | null };
 
 /** Why the cast is being asked to act now. */
-export type AgentEvent = { kind: "reply" } | { kind: "follow_up"; followUpCount: number };
+export type AgentEvent = { kind: "reply" } | { kind: "follow_up"; followUpCount: number } | { kind: "world" };
+
+/** An async opportunity's identity: who takes it up, and which conversation (arrival-based replies). */
+export type AgentTakeUpInput = {
+	/** The batch's fixed participant; single-presence moments and single-author validation key on it. */
+	participant?: string;
+	/** The scene ref of the input message whose conversation this take-up serves. */
+	targetRef?: string | null;
+};
 
 export type AgentPromptSection = { name: string; body: string };
 
@@ -60,6 +69,7 @@ const INTERFACE_RULES: Record<ChatUiVariant, string[]> = {
 	apple_mail: [
 		"Each delivery is one complete email body (greeting, paragraphs, sign-off as the author signs). Never write Subject:/From:/To: lines, Markdown fences, or JSON in the body.",
 		"Greet the learner by learner.name until they introduce themselves with another name.",
+		"Send one email per turn: a single complete email. Anything more to say belongs to a later email of its own, never a second one now.",
 	],
 	reddit: [
 		"Reddit comments: no greetings or sign-offs; one-liners next to the odd paragraph. Write only the comment text.",
@@ -92,24 +102,36 @@ const DYNAMICS_TEMPLATE = [
 	"- Every message brings something of its own: a fact, a view, a question, a plan, a doubt, a joke, a side topic. A story from someone's own life comes only now and then, never right after someone else told one. Nobody restates, sums up or merely praises the message they answer, and nobody repeats a point already made.",
 ].join("\n");
 
-function transcriptFormatSection(ui: UiVariant, group: boolean): string {
+function transcriptFormatSection(ui: UiVariant, group: boolean, takeUp: boolean): string {
 	const lines = [
 		'The user message is JSON: learner.name, and transcript (oldest first). Each entry has an id; role "learner" is the learner and "cast" anyone you write for; opening: true marks messages that were there before the learner arrived.',
 	];
 	if (supportsReplyReferences(ui))
 		lines.push(`replyTo is the id of the entry a message answers${isThreadedUi(ui) ? "; without it, a comment is top level." : "."}`);
 	lines.push("nextId is the id your first delivery will get; later deliveries follow in order.");
-	if (group)
+	if (takeUp) {
+		if (isThreadedUi(ui))
+			lines.push(
+				"moment.target is the ref of the message whose conversation this take-up serves; stay in that conversation, whatever message is newest.",
+			);
+		lines.push(
+			'moment.around lists the one participant taking it up: what they do ("answers #n" names the message they answer), their take on it, their rough length in words, and their writing habits. It is an inclination, not an assignment: they may answer, react briefly, ask, carry on, or decline (no_reply). moment.notes are observations worth reacting to.',
+		);
+	} else if (group)
 		lines.push(
 			'moment.around lists exactly who posts now, in this order: what each does ("answers #n" names the message they answer; otherwise they start something new), their take on it, their rough length in words, and their writing habits (without habits, they write as in their earlier messages). Each posts once and nobody else posts; what CHARACTER NOTES say about a person overrides the drawn take and habits. moment.notes are observations worth reacting to.',
 		);
 	return lines.join("\n");
 }
 
-function eventSection(event: AgentEvent, group: boolean, slot: SlotRenderer): string {
-	if (event.kind === "reply") return slot("eventReply", {});
-	const remaining = !group && event.followUpCount >= 2 ? "This is the last time this happens." : "";
-	return slot(group ? "eventTimePasses" : "eventFollowUp", { remaining });
+function eventSection(event: AgentEvent, group: boolean, slot: SlotRenderer, takeUp?: { participant: string; target: string }): string {
+	if (event.kind === "world") return slot("eventWorld", {});
+	if (event.kind === "follow_up") {
+		const remaining = !group && event.followUpCount >= 2 ? "This is the last time this happens." : "";
+		return slot(group ? "eventTimePasses" : "eventFollowUp", { remaining });
+	}
+	if (takeUp) return slot("eventTakeUp", { participant: takeUp.participant, target: takeUp.target });
+	return slot("eventReply", {});
 }
 
 const AGENT_RESPONSE_JSON_SHAPE = {
@@ -130,11 +152,13 @@ const CONTRACT_TEMPLATE = [
 	"- allowIdleFollowUp: whether anyone would plausibly post again if the learner went quiet after this.",
 ].join("\n");
 
-function contractSection(task: AgentTaskContext, slot: SlotRenderer): string {
+function contractSection(task: AgentTaskContext, slot: SlotRenderer, takeUp?: { participant: string }): string {
 	const { scene, ui } = task;
-	const authorRule = !scene.group
-		? `always ${scene.counterpart.name}.`
-		: `a CAST name${scene.open ? " or a new person named in moment.around" : ""}; never the learner.`;
+	const authorRule = takeUp
+		? `always ${takeUp.participant}.`
+		: !scene.group
+			? `always ${scene.counterpart.name}.`
+			: `a CAST name${scene.open ? " or a new person named in moment.around" : ""}; never the learner.`;
 	const targetRule = isThreadedUi(ui)
 		? "the id of the comment this one answers: any comment, not only the learner's, including an earlier delivery of this turn. null starts a new top-level comment."
 		: ui === "discord"
@@ -182,6 +206,29 @@ export const AGENT_REPLY_SLOTS: Readonly<Record<string, LlmSlotDefinition>> = {
 			"Some time has passed and the learner has not posted. People may carry on among themselves, answer something late, or stay quiet; nobody chases the learner. {{remaining}}",
 		variables: ["remaining"],
 	},
+	eventTakeUp: {
+		label: "CURRENT EVENT (async take-up)",
+		template:
+			"The learner's message {{target}} is the one this take-up serves. {{participant}} continues that conversation — what it holds, not whatever message is newest in the thread.",
+		variables: ["participant", "target"],
+	},
+	eventWorld: {
+		label: "CURRENT EVENT (world moment)",
+		template:
+			"Nothing is waiting on the learner. The one participant named in PARTICIPATION carries on with their own life in the scene: answering something late, starting something new, or staying quiet. They do not chase the learner.",
+		variables: [],
+	},
+	participation: {
+		label: "PARTICIPATION",
+		template: [
+			"You write {{participant}}, and only {{participant}}, in this turn. They are taking up the conversation on their own clock: they may answer, react briefly, ask something, carry on, or decline to post at all — partial participation and silence are normal.",
+			"- {{participant}} knows their own character notes, everything they themselves have posted, and everything the transcript shows in public.",
+			"- {{participant}} does not know what other participants' notes establish privately, and does not know the learner's situation beyond what the learner has actually written in the transcript, even where the setting or the notes mention it for consistency.",
+			"- When they lack the information: they ask, speculate as themselves with hedging, share their own experience, react briefly, or decline.",
+			"What CHARACTER NOTES say about {{participant}} overrides the drawn take and habits.",
+		].join("\n"),
+		variables: ["participant"],
+	},
 	source: { label: "THE REAL CONVERSATION", template: SOURCE_TEMPLATE, variables: ["continuation"] },
 	contract: { label: "RESPONSE CONTRACT", template: CONTRACT_TEMPLATE, variables: ["shape", "authorRule", "targetRule"] },
 	outputReminder: { label: "Output reminder (opens and closes the prompt)", template: OUTPUT_REMINDER, variables: [] },
@@ -207,16 +254,19 @@ function renderCast(task: AgentTaskContext): string {
 export type AgentSystemPromptInput = {
 	task: AgentTaskContext;
 	event?: AgentEvent;
+	/** An async take-up: the fixed participant, and how the event prose names the conversation. */
+	takeUp?: { participant: string; target: string };
 };
 
 /** Named sections of the scene's system message, in order. */
 export function buildAgentPromptSections(
-	{ task, event = { kind: "reply" } }: AgentSystemPromptInput,
+	{ task, event = { kind: "reply" }, takeUp: requestedTakeUp }: AgentSystemPromptInput,
 	slot: SlotRenderer = defaultAgentSlots,
 ): AgentPromptSection[] {
 	const agentPrompt = task.agentPrompt?.trim();
 	const hasStyle = (INTERFACE_RULES[task.ui as ChatUiVariant] ?? []).length > 0;
 	const style = [...(hasStyle ? [slot(`style_${task.ui}`, {})] : []), slot("register", {})];
+	const takeUp = requestedTakeUp && isAsyncSurface(task.ui) ? requestedTakeUp : undefined;
 	return [
 		{ name: "ROLE", body: slot("role", { platform: platformOf(task.ui), language: getLanguageEnglishName(task.language) }) },
 		{
@@ -224,6 +274,7 @@ export function buildAgentPromptSections(
 			body: tagged("character", agentPrompt || "People who fit the setting below; infer who they are from the opening messages."),
 		},
 		{ name: "CAST", body: renderCast(task) },
+		...(takeUp ? [{ name: "PARTICIPATION", body: slot("participation", { participant: takeUp.participant }) }] : []),
 		{ name: "SETTING", body: renderScenarioSetting(task.ui, task.openingState, task.scene) },
 		...(task.source?.continuation?.trim()
 			? [{ name: "THE REAL CONVERSATION", body: slot("source", { continuation: tagged("source", task.source.continuation.trim()) }) }]
@@ -234,9 +285,9 @@ export function buildAgentPromptSections(
 		},
 		...(style.length ? [{ name: "HOW PEOPLE WRITE HERE", body: style.join("\n") }] : []),
 		...(task.scene.group ? [{ name: "GROUP DYNAMICS", body: slot("dynamics", {}) }] : []),
-		{ name: "TRANSCRIPT FORMAT", body: transcriptFormatSection(task.ui, task.scene.group) },
-		{ name: "CURRENT EVENT", body: eventSection(event, task.scene.group, slot) },
-		{ name: "RESPONSE CONTRACT", body: contractSection(task, slot) },
+		{ name: "TRANSCRIPT FORMAT", body: transcriptFormatSection(task.ui, task.scene.group, takeUp !== undefined) },
+		{ name: "CURRENT EVENT", body: eventSection(event, task.scene.group, slot, takeUp) },
+		{ name: "RESPONSE CONTRACT", body: contractSection(task, slot, takeUp) },
 	];
 }
 
@@ -277,9 +328,12 @@ export function buildAgentTranscript(input: AgentConversationInput): { entries: 
 	});
 }
 
-export function buildAgentUserMessage(input: AgentConversationInput & AgentMomentInput & { task: Pick<AgentTaskContext, "language"> }): string {
-	const { entries } = buildAgentTranscript(input);
+export function buildAgentUserMessage(
+	input: AgentConversationInput & AgentMomentInput & AgentTakeUpInput & { task: Pick<AgentTaskContext, "language">; event?: AgentEvent },
+): string {
+	const { entries, refs } = buildAgentTranscript(input);
 	const { task, learnerName } = input;
+	const target = input.targetRef ? entries[refs.indexOf(input.targetRef)] : undefined;
 	const moment = drawSceneMoment({
 		ui: task.ui,
 		language: task.language,
@@ -288,16 +342,38 @@ export function buildAgentUserMessage(input: AgentConversationInput & AgentMomen
 		learnerName,
 		seed: input.seed ?? entries.length,
 		addressees: input.addressees,
+		...(input.participant !== undefined && isAsyncSurface(task.ui) ? { participant: input.participant } : {}),
+		...(target ? { target } : {}),
+		...(input.event?.kind === "world" ? { world: true } : {}),
 	});
-	return JSON.stringify({ learner: { name: learnerName }, transcript: entries, nextId: entries.length + 1, ...(moment ? { moment } : {}) }, null, 1);
+	return JSON.stringify(
+		{
+			learner: { name: learnerName },
+			transcript: entries,
+			nextId: entries.length + 1,
+			...(moment ? { moment: { ...moment, ...(target ? { target: input.targetRef } : {}) } } : {}),
+		},
+		null,
+		1,
+	);
+}
+
+/** The async take-up context for the system prompt, when this batch has a fixed participant. */
+function takeUpOf(input: AgentConversationInput & AgentTakeUpInput): { participant: string; target: string } | undefined {
+	if (input.participant === undefined || !isAsyncSurface(input.task.ui)) return undefined;
+	if (!input.targetRef) return { participant: input.participant, target: "the learner's latest message" };
+	const { entries, refs } = buildAgentTranscript(input);
+	const index = refs.indexOf(input.targetRef);
+	return { participant: input.participant, target: index >= 0 ? `#${entries[index].id}` : "the learner's latest message" };
 }
 
 export function buildAgentMessages(
-	input: AgentSystemPromptInput & AgentConversationInput & AgentMomentInput,
+	input: AgentSystemPromptInput & AgentConversationInput & AgentMomentInput & AgentTakeUpInput,
 	slot: SlotRenderer = defaultAgentSlots,
 ): ChatMessage[] {
+	const takeUp = takeUpOf(input);
 	return [
-		{ role: "system", content: buildAgentSystemPrompt(input, slot) },
+		{ role: "system", content: buildAgentSystemPrompt({ task: input.task, event: input.event, ...(takeUp ? { takeUp } : {}) }, slot) },
 		{ role: "user", content: buildAgentUserMessage(input) },
 	];
 }

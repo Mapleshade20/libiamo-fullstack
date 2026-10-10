@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveScene } from "$lib/practice/scene";
-import { drawSceneMoment, sendsBursts } from "$lib/server/practice/agent-replies/floor";
+import { allocateParticipants, drawSceneMoment, drawTakerCount, sendsBursts } from "$lib/server/practice/agent-replies/floor";
 import type { TranscriptEntry } from "$lib/server/practice/prompt-context";
 
 const scene = resolveScene(
@@ -145,6 +145,206 @@ describe("the floor of a group scene", () => {
 			for (const person of drawSceneMoment({ ui: "reddit", language: "en", entries, scene, learnerName: "Maple", seed })?.around ?? [])
 				expect(person.does).not.toMatch(/#[23]\b/);
 		}
+	});
+});
+
+describe("taker counts and allocation", () => {
+	it("draws a taker count deterministically from the seed, within the platform's range", () => {
+		expect(drawTakerCount("reddit", 11)).toBe(drawTakerCount("reddit", 11));
+		const counts = new Set(Array.from({ length: 60 }, (_, seed) => drawTakerCount("reddit", seed)));
+		expect(counts.size).toBeGreaterThan(1);
+		for (const count of counts) {
+			expect(count).toBeGreaterThanOrEqual(1);
+			expect(count).toBeLessThanOrEqual(3);
+		}
+	});
+
+	it("allocates distinct participants, never the learner, within the requested count", () => {
+		const entries = [cast(1, "alex"), cast(2, "luma"), learner(3, 1)];
+		for (let seed = 0; seed < 40; seed += 1) {
+			const participants = allocateParticipants({
+				ui: "reddit",
+				language: "en",
+				entries,
+				scene,
+				learnerName: "Maple",
+				seed,
+				count: 3,
+				target: entries[2],
+			});
+			expect(participants.length).toBeLessThanOrEqual(3);
+			expect(new Set(participants).size).toBe(participants.length);
+			expect(participants).not.toContain("Maple");
+		}
+	});
+
+	it("makes a regular introduced in a nested opening exchange eligible for a top-level question", () => {
+		const nested = resolveScene(
+			"reddit",
+			{ post: { author: "op" }, previousComments: [{ author: "asker", text: "help?", replies: [{ author: "regular", text: "I know this" }] }] },
+			1,
+			"Maple",
+		);
+		const entries: TranscriptEntry[] = [
+			{ id: 1, opening: true, role: "cast", author: "asker", text: "help?" },
+			{ id: 2, opening: true, role: "cast", author: "regular", text: "I know this", replyTo: 1 },
+			learner(3, undefined, "anyone know?"),
+		];
+		const drawn = new Set(
+			Array.from({ length: 60 }, (_, seed) =>
+				allocateParticipants({ ui: "reddit", language: "en", entries, scene: nested, learnerName: "Maple", seed, count: 2, target: entries[2] }),
+			).flat(),
+		);
+		expect(drawn).toContain("regular");
+	});
+
+	it("keeps excluded participants out of a retry's draw and always returns the counterpart one-to-one", () => {
+		const entries = [cast(1, "alex"), learner(2, 1)];
+		for (let seed = 0; seed < 40; seed += 1) {
+			expect(
+				allocateParticipants({
+					ui: "reddit",
+					language: "en",
+					entries,
+					scene,
+					learnerName: "Maple",
+					seed,
+					count: 2,
+					target: entries[1],
+					exclude: ["alex"],
+				}),
+			).not.toContain("alex");
+		}
+		const duet = resolveScene("apple_mail", { counterpartName: "Maya <maya@x.example>", emails: [] }, 1, "Maple");
+		expect(
+			allocateParticipants({
+				ui: "apple_mail",
+				language: "en",
+				entries: [],
+				scene: duet,
+				learnerName: "Maple",
+				seed: 1,
+				count: 3,
+				target: learner(1),
+			}),
+		).toEqual(["Maya"]);
+	});
+
+	it("keeps sibling sub-thread authors out of a branch reply's allocation", () => {
+		// Root comment with children A (alex) and B (bob); the learner answered A, so bob — who
+		// only spoke in the sibling branch — is not nearby for this exchange, while the addressed
+		// alex and the owner keep their own reasons to take it up.
+		const entries: TranscriptEntry[] = [
+			{ id: 1, role: "cast", author: "op", text: "root" },
+			{ id: 2, role: "cast", author: "alex", text: "A", replyTo: 1 },
+			{ id: 3, role: "cast", author: "bob", text: "B", replyTo: 1 },
+			learner(4, 2),
+		];
+		for (let seed = 0; seed < 60; seed += 1) {
+			const participants = allocateParticipants({
+				ui: "reddit",
+				language: "en",
+				entries,
+				scene,
+				learnerName: "Maple",
+				seed,
+				count: 3,
+				target: entries[3],
+			});
+			expect(participants.length).toBeGreaterThan(0);
+			expect(participants).not.toContain("bob");
+		}
+	});
+});
+
+describe("async take-up moments", () => {
+	it("lists exactly the fixed participant, keyed on the target entry rather than the newest learner message", () => {
+		const entries = [learner(1, undefined, "anyone?"), learner(3, undefined, "a separate question")];
+		const moment = drawSceneMoment({
+			ui: "reddit",
+			language: "en",
+			entries,
+			scene,
+			learnerName: "Maple",
+			seed: 5,
+			participant: "luma",
+			target: entries[0],
+		});
+		expect(moment?.around).toHaveLength(1);
+		expect(moment?.around[0]).toMatchObject({ name: "luma", does: "answers #1 (Maple)" });
+	});
+
+	it("can pick up a landed cast answer in the target's conversation instead (dependent continuation)", () => {
+		const entries = [learner(1, undefined, "anyone?"), cast(2, "alex", 1)];
+		const does = new Set(
+			Array.from(
+				{ length: 30 },
+				(_, seed) =>
+					drawSceneMoment({ ui: "reddit", language: "en", entries, scene, learnerName: "Maple", seed, participant: "luma", target: entries[0] })
+						?.around[0].does,
+			),
+		);
+		expect(does).toContain("answers #2");
+		expect(does).toContain("answers #1 (Maple)");
+	});
+
+	it("never picks up a sibling sub-thread under the same root", () => {
+		// Root comment with children A and B; the learner answered A, so only the learner's own
+		// exchange — the target and what answers it — is answerable, never the sibling B.
+		const entries: TranscriptEntry[] = [
+			{ id: 1, role: "cast", author: "op", text: "root" },
+			{ id: 2, role: "cast", author: "alex", text: "A", replyTo: 1 },
+			{ id: 3, role: "cast", author: "luma", text: "B", replyTo: 1 },
+			learner(4, 2),
+		];
+		const does = new Set(
+			Array.from(
+				{ length: 40 },
+				(_, seed) =>
+					drawSceneMoment({ ui: "reddit", language: "en", entries, scene, learnerName: "Maple", seed, participant: "op", target: entries[3] })
+						?.around[0].does,
+			),
+		);
+		expect([...does]).toEqual(["answers #4 (Maple)"]);
+
+		// A cast answer inside the learner's exchange is a fair target; the sibling still never is.
+		const withAnswer = [...entries, cast(5, "alex", 4)];
+		const answered = new Set(
+			Array.from(
+				{ length: 40 },
+				(_, seed) =>
+					drawSceneMoment({
+						ui: "reddit",
+						language: "en",
+						entries: withAnswer,
+						scene,
+						learnerName: "Maple",
+						seed,
+						participant: "op",
+						target: withAnswer[3],
+					})?.around[0].does,
+			),
+		);
+		expect(answered).toContain("answers #5");
+		expect([...answered].every((line) => line !== "answers #2" && line !== "answers #3")).toBe(true);
+	});
+
+	it("draws a world moment from recent cast messages anywhere in the thread, unpicked questions included", () => {
+		const entries: TranscriptEntry[] = [
+			cast(1, "alex"),
+			learner(2, 1),
+			cast(3, "luma"),
+			{ id: 4, role: "cast", author: "zed", text: "so what do we think?" },
+		];
+		const moments = Array.from({ length: 30 }, (_, seed) =>
+			drawSceneMoment({ ui: "reddit", language: "en", entries, scene, learnerName: "Maple", seed, participant: "op", world: true }),
+		);
+		const does = new Set(moments.map((moment) => moment?.around[0].does));
+		expect(moments[0]?.around).toHaveLength(1);
+		expect(moments[0]?.around[0]).toMatchObject({ name: "op" });
+		expect([...does].some((line) => line === "answers #3" || line === "answers #4")).toBe(true);
+		expect(does).toContain("a new top-level comment on the post");
+		expect(moments.every((moment) => moment?.notes.includes("Nobody has picked up #4 (zed) yet."))).toBe(true);
 	});
 });
 

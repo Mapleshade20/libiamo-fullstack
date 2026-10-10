@@ -115,3 +115,78 @@ describe("scene prompt assembly", () => {
 		]);
 	});
 });
+
+const redditOpening = { post: { author: "op" }, previousComments: [{ id: "c1", author: "alex", text: "Voice scams." }] };
+const redditTask: AgentTaskContext = {
+	...discordTask,
+	ui: "reddit",
+	openingState: redditOpening,
+	scene: resolveScene("reddit", redditOpening, 1, "Maple"),
+};
+const redditHistory = [
+	{
+		id: 9,
+		role: "user" as const,
+		content: "Same",
+		llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+	},
+];
+
+describe("async take-up prompts", () => {
+	it("adds the participation contract, the single-participant moment prose, and the pinned event", () => {
+		const [system, user] = buildAgentMessages({
+			task: redditTask,
+			learnerName: "Maple",
+			history: redditHistory,
+			participant: "alex",
+			targetRef: "reddit-user-m1",
+		});
+
+		expect(system.content).toContain("## PARTICIPATION");
+		expect(system.content).toContain("You write alex, and only alex");
+		expect(system.content).toContain("does not know the learner's situation beyond what the learner has actually written");
+		expect(system.content).toContain("moment.target is the ref of the message whose conversation this take-up serves");
+		expect(system.content).toContain("inclination, not an assignment");
+		expect(system.content).toContain("The learner's message #2 is the one this take-up serves");
+		expect(system.content).toContain("always alex.");
+		expect(system.content).not.toContain("Each posts once and nobody else posts");
+
+		const payload = JSON.parse(user.content);
+		expect(payload.moment.target).toBe("reddit-user-m1");
+		expect(payload.moment.around).toHaveLength(1);
+		expect(payload.moment.around[0].name).toBe("alex");
+	});
+
+	it("keeps live surfaces free of the async sections", () => {
+		const [system] = buildAgentMessages({
+			task: discordTask,
+			learnerName: "Maple",
+			history: [{ id: 5, role: "user", content: "hola" }],
+			participant: "Mario",
+			targetRef: "discord-user-xyz",
+		});
+		expect(system.content).not.toContain("PARTICIPATION");
+		expect(system.content).toContain("Each posts once and nobody else posts");
+	});
+
+	it("gives a one-to-one mail take-up a moment despite no group, with no target to pin", () => {
+		const opening = { counterpartName: "Maya <maya@x.example>", emails: [] };
+		const [system, user] = buildAgentMessages({
+			task: { ...discordTask, ui: "apple_mail", openingState: opening, scene: resolveScene("apple_mail", opening, 1, "Maple") },
+			learnerName: "Maple",
+			history: [{ id: 3, role: "user", content: "To: Maya\nSubject: Hi\n\nHello" }],
+			participant: "Maya",
+			targetRef: null,
+		});
+		expect(system.content).toContain("## PARTICIPATION");
+		expect(system.content).toContain("one email per turn");
+		const payload = JSON.parse(user.content);
+		expect(payload.moment.around[0].name).toBe("Maya");
+		expect(payload.moment.target).toBeUndefined();
+	});
+
+	it("describes a world moment without waiting on the learner", () => {
+		const sections = buildAgentPromptSections({ task: redditTask, event: { kind: "world" }, takeUp: { participant: "alex", target: "#2" } });
+		expect(sections.find((section) => section.name === "CURRENT EVENT")?.body).toContain("carries on with their own life");
+	});
+});
