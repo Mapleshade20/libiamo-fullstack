@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createMemberPool } from "$lib/practice/discord-members";
 import { seededContact } from "$lib/practice/mail";
-import { resolveCounterpart, resolveScene } from "$lib/practice/scene";
+import { isAsyncSurface, resolveCounterpart, resolveScene } from "$lib/practice/scene";
 
 const opening = {
 	previousMessages: [
@@ -9,6 +9,13 @@ const opening = {
 		{ sender: "Lucía", text: "¿Vamos?" },
 	],
 };
+
+describe("isAsyncSurface", () => {
+	it("names the surfaces whose replies are arrival-based opportunities", () => {
+		for (const ui of ["reddit", "ao3", "apple_mail"] as const) expect(isAsyncSurface(ui)).toBe(true);
+		for (const ui of ["imessage", "discord", "translator"] as const) expect(isAsyncSurface(ui)).toBe(false);
+	});
+});
 
 describe("resolveCounterpart", () => {
 	it("prefers the authored counterpart name over the opening senders", () => {
