@@ -753,6 +753,45 @@ describe("Better Auth social authentication lifecycle", () => {
 		expect(response.status).toBe(400);
 		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "missing-language@gmail.com" }] })).resolves.toBeNull();
 	});
+	it("refuses disabled languages at the direct HTTP sign-up boundary", async () => {
+		const { auth, db } = await createAuthTestInstance(undefined, undefined, { env: { DISABLED_LANGUAGES: "en" } });
+		const response = await auth.handler(
+			new Request(`${AUTH_BASE_URL}/sign-up/email`, {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: APP_URL },
+				body: JSON.stringify({ name: "Visitor", email: "disabled@gmail.com", password: "correct-horse-battery-staple", activeLanguage: "en" }),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "ACTIVE_LANGUAGE_DISABLED" });
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "disabled@gmail.com" }] })).resolves.toBeNull();
+	});
+
+	it("uses an available language for implicit OAuth sign-up", async () => {
+		const { auth, db } = await createAuthTestInstance(undefined, undefined, { env: { DISABLED_LANGUAGES: "en" } });
+		mockGithub({ id: "github-available", email: "available@gmail.com", verified: true });
+		const callback = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github"));
+		expect(callback.headers.get("location")).toBe(APP_URL);
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "available@gmail.com" }] })).resolves.toMatchObject({
+			activeLanguage: "es",
+		});
+	});
+
+	it("refuses explicit disabled OAuth choices without blocking existing learners", async () => {
+		const { auth, db } = await createAuthTestInstance(undefined, undefined, { env: { DISABLED_LANGUAGES: "en" } });
+		mockGithub({ id: "github-disabled", email: "oauth-disabled@gmail.com", verified: true });
+		const rejected = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "en" }));
+		expect(rejected.headers.get("location")).not.toBe(APP_URL);
+		await expect(db.findOne({ model: "user", where: [{ field: "email", value: "oauth-disabled@gmail.com" }] })).resolves.toBeNull();
+
+		const signup = await auth.api.signUpEmail({
+			body: { name: "Existing", email: "oauth-disabled@gmail.com", password: "correct-horse-battery-staple", activeLanguage: "es" },
+		});
+		await db.update({ model: "user", where: [{ field: "id", value: signup.user.id }], update: { emailVerified: true, activeLanguage: "en" } });
+		const returning = await finishSocialFlow(auth, "github", await startSocialFlow(auth, "github", { activeLanguage: "en" }));
+		expect(returning.headers.get("location")).toBe(APP_URL);
+		await expect(db.findOne({ model: "user", where: [{ field: "id", value: signup.user.id }] })).resolves.toMatchObject({ activeLanguage: "en" });
+	});
 	describe("abuse protection", () => {
 		const password = "correct-horse-battery-staple";
 

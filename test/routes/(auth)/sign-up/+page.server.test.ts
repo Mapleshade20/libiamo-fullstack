@@ -12,14 +12,16 @@ vi.mock("$lib/server/auth/auth", () => ({
 	},
 }));
 
-vi.mock("$env/dynamic/private", () => ({
+const { env } = vi.hoisted(() => ({
 	env: {
 		GOOGLE_CLIENT_ID: "google-id",
 		GOOGLE_CLIENT_SECRET: "google-secret",
 		GITHUB_CLIENT_ID: "github-id",
 		GITHUB_CLIENT_SECRET: "github-secret",
-	},
+	} as Record<string, string | undefined>,
 }));
+
+vi.mock("$env/dynamic/private", () => ({ env }));
 
 vi.mock("better-auth/api", () => {
 	class MockAPIError extends Error {
@@ -34,6 +36,7 @@ vi.mock("better-auth/api", () => {
 describe("Sign-up +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		env.DISABLED_LANGUAGES = undefined;
 	});
 
 	describe("load function", () => {
@@ -56,6 +59,7 @@ describe("Sign-up +page.server", () => {
 				socialProviders: ["google", "github"],
 				captchaSiteKey: null,
 				socialAuthError: null,
+				disabledLanguages: [],
 			});
 		});
 
@@ -101,6 +105,18 @@ describe("Sign-up +page.server", () => {
 			expect(result.data?.errors?.password).toBeDefined();
 			expect(result.data?.errors?.name).toBeDefined();
 			expect(result.data?.errors?.activeLanguage).toBeDefined();
+			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
+		});
+
+		it("refuses a language that is opening soon", async () => {
+			env.DISABLED_LANGUAGES = "ja";
+			const event = createEvent({ email: "test@gmail.com", name: "Test User", password: "securePassword123!", activeLanguage: "ja" });
+
+			const result = (await actions.default(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.activeLanguage).toHaveLength(1);
+			expect(result.data?.values?.activeLanguage).toBe("");
 			expect(auth.api.signUpEmail).not.toHaveBeenCalled();
 		});
 
@@ -256,6 +272,15 @@ describe("Sign-up +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors?.activeLanguage).toEqual(["Choose a language before continuing."]);
+			expect(auth.api.signInSocial).not.toHaveBeenCalled();
+		});
+
+		it("refuses a language that is opening soon", async () => {
+			env.DISABLED_LANGUAGES = "es,ja";
+			const result = (await actions.default(createEvent({ provider: "google", activeLanguage: "es" }))) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.activeLanguage).toHaveLength(1);
 			expect(auth.api.signInSocial).not.toHaveBeenCalled();
 		});
 

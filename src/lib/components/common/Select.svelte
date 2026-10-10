@@ -1,5 +1,6 @@
 <script lang="ts" module>
-export type SelectItem = { value: string; label: string; disabled?: boolean };
+/** `hint` explains a disabled item: pressing it shows the note beside it. */
+export type SelectItem = { value: string; label: string; disabled?: boolean; hint?: string };
 </script>
 
 <script lang="ts">
@@ -8,6 +9,7 @@ import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import { Select } from "bits-ui";
 import { tick } from "svelte";
 import { cn } from "$lib/utils";
+import SideTip from "./SideTip.svelte";
 
 /*
  * The app's only select. The list is a floating panel (transitions.dev "Menu dropdown"); the value
@@ -58,6 +60,7 @@ let {
 
 let native: HTMLSelectElement | undefined = $state();
 let trigger: HTMLButtonElement | null = $state(null);
+let sideTip: SideTip | undefined = $state();
 
 const selected = $derived(items.find((item) => item.value === value));
 
@@ -104,7 +107,15 @@ async function change(next: string) {
 				)}
 			>
 				{#each items as item (item.value)}
-					<Select.Item value={item.value} label={item.label} disabled={item.disabled} class="select-item">
+					<Select.Item
+						value={item.value}
+						label={item.label}
+						disabled={item.disabled}
+						class="select-item"
+						onpointerup={(event) => {
+							if (item.disabled && item.hint) sideTip?.show(event.currentTarget, item.hint);
+						}}
+					>
 						{#snippet children({ selected: isSelected })}
 							<span class="min-w-0 flex-1">{item.label}</span>
 							<Check class={cn("size-4 shrink-0", !isSelected && "invisible")} aria-hidden="true" />
@@ -141,4 +152,7 @@ async function change(next: string) {
 			<option value={item.value} disabled={item.disabled}>{item.label}</option>
 		{/each}
 	</select>
+	{#if items.some((item) => item.disabled && item.hint)}
+		<SideTip bind:this={sideTip} />
+	{/if}
 </div>

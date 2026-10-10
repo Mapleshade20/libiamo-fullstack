@@ -34,6 +34,7 @@ export function hallData(overrides: Partial<HallData> = {}): HallData {
 			{ id: 22, title: "Archived letter", description: null, difficulty: 2, createdMonth: "2026-08" },
 		],
 		translationStatusMap: {},
+		announcements: [],
 		...overrides,
 	};
 }

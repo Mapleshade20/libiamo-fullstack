@@ -506,3 +506,16 @@ export const lineupEntrySchema = z
 			});
 		}
 	});
+
+/** `expiresAt` is a `datetime-local` wall time in the admin's browser timezone; the action converts it. */
+export const announcementSchema = z.object({
+	title: z.string().trim().min(1, "Title is required").max(200),
+	body: z.string().trim().min(1, "Write the announcement").max(USER_LONG_TEXT_MAX_LENGTH),
+	expiresAt: z.preprocess(
+		blankToNull,
+		z
+			.string()
+			.refine((value) => dayjs(value, ["YYYY-MM-DDTHH:mm", "YYYY-MM-DDTHH:mm:ss"], true).isValid(), "Use a valid date and time")
+			.nullable(),
+	),
+});

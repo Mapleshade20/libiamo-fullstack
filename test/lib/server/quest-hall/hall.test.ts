@@ -28,6 +28,8 @@ vi.mock("drizzle-orm", () => ({
 	sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ op: "sql", strings: [...strings], values }),
 }));
 
+vi.mock("$lib/server/announcement", () => ({ listHallAnnouncements: vi.fn(async () => []) }));
+
 vi.mock("$lib/server/db", () => ({
 	db: {
 		select: mockSelect,

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getSelfAssignedLevel, type LanguageCode, type SelfAssignedLevel, type TranslationWorkflowPhase } from "$lib/constants";
 import type { HallQuest, HallQuestSessionStatus } from "$lib/quest-hall/quest";
+import { type HallAnnouncement, listHallAnnouncements } from "$lib/server/announcement";
 import { db } from "$lib/server/db";
 import { practiceSession, task, translationAttempt, translationSourceSet } from "$lib/server/db/schema";
 import { unreadReplyCount } from "$lib/server/practice/unread";
@@ -37,6 +38,7 @@ export interface HallData {
 	weeklyTasks: HallQuest[];
 	translationTasks: HallTranslationTask[];
 	translationStatusMap: Record<string, TranslationWorkflowPhase>;
+	announcements: HallAnnouncement[];
 }
 
 async function loadLineupQuests(lineupId: number, userId: string): Promise<HallQuest[]> {
@@ -78,7 +80,11 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 		columns: { levelSelfAssign: true },
 	});
 
-	const [dailyTasks, weeklyTasks] = await Promise.all([loadLineupQuests(lineups.daily, user.id), loadLineupQuests(lineups.weekly, user.id)]);
+	const [dailyTasks, weeklyTasks, announcements] = await Promise.all([
+		loadLineupQuests(lineups.daily, user.id),
+		loadLineupQuests(lineups.weekly, user.id),
+		listHallAnnouncements(user.id),
+	]);
 
 	const translationTasks = await db
 		.select({
@@ -136,5 +142,6 @@ export async function loadQuestHallData(user: QuestHallUser, browserTimezone: st
 			createdMonth: getLocalDateString(browserTimezone, createdAt).slice(0, 7),
 		})),
 		translationStatusMap: Object.fromEntries(translationStatusByTaskId),
+		announcements,
 	};
 }

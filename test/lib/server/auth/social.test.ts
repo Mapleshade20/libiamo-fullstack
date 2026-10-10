@@ -7,7 +7,7 @@ vi.mock("better-auth/api", async (importOriginal) => {
 	return { ...original, getOAuthState };
 });
 
-import { configuredSocialProviderIds, configuredSocialProviders, mapOAuthProfileToUser, prepareOAuthUser } from "$lib/server/auth/social";
+import { configuredSocialProviderIds, configuredSocialProviders, mapOAuthProfileToUser, prepareSignupUser } from "$lib/server/auth/social";
 
 describe("social authentication configuration", () => {
 	beforeEach(() => {
@@ -39,11 +39,19 @@ describe("social authentication configuration", () => {
 
 		await expect(mapOAuthProfileToUser()).resolves.toEqual({ activeLanguage: "fr" });
 	});
+	it("wires language availability into provider mapping without refusing returning users", async () => {
+		const provider = configuredSocialProviders({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", DISABLED_LANGUAGES: "en,es" }).google;
+		if (!provider || typeof provider === "function" || !provider.mapProfileToUser) throw new Error("Google mapper is missing");
+		getOAuthState.mockResolvedValue({});
+		await expect(provider.mapProfileToUser({} as never)).resolves.toEqual({ activeLanguage: "fr" });
+		getOAuthState.mockResolvedValue({ activeLanguage: "en" });
+		await expect(provider.mapProfileToUser({} as never)).resolves.toEqual({ activeLanguage: "en" });
+	});
 
 	it("accepts a verified OAuth user with a supported learning language", async () => {
 		getOAuthState.mockResolvedValue({ activeLanguage: "fr" });
 
-		await expect(prepareOAuthUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "fr" } });
+		await expect(prepareSignupUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "fr" } });
 	});
 
 	// Only Sign Up asks for a language, so arriving from Sign In there is nothing to
@@ -53,13 +61,13 @@ describe("social authentication configuration", () => {
 		getOAuthState.mockResolvedValue({});
 
 		await expect(mapOAuthProfileToUser()).resolves.toEqual({ activeLanguage: "en" });
-		await expect(prepareOAuthUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "en" } });
+		await expect(prepareSignupUser({ emailVerified: true })).resolves.toEqual({ data: { activeLanguage: "en" } });
 	});
 
 	it("rejects OAuth user creation without a verified email", async () => {
 		getOAuthState.mockResolvedValue({ activeLanguage: "ja" });
 
-		await expect(prepareOAuthUser({ emailVerified: false })).rejects.toMatchObject({
+		await expect(prepareSignupUser({ emailVerified: false })).rejects.toMatchObject({
 			body: { code: "OAUTH_EMAIL_NOT_VERIFIED" },
 		});
 	});
@@ -67,7 +75,7 @@ describe("social authentication configuration", () => {
 	it("rejects OAuth user creation without a supported learning language", async () => {
 		getOAuthState.mockResolvedValue({ activeLanguage: "de" });
 
-		await expect(prepareOAuthUser({ emailVerified: true })).rejects.toMatchObject({
+		await expect(prepareSignupUser({ emailVerified: true })).rejects.toMatchObject({
 			body: { code: "INVALID_ACTIVE_LANGUAGE" },
 		});
 	});
@@ -75,12 +83,12 @@ describe("social authentication configuration", () => {
 	it("leaves email and password user creation unchanged", async () => {
 		getOAuthState.mockResolvedValue(null);
 
-		await expect(prepareOAuthUser({ emailVerified: false, activeLanguage: "es" })).resolves.toBeUndefined();
+		await expect(prepareSignupUser({ emailVerified: false, activeLanguage: "es" })).resolves.toBeUndefined();
 	});
 
 	it("leaves required-field validation to email and password sign-up", async () => {
 		getOAuthState.mockResolvedValue(null);
 
-		await expect(prepareOAuthUser({ emailVerified: false })).resolves.toBeUndefined();
+		await expect(prepareSignupUser({ emailVerified: false })).resolves.toBeUndefined();
 	});
 });

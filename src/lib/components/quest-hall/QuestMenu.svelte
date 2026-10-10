@@ -1,12 +1,12 @@
 <script lang="ts">
 import { Portal } from "bits-ui";
 import { flushSync, onMount, setContext, tick, untrack } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
 import { afterNavigate, disableScrollHandling, goto, invalidate, pushState, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
 import { isQuestMenuPath } from "$lib/client/page-transition";
 import Typewriter from "$lib/components/common/Typewriter.svelte";
 import { createUnreadSubscription, type UnreadSubscriptionState } from "$lib/components/quest-hall/unread-subscription";
-import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 import type { LanguageCode } from "$lib/constants";
 import { t } from "$lib/i18n";
 import {
@@ -34,6 +34,7 @@ import type { QuestHallPreparation } from "$lib/quest-hall/preparation";
 import type { HallData } from "$lib/server/quest-hall/hall";
 import { getDisplayClock } from "$lib/time/display-clock";
 import { localDay } from "$lib/time/local-day";
+import { tossInto } from "./announcement-motion";
 import {
 	createQuestMenuAnimator,
 	prefersReducedQuestMenuMotion,
@@ -42,6 +43,7 @@ import {
 	type QuestMenuMotionElements,
 	type QuestMenuView,
 } from "./motion";
+import QuestMenuAnnouncementTray from "./QuestMenuAnnouncementTray.svelte";
 import QuestMenuBook, { type QuestMenuTurnPreview } from "./QuestMenuBook.svelte";
 import QuestMenuCatalog from "./QuestMenuCatalog.svelte";
 import QuestMenuHome from "./QuestMenuHome.svelte";
@@ -129,6 +131,11 @@ let narrowNextTarget = $derived(getQuestMenuNarrowTarget(catalog, location.secti
 // svelte-ignore state_referenced_locally
 let unreadState = $state<UnreadSubscriptionState>({ items: [], total: getQuestMenuUnreadCount(catalog), status: "loading" });
 let unreadCount = $derived(unreadState.total);
+// Acknowledged in this visit; the server's `read` catches up on the next Hall load.
+const acknowledgedAnnouncements = new SvelteSet<number>();
+let unreadAnnouncements = $derived(data.announcements.filter((item) => !item.read && !acknowledgedAnnouncements.has(item.id)));
+let collectedAnnouncements = $derived(data.announcements.filter((item) => item.read || acknowledgedAnnouncements.has(item.id)));
+let announcementTray = $state<ReturnType<typeof QuestMenuAnnouncementTray>>();
 let visibleView: QuestMenuView = $derived(location.view);
 let viewTransitioning = $derived(transitionTo !== null);
 let homePresent = $derived(visibleView === "home" || transitionFrom === "home" || transitionTo === "home");
@@ -458,6 +465,15 @@ function handleBookPointerLeave(): void {
 	animator?.clearPointerInteraction(visibleView);
 }
 
+/** Files an acknowledged announcement: its dot is tossed into the collection, which catches it. */
+async function collectAnnouncement(id: number, card: HTMLElement): Promise<void> {
+	void fetch(`${base}/api/announcements/${id}/read`, { method: "POST" }).catch(() => {});
+	const target = announcementTray?.target();
+	if (target) await tossInto(card, target);
+	acknowledgedAnnouncements.add(id);
+	announcementTray?.receive();
+}
+
 function finishBookReveal(): void {
 	bookRevealed = true;
 	updateAmbientMotion();
@@ -596,9 +612,18 @@ onMount(() => {
 			<h1>{data.greeting}</h1>
 			<p><Typewriter text={subtitle} /></p>
 		</div>
-		<span class="hall-wine" aria-hidden="true"><WineGlassIcon width={52} height={52} /></span>
+		<QuestMenuAnnouncementTray bind:this={announcementTray} announcements={collectedAnnouncements} {lang} />
 		{#if mounted}
-			<Portal to="#hall-nav-inbox"> <QuestMenuInbox items={unreadState.items} total={unreadCount} status={unreadState.status} {lang} /> </Portal>
+			<Portal to="#hall-nav-inbox">
+				<QuestMenuInbox
+					items={unreadState.items}
+					total={unreadCount}
+					status={unreadState.status}
+					announcements={unreadAnnouncements}
+					onacknowledge={collectAnnouncement}
+					{lang}
+				/>
+			</Portal>
 		{/if}
 	</header>
 
@@ -686,10 +711,6 @@ onMount(() => {
 </div>
 
 <style>
-.hall-wine {
-	flex: 0 0 auto;
-}
-
 .quest-menu {
 	--menu-paper: #f7f1e6;
 	--menu-sheet: #fffaf1;

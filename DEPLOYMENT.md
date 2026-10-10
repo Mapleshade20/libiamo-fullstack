@@ -382,6 +382,7 @@ database.
 | `ADDRESS_HEADER` | – | Header holding the visitor's address; see [Visitor address](#visitor-address). Empty: none. |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on sign-in, sign-up, password reset and Profile's email and password changes. Both empty turns it off; setting only one refuses to start. |
 | `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, email change (requested and completed), password change or reset, and login-method link or unlink. Lines carry email addresses and IPs. |
+| `DISABLED_LANGUAGES` | – | Default empty. Comma-separated learning languages (`en`, `es`, `fr`, `ja`) that are opening soon: sign-up and the Hall's language switcher show them but refuse them with an "Opening soon" note. Learners already studying one are unaffected. Listing all four is ignored. |
 | `LLM_LAB` | – | Default `1`. `0` disables LLM tracing, staff prompt overrides and the Lab worker. |
 | `LLM_LAB_PROVIDERS` | – | JSON array of `{"id","label","baseUrl","apiKey","model"}` admins can pick in the Lab; never debits trial quota. |
 | `LLM_LAB_CONCURRENCY` | – | Default `3`. Parallel Lab run calls. |

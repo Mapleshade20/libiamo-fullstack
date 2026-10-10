@@ -1,10 +1,12 @@
 import { redirect } from "@sveltejs/kit";
 import { base } from "$app/paths";
+import { env } from "$env/dynamic/private";
 import { STREAK_DEPENDENCY, TRIAL_QUOTA_DEPENDENCY } from "$lib/app/load-dependencies";
 import { gravatarAvatarUrl } from "$lib/server/account/gravatar";
 import { getTrialQuotaBalance, hasUserApiKey } from "$lib/server/account/trial-quota";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
+import { disabledLanguages } from "$lib/server/env";
 import { devStreakDayOffset, getStreakRecord, isReviewQueueEmpty } from "$lib/server/streak";
 import type { LayoutServerLoad } from "./$types";
 
@@ -43,5 +45,6 @@ export const load: LayoutServerLoad = async (event) => {
 		streakQueueEmpty,
 		// Zero in production; `/streak-lab` sets it so the navbar travels with the server.
 		streakDayOffset: devStreakDayOffset(),
+		disabledLanguages: disabledLanguages(env.DISABLED_LANGUAGES),
 	};
 };

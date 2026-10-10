@@ -37,6 +37,7 @@ const data = {
 	streak: null,
 	streakQueueEmpty: true,
 	streakDayOffset: 0,
+	disabledLanguages: [],
 };
 
 describe("Profile page", () => {

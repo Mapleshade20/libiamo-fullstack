@@ -8,6 +8,7 @@ const data = {
 	socialProviders: ["google" as const, "github" as const],
 	captchaSiteKey: null,
 	socialAuthError: null,
+	disabledLanguages: [],
 };
 
 const renderPage = (form: { values?: Record<string, string> } | null = null) => render(SignUpPage, { props: { data, form: form as never } }).body;

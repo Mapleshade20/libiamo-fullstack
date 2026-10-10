@@ -81,6 +81,9 @@ export function isLanguageCode(value: unknown): value is LanguageCode {
 	return typeof value === "string" && LANGUAGE_CODES.includes(value as LanguageCode);
 }
 
+/** Shown beside a learning language switched off with `DISABLED_LANGUAGES` when someone picks it. */
+export const LANGUAGE_OPENING_SOON_HINT = "Opening soon";
+
 /** Task difficulty, and the level a learner picks for recommendations: one scale. */
 export const DIFFICULTY_LEVELS = [1, 2, 3] as const;
 export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
@@ -266,7 +269,7 @@ export const LINEUP_KIND_LABELS: Record<LineupKind, string> = {
 };
 
 /** Tasks each auto-filled lineup holds. */
-export const LINEUP_SIZE = 3;
+export const LINEUP_SIZE: Record<LineupKind, number> = { daily: 1, weekly: 3 };
 
 export const FEEDBACK_LANGUAGE_MODES = ["native", "target"] as const;
 export type FeedbackLanguageMode = (typeof FEEDBACK_LANGUAGE_MODES)[number];
