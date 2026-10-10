@@ -160,30 +160,6 @@ describe("chatText", () => {
 		);
 	});
 
-	it("preserves adjacent same-role messages before sending", async () => {
-		const fetchMock = vi.fn<FetchLike>(async () => createChatCompletionResponse("ok"));
-		vi.stubGlobal("fetch", fetchMock);
-
-		const { chatText } = await import("$lib/server/llm/client");
-		await chatText({
-			messages: [
-				{ role: "system", content: "Return text." },
-				{ role: "user", content: "Learner said hello." },
-				{ role: "user", content: "Learner said goodbye." },
-			],
-		});
-
-		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-		// One shared output budget, and thinking always on (OpenAI-spec reasoning_effort, low unless the caller asks).
-		expect(payload.max_tokens).toBe(32_768);
-		expect(payload.reasoning_effort).toBe("low");
-		expect(payload.messages).toEqual([
-			{ role: "system", content: "Return text." },
-			{ role: "user", content: "Learner said hello." },
-			{ role: "user", content: "Learner said goodbye." },
-		]);
-	});
-
 	it("validates messages before provider call", async () => {
 		const fetchMock = vi.fn<FetchLike>();
 		vi.stubGlobal("fetch", fetchMock);

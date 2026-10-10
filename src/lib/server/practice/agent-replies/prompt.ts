@@ -16,7 +16,6 @@ import {
 	buildSceneTranscript,
 	type ChatTaskFacts,
 	renderScenarioSetting,
-	renderTaskBrief,
 	type TranscriptEntry,
 	type TranscriptMessage,
 	tagged,
@@ -222,9 +221,9 @@ export const AGENT_REPLY_SLOTS: Readonly<Record<string, LlmSlotDefinition>> = {
 		label: "PARTICIPATION",
 		template: [
 			"You write {{participant}}, and only {{participant}}, in this turn. They are taking up the conversation on their own clock: they may answer, react briefly, ask something, carry on, or decline to post at all — partial participation and silence are normal.",
-			"- {{participant}} knows their own character notes, everything they themselves have posted, and everything the transcript shows in public.",
-			"- {{participant}} does not know what other participants' notes establish privately, and does not know the learner's situation beyond what the learner has actually written in the transcript, even where the setting or the notes mention it for consistency.",
-			"- When they lack the information: they ask, speculate as themselves with hedging, share their own experience, react briefly, or decline.",
+			"- {{participant}} knows their own side of the character notes — their role, their procedures, their own history — plus everything they themselves have posted and everything the transcript shows in public.",
+			"- What the notes record about the learner — their details, dates, amounts, or what they did — is background for consistency only: {{participant}} knows the learner's situation exactly as far as the learner has actually written it, and never states a detail of the learner's that the learner did not give. Missing information is asked for, not filled in.",
+			"- When they lack information: they ask for it, speculate as themselves with hedging, share their own experience, react briefly, or decline.",
 			"What CHARACTER NOTES say about {{participant}} overrides the drawn take and habits.",
 		].join("\n"),
 		variables: ["participant"],
@@ -281,7 +280,9 @@ export function buildAgentPromptSections(
 			: []),
 		{
 			name: "LEARNER'S BRIEF",
-			body: `Why the learner is here. It is not the cast's goal; do not steer them through it.\n${renderTaskBrief(task)}`,
+			// Content-free by design: the brief is the learner's private situation — often the very
+			// answers they are meant to communicate themselves — so none of it reaches the cast.
+			body: "The learner is here to practise communicating, and has a goal of their own. It is not the cast's goal: do not steer them through it, and do not work it out for them. The learner's situation is theirs to tell — the cast knows it only as far as the learner actually writes.",
 		},
 		...(style.length ? [{ name: "HOW PEOPLE WRITE HERE", body: style.join("\n") }] : []),
 		...(task.scene.group ? [{ name: "GROUP DYNAMICS", body: slot("dynamics", {}) }] : []),

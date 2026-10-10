@@ -27,7 +27,7 @@ describe("generateExpressions", () => {
 
 		expect(result).toEqual(["Could I have the check, please?", "Is this seat taken?"]);
 		const request = mockChatJson.mock.calls[0][0];
-		expect(request).toMatchObject({ schema: expect.anything(), options: { temperature: 0.7, reasoningEffort: "low" }, userId: "user-1" });
+		expect(request).toMatchObject({ schema: expect.anything(), options: { reasoningEffort: "low" }, userId: "user-1" });
 		expect(request.messages.map((message: { role: string }) => message.role)).toEqual(["system", "user"]);
 		// The task is this call's input; the system message stays the stable role and contract.
 		expect(request.messages[0].content).not.toContain("Ordering at a café");

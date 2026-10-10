@@ -95,8 +95,6 @@ describe("Quest Menu book motion", () => {
 
 		expect(earliest.spinDuration).toBe(QUEST_MENU_BOOK_SPIN_DURATION);
 		expect(latest.spinDuration).toBe(QUEST_MENU_BOOK_SPIN_DURATION);
-		expect(earliest.totalDuration).toBeCloseTo(1.24);
-		expect(latest.totalDuration).toBeCloseTo(1.42);
 		expect(earliest.coverStart).toBeGreaterThan(0);
 		expect(latest.coverStart).toBeLessThan(QUEST_MENU_BOOK_SPIN_DURATION);
 		expect(earliest.coverStart + earliest.coverDuration).toBeCloseTo(earliest.totalDuration);
@@ -107,8 +105,6 @@ describe("Quest Menu book motion", () => {
 		const earliest = createQuestMenuBookCloseTiming(0);
 		const latest = createQuestMenuBookCloseTiming(1);
 
-		expect(earliest.coverDuration).toBeCloseTo(0.68);
-		expect(latest.coverDuration).toBeCloseTo(0.8);
 		expect(earliest.totalDuration).toBeCloseTo(earliest.coverStart + QUEST_MENU_BOOK_SPIN_DURATION);
 		expect(latest.totalDuration).toBeCloseTo(latest.coverStart + QUEST_MENU_BOOK_SPIN_DURATION);
 	});

@@ -1125,7 +1125,7 @@ describe("world moment scheduling", () => {
 		expect([...never.inserts, ...outstanding.inserts, ...spent.inserts, ...expiring.inserts]).toEqual([]);
 	});
 
-	it("treats a unique-index violation from the hard guard as a no-op, not an error", async () => {
+	it("returns false when insertion reports a duplicate", async () => {
 		const { executor } = makeWorldExecutor();
 		(executor.insert as unknown as (table: unknown) => { values: () => Promise<never> }) = () => ({
 			values: () => Promise.reject(Object.assign(new Error("dup"), { code: "23505" })),

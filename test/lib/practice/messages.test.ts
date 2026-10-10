@@ -161,19 +161,12 @@ describe("buildChatMessages", () => {
 	it("resolves a threaded message by explicit ownership even when its reply lands top-level", () => {
 		// the protocol allows a reply to be delivered as a top-level comment: the explicit
 		// inputMessageId ownership decides, not the branch it happens to sit in
-		const answered = build([
+		const messages = build([
 			message(1, "user", "Question A", { clientMessageId: "m1", arrival: true, thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
 			message(2, "user", "Question B", { clientMessageId: "m2", arrival: true, thread: { commentId: "reddit-user-m2", targetCommentId: "c2" } }),
 			message(3, "assistant", "A's answer, delivered top level", { inputMessageId: 1, asyncDelivery: true }),
 		]);
-		expect(answered.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
-
-		// ownership naming another conversation resolves nothing
-		const elsewhere = build([
-			message(1, "user", "Question A", { clientMessageId: "m1", arrival: true, thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } }),
-			message(2, "assistant", "Another conversation's reply, top level", { inputMessageId: 7, asyncDelivery: true }),
-		]);
-		expect(elsewhere.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-1"]);
+		expect(messages.filter((entry) => entry.deliveryState === "pending").map((entry) => entry.id)).toEqual(["retry-2"]);
 	});
 
 	it("settles a marked delivery only by its ownership, never by the branch it sits in", () => {

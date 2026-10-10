@@ -232,12 +232,14 @@ describe("taker counts and allocation", () => {
 
 	it("keeps sibling sub-thread authors out of a branch reply's allocation", () => {
 		// Root comment with children A (alex) and B (bob); the learner answered A, so bob — who
-		// only spoke in the sibling branch — is not nearby for this exchange, while the addressed
-		// alex and the owner keep their own reasons to take it up.
+		// only spoke in the sibling branch — is not nearby for this exchange, and neither is luma,
+		// whose top-level comment is a different conversation entirely, while the addressed alex
+		// and the owner keep their own reasons to take it up.
 		const entries: TranscriptEntry[] = [
 			{ id: 1, role: "cast", author: "op", text: "root" },
 			{ id: 2, role: "cast", author: "alex", text: "A", replyTo: 1 },
 			{ id: 3, role: "cast", author: "bob", text: "B", replyTo: 1 },
+			{ id: 5, role: "cast", author: "luma", text: "Another top-level branch" },
 			learner(4, 2),
 		];
 		for (let seed = 0; seed < 60; seed += 1) {
@@ -249,10 +251,11 @@ describe("taker counts and allocation", () => {
 				learnerName: "Maple",
 				seed,
 				count: 3,
-				target: entries[3],
+				target: entries[4],
 			});
 			expect(participants.length).toBeGreaterThan(0);
 			expect(participants).not.toContain("bob");
+			expect(participants).not.toContain("luma");
 		}
 	});
 });

@@ -150,7 +150,9 @@ async function send(sending: MailDraftFields) {
 			</button>
 		</header>
 
-		<div class="grid min-h-0 flex-1 md:grid-cols-[minmax(260px,320px)_1fr] lg:grid-cols-[200px_minmax(280px,340px)_1fr]">
+		<div
+			class="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] lg:grid-cols-[200px_minmax(280px,340px)_minmax(0,1fr)]"
+		>
 			<nav class="hidden min-h-0 flex-col gap-0.5 border-r border-[#E5E5EA] bg-[#F2F2F5] p-2 lg:flex" aria-label={t.mailboxes}>
 				<p class="px-2 pt-1 pb-1.5 text-[11px] font-semibold text-[#8E8E93]">{t.mailboxes}</p>
 				{#each mailboxLinks as [ id, Icon, label, count ]}

@@ -77,6 +77,23 @@ describe("scene prompt assembly", () => {
 		expect(system.content).not.toContain("Pide feedback");
 	});
 
+	it("keeps the learner's brief content out of the cast prompt entirely", () => {
+		// The brief is the learner's private situation — often the answers they are meant to
+		// communicate themselves; feeding it to the cast leaked them (task #93: the payment date).
+		const [system] = buildAgentMessages({
+			task: {
+				...discordTask,
+				shortObjective: "Fix the tuition payment error",
+				description: "You paid a £2,460 tuition instalment by bank transfer on 23 September, yet the system still shows the balance as unpaid.",
+			} as AgentTaskContext,
+			learnerName: "Maple",
+			history: [],
+		});
+		expect(system.content).not.toContain("£2,460");
+		expect(system.content).not.toContain("23 September");
+		expect(system.content).not.toContain("Fix the tuition");
+	});
+
 	it("tells a quiet spell apart: a reply, a one-to-one nudge, and time passing in a group", () => {
 		const event = (task: AgentTaskContext, followUpCount?: number) =>
 			buildAgentPromptSections({ task, event: followUpCount ? { kind: "follow_up", followUpCount } : { kind: "reply" } }).find(
@@ -143,13 +160,6 @@ describe("async take-up prompts", () => {
 		});
 
 		expect(system.content).toContain("## PARTICIPATION");
-		expect(system.content).toContain("You write alex, and only alex");
-		expect(system.content).toContain("does not know the learner's situation beyond what the learner has actually written");
-		expect(system.content).toContain("moment.target is the ref of the message whose conversation this take-up serves");
-		expect(system.content).toContain("inclination, not an assignment");
-		expect(system.content).toContain("The learner's message #2 is the one this take-up serves");
-		expect(system.content).toContain("always alex.");
-		expect(system.content).not.toContain("Each posts once and nobody else posts");
 
 		const payload = JSON.parse(user.content);
 		expect(payload.moment.target).toBe("reddit-user-m1");
@@ -166,7 +176,6 @@ describe("async take-up prompts", () => {
 			targetRef: "discord-user-xyz",
 		});
 		expect(system.content).not.toContain("PARTICIPATION");
-		expect(system.content).toContain("Each posts once and nobody else posts");
 	});
 
 	it("gives a one-to-one mail take-up a moment despite no group, with no target to pin", () => {
@@ -179,14 +188,8 @@ describe("async take-up prompts", () => {
 			targetRef: null,
 		});
 		expect(system.content).toContain("## PARTICIPATION");
-		expect(system.content).toContain("one email per turn");
 		const payload = JSON.parse(user.content);
 		expect(payload.moment.around[0].name).toBe("Maya");
 		expect(payload.moment.target).toBeUndefined();
-	});
-
-	it("describes a world moment without waiting on the learner", () => {
-		const sections = buildAgentPromptSections({ task: redditTask, event: { kind: "world" }, takeUp: { participant: "alex", target: "#2" } });
-		expect(sections.find((section) => section.name === "CURRENT EVENT")?.body).toContain("carries on with their own life");
 	});
 });

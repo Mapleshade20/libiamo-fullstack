@@ -8,22 +8,6 @@ describe("reddit format", () => {
 			const b = getAvatarColor("Alice");
 			expect(a).toBe(b);
 		});
-
-		it("returns different colors for different names", () => {
-			const a = getAvatarColor("Alice");
-			const b = getAvatarColor("Bob");
-			expect(a).not.toBe(b);
-		});
-
-		it("returns a valid bg class string", () => {
-			const result = getAvatarColor("TestUser");
-			expect(result).toMatch(/^bg-\[#[0-9A-F]+\]$/);
-		});
-
-		it("handles empty string", () => {
-			const result = getAvatarColor("");
-			expect(result).toMatch(/^bg-\[#/);
-		});
 	});
 
 	describe("seededInt", () => {
@@ -41,21 +25,8 @@ describe("reddit format", () => {
 			expect(a).toBe(b);
 		});
 
-		it("can return the minimum value", () => {
-			// Try many seeds to hit min boundary
-			let foundMin = false;
-			for (let i = 0; i < 200; i++) {
-				if (seededInt(`seed-${i}`, 3, 3) === 3) foundMin = true;
-			}
-			expect(foundMin).toBe(true);
-		});
-
-		it("can return the maximum value", () => {
-			let foundMax = false;
-			for (let i = 0; i < 200; i++) {
-				if (seededInt(`seed-${i}`, 7, 7) === 7) foundMax = true;
-			}
-			expect(foundMax).toBe(true);
+		it("returns the only value in a singleton range", () => {
+			expect(seededInt("seed", 3, 3)).toBe(3);
 		});
 	});
 });

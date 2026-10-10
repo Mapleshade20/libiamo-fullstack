@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as floor from "$lib/server/practice/agent-replies/floor";
 
 const USER_ID = "test-user-id";
 
@@ -738,6 +739,7 @@ describe("session service", () => {
 		});
 
 		it("opens a reddit exchange with a taker set pinned to its conversation target", async () => {
+			const allocate = vi.spyOn(floor, "allocateParticipants");
 			mockAsyncSelect();
 			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.9);
 			mockDb.query.practiceSession.findFirst.mockResolvedValue({
@@ -764,6 +766,8 @@ describe("session service", () => {
 				userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
 			});
 
+			expect(allocate.mock.calls[0][0].target).toMatchObject({ role: "learner", text: "Same here" });
+			allocate.mockRestore();
 			const takers = inserts.filter((insert) => insert.kind === "reply");
 			expect(takers.length).toBeGreaterThanOrEqual(1);
 			for (const taker of takers) {
@@ -882,52 +886,6 @@ describe("session service", () => {
 			expect(takers).toHaveLength(1);
 			expect(takers[0]).toMatchObject({ kind: "reply", attempt: 1, inputMessageId: 1, targetRef: "reddit-user-m1" });
 			expect(takers[0]?.participant).not.toBe("alex");
-		});
-
-		it("scopes the allocation to the learner's own message, not the comment it answers", async () => {
-			// luma spoke only in another top-level branch: a reply to alex's comment must
-			// not reach her through the top-level widening.
-			mockAsyncSelect();
-			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.9);
-			mockDb.query.practiceSession.findFirst.mockResolvedValue({
-				id: 123,
-				userId: USER_ID,
-				status: "in_progress",
-				task: {
-					...redditTask,
-					openingState: {
-						post: { author: "op" },
-						previousComments: [
-							{ id: "c1", author: "alex", text: "Voice scams." },
-							{ id: "c2", author: "luma", text: "Other branch." },
-						],
-					},
-				},
-				messages: [],
-				expiresAt: new Date(now.getTime() + 3_600_000),
-			});
-			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
-			const inserts: Record<string, unknown>[] = [];
-			mockDb.insert.mockImplementation(
-				() =>
-					({
-						values: vi.fn((values: Record<string, unknown>) => {
-							inserts.push(values);
-							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
-						}),
-					}) as unknown as ReturnType<typeof mockDb.insert>,
-			);
-
-			// fixed seed 4 drew luma under the old allocation target; every seed must scope to the branch
-			for (const seedArgument of [4, 5, 6]) {
-				await submitMessage(123, "Same here", USER_ID, `m-${seedArgument}`, {
-					userMetadata: { thread: { commentId: `reddit-user-m-${seedArgument}`, targetCommentId: "c1" } },
-				});
-			}
-			const participants = inserts.map((insert) => insert.participant);
-			expect(participants.length).toBeGreaterThanOrEqual(1);
-			expect(participants).not.toContain("luma");
-			random.mockRestore();
 		});
 
 		it("keeps the joined conversation's target for a participant the supplement addresses", async () => {

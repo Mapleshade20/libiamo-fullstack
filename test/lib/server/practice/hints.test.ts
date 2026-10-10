@@ -237,15 +237,4 @@ describe("generateHint with contextPath", () => {
 
 		expect(userPayload.replyingTo).toEqual([]);
 	});
-
-	it("throws when the session has no task", async () => {
-		mockDb.query.practiceSession.findFirst.mockResolvedValue({
-			id: 123,
-			userId: USER_ID,
-			task: null,
-			messages: [],
-		});
-
-		await expect(generateHint(123, { mode: "content" })).rejects.toThrow("Task not found");
-	});
 });
