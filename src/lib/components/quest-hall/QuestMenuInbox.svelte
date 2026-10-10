@@ -128,7 +128,16 @@ function publishedOn(date: Date): string {
 								class="summary"
 								aria-expanded={open}
 								aria-controls="announcement-{announcement.id}-detail"
-								onclick={() => toggle(announcement.id)}
+								onpointerdown={(event) => { pointerType = event.pointerType; }}
+								onclick={(event) => {
+									// The first touch/keyboard activation exposes the stack, as reply cards do.
+									if (openId === null && !expanded && (pointerType !== "mouse" || event.detail === 0)) expanded = true;
+									else toggle(announcement.id);
+									pointerType = "";
+								}}
+								onkeydown={(event) => {
+									if (event.key === "ArrowDown" && openId === null) { event.preventDefault(); expanded = true; }
+								}}
 							>
 								<span class="icon"><Megaphone size={20} aria-hidden="true" /></span>
 								<span class="copy">

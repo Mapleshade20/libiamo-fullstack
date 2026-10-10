@@ -8,7 +8,8 @@ import { type AuthAccountStore, createAccountDeleteHook } from "$lib/server/auth
 import { clientIp, logAuthEvent } from "$lib/server/auth/audit";
 import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, CAPTCHA_PROTECTED_PATHS, captchaConfig, verifyCaptcha } from "$lib/server/auth/captcha";
 import { emailVerificationHtml, resetPasswordHtml, sendEmail } from "$lib/server/auth/email";
-import { configuredSocialProviders, prepareOAuthUser } from "$lib/server/auth/social";
+import { configuredSocialProviders, prepareSignupUser } from "$lib/server/auth/social";
+import { disabledLanguages } from "$lib/server/env";
 
 type Environment = Record<string, string | undefined>;
 
@@ -168,7 +169,7 @@ export function createAuthOptions(env: Environment, { accountStore, requestHeade
 						if (typeof user.email !== "string" || !isTrustedEmailDomain(user.email)) {
 							throw new APIError("BAD_REQUEST", { code: "UNTRUSTED_EMAIL_DOMAIN", message: UNTRUSTED_EMAIL_DOMAIN_MESSAGE });
 						}
-						return prepareOAuthUser(user);
+						return prepareSignupUser(user, disabledLanguages(env.DISABLED_LANGUAGES));
 					},
 					after: async (user, ctx) => {
 						if (ctx) signUps.add(ctx);
