@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { env } from "$env/dynamic/private";
 import { nextTrialRelease, releasedTrialTokens, type TrialQuotaBalance, type TrialQuotaWarning, trialQuotaWarning } from "$lib/account/trial-release";
+import { trialEmailKey } from "$lib/auth/email-domain";
 import { db } from "../db";
 import { user, userApiKey, userQuota } from "../db/schema";
 
@@ -86,20 +87,39 @@ function findQuotaRow(userId: string): Promise<QuotaRow | undefined> {
 	});
 }
 
+/**
+ * One grant per mailbox: the row records the owner's `trialEmailKey`, whose unique constraint turns
+ * away aliases of an inbox that already has a grant. Those accounts get a row without one instead.
+ */
 async function createQuotaRow(userId: string, now: Date): Promise<QuotaRow> {
 	// The release clock starts at sign-up, not at the first visit that happens to create this row.
-	const owner = await db.query.user.findFirst({ where: eq(user.id, userId), columns: { createdAt: true } });
+	const owner = await db.query.user.findFirst({ where: eq(user.id, userId), columns: { createdAt: true, email: true } });
 	const startedAt = owner?.createdAt ?? now;
 	const budget = getTrialTokenBudget();
 	const released = releasedTrialTokens(budget, startedAt, now);
 	const [inserted] = await db
 		.insert(userQuota)
-		.values({ userId, trialTokensLeft: released, trialTokensTotal: budget, trialTokensReleased: released, trialReleaseStartedAt: startedAt })
+		.values({
+			userId,
+			trialTokensLeft: released,
+			trialTokensTotal: budget,
+			trialTokensReleased: released,
+			trialReleaseStartedAt: startedAt,
+			trialEmailKey: owner ? trialEmailKey(owner.email) : null,
+		})
 		.onConflictDoNothing()
 		.returning(quotaColumns);
 	if (inserted) return inserted;
 
-	const row = await findQuotaRow(userId);
+	// Either a concurrent request created this user's row, or the mailbox's grant belongs to another account.
+	const existing = await findQuotaRow(userId);
+	if (existing) return existing;
+	const [empty] = await db
+		.insert(userQuota)
+		.values({ userId, trialTokensLeft: 0, trialTokensTotal: 0, trialTokensReleased: 0, trialReleaseStartedAt: startedAt })
+		.onConflictDoNothing()
+		.returning(quotaColumns);
+	const row = empty ?? (await findQuotaRow(userId));
 	if (!row) throw new Error("Failed to initialize trial quota");
 	return row;
 }

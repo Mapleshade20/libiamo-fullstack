@@ -128,8 +128,7 @@ export const es: Record<keyof typeof en, string> = {
 	"profile.changeEmail": "Cambiar correo",
 	"profile.newEmail": "Nuevo correo",
 	"profile.emailProvidersLabel": "Proveedores de correo aceptados",
-	"profile.emailProviders":
-		"Aceptamos direcciones de Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina y de centros educativos (edu).",
+	"profile.emailProviders": "Aceptamos direcciones de Gmail, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina y de centros educativos (edu).",
 	"profile.changeEmailHelp": "El correo cambiará cuando verifiques la nueva dirección.",
 	"profile.emailChangeSent":
 		"Si la dirección está disponible, se ha enviado un enlace. Revisa la bandeja de entrada y el correo no deseado. No se envía si otra cuenta ya la usa.",

@@ -7,7 +7,7 @@ import { onDestroy, onMount, tick } from "svelte";
 import { enhance } from "$app/forms";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { base } from "$app/paths";
-import { trialQuotaWarning } from "$lib/account/trial-release";
+import { trialQuotaPercent, trialQuotaWarning } from "$lib/account/trial-release";
 import { checkPasswordStrength, preloadPasswordStrength } from "$lib/auth/password-strength";
 import type { AccountActionResult, SocialAuthFailure, SocialProviderId } from "$lib/auth/social";
 import { handleInvalidField } from "$lib/client/form-attention";
@@ -235,9 +235,7 @@ function formatConnectedAt(isoDate: string) {
 	return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeZone: clock().timeZone }).format(new Date(isoDate));
 }
 
-let trialPercent = $derived(
-	data.trialQuota ? Math.max(0, Math.min(100, Math.round((data.trialQuota.trialTokensLeft / data.trialQuota.trialTokensTotal) * 100))) : 0,
-);
+let trialPercent = $derived(data.trialQuota ? trialQuotaPercent(data.trialQuota) : 0);
 let trialTone = $derived((data.trialQuota && trialQuotaWarning(data.trialQuota)) ?? "normal");
 let trialNextRelease = $derived(
 	data.trialQuota?.trialNextReleaseAt

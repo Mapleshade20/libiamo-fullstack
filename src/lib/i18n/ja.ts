@@ -125,7 +125,7 @@ export const ja: Record<keyof typeof en, string> = {
 	"profile.changeEmail": "メールアドレスを変更",
 	"profile.newEmail": "新しいメールアドレス",
 	"profile.emailProvidersLabel": "利用できるメールサービス",
-	"profile.emailProviders": "Gmail、iCloud、Apple、Microsoft、Yahoo、QQ、Foxmail、126、163、Sina、教育機関（edu）のアドレスを利用できます。",
+	"profile.emailProviders": "Gmail、Apple、Microsoft、Yahoo、QQ、Foxmail、126、163、Sina、教育機関（edu）のアドレスを利用できます。",
 	"profile.changeEmailHelp": "新しいメールアドレスの確認後に変更されます。",
 	"profile.emailChangeSent":
 		"利用可能なアドレスの場合、確認リンクを送信しました。受信箱と迷惑メールをご確認ください。他のアカウントが使用中の場合は送信されません。",

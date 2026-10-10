@@ -14,7 +14,8 @@ export function releasedTrialTokens(total: number, startedAt: Date, now: Date): 
 /** The next part still to come, or null once everything is released. */
 export function nextTrialRelease(total: number, startedAt: Date, now: Date): { at: Date; tokens: number } | null {
 	const parts = releasedTrialParts(startedAt, now);
-	if (parts >= TRIAL_RELEASE_PARTS) return null;
+	// An account without a grant (see `trialEmailKey`) has nothing coming.
+	if (parts >= TRIAL_RELEASE_PARTS || total <= 0) return null;
 	return {
 		at: new Date(startedAt.getTime() + parts * TRIAL_RELEASE_INTERVAL_MS),
 		tokens: trialTokensForParts(total, parts + 1) - trialTokensForParts(total, parts),
@@ -49,4 +50,10 @@ export function trialQuotaWarning(balance: TrialQuotaBalance): TrialQuotaWarning
 	if (balance.trialNextReleaseAt) return null;
 	if (balance.trialTokensLeft <= Math.floor(balance.trialTokensTotal * 0.1)) return "low";
 	return null;
+}
+
+/** What is left as a whole percentage of the grant; an account without a grant has 0%. */
+export function trialQuotaPercent(balance: TrialQuotaBalance): number {
+	if (balance.trialTokensTotal <= 0) return 0;
+	return Math.max(0, Math.min(100, Math.round((balance.trialTokensLeft / balance.trialTokensTotal) * 100)));
 }

@@ -13,7 +13,12 @@ import { type AgentEvent, isThreadedUi } from "$lib/server/practice/agent-replie
 
 export const DEFAULT_WORKER_SCAN_INTERVAL_MS = 1_000;
 export const DEFAULT_WORKER_LEASE_MS = 30_000;
-export const DEFAULT_WORKER_CONCURRENCY = 2;
+/**
+ * A safety ceiling on generations in flight, not a queue: a generation only waits on the provider
+ * and holds no database connection, so fairness comes from one generation per learner at a time
+ * (see `claimDueBatch`), and every call is bounded by `LLM_REQUEST_TIMEOUT_MS`.
+ */
+export const DEFAULT_WORKER_CONCURRENCY = 200;
 export const DEFAULT_WORKER_RETRY_BACKOFF_MS = 60_000;
 export const MAX_GENERATION_ATTEMPTS = 3;
 
@@ -268,10 +273,17 @@ export class AgentReplyWorker {
 			UPDATE agent_response_batch
 			SET status = 'processing', worker_id = ${this.workerId}, claim_token = ${claimToken}, claimed_at = ${now.toISOString()}::timestamp, lease_expires_at = ${leaseExpiresAt.toISOString()}::timestamp, generation_count = generation_count + 1
 			WHERE id = (
-				SELECT id FROM agent_response_batch
-				WHERE status = 'pending' AND due_at <= ${now.toISOString()}::timestamp
-				ORDER BY due_at ASC, id ASC
-				FOR UPDATE SKIP LOCKED
+				SELECT b.id FROM agent_response_batch b
+				JOIN practice_session s ON s.id = b.session_id
+				WHERE b.status = 'pending' AND b.due_at <= ${now.toISOString()}::timestamp
+					-- One generation per learner at a time, so nobody's backlog holds up everyone else's replies.
+					AND NOT EXISTS (
+						SELECT 1 FROM agent_response_batch busy
+						JOIN practice_session busy_session ON busy_session.id = busy.session_id
+						WHERE busy.status = 'processing' AND busy_session.user_id = s.user_id
+					)
+				ORDER BY b.due_at ASC, b.id ASC
+				FOR UPDATE OF b SKIP LOCKED
 				LIMIT 1
 			)
 			RETURNING id

@@ -17,6 +17,10 @@ export const AUTH_TOKEN_MAX_LENGTH = 2048;
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_TEXT_MAX_LENGTH = 10000;
 export const USER_LONG_TEXT_MAX_LENGTH = 50000;
+/** A task's opening state as JSON; its per-field limits do not bound how many messages or comments it holds. */
+export const TASK_OPENING_STATE_MAX_LENGTH = 200_000;
+/** Contributed tasks a learner may have waiting for review at once; reviewing one frees a place. */
+export const PENDING_CONTRIBUTION_LIMIT = 5;
 export const BYOK_API_KEY_MAX_LENGTH = 2048;
 export const BYOK_MODEL_MAX_LENGTH = 512;
 export const CLIENT_MESSAGE_ID_MAX_LENGTH = 256;

@@ -8,6 +8,7 @@ import {
 	LINEUP_KINDS,
 	MAIL_TEXT_MAX_LENGTH,
 	PRACTICE_UI_TEXT_MAX_LENGTH,
+	TASK_OPENING_STATE_MAX_LENGTH,
 	UI_VARIANTS,
 	URGENCIES,
 	USER_LONG_TEXT_MAX_LENGTH,
@@ -58,15 +59,21 @@ const optionalCount = z.preprocess((value) => {
 }, z.number().int().positive().nullable());
 
 /** Opening state arrives as a JSON string from the editor and as an object from JSON import. */
-const openingStateInput = z.preprocess((value) => {
-	if (typeof value !== "string") return value ?? null;
-	if (!value.trim()) return null;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return value;
-	}
-}, z.record(z.string(), z.unknown()).nullable());
+const openingStateInput = z.preprocess(
+	(value) => {
+		if (typeof value !== "string") return value ?? null;
+		if (!value.trim()) return null;
+		try {
+			return JSON.parse(value);
+		} catch {
+			return value;
+		}
+	},
+	z
+		.record(z.string(), z.unknown())
+		.nullable()
+		.refine((value) => value === null || JSON.stringify(value).length <= TASK_OPENING_STATE_MAX_LENGTH, "Opening state is too large"),
+);
 
 /** The real conversation a task was cut from: JSON from the form's hidden field, an object from JSON import. */
 const sourceInput = z.preprocess(

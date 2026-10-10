@@ -341,6 +341,22 @@ describe("chatText", () => {
 		await expect(chatText({ messages: [{ role: "system", content: "hi" }] })).rejects.toThrow("Could not connect to the AI provider");
 	});
 
+	it("abandons a call the provider has not answered in time", async () => {
+		const { chatText, LLM_REQUEST_TIMEOUT_MS } = await import("$lib/server/llm/client");
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<FetchLike>(
+				(_input, init) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason))),
+			),
+		);
+		const call = chatText({ messages: [{ role: "system", content: "hi" }] }).catch((error: unknown) => error);
+		await vi.advanceTimersByTimeAsync(LLM_REQUEST_TIMEOUT_MS);
+		const error = await call;
+		vi.useRealTimers();
+		expect(error).toMatchObject({ status: 504 });
+	});
+
 	it("keeps the finish reason and usage of an empty response for tracing", async () => {
 		const { chatText } = await import("$lib/server/llm/client");
 		vi.stubGlobal(

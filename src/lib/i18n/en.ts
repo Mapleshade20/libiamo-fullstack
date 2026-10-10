@@ -128,7 +128,7 @@ export const en = {
 	"profile.changeEmail": "Change email",
 	"profile.newEmail": "New email",
 	"profile.emailProvidersLabel": "Accepted email providers",
-	"profile.emailProviders": "We accept Gmail, iCloud, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina and school (edu) addresses.",
+	"profile.emailProviders": "We accept Gmail, Apple, Microsoft, Yahoo, QQ, Foxmail, 126, 163, Sina and school (edu) addresses.",
 	"profile.changeEmailHelp": "Your email changes after you verify the new address.",
 	"profile.emailChangeSent":
 		"If this address is available, a verification link has been sent. Check its inbox and spam folder. No email will be sent if another account already uses it.",

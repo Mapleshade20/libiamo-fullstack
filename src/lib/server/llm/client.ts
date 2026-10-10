@@ -71,6 +71,11 @@ export type ChatOptions = {
 
 /** One output budget for every call: reasoning tokens count against it, so small caps starve the answer. */
 export const MAX_OUTPUT_TOKENS = 32_768;
+/**
+ * How long one provider call may take before it is abandoned. Without it the SDK waits ten minutes,
+ * and a hung or very slow provider holds a worker slot and a connection for all that time.
+ */
+export const LLM_REQUEST_TIMEOUT_MS = 150_000;
 const DEFAULT_REASONING_EFFORT: ReasoningEffort = "low";
 
 export type ChatResponse = {
@@ -145,10 +150,14 @@ export type ChatTool = ChatCompletionTool;
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 
+let derivedKey: { secret: string; key: Buffer } | null = null;
+
+/** scrypt is deliberately slow and blocks the event loop, so it runs once per secret, not per BYOK call. */
 function deriveKey(): Buffer {
 	const secret = env.BETTER_AUTH_SECRET;
 	if (!secret) throw new Error("BETTER_AUTH_SECRET is not set");
-	return crypto.scryptSync(secret, "libiamo-api-key-salt", 32);
+	if (derivedKey?.secret !== secret) derivedKey = { secret, key: crypto.scryptSync(secret, "libiamo-api-key-salt", 32) };
+	return derivedKey.key;
 }
 
 export function encryptApiKey(plaintext: string): string {
@@ -322,6 +331,7 @@ function createOpenAIClient(config: OpenAIConfig) {
 		apiKey: config.apiKey,
 		baseURL: config.baseUrl,
 		maxRetries: 0,
+		timeout: LLM_REQUEST_TIMEOUT_MS,
 	});
 }
 
@@ -632,6 +642,9 @@ function completionUsage(completion: ChatCompletion): ChatUsage | undefined {
 }
 
 function normalizeOpenAIError(error: unknown): Error {
+	if (error instanceof OpenAI.APIConnectionTimeoutError) {
+		return new LlmProviderError("The AI provider took too long to respond. Please try again.", 504);
+	}
 	if (error instanceof OpenAI.APIConnectionError) {
 		return new LlmProviderError("Could not connect to the AI provider. Please try again.", 503);
 	}

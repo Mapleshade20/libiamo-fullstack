@@ -1,30 +1,43 @@
 import type { ActionFailure } from "@sveltejs/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PENDING_CONTRIBUTION_LIMIT, PRACTICE_UI_TEXT_MAX_LENGTH, TASK_OPENING_STATE_MAX_LENGTH } from "$lib/constants";
 import { actions, load } from "$routes/(app)/contribute/+page.server";
 
 // ── Hoisted mock factories ───────────────────────────────────────────────
 
-const { mockInsert, mockValues } = vi.hoisted(() => {
+const { mockInsert, mockValues, mockTransaction, pendingCount } = vi.hoisted(() => {
 	const mockValues = vi.fn();
 	const mockInsert = vi.fn(() => ({ values: mockValues }));
-	return { mockInsert, mockValues };
+	const pendingCount = { value: 0 };
+	const lockedUser = vi.fn();
+	// The user-row lock ends in `.for("update")`; the pending count is awaited directly.
+	const where = () => Object.assign(Promise.resolve([{ pending: pendingCount.value }]), { for: lockedUser });
+	const tx = { select: vi.fn(() => ({ from: vi.fn(() => ({ where })) })), insert: mockInsert };
+	const mockTransaction = vi.fn(async (run: (transaction: typeof tx) => unknown) => run(tx));
+	return { mockInsert, mockValues, mockTransaction, pendingCount };
 });
 
 vi.mock("drizzle-orm", () => {
 	const eq = vi.fn(() => "eq");
+	const and = vi.fn(() => "and");
 	const desc = vi.fn(() => "desc");
-	return { eq, desc };
+	const count = vi.fn(() => "count");
+	return { and, count, eq, desc };
 });
 
 vi.mock("$lib/server/db", () => ({
 	db: {
-		insert: mockInsert,
+		transaction: mockTransaction,
 		select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn().mockResolvedValue([]) })) })) })),
 	},
 }));
 
 vi.mock("$lib/server/db/schema", () => ({
 	taskContribution: {},
+}));
+
+vi.mock("$lib/server/db/auth.schema", () => ({
+	user: {},
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -59,6 +72,7 @@ const validEntries: Record<string, string> = {
 describe("Contribute +page.server", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		pendingCount.value = 0;
 	});
 
 	describe("load", () => {
@@ -173,6 +187,27 @@ describe("Contribute +page.server", () => {
 
 			expect(result.status).toBe(400);
 			expect(result.data?.errors?.openingState).toBeDefined();
+			expect(mockInsert).not.toHaveBeenCalled();
+		});
+
+		it("refuses an opening state too large to review", async () => {
+			const text = "x".repeat(PRACTICE_UI_TEXT_MAX_LENGTH);
+			const previousMessages = Array.from({ length: Math.ceil(TASK_OPENING_STATE_MAX_LENGTH / text.length) + 1 }, () => ({ sender: "Sam", text }));
+			const event = createEvent({ ...validEntries, openingState: JSON.stringify({ previousMessages }) });
+
+			const result = (await actions.default(event)) as ActionFailure<any>;
+
+			expect(result.status).toBe(400);
+			expect(result.data?.errors?.openingState).toBeDefined();
+			expect(mockInsert).not.toHaveBeenCalled();
+		});
+
+		it("refuses a submission while the learner's review queue is full", async () => {
+			pendingCount.value = PENDING_CONTRIBUTION_LIMIT;
+			const result = (await actions.default(createEvent(validEntries))) as ActionFailure<any>;
+
+			expect(result.status).toBe(429);
+			expect(result.data?.message).toBeDefined();
 			expect(mockInsert).not.toHaveBeenCalled();
 		});
 
