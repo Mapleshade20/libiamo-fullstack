@@ -37,7 +37,7 @@ const initials = $derived(
 );
 </script>
 
-<section class="flex min-h-0 flex-col {hidden ? 'max-md:hidden' : ''}">
+<section class="flex min-h-0 min-w-0 flex-col {hidden ? 'max-md:hidden' : ''}">
 	{#if item}
 		<article class="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-8" aria-labelledby="mail-reader-subject">
 			<div class="flex items-start gap-3 border-b border-[#E5E5EA] pb-4">
@@ -52,7 +52,7 @@ const initials = $derived(
 					{#if item.to}
 						<p class="truncate text-sm text-[#6E6E73]">{t.to} {item.to}</p>
 					{/if}
-					<h2 id="mail-reader-subject" class="mt-1 text-lg leading-snug font-semibold">{item.subject || t.noSubject}</h2>
+					<h2 id="mail-reader-subject" class="mt-1 text-lg leading-snug font-semibold wrap-anywhere">{item.subject || t.noSubject}</h2>
 				</div>
 				<div class="flex shrink-0 flex-col items-end gap-1">
 					<span class="text-xs text-[#8E8E93]">{item.time || translate(language, "practice.earlier")}</span>
@@ -69,7 +69,7 @@ const initials = $derived(
 					{/if}
 				</div>
 			</div>
-			<div class="pt-5 text-[15px] leading-7 break-words whitespace-pre-wrap">{item.body}</div>
+			<div class="pt-5 text-[15px] leading-7 wrap-anywhere whitespace-pre-wrap">{item.body}</div>
 		</article>
 	{:else}
 		<div class="flex flex-1 flex-col items-center justify-center gap-3 p-6">

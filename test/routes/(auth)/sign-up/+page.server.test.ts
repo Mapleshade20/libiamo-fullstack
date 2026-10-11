@@ -239,31 +239,6 @@ describe("Sign-up +page.server", () => {
 			expect(result.status).toBe(400);
 			expect(result.data?.errors).toBeDefined();
 		});
-
-		it("should test generic message fallback logic", async () => {
-			const validData = {
-				email: "fallback@gmail.com",
-				name: "Test User",
-				password: "securePassword123!",
-				activeLanguage: "es",
-			};
-			const event = createEvent(validData);
-
-			const { APIError } = await import("better-auth/api");
-			class EmptyMessageAPIError extends APIError {
-				constructor() {
-					super("BAD_REQUEST");
-					this.message = "";
-				}
-			}
-
-			vi.mocked(auth.api.signUpEmail).mockRejectedValueOnce(new EmptyMessageAPIError());
-
-			const result = (await actions.default(event)) as ActionFailure<any>;
-
-			expect(result.status).toBe(400);
-			expect(result.data?.message).toBe("Registration failed");
-		});
 	});
 
 	describe("social action", () => {

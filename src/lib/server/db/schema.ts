@@ -288,6 +288,12 @@ export const agentResponseBatch = pgTable(
 		dueAt: timestamp("due_at").notNull(),
 		inputMessageId: integer("input_message_id"),
 		inputVersion: integer("input_version").default(0).notNull(),
+		/** The comment ref of the message this conversation serves; null for world moments, non-threaded surfaces and pre-migration rows. */
+		targetRef: text("target_ref"),
+		/** The cast member who takes up this opportunity; written at creation, never redrawn. */
+		participant: text("participant"),
+		/** The attempt number of the input message this batch serves (settlement scopes siblings by it). */
+		attempt: integer("attempt").default(0).notNull(),
 		workerId: text("worker_id"),
 		claimToken: text("claim_token"),
 		claimedAt: timestamp("claimed_at"),
@@ -309,6 +315,14 @@ export const agentResponseBatch = pgTable(
 		check("agent_response_batch_input_version_check", sql`${t.inputVersion} >= 0`),
 		check("agent_response_batch_generation_count_check", sql`${t.generationCount} >= 0`),
 		check("agent_response_batch_stale_count_check", sql`${t.staleCount} >= 0`),
+		// At most one outstanding world batch per session. The predicate names the pre-existing
+		// kinds instead of `kind = 'world'` because Postgres forbids using an enum value added in
+		// the same transaction inside an index predicate, and drizzle applies all pending
+		// migrations in one transaction. Update it when adding a kind: it must keep meaning
+		// "world batches only".
+		uniqueIndex("agent_response_batch_world_outstanding_idx")
+			.on(t.sessionId)
+			.where(sql`${t.kind} not in ('opening', 'reply', 'follow_up') and ${t.status} in ('pending', 'processing', 'stale', 'delivery_pending')`),
 	],
 );
 

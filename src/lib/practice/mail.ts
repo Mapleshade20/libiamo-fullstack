@@ -56,12 +56,25 @@ export function parseMailMessage(content: string): MailDraft {
 	};
 }
 
+const MAIL_HEADER_LINE = /^(subject|from|to|cc|bcc|date)\s*:/i;
+
+/** Whether a line reads as an email header (`Subject:`, `From:`, ...). */
+export function isMailHeaderLine(line: string): boolean {
+	return MAIL_HEADER_LINE.test(line.trim());
+}
+
+/** A text's lines and where its body starts, past any leading header lines and blank lines. */
+export function splitMailHeaders(text: string): { lines: string[]; bodyStart: number } {
+	const lines = text.replace(/\r\n?/g, "\n").split("\n");
+	let bodyStart = 0;
+	while (bodyStart < lines.length && (isMailHeaderLine(lines[bodyStart]) || lines[bodyStart].trim() === "")) bodyStart += 1;
+	return { lines, bodyStart };
+}
+
 /** Agent replies are bodies only; a model that still writes header lines has them dropped. */
 export function stripMailHeaders(text: string): string {
-	const lines = text.replace(/\r\n?/g, "\n").split("\n");
-	let start = 0;
-	while (start < lines.length && (/^(subject|from|to|cc|bcc|date)\s*:/i.test(lines[start].trim()) || lines[start].trim() === "")) start += 1;
-	return lines.slice(start).join("\n").trim() || text.trim();
+	const { lines, bodyStart } = splitMailHeaders(text);
+	return lines.slice(bodyStart).join("\n").trim() || text.trim();
 }
 
 export function replySubject(subject: string): string {

@@ -24,13 +24,20 @@ describe("conversation read receipts", () => {
 		expect(mocks.acknowledge).not.toHaveBeenCalled();
 	});
 	it("reports a message the reader does not own as missing", async () => {
-		mocks.acknowledge.mockResolvedValue(false);
+		mocks.acknowledge.mockResolvedValue({ acknowledged: false, worldScheduled: false });
 		expect((await post({ sessionId: 1, messageId: 2 })).status).toBe(404);
 	});
 	it("acknowledges the displayed snapshot, not newer arrivals", async () => {
-		mocks.acknowledge.mockResolvedValue(true);
-		expect((await post({ sessionId: 1, messageId: 2 })).status).toBe(204);
+		mocks.acknowledge.mockResolvedValue({ acknowledged: true, worldScheduled: false });
+		const response = await post({ sessionId: 1, messageId: 2 });
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ worldScheduled: false });
 		expect(mocks.acknowledge).toHaveBeenCalledExactlyOnceWith(1, "reader", 2);
+	});
+	it("tells the client to refresh when reading resumed ambient life", async () => {
+		mocks.acknowledge.mockResolvedValue({ acknowledged: true, worldScheduled: true });
+		const response = await post({ sessionId: 1, messageId: 2 });
+		expect(await response.json()).toEqual({ worldScheduled: true });
 	});
 });
 

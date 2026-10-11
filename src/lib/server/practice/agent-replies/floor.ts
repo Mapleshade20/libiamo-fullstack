@@ -10,6 +10,8 @@
  */
 
 import type { UiVariant } from "$lib/constants";
+import { type CommentThreadMetadata, flattenOpeningComments, persistedMessageRef } from "$lib/practice/comment-thread";
+import { parseMailAddress, parseMailMessage } from "$lib/practice/mail";
 import { passersBy } from "$lib/practice/names";
 import type { Scene } from "$lib/practice/scene";
 import type { TranscriptEntry } from "$lib/server/practice/prompt-context";
@@ -148,6 +150,38 @@ const RESPONDERS: Partial<Record<UiVariant, Weighted<number>>> = {
 /** Chance that someone also carries on their own business right after the learner posts. */
 const WORLD_ON_REPLY: Partial<Record<UiVariant, number>> = { reddit: 0.3, ao3: 0.3, discord: 0.35, imessage: 0.25 };
 
+/** How many participants take up a learner's message; one-to-one scenes always take exactly one taker (callers enforce it). */
+export function drawTakerCount(ui: UiVariant, seed: number): number {
+	return pick(RESPONDERS[ui] ?? [[1, 1]], random(seed)());
+}
+
+/**
+ * The participant a world moment belongs to: someone whose own business it is to carry on — a
+ * recent cast voice, a quiet member, or occasionally a passer-by. Drawn under the session lock
+ * when the moment is created; what they do is decided at claim.
+ */
+export function drawWorldParticipant(input: {
+	ui: UiVariant;
+	language: string;
+	entries: TranscriptEntry[];
+	scene: Scene;
+	learnerName: string;
+	seed: number;
+}): string | null {
+	const { entries, scene, learnerName, ui } = input;
+	if (!scene.group) return scene.counterpart.name;
+	const draw = random(input.seed);
+	const owner = scene.counterpart.name;
+	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
+	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
+	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
+	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;
+	const people = [...new Set([...entries.slice(-20).map((entry) => entry.author), ...(quiet ? [quiet] : [])])].filter((name) => name !== learnerName);
+	if (strangers.length && draw() < 0.12) return strangers[0];
+	return people.length ? people[Math.floor(draw() * people.length)] : owner;
+}
+
 /** Messages when time passes without the learner. */
 const WORLD_WHEN_IDLE: Weighted<number> = [
 	[1, 0.5],
@@ -200,16 +234,221 @@ export function sendsBursts(ui: UiVariant, name: string, entries: TranscriptEntr
 
 const THREADED = new Set<UiVariant>(["reddit", "ao3"]);
 
+/** A presence for someone who posts now: their take, length and habits, drawn once. */
+function presenceOf(ui: UiVariant, owner: string, posted: Set<string>, draw: () => number, name: string, does: string): Presence {
+	const attitudes =
+		ui === "ao3" && name === owner ? AUTHOR_THANKS : posted.has(name) && ui !== "ao3" ? STANCED : (ATTITUDES[ui] ?? ATTITUDES.reddit ?? []);
+	const lengths = LENGTHS[ui];
+	return {
+		name,
+		does,
+		attitude: pick(attitudes, draw()),
+		...(lengths ? { words: pick(lengths, draw()) } : {}),
+		...(posted.has(name) ? {} : { habits: HABITS[hash(name) % HABITS.length] }),
+	};
+}
+
+/** A thread entry's branch: its ancestors and everything answering them. */
+function branchOf(entries: TranscriptEntry[], entry?: TranscriptEntry): TranscriptEntry[] {
+	if (!entry) return [];
+	const byId = (id?: number) => (id ? entries[id - 1] : undefined);
+	const ids = new Set<number>();
+	for (let at: TranscriptEntry | undefined = entry; at; at = byId(at.replyTo)) ids.add(at.id);
+	return entries.filter((other) => ids.has(other.id) || (other.replyTo !== undefined && ids.has(other.replyTo)));
+}
+
+/**
+ * The learner's exchange: the anchor and everything answering it, recursively. Ancestors are
+ * context, not answerable targets — a sibling sub-thread under the same root is another
+ * conversation, never something a take-up of this exchange picks up.
+ */
+function exchangeOf(entries: TranscriptEntry[], anchor: TranscriptEntry): TranscriptEntry[] {
+	const ids = new Set<number>([anchor.id]);
+	const exchange: TranscriptEntry[] = [];
+	// Transcript ids are chronological, so a child always follows its parent.
+	for (const entry of entries) {
+		if (entry.replyTo !== undefined && ids.has(entry.replyTo)) {
+			ids.add(entry.id);
+			exchange.push(entry);
+		}
+	}
+	return [anchor, ...exchange];
+}
+
+/** Questions in the recent window no cast member has picked up yet. */
+function unpickedNotes(entries: TranscriptEntry[]): string[] {
+	const notes: string[] = [];
+	for (const entry of entries.slice(-6)) {
+		const pickedUp = entries.some((later) => later.id > entry.id && later.role === "cast" && later.author !== entry.author);
+		if (asks(entry.text) && !pickedUp && entry.role === "cast") notes.push(`Nobody has picked up #${entry.id} (${entry.author}) yet.`);
+	}
+	return notes;
+}
+
+/**
+ * Who has a reason to take up the learner's message, at what weight: the shared machinery of the
+ * live moment draw and the async taker allocation. A top-level question on a thread reaches
+ * everyone who posted in the opening conversation, at any depth, plus the authors of later
+ * top-level cast comments; a branch reply keeps its branch scope.
+ */
+function replyCandidates(input: {
+	ui: UiVariant;
+	entries: TranscriptEntry[];
+	scene: Scene;
+	learnerName: string;
+	/** The learner's message being taken up. */
+	target: TranscriptEntry;
+	addressees?: string[] | null;
+	strangers: string[];
+	quiet?: string;
+	/** An async taker allocation: nearby means the learner's exchange, not the wide branch. */
+	allocation?: boolean;
+}): { candidates: Map<string, number>; addressed: Set<string>; solo: string | null } {
+	const { entries, scene, learnerName, ui } = input;
+	const threaded = THREADED.has(ui);
+	const owner = scene.counterpart.name;
+	const byId = (id?: number) => (id ? entries[id - 1] : undefined);
+	const cast = (list: TranscriptEntry[]) => [...new Set(list.map((entry) => entry.author))].filter((name) => name !== learnerName);
+	const addressed = new Set<string>();
+	const target = byId(input.target.replyTo);
+	if (target && target.author !== learnerName) addressed.add(target.author);
+	if (input.addressees) {
+		for (const name of input.addressees) if (name !== learnerName) addressed.add(name);
+	} else {
+		for (const person of scene.cast) if (names(input.target.text, person.name)) addressed.add(person.name);
+	}
+	const ownerWeight =
+		ui === "ao3" ? (!target || target.author === owner ? 6 : 0.5) : ui === "reddit" ? (target ? 0.7 : 1.5) : ui === "apple_mail" ? 2 : 1.2;
+	const scope = threaded
+		? input.target.replyTo === undefined
+			? [...exchangeOf(entries, input.target), ...entries.filter((entry) => entry.opening || entry.replyTo === undefined)]
+			: input.allocation
+				? exchangeOf(entries, input.target)
+				: branchOf(entries, input.target)
+		: entries.slice(-6);
+	const nearby = cast(scope);
+	// Someone who alone answered the learner's last two messages steps back, so it is no duet.
+	const session = entries.filter((entry) => !entry.opening);
+	const learnerTurns = session.filter((entry) => entry.role === "learner").slice(-3, -1);
+	const partners = learnerTurns.map((turn) => {
+		const next = session.find((entry) => entry.id > turn.id && entry.role === "learner")?.id ?? Infinity;
+		return cast(session.filter((entry) => (threaded ? entry.replyTo === turn.id : entry.id > turn.id && entry.id < next)));
+	});
+	const solo = partners.length === 2 && partners.every((names) => names.length === 1 && names[0] === partners[0][0]) ? partners[0][0] : null;
+	const candidates = new Map<string, number>();
+	const consider = (name: string, weight: number) => candidates.set(name, Math.max(candidates.get(name) ?? 0, weight * (name === solo ? 0.3 : 1)));
+	for (const name of nearby) consider(name, 1);
+	if (input.quiet) consider(input.quiet, 1);
+	// Whoever just talked with the learner is the likeliest to carry on.
+	for (const name of partners.at(-1) ?? []) consider(name, 2);
+	if (owner !== learnerName) consider(owner, ownerWeight);
+	// A mail's greeting names someone, yet a reply-all is for everyone.
+	for (const name of addressed) consider(name, ui === "apple_mail" ? 2 : 5);
+	if (input.strangers.length) consider(input.strangers[0], ui === "reddit" ? 0.8 : 0.4);
+	return { candidates, addressed, solo };
+}
+
+/**
+ * The distinct participants who take up a learner's message, drawn when the taker set is created
+ * (inside the submit transaction) from the candidate machinery over the submit-time transcript.
+ * A repeat across sets or later messages is a legitimate return; a repeat inside one set is not.
+ * `exclude` keeps out participants who already delivered for the message (a manual retry), and a
+ * one-to-one scene always takes up as its single counterpart.
+ */
+export function allocateParticipants(input: {
+	ui: UiVariant;
+	language: string;
+	entries: TranscriptEntry[];
+	scene: Scene;
+	learnerName: string;
+	/** Seeded by the input message id, so the same submit re-renders the same set. */
+	seed: number;
+	count: number;
+	/** The learner's message being taken up. */
+	target: TranscriptEntry;
+	addressees?: string[] | null;
+	exclude?: string[];
+}): string[] {
+	const { entries, scene, learnerName, ui } = input;
+	if (input.count <= 0) return [];
+	if (!scene.group) return [scene.counterpart.name];
+	const draw = random(input.seed);
+	const owner = scene.counterpart.name;
+	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
+	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
+	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	// A member who has not spoken yet may be the one who does now, or a quiet group stays a duet.
+	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
+	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;
+	const { candidates, addressed } = replyCandidates({
+		ui,
+		entries,
+		scene,
+		learnerName,
+		target: input.target,
+		addressees: input.addressees,
+		strangers,
+		allocation: true,
+		quiet,
+	});
+	const excluded = new Set((input.exclude ?? []).map((name) => name.toLowerCase()));
+	for (const name of [...candidates.keys()]) if (excluded.has(name.toLowerCase())) candidates.delete(name);
+	// At most one taker who was neither addressed nor the owner: strangers do not crowd a question.
+	const participants: string[] = [];
+	let loose = 0;
+	for (let round = 0; round < input.count && candidates.size; round += 1) {
+		const name = pick([...candidates], draw());
+		candidates.delete(name);
+		const reasoned = addressed.has(name) || name === owner;
+		if (!reasoned && loose++ > 0) continue;
+		participants.push(name);
+	}
+	return participants;
+}
+
 /** Whether a message ends on a question, in any script. */
 const asks = (text: string) => /[?？]\s*\S{0,2}$/u.test(text.trim());
 
 /** Whether a message names someone: an @mention, or a name long enough not to be an ordinary word. */
-function names(text: string, name: string): boolean {
+export function names(text: string, name: string): boolean {
 	const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	return (
 		new RegExp(`@${escaped}`, "iu").test(text) ||
 		(name.length >= 4 && new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "iu").test(text))
 	);
+}
+
+/** Whom a learner message directly addresses among the cast: its reply target, names it writes, or a mail recipient. */
+export function addressedCastParticipants(input: {
+	task: { ui: UiVariant; openingState: Record<string, unknown> | null };
+	scene: { cast: Array<{ name: string }> };
+	learnerName: string;
+	content: string;
+	thread?: CommentThreadMetadata;
+	messages: Array<{ id: number; role: string; llmMetadata?: unknown }>;
+}): string[] {
+	const cast = new Set(input.scene.cast.map((person) => person.name));
+	const addressed: string[] = [];
+	const push = (name: unknown) => {
+		if (typeof name === "string" && name && cast.has(name) && name !== input.learnerName && !addressed.includes(name)) addressed.push(name);
+	};
+	if (input.task.ui === "apple_mail") {
+		for (const entry of parseMailMessage(input.content).to.split(",")) push(parseMailAddress(entry).name);
+		return addressed;
+	}
+	const targetCommentId = input.thread?.targetCommentId;
+	if (targetCommentId) {
+		const opening = flattenOpeningComments(input.task.ui as "reddit" | "ao3", input.task.openingState).find(
+			(comment) => comment.id === targetCommentId,
+		);
+		if (opening) push(opening.author);
+		else {
+			const target = input.messages.find((message) => persistedMessageRef(input.task.ui, message) === targetCommentId);
+			if (target?.role === "assistant") push((target.llmMetadata as { assistantAuthorName?: unknown } | null)?.assistantAuthorName);
+		}
+	}
+	for (const person of input.scene.cast) if (names(input.content, person.name)) push(person.name);
+	return addressed;
 }
 
 export function drawSceneMoment(input: {
@@ -224,13 +463,19 @@ export function drawSceneMoment(input: {
 	 * elsewhere; `[]` is nobody in particular. Without it, names in the text stand in.
 	 */
 	addressees?: string[] | null;
+	/** An async take-up's fixed participant: the moment lists only them (arrival-based replies). */
+	participant?: string;
+	/** The transcript entry the take-up serves; branch math keys on it, not the newest learner message. */
+	target?: TranscriptEntry;
+	/** A world moment: the participant carries on their own business rather than answering the learner. */
+	world?: boolean;
 }): SceneMoment | null {
 	const { entries, scene, learnerName, ui } = input;
+	if (input.participant !== undefined) return drawTakeUpMoment({ ...input, participant: input.participant });
 	if (!scene.group) return null;
 	const draw = random(input.seed);
 	const threaded = THREADED.has(ui);
 	const owner = scene.counterpart.name;
-	const byId = (id?: number) => (id ? entries[id - 1] : undefined);
 	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
 	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
 	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
@@ -240,18 +485,7 @@ export function drawSceneMoment(input: {
 	const around: Presence[] = [];
 	const notes: string[] = [];
 
-	const presence = (name: string, does: string): Presence => {
-		const attitudes =
-			ui === "ao3" && name === owner ? AUTHOR_THANKS : posted.has(name) && ui !== "ao3" ? STANCED : (ATTITUDES[ui] ?? ATTITUDES.reddit ?? []);
-		const lengths = LENGTHS[ui];
-		return {
-			name,
-			does,
-			attitude: pick(attitudes, draw()),
-			...(lengths ? { words: pick(lengths, draw()) } : {}),
-			...(posted.has(name) ? {} : { habits: HABITS[hash(name) % HABITS.length] }),
-		};
-	};
+	const presence = (name: string, does: string): Presence => presenceOf(ui, owner, posted, draw, name, does);
 	const post = (name: string, does: string) => {
 		if (!around.some((person) => person.name === name)) around.push(presence(name, does));
 	};
@@ -297,46 +531,22 @@ export function drawSceneMoment(input: {
 	const last = entries.at(-1);
 	const learnerTurn = last?.role === "learner";
 	// The learner's corner of a thread: what their latest message sits in and what answers it.
-	const anchor = session.findLast((entry) => entry.role === "learner");
-	const branchOf = (entry?: TranscriptEntry) => {
-		if (!entry) return [];
-		const ids = new Set<number>();
-		for (let at: TranscriptEntry | undefined = entry; at; at = byId(at.replyTo)) ids.add(at.id);
-		return entries.filter((other) => ids.has(other.id) || (other.replyTo !== undefined && ids.has(other.replyTo)));
-	};
-	const branch = threaded ? branchOf(anchor) : entries;
+	const anchor = input.target ?? session.findLast((entry) => entry.role === "learner");
+	const branch = threaded ? branchOf(entries, anchor) : entries;
 
 	if (learnerTurn && last) {
 		// Who has a reason to answer: whoever the learner answered or named, the owner, people nearby.
-		const addressed = new Set<string>();
-		const target = byId(last.replyTo);
-		if (target && target.author !== learnerName) addressed.add(target.author);
-		if (input.addressees) {
-			for (const name of input.addressees) if (name !== learnerName) addressed.add(name);
-		} else {
-			for (const person of scene.cast) if (names(last.text, person.name)) addressed.add(person.name);
-		}
-		const ownerWeight =
-			ui === "ao3" ? (!target || target.author === owner ? 6 : 0.5) : ui === "reddit" ? (target ? 0.7 : 1.5) : ui === "apple_mail" ? 2 : 1.2;
-		const nearby = cast(threaded ? branch : recent(6));
-		// Someone who alone answered the learner's last two messages steps back, so it is no duet.
-		const learnerTurns = session.filter((entry) => entry.role === "learner").slice(-3, -1);
-		const partners = learnerTurns.map((turn) => {
-			const next = session.find((entry) => entry.id > turn.id && entry.role === "learner")?.id ?? Infinity;
-			return cast(session.filter((entry) => (threaded ? entry.replyTo === turn.id : entry.id > turn.id && entry.id < next)));
+		const { candidates, addressed, solo } = replyCandidates({
+			ui,
+			entries,
+			scene,
+			learnerName,
+			target: last,
+			addressees: input.addressees,
+			strangers,
+			quiet,
 		});
-		const solo = partners.length === 2 && partners.every((names) => names.length === 1 && names[0] === partners[0][0]) ? partners[0][0] : null;
 		if (solo) notes.push(`${solo} has been ${learnerName}'s only partner lately; others may take it up.`);
-		const candidates = new Map<string, number>();
-		const consider = (name: string, weight: number) => candidates.set(name, Math.max(candidates.get(name) ?? 0, weight * (name === solo ? 0.3 : 1)));
-		for (const name of nearby) consider(name, 1);
-		if (quiet) consider(quiet, 1);
-		// Whoever just talked with the learner is the likeliest to carry on.
-		for (const name of partners.at(-1) ?? []) consider(name, 2);
-		if (owner !== learnerName) consider(owner, ownerWeight);
-		// A mail's greeting names someone, yet a reply-all is for everyone.
-		for (const name of addressed) consider(name, ui === "apple_mail" ? 2 : 5);
-		if (strangers.length) consider(strangers[0], ui === "reddit" ? 0.8 : 0.4);
 		const count = pick(RESPONDERS[ui] ?? [[1, 1]], draw());
 		// At most one responder who was neither addressed nor the owner: strangers do not crowd a one-liner.
 		let loose = 0;
@@ -354,7 +564,7 @@ export function drawSceneMoment(input: {
 	} else {
 		// Time passes: a late answer to the learner if nobody gave one, and people's own business.
 		if (threaded && anchor && !session.some((entry) => entry.replyTo === anchor.id) && draw() < 0.5) {
-			const name = cast(branchOf(anchor))[0] ?? owner;
+			const name = cast(branchOf(entries, anchor))[0] ?? owner;
 			if (name && name !== learnerName) post(name, `answers #${anchor.id} (${learnerName}), late`);
 		}
 		const count = ui === "apple_mail" ? 1 : pick(WORLD_WHEN_IDLE, draw());
@@ -367,9 +577,59 @@ export function drawSceneMoment(input: {
 		}
 	}
 
-	for (const entry of recent(6)) {
-		const pickedUp = entries.some((later) => later.id > entry.id && later.role === "cast" && later.author !== entry.author);
-		if (asks(entry.text) && !pickedUp && entry.role === "cast") notes.push(`Nobody has picked up #${entry.id} (${entry.author}) yet.`);
-	}
+	notes.push(...unpickedNotes(entries));
 	return { around, notes };
+}
+
+/**
+ * An async take-up's moment: the one fixed participant and what they do, drawn against the live
+ * transcript at claim. A reply take-up keys its branch math on the target entry — the
+ * conversation this batch serves — so a batch for one branch never answers another's messages;
+ * a world moment draws its focus from recent cast messages anywhere in the thread, unpicked-up
+ * questions included.
+ */
+function drawTakeUpMoment(input: {
+	ui: UiVariant;
+	language: string;
+	entries: TranscriptEntry[];
+	scene: Scene;
+	learnerName: string;
+	seed: number;
+	addressees?: string[] | null;
+	participant: string;
+	target?: TranscriptEntry;
+	world?: boolean;
+}): SceneMoment {
+	const { entries, scene, learnerName, ui } = input;
+	const draw = random(input.seed);
+	const threaded = THREADED.has(ui);
+	const owner = scene.counterpart.name;
+	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
+	const session = entries.filter((entry) => !entry.opening);
+	const anchor = input.target ?? session.findLast((entry) => entry.role === "learner");
+	const newThing = threaded ? (ui === "ao3" ? "a new comment on the work" : "a new top-level comment on the post") : "carries on their own topic";
+
+	let does: string;
+	if (input.world) {
+		// Someone's own business: a late answer anywhere in the thread, or something new.
+		const others = entries.filter((entry) => entry.role === "cast" && entry.author !== learnerName && entry.author !== input.participant).slice(-8);
+		const unpicked = others.filter(
+			(entry) => !entries.some((later) => later.id > entry.id && later.role === "cast" && later.author !== entry.author),
+		);
+		const pool = unpicked.length ? unpicked : others;
+		const focus = pool.length && draw() < 0.6 ? pool[pool.length - 1 - Math.floor(draw() * Math.min(3, pool.length))] : undefined;
+		does = focus ? `answers #${focus.id}` : newThing;
+	} else if (anchor) {
+		// A landed cast answer in the learner's exchange can be what this participant picks up
+		// instead of the learner's message itself (dependent continuation); ancestors and sibling
+		// sub-threads are other conversations, never targets of this take-up.
+		const branch = threaded ? exchangeOf(entries, anchor) : entries;
+		const others = branch.filter((entry) => entry.author !== learnerName && entry.author !== input.participant);
+		const landed = others.length && draw() < 0.35 ? others[others.length - 1 - Math.floor(draw() * Math.min(3, others.length))] : undefined;
+		does = landed ? `answers #${landed.id}` : `answers #${anchor.id} (${learnerName})`;
+	} else {
+		does = newThing;
+	}
+
+	return { around: [presenceOf(ui, owner, posted, draw, input.participant, does)], notes: unpickedNotes(entries) };
 }

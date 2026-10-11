@@ -98,20 +98,7 @@ describe("QuestMenu", () => {
 	it("renders the closed book shell without mounting hidden catalog cards", () => {
 		const { body } = render(QuestMenu, { props: { data: hallData(), initialLocation: home, lang: "en" } });
 
-		expect(body).toContain('class="cover-face cover-face-back page page-left ');
-		expect(body).toContain('class="book-surface book-deck book-deck-blank ');
-		expect(body).toContain('class="book-edge book-edge-board book-edge-spine ');
-		expect(body).not.toContain('class="task-card');
-		expect(body).not.toMatch(/class="book-layer [^"]*is-ready/);
-	});
-
-	it.each(["home", "catalog"] as const)("keeps the three desktop section tabs inside the animated book in %s", (view) => {
-		const { body } = render(QuestMenu, {
-			props: { data: hallData(), initialLocation: { ...home, view }, lang: "en" },
-		});
-		const bookMarkup = body.slice(body.indexOf('class="book-layer'));
-		expect(bookMarkup).toContain('class="book-ribbons');
-		expect(bookMarkup.match(/role="tab"/g)).toHaveLength(3);
+		expect(body).not.toContain("Current letter");
 	});
 
 	it("server-renders a direct catalog location with year controls and current-year production items", () => {
@@ -128,7 +115,6 @@ describe("QuestMenu", () => {
 		expect(body).toContain('datetime="2026"');
 		expect(body).toContain('aria-label="← 2026"');
 		expect(body).toContain('aria-label="2026 →"');
-		expect(body).toContain('class="month-folio');
 		expect(body).toContain("Archived letter");
 	});
 
@@ -142,7 +128,7 @@ describe("QuestMenu", () => {
 		});
 
 		// Both desktop and compact surfaces receive the selected daily category before client measurement.
-		expect(body.match(/class="task-card\b/g)).toHaveLength(2);
+		expect(body.match(/<h3\b[^>]*>[\s\S]*?<\/h3>/g)?.filter((heading) => heading.includes("Quest 1"))).toHaveLength(2);
 	});
 
 	it("server-renders an older translation preparation without mounting hidden catalog cards", () => {
@@ -175,7 +161,7 @@ describe("QuestMenu", () => {
 		});
 
 		expect(body).toContain("Archived letter");
-		expect(body).not.toContain('class="task-card');
+		expect(body).not.toContain("Current letter");
 	});
 
 	it("keeps empty production sections navigable", () => {

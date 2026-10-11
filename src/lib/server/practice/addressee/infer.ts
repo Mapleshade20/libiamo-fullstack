@@ -17,16 +17,16 @@ const NOBODY = "nobody";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Whether the latest learner message leaves its addressee unsaid in a scene where it matters. */
-export function needsAddressee(ui: UiVariant, scene: Scene, entries: TranscriptEntry[]): boolean {
-	const last = entries.at(-1);
+/** Whether the learner's message being taken up leaves its addressee unsaid in a scene where it matters. */
+export function needsAddressee(ui: UiVariant, scene: Scene, entries: TranscriptEntry[], target?: TranscriptEntry): boolean {
+	const last = target ?? entries.at(-1);
 	if (!scene.group || (ui !== "discord" && ui !== "imessage") || last?.role !== "learner" || last.replyTo) return false;
 	return !scene.cast.some((person) => new RegExp(`@${escapeRegExp(person.name)}(?![\\p{L}\\p{N}_])`, "iu").test(last.text));
 }
 
 /** The Choice to ask: the chat so far as state, one option per person plus nobody in particular. */
-export function buildAddresseeQuestion(ui: UiVariant, scene: Scene, entries: TranscriptEntry[], learnerName: string) {
-	const last = entries[entries.length - 1];
+export function buildAddresseeQuestion(ui: UiVariant, scene: Scene, entries: TranscriptEntry[], learnerName: string, target?: TranscriptEntry) {
+	const last = target ?? entries[entries.length - 1];
 	const earlier = entries.slice(-WINDOW - 1, -1);
 	const shown = new Set(earlier.map((entry) => entry.id));
 	const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -72,16 +72,19 @@ export async function inferAddressees(input: {
 	task: { id: number; ui: UiVariant; openingState: Record<string, unknown> | null };
 	learnerName: string;
 	history: TranscriptMessage[];
+	/** The scene ref of the message being taken up; the latest learner message when absent. */
+	targetRef?: string | null;
 	fetch?: typeof globalThis.fetch;
 }): Promise<string[] | null> {
 	try {
 		const { task, learnerName } = input;
 		const scene = resolveScene(task.ui, task.openingState, task.id, learnerName);
-		const { entries } = buildSceneTranscript({ ui: task.ui, openingState: task.openingState, messages: input.history, learnerName, scene });
-		if (!needsAddressee(task.ui, scene, entries)) return null;
+		const { entries, refs } = buildSceneTranscript({ ui: task.ui, openingState: task.openingState, messages: input.history, learnerName, scene });
+		const target = input.targetRef ? entries[refs.indexOf(input.targetRef)] : undefined;
+		if (!needsAddressee(task.ui, scene, entries, target)) return null;
 		const credentials = await getUserOpenAIConfig(input.userId);
 		if (!credentials || !hasAddresseeBeta(credentials.baseUrl)) return null;
-		const { state, question, people } = buildAddresseeQuestion(task.ui, scene, entries, learnerName);
+		const { state, question, people } = buildAddresseeQuestion(task.ui, scene, entries, learnerName, target);
 		const answer = await askJevChoice({ apiKey: credentials.apiKey, model: ADDRESSEE_BETA_MODEL, state, question, fetch: input.fetch });
 		return answer ? readAddressees(answer, people) : null;
 	} catch (error) {

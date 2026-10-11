@@ -108,3 +108,8 @@ export function resolveScene(ui: UiVariant, openingState: unknown, seed: string 
 export function isLiveChat(ui: UiVariant, scene: Scene): boolean {
 	return (ui === "discord" || ui === "imessage") && scene.group;
 }
+
+/** Surfaces whose replies arrive as independently scheduled response opportunities, not live-chat turns. */
+export function isAsyncSurface(ui: UiVariant): boolean {
+	return ui === "reddit" || ui === "ao3" || ui === "apple_mail";
+}

@@ -31,8 +31,12 @@ const reply = {
 	terminationReason: null,
 };
 
-function turnInput(overrides: Partial<typeof task>, history: AgentHistoryMessage[] = []): AgentReplyRecipeInput {
-	return { task: agentTaskContext({ ...task, ...overrides }, "Maple"), learnerName: "Maple", history };
+function turnInput(
+	overrides: Partial<typeof task>,
+	history: AgentHistoryMessage[] = [],
+	takeUp: { participant?: string; targetRef?: string | null } = {},
+): AgentReplyRecipeInput {
+	return { task: agentTaskContext({ ...task, ...overrides }, "Maple"), learnerName: "Maple", history, ...takeUp };
 }
 
 describe("structured agent response", () => {
@@ -206,6 +210,93 @@ describe("resolving a turn against the transcript", () => {
 		expect(discord.deliveries.map((delivery) => delivery.replyTo)).toEqual(["opening-0", null]);
 		const imessage = resolveSceneTurn({ ...reply, deliveries: [{ author: "Lucía", replyTo: 1, content: "x" }] }, turnInput({}, history));
 		expect(imessage.deliveries[0].replyTo).toBeNull();
+	});
+});
+
+describe("async take-up resolution", () => {
+	const reddit = {
+		ui: "reddit" as const,
+		openingState: { post: { author: "op" }, previousComments: [{ id: "c1", author: "alex", text: "Voice scams." }] },
+	};
+	const learnerComment: AgentHistoryMessage = {
+		id: 10,
+		role: "user",
+		content: "Same",
+		llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+	};
+
+	it("drops deliveries written for anyone but the allocated participant, with warnings", () => {
+		const turn = resolveSceneTurn(
+			{
+				...reply,
+				deliveries: [
+					{ author: "alex", replyTo: 2, content: "mine" },
+					{ author: "luma", replyTo: 2, content: "theft" },
+					{ author: "Maple", replyTo: 2, content: "impersonation" },
+				],
+			},
+			turnInput(reddit, [learnerComment], { participant: "alex", targetRef: "reddit-user-m1" }),
+		);
+		expect(turn.deliveries.map(({ author, content }) => [author, content])).toEqual([["alex", "mine"]]);
+		expect(turn.warnings.some((warning) => warning.includes("luma"))).toBe(true);
+		expect(turn.warnings.some((warning) => warning.includes("Maple"))).toBe(true);
+	});
+
+	it("keeps same-turn references off null across dropped wrong-author deliveries", () => {
+		// nextId is 3: the opening comment and the learner's comment are entries 1 and 2. The
+		// third delivery quotes the second and the fourth the dropped first; neither may become a
+		// top-level comment (null) because the author filter shifted the numbering.
+		const turn = resolveSceneTurn(
+			{
+				...reply,
+				deliveries: [
+					{ author: "bob", replyTo: 2, content: "theft" },
+					{ author: "alex", replyTo: 2, content: "first" },
+					{ author: "alex", replyTo: 4, content: "quotes the first" },
+					{ author: "alex", replyTo: 3, content: "quotes the dropped one" },
+				],
+			},
+			turnInput(reddit, [learnerComment], { participant: "alex", targetRef: "reddit-user-m1" }),
+		);
+		expect(turn.deliveries.map(({ content, replyTo }) => [content, replyTo])).toEqual([
+			["first", "reddit-user-m1"],
+			// a same-author quote continues the conversation rather than nesting under own messages
+			["quotes the first", "reddit-user-m1"],
+			// a quote of the dropped delivery follows the conversation it continued
+			["quotes the dropped one", "reddit-user-m1"],
+		]);
+		expect(turn.warnings.every((warning) => !warning.includes("became null"))).toBe(true);
+	});
+
+	it("keeps the first complete email per author, preserves one follow-on, and drops the rest with warnings", () => {
+		const mail = { ui: "apple_mail" as const, openingState: { counterpartName: "Maya <maya@x.example>", emails: [] } };
+		const history: AgentHistoryMessage[] = [{ id: 3, role: "user", content: "To: Maya\nSubject: Hi\n\nHello" }];
+		const turn = resolveSceneTurn(
+			{
+				...reply,
+				deliveries: [
+					{ author: "Maya", replyTo: null, content: "Subject: Re: Hi\n\nFirst answer" },
+					{ author: "Maya", replyTo: null, content: "Subject: Re: Hi\n\nA later thought" },
+					{ author: "Maya", replyTo: null, content: "Subject: Re: Hi\n\nThird email" },
+					{ author: "Maya", replyTo: null, content: "Subject: Re: Hi" },
+				],
+			},
+			turnInput(mail, history, { participant: "Maya", targetRef: null }),
+		);
+		expect(turn.deliveries.map((delivery) => delivery.content)).toEqual(["Subject: Re: Hi\n\nFirst answer"]);
+		expect(turn.preservedFollowOn).toMatchObject({ author: "Maya", content: "Subject: Re: Hi\n\nA later thought" });
+		expect(turn.warnings.some((warning) => warning.includes("no substantive email body"))).toBe(true);
+		expect(turn.warnings.some((warning) => warning.includes("beyond the one preserved"))).toBe(true);
+	});
+
+	it("delivers a body that embeds email structure mid-way as one email, recording the anomaly", () => {
+		const mail = { ui: "apple_mail" as const, openingState: { counterpartName: "Maya <maya@x.example>", emails: [] } };
+		const turn = resolveSceneTurn(
+			{ ...reply, deliveries: [{ author: "Maya", replyTo: null, content: "Hello\n\nSubject: Re: Hi\n\nMore" }] },
+			turnInput(mail, [], { participant: "Maya" }),
+		);
+		expect(turn.deliveries).toHaveLength(1);
+		expect(turn.warnings.some((warning) => warning.includes("embeds email structure"))).toBe(true);
 	});
 });
 

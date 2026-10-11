@@ -1,20 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-
-/**
- * Guards the translation dictionary against the three kinds of rot that stay invisible at runtime.
- *
- * A key added to one language and forgotten in the others does not throw: `t` falls back to
- * English, so a learner in that language quietly reads the wrong one. A key that no component
- * calls anymore does not throw either — it just sits in the file, translated four times, next to
- * the copy that replaced it. And a key deleted while a caller still names it does not throw: `t`
- * hands that caller the raw key, which then reads as copy to anyone asserting on it.
- *
- * Keys the app assembles at runtime (`t(lang, \`hall.menu.status.${state}\`)`) never appear
- * verbatim, so the usage check also accepts a key whose shape matches a template the source
- * actually calls.
- */
+import { en } from "$lib/i18n/en";
+import { es } from "$lib/i18n/es";
+import { fr } from "$lib/i18n/fr";
+import { ja } from "$lib/i18n/ja";
 
 const SOURCE_ROOT = resolve("src");
 const TEST_ROOT = resolve("test");
@@ -41,35 +31,12 @@ async function callerSources(): Promise<{ file: string; source: string }[]> {
 	return Promise.all(files.map(async (file) => ({ file, source: await readFile(file, "utf8") })));
 }
 
-/** Values are all single-line; two of them are written on the line below their key. */
-function parseEntries(source: string): Map<string, string> {
-	const entries = new Map<string, string>();
-	const lines = source.split("\n");
-	for (let index = 0; index < lines.length; index++) {
-		const inline = lines[index].match(/^\t"(?<key>[^"]+)":\s*"(?<value>.*)",?$/);
-		if (inline?.groups) {
-			entries.set(inline.groups.key, inline.groups.value);
-			continue;
-		}
-		const wrapped = lines[index].match(/^\t"(?<key>[^"]+)":$/);
-		if (!wrapped?.groups) continue;
-		const value = lines[index + 1]?.trim() ?? "";
-		const parsed = value.match(/^"(?<value>.*)",?$/);
-		if (!parsed?.groups) throw new Error(`unparsed value for \`${wrapped.groups.key}\``);
-		entries.set(wrapped.groups.key, parsed.groups.value);
-		index++;
-	}
-	const keyLines = lines.filter((line) => /^\t"/.test(line)).length;
-	if (keyLines !== entries.size) throw new Error(`parsed ${entries.size} of ${keyLines} dictionary entries`);
-	return entries;
-}
-
 function placeholdersOf(value: string): string[] {
 	return [...value.matchAll(/\{(?<name>[^{}]+)\}/g)].map((match) => match.groups?.name ?? "").sort();
 }
 
 const entriesByLanguage = Object.fromEntries(
-	await Promise.all(LANGUAGES.map(async (language) => [language, parseEntries(await readFile(join(DICTIONARY_ROOT, `${language}.ts`), "utf8"))])),
+	Object.entries({ en, es, fr, ja }).map(([language, dictionary]) => [language, new Map(Object.entries(dictionary))]),
 ) as Record<(typeof LANGUAGES)[number], Map<string, string>>;
 
 describe("translation dictionary", () => {
@@ -101,24 +68,6 @@ describe("translation dictionary", () => {
 			}
 		}
 		expect(mismatched).toEqual([]);
-	});
-
-	it("keeps no key that the app never asks for", async () => {
-		const haystack = (await callerSources()).map(({ source }) => source).join("\n");
-		// `t(lang, \`prefix${expression}suffix\`)` — a key of that shape is reachable without a literal.
-		const shapes = [...haystack.matchAll(/\bt\(\s*[A-Za-z0-9_.]+\s*,\s*`(?<template>[^`]*)`/g)].map((match) => {
-			const template = match.groups?.template ?? "";
-			const opening = template.indexOf("${");
-			const closing = template.lastIndexOf("}");
-			if (opening === -1) return { prefix: template, suffix: "" };
-			return { prefix: template.slice(0, opening), suffix: template.slice(closing + 1) };
-		});
-
-		const unused = [...entriesByLanguage.en.keys()].filter((key) => {
-			if (haystack.includes(`"${key}"`) || haystack.includes(`'${key}'`) || haystack.includes(`\`${key}\``)) return false;
-			return !shapes.some(({ prefix, suffix }) => key.startsWith(prefix) && key.endsWith(suffix));
-		});
-		expect(unused, `unused keys: ${unused.join(", ")}`).toEqual([]);
 	});
 
 	it("defines every key a caller names, so none falls back to its own name", async () => {

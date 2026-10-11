@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	getBubbleCorners,
 	getBubbleGroupPosition,
 	getLastOutgoingMessageId,
 	getRenderableMessages,
@@ -42,14 +41,6 @@ describe("getBubbleGroupPosition", () => {
 		expect(getBubbleGroupPosition(messages, 0)).toBe("start");
 		expect(getBubbleGroupPosition(messages, 1)).toBe("middle");
 		expect(getBubbleGroupPosition(messages, 2)).toBe("end");
-	});
-
-	it("tucks the inner corners of grouped bubbles on the sender's side", () => {
-		const messages = [createMessage({ id: "1", role: "user" }), createMessage({ id: "2", role: "user" }), createMessage({ id: "3", role: "agent" })];
-
-		expect(getBubbleCorners(messages, 0)).toBe("rounded-br-md");
-		expect(getBubbleCorners(messages, 1)).toBe("rounded-tr-md");
-		expect(getBubbleCorners(messages, 2)).toBe("");
 	});
 
 	it("returns single when neighbors differ", () => {

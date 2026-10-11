@@ -1,7 +1,7 @@
 ---
 title: Defense against bulk sign-ups and trial overspending
 type: security
-status: wip
+status: done
 ---
 
 # Defense against bulk sign-ups and trial overspending

@@ -1,7 +1,7 @@
 ---
 title: Hall announcements, a one-quest daily lineup and languages opening soon
 type: [feature, ux]
-status: wip
+status: done
 ---
 
 # Hall announcements, a one-quest daily lineup and languages opening soon

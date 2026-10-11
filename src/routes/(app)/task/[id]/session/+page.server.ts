@@ -1,5 +1,5 @@
 import { error, fail } from "@sveltejs/kit";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import EmojiConverter from "emoji-js";
 import { PRACTICE_SESSION_DEPENDENCY } from "$lib/app/load-dependencies";
 import {
@@ -14,7 +14,7 @@ import type { PersistedPracticeSession } from "$lib/practice/messages";
 import { isPracticeUiImplemented } from "$lib/practice/ui-variants";
 import { requireUser } from "$lib/server/auth/authz";
 import { db } from "$lib/server/db";
-import { agentResponseBatch, practiceSession, task } from "$lib/server/db/schema";
+import { practiceSession, task } from "$lib/server/db/schema";
 import { llmErrorMessage, llmErrorStatus } from "$lib/server/llm/client";
 import { generateHint } from "$lib/server/practice/hints";
 import { buildPracticeUiSendOptions } from "$lib/server/practice/send-options";
@@ -26,6 +26,7 @@ import {
 	startSession,
 	submitMessage,
 } from "$lib/server/practice/session";
+import { earliestOutstandingDueAtInScope } from "$lib/server/practice/unread";
 import { findPracticeSession, getTaskIdentity, parseTaskId, resolveRequestLineup } from "$lib/server/task/context";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -138,24 +139,15 @@ export const load: PageServerLoad = async (event) => {
 		0,
 	);
 
-	// Earliest outstanding agent work for this session (batches still composing or
-	// pacing out deliveries). The client keeps polling while work is due soon and
-	// wakes once when the next item falls due, so later burst deliveries are never
-	// stranded after the pending placeholder clears.
-	const outstandingAgentWork = existingSession
-		? await db.query.agentResponseBatch.findFirst({
-				where: and(
-					eq(agentResponseBatch.sessionId, existingSession.id),
-					inArray(agentResponseBatch.status, ["pending", "processing", "stale", "delivery_pending"]),
-				),
-				columns: { dueAt: true },
-				orderBy: (batches, { asc }) => [asc(batches.dueAt)],
-			})
-		: null;
+	// Earliest outstanding agent work for this session, in one statement so a generation
+	// committing mid-load cannot hide live work from both halves: composing batches' due times
+	// and pacing deliveries' own due times — a delivery-pending batch's own due time is stale
+	// and would force continuous polling. The client keeps polling while work is due soon and
+	// wakes once when the next item falls due, so later burst deliveries are never stranded
+	// after the pending placeholder clears.
+	const outstandingAgentWorkDueAt = existingSession ? await earliestOutstandingDueAtInScope(sql`s.id = ${existingSession.id}`) : null;
 
-	const session: PersistedPracticeSession | null = existingSession
-		? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWork?.dueAt ?? null }
-		: null;
+	const session: PersistedPracticeSession | null = existingSession ? { ...existingSession, nextAgentWorkDueAt: outstandingAgentWorkDueAt } : null;
 
 	return {
 		task: taskData,

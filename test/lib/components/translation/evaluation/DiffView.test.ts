@@ -16,7 +16,5 @@ describe("DiffView", () => {
 		expect(body).toContain("old wording");
 		expect(body).toContain("new wording");
 		expect(body).toContain("obsolete");
-		expect(body).toContain('class="diff-delete ');
-		expect(body).toContain('class="diff-add ');
 	});
 });

@@ -10,8 +10,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const parsed = receiptSchema.safeParse(await request.json().catch(() => null));
 	if (!parsed.success) return json({ error: "Invalid read receipt" }, { status: 400 });
 	const { sessionId, messageId } = parsed.data;
-	if (!(await acknowledgeAssistantMessage(sessionId, locals.user.id, messageId))) return json({ error: "Message not found" }, { status: 404 });
-	return new Response(null, { status: 204 });
+	const { acknowledged, worldScheduled } = await acknowledgeAssistantMessage(sessionId, locals.user.id, messageId);
+	if (!acknowledged) return json({ error: "Message not found" }, { status: 404 });
+	// Reading resumed ambient life: the client refreshes the session so its polling plan picks
+	// up the newly scheduled world moment instead of staying stopped.
+	return json({ worldScheduled });
 };
 
 /** The inbox, plus when the next reply can arrive so the Hall knows whether to poll at all. */

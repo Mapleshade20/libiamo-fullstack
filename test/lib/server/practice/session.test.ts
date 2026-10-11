@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as floor from "$lib/server/practice/agent-replies/floor";
 
 const USER_ID = "test-user-id";
 
@@ -571,6 +572,496 @@ describe("session service", () => {
 					inputVersion: 5,
 				}),
 			);
+		});
+	});
+
+	describe("submitMessage on arrival-based surfaces", () => {
+		const now = new Date("2026-08-21T12:00:00.000Z");
+
+		/** Select double: plain count/delivered queries resolve to `rows`, the row lock resolves locked. */
+		const mockAsyncSelect = (rows: unknown[] = []) => {
+			mockDb.select.mockImplementation(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() =>
+						Object.assign(Promise.resolve(rows), {
+							for: vi.fn().mockResolvedValue([{ id: 123, status: "in_progress" }]),
+						}),
+					),
+				})),
+			}));
+		};
+
+		const mailTask = {
+			id: 1,
+			ui: "apple_mail" as const,
+			language: "en" as const,
+			urgency: "high" as const,
+			maxTurns: null,
+			openingState: { counterpartName: "Maya <maya@x.example>", emails: [] },
+		};
+		const redditTask = {
+			id: 1,
+			ui: "reddit" as const,
+			language: "en" as const,
+			urgency: "high" as const,
+			maxTurns: null,
+			openingState: {
+				post: { author: "op" },
+				previousComments: [
+					{ id: "c1", author: "alex", text: "Voice scams." },
+					{ id: "c2", author: "luma", text: "Other branch." },
+				],
+			},
+		};
+
+		it("gives a one-to-one mail message exactly one taker — the counterpart — on a sampled clock", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: mailTask,
+				messages: [],
+			});
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			vi.useFakeTimers();
+			vi.setSystemTime(now);
+			try {
+				const result = await submitMessage(123, "To: Maya\nSubject: Hi\n\nHello", USER_ID, "client-1");
+				expect(result).toEqual({ turnCount: 1, pending: true });
+			} finally {
+				vi.useRealTimers();
+			}
+
+			const takers = inserts.filter((insert) => insert.kind === "reply");
+			expect(takers).toHaveLength(1);
+			expect(takers[0]).toMatchObject({
+				kind: "reply",
+				status: "pending",
+				participant: "Maya",
+				inputMessageId: 999,
+				inputVersion: 1,
+				targetRef: null,
+				attempt: 0,
+			});
+			// the message itself carries the arrival marker, so its wait settles within its conversation
+			const message = inserts.find((insert) => insert.kind === undefined);
+			expect(message?.llmMetadata).toMatchObject({ clientMessageId: "client-1", arrival: true });
+			expect((takers[0]?.dueAt as Date).getTime()).toBeGreaterThan(now.getTime());
+		});
+
+		it("re-targets a joined mail conversation's takers and folds the earlier head", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: mailTask,
+				messages: [{ id: 1, role: "user", content: "To: Maya\nSubject: Hi\n\nHello", createdAt: now, llmMetadata: { clientMessageId: "m1" } }],
+			});
+			mockDb.query.agentResponseBatch.findMany
+				.mockResolvedValueOnce([{ id: 11, targetRef: null, inputMessageId: 1, participant: "Maya" }])
+				.mockResolvedValue([{ id: 11, status: "completed" }]);
+			const updates: { table: unknown; setArgs: unknown[]; whereArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ table, setArgs, whereArgs });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(() => ({ values: valuesMock }));
+
+			await submitMessage(123, "To: Maya\nSubject: Re: Hi\n\nActually one more thing", USER_ID, "m2");
+
+			// the pending taker now serves the new head, on its unchanged clock
+			const reTarget = updates.find(
+				(update) => update.table === agentResponseBatch && (update.setArgs[0] as { inputMessageId?: number }).inputMessageId === 999,
+			);
+			expect(reTarget).toBeDefined();
+			expect(bareStrings(reTarget?.whereArgs ?? [])).toContain("reply");
+			// the earlier head folded into the new message
+			const fold = updates.find(
+				(update) =>
+					update.table === sessionMessage && (update.setArgs[0] as { llmMetadata?: { foldedInto?: number } }).llmMetadata?.foldedInto === 999,
+			);
+			expect(fold).toBeDefined();
+			// a supplement adds no takers of its own
+			expect(valuesMock).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "reply" }));
+		});
+
+		it("keeps a composing taker's head independent: no fold, its own outcome", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: mailTask,
+				messages: [{ id: 1, role: "user", content: "To: Maya\nSubject: Hi\n\nHello", createdAt: now, llmMetadata: { clientMessageId: "m1" } }],
+			});
+			// the conversation's only taker is composing: not re-targetable, so nothing joins
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
+			const updates: { table: unknown; setArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => {
+							updates.push({ table, setArgs });
+							return { where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+
+			await submitMessage(123, "To: Maya\nSubject: Re: Hi\n\nOne more thing", USER_ID, "m2");
+
+			expect(
+				updates.some(
+					(update) =>
+						update.table === sessionMessage && (update.setArgs[0] as { llmMetadata?: { foldedInto?: number } }).llmMetadata?.foldedInto !== undefined,
+				),
+			).toBe(false);
+		});
+
+		it("opens a reddit exchange with a taker set pinned to its conversation target", async () => {
+			const allocate = vi.spyOn(floor, "allocateParticipants");
+			mockAsyncSelect();
+			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.9);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			await submitMessage(123, "Same here", USER_ID, "m1", {
+				userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+			});
+
+			expect(allocate.mock.calls[0][0].target).toMatchObject({ role: "learner", text: "Same here" });
+			allocate.mockRestore();
+			const takers = inserts.filter((insert) => insert.kind === "reply");
+			expect(takers.length).toBeGreaterThanOrEqual(1);
+			for (const taker of takers) {
+				expect(taker).toMatchObject({ kind: "reply", status: "pending", targetRef: "c1", attempt: 0, inputMessageId: 999 });
+				expect(typeof taker.participant).toBe("string");
+			}
+			// distinct participants on independently sampled clocks
+			const participants = new Set(takers.map((taker) => taker.participant));
+			expect(participants.size).toBe(takers.length);
+			// the world overlap did not fire this draw
+			expect(inserts.some((insert) => insert.kind === "world")).toBe(false);
+			random.mockRestore();
+		});
+
+		it("settles a message nobody can take up as unanswered instead of leaving it waiting", async () => {
+			// the c1 conversation's takers are all composing or delivering: no room, nothing to join
+			const results: unknown[][] = [[], [{ count: 3 }], [{ count: 3 }], [{ count: 0 }]];
+			mockDb.select.mockImplementation(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() =>
+						Object.assign(Promise.resolve(results.shift() ?? []), {
+							for: vi.fn().mockResolvedValue([{ id: 123, status: "in_progress" }]),
+						}),
+					),
+				})),
+			}));
+			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.9);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+			const updates: { table: unknown; setArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => {
+							updates.push({ table, setArgs });
+							return { where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+
+			await submitMessage(123, "Same here", USER_ID, "m1", {
+				userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+			});
+			random.mockRestore();
+
+			expect(inserts.some((insert) => insert.kind === "reply")).toBe(false);
+			const settled = updates.find((update) => update.table === sessionMessage);
+			expect((settled?.setArgs[0] as { llmMetadata?: Record<string, unknown> }).llmMetadata).toMatchObject({
+				clientMessageId: "m1",
+				arrival: true,
+				noReply: true,
+			});
+		});
+
+		it("may overlap the pending reply wave with one world moment", async () => {
+			mockAsyncSelect();
+			const random = vi.spyOn(globalThis.Math, "random").mockReturnValue(0.1);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([]);
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			vi.useFakeTimers();
+			vi.setSystemTime(now);
+			try {
+				await submitMessage(123, "Same here", USER_ID, "m1", {
+					userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+
+			const world = inserts.find((insert) => insert.kind === "world");
+			expect(world).toMatchObject({ status: "pending", inputMessageId: null, sessionId: 123 });
+			expect(typeof world?.participant).toBe("string");
+			random.mockRestore();
+		});
+
+		it("retries with exactly one fresh taker at the bumped attempt, excluding delivered participants", async () => {
+			mockAsyncSelect([{ batchId: 11 }]);
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [
+					{
+						id: 1,
+						role: "user",
+						content: "anyone?",
+						createdAt: now,
+						llmMetadata: {
+							clientMessageId: "m1",
+							failed: true,
+							failureError: "boom",
+							thread: { commentId: "reddit-user-m1", targetCommentId: null },
+						},
+					},
+				],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			mockDb.query.agentResponseBatch.findMany
+				.mockResolvedValueOnce([]) // no conversation is pending
+				.mockResolvedValue([{ id: 11, participant: "alex" }]); // who already served the message
+			const updates: { table: unknown; setArgs: unknown[]; whereArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ table, setArgs, whereArgs });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			const result = await submitMessage(123, "anyone?", USER_ID, "m1", {
+				userMetadata: { thread: { commentId: "reddit-user-m1", targetCommentId: null } },
+			});
+
+			expect(result).toEqual({ turnCount: 1, pending: true });
+			// the failure clears, the attempt counter moves, and a pre-marker message gains the arrival flag
+			const revival = updates.find(
+				(update) => update.table === sessionMessage && (update.setArgs[0] as { llmMetadata?: { attempt?: number } }).llmMetadata?.attempt === 1,
+			);
+			expect(revival).toBeDefined();
+			expect((revival?.setArgs[0] as { llmMetadata?: { arrival?: boolean } }).llmMetadata?.arrival).toBe(true);
+			expect((revival?.setArgs[0] as { llmMetadata?: { failed?: boolean } }).llmMetadata?.failed).toBe(false);
+			const takers = inserts.filter((insert) => insert.kind === "reply");
+			expect(takers).toHaveLength(1);
+			expect(takers[0]).toMatchObject({ kind: "reply", attempt: 1, inputMessageId: 1, targetRef: "reddit-user-m1" });
+			expect(takers[0]?.participant).not.toBe("alex");
+		});
+
+		it("keeps the joined conversation's target for a participant the supplement addresses", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: redditTask,
+				messages: [
+					{
+						id: 1,
+						role: "user",
+						content: "Same here",
+						createdAt: now,
+						llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: "c1" } },
+					},
+				],
+				expiresAt: new Date(now.getTime() + 3_600_000),
+			});
+			mockDb.query.agentResponseBatch.findMany
+				.mockResolvedValueOnce([{ id: 11, targetRef: "c1", inputMessageId: 1, participant: "alex" }])
+				.mockResolvedValue([{ id: 11, status: "completed" }]);
+			const inserts: Record<string, unknown>[] = [];
+			mockDb.insert.mockImplementation(
+				() =>
+					({
+						values: vi.fn((values: Record<string, unknown>) => {
+							inserts.push(values);
+							return { returning: vi.fn().mockResolvedValue([{ id: 999 }]) };
+						}),
+					}) as unknown as ReturnType<typeof mockDb.insert>,
+			);
+
+			// a supplement answering their own message, naming luma, joins the c1 conversation
+			await submitMessage(123, "@luma right?", USER_ID, "m2", {
+				userMetadata: { thread: { commentId: "reddit-user-m2", targetCommentId: "reddit-user-m1" } },
+			});
+
+			const added = inserts.find((insert) => insert.participant === "luma");
+			expect(added).toMatchObject({ kind: "reply", targetRef: "c1", inputMessageId: 999, attempt: 0 });
+		});
+
+		it("still queues the farewell when only world comments ever landed at max turns", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: { ...redditTask, maxTurns: 1 },
+				messages: [
+					{
+						id: 1,
+						role: "user",
+						content: "Anyone here?",
+						createdAt: now,
+						llmMetadata: { clientMessageId: "m1", thread: { commentId: "reddit-user-m1", targetCommentId: null } },
+					},
+					{ id: 5, role: "assistant", content: "meanwhile", createdAt: now, llmMetadata: { asyncDelivery: true }, responseBatchId: 12 },
+				],
+			});
+			// no outstanding batches; the only delivered message came from a world moment
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValueOnce([]).mockResolvedValue([{ id: 12, kind: "world" }]);
+			mockDb.update.mockImplementation(
+				() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([]) })) })) }) as never,
+			);
+			const valuesMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 999 }]) });
+			mockDb.insert.mockImplementation(() => ({ values: valuesMock }) as never);
+
+			const result = await submitMessage(123, "Last", USER_ID, "m2", {
+				userMetadata: { thread: { commentId: "reddit-user-m2", targetCommentId: null } },
+			});
+
+			expect(result).toEqual({ turnCount: 2, pending: false, sessionCompleted: true, completionReason: "max_turns" });
+			const farewell = valuesMock.mock.calls.find((args) => (args[0] as { kind?: string }).kind === "reply");
+			expect(farewell?.[0]).toMatchObject({ status: "pending", inputMessageId: 999, targetRef: "reddit-user-m2" });
+		});
+
+		it("ends world activity at max turns while sparing the reply a never-replied session is owed", async () => {
+			mockAsyncSelect();
+			mockDb.query.practiceSession.findFirst.mockResolvedValue({
+				id: 123,
+				userId: USER_ID,
+				status: "in_progress",
+				task: { ...redditTask, maxTurns: 1 },
+				messages: [],
+			});
+			// a pending reply taker, and a world moment already delivering
+			mockDb.query.agentResponseBatch.findMany.mockResolvedValue([
+				{ id: 11, status: "pending", kind: "reply" },
+				{ id: 12, status: "delivery_pending", kind: "world" },
+			]);
+			const updates: { table: unknown; setArgs: unknown[]; whereArgs: unknown[] }[] = [];
+			mockDb.update.mockImplementation(
+				(table: unknown) =>
+					({
+						set: vi.fn((...setArgs: unknown[]) => ({
+							where: vi.fn((...whereArgs: unknown[]) => {
+								updates.push({ table, setArgs, whereArgs });
+								return { returning: vi.fn().mockResolvedValue([]) };
+							}),
+						})),
+					}) as unknown as ReturnType<typeof mockDb.update>,
+			);
+
+			const result = await submitMessage(123, "Anyone here?", USER_ID, "m1");
+
+			expect(result).toEqual({ turnCount: 1, pending: false, sessionCompleted: true, completionReason: "max_turns" });
+			const worldCancel = updates.find((update) => update.table === agentResponseBatch && bareStrings(update.whereArgs).includes("world"));
+			expect(worldCancel).toBeDefined();
+			// the world moment's queued deliveries are cancelled with it
+			expect(updates.some((update) => update.table === agentDelivery && bareStrings(update.setArgs).includes("cancelled"))).toBe(true);
+			// the pending reply taker is spared: only stale reply batches were in scope to cancel
+			const replyCancels = updates.filter(
+				(update) =>
+					update.table === agentResponseBatch &&
+					!bareStrings(update.whereArgs).includes("world") &&
+					bareStrings(update.setArgs).includes("cancelled"),
+			);
+			for (const cancel of replyCancels) expect(bareStrings(cancel.whereArgs)).toEqual(expect.arrayContaining(["stale"]));
 		});
 	});
 
