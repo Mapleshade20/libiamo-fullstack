@@ -66,6 +66,27 @@ import WineGlassIcon from "$lib/components/shell/WineGlassIcon.svelte";
 		<div class="divide-y divide-border">
 			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
 				<header>
+					<p class="font-serif text-xl text-foreground">v0.4.2</p>
+					<time datetime="2026-10-11" class="mt-1 block text-sm text-muted-foreground">October 11, 2026</time>
+				</header>
+				<div>
+					<h2 class="font-serif text-2xl text-foreground">Hall news and more natural replies</h2>
+					<ul class="mt-3 list-disc space-y-2 pl-6 leading-7 text-foreground/85">
+						<li>Announcements now appear in the Quest Hall inbox, with a collection where you can revisit notices you have read.</li>
+						<li>Daily lineups now offer one quest, alongside a preview of custom quests coming soon.</li>
+						<li>Languages not yet open for new learners are marked “Opening soon”; existing learners can keep practising in them.</li>
+						<li>
+							Reddit, AO3 and mail participants now reply on separate schedules. Follow-up messages no longer cancel replies already being written,
+							and separate conversation branches stay on topic.
+						</li>
+						<li>Mail replies arrive as complete emails, and counterparts no longer receive your private task brief.</li>
+						<li>Improved recovery from stalled AI requests and fixed messages that could remain stuck waiting for a reply.</li>
+					</ul>
+				</div>
+			</article>
+
+			<article class="grid gap-4 py-10 sm:grid-cols-[9rem_minmax(0,1fr)]">
+				<header>
 					<p class="font-serif text-xl text-foreground">v0.4.1</p>
 					<time datetime="2026-10-03" class="mt-1 block text-sm text-muted-foreground">October 3, 2026</time>
 				</header>
