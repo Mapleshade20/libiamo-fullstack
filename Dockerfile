@@ -7,7 +7,7 @@
 # and cannot be changed at runtime. Default "" serves the app from the root of a
 # domain; build with --build-arg BASE_PATH=/app to mount it under a sub-path.
 
-ARG NODE_VERSION=22.23.2
+ARG NODE_VERSION=22.23.4
 
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME=/pnpm
