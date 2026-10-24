@@ -49,7 +49,6 @@ let primaryLabel = $derived(signedIn ? "Return to Quest Hall" : "Go to the homep
 
 <svelte:head>
 	<title>{page.status} · {copy.label} · Libiamo</title>
-	<meta name="robots" content="noindex, nofollow">
 	<meta name="libiamo-document-language" content="en">
 </svelte:head>
 

@@ -13,7 +13,7 @@ export function resolvePageDocumentLanguage({
 	routeId: string | null;
 	learnerDocumentLanguage: string;
 }): string {
-	if (routeId === null || routeId === "/welcome" || routeId.startsWith("/welcome/")) return "en";
+	if (routeId === null || routeId.startsWith("/(public)/")) return "en";
 	return learnerDocumentLanguage;
 }
 

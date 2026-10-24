@@ -6,6 +6,7 @@ import { page } from "$app/state";
 import "./layout.css";
 import "$lib/components/common/interaction-motion.css";
 import { resolvePageDocumentLanguage } from "$lib/app/document-language";
+import { resolveSearchMetadata } from "$lib/app/seo";
 import favicon from "$lib/assets/favicon.svg?no-inline";
 import { syncBrowserTimeZone } from "$lib/client/browser-timezone";
 import { installFormFeedback } from "$lib/client/form-attention";
@@ -15,6 +16,7 @@ import { DISPLAY_CLOCK_CONTEXT } from "$lib/time/display-clock";
 let { children, data } = $props();
 setContext(DISPLAY_CLOCK_CONTEXT, () => data.displayClock);
 let transitionSequence = 0;
+let searchMetadata = $derived(resolveSearchMetadata(data.siteOrigin, base, page.error === null ? page.route.id : null));
 let documentLanguage = $derived(
 	resolvePageDocumentLanguage({
 		routeId: page.error === null ? page.route.id : null,
@@ -56,17 +58,23 @@ onNavigate((navigation) => {
 
 <svelte:head>
 	<title>Libiamo</title>
-	<meta name="description" content="Practice real-world language skills through simulated conversations, translation, feedback, and spaced review.">
+	<meta name="robots" content={searchMetadata.robots}>
+	{#if searchMetadata.canonical}
+		<meta name="description" content={searchMetadata.description}>
+		<link rel="canonical" href={searchMetadata.canonical}>
+		<meta property="og:url" content={searchMetadata.canonical}>
+	{/if}
 	<meta name="application-name" content="Libiamo">
 	<meta name="apple-mobile-web-app-title" content="Libiamo">
 	<meta name="theme-color" content="#f7f0e6">
 	<meta property="og:site_name" content="Libiamo">
-	<meta property="og:title" content="Libiamo">
-	<meta
-		property="og:description"
-		content="Practice real-world language skills through simulated conversations, translation, feedback, and spaced review."
-	>
+	<meta property="og:title" content={searchMetadata.title}>
+	<meta property="og:description" content={searchMetadata.description}>
 	<meta property="og:type" content="website">
+	<meta property="og:image" content={searchMetadata.image}>
+	<meta property="og:image:width" content="512">
+	<meta property="og:image:height" content="512">
+	<meta property="og:image:alt" content="Libiamo">
 	<meta name="twitter:card" content="summary">
 	<link rel="icon" href="{base}/favicon.ico" sizes="32x32">
 	<link rel="icon" href={favicon} type="image/svg+xml" sizes="any">

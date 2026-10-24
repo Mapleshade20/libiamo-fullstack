@@ -12,7 +12,7 @@ describe("document language", () => {
 		expect(resolvePageDocumentLanguage({ routeId: "/(app)/review", learnerDocumentLanguage: "fr" })).toBe("fr");
 	});
 
-	it.each(["/welcome", "/welcome/example", null])("uses English for public and unmatched pages: %s", (routeId) => {
+	it.each(["/(public)/welcome", "/(public)/(documents)/privacy", null])("uses English for public and unmatched pages: %s", (routeId) => {
 		expect(resolvePageDocumentLanguage({ routeId, learnerDocumentLanguage: "ja" })).toBe("en");
 	});
 

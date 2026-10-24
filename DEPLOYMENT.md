@@ -238,9 +238,9 @@ one-time move.
 
 Google's production OAuth policy expects the public homepage to describe the app
 and link to its privacy policy and terms. `/welcome` supplies the product
-description, but this repository does not yet have public privacy or terms
-routes. Publish those pages and set their consent-screen URLs before requesting
-or renewing Google production verification.
+description; set the consent-screen homepage, privacy and terms URLs to
+`/welcome`, `/privacy` and `/terms` on the public origin before requesting or
+renewing Google production verification.
 
 SMTP settings do not change when `SMTP_FROM` already uses a verified sender such
 as `@libiamo.net` (or an unrelated mail subdomain). If it uses
@@ -252,6 +252,25 @@ After the cutover, test password sign-in, both OAuth providers, email
 verification, password reset, direct protected-route redirects, and the old-host
 redirect. Also update uptime checks, analytics, search-console properties, and
 any external allowlists that explicitly contain the old hostname.
+
+### Search indexing
+
+`/sitemap.xml` and `/robots.txt` use runtime `ORIGIN` and the build-time
+`BASE_PATH`, as do public canonical and sharing URLs. Keep `ORIGIN` set to the
+public HTTPS origin, not the container address. The public search allowlist in
+`src/lib/app/seo.ts` supplies both the sitemap and public metadata. All other
+pages, including authentication, app and error pages, receive `noindex`.
+`robots.txt` keeps crawlers out of signed-in surfaces (`CRAWL_DISALLOWED_PATHS`
+in the same file), which only redirect anonymous visitors; authentication, not
+robots rules, protects learner data. Crawlers read `robots.txt` only at the
+domain root, so with a sub-path deployment whatever serves the root must
+provide it.
+
+After deployment, verify the domain in Google Search Console via DNS, submit
+`https://libiamo.net/sitemap.xml`, and inspect/request indexing for
+`https://libiamo.net/welcome`. With a sub-path deployment, include `BASE_PATH`
+in both URLs. The unauthenticated `/` redirect remains temporary because `/`
+serves Quest Hall for signed-in learners. Do not submit it as a second homepage.
 
 ---
 

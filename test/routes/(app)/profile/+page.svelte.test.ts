@@ -4,6 +4,7 @@ import { t } from "$lib/i18n";
 import ProfilePage from "$routes/(app)/profile/+page.svelte";
 
 const data = {
+	siteOrigin: "https://libiamo.test",
 	displayClock: { now: 1788480000000, timeZone: "UTC" },
 	learnerDocumentLanguage: "fr",
 	accountScope: "account-a",
