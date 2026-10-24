@@ -39,11 +39,11 @@ You can preview the production build with `pnpm preview`.
 Libiamo ships as a container image published to `ghcr.io/mapleshade20/libiamo`.
 
 Production uses rootless Podman with systemd-managed quadlet units — the app and
-Postgres 18 share one pod, and nothing but port 3000 is exposed:
+Postgres 18 share a private network, and only loopback port 3000 is published:
 
 ```sh
 scp -r deploy/podman/ user@server:~/libiamo-deploy
-ssh user@server 'bash ~/libiamo-deploy/install.sh'
+ssh -t user@server 'bash ~/libiamo-deploy/install.sh'
 ```
 
 A Compose file is also provided for local trials and for Podman < 5.0:
@@ -52,6 +52,10 @@ A Compose file is also provided for local trials and for Podman < 5.0:
 cp .env.docker.example .env.docker   # then fill in every CHANGE_ME
 podman compose --env-file .env.docker up -d
 ```
+
+The Podman installer also installs monitoring, local backup/restore-drill timers,
+and a sudo-managed Caddy logging integration. Keep the complete deployment
+directory when moving servers; configure notification recipients separately.
 
 Either way the schema is created on first boot. See [DEPLOYMENT.md](./DEPLOYMENT.md)
 for reverse-proxy configuration, updates and rollback, and backups.

@@ -4,7 +4,7 @@
 #
 # Copy this directory to the server and run it there:
 #   scp -r deploy/podman/ user@server:~/libiamo-deploy
-#   ssh user@server 'bash ~/libiamo-deploy/install.sh'
+#   ssh -t user@server 'bash ~/libiamo-deploy/install.sh'
 #
 # Idempotent: existing env files are never overwritten, so re-running it after an
 # update to the unit files is safe.
@@ -19,6 +19,7 @@ warn() { printf '\033[1;33m%s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 
 # --- Preconditions ------------------------------------------------------------
+[ "$(id -u)" -ne 0 ] || die "run as the deployment user, not root (sudo is used only for host integration)"
 command -v podman >/dev/null || die "podman is not installed"
 
 PODMAN_VERSION="$(podman --version | awk '{print $3}')"
@@ -36,7 +37,8 @@ command -v systemctl >/dev/null || die "systemd is required for quadlet"
 if ! loginctl show-user "$USER" --property=Linger 2>/dev/null | grep -q 'Linger=yes'; then
     say "Enabling linger so the services survive logout"
     loginctl enable-linger "$USER" \
-        || warn "could not enable linger; run: sudo loginctl enable-linger $USER"
+        || sudo loginctl enable-linger "$USER" \
+        || die "could not enable linger; automatic services would stop after logout"
 fi
 
 # --- Config -------------------------------------------------------------------
@@ -73,6 +75,16 @@ done
 
 systemctl --user daemon-reload
 
+# The directory copy includes operations; do not silently omit them on migration.
+say "Installing bounded logging, monitoring and local backup timers"
+OPS_FAILED=false
+if [ "$FRESH_INSTALL" = true ] || grep -q CHANGE_ME "$CONF_DIR/app.env"; then
+    if ! LIBIAMO_DEFER_CADDY_SETUP=1 bash "$SRC/ops/install.sh"; then OPS_FAILED=true; fi
+elif ! bash "$SRC/ops/install.sh"; then
+    OPS_FAILED=true
+    warn "Operations setup failed. Existing deployment is not declared fully configured; see the report below."
+fi
+
 # --- Report -------------------------------------------------------------------
 REMAINING="$(grep -l CHANGE_ME "$CONF_DIR"/*.env 2>/dev/null || true)"
 if [ -n "$REMAINING" ]; then
@@ -82,12 +94,14 @@ $(grep -Hn CHANGE_ME "$CONF_DIR"/*.env | sed 's/^/    /')
 
 Edit them, then start the stack:
     \$EDITOR $CONF_DIR/app.env
-    systemctl --user start libiamo-app"
+    bash $SRC/install.sh"
 else
-    say "Starting"
-    systemctl --user start libiamo-app
-    sleep 5
-    systemctl --user status libiamo-app --no-pager --lines=15 || true
+    if [ "$OPS_FAILED" = false ]; then
+        say "Starting"
+        systemctl --user start libiamo-app
+        sleep 5
+        systemctl --user status libiamo-app --no-pager --lines=15 || true
+    fi
 fi
 
 cat <<EOF
@@ -106,4 +120,8 @@ This is a fresh install: the database starts empty and the entrypoint creates th
 schema on first boot. Set ORIGIN in app.env to your real public URL before
 exposing it, or auth and email links will point at the wrong host.
 EOF
+fi
+
+if [ "$OPS_FAILED" = true ]; then
+    die "Operations setup incomplete; fix the reported issue and rerun this installer."
 fi

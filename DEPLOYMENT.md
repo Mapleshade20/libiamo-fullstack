@@ -13,8 +13,8 @@ Two supported ways to run it:
 | **[Podman quadlet](#1-podman-quadlet-recommended)** | Production. Native pod, systemd-managed, rootless. |
 | **[Compose](#2-compose)** | Local trials, or Podman < 5.0. Works with `docker compose` and `podman compose`. |
 
-Nothing needs to be cloned on the server — only `deploy/podman/` (about 7 small
-files) or `docker-compose.yaml`.
+Nothing needs to be cloned on the server — only the complete `deploy/podman/`
+directory (including `ops/`) or `docker-compose.yaml`.
 
 ---
 
@@ -49,7 +49,7 @@ From your workstation:
 
 ```sh
 scp -r deploy/podman/ user@server:~/libiamo-deploy
-ssh user@server 'bash ~/libiamo-deploy/install.sh'
+ssh -t user@server 'bash ~/libiamo-deploy/install.sh'
 ```
 
 `install.sh` enables lingering (so services survive logout), generates the
@@ -67,6 +67,14 @@ systemctl --user start libiamo-app
 
 `ORIGIN` must be your real public URL (`https://libiamo.net`) before you
 expose the app — auth and email links are built from it.
+
+The same directory includes portable access logging, monitoring and local backup
+jobs. The installer installs their user timers and uses sudo to integrate the
+existing Caddy site. Configure private email recipients in
+`~/.config/libiamo/ops.json`, take the first backup, test email delivery and run
+an isolated restore drill. See [deployment operations](deploy/podman/ops/README.md)
+for prerequisites, limits, commands, migration and external-monitoring gaps.
+Do not copy only the quadlet files: copy the whole deployment directory.
 
 ### Operating
 
@@ -329,6 +337,11 @@ Then proxy *without* stripping the prefix, because the Node server expects to se
 ---
 
 ## 6. Backup and restore
+
+The Podman installer now includes daily local backups and weekly isolated
+restore drills; see [deployment operations](deploy/podman/ops/README.md).
+Local copies alone do **not** protect against loss of the server/disk. The
+commands below are manual recovery tools, not a restore-drill procedure.
 
 ```sh
 # Quadlet

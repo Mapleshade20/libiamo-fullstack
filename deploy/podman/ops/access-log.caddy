@@ -1,0 +1,24 @@
+# Installed inside the application's site block by configure-caddy.py.
+log __LOGGER__ {
+	output file __LOG_FILE__ {
+		mode 0640
+		roll_size 20MiB
+		roll_keep 10
+		roll_keep_for 336h
+	}
+	format filter {
+		wrap json
+		fields {
+			request>headers delete
+			request>uri delete
+			request>tls delete
+			resp_headers delete
+			path regexp "(?is)^.*(/api/auth/reset-password/).*|^(.{0,1000}).*$" "$1$2"
+			user_agent regexp "(?s)^(.{0,256}).*$" "$1"
+			cf_ray regexp "(?s)^(.{0,80}).*$" "$1"
+		}
+	}
+}
+log_append path {http.request.uri.path}
+log_append user_agent {http.request.header.User-Agent}
+log_append cf_ray {http.request.header.Cf-Ray}

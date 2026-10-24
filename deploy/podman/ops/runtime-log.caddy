@@ -1,0 +1,16 @@
+# Global options fragment: upstream failures otherwise duplicate raw request
+# details into the journal, bypassing the access-log encoder.
+log default {
+	format filter {
+		wrap json
+		fields {
+			request>headers delete
+			request>uri delete
+			request>tls delete
+			resp_headers delete
+			path regexp "(?is)^.*(/api/auth/reset-password/).*|^(.{0,1000}).*$" "$1$2"
+			user_agent regexp "(?s)^(.{0,256}).*$" "$1"
+			cf_ray regexp "(?s)^(.{0,80}).*$" "$1"
+		}
+	}
+}

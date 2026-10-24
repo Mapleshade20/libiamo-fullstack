@@ -2,7 +2,6 @@ node_modules
 
 # Output
 .output
-.deploy
 .vercel
 .netlify
 .wrangler
@@ -39,3 +38,7 @@ vite.config.ts.timestamp-*
 # Docs
 !CLAUDE.md
 !AGENTS.md
+
+# Python
+__pycache__/
+*.py[cod]
