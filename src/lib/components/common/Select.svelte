@@ -98,7 +98,11 @@ async function change(next: string) {
 			/>
 		</Select.Trigger>
 		<Select.Portal>
+			<!-- Fixed, not absolute: on open bits-ui scrolls the first item into view before the panel is placed, and an
+			     absolute panel then still sits at the top of the document, so the whole page jumped there (and the
+			     release of the click picked whatever item ended up under the pointer). -->
 			<Select.Content
+				strategy="fixed"
 				sideOffset={6}
 				collisionPadding={12}
 				class={cn(
