@@ -201,21 +201,21 @@
 	 * set here once instead of per component. Never add `select-none` to text.
 	 */
 	:where(
-			button,
-			select,
-			summary,
-			svg,
-			[role="button"],
-			[role="tab"],
-			[role="switch"],
-			[role="radio"],
-			[role="checkbox"],
-			[role="option"],
-			[role="menuitem"],
-			[role="menuitemradio"],
-			[role="slider"],
-			[data-control]
-		) {
+		button,
+		select,
+		summary,
+		svg,
+		[role="button"],
+		[role="tab"],
+		[role="switch"],
+		[role="radio"],
+		[role="checkbox"],
+		[role="option"],
+		[role="menuitem"],
+		[role="menuitemradio"],
+		[role="slider"],
+		[data-control]
+	) {
 		user-select: none;
 		-webkit-user-select: none;
 	}

@@ -161,7 +161,7 @@ export function worldIdleDelayMs(urgency: Urgency): number {
  */
 export async function settleUserMessageFlags(tx: SessionTx, messageId: number): Promise<void> {
 	const message = await tx.query.sessionMessage.findFirst({ where: eq(sessionMessage.id, messageId) });
-	if (!message || message.role !== "user") return;
+	if (message?.role !== "user") return;
 	const metadata = messageMetadataOf(message.llmMetadata);
 	const attempt = typeof metadata.attempt === "number" ? metadata.attempt : 0;
 	const contributing = await tx.query.agentResponseBatch.findMany({
@@ -273,7 +273,7 @@ export async function scheduleWorldMoment(
 			messages: { orderBy: [asc(sessionMessage.createdAt), asc(sessionMessage.id)] },
 		},
 	});
-	if (!session || session.status !== "in_progress") return false;
+	if (session?.status !== "in_progress") return false;
 	const { task } = session;
 	const learner = await executor.query.user.findFirst({ where: eq(authUser.id, session.userId), columns: { name: true } });
 	const learnerName = learner?.name || "Learner";

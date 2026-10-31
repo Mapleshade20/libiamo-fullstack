@@ -12,9 +12,9 @@ onMount(() => {
 	return () => clearInterval(timer);
 });
 </script>
-<span class="typewriter" aria-label={text}
-	><span class="reserve" aria-hidden="true">{text}</span
-	><span class="typed" aria-hidden="true">{Array.from(text).slice(0, count).join('')}</span></span
+<span class="typewriter"
+	><span class="sr-only">{text}</span><span class="reserve" aria-hidden="true">{text}</span
+	><span class="typed" aria-hidden="true">{Array.from(text).slice(0, count).join("")}</span></span
 >
 <style>
 .typewriter {

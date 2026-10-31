@@ -1,4 +1,6 @@
 <script lang="ts">
+const controlId = $props.id();
+
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { base } from "$app/paths";
@@ -202,7 +204,7 @@ function olderHref(): string {
 		>
 			{#if allMatching}
 				<input type="hidden" name="scope" value="matching">
-				{#each filterFields as [ name, value ]}
+				{#each filterFields as [name, value]}
 					<input type="hidden" {name} value={String(value)}>
 				{/each}
 			{:else}
@@ -216,8 +218,9 @@ function olderHref(): string {
 			<Table.Header>
 				<Table.Row>
 					<Table.Head class="w-11 px-0">
-						<label class="flex size-8 cursor-pointer items-center justify-center">
+						<label for={`${controlId}-all`} class="flex size-8 cursor-pointer items-center justify-center">
 							<Checkbox
+								id={`${controlId}-all`}
 								aria-label="Select every deletable trace on this page"
 								checked={pageSelected}
 								indeterminate={!pageSelected && selected.length > 0}
@@ -241,10 +244,12 @@ function olderHref(): string {
 					<Table.Row data-state={allMatching || selected.includes(trace.id) ? "selected" : undefined}>
 						<Table.Cell class="w-11 px-0">
 							<label
-								class="flex size-8 items-center justify-center {trace.runId === null ? 'cursor-pointer' : 'cursor-not-allowed'}"
+								for={`${controlId}-${trace.id}`}
+								class="flex size-8 items-center justify-center {trace.runId === null ? "cursor-pointer" : "cursor-not-allowed"}"
 								title={trace.runId === null ? undefined : `Part of run #${trace.runId}; delete the run to remove it`}
 							>
 								<Checkbox
+									id={`${controlId}-${trace.id}`}
 									aria-label="Select this trace"
 									checked={trace.runId === null && (allMatching || selected.includes(trace.id))}
 									disabled={trace.runId !== null}

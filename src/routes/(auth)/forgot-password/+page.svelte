@@ -101,7 +101,9 @@ const actionNotification = $derived(
 							bind:ref={newPasswordInput}
 							bind:value={newPassword}
 							onfocus={preloadPasswordStrength}
-							oninput={() => { if (confirmNewPasswordInput) clearFieldFeedback(confirmNewPasswordInput); }}
+							oninput={() => {
+								if (confirmNewPasswordInput) clearFieldFeedback(confirmNewPasswordInput);
+							}}
 							required
 							aria-invalid={Boolean(newPasswordError || form?.resetErrors?.newPassword)}
 						/>

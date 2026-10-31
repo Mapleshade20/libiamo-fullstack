@@ -38,7 +38,10 @@ const Icon = $derived({ info: Info, success: CircleCheck, warning: TriangleAlert
 	)}
 >
 	<Icon
-		class={cn("mt-0.5 size-4 shrink-0", { info: "text-muted-foreground", success: "text-success", warning: "text-warning", danger: "text-destructive" }[tone])}
+		class={cn(
+			"mt-0.5 size-4 shrink-0",
+			{ info: "text-muted-foreground", success: "text-success", warning: "text-warning", danger: "text-destructive" }[tone],
+		)}
 		aria-hidden="true"
 	/>
 	<div class="min-w-0 flex-1 space-y-1">

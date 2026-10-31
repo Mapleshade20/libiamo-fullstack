@@ -56,7 +56,7 @@ const tools = $derived([
 	</div>
 
 	<div class="ml-auto flex shrink-0 items-center gap-1">
-		{#each tools as [ Icon, label ]}
+		{#each tools as [Icon, label]}
 			<button
 				type="button"
 				class="hidden h-8 w-8 items-center justify-center rounded-md text-[#878A8C] hover:bg-[#F6F7F8] lg:flex"

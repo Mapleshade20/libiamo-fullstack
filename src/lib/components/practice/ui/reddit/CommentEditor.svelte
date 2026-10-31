@@ -126,9 +126,11 @@ onDestroy(() => session.hint.release(owner));
 				<div class="flex-1"></div>
 				<button
 					type="button"
-					class="grid h-11 w-11 place-items-center rounded text-[#878A8C] transition-colors hover:bg-[#EDEFF1] hover:text-[#FF4500] disabled:opacity-40 md:h-8 md:w-8 {session.hint.isOpen(owner)
-						? 'bg-[#FFF3EC] text-[#FF4500]'
-						: ''}"
+					class="grid h-11 w-11 place-items-center rounded text-[#878A8C] transition-colors hover:bg-[#EDEFF1] hover:text-[#FF4500] disabled:opacity-40 md:h-8 md:w-8 {session.hint.isOpen(
+						owner,
+					)
+						? "bg-[#FFF3EC] text-[#FF4500]"
+						: ""}"
 					onclick={(event) => session.hint.toggle(owner, event.currentTarget, () => ({ draft: text, contextPath }))}
 					aria-label={translate(language, "practice.hint")}
 					aria-expanded={session.hint.isOpen(owner)}

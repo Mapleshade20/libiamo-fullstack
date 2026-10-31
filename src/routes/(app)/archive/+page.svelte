@@ -153,11 +153,11 @@ function formatDate(d: Date): string {
 					>
 						<ChevronRight
 							size={18}
-							class={`absolute -left-5 top-1/2 -translate-y-1/2 shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:hidden${isExpanded ? ' rotate-90' : ''}`}
+							class={`absolute -left-5 top-1/2 -translate-y-1/2 shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:hidden${isExpanded ? " rotate-90" : ""}`}
 						/>
 						<ChevronRight
 							size={18}
-							class={`hidden shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:block sm:mr-1.5${isExpanded ? ' rotate-90' : ''}`}
+							class={`hidden shrink-0 text-muted-foreground transition-transform duration-250 ease-panel sm:block sm:mr-1.5${isExpanded ? " rotate-90" : ""}`}
 						/>
 						<span>{activity.title}</span>
 					</button>
@@ -188,7 +188,9 @@ function formatDate(d: Date): string {
 	message="Its review history is deleted with it. This cannot be undone."
 	confirmLabel="Delete"
 	cancelLabel="Cancel"
-	onconfirm={() => { if (deletingNoteId !== null) void deleteNote(deletingNoteId); }}
+	onconfirm={() => {
+		if (deletingNoteId !== null) void deleteNote(deletingNoteId);
+	}}
 >
 	{#if deleteError}
 		<p class="text-destructive" role="alert">{deleteError}</p>

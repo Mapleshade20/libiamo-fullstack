@@ -57,12 +57,13 @@ let tapped = $state<string | null>(null);
 		{@const grouped = !message.replyTo && previous?.role === message.role && previous.authorName === message.authorName}
 		{@const pingsLearner = message.role === "agent" && mentionsName(message.text, userName)}
 		{@const replyable = !message.deliveryState && !session.disabled}
+		<!-- biome-ignore lint/a11y/noStaticElementInteractions: Touch only reveals the existing reply button; keyboard users reach that button directly. -->
 		<div
 			class="message-row group relative -mx-4 rounded px-4 py-1 {replyingTo?.id === message.id
-				? 'bg-[#5865F2]/15 shadow-[inset_2px_0_0_#5865F2]'
+				? "bg-[#5865F2]/15 shadow-[inset_2px_0_0_#5865F2]"
 				: pingsLearner
-					? 'bg-[#F0B232]/10 shadow-[inset_2px_0_0_#F0B232] hover:bg-[#F0B232]/15'
-					: 'hover:bg-[#2E3035]'}"
+					? "bg-[#F0B232]/10 shadow-[inset_2px_0_0_#F0B232] hover:bg-[#F0B232]/15"
+					: "hover:bg-[#2E3035]"}"
 			class:mt-4={!grouped}
 			class:mt-0.5={grouped}
 			data-tapped={tapped === message.id || undefined}
@@ -75,8 +76,8 @@ let tapped = $state<string | null>(null);
 					<span class="absolute top-1/2 left-[19px] h-3 w-8 rounded-tl-md border-t-2 border-l-2 border-[#4E5058]" aria-hidden="true"></span>
 					<span class="sr-only">{lead}</span>
 					<span
-						class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white {quoted.role === 'user'
-							? 'bg-[#5865F2]'
+						class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white {quoted.role === "user"
+							? "bg-[#5865F2]"
 							: memberColor(quoted.authorName)}"
 						aria-hidden="true"
 					>
@@ -91,8 +92,9 @@ let tapped = $state<string | null>(null);
 					<div class="mr-4 w-10 shrink-0 text-right text-[10px] text-[#949BA4] opacity-0 group-hover:opacity-100">{message.timestamp}</div>
 				{:else}
 					<div
-						class="mt-0.5 mr-4 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-inner {message.role === 'user'
-							? 'bg-[#5865F2]'
+						class="mt-0.5 mr-4 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-inner {message.role ===
+						"user"
+							? "bg-[#5865F2]"
 							: memberColor(message.authorName)}"
 						aria-hidden="true"
 					>

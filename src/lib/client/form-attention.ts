@@ -82,7 +82,12 @@ export function markFieldAttention(element: HTMLElement, message?: string) {
 		if (!error) {
 			error = document.createElement("span");
 			error.dataset.nativeFieldError = "";
-			error.dataset.fieldError = element.dataset.feedbackName || element.getAttribute("name") || element.id || (element.id = `field-${++errorId}`);
+			let fieldName = element.dataset.feedbackName || element.getAttribute("name") || element.id;
+			if (!fieldName) {
+				element.id = `field-${++errorId}`;
+				fieldName = element.id;
+			}
+			error.dataset.fieldError = fieldName;
 			error.id = `field-error-${++errorId}`;
 			error.className = "field-error-message";
 			error.setAttribute("role", "alert");

@@ -49,7 +49,7 @@ const navigation = $derived([
 {#snippet content()}
 	<div class="flex h-full flex-col overflow-y-auto bg-white text-sm">
 		<nav class="border-b border-[#EDEFF1] p-2 pt-3">
-			{#each navigation as [ Icon, label ]}
+			{#each navigation as [Icon, label]}
 				<button
 					type="button"
 					class="flex w-full items-center gap-3 rounded-md px-3 py-2 font-medium transition-colors hover:bg-[#F6F7F8]"

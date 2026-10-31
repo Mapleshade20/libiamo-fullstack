@@ -63,7 +63,9 @@ function requestDelete(announcement: { id: number; title: string }) {
 				bind:this={publishForm}
 				method="POST"
 				action="?/publish"
-				use:enhance={() => async ({ update }) => update({ reset: true })}
+				use:enhance={() =>
+					async ({ update }) =>
+						update({ reset: true })}
 				class="space-y-4"
 				oninvalidcapture={handleInvalidField}
 			>
@@ -129,7 +131,9 @@ function requestDelete(announcement: { id: number; title: string }) {
 <ConfirmDialog
 	bind:open={confirmOpen}
 	title="Delete this announcement?"
-	message={pendingDelete ? `“${pendingDelete.title}” disappears from every learner's Hall, including the collection of read announcements.` : undefined}
+	message={pendingDelete
+		? `“${pendingDelete.title}” disappears from every learner's Hall, including the collection of read announcements.`
+		: undefined}
 	confirmLabel="Delete"
 	cancelLabel="Cancel"
 	onconfirm={() => {

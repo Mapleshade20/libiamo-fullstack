@@ -56,7 +56,7 @@ const serverAcronym = $derived(
 			aria-label={translate(language, "practice.returnToTask")}
 			title={translate(language, "practice.returnToTask")}
 		>
-			<LogOut size={22} class="mr-0.5" aria-hidden="true" />
+			<span class="sr-only">{translate(language, "practice.returnToTask")}</span><LogOut size={22} class="mr-0.5" aria-hidden="true" />
 		</a>
 		<div class="h-[2px] w-8 rounded-full bg-[#35363C]"></div>
 		<div class="relative flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#5865F2] text-white" aria-current="true">

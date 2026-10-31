@@ -172,7 +172,9 @@ $effect(() => {
 						data-second-draft
 						data-feedback-name={String(i)}
 						maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
-						class="w-full min-h-[7rem] resize-none overflow-hidden rounded-xl border bg-card px-4 py-3 font-inter-stack text-base leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 {flagged ?'border-warning ring-2 ring-warning/25' : 'border-border'}"
+						class="w-full min-h-[7rem] resize-none overflow-hidden rounded-xl border bg-card px-4 py-3 font-inter-stack text-base leading-relaxed shadow-xs outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 {flagged
+							? "border-warning ring-2 ring-warning/25"
+							: "border-border"}"
 						value={draft.paragraphs[i] ?? ""}
 						readonly={finished || submitting}
 						oninput={(e) => {
@@ -204,9 +206,9 @@ $effect(() => {
 				{#if feedbackMounted && displayCommentary}
 					{#key feedbackWipeKey}
 						<div
-							class="feedback-wipe mb-1 flex gap-3 border-l-2 px-4 py-3 {displayTone ==='unresolved'
-								? 'border-destructive/40 bg-destructive/[0.06]'
-								: 'border-success/40 bg-success/[0.07]'}"
+							class="feedback-wipe mb-1 flex gap-3 border-l-2 px-4 py-3 {displayTone === "unresolved"
+								? "border-destructive/40 bg-destructive/[0.06]"
+								: "border-success/40 bg-success/[0.07]"}"
 							role="status"
 						>
 							{#if displayTone === "unresolved"}
@@ -215,8 +217,8 @@ $effect(() => {
 								<CheckCircle2 class="mt-0.5 size-4 shrink-0 text-success" />
 							{/if}
 							<div class="min-w-0">
-								<p class="mb-1 text-xs font-medium {displayTone ==='unresolved' ? 'text-destructive' : 'text-success'}">{feedbackLabel}</p>
-								<p class="font-prose text-sm leading-relaxed {displayTone ==='unresolved' ? 'text-foreground' : 'text-foreground'}">
+								<p class="mb-1 text-xs font-medium {displayTone === "unresolved" ? "text-destructive" : "text-success"}">{feedbackLabel}</p>
+								<p class="font-prose text-sm leading-relaxed {displayTone === "unresolved" ? "text-foreground" : "text-foreground"}">
 									{displayCommentary}
 								</p>
 							</div>
@@ -256,13 +258,13 @@ $effect(() => {
 				<Button
 					class="shrink-0"
 					onclick={() => {
-					const issues = sourceParagraphs.flatMap((_, index) => {
-						const message = textValidationMessage(draft.paragraphs[index] ?? "", PRACTICE_UI_TEXT_MAX_LENGTH);
-						return message ? [{ path: [index], message }] : [];
-					});
-					if (draftRoot && showValidationIssues(draftRoot, issues)) return;
-					onsubmit?.();
-				}}
+						const issues = sourceParagraphs.flatMap((_, index) => {
+							const message = textValidationMessage(draft.paragraphs[index] ?? "", PRACTICE_UI_TEXT_MAX_LENGTH);
+							return message ? [{ path: [index], message }] : [];
+						});
+						if (draftRoot && showValidationIssues(draftRoot, issues)) return;
+						onsubmit?.();
+					}}
 					disabled={submitting}
 				>
 					{#if submitting}

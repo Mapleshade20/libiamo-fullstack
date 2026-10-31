@@ -156,13 +156,14 @@ function handleKeyDown(event: KeyboardEvent) {
 			class="absolute inset-x-3 bottom-full z-50 overflow-hidden rounded-lg bg-[#2B2D31] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_12px_24px_rgba(0,0,0,0.24)] md:inset-x-4"
 		>
 			<p id="{MENTION_LIST_ID}-title" class="px-3 pt-3 pb-1 text-xs font-semibold text-[#B5BAC1] uppercase">{t.members}</p>
-			<ul id={MENTION_LIST_ID} role="listbox" aria-labelledby="{MENTION_LIST_ID}-title" class="max-h-72 overflow-y-auto px-2 pb-2">
+			<div id={MENTION_LIST_ID} role="listbox" aria-labelledby="{MENTION_LIST_ID}-title" class="max-h-72 overflow-y-auto px-2 pb-2">
 				{#each mentionMembers as member, index (member.name)}
-					<li
+					<div
 						id="{MENTION_LIST_ID}-{index}"
 						role="option"
+						tabindex="-1"
 						aria-selected={mentionIndex === index}
-						class="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 {mentionIndex === index ? 'bg-[#404249]' : ''}"
+						class="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 {mentionIndex === index ? "bg-[#404249]" : ""}"
 						onmouseenter={() => (mentionIndex = index)}
 						onmousedown={(event) => {
 							// Keep focus (and the caret) in the textarea.
@@ -177,9 +178,9 @@ function handleKeyDown(event: KeyboardEvent) {
 							{member.name.charAt(0).toUpperCase()}
 						</span>
 						<span class="truncate text-sm font-medium text-[#DBDEE1]">{member.name}</span>
-					</li>
+					</div>
 				{/each}
-			</ul>
+			</div>
 		</div>
 	{/if}
 
@@ -213,8 +214,9 @@ function handleKeyDown(event: KeyboardEvent) {
 					</button>
 				</div>
 			{/if}
-			<div class="flex items-center px-2 md:px-4 {disabled ? 'opacity-50' : ''}">
+			<div class="flex items-center px-2 md:px-4 {disabled ? "opacity-50" : ""}">
 				<div class="min-w-0 flex-1">
+					<!-- biome-ignore lint/a11y/useAriaActivedescendantWithTabindex: This component renders a natively tabbable textarea. -->
 					<ResizeableTextarea
 						bind:value={inputText}
 						bind:textarea
@@ -238,7 +240,9 @@ function handleKeyDown(event: KeyboardEvent) {
 				<div class="relative ml-2 flex shrink-0 items-center justify-center gap-1 text-[#B5BAC1] md:ml-3">
 					<button
 						type="button"
-						class="hidden h-11 w-11 place-items-center rounded transition-colors md:grid {session.hint.loading ? 'text-yellow-400' : 'hover:text-[#DBDEE1]'}"
+						class="hidden h-11 w-11 place-items-center rounded transition-colors md:grid {session.hint.loading
+							? "text-yellow-400"
+							: "hover:text-[#DBDEE1]"}"
 						onclick={toggleHint}
 						aria-label={hintLabel}
 						aria-expanded={session.hint.isOpen(HINT_OWNER)}
@@ -250,7 +254,7 @@ function handleKeyDown(event: KeyboardEvent) {
 					<div class="emoji-container-wrapper relative flex items-center">
 						<button
 							type="button"
-							class="grid h-11 w-11 place-items-center rounded transition-colors {showEmojiPicker ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+							class="grid h-11 w-11 place-items-center rounded transition-colors {showEmojiPicker ? "text-white" : "hover:text-[#DBDEE1]"}"
 							onclick={() => (showEmojiPicker = !showEmojiPicker)}
 							aria-label={t.emoji}
 							aria-expanded={showEmojiPicker}
@@ -280,7 +284,9 @@ function handleKeyDown(event: KeyboardEvent) {
 
 		<button
 			type="button"
-			class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors md:hidden {canSend ? 'bg-[#5865F2] text-white' : 'bg-[#383A40] text-[#80848E]'}"
+			class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors md:hidden {canSend
+				? "bg-[#5865F2] text-white"
+				: "bg-[#383A40] text-[#80848E]"}"
 			onclick={submit}
 			disabled={!canSend}
 			aria-label={translate(language, "practice.send")}

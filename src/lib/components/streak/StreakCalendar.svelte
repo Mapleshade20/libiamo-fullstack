@@ -92,16 +92,15 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 		{/each}
 	</div>
 
-	<div class="grid" class:loading role="list" aria-label={monthLabel} aria-busy={loading}>
+	<ul class="grid" class:loading aria-label={monthLabel} aria-busy={loading}>
 		{#each cells as cell (cell.day)}
-			<div
+			<li
 				class="cell"
 				class:outside={!cell.inMonth}
 				class:today={cell.isToday}
 				class:unknown={cell.unknown && !cell.future}
 				class:future={cell.future}
 				data-state={cell.state ?? "none"}
-				role="listitem"
 				aria-current={cell.isToday ? "date" : undefined}
 				aria-label={`${cell.day}: ${t(lang, cell.state === "lit" ? "streak.dayLit" : cell.state === "covered" ? "streak.protectedDay" : cell.future ? "streak.futureDay" : cell.unknown ? "streak.unknownDay" : "streak.unlitDay")}`}
 			>
@@ -115,9 +114,9 @@ const atStart = $derived(since === null || month <= since.slice(0, 7));
 					<!-- A day ruled through: accounted for by a saved day, not worked. -->
 					<svg class="tick" viewBox="0 0 12 12" aria-hidden="true"><path class="nav-stroke" d="M2.4 6.1q3.6-.5 7.2 0" /></svg>
 				{/if}
-			</div>
+			</li>
 		{/each}
-	</div>
+	</ul>
 </div>
 
 <style>

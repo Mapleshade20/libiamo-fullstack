@@ -207,7 +207,11 @@ onMount(() => {
 
 {#if saveStatus}
 	<div
-		class="fixed z-[60] max-w-xs rounded-full border px-3 py-2 text-xs font-medium shadow-lg border-border bg-popover {saveStatus.kind === 'success' ? 'text-success' : saveStatus.kind === 'empty' ? 'text-muted-foreground' : 'text-destructive'}"
+		class="fixed z-[60] max-w-xs rounded-full border px-3 py-2 text-xs font-medium shadow-lg border-border bg-popover {saveStatus.kind === "success"
+			? "text-success"
+			: saveStatus.kind === "empty"
+				? "text-muted-foreground"
+				: "text-destructive"}"
 		style="top: {saveStatus.top}px; left: {saveStatus.left}px;"
 		transition:fade={{ duration: 150 }}
 	>

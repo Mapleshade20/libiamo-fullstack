@@ -84,13 +84,15 @@ function publishedOn(date: Date): string {
 </script>
 
 <svelte:document
-	onpointerdown={(event) => { if (!container?.contains(event.target as Node)) close(); }}
+	onpointerdown={(event) => {
+		if (!container?.contains(event.target as Node)) close();
+	}}
 	onkeydown={(event) => {
-	if (event.key !== "Escape" || (!expanded && openId === null) || leavingId !== null) return;
-	const opened = openId;
-	close();
-	container?.querySelector<HTMLElement>(opened === null ? "a, button" : `#announcement-${opened}-summary`)?.focus({ preventScroll: true });
-}}
+		if (event.key !== "Escape" || (!expanded && openId === null) || leavingId !== null) return;
+		const opened = openId;
+		close();
+		container?.querySelector<HTMLElement>(opened === null ? "a, button" : `#announcement-${opened}-summary`)?.focus({ preventScroll: true });
+	}}
 />
 
 <span class="sr-only" role="status"
@@ -104,9 +106,15 @@ function publishedOn(date: Date): string {
 		class:has-open={openId !== null}
 		aria-label={t(lang, "hall.unreadTrigger")}
 		style:--open-height="{openHeight}px"
-		onpointerenter={(event) => { if (event.pointerType === "mouse" && openId === null) expanded = true; }}
-		onpointerleave={(event) => { if (event.pointerType === "mouse" && !container?.contains(document.activeElement)) expanded = false; }}
-		onfocusout={(event) => { if (event.relatedTarget && !container?.contains(event.relatedTarget as Node)) close(); }}
+		onpointerenter={(event) => {
+			if (event.pointerType === "mouse" && openId === null) expanded = true;
+		}}
+		onpointerleave={(event) => {
+			if (event.pointerType === "mouse" && !container?.contains(document.activeElement)) expanded = false;
+		}}
+		onfocusout={(event) => {
+			if (event.relatedTarget && !container?.contains(event.relatedTarget as Node)) close();
+		}}
 	>
 		<div class="cards" style:--count={entries.length}>
 			{#each entries as entry, index (entry.key)}
@@ -128,7 +136,9 @@ function publishedOn(date: Date): string {
 								class="summary"
 								aria-expanded={open}
 								aria-controls="announcement-{announcement.id}-detail"
-								onpointerdown={(event) => { pointerType = event.pointerType; }}
+								onpointerdown={(event) => {
+									pointerType = event.pointerType;
+								}}
 								onclick={(event) => {
 									// The first touch/keyboard activation exposes the stack, as reply cards do.
 									if (openId === null && !expanded && (pointerType !== "mouse" || event.detail === 0)) expanded = true;
@@ -136,7 +146,10 @@ function publishedOn(date: Date): string {
 									pointerType = "";
 								}}
 								onkeydown={(event) => {
-									if (event.key === "ArrowDown" && openId === null) { event.preventDefault(); expanded = true; }
+									if (event.key === "ArrowDown" && openId === null) {
+										event.preventDefault();
+										expanded = true;
+									}
 								}}
 							>
 								<span class="icon"><Megaphone size={20} aria-hidden="true" /></span>
@@ -169,12 +182,22 @@ function publishedOn(date: Date): string {
 						style:--index={index}
 						style:--depth={Math.min(index, 2)}
 						inert={openId !== null || (!expanded && index > 0)}
-						onpointerdown={(event) => { pointerType = event.pointerType; }}
+						onpointerdown={(event) => {
+							pointerType = event.pointerType;
+						}}
 						onclick={(event) => {
-							if (!expanded && (pointerType !== "mouse" || event.detail === 0)) { event.preventDefault(); expanded = true; }
+							if (!expanded && (pointerType !== "mouse" || event.detail === 0)) {
+								event.preventDefault();
+								expanded = true;
+							}
 							pointerType = "";
 						}}
-						onkeydown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); expanded = true; } }}
+						onkeydown={(event) => {
+							if (event.key === "ArrowDown") {
+								event.preventDefault();
+								expanded = true;
+							}
+						}}
 						use:hoverMarquee
 					>
 						<span class="icon"><NotificationIcon ui={item.ui} /></span>

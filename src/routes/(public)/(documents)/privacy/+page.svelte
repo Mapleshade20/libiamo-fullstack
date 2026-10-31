@@ -1,5 +1,4 @@
 <script lang="ts">
-import { base } from "$app/paths";
 import PublicPageSwitcher from "$lib/components/shell/PublicPageSwitcher.svelte";
 </script>
 

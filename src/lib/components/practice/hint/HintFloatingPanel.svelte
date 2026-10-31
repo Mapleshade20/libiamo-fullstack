@@ -374,8 +374,12 @@ $effect(() => {
 						class="min-w-0 flex-1 bg-transparent text-xs text-[#2f2a25] outline-none placeholder:text-[#8c8782]"
 						aria-label={labels.expressionInput}
 						placeholder={labels.expressionPlaceholder}
-						onfocus={() => { expressionFocused = true; }}
-						onblur={() => { expressionFocused = false; }}
+						onfocus={() => {
+							expressionFocused = true;
+						}}
+						onblur={() => {
+							expressionFocused = false;
+						}}
 						oninput={handleExpressionInput}
 						onkeydown={handleExpressionKeydown}
 						{disabled}

@@ -359,7 +359,7 @@ function enhancePasswordSetup() {
 
 	{#snippet methodStatus(on: boolean, text: string)}
 		<span class="flex items-baseline gap-1.5 text-xs text-muted-foreground">
-			<span class="size-1.5 shrink-0 translate-y-[-1px] rounded-full {on ? 'bg-success' : 'bg-foreground/25'}" aria-hidden="true"></span>
+			<span class="size-1.5 shrink-0 translate-y-[-1px] rounded-full {on ? "bg-success" : "bg-foreground/25"}" aria-hidden="true"></span>
 			<span class="min-w-0 break-words">{text}</span>
 		</span>
 	{/snippet}
@@ -427,7 +427,11 @@ function enhancePasswordSetup() {
 					legend={t(lang, "profile.proficiency")}
 					description={t(lang, "profile.proficiencyHelp")}
 					value={data.levelSelfAssign == null ? "" : String(data.levelSelfAssign)}
-					items={SELF_ASSIGNED_LEVELS.map((level) => ({ value: String(level), label: t(lang, difficultyLabelKey(level)), description: DIFFICULTY_CEFR[level] }))}
+					items={SELF_ASSIGNED_LEVELS.map((level) => ({
+						value: String(level),
+						label: t(lang, difficultyLabelKey(level)),
+						description: DIFFICULTY_CEFR[level],
+					}))}
 				/>
 				{#if form?.proficiencyError}
 					<p data-field-error="levelSelfAssign" class="field-error-message" role="alert">{t(lang, "profile.proficiencyError")}</p>
@@ -471,22 +475,24 @@ function enhancePasswordSetup() {
 						class="space-y-4"
 						oninvalidcapture={handleInvalidField}
 						use:enhance={({ formData }) => {
-								emailChangePending = true;
-								const address = String(formData.get("newEmail") ?? "").trim().toLowerCase();
-								return async ({ result, update }) => {
-									try {
-										await update({ reset: result.type === "success" });
-										if (result.type === "success" && result.data?.emailChange === "sent") {
-											emailSentTo = address;
-											// The submit button that held focus is gone with the form.
-											await tick();
-											emailDoneButton?.focus();
-										}
-									} finally {
-										emailChangePending = false;
+							emailChangePending = true;
+							const address = String(formData.get("newEmail") ?? "")
+								.trim()
+								.toLowerCase();
+							return async ({ result, update }) => {
+								try {
+									await update({ reset: result.type === "success" });
+									if (result.type === "success" && result.data?.emailChange === "sent") {
+										emailSentTo = address;
+										// The submit button that held focus is gone with the form.
+										await tick();
+										emailDoneButton?.focus();
 									}
-								};
-							}}
+								} finally {
+									emailChangePending = false;
+								}
+							};
+						}}
 					>
 						<div class="flex items-center gap-1.5">
 							<Label for="newEmail">{t(lang, "profile.newEmail")}</Label>
@@ -534,7 +540,14 @@ function enhancePasswordSetup() {
 								? {
 										variant: "error",
 										title: t(lang, "profile.changeEmail"),
-										message: t(lang, form.emailChange === "stale" ? "profile.emailChangeStale" : form.emailChange === "captcha" ? "profile.emailChangeCaptcha" : "profile.emailChangeError"),
+										message: t(
+											lang,
+											form.emailChange === "stale"
+												? "profile.emailChangeStale"
+												: form.emailChange === "captcha"
+													? "profile.emailChangeCaptcha"
+													: "profile.emailChangeError",
+										),
 									}
 								: null}
 						/>
@@ -664,7 +677,10 @@ function enhancePasswordSetup() {
 					<!-- A real basis, not flex-1's zero, so the buttons wrap below before this column collapses. -->
 					<span class="min-w-0 flex-1 basis-40 space-y-0.5">
 						<span class="block truncate font-medium" title={data.user.email}>{data.user.email}</span>
-						{@render methodStatus(data.credentialConnected, t(lang, data.credentialConnected ? "profile.passwordEnabled" : "profile.passwordMissing"))}
+						{@render methodStatus(
+							data.credentialConnected,
+							t(lang, data.credentialConnected ? "profile.passwordEnabled" : "profile.passwordMissing"),
+						)}
 					</span>
 					<span class="flex flex-wrap gap-2">
 						{#if !data.credentialConnected}
@@ -782,7 +798,11 @@ function enhancePasswordSetup() {
 					</div>
 					<div class="h-2 overflow-hidden rounded-full bg-foreground/[0.08]">
 						<div
-							class="h-full rounded-full transition-[width] duration-250 ease-panel {trialTone === 'depleted' ? 'bg-destructive' : trialTone === 'low' ? 'bg-warning' : 'bg-primary'}"
+							class="h-full rounded-full transition-[width] duration-250 ease-panel {trialTone === "depleted"
+								? "bg-destructive"
+								: trialTone === "low"
+									? "bg-warning"
+									: "bg-primary"}"
 							style="width: {trialPercent}%"
 						></div>
 					</div>
@@ -863,11 +883,11 @@ function enhancePasswordSetup() {
 					action="?/updateProfile"
 					oninvalidcapture={handleInvalidField}
 					use:enhance={() => {
-					showActionNotification = true;
-					return async ({ update }) => {
-						await update({ reset: false });
-					};
-				}}
+						showActionNotification = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+						};
+					}}
 					class="space-y-4"
 				>
 					<div class="space-y-2">
@@ -876,7 +896,9 @@ function enhancePasswordSetup() {
 							id="apiBaseUrl"
 							name="apiBaseUrl"
 							bind:value={apiBaseUrlValue}
-							onValueChange={() => { apiKeyValue = ""; }}
+							onValueChange={() => {
+								apiKeyValue = "";
+							}}
 							placeholder={t(lang, "profile.selectApiProvider")}
 							items={BYOK_API_BASE_URLS.map((baseUrl) => ({ value: baseUrl, label: BYOK_API_BASE_URL_LABELS[baseUrl] }))}
 							aria-invalid={Boolean(form?.errors?.apiBaseUrl)}

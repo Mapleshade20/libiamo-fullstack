@@ -45,15 +45,15 @@ let importNotification = $derived(
 				method="POST"
 				action="?/importJson"
 				use:enhance={({ cancel, formElement, formData }) => {
-				const result = parseTaskJson(String(formData.get("taskJson") ?? ""));
-				if (!result.success) {
-					cancel();
-					const input = formElement.querySelector<HTMLTextAreaElement>('[name="taskJson"]');
-					if (input) focusAndHighlightField(input, result.error);
-					return;
-				}
-				return async ({ update }) => update({ reset: false });
-			}}
+					const result = parseTaskJson(String(formData.get("taskJson") ?? ""));
+					if (!result.success) {
+						cancel();
+						const input = formElement.querySelector<HTMLTextAreaElement>('[name="taskJson"]');
+						if (input) focusAndHighlightField(input, result.error);
+						return;
+					}
+					return async ({ update }) => update({ reset: false });
+				}}
 				class="space-y-2"
 			>
 				<label for="task-json" class="block text-sm text-muted-foreground">Paste an exported task JSON file to create a new task.</label>

@@ -1,4 +1,6 @@
 <script lang="ts">
+const controlId = $props.id();
+
 import Plus from "@lucide/svelte/icons/plus";
 import X from "@lucide/svelte/icons/x";
 import { getDefaultOpeningState, type OpeningState } from "$lib/admin/opening-state";
@@ -166,9 +168,9 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 	tabindex="-1"
 	data-validation-group
 	use:validateBeforeSubmit={() => {
-	const result = validateOpeningState(ui, value);
-	return result && !result.success ? result.error.issues : [];
-}}
+		const result = validateOpeningState(ui, value);
+		return result && !result.success ? result.error.issues : [];
+	}}
 >
 	{#if name}
 		<input type="hidden" {name} value={serialized}>
@@ -221,7 +223,10 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 					placeholder={field.placeholder}
 					required={field.required}
 					oninput={(e) => {
-						const items = e.currentTarget.value.split(",").map((t) => t.trim()).filter(Boolean);
+						const items = e.currentTarget.value
+							.split(",")
+							.map((t) => t.trim())
+							.filter(Boolean);
 						setFlatField(path, items);
 					}}
 				/>
@@ -236,8 +241,12 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 			{/if}
 		</div>
 	{:else if field.type === "checkbox"}
-		<label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
-			<Checkbox checked={getFlatField(path) === true} onchange={(e) => setFlatField(path, e.currentTarget.checked || undefined)} />
+		<label for={`${controlId}-${path}`} class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
+			<Checkbox
+				id={`${controlId}-${path}`}
+				checked={getFlatField(path) === true}
+				onchange={(e) => setFlatField(path, e.currentTarget.checked || undefined)}
+			/>
 			{field.label}
 		</label>
 	{:else if field.type === "textarea"}
@@ -407,9 +416,9 @@ const resetsWithList = $derived(LIST_FIELDS.includes(fields.at(-1)?.type ?? ""))
 					variant="secondary"
 					size="sm"
 					onclick={() => {
-					const item: Record<string, unknown> = { [authorField]: "", [textField]: "" };
-					addListItem(field.key, item);
-				}}
+						const item: Record<string, unknown> = { [authorField]: "", [textField]: "" };
+						addListItem(field.key, item);
+					}}
 					><Plus aria-hidden="true" />Add comment</Button
 				>
 				{@render resetHere(field)}

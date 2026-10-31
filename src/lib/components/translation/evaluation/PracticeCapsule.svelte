@@ -26,8 +26,13 @@ const label = $derived(status === "generating" ? generatingLabel : status === "f
 		{#if status === "generating"}
 			<!-- Decorative spinner; status text carries the accessible name. -->
 			<span class="relative inline-flex size-4 shrink-0" aria-hidden="true">
-				<!-- biome-ignore lint/a11y/noSvgWithoutTitle: decorative, parent is aria-hidden -->
-				<svg viewBox="0 0 20 20" class="size-4 {reduced ?'' : 'animate-spin'}" style={reduced ? "" : "animation-duration: 1.1s"} focusable="false">
+				<svg
+					aria-hidden="true"
+					viewBox="0 0 20 20"
+					class="size-4 {reduced ? "" : "animate-spin"}"
+					style={reduced ? "" : "animation-duration: 1.1s"}
+					focusable="false"
+				>
 					<circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.5" class="text-muted-foreground/30" />
 					<path
 						d="M 10 2.5 A 7.5 7.5 0 0 1 17.5 10"

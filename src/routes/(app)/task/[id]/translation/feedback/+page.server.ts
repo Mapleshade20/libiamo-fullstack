@@ -94,7 +94,7 @@ function actionFailure(cause: unknown) {
 	return fail(cause instanceof TranslationWorkflowError ? cause.status : llmErrorStatus(cause), { error: llmErrorMessage(cause) });
 }
 
-export const actions: Actions = {
+export const actions = {
 	retryEvaluation: async (event) => {
 		const { attempt } = await requireTranslationAttempt(event);
 		try {
@@ -208,4 +208,4 @@ export const actions: Actions = {
 			return actionFailure(cause);
 		}
 	},
-};
+} satisfies Actions;

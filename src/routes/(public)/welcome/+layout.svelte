@@ -396,6 +396,7 @@ $effect(() => {
 				<div class:practice-stack-cycling={practiceCardAnimating} class="practice-stack">
 					<div class="practice-card practice-card-back" aria-hidden="true">{@render practiceCardContent(followingPractice)}</div>
 					<div class="practice-card practice-card-underlay" aria-hidden="true">{@render practiceCardContent(nextPractice)}</div>
+					<!-- biome-ignore lint/a11y/useSemanticElements: The preview contains headings and paragraphs, which cannot be children of a native button; Enter and Space activate it. -->
 					<div
 						class:practice-brief-cycling={practiceCardAnimating}
 						class="practice-card practice-brief"
@@ -441,7 +442,7 @@ $effect(() => {
 				</ul>
 			</div>
 
-			<div class="scenario-stage" aria-label="Working Libiamo practice cases">
+			<section class="scenario-stage" aria-label="Working Libiamo practice cases">
 				<article class="scenario-card scenario-mail">
 					<header><MessagesSquare size={17} aria-hidden="true" /><span>Discord</span><small>Medium urgency</small></header>
 					<p class="scenario-label">Sam · weekend planning</p>
@@ -463,11 +464,11 @@ $effect(() => {
 					<p class="scenario-label">{translationCase.title}</p>
 					<p lang="zh">{translationCase.source}</p>
 				</article>
-			</div>
+			</section>
 		</section>
 
 		<section id="feedback" class="feature feature-feedback" aria-labelledby="feedback-title">
-			<div class="feedback-stage" aria-label="Annotated translation evaluation of Rousseau’s Man is born free">
+			<section class="feedback-stage" aria-label="Annotated translation evaluation of Rousseau’s Man is born free">
 				<div class="margin-note margin-note-one" aria-hidden="true">subject</div>
 				<div class="margin-note margin-note-two" aria-hidden="true">idiom</div>
 				<article class="editorial-review">
@@ -485,7 +486,7 @@ $effect(() => {
 							{#each translationCase.firstDraftParts as part}
 								{#if part.type === "mark"}
 									<mark class="feedback-annotation feedback-annotation-draft"
-										>{part.content}<sup aria-label="annotation {part.annotation}">{part.annotation}</sup></mark
+										>{part.content}<sup><span class="sr-only">annotation </span>{part.annotation}</sup></mark
 									>
 								{:else}
 									{part.content}
@@ -502,7 +503,7 @@ $effect(() => {
 							{#each translationCase.referenceParts as part}
 								{#if part.type === "mark"}
 									<mark class="feedback-annotation feedback-annotation-reference"
-										>{part.content}<sup aria-label="annotation {part.annotation}">{part.annotation}</sup></mark
+										>{part.content}<sup><span class="sr-only">annotation </span>{part.annotation}</sup></mark
 									>
 								{:else}
 									{part.content}
@@ -524,7 +525,7 @@ $effect(() => {
 						<span><Check size={15} aria-hidden="true" /> Naturalness · {translationRatings.naturalness}</span>
 					</footer>
 				</article>
-			</div>
+			</section>
 
 			<div class="feature-copy">
 				<p class="section-kicker"><span>02</span> Inspect the response</p>
@@ -549,7 +550,8 @@ $effect(() => {
 					Saved expressions and feedback become Notes with definitions in both languages and four bilingual examples. Review presents one example at a
 					time, then schedules the next encounter from Again, Hard, Good, or Easy.
 				</p>
-				<div class="loop-line" aria-label="Libiamo learning loop">
+				<div class="loop-line">
+					<span class="sr-only">Libiamo learning loop: </span>
 					<span>Practice</span><ArrowRight size={16} aria-hidden="true" /><span>Understand</span><ArrowRight size={16} aria-hidden="true" />
 					<span>Remember</span>
 				</div>

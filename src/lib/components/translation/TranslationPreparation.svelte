@@ -103,9 +103,7 @@ let retakeAction = $derived(`${base}/task/${task.id}${pinnedActionQuery(pin, "re
 			<div class="blocked-note">
 				<AlertCircle class="mt-0.5 shrink-0" size={17} aria-hidden="true" />
 				<p>
-					{blockedReason === "same-language"
-						? t(lang, "translate.details.sameLanguage")
-						: t(lang, "translate.details.missingNative")}
+					{blockedReason === "same-language" ? t(lang, "translate.details.sameLanguage") : t(lang, "translate.details.missingNative")}
 				</p>
 			</div>
 		{/if}

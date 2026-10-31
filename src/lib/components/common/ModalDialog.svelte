@@ -79,6 +79,7 @@ $effect(() => {
 });
 </script>
 
+<!-- biome-ignore lint/a11y/useKeyWithClickEvents: This handler only dismisses backdrop clicks; the native dialog handles Escape via oncancel. -->
 <dialog
 	bind:this={dialog}
 	class:sheet={variant === "sheet"}
@@ -90,8 +91,12 @@ $effect(() => {
 		event.preventDefault();
 		if (!busy) isOpen = false;
 	}}
-	onmousedown={(event) => { pressedBackdrop = event.target === dialog; }}
-	onclick={(event) => { if (lightDismiss && !busy && pressedBackdrop && event.target === dialog) isOpen = false; }}
+	onmousedown={(event) => {
+		pressedBackdrop = event.target === dialog;
+	}}
+	onclick={(event) => {
+		if (lightDismiss && !busy && pressedBackdrop && event.target === dialog) isOpen = false;
+	}}
 	onclose={() => {
 		closing = false;
 		isOpen = false;

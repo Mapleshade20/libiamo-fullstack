@@ -12,7 +12,7 @@ let { value, direction = "up", muted = false }: Props = $props();
 const digits = $derived(String(Math.max(0, Math.trunc(value))).split(""));
 </script>
 
-<span class="digits tabular-nums" class:muted class:down={direction === "down"} aria-label={String(value)}>
+<span role="img" class="digits tabular-nums" class:muted class:down={direction === "down"} aria-label={String(value)}>
 	{#each digits as digit, index (index)}
 		<span class="slot">
 			{#key digit}

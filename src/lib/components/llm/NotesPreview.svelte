@@ -21,7 +21,7 @@ let { notes, compact = false }: { notes: PreviewNote[]; compact?: boolean } = $p
 				<p class="mt-1 text-sm">{String(note.targetDefinition ?? "")}</p>
 				<p class="text-sm text-muted-foreground">{String(note.nativeDefinition ?? "")}</p>
 				{#if Array.isArray(note.examples) && note.examples.length}
-					<ol class="mt-2 space-y-1 border-t border-border pt-2 text-sm {compact ? 'hidden sm:block' : ''}">
+					<ol class="mt-2 space-y-1 border-t border-border pt-2 text-sm {compact ? "hidden sm:block" : ""}">
 						{#each note.examples as example}
 							<li>
 								<span>{String(example.targetText ?? "")}</span>

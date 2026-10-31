@@ -306,7 +306,7 @@ export async function startSession(taskId: number, userId: string, lineupId: num
 		where: eq(task.id, taskId),
 		columns: { interactionType: true },
 	});
-	if (!taskData || taskData.interactionType !== "chat") throw new Error("Task not found");
+	if (taskData?.interactionType !== "chat") throw new Error("Task not found");
 
 	const sameAttempt = and(
 		eq(practiceSession.userId, userId),
@@ -723,7 +723,7 @@ export async function getSessionOrFail(sessionId: number, userId: string, taskId
 	const session = await db.query.practiceSession.findFirst({
 		where: eq(practiceSession.id, sessionId),
 	});
-	if (!session || session.userId !== userId || session.taskId !== taskId) {
+	if (session?.userId !== userId || session.taskId !== taskId) {
 		return null;
 	}
 	return session;

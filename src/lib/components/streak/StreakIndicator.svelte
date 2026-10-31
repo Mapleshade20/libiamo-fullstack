@@ -32,7 +32,9 @@ $effect(() => {
 	type="button"
 	class="streak-trigger"
 	class:lit={view.status === "lit"}
-	onclick={() => { boardOpen = true; }}
+	onclick={() => {
+		boardOpen = true;
+	}}
 	aria-label={`${t(lang, "streak.label")}: ${view.days}`}
 	aria-haspopup="dialog"
 	aria-expanded={boardOpen}

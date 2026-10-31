@@ -62,7 +62,9 @@ let {
 {#snippet memberRow(member: DiscordMember, isOnline: boolean)}
 	<button
 		type="button"
-		class="mt-0.5 flex w-full items-center gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-[#35373C] {isOnline ? '' : 'opacity-50 hover:opacity-100'}"
+		class="mt-0.5 flex w-full items-center gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-[#35373C] {isOnline
+			? ""
+			: "opacity-50 hover:opacity-100"}"
 		oncontextmenu={(event) => onMention(event, member)}
 		onclick={(event) => {
 			event.stopPropagation();
@@ -81,7 +83,7 @@ let {
 			{/if}
 		</div>
 		<div class="flex min-w-0 flex-col justify-center">
-			<span class="truncate text-sm font-medium {isOnline ? 'text-[#DBDEE1]' : 'text-[#80848E]'}">{member.name}</span>
+			<span class="truncate text-sm font-medium {isOnline ? "text-[#DBDEE1]" : "text-[#80848E]"}">{member.name}</span>
 			{#if isOnline}
 				<span class="truncate text-xs text-[#B5BAC1]">{member.status}</span>
 			{/if}

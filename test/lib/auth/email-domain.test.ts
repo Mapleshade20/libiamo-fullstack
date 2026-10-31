@@ -2,19 +2,14 @@ import { describe, expect, it } from "vitest";
 import { isTrustedEmailDomain, trialEmailKey } from "$lib/auth/email-domain";
 
 describe("isTrustedEmailDomain", () => {
-	it.each([
-		"a@gmail.com",
-		"a@QQ.com",
-		"a@foxmail.com",
-		"a@126.com",
-		"a@163.com",
-		"a@sina.cn",
-		"a@yahoo.com",
-		"a@microsoft.com",
-	])("trusts listed provider %s", (email) => expect(isTrustedEmailDomain(email)).toBe(true));
+	it.each(["a@gmail.com", "a@QQ.com", "a@foxmail.com", "a@126.com", "a@163.com", "a@sina.cn", "a@yahoo.com", "a@microsoft.com"])(
+		"trusts listed provider %s",
+		(email) => expect(isTrustedEmailDomain(email)).toBe(true),
+	);
 
 	it.each(["a@mit.edu", "a@cs.stanford.edu", "a@pku.edu.cn", "a@mail.ox.edu.au"])("trusts educational domain %s", (email) =>
-		expect(isTrustedEmailDomain(email)).toBe(true));
+		expect(isTrustedEmailDomain(email)).toBe(true),
+	);
 
 	it.each([
 		"a@mailinator.com",

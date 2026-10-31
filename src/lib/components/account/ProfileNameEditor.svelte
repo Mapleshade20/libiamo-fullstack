@@ -65,7 +65,7 @@ function open() {
 						dialogOpen = false;
 					} else if (result.type === "failure") {
 						errors = result.data?.errors ?? {};
-						failure = typeof result.data?.message === "string" ? result.data.message : (errors.name ? "" : t(lang, "profile.unableSave"));
+						failure = typeof result.data?.message === "string" ? result.data.message : errors.name ? "" : t(lang, "profile.unableSave");
 					} else {
 						failure = t(lang, "profile.unableSave");
 					}

@@ -11,9 +11,7 @@ export function parseMarkedText(value: string): MarkedTextParseResult {
 	let insideMark = false;
 	let lastIndex = 0;
 	let markCount = 0;
-	let match: RegExpExecArray | null;
-
-	while ((match = tagPattern.exec(value)) !== null) {
+	for (const match of value.matchAll(tagPattern)) {
 		const content = value.slice(lastIndex, match.index);
 		if (content) parts.push({ type: insideMark ? "mark" : "text", content });
 

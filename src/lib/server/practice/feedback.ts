@@ -94,13 +94,12 @@ function extractAllTagsWithAttr(xml: string, tag: string): Array<{ attrs: Record
 export function parseAnnotationSpans(annotatedText: string): AnnotationSpan[] {
 	const spans: AnnotationSpan[] = [];
 	const tagPattern = /<(grammar|vocab|delete)>([\s\S]*?)<\/\1>/g;
-	let match: RegExpExecArray | null;
 
 	// We need to track position in the "plain text" version
 	let plainOffset = 0;
 	let lastIndex = 0;
 
-	while ((match = tagPattern.exec(annotatedText)) !== null) {
+	for (const match of annotatedText.matchAll(tagPattern)) {
 		// Add the plain text before this tag
 		const textBefore = annotatedText.slice(lastIndex, match.index);
 		plainOffset += stripAllTags(textBefore).length;

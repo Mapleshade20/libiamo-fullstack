@@ -2,6 +2,7 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Home from "@lucide/svelte/icons/home";
+import type { AwaitedActions } from "@sveltejs/kit";
 import { deserialize } from "$app/forms";
 import { invalidateAll } from "$app/navigation";
 import { base } from "$app/paths";
@@ -91,12 +92,16 @@ function persist(next: TranslationFeedbackSnapshot) {
 	saveTranslationFeedbackSnapshot(next);
 }
 
-async function postAction(name: string, form = new FormData()) {
+type FeedbackActions = typeof import("./+page.server").actions;
+
+async function postAction<Name extends keyof FeedbackActions>(name: Name, form = new FormData()) {
 	const response = await fetch(`?/${name}`, { method: "POST", body: form });
-	return deserialize(await response.text()) as { type: string; status?: number; data?: Record<string, any> };
+	type Data = AwaitedActions<Pick<FeedbackActions, Name>>;
+	const result = deserialize<Data, Data>(await response.text());
+	return result.type === "success" || result.type === "failure" ? result : { ...result, data: undefined };
 }
 
-function resultError(result: { data?: Record<string, any> }, fallback = t(lang, "common.error")) {
+function resultError(result: { data?: { error?: unknown } }, fallback = t(lang, "common.error")) {
 	return typeof result.data?.error === "string" ? result.data.error : fallback;
 }
 
@@ -271,14 +276,12 @@ async function submitSecondDraft() {
 		if (result.type !== "success" || !result.data?.verification) {
 			persist({
 				...snapshot,
-				secondDraft: { ...previous, commentary: null, providerError: result.data?.error ?? "The tutor could not verify this draft." },
+				secondDraft: { ...previous, commentary: null, providerError: resultError(result, "The tutor could not verify this draft.") },
 			});
 			return;
 		}
 		const verification = result.data.verification;
-		const unresolvedCards = verification.cards
-			.filter((card: { resolved: boolean }) => !card.resolved)
-			.map((card: { ordinal: number }) => card.ordinal);
+		const unresolvedCards = verification.cards.filter((card) => !card.resolved).map((card) => card.ordinal);
 		persist({
 			...snapshot,
 			secondDraft: {
@@ -434,15 +437,18 @@ function updateCardInput(index: number, value: string) {
 		providerErrorBody={snapshot.secondDraft.providerError}
 		{submitting}
 		onupdate={(index, value) => {
-				if (!snapshot) return;
-				const paragraphs = [...snapshot.secondDraft.paragraphs];
-				paragraphs[index] = value;
-				persist({ ...snapshot, secondDraft: { ...snapshot.secondDraft, paragraphs } });
-			}}
+			if (!snapshot) return;
+			const paragraphs = [...snapshot.secondDraft.paragraphs];
+			paragraphs[index] = value;
+			persist({ ...snapshot, secondDraft: { ...snapshot.secondDraft, paragraphs } });
+		}}
 		onsubmit={() => void submitSecondDraft()}
 		onskip={skipSecondDraft}
 		oncontinue={() => void enterTransfer()}
-		onretryPractice={() => { practiceStatus = "idle"; practiceError = null; }}
+		onretryPractice={() => {
+			practiceStatus = "idle";
+			practiceError = null;
+		}}
 	/>
 {:else if data.attempt.workflowPhase === "transfer"}
 	{#if practiceStatus === "ready" && snapshot}
@@ -451,7 +457,9 @@ function updateCardInput(index: number, value: string) {
 			stage={3}
 			notes={data.practiceNotes}
 			pass={snapshot.transfer}
-			onchange={(transfer) => { if (snapshot) persist({ ...snapshot, transfer }); }}
+			onchange={(transfer) => {
+				if (snapshot) persist({ ...snapshot, transfer });
+			}}
 			submitRating={rateTransfer}
 			complete={completeTransfer}
 		/>
@@ -461,7 +469,10 @@ function updateCardInput(index: number, value: string) {
 			failed={practiceStatus === "failed"}
 			failedBody={practiceError ?? t(lang, "eval.waiting.failedBody")}
 			retryLabel={t(lang, "common.retry")}
-			onretry={() => { practiceStatus = "idle"; practiceError = null; }}
+			onretry={() => {
+				practiceStatus = "idle";
+				practiceError = null;
+			}}
 		/>
 	{/if}
 {:else if data.attempt.workflowPhase === "completed"}

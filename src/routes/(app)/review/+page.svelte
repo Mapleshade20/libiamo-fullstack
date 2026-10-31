@@ -138,7 +138,15 @@ async function rate(rating: number) {
 		{#if error}
 			<Notice tone="danger" role="alert">
 				<p>{error}</p>
-				<Button variant="secondary" size="sm" class="mt-2" onclick={() => { error = null; }}>{t(lang, "common.retry")}</Button>
+				<Button
+					variant="secondary"
+					size="sm"
+					class="mt-2"
+					onclick={() => {
+						error = null;
+					}}
+					>{t(lang, "common.retry")}</Button
+				>
 			</Notice>
 		{:else if sessionComplete}
 			<StreakCompletion />
@@ -163,9 +171,9 @@ async function rate(rating: number) {
 				disabled={isSubmitting}
 				onreveal={reveal}
 				onaction={(id) => {
-				const action = actions.find((item) => item.id === id);
-				if (action) void rate(action.rating);
-			}}
+					const action = actions.find((item) => item.id === id);
+					if (action) void rate(action.rating);
+				}}
 			/>
 		{/if}
 	</LoadingReveal>

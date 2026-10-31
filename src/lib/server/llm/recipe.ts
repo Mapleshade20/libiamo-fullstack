@@ -39,6 +39,7 @@ export type LlmSlotDefinition = {
 export type SlotRenderer = (name: string, variables: Readonly<Record<string, string>>) => string;
 
 /** A recipe of any input and output type, as held by a registry. */
+// biome-ignore lint/suspicious/noExplicitAny: The heterogeneous registry erases recipe generics; individual call sites retain their concrete LlmRecipe types.
 export type AnyLlmRecipe = LlmRecipe<any, any, any>;
 
 export type LlmRecipeOutputType<R> = R extends LlmRecipe<never, unknown, infer O> ? O : never;

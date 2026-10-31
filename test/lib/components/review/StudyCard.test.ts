@@ -26,7 +26,13 @@ describe("shared vocabulary study card", () => {
 		expect(body).toContain("We need to make a decision today.");
 		expect(body.match(/aria-hidden="true"/g)?.length).toBeGreaterThanOrEqual(2);
 		expect(body).toContain("Show Answer");
-		expect(body).toContain('aria-label="New: 1; Learning: 2; Review: 3"');
+		for (const [count, label] of [
+			[1, "New"],
+			[2, "Learning"],
+			[3, "Review"],
+		]) {
+			expect(body).toContain(`>${count}<span class="sr-only">${label}</span>`);
+		}
 	});
 
 	it("uses the same hidden-answer component for transfer without an answer input", () => {

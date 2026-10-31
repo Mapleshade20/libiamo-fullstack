@@ -77,7 +77,7 @@ function actionClasses(tone: StudyCardActionTone) {
 			title={editLink.label}
 			class="absolute top-0 right-5 z-10 flex size-11 -translate-y-1/2 rotate-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-[color,transform] duration-250 hover:rotate-0 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none sm:right-7"
 		>
-			<Pencil size={19} strokeWidth={1.75} aria-hidden="true" />
+			<span class="sr-only">{editLink.label}</span><Pencil size={19} strokeWidth={1.75} aria-hidden="true" />
 		</a>
 	{/if}
 	<article
@@ -126,11 +126,13 @@ function actionClasses(tone: StudyCardActionTone) {
 					{showAnswerLabel}
 				</button>
 			{:else}
-				<div class="grid w-full grid-flow-col auto-cols-fr gap-3 sm:gap-4" aria-label={showAnswerLabel}>
+				<div class="grid w-full grid-flow-col auto-cols-fr gap-3 sm:gap-4">
 					{#each actions as action}
 						<button
 							type="button"
-							class="flex min-h-14 min-w-0 flex-col items-center justify-center rounded-md border px-2 py-2 text-sm font-semibold transition-colors sm:text-base {actionClasses(action.tone)} disabled:opacity-40"
+							class="flex min-h-14 min-w-0 flex-col items-center justify-center rounded-md border px-2 py-2 text-sm font-semibold transition-colors sm:text-base {actionClasses(
+								action.tone,
+							)} disabled:opacity-40"
 							{disabled}
 							onclick={() => onaction(action.id)}
 						>
@@ -143,10 +145,7 @@ function actionClasses(tone: StudyCardActionTone) {
 				</div>
 			{/if}
 		</div>
-		<div
-			class="mt-2 flex items-center justify-center gap-2 font-mono text-lg font-semibold tabular-nums"
-			aria-label={`${countLabels.new}: ${counts.new}; ${countLabels.learning}: ${counts.learning}; ${countLabels.review}: ${counts.review}`}
-		>
+		<div class="mt-2 flex items-center justify-center gap-2 font-mono text-lg font-semibold tabular-nums">
 			<span class="border-b border-current text-[#4d85b5]" title={countLabels.new}>{counts.new}<span class="sr-only"> {countLabels.new}</span></span>
 			<span class="text-muted-foreground" aria-hidden="true">+</span>
 			<span class="border-b border-current text-[#b76565]" title={countLabels.learning}

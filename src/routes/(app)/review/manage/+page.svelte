@@ -91,56 +91,58 @@ function handleCardListKeydown(event: KeyboardEvent) {
 </svelte:head>
 
 <div class="space-y-6">
-	<form method="GET" class="flex flex-wrap items-end gap-3" role="search">
-		<input type="hidden" name="language" value={data.filters.language === "all" ? undefined : data.filters.language}>
-		<div class="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-1.5">
-			<label for="manage-search" class="text-sm font-medium">{t(lang, "review.manage.search")}</label>
-			<span class="relative block">
-				<Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-				<Input
-					id="manage-search"
-					name="q"
-					value={data.filters.search}
-					maxlength={200}
-					placeholder={t(lang, "review.manage.searchPlaceholder")}
-					class="pl-9"
+	<search>
+		<form method="GET" class="flex flex-wrap items-end gap-3">
+			<input type="hidden" name="language" value={data.filters.language === "all" ? undefined : data.filters.language}>
+			<div class="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-1.5">
+				<label for="manage-search" class="text-sm font-medium">{t(lang, "review.manage.search")}</label>
+				<span class="relative block">
+					<Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+					<Input
+						id="manage-search"
+						name="q"
+						value={data.filters.search}
+						maxlength={200}
+						placeholder={t(lang, "review.manage.searchPlaceholder")}
+						class="pl-9"
+					/>
+				</span>
+			</div>
+			<div class="flex w-[calc(50%-0.375rem)] flex-col gap-1.5 sm:w-36">
+				<label for="manage-queue" class="text-sm font-medium">{t(lang, "review.manage.state")}</label>
+				<Select
+					id="manage-queue"
+					name="queue"
+					value={data.filters.queue}
+					submitOnChange
+					items={[
+						{ value: "all", label: t(lang, "review.manage.all") },
+						{ value: "new", label: t(lang, "review.count.new") },
+						{ value: "learning", label: t(lang, "review.count.learning") },
+						{ value: "review", label: t(lang, "review.count.review") },
+					]}
 				/>
-			</span>
-		</div>
-		<div class="flex w-[calc(50%-0.375rem)] flex-col gap-1.5 sm:w-36">
-			<label for="manage-queue" class="text-sm font-medium">{t(lang, "review.manage.state")}</label>
-			<Select
-				id="manage-queue"
-				name="queue"
-				value={data.filters.queue}
-				submitOnChange
-				items={[
-					{ value: "all", label: t(lang, "review.manage.all") },
-					{ value: "new", label: t(lang, "review.count.new") },
-					{ value: "learning", label: t(lang, "review.count.learning") },
-					{ value: "review", label: t(lang, "review.count.review") },
-				]}
-			/>
-		</div>
-		<div class="flex w-[calc(50%-0.375rem)] flex-col gap-1.5 sm:w-36">
-			<label for="manage-source" class="text-sm font-medium">{t(lang, "review.manage.source")}</label>
-			<Select
-				id="manage-source"
-				name="source"
-				value={data.filters.source}
-				submitOnChange
-				items={[
-					{ value: "all", label: t(lang, "review.manage.all") },
-					{ value: "practice", label: t(lang, "review.manage.quests") },
-					{ value: "translation", label: t(lang, "translate.title") },
-				]}
-			/>
-		</div>
-		<div class="flex gap-2">
-			<Button type="submit">{t(lang, "review.manage.filter")}</Button>
-			<Button href="{base}/review/manage" variant="ghost">{t(lang, "review.manage.clear")}</Button>
-		</div>
-	</form>
+			</div>
+			<div class="flex w-[calc(50%-0.375rem)] flex-col gap-1.5 sm:w-36">
+				<label for="manage-source" class="text-sm font-medium">{t(lang, "review.manage.source")}</label>
+				<Select
+					id="manage-source"
+					name="source"
+					value={data.filters.source}
+					submitOnChange
+					items={[
+						{ value: "all", label: t(lang, "review.manage.all") },
+						{ value: "practice", label: t(lang, "review.manage.quests") },
+						{ value: "translation", label: t(lang, "translate.title") },
+					]}
+				/>
+			</div>
+			<div class="flex gap-2">
+				<Button type="submit">{t(lang, "review.manage.filter")}</Button>
+				<Button href="{base}/review/manage" variant="ghost">{t(lang, "review.manage.clear")}</Button>
+			</div>
+		</form>
+	</search>
 
 	<div class="grid min-h-[34rem] gap-5 lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.6fr)]">
 		<aside class="self-start overflow-hidden rounded-xl border border-border bg-card" aria-label={t(lang, "review.manage.cards")}>
@@ -167,8 +169,13 @@ function handleCardListKeydown(event: KeyboardEvent) {
 							data-note-id={note.id}
 							role="option"
 							tabindex="-1"
-							onclick={() => { selectedNoteId = note.id; }}
-							class="block w-full cursor-pointer px-4 py-3 text-left outline-none transition-colors duration-100 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 {selectedNoteId === note.id ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.025]'}"
+							onclick={() => {
+								selectedNoteId = note.id;
+							}}
+							class="block w-full cursor-pointer px-4 py-3 text-left outline-none transition-colors duration-100 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 {selectedNoteId ===
+							note.id
+								? "bg-foreground/[0.05]"
+								: "hover:bg-foreground/[0.025]"}"
 							aria-selected={selectedNoteId === note.id}
 						>
 							<span class="flex items-baseline justify-between gap-3">
@@ -177,7 +184,7 @@ function handleCardListKeydown(event: KeyboardEvent) {
 							</span>
 							<span class="mt-0.5 flex items-end justify-between gap-3">
 								<span class="line-clamp-2 min-w-0 text-sm text-muted-foreground">{note.nativeDefinition}</span>
-								<span class="shrink-0 whitespace-nowrap text-xs {due ? 'font-medium text-warning' : 'text-muted-foreground'}"
+								<span class="shrink-0 whitespace-nowrap text-xs {due ? "font-medium text-warning" : "text-muted-foreground"}"
 									>{formatDue(note.due)}</span
 								>
 							</span>

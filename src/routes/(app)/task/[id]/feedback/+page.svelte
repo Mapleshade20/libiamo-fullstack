@@ -446,7 +446,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 						<LoadingReveal loading={isGenerating}>
 							{#snippet placeholder()}
 								<div class="min-w-0 space-y-4">
-									{#each data.conversation.allMessages.filter(m => m.role === "user") as _}
+									{#each data.conversation.allMessages.filter((m) => m.role === "user") as _}
 										<div class="rounded-xl border border-border bg-card p-4">
 											<Skeleton class="h-4 w-3/4 mb-2" />
 											<Skeleton class="h-4 w-full mb-2" />
@@ -457,7 +457,7 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 							{/snippet}
 							{#if feedback}
 								<div class="min-w-0 space-y-4">
-									{#each data.conversation.allMessages.filter(m => m.role === "user") as message}
+									{#each data.conversation.allMessages.filter((m) => m.role === "user") as message}
 										{@const comment = getCommentForMessage(message.seqId)}
 										{#if comment}
 											{@const commentContext = getMessageContext(message.seqId)}
@@ -497,7 +497,9 @@ function gradeColor(grade: "A" | "B" | "C"): string {
 												class="flex items-start gap-3"
 											>
 												<span
-													class="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white {gradeColor(objective.grade)}"
+													class="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white {gradeColor(
+														objective.grade,
+													)}"
 												>
 													{objective.grade}
 												</span>

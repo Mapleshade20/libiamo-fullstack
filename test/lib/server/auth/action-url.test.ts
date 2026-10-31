@@ -9,15 +9,12 @@ describe("isCanonicalActionUrl", () => {
 		expect(isCanonicalActionUrl("POST", "/(auth)/sign-in", "?error=access_denied")).toBe(true);
 	});
 
-	it.each([
-		"?/changeEmail&;",
-		"?x=1&/changeEmail",
-		"?%2FchangeEmail",
-		"?/changeEmail=1",
-		"?/changeEmail&/changePassword",
-	])("refuses %s, which a proxy rule for ?/changeEmail might not match", (search) => {
-		expect(isCanonicalActionUrl("POST", "/(app)/profile", search)).toBe(false);
-	});
+	it.each(["?/changeEmail&;", "?x=1&/changeEmail", "?%2FchangeEmail", "?/changeEmail=1", "?/changeEmail&/changePassword"])(
+		"refuses %s, which a proxy rule for ?/changeEmail might not match",
+		(search) => {
+			expect(isCanonicalActionUrl("POST", "/(app)/profile", search)).toBe(false);
+		},
+	);
 
 	it("leaves other methods and pages alone", () => {
 		expect(isCanonicalActionUrl("GET", "/(app)/profile", "?x=1&/changeEmail")).toBe(true);

@@ -72,6 +72,7 @@ function moveTab(event: KeyboardEvent, index: number): void {
 			{/each}
 		</div>
 	</div>
+	<!-- biome-ignore lint/a11y/noNoninteractiveTabindex: The tabpanel must be keyboard-focusable when its content has no focusable element. -->
 	<div id="mobile-catalog-panel" class="mobile-panel" role="tabpanel" aria-labelledby={`mobile-tab-${section}`} tabindex="0" bind:this={paperElement}>
 		{#if section === "translation"}
 			<div class="month-navigation"><QuestMenuMonthFolio month={translationMonth} {lang} onchange={onmonthchange} /></div>

@@ -28,7 +28,7 @@ const subredditColor = $derived(getAvatarColor(post.subreddit));
 		<div class="flex w-10 shrink-0 flex-col items-center gap-0.5 rounded-l-md bg-[#F8F9FA] px-1 py-2">
 			<button
 				type="button"
-				class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#EDEFF1] {vote === 'up' ? 'text-[#FF4500]' : 'text-[#878A8C]'}"
+				class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#EDEFF1] {vote === "up" ? "text-[#FF4500]" : "text-[#878A8C]"}"
 				onclick={() => toggleVote("up")}
 				aria-label={t.upvote}
 				aria-pressed={vote === "up"}
@@ -37,7 +37,7 @@ const subredditColor = $derived(getAvatarColor(post.subreddit));
 			</button>
 			<button
 				type="button"
-				class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#EDEFF1] {vote === 'down' ? 'text-[#7193FF]' : 'text-[#878A8C]'}"
+				class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#EDEFF1] {vote === "down" ? "text-[#7193FF]" : "text-[#878A8C]"}"
 				onclick={() => toggleVote("down")}
 				aria-label={t.downvote}
 				aria-pressed={vote === "down"}

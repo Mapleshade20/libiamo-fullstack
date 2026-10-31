@@ -91,7 +91,13 @@ let deleteForm: HTMLFormElement | null = $state(null);
 		{#if trace.variant && (trace.variant.slots || trace.variant.options || trace.variant.messagesEdited)}
 			<p class="text-sm text-warning">
 				Deviates from the defaults:
-				{[trace.variant.slots ? `slots ${Object.keys(trace.variant.slots).join(", ")}` : null, trace.variant.options ? `options ${JSON.stringify(trace.variant.options)}` : null, trace.variant.messagesEdited ? "hand-edited messages" : null].filter(Boolean).join(" · ")}
+				{[
+					trace.variant.slots ? `slots ${Object.keys(trace.variant.slots).join(", ")}` : null,
+					trace.variant.options ? `options ${JSON.stringify(trace.variant.options)}` : null,
+					trace.variant.messagesEdited ? "hand-edited messages" : null,
+				]
+					.filter(Boolean)
+					.join(" · ")}
 			</p>
 		{/if}
 		<div class="flex flex-wrap items-center gap-2 pt-2">
@@ -143,7 +149,14 @@ let deleteForm: HTMLFormElement | null = $state(null);
 	<div class="grid gap-6 lg:grid-cols-2">
 		<section aria-labelledby="rate-heading" class="space-y-4 rounded-xl border border-border bg-card p-5">
 			<h2 id="rate-heading">Rate</h2>
-			<form method="POST" action="?/rate" use:enhance={() => async ({ update }) => update({ reset: false })} class="space-y-3">
+			<form
+				method="POST"
+				action="?/rate"
+				use:enhance={() =>
+					async ({ update }) =>
+						update({ reset: false })}
+				class="space-y-3"
+			>
 				<SegmentedControl
 					label="Vote"
 					name="vote"

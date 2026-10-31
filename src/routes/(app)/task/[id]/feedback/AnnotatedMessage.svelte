@@ -17,9 +17,7 @@ function parseAnnotatedHtml(annotatedText: string): Array<{ type: "text" | "anno
 	const parts: Array<{ type: "text" | "annotation"; content: string; kind?: string }> = [];
 	const tagPattern = /<(grammar|vocab|delete)>([\s\S]*?)<\/\1>/g;
 	let lastIndex = 0;
-	let match: RegExpExecArray | null;
-
-	while ((match = tagPattern.exec(annotatedText)) !== null) {
+	for (const match of annotatedText.matchAll(tagPattern)) {
 		// Add text before the tag
 		if (match.index > lastIndex) {
 			parts.push({ type: "text", content: annotatedText.slice(lastIndex, match.index) });
@@ -82,7 +80,7 @@ function getColor(kind: string): string {
 			{#if part.type === "text"}
 				{part.content}
 			{:else if part.type === "annotation" && part.kind}
-				{@const span = annotation.spans.find(s => s.text === part.content && s.kind === part.kind)}
+				{@const span = annotation.spans.find((s) => s.text === part.content && s.kind === part.kind)}
 				{#if span}
 					<TextHighlighter
 						action={getVariant(part.kind)}
@@ -92,6 +90,7 @@ function getColor(kind: string): string {
 						delay={300}
 						class="cursor-pointer hover:opacity-80 transition-opacity whitespace-pre-wrap"
 					>
+						<!-- biome-ignore lint/a11y/useSemanticElements: An annotation must fragment across text lines, unlike a native button; Enter and Space activate it. -->
 						<span
 							role="button"
 							tabindex="0"

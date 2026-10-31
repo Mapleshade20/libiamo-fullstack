@@ -55,7 +55,11 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 </script>
 
 <svelte:head><title>{data.task.title} · Draft</title></svelte:head>
-<svelte:window onkeydown={(event) => { if (event.key === "Escape") candidatePickerIndex = null; }} />
+<svelte:window
+	onkeydown={(event) => {
+		if (event.key === "Escape") candidatePickerIndex = null;
+	}}
+/>
 
 <div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
 	<a href={detailsHref} class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -75,7 +79,11 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 			return async ({ result, update }) => {
 				submitting = false;
 				if (result.type === "redirect") {
-					try { sessionStorage.removeItem(translationDraftStorageKey(data.attempt.id)); } catch { /* unavailable */ }
+					try {
+						sessionStorage.removeItem(translationDraftStorageKey(data.attempt.id));
+					} catch {
+						/* unavailable */
+					}
 					// Submitting spends the trial balance and may complete the quest.
 					await goto(result.location, { invalidate: [TRIAL_QUOTA_DEPENDENCY, STREAK_DEPENDENCY] });
 					return;
@@ -132,10 +140,13 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 </div>
 
 {#if candidatePickerIndex !== null}
+	<!-- biome-ignore lint/a11y/noStaticElementInteractions: Backdrop clicks are a pointer-only shortcut; the dialog provides keyboard dismissal. -->
 	<div
 		class="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
 		role="presentation"
-		onclick={(event) => { if (event.currentTarget === event.target) candidatePickerIndex = null; }}
+		onclick={(event) => {
+			if (event.currentTarget === event.target) candidatePickerIndex = null;
+		}}
 	>
 		<div
 			class="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-background p-5 shadow-xl"
@@ -151,7 +162,10 @@ function updateAnswer(paragraphIndex: number, patch: Partial<TranslationDraftAns
 				{#each data.attempt.candidates[candidatePickerIndex] as candidate, candidateIndex}
 					<button
 						type="button"
-						onclick={() => { updateAnswer(Number(candidatePickerIndex), { candidateIndex }); candidatePickerIndex = null; }}
+						onclick={() => {
+							updateAnswer(Number(candidatePickerIndex), { candidateIndex });
+							candidatePickerIndex = null;
+						}}
 						class="flex w-full gap-3 rounded-xl border border-border p-4 text-left hover:bg-foreground/[0.035]"
 					>
 						<span class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border"

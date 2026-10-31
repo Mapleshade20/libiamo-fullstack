@@ -476,7 +476,7 @@
 	justify-content: flex-end;
 }
 
-.landing-shell .message.outgoing p {
+.landing-shell .message:where(.outgoing) p {
 	border-radius: 1.1rem 1.1rem 0.2rem 1.1rem;
 	background: var(--landing-blue);
 	color: white;

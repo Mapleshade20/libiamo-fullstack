@@ -164,7 +164,7 @@ export const actions: Actions = {
 
 		const taskId = parseTaskId(event.params.id);
 		const identity = taskId ? await getTaskIdentity(taskId) : null;
-		if (!identity || identity.interactionType !== "chat") return fail(404, { error: "Task not found" });
+		if (identity?.interactionType !== "chat") return fail(404, { error: "Task not found" });
 
 		try {
 			const context = await resolveRequestLineup(event, identity);

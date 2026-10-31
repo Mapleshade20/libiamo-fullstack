@@ -93,7 +93,7 @@ const isLearner = $derived(comment.message?.role === "user");
 		</div>
 
 		{#if !isCollapsed}
-			<div class="mb-1 pl-7 text-sm leading-6 {failed ? 'text-red-600' : 'text-[#1C1C1C]'}">
+			<div class="mb-1 pl-7 text-sm leading-6 {failed ? "text-red-600" : "text-[#1C1C1C]"}">
 				{#if failed}
 					{comment.message?.error || translate(language, "practice.replyFailed")}
 				{:else}
@@ -115,7 +115,7 @@ const isLearner = $derived(comment.message?.role === "user");
 				{:else}
 					<button
 						type="button"
-						class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#F6F7F8] {vote === 'up' ? 'text-[#FF4500]' : ''}"
+						class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#F6F7F8] {vote === "up" ? "text-[#FF4500]" : ""}"
 						onclick={() => (vote = vote === "up" ? null : "up")}
 						aria-label={t.upvote}
 						aria-pressed={vote === "up"}
@@ -124,7 +124,7 @@ const isLearner = $derived(comment.message?.role === "user");
 					</button>
 					<button
 						type="button"
-						class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#F6F7F8] {vote === 'down' ? 'text-[#7193FF]' : ''}"
+						class="grid h-8 w-8 place-items-center rounded transition-colors hover:bg-[#F6F7F8] {vote === "down" ? "text-[#7193FF]" : ""}"
 						onclick={() => (vote = vote === "down" ? null : "down")}
 						aria-label={t.downvote}
 						aria-pressed={vote === "down"}
@@ -134,7 +134,9 @@ const isLearner = $derived(comment.message?.role === "user");
 					<div class="mx-1 h-4 w-px bg-[#EDEFF1]"></div>
 					<button
 						type="button"
-						class="flex min-h-11 items-center gap-1 rounded px-2 transition-colors hover:bg-[#F6F7F8] md:min-h-8 {replying ? 'bg-[#F6F7F8] text-[#0079D3]' : ''}"
+						class="flex min-h-11 items-center gap-1 rounded px-2 transition-colors hover:bg-[#F6F7F8] md:min-h-8 {replying
+							? "bg-[#F6F7F8] text-[#0079D3]"
+							: ""}"
 						onclick={() => (replying = !replying)}
 						aria-expanded={replying}
 						disabled={session.disabled && !replying}

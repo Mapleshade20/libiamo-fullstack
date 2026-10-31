@@ -32,12 +32,7 @@ $effect(() => {
 onDestroy(() => stopAll(controls));
 </script>
 
-<div
-	class="diff-view font-prose text-base leading-relaxed break-words text-foreground {className}"
-	role="group"
-	aria-label={label}
-	bind:this={rootEl}
->
+<div class="diff-view font-prose text-base leading-relaxed break-words text-foreground {className}" bind:this={rootEl}>
 	{#if label}
 		<span class="sr-only">{label}</span>
 	{/if}
@@ -45,11 +40,11 @@ onDestroy(() => stopAll(controls));
 		{#if part.type === "unchanged"}
 			<span data-diff-part class="diff-unchanged">{part.text}</span>
 		{:else if part.type === "delete"}
-			<span data-diff-part class="diff-delete" aria-label="deleted: {part.text}"> <span class="sr-only">deleted: </span>{part.text} </span>
+			<span data-diff-part class="diff-delete"> <span class="sr-only">deleted: </span>{part.text} </span>
 		{:else if part.type === "add"}
-			<span data-diff-part class="diff-add" aria-label="added: {part.text}"> <span class="sr-only">added: </span>{part.text} </span>
+			<span data-diff-part class="diff-add"> <span class="sr-only">added: </span>{part.text} </span>
 		{:else}
-			<span data-diff-part class="diff-replace" aria-label="replaced {part.from} with {part.to}">
+			<span data-diff-part class="diff-replace">
 				<span class="diff-delete"> <span class="sr-only">replaced from: </span>{part.from} </span>
 				<span class="diff-add"> <span class="sr-only">replaced with: </span>{part.to} </span>
 			</span>

@@ -174,7 +174,7 @@ describe("QuestMenu", () => {
 		});
 
 		expect(body).toContain('role="tablist"');
-		expect(body).toContain('role="tabpanel"');
+		expect(body).toMatch(/<div[^>]*role="tabpanel"[^>]*tabindex="0"/);
 	});
 
 	it.each([false, true])("shows translation empty state only for an empty catalog (empty: %s)", (empty) => {

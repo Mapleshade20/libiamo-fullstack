@@ -84,8 +84,12 @@ async function rate(kind: "incorrect" | "pass") {
 				{countLabels}
 				{actions}
 				disabled={ratingBusy}
-				onreveal={() => { revealed = true; }}
-				onaction={(id) => { if (id === "incorrect" || id === "pass") void rate(id); }}
+				onreveal={() => {
+					revealed = true;
+				}}
+				onaction={(id) => {
+					if (id === "incorrect" || id === "pass") void rate(id);
+				}}
 			/>
 		{/key}
 	{/if}

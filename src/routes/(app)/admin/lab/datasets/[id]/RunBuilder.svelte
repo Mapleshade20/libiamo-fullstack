@@ -173,9 +173,9 @@ const uid = $props.id();
 		{/if}
 
 		<div class="space-y-3 border-t border-border pt-4">
-			<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
+			<label for={`${uid}-judgeEnabled`} class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 				Score each output with an LLM judge
-				<Switch bind:checked={judgeEnabled} />
+				<Switch id={`${uid}-judgeEnabled`} bind:checked={judgeEnabled} />
 			</label>
 			{#if judgeEnabled}
 				<Field label="Rubric" for="{uid}-rubric"> <Textarea id="{uid}-rubric" rows={4} data-feedback-name="rubric" bind:value={rubric} /> </Field>

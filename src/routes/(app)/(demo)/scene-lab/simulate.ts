@@ -182,7 +182,10 @@ export type SimResult = {
 /** Deterministic randomness for the simulated clock. */
 function clockRandom(seed: number) {
 	let state = seed * 2654435761 + 1;
-	return () => (state = (state * 1103515245 + 12345) >>> 0) / 4294967296;
+	return () => {
+		state = (state * 1103515245 + 12345) >>> 0;
+		return state / 4294967296;
+	};
 }
 
 /** How long the learner takes to read, think and type a message of this length. */

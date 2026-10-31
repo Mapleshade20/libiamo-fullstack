@@ -31,6 +31,8 @@ function handleKeydown(text: string, event: KeyboardEvent) {
 			{part.content}
 		{:else}
 			<!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+			<!-- biome-ignore-start lint/a11y/noNoninteractiveElementToInteractiveRole: This inline mark must fragment across text lines; native buttons are atomic boxes. -->
+			<!-- biome-ignore lint/a11y/useSemanticElements: Preserve inline text flow; Enter and Space provide button activation (covered by the DOM test). -->
 			<mark
 				role="button"
 				tabindex="0"
@@ -40,6 +42,7 @@ function handleKeydown(text: string, event: KeyboardEvent) {
 			>
 				{part.content}
 			</mark>
+			<!-- biome-ignore-end lint/a11y/noNoninteractiveElementToInteractiveRole: see above -->
 		{/if}
 	{/each}
 </span>

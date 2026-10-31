@@ -437,7 +437,7 @@ describe("agent reply worker scheduling", () => {
 			).scheduleFollowUp(executor, 5, now, afterReply);
 			return inserts[0]?.values;
 		};
-		const due = (values: Record<string, unknown> | undefined) => (values?.dueAt as Date).getTime() - now.getTime();
+		const due = (values: Record<string, unknown> | undefined) => ((values?.dueAt as Date | undefined)?.getTime() ?? Number.NaN) - now.getTime();
 
 		const nudge = await schedule({ id: 1, ui: "imessage", urgency: "high", openingState: null });
 		expect(nudge).toMatchObject({ sessionId: 5, kind: "follow_up", status: "pending", inputMessageId: null });
@@ -834,7 +834,7 @@ describe("agent reply worker scheduling", () => {
 			.find((operation) => operation.set?.content === "A later thought");
 		expect(followOnDelivery?.set).toMatchObject({ sequence: 0, author: "Maya", replyTo: null });
 		// the clock starts at the delivery, never before the email it follows
-		expect((followOnBatch?.set?.dueAt as Date).getTime()).toBeGreaterThan(now.getTime());
+		expect((followOnBatch?.set?.dueAt as Date)?.getTime()).toBeGreaterThan(now.getTime());
 	});
 
 	it("drops a threaded delivery whose reply target went missing, recording the anomaly", async () => {
@@ -874,7 +874,7 @@ describe("agent reply worker scheduling", () => {
 		const warning = operations.find(
 			(operation) => operation.kind === "update" && operation.table === agentResponseBatch && operation.set?.providerMetadata,
 		);
-		expect((warning?.set?.providerMetadata as { contractWarnings?: string[] }).contractWarnings?.[0]).toContain("missing its target");
+		expect((warning?.set?.providerMetadata as { contractWarnings?: string[] })?.contractWarnings?.[0]).toContain("missing its target");
 		// the batch still finalizes once nothing is left pending
 		expect(
 			operations.some((operation) => operation.kind === "update" && operation.table === agentResponseBatch && operation.set?.status === "completed"),
@@ -1140,7 +1140,7 @@ describe("world moment scheduling", () => {
 		expect(inserts).toHaveLength(1);
 		expect(inserts[0].values).toMatchObject({ sessionId: 5, kind: "world", status: "pending", inputMessageId: null });
 		expect(typeof inserts[0].values.participant).toBe("string");
-		expect((inserts[0].values.dueAt as Date).getTime()).toBeGreaterThan(now.getTime());
+		expect((inserts[0].values.dueAt as Date)?.getTime()).toBeGreaterThan(now.getTime());
 	});
 
 	it("schedules only for async group scenes that are still in progress", async () => {

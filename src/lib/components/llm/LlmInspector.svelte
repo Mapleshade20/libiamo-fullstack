@@ -1,4 +1,6 @@
 <script lang="ts">
+const controlId = $props.id();
+
 import { base } from "$app/paths";
 import { page } from "$app/state";
 import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
@@ -97,9 +99,9 @@ $effect(() => {
 				</p>
 			{/if}
 			{#if taskId}
-				<label class="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm">
+				<label for={`${controlId}-onlyThisTask`} class="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm">
 					Only task #{taskId}
-					<Switch bind:checked={onlyThisTask} />
+					<Switch id={`${controlId}-onlyThisTask`} bind:checked={onlyThisTask} />
 				</label>
 			{/if}
 			{#if failed}

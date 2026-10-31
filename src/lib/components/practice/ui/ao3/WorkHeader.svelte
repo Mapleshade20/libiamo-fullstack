@@ -7,7 +7,7 @@ let { work }: { work: ReturnType<typeof describeWork> } = $props();
 
 <section class="mb-8 border border-[#ccc] bg-[#eee] p-2.5">
 	<dl class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1 md:grid-cols-[150px_1fr]">
-		{#each work.tags as [ label, values ] (label)}
+		{#each work.tags as [label, values] (label)}
 			<dt class="pt-1 text-right font-bold">{label}:</dt>
 			<dd class="border-b border-[#ddd] pb-1">
 				<ul class="work-tags m-0 list-none p-0">

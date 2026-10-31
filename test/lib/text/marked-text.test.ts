@@ -15,12 +15,10 @@ describe("parseMarkedText", () => {
 		});
 	});
 
-	it.each([
-		"<mark></mark>",
-		"<mark>open",
-		"close</mark>",
-		"<mark>outer <mark>inner</mark></mark>",
-	])("rejects malformed mark structure: %s", (value) => {
-		expect(parseMarkedText(value).success).toBe(false);
-	});
+	it.each(["<mark></mark>", "<mark>open", "close</mark>", "<mark>outer <mark>inner</mark></mark>"])(
+		"rejects malformed mark structure: %s",
+		(value) => {
+			expect(parseMarkedText(value).success).toBe(false);
+		},
+	);
 });

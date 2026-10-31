@@ -157,6 +157,14 @@ $effect(() => {
 </script>
 {#if presentation.show}
 	{#key presentation.show.token}
-		<StreakCelebration kind={presentation.show.kind} {view} today={shownDay} {lang} ondone={() => { presentation.show = null; }} />
+		<StreakCelebration
+			kind={presentation.show.kind}
+			{view}
+			today={shownDay}
+			{lang}
+			ondone={() => {
+				presentation.show = null;
+			}}
+		/>
 	{/key}
 {/if}

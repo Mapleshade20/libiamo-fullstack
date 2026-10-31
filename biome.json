@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -7,11 +7,11 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!**/dist", "!drizzle", "!src/lib/components/streak/art"]
+		"includes": ["**", "!!**/dist", "!!drizzle", "!!src/lib/components/streak/art"]
 	},
 	"formatter": {
 		"enabled": true,
-		"includes": ["**", "!package.json", "!pnpm-lock.yaml", "!biome.json", "!src/error.html"],
+		"includes": ["**", "!pnpm-lock.yaml", "!**/*.md"],
 		"indentStyle": "tab",
 		"lineEnding": "lf",
 		"lineWidth": 150
@@ -19,11 +19,7 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true,
-			"suspicious": {
-				"noExplicitAny": "off",
-				"noAssignInExpressions": "off"
-			}
+			"preset": "recommended"
 		}
 	},
 	"javascript": {
@@ -54,28 +50,28 @@
 			"enabled": true
 		}
 	},
+	"markdown": {
+		"parser": {
+			"frontmatter": true
+		}
+	},
 	"overrides": [
+		{
+			"includes": ["test/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
+		},
 		{
 			"includes": ["test/base-path.test.ts"],
 			"linter": {
 				"rules": {
 					"suspicious": {
 						"noTemplateCurlyInString": "off"
-					}
-				}
-			}
-		},
-		{
-			"includes": ["**/*.svelte"],
-			"linter": {
-				"rules": {
-					"style": {
-						"useConst": "off",
-						"useImportType": "off"
-					},
-					"correctness": {
-						"noUnusedVariables": "off",
-						"noUnusedImports": "off"
 					}
 				}
 			}

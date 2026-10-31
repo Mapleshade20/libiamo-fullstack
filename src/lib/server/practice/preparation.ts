@@ -48,7 +48,7 @@ export async function getTaskPreparationData({ userId, taskId, context }: GetTas
 		.where(eq(task.id, taskId))
 		.limit(1);
 
-	if (!result || result.interactionType !== "chat") return null;
+	if (result?.interactionType !== "chat") return null;
 	const { interactionType: _interactionType, ...details } = result;
 
 	const shownSession = await findPracticeSession(userId, taskId, context);

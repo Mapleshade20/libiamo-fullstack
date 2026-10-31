@@ -35,13 +35,14 @@ function weekday(day: string) {
 	return new Intl.DateTimeFormat(lang, { weekday: "short", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
 }
 </script>
-<div class="week" class:compact aria-label={t(lang, "streak.week")}>
+<section class="week" class:compact aria-label={t(lang, "streak.week")}>
 	{#each days as day}
 		<div class="day" class:today={day.today} class:continued={day.continued} class:covered={day.state === "covered"} class:future={day.future}>
 			<span class="weekday">{weekday(day.day)}</span>
 			<span
+				role="img"
 				class="stamp"
-				aria-label={`${day.day}: ${day.state === "covered" ? t(lang, "streak.protectedDay") : day.state === "lit" ? t(lang, "streak.dayLit") : day.today ? t(lang, "hall.today") : '—'}`}
+				aria-label={`${day.day}: ${day.state === "covered" ? t(lang, "streak.protectedDay") : day.state === "lit" ? t(lang, "streak.dayLit") : day.today ? t(lang, "hall.today") : "—"}`}
 			>
 				{#if day.continued}
 					<svg viewBox="0 0 32 32" aria-hidden="true"><path d={day.state === "covered" ? "M9 16h14" : "m8 16 5 5 11-12"} /></svg>
@@ -52,7 +53,7 @@ function weekday(day: string) {
 			<span class="dot" aria-hidden="true"></span>
 		</div>
 	{/each}
-</div>
+</section>
 <style>
 .week {
 	display: grid;
@@ -87,9 +88,10 @@ function weekday(day: string) {
 	box-shadow: inset 0 0 0 3px #e8b266;
 	transform: rotate(-5deg);
 }
-.continued:nth-child(even) .stamp {
+.continued:where(:nth-child(even)) .stamp {
 	transform: rotate(4deg);
 }
+
 .covered .stamp {
 	background: #a4aaa5;
 	border-color: #7d8982;
@@ -107,6 +109,7 @@ function weekday(day: string) {
 .today {
 	color: #75422c;
 }
+
 .today .stamp {
 	outline: 1.5px solid #ad673a;
 	outline-offset: 3px;
@@ -126,6 +129,7 @@ function weekday(day: string) {
 	max-width: 320px;
 	margin: auto;
 }
+
 .compact .stamp {
 	width: 31px;
 	height: 31px;

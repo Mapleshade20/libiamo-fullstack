@@ -17,7 +17,7 @@ const getYears = getContext<(() => string[]) | undefined>("quest-menu-translatio
 let year = $derived(month.slice(0, 4));
 </script>
 
-<span class="month-folio" role="group" aria-label={t(lang, "translate.title")}>
+<nav class="month-folio" aria-label={t(lang, "translate.title")}>
 	<button type="button" disabled={disabled || !getYears().some((value) => value < year)} aria-label={`← ${year}`} onclick={() => onchange(-1)}>
 		<ChevronLeft size={15} strokeWidth={1.5} aria-hidden="true" />
 	</button>
@@ -25,7 +25,7 @@ let year = $derived(month.slice(0, 4));
 	<button type="button" disabled={disabled || !getYears().some((value) => value > year)} aria-label={`${year} →`} onclick={() => onchange(1)}>
 		<ChevronRight size={15} strokeWidth={1.5} aria-hidden="true" />
 	</button>
-</span>
+</nav>
 
 <style>
 .month-folio {

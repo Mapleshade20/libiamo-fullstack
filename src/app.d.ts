@@ -1,5 +1,5 @@
-import type { auth } from "$lib/server/auth/auth";
 import type { QuestMenuRouteData } from "$lib/quest-hall/preparation";
+import type { auth } from "$lib/server/auth/auth";
 
 declare global {
 	namespace App {

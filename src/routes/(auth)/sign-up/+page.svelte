@@ -80,7 +80,9 @@ const actionNotification = $derived(
 				}
 				confirmPasswordError = "";
 				// The server checks too; this only spares a round trip and the human check.
-				const strength = await checkPasswordStrength(password, [String(formData.get("name") ?? ""), String(formData.get("email") ?? "")]).catch(() => null);
+				const strength = await checkPasswordStrength(password, [String(formData.get("name") ?? ""), String(formData.get("email") ?? "")]).catch(
+					() => null,
+				);
 				if (strength && !strength.ok) {
 					passwordError = strength.warning;
 					await tick();
@@ -159,7 +161,9 @@ const actionNotification = $derived(
 								bind:ref={passwordInput}
 								bind:value={password}
 								onfocus={preloadPasswordStrength}
-								oninput={() => { if (confirmPasswordInput) clearFieldFeedback(confirmPasswordInput); }}
+								oninput={() => {
+									if (confirmPasswordInput) clearFieldFeedback(confirmPasswordInput);
+								}}
 								required
 								aria-invalid={Boolean(passwordError || formState?.errors?.password)}
 							/>

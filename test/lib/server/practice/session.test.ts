@@ -658,7 +658,7 @@ describe("session service", () => {
 			// the message itself carries the arrival marker, so its wait settles within its conversation
 			const message = inserts.find((insert) => insert.kind === undefined);
 			expect(message?.llmMetadata).toMatchObject({ clientMessageId: "client-1", arrival: true });
-			expect((takers[0]?.dueAt as Date).getTime()).toBeGreaterThan(now.getTime());
+			expect((takers[0]?.dueAt as Date)?.getTime()).toBeGreaterThan(now.getTime());
 		});
 
 		it("re-targets a joined mail conversation's takers and folds the earlier head", async () => {
@@ -831,7 +831,7 @@ describe("session service", () => {
 
 			expect(inserts.some((insert) => insert.kind === "reply")).toBe(false);
 			const settled = updates.find((update) => update.table === sessionMessage);
-			expect((settled?.setArgs[0] as { llmMetadata?: Record<string, unknown> }).llmMetadata).toMatchObject({
+			expect((settled?.setArgs[0] as { llmMetadata?: Record<string, unknown> })?.llmMetadata).toMatchObject({
 				clientMessageId: "m1",
 				arrival: true,
 				noReply: true,
@@ -936,8 +936,8 @@ describe("session service", () => {
 				(update) => update.table === sessionMessage && (update.setArgs[0] as { llmMetadata?: { attempt?: number } }).llmMetadata?.attempt === 1,
 			);
 			expect(revival).toBeDefined();
-			expect((revival?.setArgs[0] as { llmMetadata?: { arrival?: boolean } }).llmMetadata?.arrival).toBe(true);
-			expect((revival?.setArgs[0] as { llmMetadata?: { failed?: boolean } }).llmMetadata?.failed).toBe(false);
+			expect((revival?.setArgs[0] as { llmMetadata?: { arrival?: boolean } })?.llmMetadata?.arrival).toBe(true);
+			expect((revival?.setArgs[0] as { llmMetadata?: { failed?: boolean } })?.llmMetadata?.failed).toBe(false);
 			const takers = inserts.filter((insert) => insert.kind === "reply");
 			expect(takers).toHaveLength(1);
 			expect(takers[0]).toMatchObject({ kind: "reply", attempt: 1, inputMessageId: 1, targetRef: "reddit-user-m1" });

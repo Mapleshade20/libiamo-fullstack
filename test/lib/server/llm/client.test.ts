@@ -98,7 +98,7 @@ describe("chatText", () => {
 		});
 
 		expect(result.content).toBe("I am doing well.");
-		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit)?.body));
 		expect(payload.messages).toEqual([
 			{ role: "system", content: "You are helpful." },
 			{ role: "user", content: "Hi" },
@@ -120,7 +120,7 @@ describe("chatText", () => {
 			],
 		});
 
-		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+		const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit)?.body));
 		expect(payload.messages).toEqual([
 			{ role: "system", content: "New persona" },
 			{ role: "user", content: "Hi" },
@@ -168,7 +168,7 @@ describe("chatText", () => {
 		await chatText({ messages: [{ role: "user", content: "Hi" }] });
 		await chatText({ messages: [{ role: "user", content: "Hi" }], options: { reasoningEffort: "medium" } });
 
-		const payloads = fetchMock.mock.calls.map((call) => JSON.parse(String((call[1] as RequestInit).body)));
+		const payloads = fetchMock.mock.calls.map((call) => JSON.parse(String((call[1] as RequestInit)?.body)));
 		expect(payloads.map((payload) => [payload.max_tokens, payload.reasoning_effort])).toEqual([
 			[MAX_OUTPUT_TOKENS, "low"],
 			[MAX_OUTPUT_TOKENS, "medium"],
@@ -437,8 +437,8 @@ describe("chatJson", () => {
 
 		expect(result.value).toEqual({ reply: "Recovered", terminate: false });
 		expect(fetchMock).toHaveBeenCalledTimes(2);
-		const firstPayload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-		const secondPayload = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+		const firstPayload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit)?.body));
+		const secondPayload = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit)?.body));
 		expect(firstPayload.messages).toEqual([{ role: "system", content: "Return JSON." }]);
 		expect(secondPayload.messages).toEqual([
 			{ role: "system", content: "Return JSON." },

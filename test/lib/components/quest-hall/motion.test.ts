@@ -175,17 +175,14 @@ describe("Quest Menu book motion", () => {
 		expect(measureQuestMenuFit(element, { getBoundingClientRect: () => ({ width: 0, height: 400 }) } as Element)).toBeNull();
 	});
 
-	it.each([
-		null,
-		{ scaleX: 0 },
-		{ scaleY: -1 },
-		{ x: Number.NaN },
-		{ scaleX: Number.POSITIVE_INFINITY },
-	])("does not report an absent or invalid fit as ready: %j", (variables) => {
-		const element = { getBoundingClientRect: () => ({ width: 300, height: 400 }) } as Element;
-		vi.spyOn(Flip, "fit").mockReturnValue(variables as any);
-		expect(measureQuestMenuFit(element, element)).toBeNull();
-	});
+	it.each([null, { scaleX: 0 }, { scaleY: -1 }, { x: Number.NaN }, { scaleX: Number.POSITIVE_INFINITY }])(
+		"does not report an absent or invalid fit as ready: %j",
+		(variables) => {
+			const element = { getBoundingClientRect: () => ({ width: 300, height: 400 }) } as Element;
+			vi.spyOn(Flip, "fit").mockReturnValue(variables as any);
+			expect(measureQuestMenuFit(element, element)).toBeNull();
+		},
+	);
 
 	it("tilts toward the pointer and restores the canonical book transform on leave", () => {
 		vi.stubGlobal("window", { matchMedia: vi.fn(() => ({ matches: false })) });

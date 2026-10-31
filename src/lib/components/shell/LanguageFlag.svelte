@@ -4,12 +4,12 @@ let { language }: { language: string } = $props();
 
 <svg viewBox="0 0 30 22" width="24" height="18" aria-hidden="true" class="flag">
 	<rect width="30" height="22" fill="#faf8f3" />
-	{#if language === 'ja'}
+	{#if language === "ja"}
 		<circle cx="15" cy="11" r="6" fill="#b85159" />
-	{:else if language === 'fr'}
+	{:else if language === "fr"}
 		<path d="M0 0h10v22H0z" fill="#526984" />
 		<path d="M20 0h10v22H20z" fill="#b85159" />
-	{:else if language === 'es'}
+	{:else if language === "es"}
 		<path d="M0 0h30v22H0z" fill="#b85159" />
 		<path d="M0 6h30v10H0z" fill="#e4bf73" />
 	{:else}

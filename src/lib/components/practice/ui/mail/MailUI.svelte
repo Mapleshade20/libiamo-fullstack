@@ -103,7 +103,7 @@ async function send(sending: MailDraftFields) {
 		<header class="flex h-[52px] shrink-0 items-center gap-1 border-b border-[#E5E5EA] bg-[#F6F6F8] px-1 md:px-3">
 			<a
 				href={props.returnHref}
-				class="inline-flex min-h-11 items-center justify-center gap-0.5 pr-2 text-[#0A84FF] {reading ? 'max-md:hidden' : ''}"
+				class="inline-flex min-h-11 items-center justify-center gap-0.5 pr-2 text-[#0A84FF] {reading ? "max-md:hidden" : ""}"
 			>
 				<ChevronLeft size={20} aria-hidden="true" />
 				<span class="text-sm">{translate(props.language, "practice.returnToTask")}</span>
@@ -155,10 +155,12 @@ async function send(sending: MailDraftFields) {
 		>
 			<nav class="hidden min-h-0 flex-col gap-0.5 border-r border-[#E5E5EA] bg-[#F2F2F5] p-2 lg:flex" aria-label={t.mailboxes}>
 				<p class="px-2 pt-1 pb-1.5 text-[11px] font-semibold text-[#8E8E93]">{t.mailboxes}</p>
-				{#each mailboxLinks as [ id, Icon, label, count ]}
+				{#each mailboxLinks as [id, Icon, label, count]}
 					<button
 						type="button"
-						class="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm {mailbox === id ? 'bg-black/[0.08] font-medium' : 'hover:bg-black/[0.04]'}"
+						class="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm {mailbox === id
+							? "bg-black/[0.08] font-medium"
+							: "hover:bg-black/[0.04]"}"
 						onclick={() => openMailbox(id)}
 						aria-current={mailbox === id ? "page" : undefined}
 					>

@@ -66,12 +66,19 @@ function validate(): ValidationIssue[] {
 const uid = $props.id();
 </script>
 
-<form method="POST" action="?/save" use:enhance={() => async ({ update }) => update({ reset: false })} class="space-y-3">
+<form
+	method="POST"
+	action="?/save"
+	use:enhance={() =>
+		async ({ update }) =>
+			update({ reset: false })}
+	class="space-y-3"
+>
 	<input type="hidden" name="payload" value={payload}>
 	<div class="space-y-3" use:validateBeforeSubmit={validate}>
-		<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
+		<label for={`${uid}-enabled`} class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 			Use this override for my own calls
-			<Switch bind:checked={enabled} />
+			<Switch id={`${uid}-enabled`} bind:checked={enabled} />
 		</label>
 		<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_10rem]">
 			<Field label="Provider" for="{uid}-provider">

@@ -24,7 +24,7 @@ const isScalar = $derived(value === null || typeof value !== "object");
 			{#each value as item, index}
 				<li class="flex gap-2">
 					<span class="w-5 shrink-0 pt-px text-right font-mono text-xs text-muted-foreground tabular-nums">{index}</span>
-					<div class="min-w-0 flex-1 {item && typeof item === 'object' ? 'rounded-lg bg-foreground/[0.03] px-2.5 py-2' : ''}">
+					<div class="min-w-0 flex-1 {item && typeof item === "object" ? "rounded-lg bg-foreground/[0.03] px-2.5 py-2" : ""}">
 						<ValueView value={item} depth={depth + 1} />
 					</div>
 				</li>
@@ -34,8 +34,8 @@ const isScalar = $derived(value === null || typeof value !== "object");
 {:else if entries.length === 0}
 	<span class="text-muted-foreground italic">empty object</span>
 {:else}
-	<dl class="grid gap-x-3 gap-y-1.5 {depth > 3 ? '' : 'sm:grid-cols-[minmax(6rem,max-content)_minmax(0,1fr)]'}">
-		{#each entries as [ key, item ] (key)}
+	<dl class="grid gap-x-3 gap-y-1.5 {depth > 3 ? "" : "sm:grid-cols-[minmax(6rem,max-content)_minmax(0,1fr)]"}">
+		{#each entries as [key, item] (key)}
 			<dt class="pt-px font-mono text-xs text-muted-foreground">{key}</dt>
 			<dd class="min-w-0"><ValueView value={item} depth={depth + 1} /></dd>
 		{/each}

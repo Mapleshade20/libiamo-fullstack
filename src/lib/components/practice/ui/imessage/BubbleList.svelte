@@ -25,10 +25,10 @@ const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, session.ag
 
 	{#each messages as message, index (message.id)}
 		{@const outgoing = message.role === "user"}
-		<div class="mb-1.5 flex flex-col {outgoing ? 'items-end' : 'items-start'}">
+		<div class="mb-1.5 flex flex-col {outgoing ? "items-end" : "items-start"}">
 			{#if !outgoing && messages[index - 1]?.authorName !== message.authorName}
 				<!-- Group chats name every sender; a one-to-one chat names the contact on wide screens only. -->
-				<span class="mb-1 ml-2 text-[11px] text-[#8E8E93] {group ? '' : 'hidden md:block'}">{message.authorName}</span>
+				<span class="mb-1 ml-2 text-[11px] text-[#8E8E93] {group ? "" : "hidden md:block"}">{message.authorName}</span>
 			{/if}
 			{#if message.deliveryState === "failed"}
 				<p class="max-w-[82%] rounded-[20px] border border-[#FF3B30]/30 bg-[#FFF2F1] px-3 py-2 text-[15px] leading-5 text-[#C9281D] md:max-w-[68%]">
@@ -45,8 +45,8 @@ const lastOutgoingRead = $derived(isLastOutgoingMessageRead(messages, session.ag
 			{:else}
 				<div
 					class="max-w-[82%] rounded-[20px] px-3 py-2 text-[15px] leading-5 shadow-sm md:max-w-[68%] {getBubbleCorners(messages, index)} {outgoing
-						? 'bg-[#0A84FF] text-white md:bg-[#34C759]'
-						: 'bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]'}"
+						? "bg-[#0A84FF] text-white md:bg-[#34C759]"
+						: "bg-[#E5E5EA] text-[#1C1C1E] md:bg-[#ECECEF]"}"
 				>
 					<MarkdownRenderer content={renderEmojiShortcodes(message.text)} />
 				</div>

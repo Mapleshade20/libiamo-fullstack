@@ -66,7 +66,7 @@ export const load: PageServerLoad = async (event) => {
 
 	const taskId = parseTaskId(event.params.id);
 	const identity = taskId ? await getTaskIdentity(taskId) : null;
-	if (!identity || identity.interactionType !== "chat") throw error(404, "Task not found");
+	if (identity?.interactionType !== "chat") throw error(404, "Task not found");
 	const sessionPath = `${base}/task/${identity.id}/session${pinQuery(event.url)}`;
 
 	// Get the session this URL shows. If there is none yet, send the learner to the session flow.

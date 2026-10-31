@@ -105,7 +105,16 @@ $effect(() => {
 			/>
 		</svg>
 		<div class="clip" aria-hidden="true"><span></span></div>
-		<button type="button" class="close" onclick={() => { isOpen = false; }} aria-label={t(lang, "common.close")}>×</button>
+		<button
+			type="button"
+			class="close"
+			onclick={() => {
+				isOpen = false;
+			}}
+			aria-label={t(lang, "common.close")}
+		>
+			×
+		</button>
 		<div class="paper">
 			<div class="headline">
 				<StreakFlame appearance={flameAppearance(view)} size={96} idle={isOpen} />
@@ -145,8 +154,8 @@ $effect(() => {
 								{t(lang, "streak.reviewRemaining").replace("{count}", "0")}
 							{:else}
 								{remaining
-												.map(([code, count]) => `${LANGUAGE_LABELS[code]} ${t(lang, "streak.reviewRemaining").replace("{count}", String(count))}`)
-												.join(" · ")}
+									.map(([code, count]) => `${LANGUAGE_LABELS[code]} ${t(lang, "streak.reviewRemaining").replace("{count}", String(count))}`)
+									.join(" · ")}
 							{/if}
 						{:else if failed}
 							{t(lang, "streak.countsUnavailable")}
@@ -159,9 +168,27 @@ $effect(() => {
 
 			<div class="divider" aria-hidden="true"></div>
 
-			<StreakCalendar {month} {today} {marks} {since} {loading} {lang} onMonth={(next) => { month = next; }} />
+			<StreakCalendar
+				{month}
+				{today}
+				{marks}
+				{since}
+				{loading}
+				{lang}
+				onMonth={(next) => {
+					month = next;
+				}}
+			/>
 			{#if calendarFailed}
-				<button class="retry" type="button" onclick={() => { retry++; }}>{t(lang, "streak.calendarRetry")}</button>
+				<button
+					class="retry"
+					type="button"
+					onclick={() => {
+						retry++;
+					}}
+				>
+					{t(lang, "streak.calendarRetry")}
+				</button>
 			{/if}
 
 			{#if view.bank > 0 || view.questsToNextSavedDay !== null}

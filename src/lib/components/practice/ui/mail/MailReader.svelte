@@ -37,7 +37,7 @@ const initials = $derived(
 );
 </script>
 
-<section class="flex min-h-0 min-w-0 flex-col {hidden ? 'max-md:hidden' : ''}">
+<section class="flex min-h-0 min-w-0 flex-col {hidden ? "max-md:hidden" : ""}">
 	{#if item}
 		<article class="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-8" aria-labelledby="mail-reader-subject">
 			<div class="flex items-start gap-3 border-b border-[#E5E5EA] pb-4">

@@ -240,7 +240,7 @@ async function deleteCard() {
 		</fieldset>
 
 		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-			<p class="min-h-5 text-sm {message?.tone === 'error' ? 'text-destructive' : 'text-success'}" role="status">{message?.text ?? ""}</p>
+			<p class="min-h-5 text-sm {message?.tone === "error" ? "text-destructive" : "text-success"}" role="status">{message?.text ?? ""}</p>
 			<Button type="submit" disabled={pending !== null}>
 				{#if pending === "save"}
 					<LoaderCircle class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -267,7 +267,14 @@ async function deleteCard() {
 					aria-label={t(lang, "review.manage.daysUntilDue")}
 					class="h-8 flex-1 pointer-coarse:h-10"
 				/>
-				<Button variant="secondary" size="sm" disabled={pending !== null} onclick={() => { void setDue(); }}>
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={pending !== null}
+					onclick={() => {
+						void setDue();
+					}}
+				>
 					{pending === "due" ? t(lang, "review.manage.setting") : t(lang, "review.manage.set")}
 				</Button>
 			</div>

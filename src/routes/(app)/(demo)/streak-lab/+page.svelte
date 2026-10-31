@@ -77,17 +77,33 @@ function nextDay() {
 <svelte:head><title>Streak — rehearsal room · Libiamo</title></svelte:head>
 <StreakCompletion ready={surface !== "home"} />
 <div class="lab">
-	<div class="pair motion-toolbar" role="group" aria-label="Micro-motion controls">
-		<Button variant="secondary" aria-pressed={streakPreview.microMotion === "moving"} onclick={() => { streakPreview.microMotion = "moving"; }}
+	<fieldset class="pair motion-toolbar min-w-0">
+		<legend class="sr-only">Micro-motion controls</legend>
+		<Button
+			variant="secondary"
+			aria-pressed={streakPreview.microMotion === "moving"}
+			onclick={() => {
+				streakPreview.microMotion = "moving";
+			}}
 			>Play micro-motion now</Button
 		>
-		<Button variant="secondary" aria-pressed={streakPreview.microMotion === "static"} onclick={() => { streakPreview.microMotion = "static"; }}
+		<Button
+			variant="secondary"
+			aria-pressed={streakPreview.microMotion === "static"}
+			onclick={() => {
+				streakPreview.microMotion = "static";
+			}}
 			>Settle to static</Button
 		>
-		<Button variant="ghost" aria-pressed={streakPreview.microMotion === "auto"} onclick={() => { streakPreview.microMotion = "auto"; }}
+		<Button
+			variant="ghost"
+			aria-pressed={streakPreview.microMotion === "auto"}
+			onclick={() => {
+				streakPreview.microMotion = "auto";
+			}}
 			>Resume automatic cycle</Button
 		>
-	</div>
+	</fieldset>
 	<div class="workspace">
 		<section class="stage" aria-label="Simulated completion surface">
 			<span class="tape"></span><span class="folio">{today} · {surface === "home" ? "QUEST HALL" : "SETTLEMENT"}</span>
@@ -106,7 +122,13 @@ function nextDay() {
 					<p>
 						{view.status === "lit" ? "Both promises kept. Today’s flame is yours." : "One promise kept. A small blue spark is waiting for the other."}
 					</p>
-					<Button variant="secondary" onclick={() => { surface = "home"; }}>Back to the hall</Button>
+					<Button
+						variant="secondary"
+						onclick={() => {
+							surface = "home";
+						}}
+						>Back to the hall</Button
+					>
 				</div>
 			{/if}
 			<div class="today-progress">
@@ -130,7 +152,7 @@ function nextDay() {
 			</div>
 			<label
 				>Playback<select bind:value={streakPreview.speed}>
-					<option value={.1}>10× — idle timing test</option>
+					<option value={0.1}>10× — idle timing test</option>
 					<option value={1}>1× — real time</option>
 					<option value={2}>½× — slow motion</option>
 					<option value={4}>¼× — inspect</option>
@@ -147,7 +169,7 @@ function nextDay() {
 		{:else}
 			<ol>
 				{#each history as entry, index}
-					<li><span>{String(history.length-index).padStart(2,"0")}</span>{entry}</li>
+					<li><span>{String(history.length - index).padStart(2, "0")}</span>{entry}</li>
 				{/each}
 			</ol>
 		{/if}

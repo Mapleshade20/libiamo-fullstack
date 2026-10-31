@@ -96,9 +96,11 @@ $effect(() => {
 			     the reading measure because the book spread needs the room; owning both edges here is what
 			     keeps the masthead, the hall heading and the spread on one set of margins. -->
 			<main
-				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall ? 'max-w-[42rem] nav:max-w-[76rem]' : isAdmin ? 'max-w-5xl nav:max-w-[76rem]' : 'max-w-5xl'} {hasMasthead
-					? 'pt-0'
-					: 'pt-8 nav:pt-24'}"
+				class="mx-auto px-4 pb-[calc(var(--app-bottom-nav-height)+2rem)] {isHall
+					? "max-w-[42rem] nav:max-w-[76rem]"
+					: isAdmin
+						? "max-w-5xl nav:max-w-[76rem]"
+						: "max-w-5xl"} {hasMasthead ? "pt-0" : "pt-8 nav:pt-24"}"
 			>
 				{#if hasMasthead}
 					<HomeMasthead

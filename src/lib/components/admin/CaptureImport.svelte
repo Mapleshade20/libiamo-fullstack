@@ -1,4 +1,6 @@
 <script lang="ts">
+const controlId = $props.id();
+
 import Check from "@lucide/svelte/icons/check";
 import { SvelteSet } from "svelte/reactivity";
 import {
@@ -89,9 +91,17 @@ function chooseAll(on: boolean) {
 		{#each replies.get(parent) ?? [] as message (message.id)}
 			<li>
 				<label
-					class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-colors duration-100 {chosen.has(message.id) ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.025]'}"
+					for={`${controlId}-${message.id}`}
+					class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-colors duration-100 {chosen.has(message.id)
+						? "bg-foreground/[0.05]"
+						: "hover:bg-foreground/[0.025]"}"
 				>
-					<Checkbox class="mt-0.5" checked={chosen.has(message.id)} onchange={(event) => toggle(message, event.currentTarget.checked)} />
+					<Checkbox
+						id={`${controlId}-${message.id}`}
+						class="mt-0.5"
+						checked={chosen.has(message.id)}
+						onchange={(event) => toggle(message, event.currentTarget.checked)}
+					/>
 					<span class="min-w-0">
 						<span class="font-medium">{message.author}</span>
 						<span class="line-clamp-2 text-muted-foreground">{message.text}</span>
@@ -139,7 +149,12 @@ function chooseAll(on: boolean) {
 					<li>
 						<button
 							type="button"
-							class="min-h-11 w-full cursor-pointer rounded-md border-l-[3px] px-2 py-1.5 text-left outline-none transition-colors duration-100 hover:bg-foreground/[0.025] focus-visible:ring-3 focus-visible:ring-ring/50 {message.id === joinedAt ? 'border-foreground bg-foreground/[0.06]' : chatOpening.has(message.id) ? 'border-foreground/30' : 'border-transparent'}"
+							class="min-h-11 w-full cursor-pointer rounded-md border-l-[3px] px-2 py-1.5 text-left outline-none transition-colors duration-100 hover:bg-foreground/[0.025] focus-visible:ring-3 focus-visible:ring-ring/50 {message.id ===
+							joinedAt
+								? "border-foreground bg-foreground/[0.06]"
+								: chatOpening.has(message.id)
+									? "border-foreground/30"
+									: "border-transparent"}"
 							aria-pressed={message.id === joinedAt}
 							onclick={() => join(message)}
 						>
@@ -170,13 +185,15 @@ function chooseAll(on: boolean) {
 				<Button type="button" variant="secondary" size="sm" onclick={() => chooseAll(true)}>Tick all</Button>
 				<Button type="button" variant="ghost" size="sm" onclick={() => chooseAll(false)}>Clear</Button>
 			</div>
-			<div class="max-h-[32rem] overflow-y-auto rounded-lg border border-border bg-white/50 p-1" role="group" aria-label="Captured comments">
+			<section class="max-h-[32rem] overflow-y-auto rounded-lg border border-border bg-white/50 p-1" aria-label="Captured comments">
 				{@render thread("")}
-			</div>
+			</section>
 			<Notice tone={chosen.size > LARGE_OPENING ? "warning" : "info"} role="status">
 				<p>
 					{chosen.size}
-					of {capture.messages.length} comments in the opening{chosen.size > LARGE_OPENING ? ": a large opening makes every reply slower and costlier" : ""}.
+					of {capture.messages.length} comments in the opening{chosen.size > LARGE_OPENING
+						? ": a large opening makes every reply slower and costlier"
+						: ""}.
 				</p>
 			</Notice>
 		{/if}

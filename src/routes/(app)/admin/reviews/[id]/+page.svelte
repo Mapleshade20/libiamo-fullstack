@@ -8,7 +8,7 @@ import Notice from "$lib/components/common/Notice.svelte";
 import { Badge } from "$lib/components/ui/badge";
 import { Button } from "$lib/components/ui/button";
 import { Input } from "$lib/components/ui/input";
-import { LANGUAGE_LABELS, type LanguageCode, type UiVariant } from "$lib/constants";
+import { LANGUAGE_LABELS, type LanguageCode } from "$lib/constants";
 import { getDisplayClock } from "$lib/time/display-clock";
 
 const clock = getDisplayClock();
@@ -55,7 +55,7 @@ function fmtDate(d: Date | null): string {
 	{#snippet item(label: string, value: string, pre = false)}
 		<div class="space-y-1">
 			<dt class="text-sm text-muted-foreground">{label}</dt>
-			<dd class="text-sm {pre ? 'whitespace-pre-wrap' : ''}">{value}</dd>
+			<dd class="text-sm {pre ? "whitespace-pre-wrap" : ""}">{value}</dd>
 		</div>
 	{/snippet}
 

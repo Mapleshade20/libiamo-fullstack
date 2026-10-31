@@ -213,7 +213,10 @@ function random(seed: number): () => number {
 function pick<T>(options: Weighted<T>, roll: number): T {
 	const total = options.reduce((sum, [, weight]) => sum + weight, 0);
 	let left = roll * total;
-	for (const [value, weight] of options) if ((left -= weight) < 0) return value;
+	for (const [value, weight] of options) {
+		left -= weight;
+		if (left < 0) return value;
+	}
 	return options[options.length - 1][0];
 }
 

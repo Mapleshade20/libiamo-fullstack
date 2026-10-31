@@ -36,9 +36,9 @@ const id = $props.id();
 			<path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
 		</svg>
 	</button>
-	<div class="panel" id={`${id}-panel`} role="region" aria-labelledby={id} inert={!expanded}>
+	<section class="panel" id={`${id}-panel`} aria-labelledby={id} inert={!expanded}>
 		<div class="panel-inner"><div class={variant === "boxed" ? "px-3 pt-1 pb-3" : "pt-1 pb-3"}>{@render children()}</div></div>
-	</div>
+	</section>
 </div>
 
 <style>

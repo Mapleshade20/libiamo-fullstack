@@ -314,8 +314,11 @@ function handleRetry() {
 					/>
 					<button
 						type="button"
-						class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 {canSubmit || submitting ?'opacity-100' : 'opacity-40'}
-						{submitting ? 'submit-orbit--busy scale-[1.02]' : 'hover:scale-[1.03] active:scale-[0.97]'}"
+						class="submit-orbit relative size-11 shrink-0 rounded-full transition-[opacity,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 {canSubmit ||
+						submitting
+							? "opacity-100"
+							: "opacity-40"}
+						{submitting ? "submit-orbit--busy scale-[1.02]" : "hover:scale-[1.03] active:scale-[0.97]"}"
 						disabled={!canSubmit && !submitting}
 						aria-label={continueLabel}
 						aria-busy={submitting}
@@ -323,11 +326,12 @@ function handleRetry() {
 					>
 						<span class="submit-orbit__ring" aria-hidden="true"></span>
 						<span
-							class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300 {submitting ?'bg-primary/90' : ''}"
+							class="relative z-[1] flex size-full items-center justify-center rounded-full border border-transparent bg-primary text-primary-foreground shadow-sm transition-colors duration-300 {submitting
+								? "bg-primary/90"
+								: ""}"
 						>
 							<ArrowUp
-								class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting ?'-translate-y-0.5 opacity-90'
-								: ''}"
+								class="size-5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] {submitting ? "-translate-y-0.5 opacity-90" : ""}"
 								strokeWidth={2.25}
 							/>
 						</span>

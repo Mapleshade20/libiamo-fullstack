@@ -4,7 +4,7 @@ import CheckCircle2 from "@lucide/svelte/icons/check-circle-2";
 import Info from "@lucide/svelte/icons/info";
 import X from "@lucide/svelte/icons/x";
 import { onDestroy, onMount, tick } from "svelte";
-import { fade, fly, scale } from "svelte/transition";
+import { fly, scale } from "svelte/transition";
 import { lockBodyScroll } from "$lib/client/scroll-lock";
 import type { NotificationVariant } from "$lib/components/common/notifications";
 import { cn } from "$lib/utils";

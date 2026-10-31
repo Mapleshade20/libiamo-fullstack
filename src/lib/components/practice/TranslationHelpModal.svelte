@@ -94,7 +94,7 @@ async function handleGenerate() {
 			expressions = r.data.expressions;
 			hasGenerated = true;
 		} else if (r.type === "failure") {
-			generateError = (r.data as any)?.error ?? t(lang, "task.usefulExpressions.error");
+			generateError = r.data?.error ?? t(lang, "task.usefulExpressions.error");
 		}
 	} catch {
 		if (!mounted) return;
@@ -132,7 +132,7 @@ async function handleCheck(idx: number) {
 			feedbacks = { ...feedbacks, [idx]: r.data.feedback ?? "" };
 			corrections = { ...corrections, [idx]: r.data.correction ?? "" };
 		} else if (r.type === "failure") {
-			feedbacks = { ...feedbacks, [idx]: (r.data as any)?.error ?? t(lang, "task.usefulExpressions.error") };
+			feedbacks = { ...feedbacks, [idx]: r.data?.error ?? t(lang, "task.usefulExpressions.error") };
 		}
 	} catch {
 		if (!mounted) return;
@@ -233,6 +233,7 @@ $effect(() => {
 	<Portal disabled={!mounted}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- biome-ignore lint/a11y/noStaticElementInteractions: Backdrop clicks are a pointer-only shortcut; the dialog provides keyboard dismissal. -->
 		<div
 			class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
 			onclick={handleBackdropClick}
@@ -286,11 +287,7 @@ $effect(() => {
 								{@const correction = corrections[idx]}
 								{@const isChecking = checking[idx]}
 
-								<div
-									class="rounded-xl border border-border p-4 transition-colors {feedback
-								? 'bg-foreground/5'
-								: 'bg-background'}"
-								>
+								<div class="rounded-xl border border-border p-4 transition-colors {feedback ? "bg-foreground/5" : "bg-background"}">
 									<!-- Source expression -->
 									<p class="font-prose text-sm font-medium text-foreground leading-relaxed">{expr}</p>
 
@@ -305,11 +302,11 @@ $effect(() => {
 											maxlength={PRACTICE_UI_TEXT_MAX_LENGTH}
 											oninput={(e) => handleUserTranslationInput(idx, e)}
 											onkeydown={(e) => {
-										if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-											e.preventDefault();
-											handleCheck(idx);
-										}
-									}}
+												if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+													e.preventDefault();
+													handleCheck(idx);
+												}
+											}}
 										></textarea>
 									</div>
 

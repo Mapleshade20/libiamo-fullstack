@@ -25,7 +25,10 @@ let {
 <Popover.Root bind:open {onOpenChange}>
 	<Popover.Trigger
 		aria-label={label}
-		class={cn("inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl outline-offset-4 hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring", triggerClass)}
+		class={cn(
+			"inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl outline-offset-4 hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring",
+			triggerClass,
+		)}
 	>
 		{@render trigger()}
 	</Popover.Trigger>
@@ -37,7 +40,10 @@ let {
 			trapFocus={false}
 			role="dialog"
 			aria-label={label}
-			class={cn("floating-panel z-[60] w-52 max-w-[calc(100vw-1.5rem)] max-h-[var(--bits-popover-content-available-height)] overflow-y-auto text-sm", className)}
+			class={cn(
+				"floating-panel z-[60] w-52 max-w-[calc(100vw-1.5rem)] max-h-[var(--bits-popover-content-available-height)] overflow-y-auto text-sm",
+				className,
+			)}
 		>
 			{@render children()}
 		</Popover.Content>

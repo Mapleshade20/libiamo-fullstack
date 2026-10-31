@@ -248,7 +248,7 @@ $effect(() => {
 	oninvalidcapture={handleInvalidField}
 >
 	{#if extraHiddenFields}
-		{#each Object.entries(extraHiddenFields) as [ name, val ]}
+		{#each Object.entries(extraHiddenFields) as [name, val]}
 			<input type="hidden" {name} value={val}>
 		{/each}
 	{/if}
@@ -342,7 +342,10 @@ $effect(() => {
 							id="rotation"
 							name="rotation"
 							bind:value={selectedRotation}
-							items={[{ value: "none", label: "None (manual lineups only)" }, ...LINEUP_KINDS.map((kind) => ({ value: kind, label: LINEUP_KIND_LABELS[kind] }))]}
+							items={[
+								{ value: "none", label: "None (manual lineups only)" },
+								...LINEUP_KINDS.map((kind) => ({ value: kind, label: LINEUP_KIND_LABELS[kind] })),
+							]}
 						/>
 					</div>
 				{/if}
@@ -544,7 +547,11 @@ $effect(() => {
 		title="Submit for review?"
 		confirmLabel="Submit"
 		cancelLabel="Go back"
-		onconfirm={() => { confirmed = true; showConfirm = false; mainFormEl?.requestSubmit(); }}
+		onconfirm={() => {
+			confirmed = true;
+			showConfirm = false;
+			mainFormEl?.requestSubmit();
+		}}
 	>
 		<div class="space-y-3">
 			<div class="grid gap-3 sm:grid-cols-2">

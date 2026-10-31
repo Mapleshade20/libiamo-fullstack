@@ -118,9 +118,11 @@ function sectionLabel(value: QuestMenuSection): string {
 	</div>
 	<div
 		class="page-items"
-		class:is-compact={pageSection === "translation" ? (side === "left" ? pageSpread.leftItems : pageSpread.rightItems).some((item) => item.archived) : side === "right" || pageSpread.leaf > 1}
+		class:is-compact={pageSection === "translation"
+			? (side === "left" ? pageSpread.leftItems : pageSpread.rightItems).some((item) => item.archived)
+			: side === "right" || pageSpread.leaf > 1}
 	>
-		{#each (side === "left" ? pageSpread.leftItems : pageSpread.rightItems) as item (item.key)}
+		{#each side === "left" ? pageSpread.leftItems : pageSpread.rightItems as item (item.key)}
 			<QuestMenuItemCard
 				{item}
 				{lang}
@@ -152,7 +154,12 @@ function sectionLabel(value: QuestMenuSection): string {
 	aria-hidden={!ready || view === "prepare"}
 	inert={!ready || !interactive || view === "prepare"}
 >
-	<div class="book-frame-shell" onanimationend={(event) => { if (event.target === event.currentTarget) onrevealed(); }}>
+	<div
+		class="book-frame-shell"
+		onanimationend={(event) => {
+			if (event.target === event.currentTarget) onrevealed();
+		}}
+	>
 		<div class="book-frame" bind:this={bookFrame} aria-busy={turning}>
 			<span class="recto-probe" bind:this={rectoProbe} aria-hidden="true"></span>
 			<div class="book-tilt" bind:this={bookTilt}>
@@ -208,7 +215,12 @@ function sectionLabel(value: QuestMenuSection): string {
 						<div class="turn-sheet" bind:this={turnSheet}>
 							<div class="turn-sheet-face turn-sheet-front">
 								{#if turnPreview}
-									{@render pageCopy(turnPreview.fromSection, turnPreview.fromSpread, turnPreview.fromFolio, turnPreview.direction > 0 ? "right" : "left")}
+									{@render pageCopy(
+										turnPreview.fromSection,
+										turnPreview.fromSpread,
+										turnPreview.fromFolio,
+										turnPreview.direction > 0 ? "right" : "left",
+									)}
 								{/if}
 								<span class="turn-sheet-shade"></span>
 							</div>
@@ -643,24 +655,24 @@ function sectionLabel(value: QuestMenuSection): string {
 	outline: 0;
 }
 
-.turn-button:not(:disabled):hover::before,
+.turn-button:where(:not(:disabled)):hover::before,
 .turn-button:focus-visible::before {
 	opacity: 1;
 }
 
-.turn-button:not(:disabled):hover .turn-cue,
+.turn-button:where(:not(:disabled)):hover .turn-cue,
 .turn-button:focus-visible .turn-cue {
 	border-color: color-mix(in oklab, var(--menu-wine) 42%, transparent);
 	background: color-mix(in oklab, var(--menu-sheet) 94%, var(--menu-paper));
 	opacity: 0.9;
 }
 
-.turn-previous:not(:disabled):hover .turn-cue,
+.turn-previous:where(:not(:disabled)):hover .turn-cue,
 .turn-previous:focus-visible .turn-cue {
 	transform: translate(-0.12rem, -50%);
 }
 
-.turn-next:not(:disabled):hover .turn-cue,
+.turn-next:where(:not(:disabled)):hover .turn-cue,
 .turn-next:focus-visible .turn-cue {
 	transform: translate(0.12rem, -50%);
 }

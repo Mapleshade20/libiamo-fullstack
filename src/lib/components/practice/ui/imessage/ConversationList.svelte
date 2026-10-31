@@ -27,7 +27,8 @@ const preview = $derived(normalizeText(getRenderableMessages(session.messages).a
 				class="block h-3 w-3 rounded-full bg-[#FF5F57] transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
 				aria-label={translate(language, "practice.returnToTask")}
 				title={translate(language, "practice.returnToTask")}
-			></a>
+				><span class="sr-only">{translate(language, "practice.returnToTask")}</span></a
+			>
 			<span class="h-3 w-3 rounded-full bg-[#FEBC2E]" aria-hidden="true"></span>
 			<span class="h-3 w-3 rounded-full bg-[#28C840]" aria-hidden="true"></span>
 		</div>

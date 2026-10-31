@@ -1,4 +1,6 @@
 <script lang="ts">
+const controlId = $props.id();
+
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
@@ -232,9 +234,9 @@ $effect(() => {
 			{/if}
 
 			<div class="space-y-3 border-t border-border pt-4">
-				<label class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
+				<label for={`${controlId}-editMessages`} class="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm">
 					Send hand-edited messages instead of the recipe's (one-off)
-					<Switch bind:checked={editMessages} />
+					<Switch id={`${controlId}-editMessages`} bind:checked={editMessages} />
 				</label>
 				{#if editMessages}
 					{#if messages.length === 0}

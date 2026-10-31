@@ -41,20 +41,24 @@ const segments = $derived([
 ] as const);
 </script>
 
-<section class="flex min-h-0 flex-col border-r border-[#E5E5EA] {hidden ? 'max-md:hidden' : ''}" aria-labelledby="mail-list-title">
+<section class="flex min-h-0 flex-col border-r border-[#E5E5EA] {hidden ? "max-md:hidden" : ""}" aria-labelledby="mail-list-title">
 	<div class="shrink-0 px-4 pt-3 pb-2">
 		<h1 id="mail-list-title" class="text-2xl font-bold tracking-tight">{mailbox === "inbox" ? t.inbox : t.sent}</h1>
-		<div class="mt-2 grid grid-cols-2 rounded-lg bg-[#EEEEF0] p-0.5 text-sm lg:hidden" role="group" aria-label={t.mailboxes}>
-			{#each segments as [ id, label ]}
+		<fieldset class="mt-2 grid min-w-0 grid-cols-2 rounded-lg bg-[#EEEEF0] p-0.5 text-sm lg:hidden">
+			<legend class="sr-only">{t.mailboxes}</legend>
+			{#each segments as [id, label]}
 				<button
 					type="button"
-					class="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md {mailbox === id ? 'bg-white font-medium shadow-sm' : 'text-[#6E6E73]'}"
+					class="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md {mailbox === id
+						? "bg-white font-medium shadow-sm"
+						: "text-[#6E6E73]"}"
 					onclick={() => onMailbox(id)}
 					aria-pressed={mailbox === id}
 				>
 					{label}
 					{#if id === "inbox" && unread}
 						<span
+							role="img"
 							class="min-w-5 rounded-full bg-[#0A84FF] px-1.5 text-xs leading-5 font-semibold text-white"
 							aria-label={t.unread.replace("{count}", String(unread))}
 						>
@@ -63,7 +67,7 @@ const segments = $derived([
 					{/if}
 				</button>
 			{/each}
-		</div>
+		</fieldset>
 	</div>
 
 	{#if failedReply}
@@ -90,18 +94,20 @@ const segments = $derived([
 				<li class="border-b border-[#F0F0F2] px-2">
 					<button
 						type="button"
-						class="my-1 grid w-full grid-cols-[12px_1fr_auto] gap-x-2 rounded-lg px-2 py-2 text-left {active ? 'md:bg-[#0A84FF] md:text-white' : ''} hover:bg-black/[0.03]"
+						class="my-1 grid w-full grid-cols-[12px_1fr_auto] gap-x-2 rounded-lg px-2 py-2 text-left {active
+							? "md:bg-[#0A84FF] md:text-white"
+							: ""} hover:bg-black/[0.03]"
 						onclick={() => onSelect(item.id)}
 						aria-current={active ? "true" : undefined}
 					>
 						<span
-							class="mt-1.5 h-2 w-2 rounded-full {unread ? (active ? 'bg-[#0A84FF] md:bg-white' : 'bg-[#0A84FF]') : ''}"
+							class="mt-1.5 h-2 w-2 rounded-full {unread ? (active ? "bg-[#0A84FF] md:bg-white" : "bg-[#0A84FF]") : ""}"
 							aria-hidden="true"
 						></span>
 						<span class="truncate text-sm font-semibold">{item.mailbox === "sent" ? `${t.to} ${item.to}` : item.from.name}</span>
-						<span class="text-xs text-[#8E8E93] {active ? 'md:text-white/80' : ''}">{item.time || translate(language, "practice.earlier")}</span>
+						<span class="text-xs text-[#8E8E93] {active ? "md:text-white/80" : ""}">{item.time || translate(language, "practice.earlier")}</span>
 						<span class="col-start-2 col-end-4 truncate text-sm">{item.subject || t.noSubject}</span>
-						<span class="col-start-2 col-end-4 line-clamp-2 text-[13px] leading-snug text-[#6E6E73] {active ? 'md:text-white/80' : ''}"
+						<span class="col-start-2 col-end-4 line-clamp-2 text-[13px] leading-snug text-[#6E6E73] {active ? "md:text-white/80" : ""}"
 							>{item.body}</span
 						>
 					</button>

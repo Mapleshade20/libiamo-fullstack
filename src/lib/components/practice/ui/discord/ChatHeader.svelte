@@ -68,7 +68,7 @@ const turnsColor = $derived((session.remainingTurns ?? 0) <= 2 ? "text-[#DA373C]
 		{#if !dm}
 			<button
 				type="button"
-				class="grid min-h-11 min-w-11 place-items-center rounded transition-colors {showMembers ? 'text-white' : 'hover:text-[#DBDEE1]'}"
+				class="grid min-h-11 min-w-11 place-items-center rounded transition-colors {showMembers ? "text-white" : "hover:text-[#DBDEE1]"}"
 				onclick={onToggleMembers}
 				aria-label={membersLabel}
 				aria-pressed={showMembers}

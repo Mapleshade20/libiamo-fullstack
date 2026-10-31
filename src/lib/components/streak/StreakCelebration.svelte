@@ -58,13 +58,21 @@ $effect(() => {
 			size={120}
 			idle={false}
 			continuous
-			onready={() => { artReady = true; }}
-			onrise={() => { rising = true; }}
-			onigniteend={() => { ignitionDone = true; }}
+			onready={() => {
+				artReady = true;
+			}}
+			onrise={() => {
+				rising = true;
+			}}
+			onigniteend={() => {
+				ignitionDone = true;
+			}}
 		/>
 		<div class="headline" aria-live="polite">
 			<strong
-				>{kind === "ignite" ? t(lang, view.days === 1 ? "streak.dayOne" : "streak.dayMany").replace("{count}", String(view.days)) : t(lang, "streak.halfway")}</strong
+				>{kind === "ignite"
+					? t(lang, view.days === 1 ? "streak.dayOne" : "streak.dayMany").replace("{count}", String(view.days))
+					: t(lang, "streak.halfway")}</strong
 			>
 			<p>{t(lang, kind === "ignite" ? "streak.keepGoing" : view.taskCount > 0 ? "streak.nextReview" : "streak.nextQuest")}</p>
 		</div>
