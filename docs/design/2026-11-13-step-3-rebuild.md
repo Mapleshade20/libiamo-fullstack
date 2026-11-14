@@ -372,8 +372,39 @@ applied to all of it. It is not committed because the pre-commit Biome hook refu
    `type="button"`), `noAssignInExpressions` (46), a11y rules on svg and roles (about 50), CSS
    `noDescendingSpecificity` (111, warnings). Fix the code rather than loosen the rules. Formatting touched Svelte
    templates, so compare a few pages with the demo (port 4793) for changed spacing between inline elements.
-2. `base`: every internal URL through `$app/paths`, until `test/base-path.test.ts` passes. Then commit the import.
-3. The rest of phase 1: the package upgrade; drizzle and the single migration with the account tables (§5.1);
+2. Remove the base path (below). Then commit the import.
+3. The package upgrade (below).
+4. The rest of phase 1: drizzle and the single migration with the account tables (§5.1);
    `/health`; hooks with graceful shutdown; the image boots under compose; Better Auth from `legacy` behind the
    demo's auth pages; the welcome, settings and the key on real accounts; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`
    and the environment lists rewritten for what exists.
+
+### Decided by the user after the handover (2026-11-13)
+
+**No base path.** The app is only ever served from the root of its host; sub-path deployment goes, and the demo's bare
+`"/…"` URLs stay as they are. Remove, together:
+
+- `svelte.config.js`: `BASE_PATH`, `paths.base` and `paths.relative`; the error template no longer needs
+  materialising, so `src/error.html` loses `%libiamo.base%` and `scripts/error-template.mjs` and its test go;
+- `test/base-path.test.ts`;
+- `Dockerfile`: the `BASE_PATH` build argument and both `ENV`s, and its use in the `HEALTHCHECK` URL;
+- `docker-compose.yaml` and `.env.docker.example`: the `BASE_PATH` build argument;
+- `.github/workflows/publish-image.yml`: the `base_path` input and build argument;
+- `deploy/podman/ops/operations.py`: the public probe is `ORIGIN + /health` (and its test in `test/deploy`);
+  `libiamo-app.container`: the comment about appending the base path to `HealthCmd`;
+- `DEPLOYMENT.md`, `README.md`, `AGENTS.md`: every mention, including the rule that internal URLs go through `base`;
+- when Better Auth comes back from `legacy`: `baseURL` is `${ORIGIN}/api/auth` and the cookie path is `/`.
+
+**The package upgrade, done properly.** Bring every package to its current major (SvelteKit 3, Vite 8, Vitest 5,
+TypeScript 7, adapter-node 6, vite-plugin-svelte 7, tailwind-variants 4, and whatever else is behind; bits-ui was
+pinned at 2.16.4 in the demo for a reason, so check that reason before moving it). How:
+
+1. One sonnet subagent, and only one, finds out from the migration guides and changelogs (the web, or the packages'
+   own docs) what each major version changed and what it added.
+2. Apply the breaking changes to this project.
+3. Think about which new features are worth using here (for instance anything that replaces hand-written loads,
+   actions or endpoints, typed server calls, streaming, new routing or transition APIs). Do not adopt any on your own:
+   for each one worth it, ask the user with the ask-user tool, saying what it would replace and what it costs.
+
+The upgrade is its own commit after the import, so a change in behaviour can be told from a change in the port. Check
+the same things after it as before: `svelte-check`, the tests, the dev server, the replay.
