@@ -1,8 +1,10 @@
-// The demo keeps everything on the device (lib/demo), so it renders in the browser only.
+// The pages still keep most of their data on the device (lib/demo), so they render in the browser only.
 export const ssr = false;
 
 export async function load() {
 	const { ready, applyLang } = await import("#lib/demo/app.svelte.ts");
+	const { hydrate } = await import("#lib/account/account.svelte.ts");
+	await hydrate();
 	await ready();
 	applyLang();
 	return {};

@@ -7,6 +7,7 @@ import Settings from "@lucide/svelte/icons/settings";
 import ShieldCheck from "@lucide/svelte/icons/shield-check";
 import UserRound from "@lucide/svelte/icons/user-round";
 import { tick } from "svelte";
+import { account, signOut } from "#lib/account/account.svelte.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
@@ -15,7 +16,6 @@ import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
 import type { StickerName } from "#lib/components/stickers/stickers.ts";
 import { hasScenarios } from "#lib/constants.ts";
-import { signOut } from "#lib/demo/account.svelte.ts";
 import { app, endonym, switchLanguage, tx } from "#lib/demo/app.svelte.ts";
 import { myWriting, reviewDeck, siteOf } from "#lib/demo/data.ts";
 import { openPiece } from "#lib/demo/reopen.ts";
@@ -264,10 +264,12 @@ const MENU_CLOSE_MS = 160;
 			<a class="floating-menu-item" href="/feedback" onclick={() => (meOpen = false)}
 				><MessageSquareHeart class="size-4 text-muted-foreground" aria-hidden="true" />{tx("navFeedback")}</a
 			>
-			<!-- Staff only in the main app; the admin pages are in English, as the main app's are. -->
-			<a class="floating-menu-item" href="/admin" onclick={() => (meOpen = false)}
-				><ShieldCheck class="size-4 text-muted-foreground" aria-hidden="true" />Admin</a
-			>
+			<!-- Staff only; the admin pages are in English. -->
+			{#if account.me.role === "admin"}
+				<a class="floating-menu-item" href="/admin" onclick={() => (meOpen = false)}
+					><ShieldCheck class="size-4 text-muted-foreground" aria-hidden="true" />Admin</a
+				>
+			{/if}
 			<div class="menu-sep"></div>
 			<button
 				type="button"

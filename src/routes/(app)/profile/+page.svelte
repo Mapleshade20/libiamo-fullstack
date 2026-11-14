@@ -3,6 +3,7 @@ import Camera from "@lucide/svelte/icons/camera";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import Pencil from "@lucide/svelte/icons/pencil";
 import { onMount, tick } from "svelte";
+import { account } from "#lib/account/account.svelte.ts";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
@@ -11,7 +12,6 @@ import AvatarSticker from "#lib/components/stickers/AvatarSticker.svelte";
 import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
 import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { account } from "#lib/demo/account.svelte.ts";
 import { app, toast, tx } from "#lib/demo/app.svelte.ts";
 import { historyWeeks, myWriting, reviewDeck } from "#lib/demo/data.ts";
 

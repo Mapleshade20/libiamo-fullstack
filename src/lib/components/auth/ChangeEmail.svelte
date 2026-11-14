@@ -1,12 +1,11 @@
 <script lang="ts">
 import "./auth.css";
 import { tick } from "svelte";
+import { account, hasPassword, hydrate, requestEmailChange, signOut } from "#lib/account/account.svelte.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { account, confirmEmailChange, hasPassword, requestEmailChange } from "#lib/demo/account.svelte.ts";
 import { toast, tx } from "#lib/demo/app.svelte.ts";
-import { dev } from "$app/env";
 import PasswordField from "./PasswordField.svelte";
 
 /*
@@ -21,6 +20,7 @@ let sent = $state(false);
 let emailIn: HTMLInputElement | null = $state(null);
 let pwIn: HTMLInputElement | null = $state(null);
 let errors = $state<{ email?: string; password?: string }>({});
+let pending = $state(false);
 $effect(() => {
 	if (!open) return;
 	email = "";
@@ -43,13 +43,23 @@ async function submit(e: SubmitEvent) {
 		shake(el);
 		return;
 	}
-	requestEmailChange(v);
-	sent = true;
-}
-function openLink() {
-	confirmEmailChange();
-	open = false;
-	toast(tx("acEmailChanged"));
+	pending = true;
+	const r = await requestEmailChange(v, hasPassword() ? password : undefined).catch(() => "error" as const);
+	pending = false;
+	if (r === "wrongPassword") {
+		errors = { password: "acWrongPw" };
+		await tick();
+		pwIn?.focus();
+		shake(pwIn);
+	} else if (r === "signInAgain") {
+		// No password to say it is them: a fresh sign-in does, then they come back to try again.
+		open = false;
+		await signOut("/sign-in");
+	} else if (r === "error") toast(tx("auSomethingWrong"));
+	else {
+		await hydrate();
+		sent = true;
+	}
 }
 </script>
 
@@ -60,9 +70,6 @@ function openLink() {
 			<p class="lede">{tx("acCheckNewLede")}</p>
 			<p class="addr">{account.me.pendingEmail}</p>
 			<div class="acts">
-				{#if dev}
-					<Button variant="ghost" size="sm" class="me-auto text-muted-foreground" onclick={openLink}>{tx("devOpenLink")}</Button>
-				{/if}
 				<Button onclick={() => (open = false)}>{tx("acOk")}</Button>
 			</div>
 		{:else}
@@ -114,7 +121,7 @@ function openLink() {
 				{/if}
 				<div class="acts">
 					<Button variant="secondary" onclick={() => (open = false)}>{tx("setCancel")}</Button>
-					<Button type="submit">{tx("acSendLink")}</Button>
+					<Button type="submit" disabled={pending}>{tx("acSendLink")}</Button>
 				</div>
 			</form>
 		{/if}

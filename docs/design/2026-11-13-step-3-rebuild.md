@@ -385,25 +385,27 @@ postgres.js 4, `src/env.ts` declaring the environment (Kit 3's replacement for `
 The dev server's CSS can order a global sheet after a page's scoped rules where the build does not (an admin row's line
 height differs by a pixel in dev only); judge looks on the build.
 
-**Next, in order:** Better Auth from `legacy` (version 1.7)
-behind the demo's auth pages; the welcome, settings and the key on real accounts through remote functions;
-`AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
+**Next, in order:** `AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
 
-Found while preparing Better Auth:
+**Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
+and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
+`app.prefs` the pages already read, and writes go through remote commands. Decisions taken on the way:
 
-- better-auth 1.7 (legacy ran 1.6): the core schema it generates matches §5.1; its breaking changes touch SSO, OAuth
-  provider, MCP and captcha-plugin paths, none of which this app uses. The project's pnpm refuses packages younger than
-  its minimum release age, so take the newest version old enough (1.7.21 on 2026-11-13).
-- The demo shows a pending new address with a cancel; Better Auth keeps no pending address (the change link is a signed
-  token), so `user` gains `pending_email`, set on request and cleared on confirm or cancel.
-- The demo's password messages are catalog keys (`auPwShort`, `auPwGuessable`); zxcvbn's warnings are English phrases.
-  Map the server's refusal onto the demo's keys rather than showing zxcvbn's text.
-- Check how 1.7 answers a sign-up for an address that already has an account with verification required: the demo
-  promises the same page either way.
-- Turnstile has no place in the demo's pages: render it with `appearance: "interaction-only"`, so it shows only when
-  Cloudflare wants a click.
-- Form actions are gone with remote functions, so legacy's canonical `?/action` check (`action-url.ts`) has nothing to
-  guard; the proxy's limits apply to `/api/auth/*`, and the table in the abuse-protection design follows.
+- No session cookie cache: every request reads the session and user, so what the app writes (finishing the welcome, a
+  granted role) holds on the next request. Hooks redirect by `onboarded_at` and `role`.
+- Turnstile guards only the signed-out endpoints (the signed-in ones stand behind a session that passed it), rendered
+  `interaction-only` in the auth layout; a signed-in learner asking for the link that sets a first password skips it.
+- A new address needs the current password, or a sign-in under ten minutes old for an account without one;
+  `pending_email` holds it until the link is opened, and cancelling only forgets it (the mailed link works until it
+  expires).
+- A saved key is not tried against its provider: the demo has no place for that error, and a refused key surfaces at
+  the first call as `LimitNotice`'s "refused", with its way to the key.
+- An address that already has an account gets the sign-up's answer, and its mailbox a "you already have an account" mail
+  (`onExistingUserSignUp`).
+- Mails are English and plain until the catalog has mail strings; without `SMTP_HOST` they print to the console.
+- The demo has no account deletion, so Better Auth's is off. **Open:** whether to add it, and where.
+- Four strings joined the catalog in every language: `auSomethingWrong`, `auCaptchaFailed`, `acWrongPw`,
+  `auSocialFailed`.
 
 ### Decided by the user after the handover (2026-11-13)
 
@@ -419,7 +421,8 @@ Found while preparing Better Auth:
 - `deploy/podman/ops/operations.py`: the public probe is `ORIGIN + /health` (and its test in `test/deploy`);
   `libiamo-app.container`: the comment about appending the base path to `HealthCmd`;
 - `DEPLOYMENT.md`, `README.md`, `AGENTS.md`: every mention, including the rule that internal URLs go through `base`;
-- when Better Auth comes back from `legacy`: `baseURL` is `${ORIGIN}/api/auth` and the cookie path is `/`.
+- when Better Auth comes back from `legacy`: `baseURL` is `ORIGIN` (Better Auth appends its default `/api/auth`; spelling the path out
+  makes it match `/api/auth/api/auth`), and the cookie path is the default `/`.
 
 **The package upgrade, done properly.** Bring every package to its current major (SvelteKit 3, Vite 8, Vitest 5,
 TypeScript 7, adapter-node 6, vite-plugin-svelte 7, tailwind-variants 4, and whatever else is behind; bits-ui was

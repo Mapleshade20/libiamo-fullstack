@@ -1,21 +1,24 @@
 <script lang="ts">
 import MailClock from "@lucide/svelte/icons/mail-clock";
 import { tick } from "svelte";
+import { account, auth, hydrate, requestPasswordReset, resetPassword, atx as tx, weakPassword } from "#lib/account/account.svelte.ts";
 import PasswordField from "#lib/components/auth/PasswordField.svelte";
 import MarkedLine from "#lib/components/common/MarkedLine.svelte";
 import { shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { auth, atx as tx, weakPassword } from "#lib/demo/account.svelte.ts";
-import { dev } from "$app/env";
+import { toast } from "#lib/demo/app.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
  * A forgotten password: the address, then the same answer whether or not it has an account. The mail's link comes back
- * here with a token: a new password, then signing in with it. A link that has expired says so and offers a new one.
+ * here with a token: a new password, then signing in with it. A link that has expired (Better Auth sends it back with
+ * `error`, or refuses the token on saving) says so and offers a new one.
  */
 const token = $derived(page.url.searchParams.get("token"));
+let expired = $state(page.url.searchParams.has("error"));
+let pending = $state(false);
 let sent = $state(false);
 let password = $state("");
 let field: HTMLInputElement | null = $state(null);
@@ -27,19 +30,35 @@ async function refuse(key: string) {
 	field?.focus();
 	shake(field);
 }
-function request(e: SubmitEvent) {
+async function request(e: SubmitEvent) {
 	e.preventDefault();
 	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(auth.email.trim())) return refuse(auth.email.trim() ? "auEmailInvalid" : "auEmailMissing");
+	pending = true;
+	const refused = await requestPasswordReset(auth.email);
+	pending = false;
+	if (refused) return refuse(refused);
 	sent = true;
 }
-function save(e: SubmitEvent) {
+async function save(e: SubmitEvent) {
 	e.preventDefault();
-	const weak = password ? weakPassword(password, auth.email) : "auPwMissing";
+	const weak = password ? await weakPassword(password, auth.email) : "auPwMissing";
 	if (weak) return refuse(weak);
-	goto("/sign-in?reset", { replace: true });
+	if (!token) return;
+	pending = true;
+	const refused = await resetPassword(token, password);
+	pending = false;
+	if (refused === "expired") expired = true;
+	else if (refused) refuse(refused);
+	else if (account.signedIn) {
+		// A provider's account setting its first password from settings.
+		toast(tx("acPwSetDone"));
+		await hydrate();
+		goto("/settings", { replace: true });
+	} else goto("/sign-in?reset", { replace: true });
 }
 function again() {
 	sent = false;
+	expired = false;
 	goto("/forgot-password", { replace: true });
 }
 $effect(() => {
@@ -47,7 +66,7 @@ $effect(() => {
 });
 </script>
 
-{#if token === "expired"}
+{#if expired}
 	<span class="tile warn" aria-hidden="true"><MailClock class="size-6" strokeWidth={1.6} /></span>
 	<h1><MarkedLine text={tx("auExpTitle")} /></h1>
 	<p class="lede">{tx("auRsExpLede")}</p>
@@ -77,7 +96,7 @@ $effect(() => {
 				<p class="help" id="pw-help">{tx("auPwHelp")}</p>
 			{/if}
 		</div>
-		<Button type="submit" class="go">{tx("auRsGo")}</Button>
+		<Button type="submit" class="go" disabled={pending}>{tx("auRsGo")}</Button>
 	</form>
 {:else if sent}
 	<h1><MarkedLine text={tx("auVerTitle")} type="circle" /></h1>
@@ -108,18 +127,7 @@ $effect(() => {
 				<p class="err" id="email-err">{tx(error)}</p>
 			{/if}
 		</div>
-		<Button type="submit" class="go">{tx("auFgGo")}</Button>
+		<Button type="submit" class="go" disabled={pending}>{tx("auFgGo")}</Button>
 	</form>
 {/if}
 <p class="foot"><a href="/sign-in">{tx("auBack")}</a></p>
-{#if dev && (sent || token)}
-	<!-- Debug only: what the mail's link would do. -->
-	<p class="devbar">
-		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=demo", { replace: true })}
-			>{tx("devOpenLink")}</Button
-		>
-		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=expired", { replace: true })}
-			>{tx("devExpiredLink")}</Button
-		>
-	</p>
-{/if}

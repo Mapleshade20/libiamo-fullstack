@@ -1,9 +1,12 @@
 <script lang="ts">
 import "#lib/components/auth/auth.css";
 import { onMount, type Snippet } from "svelte";
+import { signInSetup } from "#lib/account/account.remote.ts";
+import { account, auth, setAuthLang, speak, atx as tx } from "#lib/account/account.svelte.ts";
+import { captcha } from "#lib/auth/captcha.svelte.ts";
+import Turnstile from "#lib/components/auth/Turnstile.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { APP_LANGS, endonym, isAppLang } from "#lib/constants.ts";
-import { account, auth, setAuthLang, speak, atx as tx } from "#lib/demo/account.svelte.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -14,6 +17,7 @@ import { page } from "$app/state";
  * on the first two and goes home.
  */
 let { children }: { children: Snippet } = $props();
+captcha.siteKey = (await signInSetup()).captchaSiteKey;
 $effect(() => sessionStorage.setItem("authEmail", auth.email));
 onMount(() => {
 	speak(auth.lang);
@@ -37,6 +41,7 @@ onMount(() => {
 </header>
 <main class="auth">
 	{@render children()}
+	<Turnstile />
 </main>
 
 <style>

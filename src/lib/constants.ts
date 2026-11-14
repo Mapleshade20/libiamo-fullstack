@@ -31,3 +31,6 @@ export type TutorLanguage = (typeof TUTOR_LANGUAGES)[number];
 /** Where a learner's own key comes from. */
 export const KEY_PROVIDERS = ["openrouter", "deepseek", "openai", "glm"] as const;
 export type KeyProvider = (typeof KEY_PROVIDERS)[number];
+/* Password bounds. The upper one keeps zxcvbn (superlinear in the length) quick; the field stops typing there. */
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 128;

@@ -1,0 +1,161 @@
+import { error } from "@sveltejs/kit";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { APP_LANGS, type AppLang, KEY_PROVIDERS, LEARNABLE, TUTOR_LANGUAGES } from "#lib/constants.ts";
+import { encryptKey } from "#lib/server/account/key.ts";
+import { auth } from "#lib/server/auth/auth.ts";
+import { captchaKeys } from "#lib/server/auth/captcha.ts";
+import { configuredProviders } from "#lib/server/auth/options.ts";
+import { db } from "#lib/server/db/index.ts";
+import { account, user, userKey } from "#lib/server/db/schema.ts";
+import { learner } from "#lib/server/guard.ts";
+import { command, getRequestEvent, query } from "$app/server";
+import type { Me } from "./me.ts";
+
+/* The account as the pages see it, and the settings they change. */
+
+/** The signed-in learner, or null. */
+export const me = query(async (): Promise<Me | null> => {
+	const u = getRequestEvent().locals.user;
+	if (!u) return null;
+	const [accounts, [key]] = await Promise.all([
+		db
+			.select({ id: account.id, providerId: account.providerId, createdAt: account.createdAt })
+			.from(account)
+			.where(eq(account.userId, u.id))
+			.orderBy(asc(account.createdAt)),
+		db.select({ provider: userKey.provider, model: userKey.model }).from(userKey).where(eq(userKey.userId, u.id)),
+	]);
+	const first = accounts[0]?.providerId;
+	return {
+		email: u.email,
+		name: u.name,
+		verified: u.emailVerified,
+		via: first === "google" || first === "github" ? first : "email",
+		hasPassword: accounts.some((a) => a.providerId === "credential"),
+		linked: accounts
+			.filter((a) => a.providerId !== "credential")
+			.map((a) => ({ id: a.id, provider: a.providerId, since: a.createdAt.toISOString() })),
+		pendingEmail: u.pendingEmail ?? undefined,
+		key: key ?? null,
+		role: u.role === "admin" ? "admin" : "learner",
+		onboarded: !!u.onboardedAt,
+		prefs: u.onboardedAt
+			? {
+					native: u.nativeLanguage as AppLang,
+					learning: u.learningLanguages ?? [],
+					active: u.activeLanguage ?? "",
+					feedback: u.tutorLanguage === "target" ? "target" : "native",
+					weeklyGoal: u.weeklyGoal,
+					helpImprove: u.helpImprove,
+				}
+			: null,
+	};
+});
+
+/** What the signed-out pages offer: the providers this deployment has, and Turnstile's site key if it is on. */
+export const signInSetup = query(async () => ({ providers: configuredProviders(), captchaSiteKey: captchaKeys()?.siteKey ?? null }));
+
+const timeZone = z
+	.string()
+	.max(64)
+	.refine((tz) => {
+		try {
+			new Intl.DateTimeFormat("en", { timeZone: tz });
+			return true;
+		} catch {
+			return false;
+		}
+	});
+
+const Prefs = z
+	.object({
+		name: z.string().trim().min(1).max(80),
+		native: z.enum(APP_LANGS),
+		learning: z.array(z.enum(LEARNABLE)).min(1).max(LEARNABLE.length),
+		active: z.enum(LEARNABLE),
+		feedback: z.enum(TUTOR_LANGUAGES),
+		weeklyGoal: z.number().int().min(1).max(7),
+		helpImprove: z.boolean(),
+		timeZone: timeZone.optional(),
+	})
+	.refine(
+		(p) => p.learning.includes(p.active) && !p.learning.includes(p.native as (typeof LEARNABLE)[number]),
+		"the active language is one of the learnt ones, and none is the native",
+	);
+
+const columns = (p: z.infer<typeof Prefs>) => ({
+	name: p.name,
+	nativeLanguage: p.native,
+	learningLanguages: [...new Set(p.learning)],
+	activeLanguage: p.active,
+	tutorLanguage: p.feedback,
+	weeklyGoal: p.weeklyGoal,
+	helpImprove: p.helpImprove,
+	...(p.timeZone ? { timeZone: p.timeZone } : {}),
+});
+
+/** Every setting at once (the pages keep them together); only for an account that has set up. */
+export const savePrefs = command(Prefs, async (p) => {
+	const u = learner();
+	if (!u.onboardedAt) error(409, "Set up first.");
+	await db.update(user).set(columns(p)).where(eq(user.id, u.id));
+});
+
+/** The welcome's end: the settings, and the account is set up. */
+export const finishWelcome = command(Prefs, async (p) => {
+	const u = learner();
+	await db
+		.update(user)
+		.set({ ...columns(p), onboardedAt: sql`coalesce(${user.onboardedAt}, now())` })
+		.where(eq(user.id, u.id));
+});
+
+/** The learner's own key, encrypted; replacing it replaces the setup too. It is never sent back. */
+export const saveKey = command(
+	z.object({ provider: z.enum(KEY_PROVIDERS), model: z.string().trim().min(1).max(200), key: z.string().trim().min(8).max(1000) }),
+	async ({ provider, model, key }) => {
+		const u = learner();
+		const row = { provider, model, encryptedKey: encryptKey(key) };
+		await db
+			.insert(userKey)
+			.values({ userId: u.id, ...row })
+			.onConflictDoUpdate({ target: userKey.userId, set: row });
+	},
+);
+
+/**
+ * A new sign-in address: the password says it is really them (an account without one needs a sign-in under ten minutes
+ * old instead), then the new address gets a link and only opening it makes the change. Until then the old one signs in
+ * and settings shows the change waiting. An address that already has an account gets the same answer.
+ */
+export const requestEmailChange = command(
+	z.object({ email: z.email().max(254), password: z.string().max(200).optional() }),
+	async ({ email, password }): Promise<"sent" | "wrongPassword" | "signInAgain"> => {
+		const u = learner();
+		const headers = getRequestEvent().request.headers;
+		const [credential] = await db
+			.select({ id: account.id })
+			.from(account)
+			.where(and(eq(account.userId, u.id), eq(account.providerId, "credential")));
+		if (credential) {
+			const ok = await auth.api
+				.verifyPassword({ body: { password: password ?? "" }, headers })
+				.then(() => true)
+				.catch(() => false);
+			if (!ok) return "wrongPassword";
+		} else {
+			const session = getRequestEvent().locals.session;
+			if (!session || Date.now() - new Date(session.createdAt).getTime() > 10 * 60 * 1000) return "signInAgain";
+		}
+		await auth.api.changeEmail({ body: { newEmail: email.toLowerCase(), callbackURL: "/settings?emailChanged" }, headers });
+		await db.update(user).set({ pendingEmail: email.toLowerCase() }).where(eq(user.id, u.id));
+		return "sent";
+	},
+);
+
+/** Forgets the waiting address (its link still works until it expires, as the mail says). */
+export const cancelEmailChange = command(async () => {
+	const u = learner();
+	await db.update(user).set({ pendingEmail: null }).where(eq(user.id, u.id));
+});

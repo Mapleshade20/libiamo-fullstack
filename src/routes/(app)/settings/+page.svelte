@@ -5,6 +5,9 @@ import X from "@lucide/svelte/icons/x";
 import { onMount, type Snippet, tick } from "svelte";
 import { flip } from "svelte/animate";
 import { slide } from "svelte/transition";
+import { signInSetup } from "#lib/account/account.remote.ts";
+import { account, cancelEmailChange, connect, disconnect, hasPassword } from "#lib/account/account.svelte.ts";
+import { SOCIAL_PROVIDERS, type SocialProviderId, socialFailureKey } from "#lib/auth/social.ts";
 import ChangeEmail from "#lib/components/auth/ChangeEmail.svelte";
 import ChangePassword from "#lib/components/auth/ChangePassword.svelte";
 import KeyForm from "#lib/components/auth/KeyForm.svelte";
@@ -21,9 +24,29 @@ import Switch from "#lib/components/common/Switch.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS, hasScenarios, LEARNABLE } from "#lib/constants.ts";
-import { account, cancelEmailChange, hasPassword } from "#lib/demo/account.svelte.ts";
 import { app, demoOpens, endonym, nameOf, setTheme, switchLanguage, THEMES, type Theme, toast, tx } from "#lib/demo/app.svelte.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
+import { goto } from "$app/navigation";
+import { page } from "$app/state";
+
+// The ways in this deployment offers besides the address.
+const offered = (await signInSetup()).providers;
+const providers = SOCIAL_PROVIDERS.filter((p) => offered.includes(p.id));
+async function unlink(id: SocialProviderId) {
+	const refused = await disconnect(id);
+	if (refused) toast(tx(refused));
+}
+// Back from the link that confirms a new address, or from a provider being connected.
+onMount(() => {
+	const q = page.url.searchParams;
+	if (!q.has("emailChanged") && !q.has("error")) return;
+	if (q.has("emailChanged") && !q.has("error")) toast(tx("acEmailChanged"));
+	else if (!q.has("emailChanged")) {
+		const key = socialFailureKey(q.get("error"));
+		if (key) toast(tx(key));
+	}
+	goto("/settings", { replace: true });
+});
 
 /* Settings: how the app works for the learner (languages, the tutor, the look, the week, AI, privacy, how they sign
    in). Who they are (picture, name, their history) is the profile's. Each section is a card of rows: a label, its
@@ -285,22 +308,23 @@ onMount(() => {
 					>
 				</div>
 			</div>
-			<div class="method">
-				<span class="mi"><SocialProviderIcon provider="google" class="size-[18px]" /></span>
-				<div class="main">
-					<div class="t">Google</div>
-					<div class="s">{tx("setConnectedSince", { date: fmt({ year: "numeric", month: "short" }, new Date(2026, 6, 4)) })}</div>
+			{#each providers as p (p.id)}
+				{@const link = account.me.linked.find((l) => l.provider === p.id)}
+				<div class="method">
+					<span class="mi"><SocialProviderIcon provider={p.id} class="size-[18px]" /></span>
+					<div class="main">
+						<div class="t">{p.label}</div>
+						<div class="s">
+							{link ? tx("setConnectedSince", { date: fmt({ year: "numeric", month: "short" }, new Date(link.since)) }) : tx("setNotConnected")}
+						</div>
+					</div>
+					{#if link}
+						<Button variant="secondary" size="sm" class="text-destructive" onclick={() => unlink(p.id)}>{tx("setDisconnect")}</Button>
+					{:else}
+						<Button variant="secondary" size="sm" onclick={() => connect(p.id)}>{tx("setConnect")}</Button>
+					{/if}
 				</div>
-				<Button variant="secondary" size="sm" class="text-destructive" onclick={demoOpens}>{tx("setDisconnect")}</Button>
-			</div>
-			<div class="method">
-				<span class="mi"><SocialProviderIcon provider="github" class="size-[18px]" /></span>
-				<div class="main">
-					<div class="t">GitHub</div>
-					<div class="s">{tx("setNotConnected")}</div>
-				</div>
-				<Button variant="secondary" size="sm" onclick={demoOpens}>{tx("setConnect")}</Button>
-			</div>
+			{/each}
 		</div>
 	</section>
 

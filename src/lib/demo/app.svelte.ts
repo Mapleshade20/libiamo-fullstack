@@ -103,8 +103,11 @@ class AppState {
 	get tutor() {
 		return this.prefs.feedback === "native" ? this.prefs.native : this.prefs.active;
 	}
+	/** Sends the settings to the server; lib/account/account.svelte.ts sets it. */
+	persist: (() => void) | null = null;
 	save() {
 		write("prefs", this.prefs);
+		this.persist?.();
 	}
 	touch() {
 		this.version++;

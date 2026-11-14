@@ -1,11 +1,11 @@
 <script lang="ts">
+import { onboarding } from "#lib/account/onboarding.svelte.ts";
 import { backdropState } from "#lib/components/backdrop/state.svelte.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { markAllUnread } from "#lib/demo/announcements.ts";
 import { tx } from "#lib/demo/app.svelte.ts";
 import { dev, saveDev } from "#lib/demo/dev.svelte.ts";
-import { onboarding, replayWelcome } from "#lib/demo/onboarding.svelte.ts";
 import { goto } from "$app/navigation";
 
 /* Debug only (not part of the product): test drafts, which models the demo calls, and ways to see what would otherwise
@@ -116,15 +116,7 @@ function step(d: number) {
 		<div>
 			<span class="label">{tx("devWelcome")}</span>
 			<div class="flex gap-2">
-				<Button
-					variant="secondary"
-					size="sm"
-					onclick={() => {
-						replayWelcome();
-						goto("/welcome");
-					}}
-					>{tx("devWelcomeGo")}</Button
-				>
+				<Button variant="secondary" size="sm" onclick={() => goto("/welcome")}>{tx("devWelcomeGo")}</Button>
 				<Button variant="secondary" size="sm" onclick={() => (onboarding.tour = true)}>{tx("devTourGo")}</Button>
 			</div>
 		</div>
