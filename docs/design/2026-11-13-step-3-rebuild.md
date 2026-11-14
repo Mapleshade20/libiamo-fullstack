@@ -289,9 +289,11 @@ proxy's rate-limit list carry over; the trusted mail domains do not.
 
 ## 7. Verification
 
-- **The model flow against the demo.** The lab holds 273 recorded sessions (`runs/live`) and the cache of their calls.
-  A replay tool feeds a recording's actions to the new server with the cache as its `ModelCache` and compares every
-  response with the recorded one. A difference is a porting bug, found without spending anything.
+- **The model flow against the demo.** `lab/replay.mjs` feeds a recorded session's actions (the lab's
+  `runs/live/<id>.jsonl`) to the server and compares every response with the recorded one, with the lab's call cache
+  read only (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`), so nothing is spent and a difference is a porting bug. Only
+  recordings made with the current prompts replay (older ones miss the cache), so phase 2 starts by recording a
+  baseline with the code as imported: every way in, both tutor languages, a few cents.
 - **Snapshots.** The same replays, with the session thrown away and loaded from its snapshot between every two
   actions, must give the same responses.
 - **Pages.** The demo on port 4793 beside the new app: desktop and phone, light and dark, recordings for motion.
@@ -311,6 +313,13 @@ proxy's rate-limit list carry over; the trusted mail domains do not.
 | 5. Admin | scenarios, issues, names, inbox, announcements; sessions, a session, cases; `case pull` and `case replay` |
 | 6. First run | the tour on real pages; the public pages; the privacy policy |
 | 7. Launch | the whole app verified; deployment docs; the production reset; `v1.0.0` |
+
+**How the demo comes in.** It is brought in whole and kept running: the app starts as the demo on its browser
+storage, and each phase replaces a part of `lib/demo` with loads and actions, page by page turning rendering on. The
+model layer arrives as `src/model` (alias `$model`) and is distributed over the domains in phase 2. The work is done
+when `lib/demo`, `src/model`, the root `ssr = false`, the `/lab` pages and the dev panel are gone. SvelteKit, Vite,
+Vitest and TypeScript are a major version behind (the demo's versions were kept so the import changes nothing); the
+upgrade is its own step in phase 1, with the migration guides read first.
 
 ## 9. The production switch
 
@@ -338,3 +347,33 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
 - **Models.** Everything was tuned on Claude Haiku through OpenRouter; DeepSeek Flash, GPT Luna and GLM have not run a
   whole session. One fixture run each before their setups are offered.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
+
+## 12. State when the work was handed over (2026-11-13)
+
+Branch `rebuild`, two commits after `legacy`: this design, and the clearing of the old application.
+
+**Staged, not committed:** the demo (`src/lib`, `src/routes`, `src/app.html`), the model layer (`src/model`), the
+catalogs (`src/lib/i18n/catalog`), the name tables (`seed/names`), the lab's tests moved to Vitest (`test/model`,
+`test/lib`), `lab/replay.mjs`, new `package.json`, lockfile and build configs. Biome's safe fixes and formatting are
+applied to all of it. It is not committed because the pre-commit Biome hook refuses it.
+
+| Check | State |
+|---|---|
+| `svelte-check` | 0 errors |
+| `vitest` | 22 of 23 files pass (139 tests); `test/base-path.test.ts` fails on 202 bare `"/…"` URLs in the demo |
+| `biome check` | about 170 errors and 220 warnings left after the safe fixes |
+| dev server | pages and `/api` answer; needs `OPENROUTER_API_KEY` (or `OPENAI_API_KEY` with an OpenRouter `OPENAI_BASE_URL`) in `.env` |
+| replay | the lab's 2026-11-12 session: 14 steps identical, then `notes` differs by the `was` field the lab added after recording |
+| container | not working yet: no database, no `/health`, no migrations |
+
+**Next, in order:**
+
+1. Biome. Mostly `useButtonType` (55; a button inside a form that submits needs `type="submit"`, the others
+   `type="button"`), `noAssignInExpressions` (46), a11y rules on svg and roles (about 50), CSS
+   `noDescendingSpecificity` (111, warnings). Fix the code rather than loosen the rules. Formatting touched Svelte
+   templates, so compare a few pages with the demo (port 4793) for changed spacing between inline elements.
+2. `base`: every internal URL through `$app/paths`, until `test/base-path.test.ts` passes. Then commit the import.
+3. The rest of phase 1: the package upgrade; drizzle and the single migration with the account tables (§5.1);
+   `/health`; hooks with graceful shutdown; the image boots under compose; Better Auth from `legacy` behind the
+   demo's auth pages; the welcome, settings and the key on real accounts; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`
+   and the environment lists rewritten for what exists.
