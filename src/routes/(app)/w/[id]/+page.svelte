@@ -13,7 +13,7 @@ import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
 import { keptPiece, siteOf } from "#lib/demo/data.ts";
 import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
 import { notesPending, type Posted } from "#lib/writing/types.ts";
-import { askNotes, pieceById } from "#lib/writing/writing.remote.ts";
+import { pieceById } from "#lib/writing/writing.remote.ts";
 import { refreshWriting, setPosted } from "#lib/writing/writing.svelte.ts";
 import { page } from "$app/state";
 
@@ -36,27 +36,20 @@ let view = $state("final");
 const parts = $derived(r ? diffWords(r.original, r.final) : []);
 const learned = $derived(r ? [...r.learned].sort((a, b) => Number(b.own) - Number(a.own)).slice(0, 4) : []);
 // The entries are chosen a few seconds after the session ends: rows wait in grey until they come. The page looks again
-// every two seconds; two minutes on, what pass 2 reworked stands, and the server is asked once more.
+// every two seconds; two minutes on, what pass 2 reworked stands while the server tries again (it files that if it
+// cannot), and the page looks now and then.
 const pending = $derived(notesPending(r));
-let askedAgain = false;
 $effect(() => {
 	if (sandboxed() || !r?.notesPending) return;
 	const piece = id;
-	if (!pending) {
-		if (!askedAgain) {
-			askedAgain = true;
-			askNotes(piece).then(
-				() => pieceById(piece).refresh(),
-				() => {},
-			);
-		}
-		return;
-	}
-	const t = setTimeout(async () => {
-		await pieceById(piece).refresh();
-		// Filed: the notebook and the lists have them too.
-		if (!pieceById(piece).current?.notesPending) refreshWriting();
-	}, 2000);
+	const t = setTimeout(
+		async () => {
+			await pieceById(piece).refresh();
+			// Filed: the notebook and the lists have them too.
+			if (!pieceById(piece).current?.notesPending) refreshWriting();
+		},
+		pending ? 2000 : 30_000,
+	);
 	return () => clearTimeout(t);
 });
 const OPEN: Record<string, string> = {

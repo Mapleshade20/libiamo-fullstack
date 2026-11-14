@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import type { KeyProvider } from "#lib/constants.ts";
-import { PROVIDERS } from "#lib/llm/providers.ts";
+import { type DecisionsApi, PROVIDERS } from "#lib/llm/providers.ts";
 
 /*
  * One request to a provider: the provider table says where it goes and what it takes; one OpenAI client per key; a
@@ -10,7 +10,8 @@ import { PROVIDERS } from "#lib/llm/providers.ts";
  */
 
 export type Message = { role: "system" | "user" | "assistant"; content: string };
-export type Effort = "low" | "medium" | "high";
+/** How hard the model thinks; "none" turns thinking off (the provider's `noThinking`), for quick short answers. */
+export type Effort = "none" | "low" | "medium" | "high";
 /** Who pays: a provider, the model it runs, the key. */
 export type Route = { provider: KeyProvider; model: string; apiKey: string };
 /** cacheRead/cacheWrite: input tokens the provider served from, or wrote to, its prompt cache. */
@@ -47,29 +48,37 @@ function client(route: Route) {
 	return c;
 }
 
-export async function send(route: Route, messages: Message[], effort: Effort): Promise<Reply> {
+/** A call that must answer soon (the gate): its own timeout and token cap, and no retries. */
+export type SendLimits = { timeoutMs: number; maxTokens: number };
+
+export async function send(route: Route, messages: Message[], effort: Effort, limits?: SendLimits): Promise<Reply> {
 	const p = PROVIDERS[route.provider];
 	const t0 = Date.now();
+	const thinking = effort === "none" ? p.noThinking : p.effort ? { reasoning_effort: effort } : {};
 	const create = () =>
-		client(route).chat.completions.create({
-			model: route.model,
-			messages,
-			max_tokens: MAX_TOKENS,
-			...(p.effort ? { reasoning_effort: effort } : {}),
-			// OpenRouter's extension: report the cost in usage.
-			...(p.cost ? { usage: { include: true } } : {}),
-		} as OpenAI.ChatCompletionCreateParamsNonStreaming);
+		client(route).chat.completions.create(
+			{
+				model: route.model,
+				messages,
+				max_tokens: limits?.maxTokens ?? MAX_TOKENS,
+				...thinking,
+				// OpenRouter's extension: report the cost in usage.
+				...(p.cost ? { usage: { include: true } } : {}),
+			} as OpenAI.ChatCompletionCreateParamsNonStreaming,
+			limits ? { timeout: limits.timeoutMs, maxRetries: 0 } : undefined,
+		);
 	let res: OpenAI.ChatCompletion | undefined;
 	for (let attempt = 0; !res; attempt++) {
 		try {
 			res = await create();
 			// Providers occasionally return an empty completion: one retry, then the caller sees it.
-			if (!res.choices[0]?.message?.content && attempt < 1) res = undefined;
+			if (!res.choices[0]?.message?.content && attempt < 1 && !limits) res = undefined;
 		} catch (e) {
 			if (e instanceof OpenAI.APIError && (e.status === 401 || e.status === 402 || e.status === 403))
 				throw new LimitError("refused", `${route.provider} refused the key (${e.status})`);
 			// The SDK retries HTTP errors; a body cut off mid-response needs a retry of its own.
-			if (attempt >= 2 || !/terminated|ECONNRESET|socket/i.test(String(e))) throw new LimitError("error", String((e as Error)?.message ?? e));
+			if (limits || attempt >= 2 || !/terminated|ECONNRESET|socket/i.test(String(e)))
+				throw new LimitError("error", String((e as Error)?.message ?? e));
 		}
 	}
 	const choice = res.choices[0];
@@ -90,5 +99,39 @@ export async function send(route: Route, messages: Message[], effort: Effort): P
 		ms: Date.now() - t0,
 		costUsd: u?.cost ?? 0,
 		finish: choice?.finish_reason ?? null,
+	};
+}
+
+const DECISIONS: Record<DecisionsApi, string> = {
+	openrouter: "https://openrouter.ai/api/alpha/decisions",
+	openai: "https://api.openai.com/v1/decisions",
+};
+export type DecisionsReply = { body: unknown; usage: Usage; costUsd: number; ms: number };
+
+/** One request to a provider's Decisions API: the body as that API takes it, the answer as it gives it. */
+export async function sendDecisions(route: Route, api: DecisionsApi, body: unknown, timeoutMs: number): Promise<DecisionsReply> {
+	const t0 = Date.now();
+	let r: Response;
+	try {
+		r = await fetch(DECISIONS[api], {
+			method: "POST",
+			headers: { Authorization: `Bearer ${route.apiKey}`, "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+	} catch (e) {
+		throw new LimitError("error", String((e as Error)?.message ?? e));
+	}
+	if (r.status === 401 || r.status === 402 || r.status === 403) throw new LimitError("refused", `${route.provider} refused the key (${r.status})`);
+	if (!r.ok) throw new LimitError("error", `HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 300)}`);
+	const j = (await r.json()) as {
+		usage?: { cost?: number; prompt_tokens?: number; input_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
+	};
+	const u = j.usage;
+	return {
+		body: j,
+		usage: { input: u?.input_tokens ?? u?.prompt_tokens ?? 0, output: 0, reasoning: 0, cacheRead: u?.input_tokens_details?.cached_tokens ?? 0 },
+		costUsd: u?.cost ?? 0,
+		ms: Date.now() - t0,
 	};
 }

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "#lib/server/db/index.ts";
 import { piece } from "#lib/server/db/schema.ts";
 import { learner } from "#lib/server/guard.ts";
-import { fileNotes } from "#lib/server/revision/store.ts";
 import { credit } from "#lib/server/week/days.ts";
 import { pieceOf, piecesOf, postedValue } from "#lib/server/writing/pieces.ts";
 import { week } from "#lib/week/week.remote.ts";
@@ -44,13 +43,4 @@ export const writeAgain = command(z.object({ id: pieceId, text: z.string().trim(
 		return p ? credit(tx, u, "learned", p.language, now) : false;
 	});
 	if (changed) await week().refresh();
-});
-
-/** The piece's page found its notebook entries still not written two minutes on: they are asked for again. */
-export const askNotes = command(pieceId, async (id) => {
-	const u = learner();
-	const [r] = await db.select({ at: piece.notesRequestedAt }).from(piece).where(mine(u.id, id));
-	if (!r?.at || Date.now() - r.at.getTime() < 120_000) return;
-	await db.update(piece).set({ notesRequestedAt: new Date() }).where(mine(u.id, id));
-	void fileNotes(u, id);
 });

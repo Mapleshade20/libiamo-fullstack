@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { ModelCache } from "./cache.ts";
 import { Discarded, type Lanes, type LiveCall } from "./lanes.ts";
-import { type Effort, LimitError, type Message, type Route, send, type Usage } from "./transport.ts";
+import { type Effort, LimitError, type Message, type Route, type SendLimits, send, type Usage } from "./transport.ts";
 
 /*
  * Who pays for a model call and what it is for. The model layer takes a Caller wherever it calls a model, never a
@@ -34,6 +34,8 @@ export type CallerInit = {
 	route: Route | null;
 	/** How grading asks (lib/llm/providers.ts graderFor). */
 	grader?: "g2" | "g3";
+	/** The model that answers decisions on the route's key (lib/llm/providers.ts decisionModelFor); none: the chat model. */
+	decision?: string | null;
 	lanes?: Lanes;
 	cache?: ModelCache;
 	/** Ask the provider even when the cache holds the request (the cache is still written). */
@@ -75,6 +77,8 @@ export type CallOptions = {
 	sample?: number;
 	/** Names the call in records and the cache, e.g. "session/hint". */
 	tag: string;
+	/** A call that must answer soon. */
+	limits?: SendLimits;
 };
 export type CallResult = { text: string; usage: Usage; ms: number; cached: boolean; costUsd: number };
 
@@ -106,7 +110,7 @@ export async function chat(messages: Message[], opts: CallOptions): Promise<Call
 		// Only calls that reach the provider take a turn; cache hits are free.
 		const release = live && lanes ? await lanes.gate(live) : () => {};
 		try {
-			const r = await send(route, messages, effort);
+			const r = await send(route, messages, effort, opts.limits);
 			cache?.put(key, r);
 			const discarded = live?.state === "discarded";
 			if (live) lanes?.finish(live, { state: "done", ms: r.ms, tokens: r.usage, cost: r.costUsd, output: r.text });
@@ -173,4 +177,6 @@ export async function chatJson<T>(messages: Message[], schema: z.ZodType<T>, opt
 	if (!q.ok) throw new LimitError("error", `${opts.tag} ${opts.ai.route?.model}: invalid JSON after repair: ${q.error}`);
 	return { value: q.value, calls: [first, second] };
 }
+/** Records a call made outside `chat` (a Decisions API request) the way `chat` records its own. */
+export const recordCall = safely;
 export type { Effort, Message } from "./transport.ts";

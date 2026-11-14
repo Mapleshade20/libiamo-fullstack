@@ -12,6 +12,7 @@ import {
 	me,
 	deleteAccount as remove,
 	requestEmailChange as requestChange,
+	saveDecisionModel,
 	saveKey,
 	savePrefs,
 } from "./account.remote.ts";
@@ -197,6 +198,11 @@ export async function cancelEmailChange() {
 export async function setKey(provider: string, model: string, key: string) {
 	await saveKey({ provider: provider as never, model, key });
 	await hydrate();
+}
+/** Which model checks what the learner sends; applies at once. */
+export async function setDecisionModel(model: string) {
+	if (account.me.key) account.me.key.decision = model;
+	await saveDecisionModel(model);
 }
 export const hasPassword = () => account.me.hasPassword;
 

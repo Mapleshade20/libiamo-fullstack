@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import type { Choice } from "#lib/server/llm/decide.ts";
 import { matchExplained } from "#lib/server/notebook/collect.ts";
-import { type Choice, judge, precheck } from "#lib/server/writing/gate.ts";
+import { judge, precheck } from "#lib/server/writing/gate.ts";
 
 const item = (n: number, phrase: string) => ({ n, phrase, meaning: "", register: "neutral" as const, why: "", example: "" });
 
@@ -53,4 +54,14 @@ test("the gate refuses a language the app does not work in, and offers one it do
 	assert.deepEqual(judge(input, said("other", { heavy_mix: 0.7 })), { verdict: "reject", reason: "mixed" });
 	assert.deepEqual(judge(input, said("ko")), { verdict: "ask", reason: "addLang", lang: "ko" });
 	assert.deepEqual(judge(input, said("zh-CN")), { verdict: "ask", reason: "native", lang: "en" });
+});
+
+test("a phrase the model finds too short is still fine to collect, not to check", () => {
+	const short = {
+		language: { choice: "en", probabilities: { en: 1 } },
+		usable: { choice: "too_short", probabilities: { ok: 0.05, too_short: 0.95 } },
+	};
+	const input = { text: "", native: "zh-CN", learning: ["en"], active: "en" };
+	assert.deepEqual(judge({ ...input, mode: "collect" }, short), { verdict: "ok", lang: "en" });
+	assert.deepEqual(judge({ ...input, mode: "check" }, short), { verdict: "reject", reason: "tooShort" });
 });

@@ -1,7 +1,8 @@
 import { error } from "@sveltejs/kit";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { APP_LANGS, type AppLang, KEY_PROVIDERS, LEARNABLE, TUTOR_LANGUAGES } from "#lib/constants.ts";
+import { APP_LANGS, type AppLang, KEY_PROVIDERS, type KeyProvider, LEARNABLE, TUTOR_LANGUAGES } from "#lib/constants.ts";
+import { PROVIDERS } from "#lib/llm/providers.ts";
 import { encryptKey } from "#lib/server/account/key.ts";
 import { clientIp, logAuthEvent } from "#lib/server/auth/audit.ts";
 import { auth } from "#lib/server/auth/auth.ts";
@@ -27,7 +28,7 @@ export const me = query(async (): Promise<Me | null> => {
 			.from(account)
 			.where(eq(account.userId, u.id))
 			.orderBy(asc(account.createdAt)),
-		db.select({ provider: userKey.provider, model: userKey.model }).from(userKey).where(eq(userKey.userId, u.id)),
+		db.select({ provider: userKey.provider, model: userKey.model, decision: userKey.decisionModel }).from(userKey).where(eq(userKey.userId, u.id)),
 	]);
 	const first = accounts[0]?.providerId;
 	return {
@@ -131,6 +132,15 @@ export const saveKey = command(
 			.onConflictDoUpdate({ target: userKey.userId, set: row });
 	},
 );
+
+/** Which model checks what the learner sends (the gate), among those their key's provider runs. */
+export const saveDecisionModel = command(z.string().max(200), async (model) => {
+	const u = learner();
+	const [key] = await db.select({ provider: userKey.provider }).from(userKey).where(eq(userKey.userId, u.id));
+	const models = key ? (PROVIDERS[key.provider as KeyProvider].decisions?.models ?? []) : [];
+	if (!models.some((m) => m.id === model)) error(400, "Not a model your provider runs.");
+	await db.update(userKey).set({ decisionModel: model }).where(eq(userKey.userId, u.id));
+});
 
 /**
  * A new sign-in address: the password says it is really them (an account without one needs a sign-in under ten minutes

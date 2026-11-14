@@ -14,18 +14,57 @@ export type Provider = {
 	effort: boolean;
 	/** OpenRouter reports what a call cost when asked (`usage: { include: true }`). */
 	cost: boolean;
+	/** What turns thinking off in a request, for the short calls that want a quick answer. */
+	noThinking: Record<string, unknown>;
+	/**
+	 * The provider's Decisions API (a typed choice with probabilities, no text) and the models it runs, the first the
+	 * default; a provider without one answers the gate's questions with the learner's chat model instead.
+	 */
+	decisions?: { api: DecisionsApi; models: { id: string; name: string }[] };
 };
+export type DecisionsApi = "openrouter" | "openai";
 
 export const PROVIDERS: Record<KeyProvider, Provider> = {
-	openrouter: { label: "OpenRouter", baseURL: "https://openrouter.ai/api/v1", keys: "https://openrouter.ai/keys", effort: true, cost: true },
-	deepseek: { label: "DeepSeek", baseURL: "https://api.deepseek.com", keys: "https://platform.deepseek.com/api_keys", effort: false, cost: false },
-	openai: { label: "OpenAI", baseURL: "https://api.openai.com/v1", keys: "https://platform.openai.com/api-keys", effort: true, cost: false },
+	openrouter: {
+		label: "OpenRouter",
+		baseURL: "https://openrouter.ai/api/v1",
+		keys: "https://openrouter.ai/keys",
+		effort: true,
+		cost: true,
+		noThinking: { reasoning: { effort: "none" } },
+		decisions: {
+			api: "openrouter",
+			models: [
+				{ id: "~typesafe/jev-latest", name: "Jev" },
+				{ id: "openai/gpt-6-luna-decisions", name: "GPT-6 Luna Decisions" },
+				{ id: "google/gemini-decision-1", name: "Gemini Decision 1" },
+			],
+		},
+	},
+	deepseek: {
+		label: "DeepSeek",
+		baseURL: "https://api.deepseek.com",
+		keys: "https://platform.deepseek.com/api_keys",
+		effort: false,
+		cost: false,
+		noThinking: { thinking: { type: "disabled" } },
+	},
+	openai: {
+		label: "OpenAI",
+		baseURL: "https://api.openai.com/v1",
+		keys: "https://platform.openai.com/api-keys",
+		effort: true,
+		cost: false,
+		noThinking: { reasoning_effort: "none" },
+		decisions: { api: "openai", models: [{ id: "gpt-6-luna", name: "GPT-6 Luna" }] },
+	},
 	glm: {
 		label: "Zhipu AI / GLM",
 		baseURL: "https://open.bigmodel.cn/api/paas/v4",
 		keys: "https://open.bigmodel.cn/usercenter/apikeys",
 		effort: false,
 		cost: false,
+		noThinking: { thinking: { type: "disabled" } },
 	},
 };
 
@@ -44,3 +83,11 @@ export const SETUPS: Setup[] = [
 export const RECOMMENDED = SETUPS[0];
 /** How grading asks for a model: as its setup says, else as for Haiku. */
 export const graderFor = (provider: string, model: string) => SETUPS.find((s) => s.provider === provider && s.model === model)?.grader ?? "g3";
+
+/** The model that answers the gate's questions: the learner's choice if their provider runs it, else its default; null
+ * when the provider has no Decisions API (the chat model answers). */
+export function decisionModelFor(provider: KeyProvider, chosen: string | null | undefined): string | null {
+	const d = PROVIDERS[provider]?.decisions;
+	if (!d) return null;
+	return d.models.find((m) => m.id === chosen)?.id ?? d.models[0].id;
+}

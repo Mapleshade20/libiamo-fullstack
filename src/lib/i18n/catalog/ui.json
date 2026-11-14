@@ -721,7 +721,9 @@
 		"acDeleteNext": "I understand, continue",
 		"acDeleteType": "Type {email} to confirm.",
 		"acDeleteGo": "Delete my account",
-		"acDeleted": "Your account has been deleted."
+		"acDeleted": "Your account has been deleted.",
+		"setDecider": "Checking model",
+		"setDeciderHelp": "Before the tutor starts, a small fast model looks at what you sent: which language it is in, and whether it is something to work on. It runs on your key and costs a few hundredths of a cent."
 	},
 	"ru": {
 		"next": "Дальше",
@@ -1445,7 +1447,9 @@
 		"acDeleteNext": "Понятно, продолжить",
 		"acDeleteType": "Введите {email} для подтверждения.",
 		"acDeleteGo": "Удалить мой аккаунт",
-		"acDeleted": "Ваш аккаунт удалён."
+		"acDeleted": "Ваш аккаунт удалён.",
+		"setDecider": "Модель проверки",
+		"setDeciderHelp": "Перед началом занятия небольшая быстрая модель смотрит, что вы отправили: на каком это языке и подходит ли текст для работы. Она работает на вашем ключе и стоит сотые доли цента."
 	},
 	"es": {
 		"next": "Siguiente",
@@ -2169,7 +2173,9 @@
 		"acDeleteNext": "Entendido, continuar",
 		"acDeleteType": "Escribe {email} para confirmar.",
 		"acDeleteGo": "Eliminar mi cuenta",
-		"acDeleted": "Tu cuenta se ha eliminado."
+		"acDeleted": "Tu cuenta se ha eliminado.",
+		"setDecider": "Modelo de revisión",
+		"setDeciderHelp": "Antes de que empiece el tutor, un modelo pequeño y rápido mira lo que enviaste: en qué idioma está y si se puede trabajar con ello. Usa tu clave y cuesta unas centésimas de céntimo."
 	},
 	"de": {
 		"next": "Nächste",
@@ -2893,7 +2899,9 @@
 		"acDeleteNext": "Verstanden, weiter",
 		"acDeleteType": "Gib {email} ein, um zu bestätigen.",
 		"acDeleteGo": "Mein Konto löschen",
-		"acDeleted": "Dein Konto wurde gelöscht."
+		"acDeleted": "Dein Konto wurde gelöscht.",
+		"setDecider": "Prüfmodell",
+		"setDeciderHelp": "Bevor der Tutor beginnt, schaut ein kleines, schnelles Modell auf das, was du geschickt hast: in welcher Sprache es ist und ob sich damit arbeiten lässt. Es läuft über deinen Schlüssel und kostet ein paar hundertstel Cent."
 	},
 	"tr": {
 		"next": "Sonraki",
@@ -3617,7 +3625,9 @@
 		"acDeleteNext": "Anladım, devam et",
 		"acDeleteType": "Onaylamak için {email} yaz.",
 		"acDeleteGo": "Hesabımı sil",
-		"acDeleted": "Hesabın silindi."
+		"acDeleted": "Hesabın silindi.",
+		"setDecider": "Kontrol modeli",
+		"setDeciderHelp": "Eğitmen başlamadan önce küçük ve hızlı bir model gönderdiğine bakar: hangi dilde olduğuna ve üzerinde çalışılabilir olup olmadığına. Senin anahtarınla çalışır ve bir sentin yüzde birkaçı kadar tutar."
 	},
 	"fa": {
 		"next": "بعدی",
@@ -4341,7 +4351,9 @@
 		"acDeleteNext": "متوجهم، ادامه",
 		"acDeleteType": "برای تأیید، {email} را تایپ کنید.",
 		"acDeleteGo": "حساب مرا حذف کن",
-		"acDeleted": "حساب شما حذف شد."
+		"acDeleted": "حساب شما حذف شد.",
+		"setDecider": "مدل بررسی",
+		"setDeciderHelp": "پیش از شروع مربی، یک مدل کوچک و سریع به آنچه فرستادی نگاه می‌کند: به چه زبانی است و آیا می‌شود رویش کار کرد. با کلید خودت اجرا می‌شود و چند صدم سنت هزینه دارد."
 	},
 	"fr": {
 		"next": "Suivant",
@@ -5065,7 +5077,9 @@
 		"acDeleteNext": "J'ai compris, continuer",
 		"acDeleteType": "Tape {email} pour confirmer.",
 		"acDeleteGo": "Supprimer mon compte",
-		"acDeleted": "Ton compte a été supprimé."
+		"acDeleted": "Ton compte a été supprimé.",
+		"setDecider": "Modèle de vérification",
+		"setDeciderHelp": "Avant que le tuteur ne commence, un petit modèle rapide regarde ce que vous avez envoyé : dans quelle langue c'est écrit et si l'on peut travailler dessus. Il fonctionne avec votre clé et coûte quelques centièmes de centime."
 	},
 	"ja": {
 		"next": "次へ",
@@ -5789,7 +5803,9 @@
 		"acDeleteNext": "わかった、続ける",
 		"acDeleteType": "確認のため {email} と入力してね。",
 		"acDeleteGo": "アカウントを削除する",
-		"acDeleted": "アカウントを削除したよ。"
+		"acDeleted": "アカウントを削除したよ。",
+		"setDecider": "チェック用モデル",
+		"setDeciderHelp": "チューターが始める前に、小さく速いモデルが送った内容を確認します。何語で書かれているか、練習に使える内容か。あなたのキーで動き、費用は1回あたり数百分の1セントです。"
 	},
 	"pt": {
 		"next": "Próximo",
@@ -6513,7 +6529,9 @@
 		"acDeleteNext": "Entendi, continuar",
 		"acDeleteType": "Digite {email} para confirmar.",
 		"acDeleteGo": "Excluir minha conta",
-		"acDeleted": "Sua conta foi excluída."
+		"acDeleted": "Sua conta foi excluída.",
+		"setDecider": "Modelo de verificação",
+		"setDeciderHelp": "Antes de o tutor começar, um modelo pequeno e rápido olha o que você enviou: em que idioma está e se dá para trabalhar com isso. Ele usa sua chave e custa alguns centésimos de centavo."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -7237,7 +7255,9 @@
 		"acDeleteNext": "我明白，继续",
 		"acDeleteType": "输入 {email} 以确认。",
 		"acDeleteGo": "删除我的账户",
-		"acDeleted": "你的账户已删除。"
+		"acDeleted": "你的账户已删除。",
+		"setDecider": "检查模型",
+		"setDeciderHelp": "辅导开始前，一个小而快的模型会先看看你发来的内容：用的是哪种语言，适不适合拿来练。它用你的密钥运行，每次只花几百分之一美分。"
 	},
 	"vi": {
 		"next": "Tiếp",
@@ -7961,7 +7981,9 @@
 		"acDeleteNext": "Tôi hiểu, tiếp tục",
 		"acDeleteType": "Nhập {email} để xác nhận.",
 		"acDeleteGo": "Xóa tài khoản của tôi",
-		"acDeleted": "Tài khoản của bạn đã bị xóa."
+		"acDeleted": "Tài khoản của bạn đã bị xóa.",
+		"setDecider": "Mô hình kiểm tra",
+		"setDeciderHelp": "Trước khi gia sư bắt đầu, một mô hình nhỏ và nhanh sẽ xem nội dung bạn gửi: viết bằng ngôn ngữ nào và có dùng để luyện được không. Nó chạy bằng khóa của bạn và chỉ tốn vài phần trăm xu."
 	},
 	"it": {
 		"next": "Avanti",
@@ -8685,7 +8707,9 @@
 		"acDeleteNext": "Ho capito, continua",
 		"acDeleteType": "Scrivi {email} per confermare.",
 		"acDeleteGo": "Elimina il mio account",
-		"acDeleted": "Il tuo account è stato eliminato."
+		"acDeleted": "Il tuo account è stato eliminato.",
+		"setDecider": "Modello di controllo",
+		"setDeciderHelp": "Prima che il tutor cominci, un modello piccolo e veloce guarda ciò che hai inviato: in che lingua è e se ci si può lavorare. Usa la tua chiave e costa qualche centesimo di centesimo."
 	},
 	"ar": {
 		"next": "التالي",
@@ -9409,7 +9433,9 @@
 		"acDeleteNext": "أفهم ذلك، متابعة",
 		"acDeleteType": "اكتب {email} للتأكيد.",
 		"acDeleteGo": "احذف حسابي",
-		"acDeleted": "تم حذف حسابك."
+		"acDeleted": "تم حذف حسابك.",
+		"setDecider": "نموذج الفحص",
+		"setDeciderHelp": "قبل أن يبدأ المعلّم، ينظر نموذج صغير وسريع إلى ما أرسلته: بأي لغة كُتب، وهل يصلح للتدرّب عليه. يعمل بمفتاحك وتكلفته أجزاء من مئة من السنت."
 	},
 	"pl": {
 		"next": "Dalej",
@@ -10133,7 +10159,9 @@
 		"acDeleteNext": "Rozumiem, dalej",
 		"acDeleteType": "Wpisz {email}, aby potwierdzić.",
 		"acDeleteGo": "Usuń moje konto",
-		"acDeleted": "Twoje konto zostało usunięte."
+		"acDeleted": "Twoje konto zostało usunięte.",
+		"setDecider": "Model sprawdzający",
+		"setDeciderHelp": "Zanim tutor zacznie, mały, szybki model sprawdza, co wysłałeś: w jakim to języku i czy da się nad tym pracować. Działa na twoim kluczu i kosztuje kilka setnych centa."
 	},
 	"el": {
 		"next": "Επόμενο",
@@ -10857,7 +10885,9 @@
 		"acDeleteNext": "Κατάλαβα, συνέχεια",
 		"acDeleteType": "Πληκτρολόγησε {email} για επιβεβαίωση.",
 		"acDeleteGo": "Διαγραφή του λογαριασμού μου",
-		"acDeleted": "Ο λογαριασμός σου διαγράφηκε."
+		"acDeleted": "Ο λογαριασμός σου διαγράφηκε.",
+		"setDecider": "Μοντέλο ελέγχου",
+		"setDeciderHelp": "Πριν ξεκινήσει ο δάσκαλος, ένα μικρό και γρήγορο μοντέλο κοιτάζει τι έστειλες: σε ποια γλώσσα είναι και αν μπορείς να δουλέψεις πάνω του. Τρέχει με το κλειδί σου και κοστίζει λίγα εκατοστά του σεντ."
 	},
 	"nl": {
 		"next": "Volgende",
@@ -11581,7 +11611,9 @@
 		"acDeleteNext": "Begrepen, doorgaan",
 		"acDeleteType": "Typ {email} om te bevestigen.",
 		"acDeleteGo": "Mijn account verwijderen",
-		"acDeleted": "Je account is verwijderd."
+		"acDeleted": "Je account is verwijderd.",
+		"setDecider": "Controlemodel",
+		"setDeciderHelp": "Voordat de tutor begint, kijkt een klein, snel model naar wat je stuurde: in welke taal het is en of je ermee aan de slag kunt. Het draait op jouw sleutel en kost een paar honderdste cent."
 	},
 	"id": {
 		"next": "Berikutnya",
@@ -12305,7 +12337,9 @@
 		"acDeleteNext": "Saya mengerti, lanjutkan",
 		"acDeleteType": "Ketik {email} untuk mengonfirmasi.",
 		"acDeleteGo": "Hapus akun saya",
-		"acDeleted": "Akunmu telah dihapus."
+		"acDeleted": "Akunmu telah dihapus.",
+		"setDecider": "Model pemeriksa",
+		"setDeciderHelp": "Sebelum tutor mulai, model kecil yang cepat melihat apa yang kamu kirim: bahasanya apa, dan apakah bisa dipakai untuk berlatih. Model ini memakai kuncimu dan biayanya hanya beberapa perseratus sen."
 	},
 	"ko": {
 		"next": "다음 곳",
@@ -13029,6 +13063,8 @@
 		"acDeleteNext": "이해했어요, 계속",
 		"acDeleteType": "확인하려면 {email}을(를) 입력하세요.",
 		"acDeleteGo": "내 계정 삭제",
-		"acDeleted": "계정이 삭제되었어요."
+		"acDeleted": "계정이 삭제되었어요.",
+		"setDecider": "확인 모델",
+		"setDeciderHelp": "튜터가 시작하기 전에 작고 빠른 모델이 보낸 내용을 살펴봅니다. 어떤 언어로 쓰였는지, 연습에 쓸 만한 내용인지요. 내 키로 실행되며 비용은 몇백분의 1센트입니다."
 	}
 }

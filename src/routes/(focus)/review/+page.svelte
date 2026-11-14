@@ -364,8 +364,7 @@ onMount(() => {
 	gap: 2px;
 	padding-inline-end: 6px;
 }
-.tools button,
-.send {
+.tools button {
 	display: grid;
 	place-items: center;
 	width: 36px;
@@ -380,17 +379,14 @@ onMount(() => {
 		background-color 150ms,
 		scale 150ms;
 }
-.tools button:hover,
-.send:hover:not(:disabled) {
+.tools button:hover {
 	color: var(--ink);
 	background: var(--hover);
 }
-.tools button:active,
-.send:active:not(:disabled) {
+.tools button:active {
 	scale: 0.97;
 }
-.tools button:focus-visible,
-.send:focus-visible {
+.tools button:focus-visible {
 	outline: none;
 	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 60%, transparent);
 }
@@ -546,10 +542,5 @@ onMount(() => {
 }
 .tipped {
 	display: inline-flex;
-}
-@media (prefers-reduced-motion: reduce) {
-	.thinking span {
-		animation: none;
-	}
 }
 </style>

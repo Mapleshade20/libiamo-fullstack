@@ -1,9 +1,9 @@
 import { learner } from "#lib/server/guard.ts";
-import { serviceKey } from "#lib/server/llm/callers.ts";
-import { recorder } from "#lib/server/llm/records.ts";
+import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { gate } from "#lib/server/writing/gate.ts";
 
-// The composer's door (src/model/gate.ts): is this something to work on, and in which language? The service pays.
+// The composer's door (server/writing/gate.ts): is this something to work on, and in which language? On the learner's
+// own key, like every call they make.
 export async function POST({ request }) {
 	const u = learner();
 	const b = await request.json();
@@ -17,7 +17,7 @@ export async function POST({ request }) {
 				learning: strs(b.learning),
 				active: String(b.active ?? "en"),
 			},
-			{ key: serviceKey(), record: recorder({ userId: u.id, keepText: u.helpImprove }) },
+			await learnerCaller({ user: u }),
 		),
 	);
 }

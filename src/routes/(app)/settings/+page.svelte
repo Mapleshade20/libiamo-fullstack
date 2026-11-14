@@ -6,7 +6,7 @@ import { onMount, type Snippet, tick } from "svelte";
 import { flip } from "svelte/animate";
 import { slide } from "svelte/transition";
 import { signInSetup } from "#lib/account/account.remote.ts";
-import { account, cancelEmailChange, connect, disconnect, hasPassword } from "#lib/account/account.svelte.ts";
+import { account, cancelEmailChange, connect, disconnect, hasPassword, setDecisionModel } from "#lib/account/account.svelte.ts";
 import { SOCIAL_PROVIDERS, type SocialProviderId, socialFailureKey } from "#lib/auth/social.ts";
 import ChangeEmail from "#lib/components/auth/ChangeEmail.svelte";
 import ChangePassword from "#lib/components/auth/ChangePassword.svelte";
@@ -27,6 +27,7 @@ import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS, hasScenarios, LEARNABLE } from "#lib/constants.ts";
 import { app, demoOpens, endonym, nameOf, setTheme, switchLanguage, THEMES, type Theme, toast, tx } from "#lib/demo/app.svelte.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
+import { decisionModelFor, PROVIDERS } from "#lib/llm/providers.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -54,6 +55,8 @@ onMount(() => {
    help behind an ⓘ, and its control at the row's end; a list or a form takes the row's full width under its label.
    Every change applies at once and says so quietly; only what is typed (the key) waits for a button. */
 const saved = () => toast(tx("setSaved"));
+// The model that checks what is sent, when the key's provider runs more than one.
+const deciders = $derived(account.me.key ? (PROVIDERS[account.me.key.provider as keyof typeof PROVIDERS]?.decisions?.models ?? []) : []);
 
 const others = $derived((LEARNABLE as readonly string[]).filter((l) => l !== app.prefs.native && !app.prefs.learning.includes(l)));
 function setNative(v: string) {
@@ -273,6 +276,20 @@ onMount(() => {
 				<KeyForm {tx} onsaved={() => toast(tx("setKeySaved"))} />
 			{/snippet}
 			{@render row(tx("setKey"), tx("setKeyHelp"), keyCtl, true)}
+			{#snippet deciderCtl()}
+				<div class="w-60">
+					<Select
+						aria-label={tx("setDecider")}
+						value={decisionModelFor(account.me.key?.provider as keyof typeof PROVIDERS, account.me.key?.decision) ?? ""}
+						onValueChange={async (v) => {
+							await setDecisionModel(v);
+							saved();
+						}}
+						items={deciders.map((m, i) => ({ value: m.id, label: m.name, description: i === 0 ? tx("setRecommended") : undefined }))}
+					/>
+				</div>
+			{/snippet}
+			<Reveal open={deciders.length > 1}>{@render row(tx("setDecider"), "", deciderCtl, false, tx("setDeciderHelp"))}</Reveal>
 			{#snippet improveCtl()}
 				<Switch
 					aria-label={tx("setHelpImprove")}

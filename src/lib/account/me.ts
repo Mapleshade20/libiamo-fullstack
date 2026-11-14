@@ -16,7 +16,7 @@ export type Me = {
 	/** A new address waiting for its link; the old one signs in until then. */
 	pendingEmail?: string;
 	/** The learner's own key's setup (never the key itself); null until they add one. */
-	key: { provider: string; model: string } | null;
+	key: { provider: string; model: string; decision: string | null } | null;
 	role: "learner" | "admin";
 	/** Whether the welcome is done; until then there are no settings. */
 	onboarded: boolean;
