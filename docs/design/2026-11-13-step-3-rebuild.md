@@ -367,6 +367,10 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
 - **The public welcome page** describes the old product (lineups, the book). It needs new content before launch.
 - **Models.** Everything was tuned on Claude Haiku through OpenRouter; DeepSeek Flash, GPT Luna and GLM have not run a
   whole session. One fixture run each before their setups are offered.
+- **Asking about a review answer.** The demo's "Is mine OK too?" on a card's back answered with stand-ins; it was taken
+  out in phase 3 (decided by the user, 2026-11-15) and is to come back later with a real call to the tutor (a new
+  prompt: the card's sentence, the learner's answer and the one they kept, then follow-up questions), like collecting's
+  questions about a phrase.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
 
 ## 12. State of the work
@@ -472,8 +476,7 @@ rate-limit table and every environment list describe what exists.
   call (one removed again), write-again crediting the day. The image on Node 24 built and booted under `podman compose`
   on an empty database (the migration with the new tables, `/health`, a card reviewed and the day's half written,
   SIGTERM).
-- **Open.** Review's "Is mine OK too?" still answers with the demo's stand-in replies (the demo says the app would ask
-  the tutor); a real call is a new prompt, for the user to decide.
+- Review's "Is mine OK too?" (the demo's stand-in replies) is taken off the card's back for now (§11).
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
