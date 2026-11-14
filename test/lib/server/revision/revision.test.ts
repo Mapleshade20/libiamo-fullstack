@@ -172,3 +172,20 @@ test("other readings are never prepared on a guess, even when the learner must c
 		assert.equal(asked.length, expected, mode);
 	}
 });
+
+test("coming back: the page's bookmark and pass 1 as it was given outlive a snapshot; the post as it stands once pass 1 is in", () => {
+	const text = "I likes it.";
+	const { s, x } = session(text);
+	x.scene = { platform: "AO3", audience: "fans", purpose: "praise", target: "en" };
+	x.p1 = [change(text, "likes", "like", "p1")];
+	x.p1view = { doc: [[text]], stops: [{ item: "p1", kind: "fix" }] };
+	assert.equal(s.resume().doc, null);
+	s.progress({ phase: 1, answers: [{ to: "love", ok: true, self: true }] });
+	s.pass1Done({ p1: "love" }, []);
+	const back = RevisionSession.restore(JSON.parse(JSON.stringify(s.snapshot())), nokey).resume();
+	assert.deepEqual(back.page, { phase: 1, answers: [{ to: "love", ok: true, self: true }] });
+	assert.deepEqual(back.pass1, x.p1view);
+	assert.equal(back.scene?.ui, "zh-CN");
+	assert.deepEqual(back.doc, [["I love it."]]);
+	assert.throws(() => s.progress([1, 2]));
+});

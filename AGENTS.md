@@ -39,7 +39,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 
 - The app's reads and writes are remote functions (`query`, `command`, `form` in `*.remote.ts`), experimental like Svelte's async mode: Kit and Svelte are pinned to a minor version, and each upgrade reads the changelog's remote-function entries first. Never run two refreshes of one query at once (an older response can overwrite a newer one, sveltejs/kit#17354). `query.live` is not used; the exchange polls.
 - The account reaches the pages through `me` (`lib/account/account.remote.ts`), poured into `account` and `app.prefs` (`lib/account/account.svelte.ts`) by the root layout's load; `app.save()` sends the settings back once the welcome is done. Auth flows call Better Auth's client and return catalog keys for what the page shows.
-- The revision's protocol (`POST /api/s`, then `/api/s/<id>/<action>`) stays as the demo has it: it is also the tape, the tour's and `case replay`'s format.
+- The revision's protocol (`POST /api/s`, then `/api/s/<id>/<action>`) stays as the demo has it: it is also the tape, the tour's and `case replay`'s format. `<id>` is the piece's: the page that sends a draft in creates the piece (`lib/session/start.ts`) and opens `/live/<piece>`. Two actions are not steps and stay off the tape: `progress` (the page's bookmark, kept in the snapshot) and `resume` (where the revision was, for a reload, a restart or another device). Anything the page alone knows that coming back needs goes into the bookmark.
 
 ### Database
 

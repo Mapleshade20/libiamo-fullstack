@@ -1,7 +1,7 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
-import { act, openRevision, reloadRevision, updatePiece } from "#lib/server/revision/store.ts";
+import { act, bookmark, openRevision, pieceFor, reloadRevision, updatePiece } from "#lib/server/revision/store.ts";
 import { dev } from "$app/env";
 
 // Each action is one step of the revision page's flow (src/lib/session/session.svelte.ts); `id` is the piece's.
@@ -32,8 +32,37 @@ const UUID = /^[0-9a-f-]{36}$/;
 
 export async function POST({ params, request }) {
 	const u = learner();
-	const h = UUID.test(params.id) ? await openRevision(u, params.id) : null;
+	const p = UUID.test(params.id) ? await pieceFor(u.id, params.id) : null;
+	if (!p) return Response.json({ error: "No such piece." }, { status: 404 });
+	// Coming back to a finished piece is coming back to its page.
+	if (params.action === "resume" && p.state === "finished") return Response.json({ finished: true });
+	const h = await openRevision(u, params.id);
 	if (!h) return Response.json({ error: "This revision is gone. Start again." }, { status: 404 });
+	// Where the page was, with what it was started from; and the page's bookmark. Neither is a step on the tape.
+	if (params.action === "resume") {
+		const i = h.session.input;
+		const setup = {
+			text: i.text,
+			background: i.background,
+			source: i.source,
+			detail: i.detail,
+			learner: i.learner,
+			feedback: i.feedback,
+			lang: p.language,
+			exchange: i.exchange,
+			translation: i.translation,
+			scenario: p.scenarioId ? { id: p.scenarioId, title: p.title, site: p.place } : undefined,
+		};
+		return Response.json({ setup, ...h.session.resume() });
+	}
+	if (params.action === "progress") {
+		try {
+			bookmark(h, await request.json());
+			return Response.json({});
+		} catch (e) {
+			return Response.json({ error: String((e as Error)?.message ?? e) }, { status: 400 });
+		}
+	}
 	// Development only: the revision thrown away and loaded again from its snapshot (lab/replay.mjs --reload).
 	if (params.action === "reload" && dev) {
 		reloadRevision(h);

@@ -1,7 +1,7 @@
 import { tick } from "svelte";
 import { CALLS } from "#lib/components/debug/calls.ts";
 import { app, enterSandbox, leaveSandbox } from "#lib/demo/app.svelte.ts";
-import { COLLECT_KEY, HANDOFF_KEY } from "#lib/demo/data.ts";
+import { COLLECT_KEY } from "#lib/demo/data.ts";
 import { t } from "#lib/i18n/index.svelte.ts";
 import { pacing } from "#lib/session/clock.ts";
 import { goto } from "$app/navigation";
@@ -81,7 +81,7 @@ class Director {
 		leaveSandbox();
 		this.onEnd?.();
 		this.onEnd = null;
-		for (const k of [HANDOFF_KEY, COLLECT_KEY]) sessionStorage.removeItem(k);
+		sessionStorage.removeItem(COLLECT_KEY);
 		CALLS.reset();
 		document.documentElement.classList.remove("touring", "no-calls");
 		pacing.speed = 1;
@@ -114,7 +114,7 @@ class Director {
 			this.keys = null;
 			this.idle = false;
 			this.seenPath = "";
-			for (const k of [HANDOFF_KEY, COLLECT_KEY]) sessionStorage.removeItem(k);
+			sessionStorage.removeItem(COLLECT_KEY);
 			enterSandbox(c.seed());
 			this.epoch++;
 			if (page.url.pathname !== c.start) await goto(c.start);

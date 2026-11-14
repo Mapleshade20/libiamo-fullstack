@@ -177,6 +177,22 @@ async function record(pieceId: string, h: Held, action: string, body: unknown, r
 	await save(pieceId, h);
 }
 
+/** The learner's piece, as far as coming back to its revision needs it. */
+export async function pieceFor(userId: string, pieceId: string) {
+	const [row] = await db
+		.select({ state: piece.state, language: piece.language, scenarioId: piece.scenarioId, title: piece.title, place: piece.place })
+		.from(piece)
+		.where(and(eq(piece.id, pieceId), eq(piece.userId, userId)));
+	return row ?? null;
+}
+
+/** The page's bookmark kept with the revision: not a step of it, so not on the tape; the snapshot is written shortly. */
+export function bookmark(h: Held, page: unknown) {
+	h.used = Date.now();
+	h.session.progress(page);
+	h.changed();
+}
+
 /** Change what the piece's row says (the scene's title, the end); the revision itself is in the snapshot. */
 export async function updatePiece(pieceId: string, set: Partial<typeof piece.$inferInsert>) {
 	await db.update(piece).set(set).where(eq(piece.id, pieceId));

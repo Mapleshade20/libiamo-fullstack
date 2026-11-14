@@ -12,8 +12,6 @@ export type Setup = {
 	grader?: string;
 	cache?: string;
 	scenario?: { id: string; title: string; site: string };
-	/** The piece this session works on, when it goes back into one (My writing, the sidebar): it stays one piece. */
-	pieceId?: string;
 	/** A scenario's conversation as it happened; `text` is then its learner turns joined by `SEP` lines. */
 	exchange?: Exchange;
 	/** A translation scenario: the source the learner translated, the text as first written, the names and terms given. */
@@ -80,6 +78,9 @@ export type P1Stop = {
 	parts?: { item: string; ins: string }[];
 	label?: string;
 };
+
+/** A pass-1 card as the learner answered it: the page's bookmark keeps them, so coming back fills them in. */
+export type P1Answer = { picked?: number; keep?: boolean; to?: string; ok?: boolean | null; self?: boolean };
 
 export type Reading = { label: string; meaning: string };
 /** given: nothing to ask (a translation's source, or a spot about how something is put). */

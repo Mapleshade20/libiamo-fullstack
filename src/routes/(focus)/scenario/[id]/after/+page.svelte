@@ -3,11 +3,12 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { fly } from "svelte/transition";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, read, tx } from "#lib/demo/app.svelte.ts";
-import { HANDOFF_KEY, myWriting, recordWriting, siteOf } from "#lib/demo/data.ts";
+import { app, read, toast, tx } from "#lib/demo/app.svelte.ts";
+import { myWriting, recordWriting, siteOf } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { exchangeOf, SIMS, scenarioById, simTurns, situationOf, situationText } from "#lib/demo/scenarios.ts";
-import { SEP } from "#lib/session/types.ts";
+import { startPiece } from "#lib/session/start.ts";
+import { SEP, type Setup } from "#lib/session/types.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -47,16 +48,16 @@ function handoff() {
 		scenario: { id: scenario.id, title: scenario.title[app.lang], site: scenario.site },
 		...$state.snapshot(dev),
 		learner: app.prefs.native,
-		feedback: app.prefs.feedback,
+		feedback: app.prefs.feedback as Setup["feedback"],
 		lang: app.lang,
-		pieceId: kept?.id,
 	};
 }
-function review() {
+async function review() {
 	const h = handoff();
 	if (!h) return;
-	sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(h));
-	goto("/live");
+	const id = await startPiece(h).catch(() => null);
+	if (!id) return toast(tx("startFailed"));
+	goto(`/live/${id}`);
 }
 function later() {
 	const h = handoff();

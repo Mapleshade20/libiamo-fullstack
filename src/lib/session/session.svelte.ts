@@ -4,7 +4,7 @@ import ChoiceCard from "#lib/components/session/ChoiceCard.svelte";
 import FixCard from "#lib/components/session/FixCard.svelte";
 import NoteCard from "#lib/components/session/NoteCard.svelte";
 import { isAppLang } from "#lib/constants.ts";
-import { app, forget, read, write } from "#lib/demo/app.svelte.ts";
+import { app, forget, read, sandboxed, write } from "#lib/demo/app.svelte.ts";
 import { type Learned, myWriting, type NoteBody, practised, recordWriting } from "#lib/demo/data.ts";
 import { checkCall, type Stop as Halt, LimitError, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
@@ -20,6 +20,7 @@ import {
 	type Landed,
 	type MapRow,
 	type Material,
+	type P1Answer,
 	type P1Stop,
 	type Scene,
 	SEP,
@@ -63,7 +64,8 @@ export type Msg = {
 	/** "Say it again": the words the learner had there, struck through as the cue. */
 	cue?: string;
 };
-export type Stop = { id: number; top: Msg[]; replies: Msg[]; done: boolean };
+/** spot: the pass-2 spot the stop is about (the overview, say-it-again and the end have none). */
+export type Stop = { id: number; top: Msg[]; replies: Msg[]; done: boolean; spot?: string };
 export type Hint = {
 	pieces: { text: string; own: boolean }[];
 	rung: { lead: string; html: string } | null;
@@ -83,6 +85,36 @@ export type BarSpec = {
 };
 
 const HANDOFF_DETAIL = "detail";
+
+/**
+ * The page's bookmark, kept with the revision on the server (the `progress` action) so a reload, a restart or another
+ * device comes back to where the learner was: pass 1's answers so far; once pass 2's plan is agreed, the plan, what
+ * became of each spot and the conversation about the spots behind them.
+ */
+export type Bookmark = {
+	phase: 1 | 2;
+	answers: P1Answer[];
+	p2?: { spots: Spot[]; landed: Landed[]; map: MapRow[]; results: Record<string, SpotResult>; thread: Stop[] };
+};
+/** What `resume` answers: where the revision was, and the bookmark. */
+export type Resumed = { scene: Scene | null; pass1: { doc: DocDef; stops: P1Stop[] } | null; page: Bookmark | null; doc: DocDef | null };
+
+/** Where a revision comes back to (§6.2 of the rebuild design): 0 the scene, 1 pass 1, 2 pass 2. */
+export function resumeAt(r: Resumed): 0 | 1 | 2 {
+	if (!r.scene || !r.pass1) return 0;
+	return r.page?.phase === 2 ? 2 : 1;
+}
+
+/** How a pass-1 card went, from the learner's answer to it. */
+function outcomeOf(stop: P1Stop, a: P1Answer | undefined): { deferred?: boolean; kept?: boolean; self?: boolean; ok?: boolean | null } {
+	if (!a) return {};
+	if (stop.kind === "choice") return { self: true, ok: a.picked === stop.answer };
+	if (stop.kind === "fix") return a.keep ? { kept: true } : { self: a.self, ok: a.ok };
+	if (stop.kind === "replace" || stop.kind === "link") return a.keep ? { kept: true } : {};
+	if (stop.kind === "defer") return { deferred: true };
+	if (stop.kind === "tick") return { kept: true };
+	return {};
+}
 
 /** Resolves once no navigation's view transition is running (the root layout clears <html data-vt> when it ends). */
 function navigationSettled(): Promise<void> {
@@ -109,7 +141,8 @@ export class Session {
 	sceneBusy = $state(false);
 	background = $state("");
 	detail = $state<"more" | "needed">("needed");
-	sid = $state<string | null>(null);
+	/** The piece: every action names it. */
+	readonly sid: string;
 	/** Pass 1's last card: how it went, and the post as it stands for "need it now". */
 	p1end = $state<{ fixed: number; self: number; deferred: number } | null>(null);
 	quick = $state<{ busy: boolean; text: string | null; halt: Halt | null }>({ busy: false, text: null, halt: null });
@@ -132,9 +165,14 @@ export class Session {
 	private pass1: P1Stop[] = [];
 	private pass1Text = "";
 	private spots: Spot[] = [];
-	private outcomes: { deferred?: boolean; kept?: boolean; self?: boolean; ok?: boolean | null }[] = [];
+	/** Pass 1's cards as the learner answered them, in order. */
+	private answers: P1Answer[] = [];
 	private kept = new Set<string>();
 	private results: Record<string, SpotResult> = {};
+	/** Pass 2 as the bookmark keeps it, once the plan is agreed. */
+	private p2mark: Bookmark["p2"] | null = null;
+	/** What `resume` found, until the page has come back to it. */
+	private resumed: Resumed | null = null;
 	private memo = new Map<string, Promise<unknown>>();
 	private p1sent: { key: string; job: Promise<{ text: string; doc: DocDef }> } | null = null;
 	private nextId = 1;
@@ -146,10 +184,13 @@ export class Session {
 	/** Resolves the scene card's "Start". */
 	private go: (() => void) | null = null;
 
-	constructor(setup: Setup) {
+	/** sid: the piece the revision belongs to. resumed: where it was, when the page comes back to it. */
+	constructor(setup: Setup, sid: string, resumed: Resumed | null = null) {
 		this.setup = setup;
+		this.sid = sid;
+		this.resumed = resumed;
 		this.background = setup.background ?? "";
-		this.detail = read<string>(HANDOFF_DETAIL, "needed") === "more" ? "more" : "needed";
+		this.detail = setup.detail ?? (read<string>(HANDOFF_DETAIL, "needed") === "more" ? "more" : "needed");
 		// The session speaks the tutor's language: the learner's own, or the one they write in, as they chose in their
 		// settings. Its buttons and prompts too: they are the tutor's side of the conversation.
 		this.lang = this.pick(setup.feedback === "target" && setup.lang ? setup.lang : setup.learner);
@@ -158,6 +199,12 @@ export class Session {
 		if (setup.scenario) {
 			this.phase = 1;
 			this.waiting = "on";
+		}
+		// Coming back to a pass, the page opens on it (no scene card first, no waiting draft).
+		const at = resumed ? resumeAt(resumed) : 0;
+		if (at > 0) {
+			this.phase = at;
+			this.waiting = "no";
 		}
 	}
 	tt = (key: string, vars?: Record<string, string | number>) => t(this.lang, key, vars);
@@ -221,6 +268,27 @@ export class Session {
 		if (!r.ok) throw v.code === "nokey" || v.code === "refused" ? new LimitError(v.code) : new Error(v.error || this.tt("error"));
 		return v as T;
 	}
+	/** The bookmark goes to the server after every answer, the newest only, one request at a time; the tour keeps none. */
+	private marking = false;
+	private dirty = false;
+	private mark() {
+		if (sandboxed()) return;
+		this.dirty = true;
+		if (this.marking) return;
+		this.marking = true;
+		(async () => {
+			while (this.dirty) {
+				this.dirty = false;
+				const page: Bookmark = { phase: this.phase === 2 ? 2 : 1, answers: this.answers, ...(this.p2mark ? { p2: this.p2mark } : {}) };
+				await fetch(`/api/s/${this.sid}/progress`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(page),
+				}).catch(() => {});
+			}
+			this.marking = false;
+		})();
+	}
 	/** A step asked for again (a restart from the debug panel) reuses its answer. */
 	private once<T>(key: string, f: () => Promise<T>): Promise<T> {
 		if (!this.memo.has(key)) {
@@ -248,8 +316,18 @@ export class Session {
 	}
 
 	/* ---------- Running ---------- */
-	start() {
-		this.run(0);
+	/** From the start, or back where the revision was. */
+	async start() {
+		CALLS.watch(this.sid);
+		const r = this.resumed;
+		if (!r) return this.run(0);
+		if (r.scene) await this.applyScene(r.scene);
+		const at = resumeAt(r);
+		if (at === 0) return this.run(0);
+		this.doc1 = r.pass1?.doc ?? null;
+		this.pass1 = r.pass1?.stops ?? [];
+		this.answers = r.page?.answers ?? [];
+		this.run(at);
 	}
 	stop() {
 		this.clock.next();
@@ -259,7 +337,7 @@ export class Session {
 	}
 	/** Debug only: jump to a phase (pass 2 needs pass 1's text first). */
 	jump(i: 0 | 1 | 2) {
-		if (i > 0 && !this.sid) return;
+		if (i > 0 && !this.scene) return;
 		this.run(i);
 	}
 	private async run(i: 0 | 1 | 2) {
@@ -301,40 +379,19 @@ export class Session {
 	}
 
 	/* ---------- The scene ---------- */
-	/** The piece in My writing that this session works on. */
-	private pieceId: string | null = null;
-	private async createSession() {
-		checkCall("session");
-		const r = await fetch("/api/s", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ ...this.setup, background: this.background, detail: this.detail, noCache: this.setup.cache === "off" }),
+	private async readScene() {
+		const s = await this.once("scene", () => this.api<Scene>("scene"));
+		// From here it is one of the learner's pieces in My writing: unfinished until the revision ends.
+		const q = this.setup.scenario;
+		recordWriting({
+			id: this.sid,
+			title: q?.title || s.title || this.setup.text.split(/\s+/).slice(0, 8).join(" "),
+			site: q?.site || s.site || s.platform,
+			lang: s.target,
+			open: true,
+			scenarioId: q?.id,
 		});
-		const v = await r.json().catch(() => ({}));
-		if (!r.ok) throw new Error(v.error || this.tt("startFailed"));
-		this.sid = v.id;
-		CALLS.watch(v.id);
-		try {
-			const s = await this.once("scene", () => this.api<Scene>("scene"));
-			// From here it is one of the learner's pieces: unfinished until the session ends. A session that goes back into a
-			// piece files under that piece (the demo's server cannot resume a session, so going back starts a new one).
-			const q = this.setup.scenario;
-			const pieceId: string = this.setup.pieceId ?? v.id;
-			this.pieceId = pieceId;
-			recordWriting({
-				id: pieceId,
-				title: q?.title || s.title || this.setup.text.split(/\s+/).slice(0, 8).join(" "),
-				site: q?.site || s.site || s.platform,
-				lang: s.target,
-				open: true,
-				handoff: { ...this.setup, lang: this.setup.lang ?? s.target },
-				scenarioId: q?.id,
-			});
-			return s;
-		} catch (e) {
-			this.sid = null;
-			throw e;
-		}
+		return s;
 	}
 	private async applyScene(s: Scene) {
 		const ui = this.pick(s.ui);
@@ -352,7 +409,7 @@ export class Session {
 		while (!this.scene) {
 			this.sceneError = null;
 			try {
-				const s = await this.createSession();
+				const s = await this.readScene();
 				if (!alive()) return;
 				await this.applyScene(s);
 			} catch (e) {
@@ -437,8 +494,8 @@ export class Session {
 		post.target = this.scene.target;
 		this.placeContext(post);
 		this.kept.clear();
-		this.outcomes = [];
 		if (!this.doc1) {
+			this.answers = [];
 			// While the first pass is written, the draft waits in grey where it will stand, a light sweeping across it.
 			this.waiting = "on";
 			const p = await this.guard(() => this.once("pass1", () => this.api<{ doc: DocDef; stops: P1Stop[] }>("pass1", { detail: this.detail })));
@@ -453,10 +510,13 @@ export class Session {
 		}
 		const doc = post.build(this.doc1 as DocDef);
 		post.hideAll();
-		await this.clock.sleep(400 * SLOW);
+		// Coming back, the cards already answered are filled in at once and the typing goes on from the first open one.
+		const known = (i: number) => this.answers[i] !== undefined;
+		if (!known(0)) await this.clock.sleep(400 * SLOW);
 		// Type to the end of the sentence, then go back over the marks in it, in order.
 		for (let i = 0; i < this.pass1.length; ) {
 			const end = post.unitEnd(doc.items.get(this.pass1[i].item)?.last ?? 0);
+			post.instant = known(i);
 			await post.typeTo(end);
 			let j = i;
 			while (j < this.pass1.length && (doc.items.get(this.pass1[j].item)?.last ?? 0) <= end) j++;
@@ -467,7 +527,9 @@ export class Session {
 			}
 			post.caretBack();
 		}
+		post.instant = this.pass1.length > 0 && known(this.pass1.length - 1);
 		await post.typeTo(doc.tokens.length - 1);
+		post.instant = false;
 		this.endP1();
 	}
 	/** One card, resolved by the learner. */
@@ -506,98 +568,106 @@ export class Session {
 			};
 		});
 	}
+	/** One mark of pass 1. A card the learner answered before coming back is filled in from their answer, without asking. */
 	private async correct(stop: P1Stop, i: number) {
 		const post = this.post as Post;
 		const tutor = this.who("tutor");
-		const out: (typeof this.outcomes)[number] = {};
-		this.outcomes[i] = out;
+		const given = this.answers[i];
+		const a: P1Answer = {};
+		post.instant = !!given;
 		const parts = stop.kind === "group" ? (stop.parts ?? []).map((p) => p.item) : [stop.item];
-		await this.clock.sleep(500 * SLOW);
-		parts.forEach((p, k) => {
-			post.select(p, tutor, { flag: k === 0 });
-		});
-		await this.clock.sleep(650 * SLOW);
-		if (stop.kind === "choice") {
-			let pickFromPost: (i: number) => void = () => {};
-			const ask = post.askChoice(stop.item, tutor, (n) => pickFromPost(n));
-			const picked = await this.card<number, Record<string, unknown>>(stop.item, ChoiceCard as never, (done) => {
-				pickFromPost = done;
-				return { who: tutor, icon: "pen", text: stop.prompt ?? "", options: ask.options, done };
+		if (!given) {
+			await this.clock.sleep(500 * SLOW);
+			parts.forEach((p, k) => {
+				post.select(p, tutor, { flag: k === 0 });
 			});
-			ask.done();
-			Object.assign(out, { self: true, ok: picked === stop.answer });
+			await this.clock.sleep(650 * SLOW);
+		}
+		if (stop.kind === "choice") {
+			let picked = given?.picked ?? 0;
+			if (!given) {
+				let pickFromPost: (i: number) => void = () => {};
+				const ask = post.askChoice(stop.item, tutor, (n) => pickFromPost(n));
+				picked = await this.card<number, Record<string, unknown>>(stop.item, ChoiceCard as never, (done) => {
+					pickFromPost = done;
+					return { who: tutor, icon: "pen", text: stop.prompt ?? "", options: ask.options, done };
+				});
+				ask.done();
+			}
+			a.picked = picked;
 			post.markChoice(stop.item, picked, stop.answer ?? 0);
-			await this.note(stop.item, (out.ok ? stop.note : stop.wrongNote) ?? "");
+			if (!given) await this.note(stop.item, (picked === stop.answer ? stop.note : stop.wrongNote) ?? "");
 		} else if (stop.kind === "fix") {
-			const res = await this.card<{ keep?: boolean; to?: string; ok: boolean | null; self: boolean }, Record<string, unknown>>(
-				stop.item,
-				FixCard as never,
-				(done) => ({
-					who: tutor,
-					icon: "pen",
-					text: stop.prompt ?? "",
-					initial: stop.initial ?? "",
-					labels: {
-						submit: this.tt("fixSubmit"),
-						reveal: this.tt("reveal"),
-						keep: this.tt("keepMine"),
-						keepSure: this.tt("keepMineSure"),
-						cont: this.tt("continue"),
-					},
-					judge: (typed: string) => {
-						const key = typed
-							.trim()
-							.toLowerCase()
-							.replace(/[.!?]+$/, "");
-						const hit = stop.answers?.[key];
-						return hit?.ok
-							? { to: typed.trim(), ok: true, note: hit.note, self: true }
-							: { to: stop.to, ok: false, note: hit ? hit.note : (stop.wrongNote ?? this.tt("fallbackWrong", { x: stop.to ?? "" })), self: true };
-					},
-					reveal: () => ({ to: stop.to, ok: null, self: false }),
-					done,
-				}),
-			);
-			if (res.keep) {
-				this.kept.add(stop.item);
-				out.kept = true;
-			} else {
-				Object.assign(out, { self: res.self, ok: res.ok });
+			const res =
+				given ??
+				(await this.card<{ keep?: boolean; to?: string; ok: boolean | null; self: boolean }, Record<string, unknown>>(
+					stop.item,
+					FixCard as never,
+					(done) => ({
+						who: tutor,
+						icon: "pen",
+						text: stop.prompt ?? "",
+						initial: stop.initial ?? "",
+						labels: {
+							submit: this.tt("fixSubmit"),
+							reveal: this.tt("reveal"),
+							keep: this.tt("keepMine"),
+							keepSure: this.tt("keepMineSure"),
+							cont: this.tt("continue"),
+						},
+						judge: (typed: string) => {
+							const key = typed
+								.trim()
+								.toLowerCase()
+								.replace(/[.!?]+$/, "");
+							const hit = stop.answers?.[key];
+							return hit?.ok
+								? { to: typed.trim(), ok: true, note: hit.note, self: true }
+								: { to: stop.to, ok: false, note: hit ? hit.note : (stop.wrongNote ?? this.tt("fallbackWrong", { x: stop.to ?? "" })), self: true };
+						},
+						reveal: () => ({ to: stop.to, ok: null, self: false }),
+						done,
+					}),
+				));
+			Object.assign(a, res.keep ? { keep: true } : { to: res.to, ok: res.ok, self: res.self });
+			if (res.keep) this.kept.add(stop.item);
+			else {
 				if (res.ok && res.to) post.carried[stop.item] = res.to;
 				await post.suggest(stop.item, res.to ?? "", tutor);
 			}
 		} else if (stop.kind === "replace" || stop.kind === "link") {
 			const typing = post.suggest(stop.item, stop.to ?? "", tutor);
-			const v = await this.note(stop.item, stop.note ?? "", true);
+			const v = given ? (given.keep ? "keep" : "continue") : await this.note(stop.item, stop.note ?? "", true);
 			await typing;
 			if (v === "keep") {
 				post.unsuggest(stop.item);
 				this.kept.add(stop.item);
-				out.kept = true;
+				a.keep = true;
 			}
 		} else if (stop.kind === "group") {
 			const typing = (async () => {
 				for (const p of stop.parts ?? []) await post.suggest(p.item, p.ins, tutor);
 			})();
-			await this.note(stop.item, stop.note ?? "");
+			if (!given) await this.note(stop.item, stop.note ?? "");
 			await typing;
 		} else if (stop.kind === "defer") {
 			post.defer(stop.item);
-			out.deferred = true;
-			if (stop.note) await this.note(stop.item, stop.note);
-			else await this.clock.sleep(500 * SLOW);
+			if (!given) await (stop.note ? this.note(stop.item, stop.note) : this.clock.sleep(500 * SLOW));
 		} else if (stop.kind === "quiet") {
 			await post.suggest(stop.item, stop.to ?? "", tutor);
 		} else if (stop.kind === "tick") {
 			post.tick(stop.item);
-			out.kept = true;
-			await this.note(stop.item, stop.note ?? "");
+			if (!given) await this.note(stop.item, stop.note ?? "");
 		}
 		for (const p of parts) post.unselect(p);
 		post.caretAfterItem(parts[parts.length - 1]);
+		if (!given) {
+			this.answers[i] = a;
+			this.mark();
+		}
 	}
 	private endP1() {
-		const vals = Object.values(this.outcomes).filter(Boolean);
+		const vals = this.pass1.map((st, i) => outcomeOf(st, this.answers[i])).filter((_, i) => this.answers[i]);
 		this.p1end = {
 			fixed: vals.filter((o) => !o.deferred && !o.kept).length,
 			self: vals.filter((o) => o.self).length,
@@ -768,20 +838,37 @@ export class Session {
 	private async runP2() {
 		if (!this.doc1) return this.run(1);
 		this.results = {};
+		this.p2mark = null;
 		await this.layout(2);
 		const post = this.post as Post;
 		post.target = this.scene?.target ?? "en";
 		this.placeContext(post);
-		const p1 = await this.guard(() => this.syncP1());
-		await this.guard(() => this.api("resetP2"));
-		// The post is there at once: pass 2 starts from the finished pass-1 text.
-		post.build(p1.doc);
+		// Coming back once the plan was agreed: the post as it stands, the spots behind the learner as they left them.
+		const back = this.resumed?.page?.p2 && this.resumed.doc ? { ...this.resumed.page.p2, doc: this.resumed.doc } : null;
+		this.resumed = null;
+		if (back) {
+			post.build(back.doc);
+			this.spots = back.spots;
+			this.landed = back.landed;
+			this.results = back.results;
+			this.map = { rows: back.map, frozen: true };
+			this.stops = back.thread;
+			this.nextId = Math.max(0, ...back.thread.flatMap((s) => [s.id, ...s.top.map((m) => m.id), ...s.replies.map((m) => m.id)])) + 1;
+			this.p2mark = { spots: back.spots, landed: back.landed, map: back.map, results: this.results, thread: back.thread };
+		} else {
+			this.mark();
+			const p1 = await this.guard(() => this.syncP1());
+			await this.guard(() => this.api("resetP2"));
+			// The post is there at once: pass 2 starts from the finished pass-1 text.
+			post.build(p1.doc);
+		}
 		post.showAll();
 		post.dropCaret();
 		post.scrollTop(0);
-		await this.overview();
+		if (back) await this.settle();
+		else await this.overview();
 		const ids = this.spots.map((s) => s.id);
-		for (let i = 0; i < ids.length; i++) await this.spot(ids[i], i === ids.length - 1);
+		for (let i = 0; i < ids.length; i++) if (!this.results[ids[i]]) await this.spot(ids[i], i === ids.length - 1);
 		this.readerNow = null;
 		await this.sayAgain();
 		await this.replay();
@@ -825,6 +912,7 @@ export class Session {
 		this.map.frozen = true;
 		this.post?.clearRow();
 		el.done = true;
+		this.markP2();
 	}
 	/** A scenario's overview: not a reader's guess but how each turn really landed, then the plan. */
 	private async scenarioOverview() {
@@ -852,6 +940,7 @@ export class Session {
 		if (!this.spots.length) {
 			await this.ask({ buttons: [{ label: this.tt("continue"), v: "go", primary: true }] });
 			el.done = true;
+			this.markP2(r.map);
 			return;
 		}
 		this.map = { rows: r.map, frozen: false };
@@ -860,6 +949,18 @@ export class Session {
 		this.map.frozen = true;
 		this.post?.clearRow();
 		el.done = true;
+		this.markP2();
+	}
+	/** The plan is agreed (or another spot is behind the learner): the bookmark keeps pass 2 as it stands. */
+	private markP2(rows = this.map?.rows ?? []) {
+		const clean = (m: Msg): Msg => ({ ...m, retry: undefined, halt: undefined, hint: false });
+		const shown = (m: Msg) => m.kind !== "thinking" && m.kind !== "fail";
+		// Through JSON: the retries are functions, and the thread is state.
+		const thread = (JSON.parse(JSON.stringify(this.stops)) as Stop[])
+			.filter((s) => s.done || (s.spot && this.results[s.spot]))
+			.map((s) => ({ ...s, done: true, top: s.top.filter(shown).map(clean), replies: s.replies.filter(shown).map(clean) }));
+		this.p2mark = { spots: this.spots, landed: this.landed, map: this.p2mark?.map ?? rows, results: this.results, thread };
+		this.mark();
 	}
 	showRow(row: MapRow) {
 		this.post?.showRow(row, this.tt("ghost"));
@@ -1223,6 +1324,7 @@ export class Session {
 		post.select(S.id, reader, { flag: false });
 		post.revealItem(S.id);
 		const el = this.newStop();
+		el.spot = id;
 		const res = await this.spotScript(S, el);
 		this.hint = null;
 		const next = () => this.ask({ buttons: [{ label: last ? this.tt("seeAll") : this.tt("nextSpot"), v: "next", primary: true }] });
@@ -1233,6 +1335,7 @@ export class Session {
 			post.rebuild(out.doc);
 			this.dropBar();
 			this.quiet(el, this.tt("keptNote"));
+			this.markP2();
 			await next();
 			this.dropBar();
 			el.done = true;
@@ -1242,6 +1345,7 @@ export class Session {
 		const out = await this.generate(el, () =>
 			this.api<{ oldDoc: DocDef; newDoc: DocDef; placed?: string }>("apply", { id: S.id, final: res.text, self: !!res.self }),
 		);
+		this.markP2();
 		post.widen(out.oldDoc, S.id, reader);
 		// The words as they stand in the post (end mark and first letter set by the server).
 		const typing = post.typeEdit(S.id, out.placed ?? res.text ?? "", reader);
@@ -1338,7 +1442,7 @@ export class Session {
 		// Pass-1 changes the learner did not make on their own (a fix or a choice they got right is theirs already); the
 		// notes call says which of these and of pass 2's parts earn an entry (src/session/calls.ts notesFor).
 		const p1 = this.pass1.flatMap((st, i) => {
-			const o = this.outcomes[i] ?? {};
+			const o = outcomeOf(st, this.answers[i]);
 			if (o.kept || o.deferred || st.kind === "quiet" || st.kind === "tick" || st.kind === "defer") return [];
 			if ((st.kind === "fix" || st.kind === "choice") && o.self && o.ok) return [];
 			return st.kind === "group" ? (st.parts ?? []).map((p) => p.item) : [st.item];
@@ -1348,7 +1452,7 @@ export class Session {
 			.map((r) => ({ text: r.construct ?? "", own: own.includes(r), before: r.orig || r.before, final: r.text }));
 		const el = this.newStop();
 		const fin = await this.generate(el, () => this.api<{ closing: string; issues: { quote: string; note: string }[] }>("end"));
-		const pid = this.pieceId ?? (this.sid as string);
+		const pid = this.sid;
 		const asking = own.length + given.length + p1.length > 0;
 		// The finished piece keeps what its page shows (/w/<id>): the text, the reader's reply, what was worked out.
 		recordWriting({
