@@ -20,6 +20,9 @@ export type ThreadTurn = { author: string; text: string; me: boolean };
 export type AfterView = {
 	scenarioId: string;
 	pieceId: string;
+	exchangeId: number;
+	/** The newest reply, marked read once the page shows the thread. */
+	latestReplyId: number | null;
 	title: string;
 	site: string;
 	place: Setting["ui"];
@@ -119,6 +122,8 @@ export async function afterOf(u: { id: string; name: string }, scenarioId: strin
 	return {
 		scenarioId,
 		pieceId: row.pieceId,
+		exchangeId: row.exchangeId,
+		latestReplyId: (messages?.messages ?? []).reduce((m, x) => (x.role === "assistant" ? Math.max(m, x.id) : m), 0) || null,
 		title: s.title,
 		site: SITE_OF[s.ui],
 		place: s.ui,

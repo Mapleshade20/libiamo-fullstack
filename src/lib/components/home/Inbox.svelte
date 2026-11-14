@@ -5,8 +5,11 @@ import { tick } from "svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { ANNOUNCEMENTS, type Announcement, dateOf, local, markRead, REPLIES, type Reply, readIds } from "#lib/demo/announcements.ts";
-import { app, demoOpens, sandboxed, tx } from "#lib/demo/app.svelte.ts";
+import { ANNOUNCEMENTS, type Announcement, dateOf, local, markRead, readIds } from "#lib/demo/announcements.ts";
+import { app, sandboxed, tx } from "#lib/demo/app.svelte.ts";
+import { unreadReplies } from "#lib/exchange/exchange.remote.ts";
+import { type UnreadInboxItem, unreadTargetHref } from "#lib/exchange/unread.ts";
+import { goto } from "$app/navigation";
 import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
 
 /*
@@ -14,14 +17,28 @@ import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
  * replies. The stack keeps one card's room in the page; spread out (hover, or a first tap) or opened, it lies over what
  * is below rather than pushing it. An announcement grows in place into an island holding the whole notice;
  * acknowledged, it closes into a dot, is tossed into the mark beside the greeting, and the mark takes the catch.
+ * Replies are the server's unread messages by exchange; the stack asks again when the cast's next reply falls due.
  */
 let { mark }: { mark: () => HTMLElement | undefined } = $props();
 
-type Item = { key: string; ann?: Announcement; reply?: Reply };
+type Item = { key: string; ann?: Announcement; reply?: UnreadInboxItem };
+const unread = unreadReplies();
 const items = $derived<Item[]>([
 	...ANNOUNCEMENTS.filter((a) => !readIds().has(a.id)).map((a) => ({ key: `a${a.id}`, ann: a })),
-	...(sandboxed() ? [] : (REPLIES[app.lang] ?? [])).map((r) => ({ key: r.id, reply: r })),
+	...(sandboxed() ? [] : (unread.current?.items ?? [])).map((r) => ({ key: `r${r.exchangeId}`, reply: r })),
 ]);
+$effect(() => {
+	const due = unread.current?.nextDueAt;
+	if (!due) return;
+	const t = setTimeout(() => unread.refresh(), Math.max(2000, Date.parse(due) - Date.now() + 1000));
+	return () => clearTimeout(t);
+});
+/** "5 min", "3 hr", "2 days": how long ago the newest reply came, in the interface's language. */
+function ageOf(seconds: number | null) {
+	const s = Math.max(60, seconds ?? 60);
+	const [n, unit] = s < 3600 ? [s / 60, "minute"] : s < 86_400 ? [s / 3600, "hour"] : [s / 86_400, "day"];
+	return new Intl.NumberFormat(app.lang, { style: "unit", unit, unitDisplay: unit === "day" ? "long" : "short" }).format(Math.floor(n));
+}
 const touch = matchMedia("(pointer: coarse)").matches;
 let openAnn = $state<number | null>(null);
 let spread = $state(false);
@@ -152,19 +169,19 @@ const count = $derived(Math.max(1, items.length));
 					{@const r = it.reply}
 					<a
 						class="note"
-						href="/"
+						href={unreadTargetHref(r)}
 						{style}
 						onclick={(e) => {
 							e.preventDefault();
 							if (firstSpreads(e)) spread = true;
-							else demoOpens();
+							else goto(unreadTargetHref(r));
 						}}
 					>
 						<span class="ic"><MessageCircle class="size-5" aria-hidden="true" /></span>
 						<span class="copy">
-							<span class="meta"><span>{r.site}</span><span>{tx("ageAgo", { age: r.age })}</span></span>
+							<span class="meta"><span>{r.place}</span><span>{tx("ageAgo", { age: ageOf(r.latestAgeSeconds) })}</span></span>
 							<span class="t">{r.title}</span>
-							<span class="r">{tx("replyNew")}{r.count > 1 ? ` × ${r.count}` : ""}</span>
+							<span class="r">{tx("replyNew")}{r.unreadCount > 1 ? ` × ${r.unreadCount}` : ""}</span>
 						</span>
 					</a>
 				{/if}
