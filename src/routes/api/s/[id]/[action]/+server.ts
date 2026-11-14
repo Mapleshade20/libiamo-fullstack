@@ -1,7 +1,8 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
-import type { RevisionSession } from "#lib/server/revision/revision.ts";
+import { RevisionSession } from "#lib/server/revision/revision.ts";
 import { logSession, sessions } from "#lib/server/sessions.ts";
+import { dev } from "$app/env";
 
 // Each action is one step of the session page's flow; see src/session/live.ts.
 // biome-ignore lint/suspicious/noExplicitAny: request bodies are checked by the session's methods.
@@ -32,6 +33,11 @@ export async function POST({ params, request }) {
 	const held = sessions.get(params.id);
 	const s = held?.owner === u.id ? held.session : null;
 	if (!s) return Response.json({ error: "This session is gone (the server may have restarted). Start again." }, { status: 404 });
+	// Development only: the revision thrown away and loaded again from its snapshot (lab/replay.mjs --reload).
+	if (params.action === "reload" && dev) {
+		held!.session = RevisionSession.restore(JSON.parse(JSON.stringify(s.snapshot())), s.ai);
+		return Response.json({});
+	}
 	const fn = ACTIONS[params.action];
 	if (!fn) return Response.json({ error: "unknown action" }, { status: 404 });
 	const b = await request.json().catch(() => ({}));

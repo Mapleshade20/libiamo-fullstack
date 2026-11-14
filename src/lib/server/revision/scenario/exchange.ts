@@ -2,10 +2,10 @@
 // turns are the draft, one paragraph block per turn between separator lines; the others' messages stay beside it, in
 // order, as context (Q1: listing the learner's lines first and the replies after them made the models use replies the
 // learner had not seen yet).
-import { type Caller, chat } from "#lib/server/llm/caller.ts";
+import { type Caller, type CallResult, chat } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES } from "#lib/server/revision/draft.ts";
 import { DRAFT_CONVENTIONS, draftBlock, ROUTING, VOICE } from "#lib/server/revision/pass1/context.ts";
-import { label, MARK_RULES, merge, section } from "#lib/server/revision/pass1/rewrite.ts";
+import { label, MARK_RULES, merge, type Rewrite, section } from "#lib/server/revision/pass1/rewrite.ts";
 import { align } from "#lib/text/diff.ts";
 
 export type Msg = { id: string; author: string; text: string; replyTo?: string | null; learner?: boolean };
@@ -85,21 +85,23 @@ export function replyTo(c: Case, n: number): Msg | undefined {
  * Pass 1 over the exchange: each turn written natively as it would have been said then, and the draft fixed against it.
  * `rewrite` resolves first (pass 2's analysis compares with its native version while the labels are written).
  */
-export function pass1Exchange(c: Case, ai: Caller, d: Draft = draftOf(c)) {
+export function pass1Exchange(c: Case, ai: Caller, d: Draft = draftOf(c), given?: Rewrite) {
 	const block = `${draftBlock(d)}\n\nThe draft is the writer's turns in a conversation that has already happened, in order, separated by lines "${SEP}". Here is the whole exchange, so you know what each turn answers and what the others said in between (their messages are context, not part of the draft):\n<<<\n${exchange(c)}\n>>>`;
 	const system = `You are a ${LANG_NAMES[d.target]} writing tutor going over what a learner wrote in an online conversation, so they can say it better next time.\n\n${DRAFT_CONVENTIONS(d)}\n\n${ROUTING}\n\n${VOICE(d)}`;
 	const user = `${block}\n\nWork in two steps.\n\nStep 1. Under the heading "### NATIVE", write each of the writer's turns as a fluent ${LANG_NAMES[d.target]} speaker of this community would have written it at that moment, saying what the writer wanted to say there, in their voice and at their length, knowing only what had been said up to that turn. Keep the "${SEP}" lines between turns.\n\nStep 2. Under the heading "### PASS 1", write out the draft after pass 1. Use your native version to notice everything in the draft that is not how it would naturally be said, then fix every pass-1 problem in place. ${MARK_RULES} Keep the "${SEP}" lines exactly.\n\nReply with the two sections only.`;
-	const rewrite = chat(
-		[
-			{ role: "system", content: system },
-			{ role: "user", content: user },
-		],
-		{ ai, sample: 0, tag: "q1/b/rewrite" },
-	).then((res) => ({ res, native: section(res.text, "NATIVE"), pass1: section(res.text, "PASS 1") }));
+	const rewrite: Promise<{ res: CallResult | null; native: string; pass1: string }> = given
+		? Promise.resolve({ res: null, native: given.native ?? "", pass1: given.pass1 })
+		: chat(
+				[
+					{ role: "system", content: system },
+					{ role: "user", content: user },
+				],
+				{ ai, sample: 0, tag: "q1/b/rewrite" },
+			).then((res) => ({ res, native: section(res.text, "NATIVE"), pass1: section(res.text, "PASS 1") }));
 	const done = rewrite.then(async ({ res, native, pass1 }) => {
 		const { hunks, opens } = align(d.text, pass1, d.target);
 		const labels = await label({ ...d, brief: exchange(c) }, hunks, opens, ai, 0, "q1/b/label");
-		return { d, native, pass1, findings: merge(hunks, opens, labels.value), calls: [res, ...labels.calls] };
+		return { d, native, pass1, findings: merge(hunks, opens, labels.value), calls: [...(res ? [res] : []), ...labels.calls] };
 	});
 	rewrite.catch(() => {});
 	done.catch(() => {});

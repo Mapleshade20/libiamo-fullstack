@@ -15,7 +15,8 @@ import {
 } from "#lib/server/revision/calls.ts";
 import { type Draft, LANG_NAMES, type Lang, replyIn } from "#lib/server/revision/draft.ts";
 import { applyEdits, scopeOf } from "#lib/server/revision/edits.ts";
-import type { Finding } from "#lib/server/revision/pass1/rewrite.ts";
+import { Memo } from "#lib/server/revision/memo.ts";
+import type { Finding, Rewrite } from "#lib/server/revision/pass1/rewrite.ts";
 import { type Analysis, readBack, sentences, spotRange } from "#lib/server/revision/pass2/analyze.ts";
 import { feedback, grade, placeAt } from "#lib/server/revision/pass2/grade.ts";
 import { markKeys } from "#lib/server/revision/pass2/keys.ts";
@@ -172,10 +173,27 @@ export type RevisionInput = {
 	feedback: "native" | "target";
 };
 
+type Ending = { issues: Awaited<ReturnType<typeof contentCheck>>; closing: string };
+/** Detection's settled results: pass 1's rewrite, its findings, the analysis (and how a scenario's turns landed), the
+ *  outline, the brief on an import, the reader's read-back of the pass-1 text (for the answers it was made from). */
+type Found = {
+	rewrite?: Rewrite;
+	pass1?: Finding[];
+	pass2?: { analysis: Analysis; landed?: ExchangeAnalysis["turns"] };
+	outline?: Outline;
+	brief?: string | null;
+	readBack?: { args: string; text: string };
+};
+const noop = () => {};
+
 export class RevisionSession {
 	d!: Draft;
 	scene!: Awaited<ReturnType<typeof inferScene>>;
-	private det?: ReturnType<typeof detectSplit>;
+	private det?: { pass1: Promise<{ findings: Finding[] }>; pass2: Promise<{ analysis: Analysis; base: Base }>; rewrite: Promise<Rewrite> };
+	/** What the model calls behind detection have settled (kept for the snapshot): see `start`. */
+	private found: Found = {};
+	/** Called whenever something worth keeping settles in the background, so the snapshot can be written again. */
+	onChange: () => void = noop;
 	private p1: (Finding & { after: string; id: string })[] = [];
 	/** The pass-1 changes the writer took (not those they kept their own words for), and the answers they came from. */
 	private applied: (Finding & { after: string; id: string })[] = [];
@@ -195,8 +213,8 @@ export class RevisionSession {
 	private marks: Marks = { choices: [], hole: null };
 	private chips = { n: 0 };
 	private revised: { from: number; to: number }[] = [];
-	private materials = new Map<string, Promise<Material>>();
-	private ends = new Map<string, Promise<{ issues: Awaited<ReturnType<typeof contentCheck>>; closing: string }>>();
+	private materials = new Memo<Material>(() => this.onChange());
+	private ends = new Memo<Ending>(() => this.onChange());
 	learned: { construct: string; self: boolean }[] = [];
 	private decided: string[] = [];
 	private detN = 0;
@@ -216,6 +234,10 @@ export class RevisionSession {
 		if (input.exchange) this.ex = { id: "scenario", notes: "", ...input.exchange };
 		const source = input.source?.trim() ? (parseSource(input.source) ?? plainSource(input.source)) : null;
 		if (source) this.source = withoutDraft(source, input.text);
+	}
+	private remember(x: Found) {
+		Object.assign(this.found, x);
+		this.onChange();
 	}
 	/** The import itself, for the calls that answer the writer: what they say about their source must be checkable. */
 	private get imported() {
@@ -246,6 +268,7 @@ export class RevisionSession {
 		if (this.source && !this.brief) {
 			const src = renderSource(this.source);
 			this.brief = briefFor(this.input.text, this.input.background, src, this.ai.for("brief")).catch(() => undefined);
+			this.brief.then((brief) => this.remember({ brief: brief ?? null }));
 		}
 		const imported = this.source ? `\nImported as context: ${this.source.label}\n${sourceGist(this.source)}` : "";
 		this.scene = await inferScene(
@@ -273,6 +296,7 @@ export class RevisionSession {
 		// Detection starts as soon as the scene is known, while the writer reads the scene card; a corrected scene starts it again.
 		this.det = undefined;
 		this.analysis = undefined;
+		this.found = "brief" in this.found ? { brief: this.found.brief } : {};
 		const n = ++this.detN;
 		this.ai.lanes?.discard((p) => p.startsWith("detect #") && p !== `detect #${n}`);
 		this.start(this.ai.for(`detect #${n}`));
@@ -345,83 +369,86 @@ export class RevisionSession {
 		return { ...scene, ui: feedback };
 	}
 
-	/** Pass 1 and the pass-2 analysis start together, once the brief on any import is ready. */
+	/**
+	 * Pass 1 and the pass-2 analysis start together, once the brief on any import is ready. What has already settled
+	 * (after a reload) is not asked for again: a known rewrite feeds the passes that read it.
+	 */
 	start(ai: Caller = this.ai.for("pass1")) {
 		if (this.det) return;
-		if (this.ex) return this.startScenario(ai);
-		if (this.input.translation) {
+		const n = this.detN;
+		const known = this.found;
+		const tierOf = (findings: Finding[]) =>
+			findings.filter((f) => !f.optional || (f.pass === 1 && f.after !== undefined)).map((f) => (f.optional ? { ...f, tier: "better" as const } : f));
+		let det: { pass1: Promise<{ findings: Finding[] }>; pass2: Promise<{ analysis: Analysis; base: Base }>; rewrite: Promise<Rewrite> };
+		if (known.rewrite && known.pass1 && known.pass2) {
+			const base = analysisBase(this.d, known.rewrite.pass1);
+			det = {
+				pass1: Promise.resolve({ findings: known.pass1 }),
+				pass2: Promise.resolve({ analysis: known.pass2.analysis, base }),
+				rewrite: Promise.resolve(known.rewrite),
+			};
+			this.landed = known.pass2.landed;
+			if (!this.ex && !this.input.translation) {
+				const d = this.d;
+				this.outline = known.outline
+					? Promise.resolve(known.outline)
+					: outline({ ...d, text: base.text }, sentences(base.text, d.target), ai.for("outline")).then((r) => r.value);
+				this.outline.then((o) => this.detN === n && this.remember({ outline: o }), noop);
+			}
+		} else if (this.ex) {
+			const c = this.ex;
+			const p1 = pass1Exchange(c, ai, this.d, known.rewrite);
+			det = {
+				pass1: p1.done.then((r) => ({ findings: tierOf(r.findings) })),
+				pass2: p1.rewrite.then(async (r) => {
+					const base = analysisBase(this.d, r.pass1);
+					const a = await analyzeExchange(c, this.d.text, r.native, ai.for("analysis"), true, this.d, "draft", base.left);
+					if (this.detN === n) this.landed = a.analysis.turns;
+					const rb = await rebase(this.d, base, a.analysis as Analysis, ai.for("analysis"));
+					return { analysis: rb.analysis, base };
+				}),
+				rewrite: p1.rewrite.then(({ pass1, native }) => ({ pass1, native })),
+			};
+		} else if (this.input.translation) {
 			const t = this.input.translation;
-			const p1 = pass1Translation(this.d, t, ai);
-			const pass1 = p1.done.then((r) => ({
-				findings: r.findings
-					.filter((f) => !f.optional || (f.pass === 1 && f.after !== undefined))
-					.map((f) => (f.optional ? { ...f, tier: "better" as const } : f)),
-			}));
-			// The analysis reads the draft, told what pass 1 left for it, then is rebased on the pass-1 text (base.ts).
-			const pass2 = p1.rewrite.then(async (rw) => {
-				const base = analysisBase(this.d, rw.pass1);
-				const a = await analyzeTranslation(this.d, t, ai.for("analysis"), base.left);
-				return { analysis: (await rebase(this.d, base, a, ai.for("analysis"))).analysis, base };
+			const p1 = pass1Translation(this.d, t, ai, known.rewrite);
+			det = {
+				pass1: p1.done.then((r) => ({ findings: tierOf(r.findings) })),
+				// The analysis reads the draft, told what pass 1 left for it, then is rebased on the pass-1 text (base.ts).
+				pass2: p1.rewrite.then(async (rw) => {
+					const base = analysisBase(this.d, rw.pass1);
+					const a = await analyzeTranslation(this.d, t, ai.for("analysis"), base.left);
+					return { analysis: (await rebase(this.d, base, a, ai.for("analysis"))).analysis, base };
+				}),
+				rewrite: p1.rewrite.then(({ pass1 }) => ({ pass1 })),
+			};
+		} else {
+			const d = this.d;
+			const ready = (this.brief ?? Promise.resolve(undefined)).then((brief) => {
+				if (brief) Object.assign(d, { brief, replyTo: replyIn(brief) });
+				// Pass-2 spots go past a judge (judge.ts) before anyone sees them.
+				const x = detectSplit(d, ai, 0, { judge: true }, known.rewrite);
+				// The map's outline is its own call over the same text pass 2 reads, made while the writer is in pass 1.
+				this.outline = known.outline
+					? Promise.resolve(known.outline)
+					: x.base.then((b) => outline({ ...d, text: b.text }, sentences(b.text, d.target), ai.for("outline"))).then((r) => r.value);
+				this.outline.then((o) => this.detN === n && this.remember({ outline: o }), noop);
+				return x;
 			});
-			pass1.catch(() => {});
-			pass2.catch(() => {});
-			this.det = { pass1, pass2 } as unknown as ReturnType<typeof detectSplit>;
-			pass2.then(
-				(p) => {
-					this.analysis = p.analysis;
-					this.base = p.base;
-				},
-				() => {},
-			);
-			return;
+			det = { pass1: ready.then((x) => x.pass1), pass2: ready.then((x) => x.pass2), rewrite: ready.then((x) => x.rewrite) };
 		}
-		const d = this.d;
-		const ready = (this.brief ?? Promise.resolve(undefined)).then((brief) => {
-			if (brief) Object.assign(d, { brief, replyTo: replyIn(brief) });
-			// Pass-2 spots go past a judge (judge.ts) before anyone sees them.
-			const det = detectSplit(d, ai, 0, { judge: true });
-			// The map's outline is its own call over the same text pass 2 reads, made while the writer is in pass 1.
-			this.outline = det.base.then((b) => outline({ ...d, text: b.text }, sentences(b.text, d.target), ai.for("outline"))).then((r) => r.value);
-			this.outline.catch(() => {});
-			return det;
-		});
-		this.det = { pass1: ready.then((x) => x.pass1), pass2: ready.then((x) => x.pass2), base: ready.then((x) => x.base) };
-		this.det.pass1.catch(() => {});
-		this.det.pass2.then(
-			(p) => {
-				this.analysis = p.analysis;
-				this.base = p.base;
-			},
-			() => {},
-		);
-	}
-
-	/** A scenario's exchange: pass 1 per turn as said at that moment, then the analysis that first judges how each turn landed (Q1, Q2). */
-	private startScenario(ai: Caller) {
-		const c = this.ex as Case;
-		const p1 = pass1Exchange(c, ai, this.d);
-		const pass1 = p1.done.then((r) => ({
-			findings: r.findings
-				.filter((f) => !f.optional || (f.pass === 1 && f.after !== undefined))
-				.map((f) => (f.optional ? { ...f, tier: "better" as const } : f)),
-		}));
-		const pass2 = p1.rewrite.then(async (r) => {
-			const base = analysisBase(this.d, r.pass1);
-			const a = await analyzeExchange(c, this.d.text, r.native, ai.for("analysis"), true, this.d, "draft", base.left);
-			this.landed = a.analysis.turns;
-			const rb = await rebase(this.d, base, a.analysis as Analysis, ai.for("analysis"));
-			return { analysis: rb.analysis, base };
-		});
-		pass1.catch(() => {});
-		pass2.catch(() => {});
-		this.det = { pass1, pass2 } as unknown as ReturnType<typeof detectSplit>;
-		pass2.then(
-			(p) => {
-				this.analysis = p.analysis;
-				this.base = p.base;
-			},
-			() => {},
-		);
+		if (known.pass1) det.pass1 = Promise.resolve({ findings: known.pass1 });
+		this.det = det;
+		// Every one of them is watched here, so none rejects unobserved; only the current detection's results are kept.
+		const current = () => this.det === det;
+		det.rewrite.then((rewrite) => current() && this.remember({ rewrite }), noop);
+		det.pass1.then((p) => current() && this.remember({ pass1: p.findings }), noop);
+		det.pass2.then((p) => {
+			if (!current()) return;
+			this.analysis = p.analysis;
+			this.base = p.base;
+			this.remember({ pass2: { analysis: p.analysis, landed: this.landed } });
+		}, noop);
 	}
 
 	/** How each turn landed, with the reply that shows it, for the page's "how it went". */
@@ -544,20 +571,9 @@ export class RevisionSession {
 		const args = JSON.stringify([own, [...keep].sort()]);
 		if (args === this.p1args && this.rb) return { text: this.pass1Text, doc: toDoc(this.pass1Text, [], this.marks, this.chips) };
 		this.p1args = args;
-		// Changes the writer turned down (they know better, e.g. a name from canon) leave their words as they were.
-		this.applied = this.p1.filter((f) => !keep.includes(f.id));
-		const edits = this.applied.map((f) => ({ from: f.from, to: f.to, after: own[f.id]?.trim() || f.after }));
-		const r = applyEdits(this.d.text, edits);
-		this.pass1Text = r.text;
-		this.map = r.map;
-		this.unmap = r.inv;
-		this.text = r.text;
-		// A scenario has no read-back: how the turns landed is already known.
-		this.rb =
-			this.ex || this.input.translation
-				? Promise.resolve("")
-				: readBack(this.d, this.pass1Text, this.ai.for("read-back"), 0).then((c) => c.text.trim());
-		this.rb.catch(() => {});
+		this.applyPass1(args);
+		this.text = this.pass1Text;
+		this.askReadBack(args);
 		const det = this.det;
 		if (det && !this.ex && !this.input.translation) {
 			det.pass2
@@ -569,6 +585,28 @@ export class RevisionSession {
 				.catch(() => {});
 		}
 		return { text: this.pass1Text, doc: toDoc(this.pass1Text, [], this.marks, this.chips) };
+	}
+	/** The pass-1 text from the writer's answers (`args`, as pass1Done keys them), and the ways to and from the draft. */
+	private applyPass1(args: string) {
+		const [own, keep] = JSON.parse(args) as [Record<string, string>, string[]];
+		// Changes the writer turned down (they know better, e.g. a name from canon) leave their words as they were.
+		this.applied = this.p1.filter((f) => !keep.includes(f.id));
+		const edits = this.applied.map((f) => ({ from: f.from, to: f.to, after: own[f.id]?.trim() || f.after }));
+		const r = applyEdits(this.d.text, edits);
+		this.pass1Text = r.text;
+		this.map = r.map;
+		this.unmap = r.inv;
+	}
+	/** The reader's first reply to the pass-1 text. A scenario has none: how the turns landed is already known. */
+	private askReadBack(args: string) {
+		const known = this.found.readBack;
+		this.rb =
+			this.ex || this.input.translation
+				? Promise.resolve("")
+				: known?.args === args
+					? Promise.resolve(known.text)
+					: readBack(this.d, this.pass1Text, this.ai.for("read-back"), 0).then((c) => c.text.trim());
+		this.rb.then((text) => this.p1args === args && !this.ex && !this.input.translation && this.remember({ readBack: { args, text } }), noop);
 	}
 
 	/** The reader's read-back, and the plan as it stands before the learner says whether it was right. */
@@ -977,7 +1015,7 @@ export class RevisionSession {
 	}
 
 	/** What each hint piece of a stop's current material means, with an unrelated example; asked once per set of pieces. */
-	private glosses = new Map<string, Promise<Awaited<ReturnType<typeof pieceNotes>>>>();
+	private glosses = new Memo<Awaited<ReturnType<typeof pieceNotes>>>(() => this.onChange());
 	async pieces(id: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
 		const pieces = stop.m?.pieces ?? [];
@@ -999,7 +1037,7 @@ export class RevisionSession {
 	}
 
 	/** The two hints for a stop's current material, from the learner's last failed try when there is one; asked once each. */
-	private hints = new Map<string, Promise<{ plan: string; example: string }>>();
+	private hints = new Memo<{ plan: string; example: string }>(() => this.onChange());
 	async hint(id: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
 		const m = stop.m!;
@@ -1358,7 +1396,106 @@ export class RevisionSession {
 		this.ai.lanes?.discard((x) => x.startsWith("end · ") && x !== endPurpose(this.text));
 		return { issues, closing, learned: this.learned, text: this.text };
 	}
+
+	/* ---------- The snapshot ---------- */
+
+	/**
+	 * Everything the revision holds, as a value that can be stored: every model result it has, and what the learner did.
+	 * What follows from those (the ways between the draft and the pass-1 text, the base pass 2 read) is worked out again
+	 * on loading; a call still running is not in it and is asked for again if it is needed.
+	 */
+	snapshot(): RevisionState {
+		const stop = (x: Stop): StopState => ({ ...x, seen: [...x.seen], graded: [...x.graded] });
+		return {
+			v: SNAPSHOT_VERSION,
+			input: this.input,
+			d: this.d,
+			scene: this.scene,
+			detN: this.detN,
+			found: this.found,
+			p1: this.p1,
+			defers: this.defers,
+			p1args: this.p1args,
+			text: this.text,
+			marks: this.marks,
+			chips: this.chips.n,
+			revised: this.revised,
+			learned: this.learned,
+			decided: this.decided,
+			stops: this.stops.map(stop),
+			initial: this.initial.map(stop),
+			materials: this.materials.entries(),
+			ends: this.ends.entries(),
+			glosses: this.glosses.entries(),
+			hints: this.hints.entries(),
+		};
+	}
+
+	static restore(state: RevisionState, ai: Caller): RevisionSession {
+		const s = new RevisionSession(state.input, ai);
+		const stop = (x: StopState): Stop => ({ ...x, seen: new Set(x.seen), graded: new Map(x.graded) });
+		s.d = state.d as Draft;
+		s.scene = state.scene as RevisionSession["scene"];
+		s.detN = state.detN;
+		s.found = state.found;
+		s.p1 = state.p1;
+		s.defers = state.defers;
+		s.marks = state.marks;
+		s.chips.n = state.chips;
+		s.revised = state.revised;
+		s.learned = state.learned;
+		s.decided = state.decided;
+		if ("brief" in state.found) s.brief = Promise.resolve(state.found.brief ?? undefined);
+		const { rewrite, pass2 } = state.found;
+		if (rewrite && pass2 && state.d) {
+			s.analysis = pass2.analysis;
+			s.base = analysisBase(state.d, rewrite.pass1);
+			s.landed = pass2.landed;
+		}
+		// Detection goes on from what had settled (or starts again, if nothing had).
+		if (state.d) s.start(ai.for(`detect #${state.detN || 1}`));
+		if (state.p1args) {
+			s.p1args = state.p1args;
+			s.applyPass1(state.p1args);
+			s.askReadBack(state.p1args);
+		}
+		s.text = state.text;
+		s.stops = state.stops.map(stop);
+		s.initial = state.initial.map(stop);
+		s.materials.load(state.materials);
+		s.ends.load(state.ends);
+		s.glosses.load(state.glosses);
+		s.hints.load(state.hints);
+		return s;
+	}
 }
+
+/** A snapshot's shape changes with this number; one of another version is not loaded (the piece starts its revision again). */
+export const SNAPSHOT_VERSION = 1;
+type StopState = Omit<Stop, "seen" | "graded"> & { seen: number[]; graded: [string, GradeOut][] };
+export type RevisionState = {
+	v: number;
+	input: RevisionInput;
+	d?: Draft;
+	scene?: unknown;
+	detN: number;
+	found: Found;
+	p1: (Finding & { after: string; id: string })[];
+	defers: (Finding & { id: string })[];
+	p1args?: string;
+	text: string;
+	marks: Marks;
+	chips: number;
+	revised: { from: number; to: number }[];
+	learned: { construct: string; self: boolean }[];
+	decided: string[];
+	stops: StopState[];
+	initial: StopState[];
+	materials: [string, Material][];
+	ends: [string, Ending][];
+	glosses: [string, Awaited<ReturnType<typeof pieceNotes>>][];
+	hints: [string, { plan: string; example: string }][];
+};
 
 /**
  * The open stops the post can mark. Marks cannot nest, and a stop inside a larger one comes first, so the larger one

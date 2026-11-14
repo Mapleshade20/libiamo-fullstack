@@ -2,10 +2,10 @@
 // pass 2 compares with; the source is what the writer means, so pass 2 asks nothing about meaning. Names and terms
 // from the scenario's glossary are given: never a spot.
 
-import { type Caller, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
+import { type Caller, type CallResult, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES } from "#lib/server/revision/draft.ts";
 import { DRAFT_CONVENTIONS, draftBlock, ROUTING, VOICE } from "#lib/server/revision/pass1/context.ts";
-import { label, MARK_RULES, merge } from "#lib/server/revision/pass1/rewrite.ts";
+import { label, MARK_RULES, merge, type Rewrite } from "#lib/server/revision/pass1/rewrite.ts";
 import { AnalysisSchema, leftLine, numbered, SCAN_RULE, SHAPE_V6, sentences, TASK_V6 } from "#lib/server/revision/pass2/analyze.ts";
 import type { Gloss } from "#lib/server/translation/source.ts";
 import { align } from "#lib/text/diff.ts";
@@ -28,17 +28,19 @@ const leftNative = (d: Draft) =>
 const authentic = (t: Translation) =>
 	`How a fluent member of this community actually wrote the same thing (the authentic text the source was made from; a different, equally good wording is fine, and its extra or missing details are not the writer's errors):\n<<<\n${t.original}\n>>>`;
 
-export function pass1Translation(d: Draft, t: Translation, ai: Caller) {
+export function pass1Translation(d: Draft, t: Translation, ai: Caller, known?: Rewrite) {
 	const system = `You are a ${LANG_NAMES[d.target]} writing tutor making the first pass over a learner's translation.\n\n${DRAFT_CONVENTIONS(d)}\n\n${ROUTING}\n\n${VOICE(d)}`;
 	const user = `${draftBlock(d)}\n\n${intentOf(d, t)}\n\n${given(t)}\n\n${leftNative(d)}\n\n${authentic(t)}\n\nUnder the heading "### PASS 1", write out the draft after pass 1. Use the authentic text to notice everything in the draft that is not how it would naturally be said, then fix every pass-1 problem in place. A part that says something other than the source is pass 2 (meaning), not a fix. ${MARK_RULES}\n\nReply with the section only.`;
 	// The rewrite resolves first: pass 2 reads it (pipeline/base.ts) while its changes are being labelled.
-	const rewrite = chat(
-		[
-			{ role: "system", content: system },
-			{ role: "user", content: user },
-		],
-		{ ai, sample: 0, tag: "translate/pass1" },
-	).then((r1) => ({ r1, pass1: r1.text.split(/###\s*PASS 1\s*\n/)[1]?.trim() ?? r1.text.trim() }));
+	const rewrite: Promise<{ r1: CallResult | null; pass1: string }> = known
+		? Promise.resolve({ r1: null, pass1: known.pass1 })
+		: chat(
+				[
+					{ role: "system", content: system },
+					{ role: "user", content: user },
+				],
+				{ ai, sample: 0, tag: "translate/pass1" },
+			).then((r1) => ({ r1, pass1: r1.text.split(/###\s*PASS 1\s*\n/)[1]?.trim() ?? r1.text.trim() }));
 	const done = rewrite.then(async ({ r1, pass1 }) => {
 		const { hunks, opens } = align(d.text, pass1, d.target);
 		const labels = await label(
@@ -49,7 +51,7 @@ export function pass1Translation(d: Draft, t: Translation, ai: Caller) {
 			0,
 			"translate/label",
 		);
-		return { findings: merge(hunks, opens, labels.value), calls: [r1, ...labels.calls] };
+		return { findings: merge(hunks, opens, labels.value), calls: [...(r1 ? [r1] : []), ...labels.calls] };
 	});
 	rewrite.catch(() => {});
 	done.catch(() => {});

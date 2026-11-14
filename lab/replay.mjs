@@ -5,12 +5,15 @@
 //   LLM_CACHE_DIR=lab/baseline/cache LLM_CACHE_ONLY=1 ORIGIN=http://127.0.0.1:5180 pnpm dev --port 5180
 //   COOKIE="better-auth.session_token=..." node lab/replay.mjs http://127.0.0.1:5180 lab/baseline/sessions/*.jsonl
 //
-// The endpoints need a signed-in learner: COOKIE is a session cookie from the dev server.
+// The endpoints need a signed-in learner: COOKIE is a session cookie from the dev server. With --reload, the server throws
+// the revision away before every step and loads it from its snapshot: the responses must not change.
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-const [origin, ...files] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const reload = args.includes("--reload");
+const [origin, ...files] = args.filter((a) => a !== "--reload");
 if (!origin || !files.length) {
 	console.error("usage: node lab/replay.mjs <origin> <session.jsonl>...");
 	process.exit(2);
@@ -61,6 +64,7 @@ for (const file of files) {
 		if (s.action === "create") continue;
 		// A step that failed when it was recorded says nothing about now.
 		if (s.error) continue;
+		if (reload) await post(`/api/s/${made.json.id}/reload`, {});
 		const now = await post(`/api/s/${made.json.id}/${s.action}`, s.body);
 		const diff = now.status !== 200 ? `status ${now.status} ${JSON.stringify(now.json)?.slice(0, 200)}` : firstDiff(normal(s.out), normal(now.json));
 		if (diff) {
