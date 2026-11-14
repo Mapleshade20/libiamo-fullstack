@@ -1,0 +1,29 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "system",
+			"content": "You read Spanish only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (The school's admissions contact, Sra. Morales), reading what was written to you; otherwise you are a regular on Email to a Spanish language school."
+		},
+		{
+			"role": "user",
+			"content": "Estimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo a mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y tengo muchas ganas de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envía información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Está el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puede decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a pasar muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n\nYou just read this post. Write the first thing you would write back (or reply in the thread): one or two short sentences in Spanish, in your own voice, that says back what you understood them to be asking or saying, so they can tell whether you got it. If something was unclear to you, say how you read it. Reply with the reply only."
+		}
+	],
+	"result": {
+		"text": "Querido Daniel, entendí que quiere venir a Granada en septiembre para mejorar su español, para hablar con la familia de su novia, y que pide precios, si el piso está cerca de la escuela y tranquilo, si puede traer su bicicleta, y cuándo empiezan los cursos, con respuesta antes de fin de mes. Lo que no me quedó del todo claro es si prefiere una familia o un piso compartido, así que, por favor, dígame cuál prefiere.",
+		"usage": {
+			"input": 651,
+			"output": 165,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 1307,
+		"cached": false,
+		"costUsd": 0.0001476
+	},
+	"finish": "stop"
+}

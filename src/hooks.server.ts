@@ -10,6 +10,9 @@ process.on("sveltekit:shutdown", async (reason) => {
 	console.log(`shutdown: ${reason}`);
 	await sql.end({ timeout: 5 });
 });
+/* A failed promise nobody waited for (a model call made ahead of need) is a bug to log, never a reason to end the one
+   process every learner's revision lives in. */
+process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e));
 
 const handleAuth: Handle = async ({ event, resolve }) => {
 	const found = await auth.api.getSession({ headers: event.request.headers });

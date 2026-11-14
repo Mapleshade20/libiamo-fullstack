@@ -1,0 +1,468 @@
+[
+	{
+		"name": "own-reddit-zh",
+		"body": {
+			"text": "I’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.",
+			"background": "r/WarriorCats 的提问帖。我刚开始读 Darktail’s Judgment，想问 Darkpaw 在月亮石那一段，还想说说我的看法。",
+			"source": "",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on"
+		},
+		"said": "不完全是，我主要想问星族为什么不回应他，阴天只是我猜的原因。"
+	},
+	{
+		"name": "own-reddit-zh-target",
+		"body": {
+			"text": "I’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.",
+			"background": "r/WarriorCats 的提问帖。我刚开始读 Darktail’s Judgment，想问 Darkpaw 在月亮石那一段，还想说说我的看法。",
+			"source": "",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "target",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on"
+		},
+		"correction": "我想在 r/WarriorCats 发一个提问帖，问问大家的看法。"
+	},
+	{
+		"name": "own-ao3-zh",
+		"body": {
+			"text": "Wow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates for his own ambition and hunger for power, while also manipulating himself into ignoring and distrusting every act of kindness around him. It makes so much sense that he would come to see force and fear as the only real way to earn respect, and insist that what he did was the sole right path.\n\nThe effort you put into Yellowfang and Brokentail’s interactions in his final days adds so much depth to Yellowfang’s complicated relationship with her son. Especially, the canon-divergent ending struck me as more emotionally powerful than canon. “This is more than I deserve from you,” Apart from coming to terms with his fate out of, what you said, \"captain's integrity\", he's also somehow accepting her as his mother and feeling gratitude for her final care, and was there even a bit regret of what he had done to her?\n\nGreat work! Kudo attached~",
+			"background": "",
+			"source": "",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on"
+		}
+	},
+	{
+		"name": "own-mail-es",
+		"body": {
+			"text": "Estimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy excitado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envía información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia puede cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a tener un buen tiempo en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke",
+			"background": "",
+			"source": "",
+			"detail": "needed",
+			"learner": "en",
+			"feedback": "native",
+			"lang": "es",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on"
+		},
+		"said": "Mostly yes, but the main thing I want is the prices and when the September course starts, so I can book my flight."
+	},
+	{
+		"name": "own-mail-es-target",
+		"body": {
+			"text": "Estimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y estoy muy excitado de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envía información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia puede cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a tener un buen tiempo en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke",
+			"background": "",
+			"source": "",
+			"detail": "needed",
+			"learner": "en",
+			"feedback": "target",
+			"lang": "es",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on"
+		}
+	},
+	{
+		"name": "ex-mail",
+		"body": {
+			"text": "Hi David,\n\nThe heating in my flat is broken since Monday, it is very cold in the night. You must send someone to repair it this week. When it can be fixed?\n\nBest,\nMaple\n\n* * *\n\nHi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to know roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple",
+			"background": "An email to the landlord about broken heating. Firm but polite; ask for a date.",
+			"source": "Email from Greenway Lettings. Subject: Welcome to your new flat\n\nHi,\n\nWelcome! If anything needs fixing, just email this address and we'll get back to you within two working days.\n\nKind regards,\nDavid, Greenway Lettings\n\nThe conversation:\nmaple: Hi David,\n\nThe heating in my flat is broken since Monday, it is very cold in the night. You must send someone to repair it this week. When it can be fixed?\n\nBest,\nMaple\nDavid: Hi Maple,\n\nSorry to hear that. Please bear in mind our engineers are fully booked, so I can't promise anything for this week. I'll let you know when I hear back.\n\nDavid\nmaple: Hi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to know roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple\nDavid: Thanks Maple, that helps. An engineer can come Thursday morning, 9–12. I'll drop off a heater tomorrow in the meantime.",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "email-landlord",
+				"title": "Tell your landlord the heating is broken",
+				"site": "Email"
+			},
+			"exchange": {
+				"place": "mail",
+				"lang": "en",
+				"scene": {
+					"platform": "Email",
+					"where": "email: Welcome to your new flat",
+					"you": "A tenant whose heating stopped working",
+					"goals": ["Say what's broken and since when", "Ask for a date it'll be fixed"],
+					"cast": [
+						{
+							"name": "David",
+							"who": "Greenway Lettings"
+						}
+					]
+				},
+				"before": [
+					{
+						"id": "b0",
+						"author": "Greenway Lettings",
+						"text": "Subject: Welcome to your new flat\n\nHi,\n\nWelcome! If anything needs fixing, just email this address and we'll get back to you within two working days.\n\nKind regards,\nDavid, Greenway Lettings"
+					}
+				],
+				"transcript": [
+					{
+						"id": "t1",
+						"author": "Tester",
+						"text": "Hi David,\n\nThe heating in my flat is broken since Monday, it is very cold in the night. You must send someone to repair it this week. When it can be fixed?\n\nBest,\nMaple",
+						"learner": true
+					},
+					{
+						"id": "t2",
+						"author": "David",
+						"text": "Hi Maple,\n\nSorry to hear that. Please bear in mind our engineers are fully booked, so I can't promise anything for this week. I'll let you know when I hear back.\n\nDavid"
+					},
+					{
+						"id": "t3",
+						"author": "Tester",
+						"text": "Hi David,\n\nSorry, I didn't mean to be rude. I understand the engineers are busy. Is it possible to know roughly which day they can come? I am at home every morning, so any morning is ok for me.\n\nThanks,\nMaple",
+						"learner": true
+					},
+					{
+						"id": "t4",
+						"author": "David",
+						"text": "Thanks Maple, that helps. An engineer can come Thursday morning, 9–12. I'll drop off a heater tomorrow in the meantime."
+					}
+				]
+			}
+		}
+	},
+	{
+		"name": "ex-discord",
+		"body": {
+			"text": "i'm with theo actually\nthe letters in ch 9 is not just setup, she already forgive him there, she just don't say it\n\n* * *\n\nnot all! the one with his drawing she keep it. so the ending is only her saying it loud",
+			"background": "A message in a book club's Discord channel, where people are arguing about whether the ending was earned. Casual; short messages.",
+			"source": "#book-club\njuniper: ok I finished it. the ending felt rushed?? she forgives him in like two pages\ntheo: nah it was set up the whole time, the letters in ch 9\njuniper: set up ≠ earned imo\nmira: anyone who hasn't weighed in yet? 👀\n\nThe conversation:\nmaple: i'm with theo actually\nthe letters in ch 9 is not just setup, she already forgive him there, she just don't say it\njuniper: wait which letters? she burns all of them in ch 9\nmaple: not all! the one with his drawing she keep it. so the ending is only her saying it loud\njuniper: ok that's... a good point. the letter where she keeps his drawing\nmira: putting this in the pinned takes 📌",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "discord-ending",
+				"title": "Join the talk in #book-club",
+				"site": "Discord"
+			},
+			"exchange": {
+				"place": "discord",
+				"lang": "en",
+				"scene": {
+					"platform": "Discord",
+					"where": "#book-club",
+					"you": "A book-club regular who liked the ending",
+					"goals": ["Take a side on the ending", "Back it up with something from the book"],
+					"cast": [
+						{
+							"name": "juniper",
+							"who": "thinks it was rushed"
+						},
+						{
+							"name": "theo",
+							"who": "thinks it was earned"
+						},
+						{
+							"name": "mira",
+							"who": "runs the club"
+						}
+					]
+				},
+				"before": [
+					{
+						"id": "b0",
+						"author": "juniper",
+						"text": "ok I finished it. the ending felt rushed?? she forgives him in like two pages"
+					},
+					{
+						"id": "b1",
+						"author": "theo",
+						"text": "nah it was set up the whole time, the letters in ch 9"
+					},
+					{
+						"id": "b2",
+						"author": "juniper",
+						"text": "set up ≠ earned imo"
+					},
+					{
+						"id": "b3",
+						"author": "mira",
+						"text": "anyone who hasn't weighed in yet? 👀"
+					}
+				],
+				"transcript": [
+					{
+						"id": "t1",
+						"author": "Tester",
+						"text": "i'm with theo actually\nthe letters in ch 9 is not just setup, she already forgive him there, she just don't say it",
+						"learner": true
+					},
+					{
+						"id": "t2",
+						"author": "juniper",
+						"text": "wait which letters? she burns all of them in ch 9"
+					},
+					{
+						"id": "t3",
+						"author": "Tester",
+						"text": "not all! the one with his drawing she keep it. so the ending is only her saying it loud",
+						"learner": true
+					},
+					{
+						"id": "t4",
+						"author": "juniper",
+						"text": "ok that's... a good point. the letter where she keeps his drawing"
+					},
+					{
+						"id": "t5",
+						"author": "mira",
+						"text": "putting this in the pinned takes 📌"
+					}
+				]
+			}
+		}
+	},
+	{
+		"name": "ex-reddit-target",
+		"body": {
+			"text": "I think it is not StarClan's fault. When the Clans at the Moonstone the sky is overcast, so the moonlight cannot reach the stone, maybe the clouds alone explain it?\n\n* * *\n\nNo no, I mean StarClan didn't abandon them on purpose. They wanted to come but without moonlight the Moonstone can't work, so they can't reach the cats.",
+			"background": "A comment in a fan theory thread in r/WarriorCats. Fans like evidence from the books, and a little humour.",
+			"source": "r/WarriorCats, post by u/ashpelt_fan: Why did StarClan go quiet in the Broken Code arc? Theories?\n\nRereading and I still don't get it. Was it the impostor, or were they always weaker than the Clans thought? Give me your best theory with evidence.\n\nu/frostkit: I think the Moonpool itself was the problem, not StarClan.\n\nThe conversation:\nmaple: I think it is not StarClan's fault. When the Clans at the Moonstone the sky is overcast, so the moonlight cannot reach the stone, maybe the clouds alone explain it?\nu/frostkit: Wait, so you think StarClan just... isn't real? That's a pretty big claim lol\nmaple: No no, I mean StarClan didn't abandon them on purpose. They wanted to come but without moonlight the Moonstone can't work, so they can't reach the cats.\nu/frostkit: Ohh got it. Then the clouds theory is actually solid. Moonstone only works with moonlight anyway.",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "target",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "reddit-theory",
+				"title": "Post your theory in r/WarriorCats",
+				"site": "Reddit"
+			},
+			"exchange": {
+				"place": "reddit",
+				"lang": "en",
+				"scene": {
+					"platform": "Reddit",
+					"where": "r/WarriorCats",
+					"you": "A Warriors fan with a theory",
+					"goals": ["Put forward your theory", "Point to something in the books"],
+					"cast": [
+						{
+							"name": "u/ashpelt_fan",
+							"who": "asked for theories"
+						},
+						{
+							"name": "u/frostkit",
+							"who": "blames the Moonpool"
+						}
+					]
+				},
+				"before": [
+					{
+						"id": "b0",
+						"author": "u/ashpelt_fan",
+						"text": "Why did StarClan go quiet in the Broken Code arc? Theories?\n\nRereading and I still don't get it. Was it the impostor, or were they always weaker than the Clans thought? Give me your best theory with evidence."
+					},
+					{
+						"id": "b1",
+						"author": "u/frostkit",
+						"text": "I think the Moonpool itself was the problem, not StarClan.",
+						"replyTo": "b0"
+					}
+				],
+				"transcript": [
+					{
+						"id": "t1",
+						"author": "Tester",
+						"text": "I think it is not StarClan's fault. When the Clans at the Moonstone the sky is overcast, so the moonlight cannot reach the stone, maybe the clouds alone explain it?",
+						"learner": true
+					},
+					{
+						"id": "t2",
+						"author": "u/frostkit",
+						"text": "Wait, so you think StarClan just... isn't real? That's a pretty big claim lol"
+					},
+					{
+						"id": "t3",
+						"author": "Tester",
+						"text": "No no, I mean StarClan didn't abandon them on purpose. They wanted to come but without moonlight the Moonstone can't work, so they can't reach the cats.",
+						"learner": true
+					},
+					{
+						"id": "t4",
+						"author": "u/frostkit",
+						"text": "Ohh got it. Then the clouds theory is actually solid. Moonstone only works with moonlight anyway."
+					}
+				]
+			}
+		}
+	},
+	{
+		"name": "ex-ao3",
+		"body": {
+			"text": "I read this fic since the first chapter and the ending make me cry. The scene when Bluestar not look back at the camp is staying with me, because she choose to go alone even she is scared.\n\n* * *\n\nI think more about what she find. The journey she did many times, but this time maybe StarClan will tell her Oakheart is not waiting for her. That is why she make herself stop thinking of him, I think.",
+			"background": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+			"source": "AO3 work \"Long Way Home\" by mossfur_writes, Chapter 24: The Moonstone.\n\nBluestar did not look back at the camp. The moor was silver under a moon that had not been there an hour ago, and the cold came up through her paws like an old argument she had never finished. She thought of Oakheart, and then she made herself stop thinking of him, and walked on.\n\nAuthor's note: That's the end! Thank you for sticking with this for two years. If you have a second, tell me which scene stayed with you, I read every comment.\n\nThe conversation:\nmaple: I read this fic since the first chapter and the ending make me cry. The scene when Bluestar not look back at the camp is staying with me, because she choose to go alone even she is scared.\nmossfur_writes: Two years!! Thank you so much 😭 Can I ask, did you read her as scared of the journey, or of what she'd find at the Moonstone? I went back and forth on that a lot.\nmaple: I think more about what she find. The journey she did many times, but this time maybe StarClan will tell her Oakheart is not waiting for her. That is why she make herself stop thinking of him, I think.\nmossfur_writes: Oh. That's exactly it, and I never said it out loud in the text. Thank you for reading her so closely.",
+			"detail": "more",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "ao3-fic",
+				"title": "Comment on a fic you loved",
+				"site": "AO3"
+			},
+			"exchange": {
+				"place": "ao3",
+				"lang": "en",
+				"scene": {
+					"platform": "AO3",
+					"where": "“Long Way Home”, Chapter 24: The Moonstone",
+					"you": "A reader who followed the fic for two years",
+					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
+					"cast": [
+						{
+							"name": "mossfur_writes",
+							"who": "the author"
+						},
+						{
+							"name": "lichenpaw",
+							"who": "another reader"
+						}
+					]
+				},
+				"before": [
+					{
+						"id": "b0",
+						"author": "mossfur_writes",
+						"text": "Bluestar did not look back at the camp. The moor was silver under a moon that had not been there an hour ago, and the cold came up through her paws like an old argument she had never finished. She thought of Oakheart, and then she made herself stop thinking of him, and walked on.\n\nAuthor's note: That's the end! Thank you for sticking with this for two years. If you have a second, tell me which scene stayed with you, I read every comment."
+					}
+				],
+				"transcript": [
+					{
+						"id": "t1",
+						"author": "Maple",
+						"text": "I read this fic since the first chapter and the ending make me cry. The scene when Bluestar not look back at the camp is staying with me, because she choose to go alone even she is scared.",
+						"learner": true
+					},
+					{
+						"id": "t2",
+						"author": "mossfur_writes",
+						"text": "Two years!! Thank you so much 😭 Can I ask, did you read her as scared of the journey, or of what she'd find at the Moonstone? I went back and forth on that a lot."
+					},
+					{
+						"id": "t3",
+						"author": "Maple",
+						"text": "I think more about what she find. The journey she did many times, but this time maybe StarClan will tell her Oakheart is not waiting for her. That is why she make herself stop thinking of him, I think.",
+						"learner": true
+					},
+					{
+						"id": "t4",
+						"author": "mossfur_writes",
+						"text": "Oh. That's exactly it, and I never said it out loud in the text. Thank you for reading her so closely."
+					}
+				]
+			}
+		}
+	},
+	{
+		"name": "tr-menu",
+		"body": {
+			"text": "Osmanthus latte: home made osmanthus sauce, with a little sea salt milk cap.\nChestnut basque: the outside is baked a bit burnt, inside still soft.\nHot red wine (no alcohol version): cinnamon, orange skin and clove, suitable for rainy day.",
+			"background": "A small café wants its autumn menu in English for tourists. Short, appetising lines, not a word-for-word list.",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "native",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "translate-menu",
+				"title": "Translate a café's new menu",
+				"site": "Translate"
+			},
+			"translation": {
+				"source": "桂花拿铁：用店里自制的桂花糖浆调制，顶上撒一点海盐奶泡。\n栗子巴斯克奶酪蛋糕：外表焦香，里面依然软嫩。\n无酒精热红酒：加了肉桂、橙皮和丁香，适合阴雨天喝。",
+				"original": "Osmanthus latte: house-made osmanthus syrup, a little sea-salt foam on top.\nChestnut basque cheesecake: caramelised outside, still soft inside.\nMulled wine (alcohol-free): cinnamon, orange peel and clove, for rainy days.",
+				"glossary": [
+					{
+						"term": "Osmanthus latte",
+						"shown": "桂花拿铁",
+						"gloss": "以店内自制桂花糖浆为主要原料的拿铁咖啡，是这里的招牌饮品。"
+					},
+					{
+						"term": "Basque cheesecake",
+						"shown": "巴斯克奶酪蛋糕",
+						"gloss": "一种有名的奶酪蛋糕做法，这里指外部焦糖化、内部柔软的蛋糕。"
+					}
+				],
+				"context": "A small café wants its autumn menu in English for tourists. Short, appetising lines, not a word-for-word list.",
+				"where": "the café's printed autumn menu",
+				"readers": "tourists who read English, choosing at the counter",
+				"target": "en"
+			}
+		}
+	},
+	{
+		"name": "tr-menu-target",
+		"body": {
+			"text": "Osmanthus latte: home made osmanthus sauce, with a little sea salt milk cap.\nChestnut basque: the outside is baked a bit burnt, inside still soft.\nHot red wine (no alcohol version): cinnamon, orange skin and clove, suitable for rainy day.",
+			"background": "A small café wants its autumn menu in English for tourists. Short, appetising lines, not a word-for-word list.",
+			"detail": "needed",
+			"learner": "zh-CN",
+			"feedback": "target",
+			"lang": "en",
+			"model": "haiku",
+			"grader": "haiku",
+			"cache": "on",
+			"scenario": {
+				"id": "translate-menu",
+				"title": "Translate a café's new menu",
+				"site": "Translate"
+			},
+			"translation": {
+				"source": "桂花拿铁：用店里自制的桂花糖浆调制，顶上撒一点海盐奶泡。\n栗子巴斯克奶酪蛋糕：外表焦香，里面依然软嫩。\n无酒精热红酒：加了肉桂、橙皮和丁香，适合阴雨天喝。",
+				"original": "Osmanthus latte: house-made osmanthus syrup, a little sea-salt foam on top.\nChestnut basque cheesecake: caramelised outside, still soft inside.\nMulled wine (alcohol-free): cinnamon, orange peel and clove, for rainy days.",
+				"glossary": [
+					{
+						"term": "Osmanthus latte",
+						"shown": "桂花拿铁",
+						"gloss": "以店内自制桂花糖浆为主要原料的拿铁咖啡，是这里的招牌饮品。"
+					},
+					{
+						"term": "Basque cheesecake",
+						"shown": "巴斯克奶酪蛋糕",
+						"gloss": "一种有名的奶酪蛋糕做法，这里指外部焦糖化、内部柔软的蛋糕。"
+					}
+				],
+				"context": "A small café wants its autumn menu in English for tourists. Short, appetising lines, not a word-for-word list.",
+				"where": "the café's printed autumn menu",
+				"readers": "tourists who read English, choosing at the counter",
+				"target": "en"
+			}
+		}
+	}
+]

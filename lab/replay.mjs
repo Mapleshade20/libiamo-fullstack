@@ -1,8 +1,9 @@
-// Replays sessions the rehearsal lab recorded (runs/live/<id>.jsonl) against a running server and compares every
-// step's response with the recorded one. Run the server with the lab's call cache, read only, so nothing is spent:
+// Replays recorded revisions (lab/baseline/sessions/<case>.jsonl, made by lab/record.mjs) against a running server and
+// compares every step's response with the recorded one. Run the server on the baseline's cache, read only, so nothing
+// is spent and a difference is a change in behaviour:
 //
-//   LLM_CACHE_DIR=../rehearsal-lab/runs/cache LLM_CACHE_ONLY=1 pnpm dev --port 5180
-//   COOKIE="better-auth.session_token=..." node lab/replay.mjs http://127.0.0.1:5180 ../rehearsal-lab/runs/live/<id>.jsonl ...
+//   LLM_CACHE_DIR=lab/baseline/cache LLM_CACHE_ONLY=1 ORIGIN=http://127.0.0.1:5180 pnpm dev --port 5180
+//   COOKIE="better-auth.session_token=..." node lab/replay.mjs http://127.0.0.1:5180 lab/baseline/sessions/*.jsonl
 //
 // The endpoints need a signed-in learner: COOKIE is a session cookie from the dev server.
 import { readFileSync } from "node:fs";

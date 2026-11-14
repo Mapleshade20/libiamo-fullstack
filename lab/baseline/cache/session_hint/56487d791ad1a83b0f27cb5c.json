@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "medium",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of Spanish is rewriting part of a post for Email to a Spanish language school:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero aplicar para el curso de septiembre. Vengo a mejorar mi español por mi novia, que es de Granada. El año pasado conocí a su familia, pero no entendí casi nada, y tengo muchas ganas de aprender para poder hablar con ellos.\n\n¿Le agradecería que me enviara información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cuál es mejor para aprender. ¿Está el piso cerca de la escuela? Necesito una habitación tranquilo para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (en lo demás soy muy flexible, pero no como carne). ¿Sería posible que la familia cocinara algo para mí sin carne? Mi novia viene conmigo el primer fin de semana.\n\n¿Me puede decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que voy a pasar muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\nThe part: \"Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo.\"\nWhat is wrong with it: Necesito una respuesta makes the writer's need sound like an order for a reply by a set date. An admissions contact reads this as pressure on her timing.\nWhat they mean (confirmed by them): Must hear by end of month for flight\nA version that works (never show it or any stretch of it): \"Necesitaría su respuesta antes de fin de mes, porque tengo que comprar el vuelo.\"\nWords they already have as hints: respuesta, vuelo, necesitaría, mes\nTheir last try: \"Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo.\"\nWhat the tutor told them about it: \"Necesito una respuesta\" is still the bare present, which reads to Sra. Morales as a demand rather than a firm but polite need. Change only the verb form of \"Necesito\" so the need stays firm but becomes courteous.\nThey are stuck. Write two hints that help them build it themselves, never giving them the wording:\n- plan: in English, one or two short sentences, as their tutor: how a fluent writer builds this part: what comes first, what follows, how the parts connect (contrast, cause, addition) and where the emphasis goes. Start from their try: what to keep and what to build differently. Name no Spanish word except the hint words above (none from the working version), no letter counts, no fill-in blanks. It is about the words of this part, never the content they talk about (\"first the interactions between them, then…\" plans a story, not the sentence). When the part is a word or two (left in English, or a missing word), say what kind of word goes there and how it sits in the sentence.\n- example: one short Spanish sentence a fluent writer would actually write (grammatical and natural on its own), about an everyday topic unrelated to the post (different people, things and events), built the same way as the working version: the same pattern and the same connecting words, none of its other content words. Put [square brackets] around the few words it shares with the working version as they are (the frame they can borrow, at most four), never around the words that change.\nThe writer may write to you in any language; whatever they write in, everything you write for them is in English.\nReply with JSON only: {\"plan\":\"\",\"example\":\"\"}"
+		}
+	],
+	"result": {
+		"text": "{\"plan\":\"Keep your try exactly as it is, including its order and the reason clause after the comma. Change only the verb \\\"necesito\\\" into the conditional form, which makes a need sound softer and more courteous, like English \\\"would need\\\".\",\"example\":\"[Necesitaría] el coche [antes de] las ocho, [porque] [tengo que] llevar a mi madre al hospital.\"}",
+		"usage": {
+			"input": 1257,
+			"output": 2129,
+			"reasoning": 2003,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 10817,
+		"cached": false,
+		"costUsd": 0.0011902
+	},
+	"finish": "stop"
+}

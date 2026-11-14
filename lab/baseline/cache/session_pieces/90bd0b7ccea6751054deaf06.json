@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner of Spanish is rewriting part of a post. The sentence they are working towards, for you only (never quote it or give it away): \"Si fuera posible, le agradecería una respuesta antes de fin de mes, ya que tengo que comprar el vuelo.\". Gloss each hint word in the sense it has in that sentence, not its most common sense (\"alone\" in \"the clouds alone explain it\" means \"only\", not \"by oneself\").\n\nTheir hint words, exactly 4: \"posible\", \"respuesta\", \"vuelo\", \"mes\". \"a / b\" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in Spanish, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural Spanish sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {\"notes\":[{\"piece\":\"\",\"gloss\":\"\",\"example\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"notes\":[{\"piece\":\"posible\",\"gloss\":\"Adjetivo que aquí significa que algo se puede realizar o hacer; va con 'si' como condición hipotética ('si fuera posible'), en registro formal y cortés. Es un adjetivo de uso general, no se refiere a algo 'probable' en sentido de probabilidad.\",\"example\":\"Si es posible, me gustaría cambiar la cita del jueves para la tarde.\"},{\"piece\":\"respuesta\",\"gloss\":\"Sustantivo femenino que designa la contestación a una pregunta, carta o solicitud; suele ir con 'dar' o 'recibir' (dar una respuesta, recibir una respuesta). Es neutro en registro.\",\"example\":\"Mi hermana todavía no me ha dado respuesta sobre la invitación a su boda.\"},{\"piece\":\"vuelo\",\"gloss\":\"Sustantivo masculino que se refiere al viaje en avión de un punto a otro; se usa con verbos como 'comprar', 'reservar' o 'coger/tomar'. Es un término común y cotidiano.\",\"example\":\"Reservé un vuelo barato a Valencia para el puente de noviembre.\"},{\"piece\":\"mes\",\"gloss\":\"Sustantivo masculino que designa cada una de las doce partes del año; aparece con 'de' en expresiones de plazo como 'fin de mes' o 'a fin de mes', y con artículo determinado para indicar el mes actual o uno concreto. Es neutro.\",\"example\":\"El alquiler de mi piso sube cada mes un poco más.\"}]}",
+		"usage": {
+			"input": 381,
+			"output": 529,
+			"reasoning": 0,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3486,
+		"cached": false,
+		"costUsd": 0.0003026
+	},
+	"finish": "stop"
+}
