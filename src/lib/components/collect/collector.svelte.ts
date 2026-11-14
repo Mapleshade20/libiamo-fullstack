@@ -1,13 +1,15 @@
 import { CALLS } from "#lib/components/debug/calls.ts";
-import { read, write } from "#lib/demo/app.svelte.ts";
+import { read, sandboxed, write } from "#lib/demo/app.svelte.ts";
 import { COLLECTED_KEY } from "#lib/demo/data.ts";
 import { checkCall, stopOf } from "#lib/demo/limits.ts";
+import { removeNotes } from "#lib/notebook/notebook.remote.ts";
 
 /*
  * Phrases kept from something read, wherever it is read (a scenario's situation, later the session's context): each
- * highlight is filled in by the collect call (meaning, register, why) and kept in the notebook the moment it is. One
- * collector per page; highlightable texts register their marks with it. The /collect page keeps its own (it also holds
- * the follow-up questions).
+ * highlight is filled in by the collect call (meaning, register, why) and the server keeps it in the notebook the moment
+ * it is, each text as the reading its phrases come from. A mark undone or changed takes its entry away. One collector
+ * per page; highlightable texts register their marks with it. The /collect page keeps its own (it also holds the
+ * follow-up questions).
  */
 export type Kept = {
 	key: string;
@@ -19,20 +21,29 @@ export type Kept = {
 	why?: string;
 	example?: string;
 	failed?: boolean;
+	/** The notebook entry it is kept as. */
+	id?: string;
 };
-type Setup = { lang: string; native: string; feedback: string; model: string };
+type Setup = { lang: string; native: string; feedback: string; model: string; place?: string };
 
 export class Collector {
 	kept = $state<Kept[]>([]);
 	private batch = `${Date.now()}`;
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
 	private retries = 0;
+	/** Each text's reading, once its first phrase is kept. */
+	private readings = new Map<string, string>();
 	constructor(private setup: Setup) {}
+	private forget(ids: (string | undefined)[]) {
+		const gone = ids.filter((x): x is string => !!x);
+		if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
+	}
 
 	/** A mark in a text was made or changed; filled in a moment later, with the other new marks in the same text. */
 	mark(block: string, passage: string, key: string, marked: string, sentence: string) {
 		const at = this.kept.findIndex((k) => k.key === key);
 		const item: Kept = { key, marked, sentence };
+		if (at >= 0) this.forget([this.kept[at].id]);
 		if (at >= 0) this.kept[at] = item;
 		else this.kept.push(item);
 		clearTimeout(this.timers.get(block));
@@ -42,6 +53,7 @@ export class Collector {
 		);
 	}
 	unmark(key: string) {
+		this.forget(this.kept.filter((k) => k.key === key).map((k) => k.id));
 		this.kept = this.kept.filter((k) => k.key !== key);
 		this.store();
 	}
@@ -56,27 +68,49 @@ export class Collector {
 	private async fill(block: string, passage: string) {
 		const todo = this.kept.filter((k) => k.key.startsWith(`${block}:`) && !k.phrase);
 		if (!todo.length) return;
-		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key }));
+		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key, sentence: k.sentence }));
 		try {
 			checkCall(`explain:${sent.map((x) => x.text).join("|")}`);
 			this.halt = null;
 			const r = await CALLS.traced("/api/collect/explain", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ ...this.setup, passage, highlights: sent.map(({ n, text }) => ({ n, text })), retry: this.retries }),
+				body: JSON.stringify({
+					...this.setup,
+					passage,
+					readingId: this.readings.get(block),
+					highlights: sent.map(({ n, text, sentence }) => ({ n, text, sentence })),
+					retry: this.retries,
+				}),
 			});
 			if (!r.ok) throw new Error(String(r.status));
-			const { items } = (await r.json()) as {
-				items: { n: number; phrase: string; meaning: string; register: string; why: string; example: string }[];
+			const { items, readingId } = (await r.json()) as {
+				readingId?: string;
+				items: { n: number; id?: string; phrase: string; meaning: string; register: string; why: string; example: string }[];
 			};
+			if (readingId) this.readings.set(block, readingId);
+			const stale: (string | undefined)[] = [];
 			for (const s of sent) {
 				const k = this.kept.find((x) => x.key === s.key);
-				// Changed while the call was out: the next call fills it.
-				if (!k || k.marked !== s.text) continue;
 				const it = items.find((x) => x.n === s.n);
-				if (it) Object.assign(k, { phrase: it.phrase, meaning: it.meaning, register: it.register, why: it.why, example: it.example, failed: false });
+				// Changed or undone while the call was out: the next call fills it, and this one's entry goes.
+				if (!k || k.marked !== s.text) {
+					stale.push(it?.id);
+					continue;
+				}
+				if (it)
+					Object.assign(k, {
+						id: it.id,
+						phrase: it.phrase,
+						meaning: it.meaning,
+						register: it.register,
+						why: it.why,
+						example: it.example,
+						failed: false,
+					});
 				else k.failed = true;
 			}
+			this.forget(stale);
 		} catch (e) {
 			const k = stopOf(e);
 			if (k !== "error") this.halt = { kind: k, retry: () => this.retry(block, passage) };
@@ -88,6 +122,7 @@ export class Collector {
 		this.store();
 	}
 	private store() {
+		if (!sandboxed()) return;
 		const others = read<{ batch?: string }[]>(COLLECTED_KEY, []).filter((x) => x.batch !== this.batch);
 		write(COLLECTED_KEY, [
 			...others,

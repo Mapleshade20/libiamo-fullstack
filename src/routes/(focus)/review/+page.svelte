@@ -12,10 +12,13 @@ import RateMark from "#lib/components/review/RateMark.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, tx } from "#lib/demo/app.svelte.ts";
-import { practised, type ReviewCard, reviewDeck } from "#lib/demo/data.ts";
+import { app, sandboxed, tx } from "#lib/demo/app.svelte.ts";
+import { practised } from "#lib/demo/data.ts";
+import { rate as sendRating } from "#lib/notebook/notebook.remote.ts";
+import { deckNow } from "#lib/notebook/notebook.svelte.ts";
+import type { ReviewCard } from "#lib/notebook/types.ts";
 import { hintOf, type Verdict, verdictOf } from "#lib/review/check.ts";
-import { createSitting, intervals, RATINGS, type Rating } from "#lib/review/session.ts";
+import { createSitting, type Item, RATINGS, type Rating } from "#lib/review/session.ts";
 import { goto } from "$app/navigation";
 
 /*
@@ -24,13 +27,12 @@ import { goto } from "$app/navigation";
  * Ratings show only when the card comes back; a card rated within minutes returns in this sitting. Enter is Good.
  * The counts below are what is left: new, learning, review. At the end, the sitting's cards and how each went.
  */
-const deck: ReviewCard[] = reviewDeck();
+// The sitting is the cards due when the page opened; ratings change it here, not by asking the server again.
+const deck: ReviewCard[] = await deckNow();
 if (!deck.length) goto("/", { replace: true });
-// Stand-in scheduling state: cards kept today are new; of the rest, every third is new too.
-const sitting = createSitting(
-	deck.map((card, i) => ({ card, state: card.id.startsWith("c") || i % 3 === 2 ? ("new" as const) : ("review" as const) })),
-);
+const sitting = createSitting(deck);
 const started = Date.now();
+let shownAt = started;
 let v = $state(0);
 let shown = $state<{ given: string; verdict: Verdict } | null>(null);
 let given = $state("");
@@ -39,10 +41,14 @@ let input: HTMLInputElement | undefined = $state();
 let doneBtn: HTMLElement | null = $state(null);
 const item = $derived((void v, sitting.current));
 const card = $derived(item?.card);
+$effect(() => {
+	void item;
+	shownAt = Date.now();
+});
 const counts = $derived((void v, sitting.counts()));
 const reviewed = $derived((void v, sitting.done.length));
 const finished = $derived(!item);
-const next = $derived(item ? intervals(item) : []);
+const next = $derived((void v, item ? sitting.intervals(item) : []));
 const progress = $derived(reviewed / Math.max(1, reviewed + counts.new + counts.learning + counts.review));
 const TONE: Record<Rating, string> = { again: "--bad", hard: "--warn", good: "--ok", easy: "--cool" };
 const LABEL: Record<Rating, string> = { again: "rvAgain", hard: "rvHard", good: "rvGood", easy: "rvEasy" };
@@ -101,17 +107,33 @@ function check(text: string) {
 	if (!firstRight.has(card.id)) firstRight.set(card.id, shown.verdict === "exact" || shown.verdict === "close");
 	focusNow();
 }
+/* Ratings go to the server one after another (each sees the last one's card, so the one that empties the queue
+   knows it), while the page moves on at once. */
+let sending: Promise<unknown> = Promise.resolve();
+function send(it: Item<ReviewCard>, r: Rating, verdict: Verdict | null, seconds: number) {
+	if (sandboxed()) {
+		if (!sitting.current) practised("reviewed");
+		return;
+	}
+	sending = sending
+		.then(() => sendRating({ id: it.card.id, rating: r, verdict, seconds }))
+		.then((s) => {
+			sitting.settle(it, s);
+			v++;
+		})
+		.catch((e) => console.error("a rating was not saved", e));
+}
 function rate(r: Rating) {
 	if (!shown) return;
-	sitting.rate(r);
+	const verdict = shown.given.trim() ? shown.verdict : "none";
+	const it = sitting.rate(r);
+	if (it) send(it, r, verdict, Math.min(86_400, Math.round((Date.now() - shownAt) / 1000)));
 	v++;
 	shown = null;
 	given = "";
 	placeholder = "";
 	asking = "closed";
 	thread = [];
-	// Clearing the reviews is half of a day of the week.
-	if (!sitting.current) practised("reviewed");
 	focusNow();
 }
 const minutes = $derived(finished ? Math.max(1, Math.round((Date.now() - started) / 60_000)) : 0);

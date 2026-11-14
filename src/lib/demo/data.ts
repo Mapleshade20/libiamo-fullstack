@@ -1,4 +1,5 @@
-import type { Face } from "#lib/review/faces.ts";
+import type { ReviewCard } from "#lib/notebook/types.ts";
+import type { DayKind, WeekView } from "#lib/week/types.ts";
 import type { PieceItem, PieceResult } from "#lib/writing/types.ts";
 import { writing } from "#lib/writing/writing.svelte.ts";
 import { app, read, sandboxed, tx, write } from "./app.svelte";
@@ -88,58 +89,9 @@ export function whenOf(w: Writing): string {
 }
 export const COLLECT_KEY = "rehearsal:collect";
 
-/* ---------- Review: two kinds of card, by where the phrase came from ---------- */
-/* From the learner's own writing: their sentence with the part they reworked marked, to say again. From reading: the
-   sentence they met it in with the words they highlighted blanked, and what it means as the cue. Either way they answer
-   before they see it. Cues are the tutor's to say, in the tutor's language. */
-type Local = Record<string, string>;
-type DeckCard =
-	| { id: string; kind: "own"; where: string; text: string; part: string; answer: string; also: string[]; why: Local }
-	| { id: string; kind: "collected"; where: string; text: string; answer: string; cue: Local | string; phrase?: string };
-const DECK: Record<string, DeckCard[]> = {
-	en: [
-		{
-			id: "r1",
-			kind: "own",
-			where: "your Reddit post",
-			text: "When StarClan didn't show up, he went really miserable and furious for that.",
-			part: "he went really miserable and furious for that",
-			answer: "it left him miserable and furious",
-			also: ["it left him furious and miserable"],
-			why: { en: "Let the event be the subject: it did something to him.", "zh-CN": "让事件做主语：这件事让他怎样。" },
-		},
-		{
-			id: "r2",
-			kind: "collected",
-			where: "r/WarriorCats",
-			text: "For what it's worth, I always thought Bluestar knew more than she let on.",
-			answer: "For what it's worth",
-			cue: { en: "Offering your opinion without pushing it", "zh-CN": "表达看法但不强加于人" },
-		},
-		{
-			id: "r3",
-			kind: "own",
-			where: "your email to a professor",
-			text: "I want to ask if I can have one more week for the essay.",
-			part: "I want to ask if I can have",
-			answer: "Would it be possible to have",
-			also: ["would it be possible to get", "could I possibly have"],
-			why: { en: "A request opens politely with a question, not with what you want.", "zh-CN": "提请求用问句开头更礼貌，而不是先说“我想要”。" },
-		},
-		{
-			id: "r4",
-			kind: "own",
-			where: "your AO3 comment",
-			text: "This chapter made me very very sad, in a good way.",
-			part: "made me very very sad",
-			answer: "wrecked me",
-			also: ["absolutely wrecked me", "destroyed me"],
-			why: { en: "Fans say a chapter wrecked them: strong, casual, and a compliment.", "zh-CN": "粉丝会说一章 wrecked me：强烈、口语，而且是夸奖。" },
-		},
-	],
-};
-/** A card review asks (its front: lib/review/faces.ts), with why it is said this way for its back. */
-export type ReviewCard = Face & { id: string; kind: "own" | "collected"; where: string; why?: string; phrase?: string };
+/* ---------- The tour's sandbox: its notebook, review and week ---------- */
+/* The learner's own are the server's (lib/notebook, lib/week); while the tour plays, these stand in, from what its
+   sandbox holds: phrases it collected (Collected), the days it practised. Phase 6 moves the tour onto the real pages. */
 export type Collected = {
 	phrase: string;
 	meaning: string;
@@ -159,7 +111,7 @@ export const collected = (): Collected[] => {
 	void app.version;
 	return read<Collected[]>(COLLECTED_KEY, []);
 };
-/* ---------- Notebook entries the learner edited or deleted (/notebook/<id>), laid over what they came from ---------- */
+/* ---------- Notebook entries the learner edited or deleted in the sandbox, laid over what they came from ---------- */
 export type NoteEdit = { phrase?: string; gloss?: string; deleted?: boolean };
 export const NOTE_EDITS = "noteEdits";
 export const noteEdits = () => read<Record<string, NoteEdit>>(NOTE_EDITS, {});
@@ -169,120 +121,66 @@ export function collectedId(c: Collected) {
 	for (const ch of `${c.batch ?? c.at}|${c.phrase}`) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0;
 	return `c-${h.toString(36)}`;
 }
-/** Which stand-in note each stand-in card asks. */
-export const CARD_NOTE: Record<string, string> = { r1: "n1", r2: "n4", r3: "n3", r4: "n2" };
 
-export function reviewDeck(): ReviewCard[] {
+/** What each rating does to a card the sandbox asks (a new one): the scheduler's first steps. */
+const FIRST: ReviewCard["outcomes"] = {
+	again: { label: "1m", stays: true, inMs: 60_000 },
+	hard: { label: "6m", stays: true, inMs: 360_000 },
+	good: { label: "10m", stays: true, inMs: 600_000 },
+	easy: { label: "4d", stays: false, inMs: 4 * 864e5 },
+};
+/** The sandbox's review cards: each phrase it collected, asked in the sentence it was read in. */
+export function sandboxDeck(): ReviewCard[] {
 	void app.version;
 	const edits = noteEdits();
-	const pick = (o: Local | string | undefined) => (typeof o === "string" ? o : (o?.[app.tutor] ?? o?.en ?? ""));
-	const mine = collected()
+	return collected()
 		.filter((c) => c.lang === app.lang && c.sentence && c.marked && c.sentence.includes(c.marked))
 		.map((c): ReviewCard => {
 			const id = collectedId(c);
 			return {
 				id,
 				kind: "collected",
-				where: tx("nbSomethingRead"),
+				where: "",
 				text: c.sentence as string,
 				answer: c.marked as string,
 				cue: edits[id]?.gloss ?? c.meaning,
 				phrase: edits[id]?.phrase ?? c.phrase,
+				queue: "new",
+				outcomes: FIRST,
 			};
-		});
-	const stand = (sandboxed() ? [] : (DECK[app.lang] ?? [])).map((c): ReviewCard => {
-		const e = edits[CARD_NOTE[c.id]];
-		if (c.kind === "collected") return { ...c, cue: e?.gloss ?? pick(c.cue) };
-		// An own card is their sentence as they settled it, the phrase blanked, cued by what they first wrote there; an
-		// edited phrase is the answer from then on.
-		const answer = e?.phrase ?? c.answer;
-		return {
-			id: c.id,
-			kind: "own",
-			where: c.where,
-			text: c.text.replace(c.part, answer),
-			answer,
-			also: c.also,
-			was: c.part,
-			why: e?.gloss ?? pick(c.why),
-		};
-	});
-	// A deleted entry leaves review too.
-	return [...stand, ...mine].filter((c) => !edits[CARD_NOTE[c.id] ?? c.id]?.deleted);
+		})
+		.filter((c) => !edits[c.id]?.deleted);
 }
 
-/* ---------- The week: which days the learner practised ---------- */
-/*
- * A day counts (its glass is poured) only when the learner both learned something (finished a piece, a scenario, a
- * translation, or wrote a piece again from memory) and cleared their reviews (finished a sitting, or had nothing due), as
- * the main app's streak rule: a completion and an empty queue on the same day. One of the two alone is a half day, its
- * glass turned upright and empty so the other half is one step away, never counted. Stand-in history for the days before today;
- * today is real on this device.
- */
-export type DayKind = "full" | "learned" | "reviewed" | "none" | "later";
 const PRACTICE = "practiceDays";
-export const dayKey = (d = new Date()) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-// Stored as "both", "learned" or "reviewed". Days kept before the rule changed said "full" (a piece finished) or
-// "light" (only reviewed).
-const kindOf = (k: string | undefined): DayKind | undefined =>
-	k === "both" ? "full" : k === "learned" || k === "full" ? "learned" : k === "reviewed" || k === "light" ? "reviewed" : undefined;
-/** Credits today with one half; returns whether that changed anything (and leaves a note for the shell to show it). */
-export function practised(what: "learned" | "reviewed"): boolean {
+/** A day on this device, as the server names the learner's days: `YYYY-MM-DD`. */
+export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Credits the sandbox's today with one half (the tour). */
+export function practised(what: "learned" | "reviewed") {
 	const all = read<Record<string, string>>(PRACTICE, {});
-	const was = kindOf(all[dayKey()]) ?? "none";
-	const learned = what === "learned" || was === "learned" || was === "full";
-	// Nothing due means the reviews are as done as they can be.
-	const reviewed = what === "reviewed" || was === "reviewed" || was === "full" || reviewDeck().length === 0;
-	const kind: DayKind = learned && reviewed ? "full" : learned ? "learned" : "reviewed";
-	if (kind === was) return false;
-	all[dayKey()] = kind === "full" ? "both" : kind;
+	const was = all[dayKey()];
+	const learned = what === "learned" || was === "learned" || was === "both";
+	const reviewed = what === "reviewed" || was === "reviewed" || was === "both" || sandboxDeck().length === 0;
+	all[dayKey()] = learned && reviewed ? "both" : learned ? "learned" : "reviewed";
 	write(PRACTICE, all);
-	sessionStorage.setItem("weekEarned", kind);
 	app.touch();
-	return true;
 }
-export function weekDays(now = new Date()) {
+/** The sandbox's week, Monday first. */
+export function sandboxWeek(now = new Date()): WeekView {
 	void app.version;
 	const mon = (now.getDay() + 6) % 7;
 	const all = read<Record<string, string>>(PRACTICE, {});
-	return Array.from({ length: 7 }, (_, i) => {
-		const d = new Date(now);
-		d.setDate(now.getDate() - mon + i);
-		const real = kindOf(all[dayKey(d)]);
-		const kind: DayKind = i > mon ? "later" : (real ?? (i === mon - 2 ? "full" : i === mon - 3 ? "learned" : i === mon - 1 ? "reviewed" : "none"));
-		return { i, today: i === mon, kind };
-	});
-}
-export const weekCount = () => weekDays().filter((d) => d.kind === "full").length;
-/** The whole history, week by week (Monday first), for the profile: this week is real; the weeks before are a
-    stand-in, drawn from a fixed seed so the page is the same on every visit. */
-export function historyWeeks(weeks = 26, now = new Date()) {
-	void app.version;
-	const mon = (now.getDay() + 6) % 7;
-	const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mon);
-	let seed = 7;
-	const rand = () => {
-		seed = (seed * 16807) % 2147483647;
-		return (seed - 1) / 2147483646;
+	const KIND: Record<string, DayKind> = { both: "full", learned: "learned", reviewed: "reviewed" };
+	return {
+		today: dayKey(now),
+		goal: app.prefs.weeklyGoal,
+		days: Array.from({ length: 7 }, (_, i) => {
+			const d = new Date(now);
+			d.setDate(now.getDate() - mon + i);
+			return { day: dayKey(d), kind: i > mon ? "later" : (KIND[all[dayKey(d)]] ?? "none") };
+		}),
 	};
-	const out: { start: Date; days: DayKind[] }[] = [];
-	for (let w = weeks - 1; w >= 0; w--) {
-		const s = new Date(start);
-		s.setDate(start.getDate() - w * 7);
-		// The learner started 19 weeks ago, and got steadier.
-		const busy = w > 18 ? 0 : 0.3 + (18 - w) * 0.02;
-		// Last week met the aim, so the run is alive while this one is under way.
-		const days: DayKind[] =
-			w === 0
-				? weekDays(now).map((d) => d.kind)
-				: w === 1
-					? ["full", "reviewed", "full", "learned", "full", "none", "full"]
-					: Array.from({ length: 7 }, () => (rand() < busy ? "full" : rand() < 0.25 && w <= 18 ? (rand() < 0.5 ? "learned" : "reviewed") : "none"));
-		out.push({ start: s, days });
-	}
-	return out;
 }
-export const todayKind = () => weekDays().find((d) => d.today)?.kind ?? "none";
 
 /* ---------- Follow-up: the shelf's second slot ---------- */
 /* One card at most, for one piece: first whether it was posted (a day after it was finished, not again for a day after

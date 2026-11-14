@@ -2,6 +2,7 @@
 // fills in every highlight at once (what it means here, how it sounds, what makes it worth taking, one example of their
 // own to imitate); a second answers their questions about one of them. Nothing here writes for the learner.
 import { z } from "zod";
+import { REGISTERS } from "#lib/constants.ts";
 import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES } from "#lib/server/revision/draft.ts";
 
@@ -11,7 +12,6 @@ export type CollectInput = { passage: string; lang: string; native: string; feed
 
 // Lenient where a model's slip should not cost the learner their highlight: a number as a string, a register named
 // differently (it falls back to neutral).
-const REGISTERS = ["neutral", "casual", "formal", "slang", "literary", "technical"] as const;
 const Item = z.object({
 	n: z.coerce.number(),
 	phrase: z.string(),

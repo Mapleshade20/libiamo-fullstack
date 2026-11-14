@@ -32,3 +32,35 @@ test("reuse finds worked-out phrases in a new text, whatever the case or quotes"
 		[false, true, false],
 	);
 });
+
+test("an entry's cards: its own sentence first, then examples; a collected one in the sentence it was read in", async () => {
+	const { noteFaces } = await import("#lib/review/faces.ts");
+	const own = noteFaces({
+		kind: "own",
+		phrase: "it left him …",
+		gloss: "what it did to him",
+		before: "he went really miserable",
+		final: "It left him miserable.",
+		examples: [{ t: "The news left her speechless.", n: "消息让她说不出话", span: "left her" }],
+	});
+	assert.deepEqual(
+		own.map((f) => [f.answer, f.was ?? f.cue]),
+		[
+			["It left him", "he went really miserable"],
+			["left her", "消息让她说不出话"],
+		],
+	);
+	const read = noteFaces({
+		kind: "collected",
+		phrase: "for what it's worth",
+		gloss: "offering a view",
+		sentence: "For what it's worth, I agree.",
+		marked: "For what it's worth",
+	});
+	assert.equal(read[0].answer, "For what it's worth");
+	assert.equal(read[0].cue, "offering a view");
+	// Nowhere to blank it: asked bare.
+	assert.deepEqual(noteFaces({ kind: "collected", phrase: "slow burn", gloss: "a slow romance" }), [
+		{ text: "slow burn", answer: "slow burn", cue: "a slow romance" },
+	]);
+});

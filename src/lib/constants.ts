@@ -49,6 +49,17 @@ export type Posted = (typeof POSTED)[number];
 export const CALL_STATES = ["done", "failed", "repaired", "discarded"] as const;
 export type CallState = (typeof CALL_STATES)[number];
 
+/* The notebook and review (src/lib/server/db/schema.ts). */
+/** Where an entry came from: the learner's own writing (a finished piece), or something they read and collected. */
+export const NOTE_KINDS = ["own", "collected"] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+/** How a phrase sounds, as collecting names it. */
+export const REGISTERS = ["neutral", "casual", "formal", "slang", "literary", "technical"] as const;
+export type Register = (typeof REGISTERS)[number];
+/** What the code made of a typed review answer (lib/review/check.ts). */
+export const VERDICTS = ["exact", "close", "other", "miss", "none"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
 /* Password bounds. The upper one keeps zxcvbn (superlinear in the length) quick; the field stops typing there. */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;

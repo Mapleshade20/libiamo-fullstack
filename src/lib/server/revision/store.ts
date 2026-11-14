@@ -1,8 +1,10 @@
-import { and, eq, inArray, max } from "drizzle-orm";
+import { and, eq, inArray, max, ne } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
 import { piece, pieceRevision, pieceStep } from "#lib/server/db/schema.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { Lanes } from "#lib/server/llm/lanes.ts";
+import { fileOwn } from "#lib/server/notebook/notes.ts";
+import { credit } from "#lib/server/week/days.ts";
 import { learnedFrom } from "#lib/server/writing/learned.ts";
 import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSION } from "./revision.ts";
 
@@ -12,7 +14,7 @@ import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSI
  * restart, an idle revision put away or another device picks it up where it was. An idle revision leaves memory after
  * thirty minutes; shutdown writes every snapshot first.
  */
-type Learner = { id: string; helpImprove: boolean };
+type Learner = { id: string; helpImprove: boolean; timeZone?: string | null };
 type Held = {
 	userId: string;
 	session: RevisionSession;
@@ -201,6 +203,23 @@ export async function updatePiece(pieceId: string, set: Partial<typeof piece.$in
 }
 
 /**
+ * The move to `finished`, guarded so it happens once: the transaction that wins it credits the day with what was learned
+ * (design §5.2). Returns whether this call finished it.
+ */
+export async function finishPiece(user: Learner, pieceId: string, set: Partial<typeof piece.$inferInsert>): Promise<boolean> {
+	return db.transaction(async (tx) => {
+		const now = new Date();
+		const [done] = await tx
+			.update(piece)
+			.set({ ...set, state: "finished", finishedAt: now })
+			.where(and(eq(piece.id, pieceId), ne(piece.state, "finished")))
+			.returning({ language: piece.language });
+		if (done) await credit(tx, user, "learned", done.language, now);
+		return !!done;
+	});
+}
+
+/**
  * The notebook entries of a finished piece, written after its revision ended (the learner is on the piece's page by
  * then; it shows what pass 2 reworked meanwhile). The call is a step on the tape. Once they are filed, or there is no
  * revision left to ask, the revision is not needed again.
@@ -217,7 +236,15 @@ export async function fileNotes(user: Learner, pieceId: string) {
 			return;
 		}
 		const notes = await act(pieceId, h, "notes", ask, (s) => s.notes(ask.items, ask.p1));
-		await updatePiece(pieceId, { learned: learnedFrom(ask, notes), notesRequestedAt: null });
+		const learned = learnedFrom(ask, notes);
+		await db.transaction(async (tx) => {
+			const [p] = await tx
+				.update(piece)
+				.set({ learned, notesRequestedAt: null })
+				.where(eq(piece.id, pieceId))
+				.returning({ id: piece.id, language: piece.language, tutorLanguage: piece.tutorLanguage });
+			if (p) await fileOwn(tx, user, p, learned);
+		});
 		await dropRevision(pieceId);
 	} catch (e) {
 		// The stand-in stays; the piece's page asks again once the wait is over.

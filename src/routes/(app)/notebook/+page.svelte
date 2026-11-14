@@ -4,15 +4,15 @@ import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, tx } from "#lib/demo/app.svelte.ts";
-import { reviewDeck } from "#lib/demo/data.ts";
-import { type Note, notebook } from "#lib/demo/notes.ts";
+import { dueNow, notesNow } from "#lib/notebook/notebook.svelte.ts";
+import type { Note } from "#lib/notebook/types.ts";
 
 /* The notebook: every phrase the learner keeps, whether it came out of their own writing (what they reworked in a
    session) or was collected from something they read. Review runs over all of it; each entry opens its own page. */
-const notes = $derived<Note[]>(notebook());
+const notes = $derived<Note[]>(await notesNow());
 let filter = $state("all");
 const shown = $derived(notes.filter((n) => filter === "all" || n.from === filter));
-const due = $derived(reviewDeck().length);
+const due = $derived((await dueNow()).count);
 $effect(() => {
 	document.title = `${tx("navNotebook")} · ${tx("homeTitle")}`;
 });
@@ -51,7 +51,7 @@ $effect(() => {
 									{#if n.gloss}
 										<p class="sub">{n.gloss}</p>
 									{/if}
-									<p class="sub">{tx(n.from === "own" ? "nbFromOwn" : "nbFromRead", { where: n.where })}</p>
+									<p class="sub">{tx(n.from === "own" ? "nbFromOwn" : "nbFromRead", { where: n.where || tx("nbSomethingRead") })}</p>
 								</div>
 								{#if n.due}
 									<span class="tag on">{tx("nbDue")}</span>

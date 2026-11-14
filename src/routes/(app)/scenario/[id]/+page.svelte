@@ -8,9 +8,10 @@ import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, demoOpens, read, tx, write } from "#lib/demo/app.svelte.ts";
-import { myWriting, reviewDeck, siteOf } from "#lib/demo/data.ts";
+import { myWriting, siteOf } from "#lib/demo/data.ts";
 import { reopen } from "#lib/demo/reopen.ts";
 import { SIMS, scenarioById, scenarioState, situationOf } from "#lib/demo/scenarios.ts";
+import { notesNow } from "#lib/notebook/notebook.svelte.ts";
 import { page } from "$app/state";
 
 /*
@@ -28,12 +29,8 @@ const st = $derived(scenario ? siteOf(scenario.site) : undefined);
 const progress = $derived(scenario ? scenarioState(scenario.id) : "new");
 const started = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.open) : undefined);
 const written = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.finishedAt) : undefined);
-// Phrases the learner already owns that could serve here: their notebook's, a few (the main app would rank by fit).
-const owned = $derived(
-	reviewDeck()
-		.slice(0, 4)
-		.map((c) => c.phrase ?? c.answer),
-);
+// Phrases the learner already owns that could serve here: their notebook's latest few (phase 4 ranks them by fit).
+const owned = $derived((await notesNow()).slice(0, 4).map((n) => n.phrase));
 const planKey = $derived(`scenarioPlan:${page.params.id}`);
 let plan = $state("");
 $effect(() => {

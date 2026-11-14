@@ -1,7 +1,17 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
-import { act, bookmark, dropRevision, fileNotes, openRevision, pieceFor, reloadRevision, updatePiece } from "#lib/server/revision/store.ts";
+import {
+	act,
+	bookmark,
+	dropRevision,
+	fileNotes,
+	finishPiece,
+	openRevision,
+	pieceFor,
+	reloadRevision,
+	updatePiece,
+} from "#lib/server/revision/store.ts";
 import { NoteAsk, StandIn } from "#lib/server/writing/learned.ts";
 import { dev } from "$app/env";
 
@@ -84,9 +94,7 @@ export async function POST({ params, request }) {
 			const e = out as Awaited<ReturnType<RevisionSession["end"]>>;
 			const ask = h.session.noteAsk;
 			const asking = !!ask && ask.items.length + ask.p1.length > 0;
-			await updatePiece(params.id, {
-				state: "finished",
-				finishedAt: new Date(),
+			await finishPiece(u, params.id, {
 				final: e.text,
 				closing: e.closing || null,
 				leftovers: e.issues.map((x) => ({ quote: x.quote, note: x.note })),

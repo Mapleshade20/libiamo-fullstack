@@ -6,8 +6,10 @@ import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "#lib/demo/app.svelte.ts";
-import { editNote, noteById } from "#lib/demo/notes.ts";
+import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
+import { editSandboxNote } from "#lib/demo/notes.ts";
+import { changeNote, due, noteById, notebook, removeNotes } from "#lib/notebook/notebook.remote.ts";
+import { lang, noteNow } from "#lib/notebook/notebook.svelte.ts";
 import { around, fixedPart } from "#lib/review/faces.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -19,7 +21,7 @@ import { page } from "$app/state";
  * with the place as one quiet line), then the card review asks with when. Correcting or deleting it happens here
  * (the main app's /review/manage, folded in); a deleted entry leaves review too.
  */
-const n = $derived(noteById(page.params.id ?? ""));
+const n = $derived(await noteNow(page.params.id ?? ""));
 const REG: Record<string, string> = {
 	neutral: "regNeutral",
 	casual: "regCasual",
@@ -42,19 +44,37 @@ function startEdit() {
 	gloss = n?.gloss ?? "";
 	editing = true;
 }
-function save(e: SubmitEvent) {
+let busy = $state(false);
+async function save(e: SubmitEvent) {
 	e.preventDefault();
-	if (!n || !phrase.trim()) return;
-	editNote(n.id, { phrase: phrase.trim(), gloss: gloss.trim() });
-	editing = false;
-	toast(tx("noteSaved"));
+	if (!n || !phrase.trim() || busy) return;
+	const edit = { phrase: phrase.trim(), gloss: gloss.trim() };
+	busy = true;
+	try {
+		if (sandboxed()) editSandboxNote(n.id, edit);
+		else await changeNote({ id: n.id, ...edit }).updates(noteById(n.id), notebook(lang()));
+		editing = false;
+		toast(tx("noteSaved"));
+	} catch {
+		toast(tx("error"));
+	} finally {
+		busy = false;
+	}
 }
-function remove() {
-	if (!n) return;
-	editNote(n.id, { deleted: true });
-	deleting = false;
-	toast(tx("noteDeleted"));
-	goto("/notebook");
+async function remove() {
+	if (!n || busy) return;
+	busy = true;
+	try {
+		if (sandboxed()) editSandboxNote(n.id, { deleted: true });
+		else await removeNotes([n.id]).updates(notebook(lang()), due(lang()));
+		deleting = false;
+		toast(tx("noteDeleted"));
+		goto("/notebook");
+	} catch {
+		toast(tx("error"));
+	} finally {
+		busy = false;
+	}
 }
 $effect(() => {
 	document.title = `${n?.phrase ?? tx("navNotebook")} · ${tx("homeTitle")}`;
@@ -127,7 +147,7 @@ $effect(() => {
 				{#if n.whereHref}
 					{tx(n.from === "own" ? "nbFromOwn" : "nbFromRead", { where: "" })}<a href={n.whereHref}>{n.where}</a>
 				{:else}
-					{tx(n.from === "own" ? "nbFromOwn" : "nbFromRead", { where: n.where })}
+					{tx(n.from === "own" ? "nbFromOwn" : "nbFromRead", { where: n.where || tx("nbSomethingRead") })}
 				{/if}
 			</p>
 		</section>
@@ -161,7 +181,7 @@ $effect(() => {
 		<textarea id="note-gloss" class="input area" bind:value={gloss} rows="3" maxlength="400"></textarea>
 		<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 			<Button variant="secondary" onclick={() => (editing = false)}>{tx("setCancel")}</Button>
-			<Button type="submit" disabled={!phrase.trim() || (phrase.trim() === n?.phrase && gloss.trim() === n?.gloss)}>{tx("setSave")}</Button>
+			<Button type="submit" disabled={busy || !phrase.trim() || (phrase.trim() === n?.phrase && gloss.trim() === n?.gloss)}>{tx("setSave")}</Button>
 		</div>
 	</form>
 </ModalDialog>
@@ -171,7 +191,7 @@ $effect(() => {
 	<p class="text-sm text-muted-foreground">{tx("noteDeleteBody")}</p>
 	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 		<Button variant="secondary" onclick={() => (deleting = false)} data-initial-focus>{tx("setCancel")}</Button>
-		<Button variant="destructive-solid" onclick={remove}>{tx("noteDelete")}</Button>
+		<Button variant="destructive-solid" disabled={busy} onclick={remove}>{tx("noteDelete")}</Button>
 	</div>
 </ModalDialog>
 

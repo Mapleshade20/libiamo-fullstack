@@ -7,6 +7,7 @@ import { type SQL, sql } from "drizzle-orm";
 import {
 	boolean,
 	check,
+	date,
 	doublePrecision,
 	index,
 	integer,
@@ -25,11 +26,14 @@ import {
 	DETAILS,
 	KEY_PROVIDERS,
 	LEARNABLE,
+	NOTE_KINDS,
 	PIECE_KINDS,
 	PIECE_STATES,
 	POSTED,
+	REGISTERS,
 	ROLES,
 	TUTOR_LANGUAGES,
+	VERDICTS,
 } from "#lib/constants.ts";
 
 const at = (name: string) => timestamp(name, { withTimezone: true });
@@ -153,6 +157,36 @@ export const userKey = pgTable(
 	(t) => [check("user_key_provider_check", oneOf(t.provider, KEY_PROVIDERS))],
 );
 
+// --- The week (§5.2) --------------------------------------------------------------------------------------------------
+
+/* A day of the learner's week, in their time zone: it counts when both halves are set. Each half is written only in the
+   transaction that earned it (server/week/days.ts), never read-modified-written. */
+export const practiceDay = pgTable(
+	"practice_day",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		day: date("day").notNull(),
+		learnedAt: at("learned_at"),
+		reviewedAt: at("reviewed_at"),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+/** The aim a week was held to (Monday first, in the learner's time zone): a goal changed later does not rewrite it. */
+export const userWeek = pgTable(
+	"user_week",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		weekStart: date("week_start").notNull(),
+		goal: integer("goal").notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.weekStart] }), check("user_week_goal_check", sql`${t.goal} between 1 and 7`)],
+);
+
 // --- Pieces (§5.4) ----------------------------------------------------------------------------------------------------
 
 /* One piece of the learner's writing, from the draft to what the revision left. `place` is where it is for as its
@@ -237,6 +271,93 @@ export const pieceStep = pgTable(
 		at: at("at").defaultNow().notNull(),
 	},
 	(t) => [primaryKey({ columns: [t.pieceId, t.seq] })],
+);
+
+// --- Notebook and review (§5.6) -------------------------------------------------------------------------------------
+
+/** Something the learner read and collected phrases from (the passage pasted on /collect, a scenario's situation). */
+export const reading = pgTable(
+	"reading",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		language: text("language").notNull(),
+		text: text("text").notNull(),
+		place: text("place"),
+		createdAt: created(),
+	},
+	(t) => [check("reading_language_check", oneOf(t.language, LEARNABLE)), index("reading_user_idx").on(t.userId)],
+);
+
+/*
+ * A notebook entry, and its review card. Own: a phrase worked out in a finished piece (`sentence` is the sentence as they
+ * settled it, `was` what they first wrote there). Collected: a phrase highlighted in a reading (`sentence` is the
+ * sentence it was read in, `marked` the words highlighted). `fsrs` is the scheduler's card (server/review/scheduler.ts);
+ * `due` repeats its due time so the queue is an index scan. Deleting keeps the row for its review history.
+ */
+export const note = pgTable(
+	"note",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		language: text("language").notNull(),
+		kind: text("kind").notNull(),
+		pieceId: uuid("piece_id").references(() => piece.id, { onDelete: "set null" }),
+		readingId: uuid("reading_id").references(() => reading.id, { onDelete: "set null" }),
+		phrase: text("phrase").notNull(),
+		meaning: text("meaning").notNull().default(""),
+		/** The language `meaning`, `usage`, `why` and the examples' translations are in (the tutor's, when it was written). */
+		meaningLanguage: text("meaning_language").notNull(),
+		usage: text("usage"),
+		register: text("register"),
+		why: text("why"),
+		examples: jsonb("examples").notNull().default(sql`'[]'::jsonb`),
+		sentence: text("sentence"),
+		marked: text("marked"),
+		was: text("was"),
+		also: text("also").array().default(sql`'{}'::text[]`).notNull(),
+		fsrs: jsonb("fsrs").notNull(),
+		due: at("due").notNull(),
+		deletedAt: at("deleted_at"),
+		createdAt: created(),
+		updatedAt: updated(),
+	},
+	(t) => [
+		check("note_language_check", oneOf(t.language, LEARNABLE)),
+		check("note_kind_check", oneOf(t.kind, NOTE_KINDS)),
+		check("note_register_check", sql`${t.register} is null or ${oneOf(t.register, REGISTERS)}`),
+		index("note_due_idx").on(t.userId, t.due).where(sql`${t.deletedAt} is null`),
+		index("note_piece_idx").on(t.pieceId),
+	],
+);
+
+/** Every rating, with the card before and after it. */
+export const reviewLog = pgTable(
+	"review_log",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		noteId: uuid("note_id")
+			.notNull()
+			.references(() => note.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		rating: integer("rating").notNull(),
+		verdict: text("verdict"),
+		elapsedSeconds: integer("elapsed_seconds").notNull(),
+		prev: jsonb("prev").notNull(),
+		next: jsonb("next").notNull(),
+		reviewedAt: at("reviewed_at").defaultNow().notNull(),
+	},
+	(t) => [
+		check("review_log_rating_check", sql`${t.rating} between 1 and 4`),
+		check("review_log_verdict_check", sql`${t.verdict} is null or ${oneOf(t.verdict, VERDICTS)}`),
+		index("review_log_note_idx").on(t.noteId),
+	],
 );
 
 // --- Calls (§5.7) -----------------------------------------------------------------------------------------------------

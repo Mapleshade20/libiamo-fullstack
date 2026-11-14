@@ -10,6 +10,8 @@ import { configuredProviders } from "#lib/server/auth/options.ts";
 import { db } from "#lib/server/db/index.ts";
 import { account, user, userKey } from "#lib/server/db/schema.ts";
 import { learner } from "#lib/server/guard.ts";
+import { setWeekGoal } from "#lib/server/week/days.ts";
+import { week } from "#lib/week/week.remote.ts";
 import { command, getRequestEvent, query } from "$app/server";
 import type { Me } from "./me.ts";
 
@@ -101,6 +103,11 @@ export const savePrefs = command(Prefs, async (p) => {
 	const u = learner();
 	if (!u.onboardedAt) error(409, "Set up first.");
 	await db.update(user).set(columns(p)).where(eq(user.id, u.id));
+	// A new weekly aim holds from the week under way; the weeks before keep theirs.
+	if (p.weeklyGoal !== u.weeklyGoal) {
+		await setWeekGoal(u, p.weeklyGoal);
+		await week().refresh();
+	}
 });
 
 /** The welcome's end: the settings, and the account is set up. */

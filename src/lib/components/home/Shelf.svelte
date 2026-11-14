@@ -5,10 +5,11 @@ import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
-import { followUp, myWriting, reviewDeck } from "#lib/demo/data.ts";
+import { followUp, myWriting } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { reopen } from "#lib/demo/reopen.ts";
 import { shelfScenarios } from "#lib/demo/scenarios.ts";
+import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import FollowCard from "./FollowCard.svelte";
 import ScenarioCard from "./ScenarioCard.svelte";
 
@@ -24,14 +25,14 @@ const openPiece = $derived(myWriting().find((w) => w.open));
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
 const prompts = $derived(shelfScenarios(app.lang).slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
 const roomForAdd = $derived((openPiece ? 1 : 0) + (follow ? 1 : 0) + prompts.length < 4);
-const deck = $derived(reviewDeck());
+const deck = $derived(await dueNow());
 const add = createPlay();
 
 /* Review: how many cards are due and, in turns with it (half a minute each), one or two of those cards asked back.
    Pointing at the row brings the count back and holds it; the turns go on a full turn after the pointer leaves. */
 const slides = $derived([
-	{ main: tx("reviewDueShort"), small: tx("aboutMin", { m: Math.max(1, Math.round(deck.length * 0.5)) }) },
-	...deck.slice(0, 2).map((c) => ({ main: tx("reviewRecall", { w: c.phrase ?? c.answer }), small: tx("reviewFrom", { where: c.where }) })),
+	{ main: tx("reviewDueShort"), small: tx("aboutMin", { m: Math.max(1, Math.round(deck.count * 0.5)) }) },
+	...deck.first.map((c) => ({ main: tx("reviewRecall", { w: c.phrase }), small: tx("reviewFrom", { where: c.where || tx("nbSomethingRead") }) })),
 ]);
 let at = $state(0);
 let held = $state(false);
@@ -71,7 +72,7 @@ function hold(on: boolean) {
 </script>
 
 <section class="shelf" aria-labelledby="shelf-h">
-	{#if deck.length}
+	{#if deck.count}
 		<!-- biome-ignore lint/a11y/useSemanticElements: the handlers only pause the ticker; not form fields -->
 		<div
 			class="review-row"
@@ -81,7 +82,7 @@ function hold(on: boolean) {
 			onfocusin={() => hold(true)}
 			onfocusout={() => hold(false)}
 		>
-			<span class="n">{deck.length}</span>
+			<span class="n">{deck.count}</span>
 			<!-- Every turn lies in one cell, so the row never changes size. -->
 			<div class="ticker" aria-live="off" bind:this={ticker}>
 				{#each slides as s, i}
