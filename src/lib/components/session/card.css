@@ -1,0 +1,88 @@
+/* A pass-1 card: paper under the line being typed, headed by the colour of whoever speaks. Shared by the three cards
+   (they are mounted inside the post, so they bring their own look). */
+.p1-card {
+	position: relative;
+	background: var(--raised);
+	border: 1px solid var(--line);
+	border-top: 3px solid var(--who);
+	border-radius: 6px;
+	padding: 14px 18px 16px;
+	box-shadow: var(--paper-lift);
+	font-size: 15px;
+	line-height: 1.6;
+	animation: p1-in 0.5s ease both;
+}
+.p1-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-left: 38px;
+}
+/* The ways out of a card or a step (a hint, the answer, leaving it): small, at the right, never next to the send key. */
+.p1-links {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0 16px;
+	margin-left: auto;
+	font-weight: 400;
+}
+.p1-link {
+	border: 0;
+	background: none;
+	padding: 2px 0;
+	color: var(--muted);
+	font-size: 13px;
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-color: var(--line);
+	text-underline-offset: 3px;
+}
+.p1-link:hover {
+	color: var(--ink);
+}
+@keyframes p1-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+}
+@media (max-width: 760px) {
+	.p1-actions {
+		margin-left: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.p1-card {
+		animation: none;
+	}
+}
+/* The session's icon sends (a fix, a reply): a small typewriter key (layout.css draws the key itself). */
+.send.key {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	color: var(--key-ink);
+	cursor: pointer;
+}
+.send.key:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+.send.key.small {
+	width: 32px;
+	height: 32px;
+}
+@media (pointer: coarse) {
+	.send.key,
+	.send.key.small {
+		width: 44px;
+		height: 44px;
+	}
+}

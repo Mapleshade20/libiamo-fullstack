@@ -1,0 +1,60 @@
+/* Plain pages (notebook, writing, settings): one column, a serif title and a lede, then rows. */
+.sheet {
+	width: min(760px, 100% - 40px);
+	margin: 0 auto;
+	padding: clamp(16px, 5vh, 48px) 0 96px;
+}
+.sheet > h1 {
+	margin-bottom: 22px;
+	font-weight: 500;
+	letter-spacing: -0.015em;
+}
+.sheet .lede {
+	margin: 0 0 24px;
+	color: var(--muted);
+}
+.rows {
+	border-top: 1px solid var(--line-soft);
+}
+.row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 8px;
+	border-bottom: 1px solid var(--line-soft);
+}
+.row .main {
+	flex: 1;
+	min-width: 0;
+}
+.row .title {
+	font-size: 15px;
+	color: var(--ink);
+}
+.row .sub {
+	margin: 2px 0 0;
+	font-size: 13px;
+	color: var(--muted);
+}
+.empty {
+	padding: 48px 0;
+	text-align: center;
+	color: var(--muted);
+}
+/* A status: a quiet pill; `on` is the one that wants attention. */
+.tag {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 4px;
+	background: var(--well);
+	color: var(--ink-2);
+	font-size: 12px;
+	white-space: nowrap;
+}
+.tag.on {
+	background: color-mix(in srgb, var(--accent-c) 16%, transparent);
+	color: var(--ink);
+}

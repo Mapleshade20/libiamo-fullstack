@@ -1,0 +1,86 @@
+[
+	{
+		"key": "/api/gate",
+		"body": "{\"mode\":\"check\",\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"native\":\"zh-CN\",\"learning\":[\"en\"],\"active\":\"en\"}",
+		"status": 200,
+		"reply": "{\"verdict\":\"ok\",\"lang\":\"en\"}",
+		"ms": 351
+	},
+	{
+		"key": "/api/s",
+		"body": "{\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"background\":\"\",\"source\":\"\",\"model\":\"haiku\",\"grader\":\"haiku\",\"cache\":\"on\",\"imageOffset\":0,\"reviewEvery\":30,\"limit\":\"none\",\"learner\":\"zh-CN\",\"feedback\":\"native\",\"lang\":\"en\",\"detail\":\"more\",\"noCache\":false}",
+		"status": 200,
+		"reply": "{\"id\":\"2026-11-10T04-03-19-305Z-haiku\"}",
+		"ms": 8
+	},
+	{
+		"key": "/api/s/*/scene",
+		"body": "{}",
+		"status": 200,
+		"reply": "{\"site\":\"AO3\",\"community\":\"Harry Potter fic\",\"reader\":\"sunny_quill\",\"title\":\"Reply to the author of this Draco fic\",\"platform\":\"AO3 评论（同人小说章节评论区）\",\"audience\":\"该同人作品的作者及其他读者\",\"purpose\":\"分享看哭的感受并表达对更新的期待\",\"target\":\"en\",\"ui\":\"zh-CN\"}",
+		"ms": 4803
+	},
+	{
+		"key": "/api/s/*/pass1",
+		"body": "{\"detail\":\"more\"}",
+		"status": 200,
+		"reply": "{\"doc\":[[\"This chapter \",{\"item\":\"p1\",\"parts\":[\"make\"]},\" me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait \",{\"item\":\"p2\",\"parts\":[\"\"]},\"the next update!\"]],\"stops\":[{\"item\":\"p1\",\"kind\":\"fix\",\"label\":\"make\",\"initial\":\"make\",\"to\":\"made\",\"hole\":false,\"prompt\":\"看看这句话描述的是已经发生的事，动词需要用哪种时态。 改一下试试：\",\"answers\":{\"made\":{\"ok\":true,\"note\":\"句子描述的是看完章节后已经发生的哭的经历，动词应用过去式 made，与 cry 的过去语境保持一致。\"}},\"note\":\"句子描述的是看完章节后已经发生的哭的经历，动词应用过去式 made，与 cry 的过去语境保持一致。\",\"wrongNote\":\"这里用 made。 句子描述的是看完章节后已经发生的哭的经历，动词应用过去式 made，与 cry 的过去语境保持一致。\"},{\"item\":\"p2\",\"kind\":\"fix\",\"label\":\"∅\",\"initial\":\"\",\"to\":\"for\",\"hole\":false,\"prompt\":\"想想 wait 后面通常接哪个介词，才能引出等待的对象。 改一下试试：\",\"answers\":{\"for\":{\"ok\":true,\"note\":\"wait 表示等待某事时要用介词 for，缺少它句意不完整，应为 wait for the next update。\"}},\"note\":\"wait 表示等待某事时要用介词 for，缺少它句意不完整，应为 wait for the next update。\",\"wrongNote\":\"这里用 for。 wait 表示等待某事时要用介词 for，缺少它句意不完整，应为 wait for the next update。\"}]}",
+		"ms": 783
+	},
+	{
+		"key": "/api/s/*/pass1done",
+		"body": "{\"own\":{\"p1\":\"made\"},\"keep\":[]}",
+		"status": 200,
+		"reply": "{\"text\":\"This chapter made me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait for the next update!\",\"doc\":[[\"This chapter made me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait for the next update!\"]]}",
+		"ms": 13
+	},
+	{
+		"key": "/api/s/*/resetP2",
+		"body": "{}",
+		"status": 200,
+		"reply": "{}",
+		"ms": 12
+	},
+	{
+		"key": "/api/s/*/overview",
+		"body": "{}",
+		"status": 200,
+		"reply": "{\"reader\":\"I got teary on the bus too! Draco's slow redemption is exactly why Hermione's forgiveness hit so hard, and it sounds like the author earned that moment. Can't wait for the next update either.\",\"stops\":[{\"id\":\"s1\",\"label\":\"takes forever to change …\",\"parts\":[{\"problem\":\"可选：“takes forever”在英文里常带不耐烦的抱怨语气，读者会先理解为“这篇里德拉科改变得太慢”这一缺点，而不是有意设计的慢热。于是句子的评价方向被读者理解反了，与作者想要表达的赞扬不一致。\",\"question\":\"你是在夸这篇的慢热转变，还是在抱怨改变太慢？\",\"mode\":\"ask\",\"readings\":[{\"label\":\"赞慢热\",\"meaning\":\"德拉科的转变是慢慢铺垫出来的，我很欣赏这种写法。\"},{\"label\":\"抱怨\",\"meaning\":\"德拉科的转变拖得太久，我看得不耐烦。\"}]}],\"who\":null}]}",
+		"ms": 8
+	},
+	{
+		"key": "/api/s/*/overviewReply",
+		"body": "{\"said\":null}",
+		"status": 200,
+		"reply": "{\"reply\":\"你这条评论真正想说的是：这一章让你哭了，因为德拉科转变得慢，赫敏的原谅才显得可信，所以你很期待更新。原文把这层意思直接写出来了，读者也确实接住了。接下来我们看看这条评论的整体结构。\",\"map\":[{\"depth\":0,\"what\":\"说这章在公交车上看哭了\",\"note\":\"\",\"hl\":[\"f1\"]},{\"depth\":0,\"what\":\"德拉科转变得慢，赫敏原谅他才让人信服\",\"st\":\"fix\",\"note\":\"可选：“takes forever”在英文里常带不耐烦的抱怨语气，读者会先理解为“这篇里德拉科改变得太慢”这一缺点，而不是有意设计的慢热。于是句子的评价方向被读者理解反了，与作者想要表达的赞扬不一致。\",\"hl\":[\"s1\",\"f2\",\"f3\"]},{\"depth\":0,\"what\":\"表示很期待下一次更新\",\"note\":\"\",\"hl\":[\"f4\"]}],\"stops\":[{\"id\":\"s1\",\"label\":\"takes forever to change …\",\"parts\":[{\"problem\":\"可选：“takes forever”在英文里常带不耐烦的抱怨语气，读者会先理解为“这篇里德拉科改变得太慢”这一缺点，而不是有意设计的慢热。于是句子的评价方向被读者理解反了，与作者想要表达的赞扬不一致。\",\"question\":\"你是在夸这篇的慢热转变，还是在抱怨改变太慢？\",\"mode\":\"ask\",\"readings\":[{\"label\":\"赞慢热\",\"meaning\":\"德拉科的转变是慢慢铺垫出来的，我很欣赏这种写法。\"},{\"label\":\"抱怨\",\"meaning\":\"德拉科的转变拖得太久，我看得不耐烦。\"}]}],\"who\":null}],\"doc\":[[{\"item\":\"f1\",\"parts\":[\"This chapter made me cry on the bus.\"]},\" \",{\"item\":\"f2\",\"parts\":[\"Draco\"]},\" \",{\"item\":\"s1\",\"parts\":[\"takes forever to change in this fic\"]},{\"item\":\"f3\",\"parts\":[\", so when Hermione forgave him, I believed it.\"]},\" \",{\"item\":\"f4\",\"parts\":[\"I can't wait for the next update!\"]}]]}",
+		"ms": 6
+	},
+	{
+		"key": "/api/s/*/material",
+		"body": "{\"id\":\"s1\"}",
+		"status": 200,
+		"reply": "{\"orig\":\"takes forever to change in this fic\",\"reader\":\"Wait, is \\\"takes forever\\\" a complaint? Did you hate how slow he is?\",\"ref\":\"takes [his time] changing in this fic, a [slow build] I really [appreciate]\",\"alts\":[\"takes a slow, earned route to change in this fic, which I really respect\",\"changes at a patient pace in this fic, and I love how it's built up\"],\"pieces\":[{\"text\":\"appreciate\",\"own\":false}],\"construct\":\"a [noun] I really appreciate（我很欣赏的……）\",\"why\":[{\"label\":\"takes his time\",\"note\":\"takes forever 读起来像抱怨，读者会以为你嫌他改得慢。takes his time 指他不着急、慢慢来，语气中性偏正面，适合说明这是作者有意的铺垫。\"},{\"label\":\"slow build\",\"note\":\"slow build 是同人圈常用来形容人物慢慢成长、关系慢慢推进的说法。直译“改变得很慢”（changes very slowly）听起来只是描述速度，不带欣赏的意思。\"},{\"label\":\"appreciate\",\"note\":\"你要表达的是欣赏这种写法。appreciate 表示认可作者的处理方式，比 like 更像在评价写作手法，比 hate 之类的词则完全相反。\"}],\"prompt\":\"好，现在用英文把这一小段重新写一下，语气像在评论区跟大家聊天一样自然。\",\"success\":\"Okay, now I get why it hit so hard on the bus 😭\"}",
+		"ms": 18318
+	},
+	{
+		"key": "/api/s/*/grade",
+		"body": "{\"id\":\"s1\",\"attempt\":\"I love how slowly Draco changes, so when Hermione forgave him, I believed every bit of it.\"}",
+		"status": 200,
+		"reply": "{\"pass\":true,\"success\":\"Okay, now I get why it hit so hard on the bus 😭\",\"ticks\":[1,2],\"own\":null,\"choices\":[{\"n\":0,\"mine\":null,\"verdict\":\"missing\",\"note\":null},{\"n\":1,\"mine\":\"I love how slowly Draco changes\",\"verdict\":\"also\",\"note\":\"你的句子直接说“喜欢他改得慢”，读者能看出是赞赏。但没有用 slow build 这类圈内说法，所以读起来更像在描述节奏，而不是点出这是一种常见的人物成长写法。\"},{\"n\":2,\"mine\":\"I love\",\"verdict\":\"also\",\"note\":\"I love 同样表达认可，只是语气更口语化，读起来像在评价这种写法，效果和 appreciate 差不多。\"}],\"extra\":[]}",
+		"ms": 11096
+	},
+	{
+		"key": "/api/gate",
+		"body": "{\"mode\":\"collect\",\"text\":\"Honestly, the finale caught me off guard. I went in expecting a tidy ending, and instead it left me staring at the ceiling for an hour. The author knows how to land a punch without making a fuss about it.\",\"native\":\"zh-CN\",\"learning\":[\"en\"],\"active\":\"en\"}",
+		"status": 200,
+		"reply": "{\"verdict\":\"ok\",\"lang\":\"en\"}",
+		"ms": 230
+	},
+	{
+		"key": "/api/collect/explain",
+		"body": "{\"passage\":\"Honestly, the finale caught me off guard. I went in expecting a tidy ending, and instead it left me staring at the ceiling for an hour. The author knows how to land a punch without making a fuss about it.\",\"lang\":\"en\",\"native\":\"zh-CN\",\"feedback\":\"native\",\"model\":\"haiku\",\"highlights\":[{\"n\":1,\"text\":\"caught me off guard\",\"a\":7,\"b\":13}],\"retry\":0}",
+		"status": 200,
+		"reply": "{\"items\":[{\"n\":1,\"phrase\":\"catch someone off guard\",\"meaning\":\"使人措手不及，出乎意料地让人没有防备\",\"register\":\"neutral\",\"why\":\"比起直接说surprise，这个短语强调的是事情来得突然、你毫无准备，而不只是感到惊讶。\",\"example\":\"The sudden question from the interviewer caught me off guard, so I forgot my prepared answer.\",\"span\":\"caught me off guard\"}]}",
+		"ms": 8
+	}
+]

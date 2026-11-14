@@ -15,6 +15,10 @@ const config = {
 	},
 	kit: {
 		adapter: adapter(),
+		// The model layer as the rehearsal lab had it; it moves into the domains under src/lib/server in phase 2.
+		alias: {
+			$model: "src/model",
+		},
 	},
 };
 
