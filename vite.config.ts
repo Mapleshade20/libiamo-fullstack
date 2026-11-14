@@ -8,7 +8,11 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		sveltekit({
+			// Remote functions (query/command/form) carry the app's data; they need Svelte's async mode. Both are
+			// experimental, so Kit and Svelte are pinned to a minor version (docs/design/2026-11-13-step-3-rebuild.md).
+			experimental: { remoteFunctions: true },
 			compilerOptions: {
+				experimental: { async: true },
 				// Runes everywhere except in node_modules. Can be removed in Svelte 6.
 				runes: ({ filename }) =>
 					relative(import.meta.dirname, filename)

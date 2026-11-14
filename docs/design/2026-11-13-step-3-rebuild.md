@@ -38,9 +38,9 @@ checkpoints; production switches once, when everything is done. Earlier decision
 
 ## 3. Stack
 
-SvelteKit 2 with Svelte 5 and `adapter-node`, server-rendered (the demo's `ssr = false` goes; the session's hand-drawn
+SvelteKit 3 with Svelte 5 and `adapter-node`, server-rendered (the demo's `ssr = false` goes; the session's hand-drawn
 post stays a browser-only component inside a rendered page). Tailwind 4, bits-ui, lucide. Postgres 18 through
-drizzle-orm and postgres.js. Better Auth. zod. The OpenAI SDK as the one client for every provider. ts-fsrs. Vitest
+drizzle-orm and postgres.js. The app's data moves through remote functions (§6.8). Better Auth. zod. The OpenAI SDK as the one client for every provider. ts-fsrs. Vitest
 (node and jsdom projects), Biome. Every package is taken at its current version in phase 1 and only if something
 imports it; `dependencies` holds only what the runtime image must have outside the bundle (drizzle-kit, drizzle-orm).
 
@@ -287,6 +287,22 @@ routes check the role in their layout and again in every action. Loaders never w
 Turnstile, the password check, the non-enumerating answers, the ten-minute freshness for changing the address and the
 proxy's rate-limit list carry over; the trusted mail domains do not.
 
+### 6.8 Remote functions
+
+Decided by the user, 2026-11-13, after a survey of the maintainers' plans and the community's reports: the app's reads
+and writes are remote functions (`query`, `command`, `form` in `*.remote.ts`), the direction SvelteKit is going, rather
+than `load` and form actions. They and Svelte's async mode are experimental, so:
+
+- Kit and Svelte are pinned to a minor version; each upgrade reads the changelog's remote-function entries first.
+- Signing in and the admin role are enforced in `hooks.server.ts`, before any page or query runs (a `redirect()` thrown
+  inside a query called from the browser is not honoured, sveltejs/kit#17262).
+- Every remote function is a public endpoint: each begins with the one `learner()` (or `admin()`) guard and scopes rows
+  by its `user_id`.
+- No two refreshes of the same query run at once (an older response can overwrite a newer one, sveltejs/kit#17354).
+- The revision's own protocol (`/api/s`) and Better Auth's endpoints stay as they are.
+- `query.live` is not used: its transport is still changing and a proxy's 502 stops it for good (sveltejs/kit#17655,
+  #16422). The exchange keeps the legacy polling.
+
 ## 7. Verification
 
 - **The model flow against the demo.** `lab/replay.mjs` feeds a recorded session's actions (the lab's
@@ -348,36 +364,30 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
   whole session. One fixture run each before their setups are offered.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
 
-## 12. State when the work was handed over (2026-11-13)
+## 12. State of the work
 
-Branch `rebuild`, two commits after `legacy`: this design, and the clearing of the old application.
+Kept current as the work goes; the history is in the commits.
 
-**Staged, not committed:** the demo (`src/lib`, `src/routes`, `src/app.html`), the model layer (`src/model`), the
-catalogs (`src/lib/i18n/catalog`), the name tables (`seed/names`), the lab's tests moved to Vitest (`test/model`,
-`test/lib`), `lab/replay.mjs`, new `package.json`, lockfile and build configs. Biome's safe fixes and formatting are
-applied to all of it. It is not committed because the pre-commit Biome hook refuses it.
+**Done (2026-11-13):** the import (Biome's findings fixed in the code; the lab's control specimens left in the archive);
+the base path removed; every package at its current major (SvelteKit 3, Vite 8, Vitest 5, TypeScript 6, since Kit 3 and
+svelte-check cannot use 7 yet); remote functions and async Svelte switched on (§6.8); Postgres through drizzle 0.45 and
+postgres.js 4, `src/env.ts` declaring the environment (Kit 3's replacement for `$env`), the account tables (§5.1) in
+`drizzle/0000_init.sql`, `/health`, and the pool closed on `sveltekit:shutdown`.
 
 | Check | State |
 |---|---|
-| `svelte-check` | 0 errors |
-| `vitest` | 22 of 23 files pass (139 tests); `test/base-path.test.ts` fails on 202 bare `"/…"` URLs in the demo |
-| `biome check` | about 170 errors and 220 warnings left after the safe fixes |
-| dev server | pages and `/api` answer; needs `OPENROUTER_API_KEY` (or `OPENAI_API_KEY` with an OpenRouter `OPENAI_BASE_URL`) in `.env` |
+| `pnpm check` | 0 errors; about 100 Biome warnings (non-null assertions, CSS specificity order), left for when the pages are touched |
+| `pnpm test` | 21 files, 109 tests pass |
 | replay | the lab's 2026-11-12 session: 14 steps identical, then `notes` differs by the `was` field the lab added after recording |
-| container | not working yet: no database, no `/health`, no migrations |
+| pages | the production build matches the demo pixel for pixel on 32 of 36 screenshots (desktop and phone); the rest differ by subpixels or data |
+| container | not built yet |
 
-**Next, in order:**
+The dev server's CSS can order a global sheet after a page's scoped rules where the build does not (an admin row's line
+height differs by a pixel in dev only); judge looks on the build.
 
-1. Biome. Mostly `useButtonType` (55; a button inside a form that submits needs `type="submit"`, the others
-   `type="button"`), `noAssignInExpressions` (46), a11y rules on svg and roles (about 50), CSS
-   `noDescendingSpecificity` (111, warnings). Fix the code rather than loosen the rules. Formatting touched Svelte
-   templates, so compare a few pages with the demo (port 4793) for changed spacing between inline elements.
-2. Remove the base path (below). Then commit the import.
-3. The package upgrade (below).
-4. The rest of phase 1: drizzle and the single migration with the account tables (§5.1);
-   `/health`; hooks with graceful shutdown; the image boots under compose; Better Auth from `legacy` behind the
-   demo's auth pages; the welcome, settings and the key on real accounts; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`
-   and the environment lists rewritten for what exists.
+**Next, in order:** the image boots under compose with an empty database; Better Auth from `legacy` (version 1.7)
+behind the demo's auth pages; the welcome, settings and the key on real accounts through remote functions;
+`AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
 
 ### Decided by the user after the handover (2026-11-13)
 
