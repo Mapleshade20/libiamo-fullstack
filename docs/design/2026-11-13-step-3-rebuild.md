@@ -379,6 +379,9 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
   prompt: the card's sentence, the learner's answer and the one they kept, then follow-up questions), like collecting's
   questions about a phrase.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
+- **The pace of async places.** The seeded AO3 and Reddit scenarios are `low` urgency (replies about ten minutes on,
+  at most forty), mail `medium` (two, at most eight), the chats `high` (half a minute). A learner who ends the exchange
+  before anyone answered goes over a thread with no reply. To settle in Scene Lab (4e) with the learner's seat in mind.
 - **A count of use per learner** kept on the account before a call's row goes after 30 days (§5.7): the user is
   considering it.
 - **Users in admin** (asked for by the user, 2026-11-14): a tab listing every account, with its information, its call
@@ -522,12 +525,27 @@ decided on:
   learner's language. The non-English versions' `you`, `goals` and people's `who` are still the demo's English, and
   every person's `notes` are empty until Scene Lab (4e). The scenario page's plan stays on the device until 4b; the
   phrases it offers are the notebook's latest four, not yet ranked by fit.
-- **4b. The exchange.** `exchange`, `exchange_message`, `agent_batch`, `agent_delivery` (§5.5); legacy's places,
-  `createPracticeSession`, the agent-reply worker, floor, prompts, unread, send options and hints moved and renamed;
-  entering a scenario creates its piece (`writing`) and exchange, the plan typed beforehand going into the piece's
-  `background`; `/scenario/<id>/play` is the real place.
-- **4c. Into the revision.** The exchange's end builds the lab's `Exchange` from its messages; the after page shows the
-  thread and starts the revision on the same piece; "later" keeps it on the shelf.
+- **4b. The exchange** (done 2026-11-14). `exchange`, `exchange_message`, `agent_batch`, `agent_delivery` (§5.5);
+  legacy's five places, the controller (`createPracticeSession`, now `createExchange`), the hint panel, the agent-reply
+  worker, floor, prompts, unread, send options and hints moved (`components/exchange`, `exchange/`,
+  `server/exchange`) and renamed. The places reach the server only through an `ExchangeApi` the play page builds from
+  remote functions (`lib/exchange/exchange.remote.ts`); the page polls the place while the cast composes, as legacy
+  did. What an exchange is played in comes from its scenario and the version in the piece's language
+  (`server/exchange/setting.ts`): the old code's `counterpartName` and `members` are filled from the version's people,
+  so the places and the floor read who is there as they did. The cast's prompt keeps its text; its CHARACTER NOTES are
+  the people (who they are, their notes) and "others", THE REAL CONVERSATION is `followed`. Every call (replies, the
+  addressee, hints) runs on the learner's key through their `Caller`; the addressee is a `decide()` on any provider
+  (legacy asked Jev on OpenRouter keys only); the recipe and slot machinery and the per-learner level went. The
+  worker starts with the server (`hooks.server.ts`) and stops before shutdown flushes. The lifecycle strings joined
+  the catalog in every language (`ex*`); each place's own vocabulary is still legacy's en/es/fr/ja (other languages
+  fall back to English). Checked in the browser on the dev server: the iMessage scenario, two messages from the cast in
+  one burst on Haiku, the read receipt, "I'm done".
+- **4c. Into the revision** (done 2026-11-14). The after page reads the exchange (`server/exchange/after.ts`): the
+  thread as the learner left it, and the handoff the revision takes (the lab's `Exchange` built from the opening and
+  the messages, the learner's turns as the text, the plan as background); "Go over what I wrote" starts the revision on
+  the same piece, "Later" leaves it on the shelf, where it opens back in its place or on the after page. A finished
+  scenario piece's page shows how the others answered last from the exchange. Checked end to end: the place, the
+  after page, the revision on the same piece (pass 1 done), every call recorded on the learner's key.
 - **4d. Translations.** The sheet keeps its draft in `piece.text`; the source runner (§6.4) on the service key; name
   tables.
 - **4e. Scene Lab.** The agents' new input (`people`, `others`, `followed`) judged from the learner's seat.

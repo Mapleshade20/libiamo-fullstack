@@ -19,6 +19,8 @@ export type PieceItem = {
 	lang: string;
 	at: number;
 	open: boolean;
+	/** writing: a scenario still in its place (or a translation on its sheet); revising: inside the two passes. */
+	phase?: "writing" | "revising" | "finished";
 	scenarioId?: string;
 	finishedAt?: number;
 	/** What the notebook keeps from it, and since when its entries are on their way. */
@@ -45,6 +47,8 @@ export type PieceResult = {
 	leftovers: Leftover[];
 	/** A translation's text as it was first written, shown beside the learner's final version. */
 	authentic?: string;
+	/** A scenario's: how the others answered last in its place. */
+	ending?: { author: string; text: string }[];
 	finishedAt: number;
 };
 

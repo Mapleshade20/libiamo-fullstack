@@ -1,6 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { piece } from "#lib/server/db/schema.ts";
+import { exchange, exchangeMessage, piece } from "#lib/server/db/schema.ts";
 import type { Learned, Leftover, PieceItem, PieceView, Posted } from "#lib/writing/types.ts";
 
 /* The learner's pieces as the pages read them: the lists, and one piece's page. */
@@ -37,6 +37,7 @@ function itemOf(r: Listed): PieceItem {
 		lang: r.language,
 		at: r.createdAt.getTime(),
 		open: r.state === "writing" || r.state === "revising",
+		phase: r.state === "writing" || r.state === "revising" || r.state === "finished" ? r.state : undefined,
 		scenarioId: r.scenarioId ?? undefined,
 		finishedAt: ms(r.finishedAt),
 		learned: (r.learned as Learned[] | null) ?? undefined,
@@ -71,6 +72,7 @@ export async function pieceOf(userId: string, id: string): Promise<PieceView | n
 	if (!r) return null;
 	const item = itemOf(r);
 	if (r.state !== "finished" || !r.finishedAt) return item;
+	const ending = r.scenarioId ? await endingOf(id) : [];
 	return {
 		...item,
 		result: {
@@ -82,7 +84,22 @@ export async function pieceOf(userId: string, id: string): Promise<PieceView | n
 			notesPending: item.notesPending,
 			leftovers: (r.leftovers as Leftover[] | null) ?? [],
 			authentic: r.authentic ?? undefined,
+			...(ending.length ? { ending } : {}),
 			finishedAt: r.finishedAt.getTime(),
 		},
 	};
+}
+
+/** How the others answered after the learner's last message in a scenario's place. */
+async function endingOf(pieceId: string): Promise<{ author: string; text: string }[]> {
+	const rows = await db
+		.select({ role: exchangeMessage.role, content: exchangeMessage.content, meta: exchangeMessage.llmMetadata })
+		.from(exchangeMessage)
+		.innerJoin(exchange, eq(exchange.id, exchangeMessage.exchangeId))
+		.where(eq(exchange.pieceId, pieceId))
+		.orderBy(asc(exchangeMessage.createdAt), asc(exchangeMessage.id));
+	const last = rows.findLastIndex((m) => m.role === "user");
+	return rows
+		.slice(last + 1)
+		.map((m) => ({ author: String((m.meta as { assistantAuthorName?: string } | null)?.assistantAuthorName ?? ""), text: m.content }));
 }

@@ -15,6 +15,8 @@ const PIECE = /^[0-9a-f-]{36}$/;
 
 /** Back into an unfinished piece: its revision comes back to where it was. */
 export async function reopen(w: Writing | undefined) {
+	// A scenario's piece still being played goes back to its place.
+	if (w?.phase === "writing" && w.scenarioId) return goto(`/scenario/${w.scenarioId}/${w.site === "Translate" ? "translate" : "play"}`);
 	if (w && PIECE.test(w.id)) return goto(`/live/${w.id}`);
 	// A scenario set aside before its revision began: a translation back to its sheet (the draft is kept there), any other
 	// back to how the thread ended (the stand-in has no handoff), where the revision starts.

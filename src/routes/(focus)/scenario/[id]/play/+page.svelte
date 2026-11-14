@@ -1,165 +1,101 @@
 <script lang="ts">
-import { onMount } from "svelte";
-import Button from "#lib/components/ui/button/button.svelte";
-import { app, tx } from "#lib/demo/app.svelte.ts";
-import { siteOf } from "#lib/demo/data.ts";
-import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
+import type { Component } from "svelte";
+import { account } from "#lib/account/account.svelte.ts";
+import type { ExchangeApi } from "#lib/components/exchange/actions.ts";
+import ConversationReadReceipt from "#lib/components/exchange/ConversationReadReceipt.svelte";
+import type { SurfaceProps } from "#lib/components/exchange/controller.svelte.ts";
+import AO3UI from "#lib/components/exchange/places/ao3/AO3UI.svelte";
+import DiscordUI from "#lib/components/exchange/places/discord/DiscordUI.svelte";
+import MailUI from "#lib/components/exchange/places/email/MailUI.svelte";
+import IMessageUI from "#lib/components/exchange/places/imessage/IMessageUI.svelte";
+import RedditUI from "#lib/components/exchange/places/reddit/RedditUI.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import type { ExchangePlace } from "#lib/constants.ts";
+import { app, forget, read, tx } from "#lib/demo/app.svelte.ts";
+import { enterPlace, finishPlace, hintInPlace, placeOf, readInPlace, sendToPlace } from "#lib/exchange/exchange.remote.ts";
+import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
- * Stands in for the simulation. In the main app this is the place itself (its AO3, Reddit, Discord, iMessage or mail
- * surface, with the cast answering); the demo designs what comes before and after it, so here the place only passes:
- * a few seconds, or a skip, and the learner has been there.
+ * The scenario's place itself: its AO3, Reddit, mail, Discord or iMessage, with the cast answering from the server.
+ * Going in opens the piece and its exchange (the plan typed on the scenario page goes with it); the page polls while
+ * the cast is composing, and ending it leads to the after page.
  */
-const scenario = $derived(scenarioById(page.params.id ?? ""));
-const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
-const st = $derived(siteOf(scenario?.site));
-const LENGTH = 6000;
-const leave = () => goto(`/scenario/${page.params.id}/after`, { replace: true });
-onMount(() => {
-	const t = setTimeout(leave, LENGTH);
-	return () => clearTimeout(t);
+const SURFACES: Record<ExchangePlace, Component<SurfaceProps>> = {
+	ao3: AO3UI,
+	reddit: RedditUI,
+	email: MailUI,
+	discord: DiscordUI,
+	imessage: IMessageUI,
+};
+
+const id = $derived(page.params.id ?? "");
+const where = $derived({ scenarioId: id, lang: app.lang });
+const view = $derived(await placeOf(where));
+// The place speaks the language learnt, whatever the interface's.
+$effect(() => {
+	if (view) void loadLang(view.language);
+});
+const exchangeId = () => view?.persisted?.id ?? null;
+const planKey = $derived(`scenarioPlan:${id}`);
+
+const api: ExchangeApi = {
+	async start() {
+		await enterPlace({ ...where, plan: read<string>(planKey, "") });
+		forget(planKey);
+	},
+	async send(fields) {
+		const ex = exchangeId();
+		return ex === null ? { status: "failed" } : sendToPlace({ exchangeId: ex, fields });
+	},
+	async finish() {
+		const ex = exchangeId();
+		if (ex !== null) await finishPlace(ex);
+	},
+	async refresh() {
+		await placeOf(where).refresh();
+	},
+	async hint(input) {
+		const ex = exchangeId();
+		if (ex === null) return {};
+		return hintInPlace({ exchangeId: ex, ...input });
+	},
+	async read(messageId) {
+		const ex = exchangeId();
+		if (ex === null) return;
+		const r = await readInPlace({ exchangeId: ex, messageId });
+		if (r.worldScheduled) await placeOf(where).refresh();
+	},
+};
+const Surface = $derived(view ? SURFACES[view.place] : null);
+// An exchange already over is read on the after page.
+$effect(() => {
+	if (view?.persisted && view.persisted.status !== "in_progress") goto(`/scenario/${id}/after`, { replaceState: true });
+});
+$effect(() => {
+	document.title = `${view?.title ?? ""} · ${tx("homeTitle")}`;
 });
 </script>
 
-<main class="play" style:--tone={st.tone} style:--deep={st.deep} style:--length="{LENGTH}ms">
-	<div class="window">
-		<div class="chrome">
-			<span class="site">{scenario?.site}</span>
-			<span class="grow"></span>
-			<Button variant="ghost" size="sm" onclick={leave}>{tx("playSkip")}</Button>
-		</div>
-		<div class="inside">
-			<p class="caption">{tx("playCaption", { site: scenario?.site ?? "" })}</p>
-			<p class="title">{scenario?.title[app.lang] ?? ""}</p>
-			<div class="cast" aria-hidden="true">
-				{#each sim?.cast ?? [] as c, i}
-					<span class="person" style:--i={i}
-						><span class="avatar">{c.name.replace(/^u\//, "").slice(0, 1).toUpperCase()}</span><span class="dots"><i></i><i></i><i></i></span></span
-					>
-				{/each}
-			</div>
-			<div class="track" role="progressbar" aria-label={tx("playCaption", { site: scenario?.site ?? "" })}><i></i></div>
-		</div>
-	</div>
-</main>
-
-<style>
-.play {
-	min-height: 100dvh;
-	display: grid;
-	place-items: center;
-	padding: 24px;
-	background: color-mix(in srgb, var(--tone) 35%, var(--bg));
-}
-:global([data-theme="dark"]) .play {
-	background: color-mix(in srgb, var(--deep) 45%, var(--bg));
-}
-.window {
-	width: min(640px, 100%);
-	border-radius: 6px;
-	background: var(--raised);
-	box-shadow: var(--pop);
-	overflow: hidden;
-	animation: rise 400ms var(--ease-panel);
-}
-@keyframes rise {
-	from {
-		opacity: 0;
-		transform: translateY(10px) scale(0.98);
-	}
-}
-.chrome {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 8px 10px 8px 18px;
-	border-bottom: 1px solid var(--line-soft);
-	background: color-mix(in srgb, var(--tone) 40%, var(--raised));
-}
-:global([data-theme="dark"]) .chrome {
-	background: var(--deep);
-}
-.site {
-	font: 500 18px var(--font-serif-stack);
-}
-.grow {
-	flex: 1;
-}
-.inside {
-	padding: 36px 28px 30px;
-	text-align: center;
-}
-.caption {
-	margin: 0;
-	font-size: 13px;
-	color: var(--muted);
-}
-.title {
-	margin: 6px 0 22px;
-	font: 500 22px / 1.3 var(--font-serif-stack);
-}
-.cast {
-	display: flex;
-	justify-content: center;
-	gap: 22px;
-	margin-bottom: 28px;
-}
-.person {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	animation: rise 400ms var(--ease-panel) calc(200ms + var(--i) * 140ms) both;
-}
-.avatar {
-	display: grid;
-	place-items: center;
-	width: 34px;
-	height: 34px;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--tone) 70%, var(--raised));
-	font-weight: 600;
-	color: #3d3d3a;
-}
-.dots {
-	display: inline-flex;
-	gap: 3px;
-}
-.dots i {
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: var(--muted);
-	animation: breathe 1.2s ease-in-out infinite;
-}
-.dots i:nth-child(2) {
-	animation-delay: 0.15s;
-}
-.dots i:nth-child(3) {
-	animation-delay: 0.3s;
-}
-@keyframes breathe {
-	50% {
-		opacity: 0.25;
-	}
-}
-.track {
-	height: 3px;
-	border-radius: 3px;
-	background: var(--line-soft);
-	overflow: hidden;
-}
-.track i {
-	display: block;
-	height: 100%;
-	background: var(--wine);
-	transform-origin: left;
-	animation: fill var(--length) linear both;
-}
-@keyframes fill {
-	from {
-		transform: scaleX(0);
-	}
-}
-</style>
+{#if view && Surface}
+	<ConversationReadReceipt exchangeId={view.persisted?.id ?? null} messageId={view.latestReplyId} read={api.read} />
+	{#key view.scenarioId}
+		<Surface
+			scenarioId={view.scenarioId}
+			userName={account.me.name}
+			avatarUrl={app.prefs.avatar ?? ""}
+			language={view.language}
+			persisted={view.persisted}
+			openingState={view.openingState}
+			maxTurns={view.maxTurns}
+			returnHref="/scenario/{view.scenarioId}"
+			afterHref="/scenario/{view.scenarioId}/after"
+			{api}
+		/>
+	{/key}
+{:else}
+	<main class="grid min-h-dvh place-items-center">
+		<EmptyState art="clink" title={tx("qMissing")} action={{ label: tx("shelfAll"), href: "/library" }} />
+	</main>
+{/if}

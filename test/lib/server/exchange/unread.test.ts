@@ -1,0 +1,186 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockDb } = vi.hoisted(() => ({
+	mockDb: {
+		update: vi.fn(),
+		select: vi.fn(),
+		execute: vi.fn(),
+		transaction: vi.fn(),
+	},
+}));
+
+vi.mock("#lib/server/db/index.ts", () => ({ db: mockDb }));
+// The scene the ownership read stands for: its place and opening, as the exchange's setting.
+const scene = vi.hoisted(() => ({ current: { ui: "reddit", openingState: {} as Record<string, unknown> } }));
+vi.mock("#lib/server/exchange/setting.ts", () => ({
+	settingOf: vi.fn(async () => ({ id: "s", language: "en", title: "", urgency: "high", maxTurns: null, version: {}, ...scene.current })),
+}));
+
+import { acknowledgeAssistantMessage, getNextAgentWorkDueAt } from "#lib/server/exchange/unread.ts";
+
+/** Flattens a drizzle SQL object's chunks into the literal text it will emit. */
+function sqlText(value: unknown): string {
+	if (typeof value === "string") return value;
+	if (Array.isArray(value)) return value.map(sqlText).join(" ");
+	if (value && typeof value === "object") {
+		if ("queryChunks" in value) return sqlText((value as { queryChunks: unknown }).queryChunks);
+		if ("value" in value) return sqlText((value as { value: unknown }).value);
+	}
+	return "";
+}
+
+describe("acknowledgeAssistantMessage", () => {
+	let setMock: ReturnType<typeof vi.fn>;
+	let whereMock: ReturnType<typeof vi.fn>;
+	let returning: ReturnType<typeof vi.fn>;
+	let tx: {
+		select: ReturnType<typeof vi.fn>;
+		update: ReturnType<typeof vi.fn>;
+		insert: ReturnType<typeof vi.fn>;
+		query: {
+			agentBatch: { findFirst: ReturnType<typeof vi.fn> };
+			exchange: { findFirst: ReturnType<typeof vi.fn> };
+			user: { findFirst: ReturnType<typeof vi.fn> };
+		};
+	};
+
+	beforeEach(() => {
+		vi.resetAllMocks();
+		returning = vi.fn().mockResolvedValue([{ id: 42 }]);
+		whereMock = vi.fn(() => ({ returning }));
+		setMock = vi.fn(() => ({ where: whereMock }));
+		tx = {
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn(() => Object.assign(Promise.resolve([{ id: 42 }]), { for: vi.fn().mockResolvedValue([{ id: 42 }]) })),
+				})),
+			})),
+			update: vi.fn(() => ({ set: setMock })),
+			insert: vi.fn(() => ({ values: vi.fn().mockResolvedValue([{ id: 99 }]) })),
+			query: {
+				agentBatch: { findFirst: vi.fn().mockResolvedValue({ id: 55 }) },
+				exchange: { findFirst: vi.fn().mockResolvedValue(null) },
+				user: { findFirst: vi.fn().mockResolvedValue({ name: "Maple" }) },
+			},
+		};
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+		ownedSession([{ ui: "reddit", openingState: { post: { author: "op" } }, learnerName: "Maple" }]);
+	});
+
+	/** The unlocked ownership read that decides whether the session can resume ambient life. */
+	const ownedSession = (rows: { ui?: string; openingState?: Record<string, unknown>; learnerName: string }[]) => {
+		if (rows[0]) scene.current = { ui: rows[0].ui ?? "reddit", openingState: rows[0].openingState ?? {} };
+		mockDb.select.mockImplementation(() => ({
+			from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(rows) })) })),
+		}));
+	};
+
+	it("advances a live chat's watermark without the session lock or a world moment", async () => {
+		ownedSession([{ ui: "discord", openingState: { serverName: "s", channelName: "c" }, learnerName: "Maple" }]);
+		mockDb.update.mockImplementation(() => ({ set: setMock }));
+
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: true, worldScheduled: false });
+
+		expect(mockDb.transaction).not.toHaveBeenCalled();
+		expect(sqlText(setMock.mock.calls[0][0].lastSeenAssistantMessageId)).toContain("greatest");
+	});
+
+	// Two acknowledgements can overlap. If the older snapshot's smaller id were
+	// written last the watermark would move backwards and already-read replies
+	// would resurface as unread.
+	it("moves the watermark forward only, resolving the maximum in the database", async () => {
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: true, worldScheduled: false });
+
+		expect(setMock).toHaveBeenCalledTimes(1);
+		expect(sqlText(setMock.mock.calls[0][0].lastSeenAssistantMessageId)).toContain("greatest");
+	});
+
+	it("proves ownership and the assistant role in the same statement", async () => {
+		await acknowledgeAssistantMessage(42, "user-1", 10);
+		const condition = sqlText(whereMock.mock.calls[0][0]);
+		expect(condition).toContain("exists");
+		expect(condition).toContain("'assistant'");
+	});
+
+	it("reports a message outside the reader's sessions as not acknowledged", async () => {
+		returning.mockResolvedValue([]);
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: false, worldScheduled: false });
+	});
+
+	it("reports a session the reader does not own as not acknowledged", async () => {
+		ownedSession([]);
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: false, worldScheduled: false });
+		expect(setMock).not.toHaveBeenCalled();
+	});
+
+	it("resumes ambient life on reading when no reply work is outstanding", async () => {
+		// no outstanding reply batches; the async group session is eligible for a world moment
+		tx.query.agentBatch.findFirst.mockResolvedValue(null);
+		tx.query.exchange.findFirst.mockResolvedValue({
+			id: 42,
+			userId: "user-1",
+			status: "in_progress",
+			expiresAt: new Date(Date.now() + 3_600_000),
+			task: { id: 1, ui: "reddit", language: "en", openingState: { post: { author: "op" } }, urgency: "high" },
+			messages: [{ id: 1, role: "user", content: "anyone?", createdAt: new Date() }],
+		});
+		const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+		(tx.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
+			values: async (values: Record<string, unknown>) => {
+				inserts.push({ table, values });
+				return [{ id: 99 }];
+			},
+		}));
+
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: true, worldScheduled: true });
+
+		// a world moment was scheduled for the session; its shape is pinned by the worker's
+		// scheduling tests, not here
+		expect(inserts.some((insert) => (insert.values as { kind?: string }).kind === "world")).toBe(true);
+	});
+
+	it("does not resume ambient life while reply work is still outstanding", async () => {
+		// a taker is still composing for the learner's last message
+		tx.query.agentBatch.findFirst.mockResolvedValue({ id: 55 });
+		const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+		(tx.insert as ReturnType<typeof vi.fn>).mockImplementation((table: unknown) => ({
+			values: async (values: Record<string, unknown>) => {
+				inserts.push({ table, values });
+				return [{ id: 99 }];
+			},
+		}));
+
+		await expect(acknowledgeAssistantMessage(42, "user-1", 10)).resolves.toEqual({ acknowledged: true, worldScheduled: false });
+
+		expect(inserts).toEqual([]);
+	});
+});
+
+describe("getNextAgentWorkDueAt", () => {
+	beforeEach(() => {
+		vi.resetAllMocks();
+		mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({}));
+	});
+
+	it("maps the next work timestamp from one database snapshot", async () => {
+		const soonest = new Date("2026-08-21T12:01:00.000Z");
+		mockDb.execute.mockResolvedValue([{ dueAt: soonest }]);
+
+		await expect(getNextAgentWorkDueAt("user-1")).resolves.toEqual(soonest);
+
+		// one snapshot for both halves: a commit between two separate reads could hide live work
+		expect(mockDb.execute).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns null when nothing is outstanding", async () => {
+		mockDb.execute.mockResolvedValue([{ dueAt: null }]);
+		await expect(getNextAgentWorkDueAt("user-1")).resolves.toBeNull();
+	});
+
+	it("reads the database's timestamp with its offset, whatever the server's timezone", async () => {
+		// timestamptz comes back with its offset; parsing it by the local timezone would misplace it and force
+		// endless polling
+		mockDb.execute.mockResolvedValue([{ dueAt: "2026-10-10 00:05:00+00" }]);
+		await expect(getNextAgentWorkDueAt("user-1")).resolves.toEqual(new Date("2026-10-10T00:05:00.000Z"));
+	});
+});
