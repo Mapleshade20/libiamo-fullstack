@@ -1,12 +1,11 @@
 import { learner } from "#lib/server/guard.ts";
 import type { LiveCall } from "#lib/server/llm/lanes.ts";
-import { sessions } from "#lib/server/sessions.ts";
+import { heldRevision } from "#lib/server/revision/store.ts";
 
-// Debug only: a session's model calls as server-sent events, for the page's call bubbles.
+// Debug only: a revision's model calls as server-sent events, for the page's call bubbles.
 export function GET({ params, request }) {
 	const u = learner();
-	const held = sessions.get(params.id);
-	const lanes = held?.owner === u.id ? held.session.ai.lanes : undefined;
+	const lanes = heldRevision(params.id, u.id)?.session.ai.lanes;
 	if (!lanes) return new Response(null, { status: 204 });
 	let send: (c: LiveCall) => void;
 	const stream = new ReadableStream({
