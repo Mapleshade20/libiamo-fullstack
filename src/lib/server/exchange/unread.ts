@@ -118,23 +118,26 @@ async function advanceWatermark(executor: Pick<typeof db, "update">, exchangeId:
  * clock so the naive timestamp convention never leaks into the client.
  */
 export async function getUnreadInbox(userId: string): Promise<UnreadInboxItem[]> {
-	return db
-		.select({
-			exchangeId: exchange.id,
-			pieceId: exchange.pieceId,
-			scenarioId: exchange.scenarioId,
-			title: piece.title,
-			place: piece.place,
-			status: exchange.status,
-			unreadCount: sql<number>`count(*)::int`,
-			latestAgeSeconds: sql<number | null>`extract(epoch from (now() - max(${exchangeMessage.createdAt})))::int`,
-		})
-		.from(exchange)
-		.innerJoin(exchangeMessage, unreadReply)
-		.innerJoin(piece, eq(piece.id, exchange.pieceId))
-		.where(eq(exchange.userId, userId))
-		.groupBy(exchange.id, piece.title, piece.place)
-		.orderBy(sql`max(${exchangeMessage.createdAt}) desc`);
+	return (
+		db
+			.select({
+				exchangeId: exchange.id,
+				pieceId: exchange.pieceId,
+				scenarioId: exchange.scenarioId,
+				title: piece.title,
+				place: piece.place,
+				status: exchange.status,
+				unreadCount: sql<number>`count(*)::int`,
+				latestAgeSeconds: sql<number | null>`extract(epoch from (now() - max(${exchangeMessage.createdAt})))::int`,
+			})
+			.from(exchange)
+			.innerJoin(exchangeMessage, unreadReply)
+			.innerJoin(piece, eq(piece.id, exchange.pieceId))
+			// A piece gone past its revision has nothing left to read the replies in.
+			.where(and(eq(exchange.userId, userId), inArray(piece.state, ["writing", "revising"])))
+			.groupBy(exchange.id, piece.title, piece.place)
+			.orderBy(sql`max(${exchangeMessage.createdAt}) desc`)
+	);
 }
 
 /**

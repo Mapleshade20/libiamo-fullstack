@@ -1,6 +1,6 @@
 import { app, read, write } from "./app.svelte";
 
-/* Stand-ins for the main app's announcements (written per interface language) and for a reply in a chat scenario. */
+/* Stand-ins for the main app's announcements (written per interface language). */
 type Local = Record<string, string>;
 export type Announcement = { id: number; date: Date; title: Local; body: Local };
 export const ANNOUNCEMENTS: Announcement[] = [
@@ -24,10 +24,6 @@ export const ANNOUNCEMENTS: Announcement[] = [
 		},
 	},
 ];
-export type Reply = { id: string; site: string; title: string; age: string; count: number };
-export const REPLIES: Record<string, Reply[]> = {
-	en: [{ id: "r1", site: "iMessage", title: "Plan Saturday with a friend", age: "5 min", count: 2 }],
-};
 
 const READ = "announcementsRead";
 export const readIds = () => {

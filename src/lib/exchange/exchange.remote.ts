@@ -10,7 +10,7 @@ import { completeSession, exchangeFor, openExchange, sessionMessageChronological
 import { generateHint } from "#lib/server/exchange/hints.ts";
 import { sendOptionsFor } from "#lib/server/exchange/send-options.ts";
 import { settingFrom } from "#lib/server/exchange/setting.ts";
-import { acknowledgeAssistantMessage, earliestOutstandingDueAtInScope } from "#lib/server/exchange/unread.ts";
+import { acknowledgeAssistantMessage, earliestOutstandingDueAtInScope, getNextAgentWorkDueAt, getUnreadInbox } from "#lib/server/exchange/unread.ts";
 import { learner } from "#lib/server/guard.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
@@ -19,6 +19,7 @@ import { command, query } from "$app/server";
 import { MAIL_TEXT_MAX, TEXT_MAX } from "./limits.ts";
 import { parseMailMessage } from "./mail.ts";
 import type { PersistedExchange } from "./messages.ts";
+import type { UnreadInboxItem } from "./unread.ts";
 
 /*
  * The simulated place as the play page reads and writes it. `place` is everything the page needs to draw it: the
@@ -196,4 +197,12 @@ export const readInPlace = command(z.object({ exchangeId: z.number().int(), mess
 export const afterPlace = query(z.string().max(60), async (scenarioId) => {
 	const u = learner();
 	return afterOf(u, scenarioId);
+});
+
+/** Replies the learner has not read, by exchange (the home page's "someone answered you"), and when the cast's next
+ *  reply falls due, so the page knows when to ask again (null: nothing is coming). */
+export const unreadReplies = query(async (): Promise<{ items: UnreadInboxItem[]; nextDueAt: string | null }> => {
+	const u = learner();
+	const [items, due] = await Promise.all([getUnreadInbox(u.id), getNextAgentWorkDueAt(u.id)]);
+	return { items, nextDueAt: due?.toISOString() ?? null };
 });
