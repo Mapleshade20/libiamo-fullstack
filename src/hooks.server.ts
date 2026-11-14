@@ -13,7 +13,7 @@ process.on("sveltekit:shutdown", async (reason) => {
 
 const handleAuth: Handle = async ({ event, resolve }) => {
 	const found = await auth.api.getSession({ headers: event.request.headers });
-	if (found && !found.user.deletedAt) {
+	if (found) {
 		event.locals.session = found.session;
 		event.locals.user = found.user;
 	}

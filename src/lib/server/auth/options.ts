@@ -80,7 +80,6 @@ export function createAuthOptions(store: AuthStore) {
 				helpImprove: { type: "boolean", defaultValue: true, input: false },
 				onboardedAt: { type: "date", required: false, input: false },
 				pendingEmail: { type: "string", required: false, input: false },
-				deletedAt: { type: "date", required: false, input: false },
 			},
 		},
 		emailAndPassword: {

@@ -1,5 +1,5 @@
 {
-  "id": "06d9fd7a-a427-423e-bead-375e0106a119",
+  "id": "8be226ec-9540-461b-b4a4-9adab4442644",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -352,12 +352,6 @@
         "pending_email": {
           "name": "pending_email",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

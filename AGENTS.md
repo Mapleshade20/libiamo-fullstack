@@ -43,6 +43,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 ### Database
 
 - `server/db/schema.ts` follows §5 of the rebuild design: value sets are `text` with a check built from `lib/constants.ts` (no Postgres enums), every time is `timestamptz`, jsonb is validated in code on every write.
+- Deleting an account deletes its `user` row: every table that belongs to a learner must reference `user.id` (or a row that does) `on delete cascade`, or deletion leaves their data behind.
 - The environment is declared and checked in `src/env.ts` and read from `$app/env/private` (never `$env/*` or `process.env` in app code). Build-time placeholders in the Dockerfile satisfy required variables; add one there when a new required variable is read at module scope.
 
 ### Accounts

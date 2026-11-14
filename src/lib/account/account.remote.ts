@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { APP_LANGS, type AppLang, KEY_PROVIDERS, LEARNABLE, TUTOR_LANGUAGES } from "#lib/constants.ts";
 import { encryptKey } from "#lib/server/account/key.ts";
+import { clientIp, logAuthEvent } from "#lib/server/auth/audit.ts";
 import { auth } from "#lib/server/auth/auth.ts";
 import { captchaKeys } from "#lib/server/auth/captcha.ts";
 import { configuredProviders } from "#lib/server/auth/options.ts";
@@ -158,4 +159,15 @@ export const requestEmailChange = command(
 export const cancelEmailChange = command(async () => {
 	const u = learner();
 	await db.update(user).set({ pendingEmail: null }).where(eq(user.id, u.id));
+});
+
+/**
+ * Deletes the account and everything that belongs to it, once the learner has typed their address (the page refuses a
+ * pasted one; the server only checks it matches). Its sessions go with it, so the browser is signed out.
+ */
+export const deleteAccount = command(z.object({ email: z.string().max(254) }), async ({ email }) => {
+	const u = learner();
+	if (email.trim().toLowerCase() !== u.email.toLowerCase()) error(400, "The address does not match.");
+	await db.delete(user).where(eq(user.id, u.id));
+	logAuthEvent("auth.account_deleted", { userId: u.id, email: u.email, ip: clientIp(getRequestEvent().request.headers) });
 });

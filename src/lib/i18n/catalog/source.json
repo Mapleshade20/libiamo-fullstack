@@ -722,7 +722,14 @@
 		"auSomethingWrong": "That didn't go through. Try again in a moment.",
 		"auCaptchaFailed": "We couldn't confirm you're not a bot. Try again.",
 		"acWrongPw": "That's not your current password.",
-		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email."
+		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email.",
+		"setDeleteAccount": "Delete account",
+		"acDeleteTitle": "Delete your account?",
+		"acDeleteLede": "Everything goes with it: what you've written, your notes and reviews, your week and your saved key. It can't be undone.",
+		"acDeleteNext": "I understand, continue",
+		"acDeleteType": "Type {email} to confirm.",
+		"acDeleteGo": "Delete my account",
+		"acDeleted": "Your account has been deleted."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -1447,6 +1454,13 @@
 		"auSomethingWrong": "没能完成。稍等一下再试。",
 		"auCaptchaFailed": "没能确认你不是机器人。再试一次。",
 		"acWrongPw": "这不是你现在的密码。",
-		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。"
+		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。",
+		"setDeleteAccount": "删除账户",
+		"acDeleteTitle": "要删除你的账户吗？",
+		"acDeleteLede": "所有内容都会一起删除：你写过的东西、笔记和复习记录、每周进度，以及保存的密钥。删除后无法恢复。",
+		"acDeleteNext": "我明白，继续",
+		"acDeleteType": "输入 {email} 以确认。",
+		"acDeleteGo": "删除我的账户",
+		"acDeleted": "你的账户已删除。"
 	}
 }

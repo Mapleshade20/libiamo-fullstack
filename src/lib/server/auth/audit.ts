@@ -8,7 +8,8 @@ export type AuthAuditEvent =
 	| "auth.password_reset"
 	| "auth.account_linked"
 	| "auth.account_unlinked"
-	| "auth.admin_granted";
+	| "auth.admin_granted"
+	| "auth.account_deleted";
 
 /**
  * The visitor's address, from the header the reverse proxy overwrites (the one adapter-node trusts). Without it any
