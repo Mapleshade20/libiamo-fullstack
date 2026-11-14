@@ -11,7 +11,7 @@ const file = process.argv[2] ?? new URL("seed/scenarios.json", import.meta.url).
 const client = postgres(process.env.DATABASE_URL ?? "", { max: 1 });
 try {
 	const n = await importContent(drizzle(client, { schema }), JSON.parse(readFileSync(file, "utf8")));
-	console.log(`seeded ${n.scenarios} scenarios, ${n.issues} issues`);
+	console.log(`seeded ${n.works} works, ${n.scenarios} scenarios, ${n.issues} issues`);
 } finally {
 	await client.end();
 }

@@ -30,6 +30,7 @@ export async function extractTerms(original: string, target: Lang, context: stri
 }
 
 const SourceSchema = z.object({
+	title: z.string().default(""),
 	points: z.array(z.array(z.string())),
 	source: z.array(z.string()),
 	glossary: z.array(z.object({ term: z.string(), shown: z.string(), gloss: z.string() })),
@@ -63,8 +64,9 @@ export async function makeSource(
 		"",
 		`1. points: for each paragraph, every point it makes, as short plain ${N} notes (what is said, its attitude and emphasis; not how it is phrased).`,
 		`2. source: for each paragraph, the ${N} text a native ${N} writer in the same kind of place would write to say exactly those points, in the same register (casual stays casual, a rant stays a rant). Natural ${N}, not translationese: rebuild sentences the way ${N} says things rather than following ${T} word order or idioms. Every point, nothing added. ${names.size ? `These names and terms are written exactly as listed (settled for ${N} readers of this community): ${[...names].map(([t, r]) => `${t} → ${r ?? "as in the original"}`).join("; ")}. Any other name` : "Names are"} written exactly as in the original (in ${T}). A term is written the way ${N}-speaking members of this community usually say it if there is a settled way; otherwise kept in ${T}.`,
-		`3. glossary: one entry per name and term listed above: term (as in the original), shown (exactly as it appears in your source), gloss (a short ${N} note: what it is here; for a name, who or what it names). Like the notes above, only what the text itself shows.`,
-		'Reply with JSON only: {"points":[["..."]],"source":["paragraph 1","paragraph 2"],"glossary":[{"term":"","shown":"","gloss":""}]}',
+		`3. title: a short ${N} heading for the text as the learner's sheet shows it above the source (what it is, like a menu's or a post's name), at most about eight words.`,
+		`4. glossary: one entry per name and term listed above: term (as in the original), shown (exactly as it appears in your source), gloss (a short ${N} note: what it is here; for a name, who or what it names). Like the notes above, only what the text itself shows.`,
+		'Reply with JSON only: {"points":[["..."]],"source":["paragraph 1","paragraph 2"],"title":"","glossary":[{"term":"","shown":"","gloss":""}]}',
 	].join("\n");
 	return fixNames((await chatJson([{ role: "user", content: user }], SourceSchema, { ai, tag: "translate/source" })).value, terms, names);
 }

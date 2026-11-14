@@ -1,17 +1,18 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
+import { untrack } from "svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
 import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, nameOf, read, toast, tx, write } from "#lib/demo/app.svelte.ts";
-import { myWriting, recordWriting } from "#lib/demo/data.ts";
+import { app, forget, nameOf, read, toast, tx } from "#lib/demo/app.svelte.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
-import { SIMS, scenarioById, situationOf } from "#lib/demo/scenarios.ts";
+import { SIMS } from "#lib/demo/scenarios.ts";
+import { saveDraft, sheet } from "#lib/scenario/scenario.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
-import { blockAt, blocksOf, termRuns } from "#lib/translation/blocks.ts";
+import { blockAt, blocksOf, isByLine, termRuns } from "#lib/translation/blocks.ts";
 import { dev as isDev } from "$app/env";
 import { beforeNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -22,23 +23,29 @@ import { page } from "$app/state";
  * paragraph the caret is in lights up in the source, so a long text needs no box per paragraph and sentences can still
  * be joined or split freely. Names and terms the scenario gives are marked in the source (their meaning on hover) and can
  * be put in with a click. What the learner cannot say yet they leave in their own language: those words become the
- * revision's stops. Nothing here helps or checks; the two passes come after, straight from "done".
+ * revision's stops. Nothing here helps or checks; the two passes come after, straight from "done". The draft is the
+ * piece's text on the server, saved as they type (the first words create the piece, which then waits on the shelf).
  */
-const scenario = $derived(scenarioById(page.params.id ?? ""));
-const s = $derived.by(() => {
-	const x = scenario ? situationOf(scenario) : undefined;
-	return x?.kind === "translate" ? x : undefined;
-});
-const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
+const id = $derived(page.params.id ?? "");
+const data = $derived(await sheet({ id, lang: app.lang }));
+const scenario = $derived(data?.scenario);
+const s = $derived(scenario?.situation.kind === "translate" ? scenario.situation : undefined);
+const sim = $derived(SIMS[id]);
 // One line per item (a menu) or blank-line paragraphs (prose): the sheet follows the source.
-const byLine = $derived(!!s && !/\n\s*\n/.test(s.source));
+const byLine = $derived(!!s && isByLine(s.source));
 const units = $derived(s ? blocksOf(s.source, byLine).map((b) => s.source.slice(b.from, b.to)) : []);
 const terms = $derived(s?.glossary ?? []);
 
-const draftKey = $derived(`trDraft:${page.params.id}`);
 let text = $state("");
+// The draft as the server keeps it, once per scenario (what is typed after is the page's own).
+let loaded = "";
 $effect(() => {
-	text = read<string>(draftKey, "");
+	const d = data;
+	if (!d || loaded === d.scenario.id) return;
+	loaded = d.scenario.id;
+	untrack(() => (text = d.draft));
+	// Already gone into its revision (another tab, another device): it goes on there.
+	if (d.revising && d.pieceId) goto(`/live/${d.pieceId}`, { replaceState: true });
 });
 const blocks = $derived(blocksOf(text, byLine));
 let caret = $state(0);
@@ -48,16 +55,36 @@ const written = $derived(units.map((_, i) => !!blocks[i]));
 let area: HTMLTextAreaElement | undefined = $state();
 let all = $state(false);
 
-const kept = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.open) : undefined);
 const native = $derived(nameOf(s?.sourceLang ?? app.prefs.native));
 const target = $derived(nameOf(app.lang));
+const planKey = $derived(`scenarioPlan:${id}`);
 
 function track() {
 	if (!area) return;
 	caret = area.selectionStart;
 }
+
+// Saves one after another, the last text winning; a pause in typing saves, and so do leaving and "done".
+let chain: Promise<string | null> = Promise.resolve(null);
+let saved = "";
+let timer: ReturnType<typeof setTimeout> | undefined;
+function flush() {
+	clearTimeout(timer);
+	const now = text;
+	const where = { id, lang: app.lang };
+	chain = chain.then(async (pieceId) => {
+		if (now === saved && pieceId) return pieceId;
+		const r = await saveDraft({ ...where, text: now, plan: read<string>(planKey, "") || undefined }).catch(() => null);
+		if (!r) return pieceId;
+		saved = now;
+		if (r.pieceId) forget(planKey);
+		return r.pieceId ?? pieceId;
+	});
+	return chain;
+}
 function save() {
-	write(draftKey, text);
+	clearTimeout(timer);
+	timer = setTimeout(flush, 700);
 }
 /** A given name or term goes in where the caret is, and the caret stays after it. */
 function insert(term: string) {
@@ -73,52 +100,34 @@ function insert(term: string) {
 	track();
 }
 
-let leaving = false;
-function handoff() {
-	if (!scenario || !s?.original) return null;
-	const plan = read<string>(`scenarioPlan:${scenario.id}`, "");
-	return {
-		text: text.trim(),
-		translation: {
-			source: s.source,
-			original: s.original,
-			glossary: s.glossary ?? [],
-			context: scenario.brief.en ?? "",
-			where: s.where,
-			readers: s.readers,
-			target: app.lang,
-		},
-		background: [scenario.brief[app.lang] ?? scenario.brief.en, plan && `My plan: ${plan}`].filter(Boolean).join("\n\n"),
-		scenario: { id: scenario.id, title: scenario.title[app.lang], site: scenario.site },
-		...$state.snapshot(dev),
-		learner: app.prefs.native,
-		feedback: app.prefs.feedback as Setup["feedback"],
-		lang: app.lang,
-	};
-}
+let leaving = $state(false);
 async function done() {
-	const h = handoff();
-	if (!h || !h.text) return;
-	const id = await startPiece(h).catch(() => null);
-	if (!id) return toast(tx("startFailed"));
+	if (!scenario || !text.trim() || leaving) return;
 	leaving = true;
-	write(draftKey, "");
-	goto(`/live/${id}`);
+	const pieceId = (await flush()) ?? data?.pieceId;
+	// The server hands the revision the source and the original from the piece.
+	const started = pieceId
+		? await startPiece({
+				text: text.trim(),
+				pieceId,
+				...$state.snapshot(dev),
+				learner: app.prefs.native,
+				feedback: app.prefs.feedback as Setup["feedback"],
+				lang: app.lang,
+			} as unknown as Setup).catch(() => null)
+		: null;
+	if (!started) {
+		leaving = false;
+		return toast(tx("startFailed"));
+	}
+	goto(`/live/${started}`);
 }
-// Leaving with something written keeps it on the shelf; coming back (the scenario page, the shelf) opens this page again.
+// Leaving keeps what is written: the piece waits on the shelf, and opens this page again.
 beforeNavigate(() => {
-	if (leaving || !scenario || !text.trim() || kept) return;
-	recordWriting({
-		id: `q-${scenario.id}-${Date.now()}`,
-		title: scenario.title[app.lang],
-		site: scenario.site,
-		lang: app.lang,
-		open: true,
-		scenarioId: scenario.id,
-	});
+	if (!leaving && text !== saved && (text.trim() || data?.pieceId)) void flush();
 });
 $effect(() => {
-	document.title = `${scenario?.title[app.lang] ?? ""} · Libiamo`;
+	document.title = `${scenario?.title ?? ""} · Libiamo`;
 });
 </script>
 
@@ -128,8 +137,8 @@ $effect(() => {
 {:else}
 	<main class="tr">
 		<header>
-			<h1 class="title">{scenario.title[app.lang]}</h1>
-			<p class="brief">{scenario.brief[app.lang] ?? scenario.brief.en}</p>
+			<h1 class="title">{scenario.title}</h1>
+			<p class="brief">{scenario.introduction ?? scenario.line}</p>
 		</header>
 
 		<div class="cols">
@@ -195,7 +204,10 @@ $effect(() => {
 						focused = true;
 						track();
 					}}
-					onblur={() => (focused = false)}
+					onblur={() => {
+						focused = false;
+						void flush();
+					}}
 				></textarea>
 				<div class="foot">
 					<p class="stuck">{tx("trStuck", { lang: native })}</p>
@@ -212,7 +224,7 @@ $effect(() => {
 							>{tx("devSample")}</Button
 						>
 					{/if}
-					<Button disabled={!text.trim()} onclick={done}>{tx("trDone")}<ArrowRight aria-hidden="true" /></Button>
+					<Button disabled={!text.trim() || leaving} onclick={done}>{tx("trDone")}<ArrowRight aria-hidden="true" /></Button>
 				</div>
 			</section>
 		</div>

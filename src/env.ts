@@ -44,7 +44,8 @@ export const variables = defineEnvVars({
 	SMTP_PASS: { schema: optional },
 
 	OPENROUTER_API_KEY: {
-		description: "The service's own OpenRouter key, for the calls no learner makes (the composer's gate). Learners' calls use their own key.",
+		description:
+			"The service's own OpenRouter key, for the calls no learner makes (translation sources, name tables, Scene Lab). Learners' calls use their own key.",
 		schema: optional,
 	},
 	LLM_CACHE_DIR: { description: "Development only: answer model calls from this cache and write new replies to it.", schema: optional },

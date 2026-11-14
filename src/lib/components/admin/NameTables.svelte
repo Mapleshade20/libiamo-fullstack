@@ -2,35 +2,29 @@
 import Check from "@lucide/svelte/icons/check";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import Search from "@lucide/svelte/icons/search";
-import { onMount } from "svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { langEn as nameOf } from "#lib/demo/admin.ts";
-import type { NameRow, NameTable, Work } from "#lib/server/translation/names.ts";
+import { nameTables, saveNames } from "#lib/translation/names.remote.ts";
+import type { NameRow, NameTable } from "#lib/translation/names.ts";
 
 /*
- * The admin's name tables (src/translate/names.ts): for each work and learner language, how every name and term is
- * written in the sources. Each row shows what the sources found or the model proposed, and why; the admin keeps it,
+ * The admin's name tables (server/translation/tables.ts): for each work and learner language, how every name and term
+ * is written in the sources. Each row shows what the sources found or the model proposed, and why; the admin keeps it,
  * types another rendering, or keeps the original spelling, then confirms. Only confirmed rows reach a source. Wikis a
- * program cannot read are search links. Shown on the admin page (/admin/names) and the dev lab page (/lab/names).
+ * program cannot read are search links. Shown on the admin page (/admin/names).
  */
-let tables = $state<NameTable[]>([]);
-let works = $state<Record<string, Work>>({});
+const loadedTables = await nameTables();
+// The page edits its own copy; each change is sent back whole.
+let tables = $state<NameTable[]>(structuredClone(loadedTables.tables));
+const works = $derived(loadedTables.works);
 let saved = $state<string | null>(null);
-let loaded = $state(false);
-onMount(async () => {
-	const r = await fetch("/api/names").catch(() => null);
-	loaded = true;
-	if (!r?.ok) return;
-	const v = await r.json();
-	tables = v.tables;
-	works = v.works;
-});
+const loaded = true;
 let timer: ReturnType<typeof setTimeout> | undefined;
 function save(t: NameTable) {
 	clearTimeout(timer);
 	timer = setTimeout(async () => {
-		await fetch("/api/names", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify($state.snapshot(t)) });
+		await saveNames($state.snapshot(t));
 		saved = `${t.work}.${t.locale}`;
 		setTimeout(() => (saved = null), 1600);
 	}, 300);

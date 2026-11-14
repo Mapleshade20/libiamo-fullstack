@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { decisionModelFor, graderFor } from "#lib/llm/providers.ts";
+import { decisionModelFor, graderFor, RECOMMENDED } from "#lib/llm/providers.ts";
 import { decryptKey } from "#lib/server/account/key.ts";
 import { db } from "#lib/server/db/index.ts";
 import { userKey } from "#lib/server/db/schema.ts";
@@ -56,5 +56,15 @@ export async function learnerCaller(scope: LearnerScope): Promise<Caller> {
 	});
 }
 
-/** The service's own OpenRouter key, for the calls no learner makes. */
-export const serviceKey = () => OPENROUTER_API_KEY;
+/**
+ * The service's own OpenRouter key, for the calls no learner makes (translation sources and name tables, Scene Lab).
+ * Recorded with no learner and with their text; without the key every call stops with "nokey".
+ */
+export function serviceCaller(model: string = RECOMMENDED.model): Caller {
+	return new Caller({
+		route: OPENROUTER_API_KEY ? { provider: "openrouter", model, apiKey: OPENROUTER_API_KEY } : null,
+		grader: graderFor("openrouter", model),
+		cache,
+		record: recorder({ userId: null, keepText: true }),
+	});
+}

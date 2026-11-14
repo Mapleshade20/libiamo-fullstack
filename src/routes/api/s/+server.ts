@@ -2,18 +2,24 @@ import { LEARNABLE } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
 import { LANGS, type Lang, normLang } from "#lib/server/revision/draft.ts";
 import { startRevision } from "#lib/server/revision/store.ts";
+import { translationFor } from "#lib/server/translation/sheet.ts";
 import { sourceKind } from "#lib/server/writing/source.ts";
 
 /*
  * Starts the revision of a piece from what the page handed over: a new piece of the learner's writing, or a fresh
- * revision of one of their unfinished pieces (`pieceId`). Answers the piece's id, which every action then names.
+ * revision of one of their unfinished pieces (`pieceId`). Answers the piece's id, which every action then names. A
+ * translation sheet's piece brings its source, original and scenario from the server (the page never sees the original).
  */
 export async function POST({ request }) {
 	const u = learner();
 	const b = await request.json();
 	// A piece kept from before Chinese became "zh-CN" still says "zh".
 	b.learner = normLang(b.learner);
-	if (b.translation) b.translation.target = normLang(b.translation.target);
+	const pieceId = typeof b.pieceId === "string" && /^[0-9a-f-]{36}$/.test(b.pieceId) ? b.pieceId : undefined;
+	const sheet = pieceId ? await translationFor(u.id, pieceId) : null;
+	if (sheet) Object.assign(b, sheet);
+	// Recorded sessions (lab/baseline) and fixtures still hand a translation over whole.
+	else if (b.translation) b.translation.target = normLang(b.translation.target);
 	const text = String(b.text ?? "").trim();
 	if (!text) return Response.json({ error: "empty draft" }, { status: 400 });
 	const source = String(b.source ?? "").trim();
@@ -59,7 +65,7 @@ export async function POST({ request }) {
 			scenarioId: scenario?.id,
 			title: typeof scenario?.title === "string" ? scenario.title : undefined,
 			place: typeof scenario?.site === "string" ? scenario.site : undefined,
-			pieceId: typeof b.pieceId === "string" && /^[0-9a-f-]{36}$/.test(b.pieceId) ? b.pieceId : undefined,
+			pieceId,
 		},
 	);
 	return Response.json({ id });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { blockAt, blocksOf, termRuns } from "#lib/translation/blocks.ts";
+import { blockAt, blocksOf, termRuns, unitsOf } from "#lib/translation/blocks.ts";
 
 const slices = (t: string, byLine: boolean) => blocksOf(t, byLine).map((b) => t.slice(b.from, b.to));
 
@@ -36,4 +36,12 @@ test("given terms are marked as the source shows them, whole words for Latin, lo
 		termRuns("Leafy", terms).map((r) => r.text),
 		["Leafy"],
 	);
+});
+
+test("a source is made unit by unit and joined back laid out as its original: lines for a menu, paragraphs for prose", () => {
+	assert.deepEqual(unitsOf("Latte: syrup.\nCake: soft.\n"), { units: ["Latte: syrup.", "Cake: soft."], join: "\n" });
+	assert.deepEqual(unitsOf("Where to start?\nNo buildup.\n\n  Crowfeather was shaped by loss.  "), {
+		units: ["Where to start?\nNo buildup.", "Crowfeather was shaped by loss."],
+		join: "\n\n",
+	});
 });
