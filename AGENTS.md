@@ -56,7 +56,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 ### Interface strings
 
 - `lib/i18n/catalog/source.json` is written by hand in en and zh-CN; `ui.json` holds every interface language. A new key goes into both, in every language; `test/lib/i18n.test.ts` fails on a key missing anywhere or named nowhere.
-- Mails are English (`server/auth/email.ts`) until the catalog has mail strings; without `SMTP_HOST` they are printed to the console.
+- Mails are English (`server/auth/email.ts`) until the catalog has mail strings; without all of `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` they are printed to the console.
 
 ## Implementation conventions
 
