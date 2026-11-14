@@ -26,13 +26,20 @@ import {
 	DETAILS,
 	KEY_PROVIDERS,
 	LEARNABLE,
+	NAME_KINDS,
+	NAME_STATUSES,
 	NOTE_KINDS,
 	PIECE_KINDS,
 	PIECE_STATES,
+	PLACES,
 	POSTED,
 	REGISTERS,
 	ROLES,
+	SCENARIO_KINDS,
+	SCENARIO_STATUSES,
+	SOURCE_STATES,
 	TUTOR_LANGUAGES,
+	URGENCIES,
 	VERDICTS,
 } from "#lib/constants.ts";
 
@@ -189,11 +196,131 @@ export const userWeek = pgTable(
 	(t) => [primaryKey({ columns: [t.userId, t.weekStart] }), check("user_week_goal_check", sql`${t.goal} between 1 and 7`)],
 );
 
+// --- Scenarios (§5.3) -------------------------------------------------------------------------------------------------
+
+/* A scenario: what is the same in every language. What learners read is in `versions`, keyed by the language learnt
+   (lib/scenario/versions.ts validates it on every write); a language is offered when its version is there and not a
+   draft. A translation's text comes from `scenario_source`, one per learner language. */
+export const scenario = pgTable(
+	"scenario",
+	{
+		id: text("id").primaryKey(),
+		kind: text("kind").notNull(),
+		place: text("place").notNull(),
+		status: text("status").notNull().default("draft"),
+		minutes: integer("minutes").notNull(),
+		urgency: text("urgency"),
+		/** Null: the exchange has no turn limit. */
+		maxTurns: integer("max_turns"),
+		/** A translation of a work with a name table: whose names it uses. */
+		workId: text("work_id").references(() => work.id, { onDelete: "set null" }),
+		versions: jsonb("versions").notNull(),
+		createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+		publishedAt: at("published_at"),
+		createdAt: created(),
+		updatedAt: updated(),
+	},
+	(t) => [
+		check("scenario_kind_check", oneOf(t.kind, SCENARIO_KINDS)),
+		check("scenario_place_check", oneOf(t.place, PLACES)),
+		check("scenario_status_check", oneOf(t.status, SCENARIO_STATUSES)),
+		check("scenario_urgency_check", sql`${t.urgency} is null or ${oneOf(t.urgency, URGENCIES)}`),
+		check("scenario_kind_place_check", sql`(${t.kind} = 'translation') = (${t.place} = 'translation')`),
+		check("scenario_minutes_check", sql`${t.minutes} > 0`),
+		check("scenario_max_turns_check", sql`${t.maxTurns} is null or ${t.maxTurns} > 0`),
+	],
+);
+
+/* A translation's source in one learner language: the text learners translate, made and checked at publish (§6.4) or
+   confirmed by an admin, with the names and terms it gives. `original_hash` says which original it was made from. */
+export const scenarioSource = pgTable(
+	"scenario_source",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		scenarioId: text("scenario_id")
+			.notNull()
+			.references(() => scenario.id, { onDelete: "cascade" }),
+		/** The version translated into. */
+		language: text("language").notNull(),
+		/** The learner language the source is written in. */
+		native: text("native").notNull(),
+		/** A short heading for it in the learner's language ("Autumn menu"). */
+		title: text("title").notNull().default(""),
+		text: text("text").notNull().default(""),
+		glossary: jsonb("glossary").notNull().default([]),
+		state: text("state").notNull().default("pending"),
+		notes: jsonb("notes"),
+		originalHash: text("original_hash"),
+		madeAt: at("made_at"),
+	},
+	(t) => [
+		uniqueIndex("scenario_source_unique").on(t.scenarioId, t.language, t.native),
+		check("scenario_source_state_check", oneOf(t.state, SOURCE_STATES)),
+	],
+);
+
+/* A work whose names translations keep consistent (a fandom's books), and how each name is rendered in each locale. */
+export const work = pgTable("work", {
+	id: text("id").primaryKey(),
+	title: text("title").notNull(),
+	wikidata: text("wikidata"),
+	wikis: jsonb("wikis"),
+	manual: jsonb("manual"),
+});
+export const nameRendering = pgTable(
+	"name_rendering",
+	{
+		workId: text("work_id")
+			.notNull()
+			.references(() => work.id, { onDelete: "cascade" }),
+		locale: text("locale").notNull(),
+		term: text("term").notNull(),
+		kind: text("kind").notNull().default("name"),
+		rendering: text("rendering").notNull().default(""),
+		status: text("status").notNull().default("pending"),
+		origin: text("origin"),
+		url: text("url"),
+		why: text("why"),
+		candidates: jsonb("candidates"),
+	},
+	(t) => [
+		primaryKey({ columns: [t.workId, t.locale, t.term] }),
+		check("name_rendering_kind_check", oneOf(t.kind, NAME_KINDS)),
+		check("name_rendering_status_check", oneOf(t.status, NAME_STATUSES)),
+	],
+);
+
+/* An issue: a themed handful of scenarios published on a date (the library shows the latest while it is recent).
+   `title` and `line` are keyed by interface language. */
+export const issue = pgTable("issue", {
+	id: text("id").primaryKey(),
+	date: date("date").notNull(),
+	title: jsonb("title").notNull(),
+	line: jsonb("line").notNull(),
+	tone: text("tone").notNull(),
+	deep: text("deep").notNull(),
+	createdAt: created(),
+	updatedAt: updated(),
+});
+export const issueScenario = pgTable(
+	"issue_scenario",
+	{
+		issueId: text("issue_id")
+			.notNull()
+			.references(() => issue.id, { onDelete: "cascade" }),
+		scenarioId: text("scenario_id")
+			.notNull()
+			.references(() => scenario.id, { onDelete: "cascade" }),
+		position: integer("position").notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.issueId, t.scenarioId] })],
+);
+
 // --- Pieces (§5.4) ----------------------------------------------------------------------------------------------------
 
 /* One piece of the learner's writing, from the draft to what the revision left. `place` is where it is for as its
-   cover names it (a scenario's place, or the site the scene inferred). `scenario_id` gains its reference with the
-   scenario tables (phase 4). Only the guarded move to `finished` credits the day. */
+   cover names it (a scenario's place, or the site the scene inferred). A translation's piece pins the source it was
+   written from. Only the guarded move to `finished` credits the day. */
 export const piece = pgTable(
 	"piece",
 	{
@@ -203,7 +330,8 @@ export const piece = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		language: text("language").notNull(),
 		kind: text("kind").notNull(),
-		scenarioId: text("scenario_id"),
+		scenarioId: text("scenario_id").references(() => scenario.id, { onDelete: "set null" }),
+		sourceId: uuid("source_id").references(() => scenarioSource.id, { onDelete: "set null" }),
 		place: text("place").notNull().default(""),
 		title: text("title").notNull().default(""),
 		text: text("text").notNull(),

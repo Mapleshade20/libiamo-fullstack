@@ -509,6 +509,29 @@ decided on:
   hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
   not list that learner's pieces.
 
+**Phase 4, scenarios: in progress** (started 2026-11-14). In steps, each committed with the app running:
+
+- **4a. Scenario data** (done 2026-11-14). `scenario`, `scenario_source`, `issue`, `issue_scenario`, `work`, `name_rendering` (§5.3);
+  versions and openings validated by zod (`lib/scenario/versions.ts`, `lib/exchange/opening.ts`: the legacy per-place
+  opening without `counterpartName`/`members`, AO3 with the chapter's end note the demo shows). The demo's scenarios,
+  people and issues become a content file (`lab/seed/scenarios.json`, loaded by `lab/seed.ts` in development; phase 5's
+  admin imports the same document). The library, the issue, the shelf's two and the scenario page read the server;
+  ranking is code on the server (`server/scenario/rank.ts`), a scenario's state comes from the learner's pieces. A
+  translation is offered once its source in the learner's language is `checked` or `confirmed`; the demo's hand-written
+  sources are seeded `confirmed`. A source also has a `title`, the short heading the sheet shows over it in the
+  learner's language. The non-English versions' `you`, `goals` and people's `who` are still the demo's English, and
+  every person's `notes` are empty until Scene Lab (4e). The scenario page's plan stays on the device until 4b; the
+  phrases it offers are the notebook's latest four, not yet ranked by fit.
+- **4b. The exchange.** `exchange`, `exchange_message`, `agent_batch`, `agent_delivery` (§5.5); legacy's places,
+  `createPracticeSession`, the agent-reply worker, floor, prompts, unread, send options and hints moved and renamed;
+  entering a scenario creates its piece (`writing`) and exchange, the plan typed beforehand going into the piece's
+  `background`; `/scenario/<id>/play` is the real place.
+- **4c. Into the revision.** The exchange's end builds the lab's `Exchange` from its messages; the after page shows the
+  thread and starts the revision on the same piece; "later" keeps it on the shelf.
+- **4d. Translations.** The sheet keeps its draft in `piece.text`; the source runner (§6.4) on the service key; name
+  tables.
+- **4e. Scene Lab.** The agents' new input (`people`, `others`, `followed`) judged from the learner's seat.
+
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
 `app.prefs` the pages already read, and writes go through remote commands. Decisions taken on the way:
