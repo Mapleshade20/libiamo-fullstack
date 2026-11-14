@@ -7,7 +7,7 @@ import type { Writing } from "./data";
 /** Where a piece opens, from any list of them (the sidebar, My writing): a finished one on its own page, an unfinished
  *  one back in its revision. */
 export function openPiece(w: Writing) {
-	if (w.result && !w.open) return goto(`/w/${w.id}`);
+	if (w.finishedAt && !w.open) return goto(`/w/${w.id}`);
 	reopen(w);
 }
 

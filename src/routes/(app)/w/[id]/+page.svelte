@@ -9,9 +9,12 @@ import LoadingReveal from "#lib/components/common/LoadingReveal.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "#lib/demo/app.svelte.ts";
-import { notesPending, recordWriting, siteOf, writingById } from "#lib/demo/data.ts";
+import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
+import { keptPiece, siteOf } from "#lib/demo/data.ts";
 import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
+import { notesPending, type Posted } from "#lib/writing/types.ts";
+import { askNotes, pieceById } from "#lib/writing/writing.remote.ts";
+import { refreshWriting, setPosted } from "#lib/writing/writing.svelte.ts";
 import { page } from "$app/state";
 
 /*
@@ -20,7 +23,9 @@ import { page } from "$app/state";
  * what they worked out, theirs marked apart from what was given, at most four, already in the notebook; what is still
  * worth a look, folded; and what next.
  */
-const w = $derived(writingById(page.params.id ?? ""));
+const id = $derived(page.params.id ?? "");
+// The tour's piece lives in its sandbox; every other is the server's.
+const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const st = $derived(siteOf(w?.site));
 const scenario = $derived(w?.scenarioId ? scenarioById(w.scenarioId) : undefined);
@@ -30,8 +35,30 @@ const sim = $derived(w?.scenarioId ? SIMS[w.scenarioId] : undefined);
 let view = $state("final");
 const parts = $derived(r ? diffWords(r.original, r.final) : []);
 const learned = $derived(r ? [...r.learned].sort((a, b) => Number(b.own) - Number(a.own)).slice(0, 4) : []);
-// The entries are chosen a few seconds after the session ends: rows wait in grey until they come.
+// The entries are chosen a few seconds after the session ends: rows wait in grey until they come. The page looks again
+// every two seconds; two minutes on, what pass 2 reworked stands, and the server is asked once more.
 const pending = $derived(notesPending(r));
+let askedAgain = false;
+$effect(() => {
+	if (sandboxed() || !r?.notesPending) return;
+	const piece = id;
+	if (!pending) {
+		if (!askedAgain) {
+			askedAgain = true;
+			askNotes(piece).then(
+				() => pieceById(piece).refresh(),
+				() => {},
+			);
+		}
+		return;
+	}
+	const t = setTimeout(async () => {
+		await pieceById(piece).refresh();
+		// Filed: the notebook and the lists have them too.
+		if (!pieceById(piece).current?.notesPending) refreshWriting();
+	}, 2000);
+	return () => clearTimeout(t);
+});
 const OPEN: Record<string, string> = {
 	AO3: "https://archiveofourown.org",
 	Reddit: "https://www.reddit.com",
@@ -44,10 +71,15 @@ function copy() {
 	if (!r) return;
 	navigator.clipboard?.writeText(r.final).then(() => toast(tx("copied")));
 }
-function setPosted(v: string) {
+async function posted(v: string) {
 	if (!w) return;
-	recordWriting({ id: w.id, posted: v as "yes" | "not-yet" | "no", state: v === "yes" ? "posted" : "revised", askedAt: Date.now() });
-	if (v === "yes") toast(tx("pcPostedThanks"));
+	try {
+		await setPosted(w.id, v as Posted);
+		if (!sandboxed()) await pieceById(w.id).refresh();
+		if (v === "yes") toast(tx("pcPostedThanks"));
+	} catch {
+		toast(tx("error"));
+	}
 }
 $effect(() => {
 	document.title = `${w?.title ?? tx("navWriting")} · ${tx("homeTitle")}`;
@@ -189,7 +221,7 @@ $effect(() => {
 						label={tx("pcAskPosted")}
 						size="sm"
 						value={w.posted ?? ""}
-						onValueChange={setPosted}
+						onValueChange={posted}
 						items={[
 							{ value: "yes", label: tx("fuYes") },
 							{ value: "not-yet", label: tx("fuNotYet") },

@@ -423,8 +423,15 @@ rate-limit table and every environment list describe what exists.
   knows (how much help a spot took, for say-it-again and the notes). Neither action is a step on the tape. A spot
   left half done starts again from its beginning; its materials, grades and hints come back from the revision's
   memos (an own reading or a question asked again is a new call).
-- **Next:** the notes into `piece.learned` on the server and the revision dropped after them; the piece's page, My
-  writing and the sidebar from the database. The operations monitor's hourly query still names `llm_trace`.
+- **Finishing and the lists** (done). `end` finishes the piece with what pass 2 reworked standing in as `learned`, and
+  carries the notes request (the parts reworked, theirs first, and pass 1's changes not made unaided); the server then
+  makes the notes call itself (a step on the tape), files the entries and drops the revision. The piece's page looks
+  again every two seconds while they are on their way, and after two minutes asks once more (`askNotes`). The piece's
+  page, My writing, the sidebar and the shelf read the learner's pieces from the server (`pieces`, `pieceById`);
+  posted and written-again are commands. The demo's stand-in pieces and the clean-ups of older builds' local data are
+  gone; this device keeps only a scenario set aside before its revision (phase 4) and the tour's sandbox.
+- **Next:** the operations monitor's hourly query (`llm_trace` → `llm_call`); then the whole loop checked in the
+  browser beside the demo.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

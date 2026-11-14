@@ -27,7 +27,7 @@ const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
 const st = $derived(scenario ? siteOf(scenario.site) : undefined);
 const progress = $derived(scenario ? scenarioState(scenario.id) : "new");
 const started = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.open) : undefined);
-const written = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.result) : undefined);
+const written = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.finishedAt) : undefined);
 // Phrases the learner already owns that could serve here: their notebook's, a few (the main app would rank by fit).
 const owned = $derived(
 	reviewDeck()

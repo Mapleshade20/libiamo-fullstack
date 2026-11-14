@@ -131,9 +131,9 @@ export function notebook(): Note[] {
 	const stands = new Set(["w1", "w2", "w3", "w4", "w5"]);
 	const own = myWriting()
 		// A piece whose entries are on their way has none yet: the stand-in list would come and go.
-		.filter((w) => w.result && !stands.has(w.id) && !notesPending(w.result))
+		.filter((w) => w.finishedAt && !stands.has(w.id) && !notesPending(w))
 		.flatMap((w) =>
-			(w.result?.learned ?? []).map(
+			(w.learned ?? []).map(
 				(l, i): Note => ({
 					id: `o-${w.id}-${i}`,
 					phrase: l.note?.phrase ?? l.text,

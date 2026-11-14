@@ -1,4 +1,5 @@
 import { checkCall } from "#lib/demo/limits.ts";
+import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import type { Setup } from "./types";
 
 /*
@@ -18,6 +19,8 @@ export async function startPiece(setup: Setup): Promise<string> {
 	const v = await r.json().catch(() => ({}));
 	if (!r.ok || typeof v.id !== "string") throw new Error(v.error || "startFailed");
 	handed = { id: v.id, setup };
+	// It is one of their pieces now, unfinished until its revision ends.
+	refreshWriting();
 	return v.id;
 }
 

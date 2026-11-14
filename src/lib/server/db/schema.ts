@@ -211,7 +211,7 @@ export const piece = pgTable(
 	],
 );
 
-/** The revision's snapshot (src/lib/server/revision/snapshot.ts), apart from `piece` so lists never read it. */
+/** The revision's snapshot (server/revision/store.ts), apart from `piece` so lists never read it. */
 export const pieceRevision = pgTable("piece_revision", {
 	pieceId: uuid("piece_id")
 		.primaryKey()
