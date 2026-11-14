@@ -469,7 +469,9 @@ rate-limit table and every environment list describe what exists.
   (seventeen entries, due the next day); in the browser on the dev server: the shelf's review row and the sidebar count,
   the notebook list, filters, an entry, editing and deleting it, a whole sitting of six cards (thirteen ratings, the
   buttons' intervals from the scheduler), the glass filled after it, the profile, collecting two phrases with one live
-  call (one removed again), write-again crediting the day.
+  call (one removed again), write-again crediting the day. The image on Node 24 built and booted under `podman compose`
+  on an empty database (the migration with the new tables, `/health`, a card reviewed and the day's half written,
+  SIGTERM).
 - **Open.** Review's "Is mine OK too?" still answers with the demo's stand-in replies (the demo says the app would ask
   the tutor); a real call is a new prompt, for the user to decide.
 
