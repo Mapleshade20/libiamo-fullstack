@@ -853,7 +853,7 @@ export class RevisionSession {
 		const problem = many ? stop.parts.map((p, i) => `${i + 1}. ${p.problem}`).join("\n") : stop.parts[0].problem;
 		const reading = many ? meanings.map((x, i) => `${i + 1}. ${x}`).join("\n") : meanings[0];
 		// Keyed by what the material is about, so a rewrite elsewhere in the post does not throw it away.
-		const key = `${stop.id}\u0000${reading}\u0000${anchor}\u0000${sentence}`;
+		const key = `${stop.id}\u001f${reading}\u001f${anchor}\u001f${sentence}`;
 		const purpose = `material ${stop.id} · ${reading}`;
 		return {
 			anchor,
@@ -1019,7 +1019,7 @@ export class RevisionSession {
 	async pieces(id: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
 		const pieces = stop.m?.pieces ?? [];
-		const key = pieces.join("\u0000");
+		const key = pieces.join("\u001f");
 		let n = this.glosses.get(key);
 		if (!n) {
 			n = pieceNotes(this.d, pieces, this.ai.for(`pieces ${id}`), stop.m ? plainRef(stop.m.ref) : undefined);
@@ -1042,7 +1042,7 @@ export class RevisionSession {
 		const stop = this.stops.find((s) => s.id === id)!;
 		const m = stop.m!;
 		const last = stop.history.at(-1);
-		const key = [id, m.ref, last?.text ?? ""].join("\u0000");
+		const key = [id, m.ref, last?.text ?? ""].join("\u001f");
 		let h = this.hints.get(key);
 		if (!h) {
 			h = hintFor(
