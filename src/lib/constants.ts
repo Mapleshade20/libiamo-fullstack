@@ -66,6 +66,29 @@ export type Urgency = (typeof URGENCIES)[number];
 export const SOURCE_STATES = ["pending", "checked", "notes", "confirmed", "failed"] as const;
 export type SourceState = (typeof SOURCE_STATES)[number];
 export const NAME_KINDS = ["name", "term"] as const;
+
+/* The exchange (src/lib/server/db/schema.ts): the simulated conversation a scenario is played in. */
+export const EXCHANGE_STATUSES = ["in_progress", "completed", "abandoned"] as const;
+export type ExchangeStatus = (typeof EXCHANGE_STATUSES)[number];
+export const EXCHANGE_END_REASONS = ["user_requested", "max_turns", "max_age", "terminated_abuse"] as const;
+export type ExchangeEndReason = (typeof EXCHANGE_END_REASONS)[number];
+export const MESSAGE_ROLES = ["user", "assistant"] as const;
+/** What a batch of agent work is for: the opening, a reply, a follow-up when the learner went quiet, life in a group. */
+export const AGENT_BATCH_KINDS = ["opening", "reply", "follow_up", "world"] as const;
+export type AgentBatchKind = (typeof AGENT_BATCH_KINDS)[number];
+export const AGENT_BATCH_STATUSES = [
+	"pending",
+	"processing",
+	"stale",
+	"delivery_pending",
+	"completed",
+	"no_reply",
+	"failed",
+	"cancelled",
+	"terminated",
+] as const;
+export type AgentBatchStatus = (typeof AGENT_BATCH_STATUSES)[number];
+export const AGENT_DELIVERY_STATUSES = ["pending", "delivered", "cancelled"] as const;
 export const NAME_STATUSES = ["pending", "confirmed"] as const;
 
 /* The notebook and review (src/lib/server/db/schema.ts). */

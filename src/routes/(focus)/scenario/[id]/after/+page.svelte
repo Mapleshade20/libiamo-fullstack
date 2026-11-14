@@ -3,89 +3,61 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { fly } from "svelte/transition";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, read, toast, tx } from "#lib/demo/app.svelte.ts";
-import { myWriting, recordWriting, siteOf } from "#lib/demo/data.ts";
+import { app, toast, tx } from "#lib/demo/app.svelte.ts";
+import { siteOf } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
-import { exchangeOf, SIMS, scenarioById, simTurns, situationOf, situationText } from "#lib/demo/scenarios.ts";
+import { afterPlace } from "#lib/exchange/exchange.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
-import { SEP, type Setup } from "#lib/session/types.ts";
+import type { Setup } from "#lib/session/types.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
  * Out of the place: how it ended, before any correcting. First the thread as the learner left it (what they sent, how
  * the others took it), so the social outcome is felt as its own thing; then the way on: going over what they wrote, in
- * the same two passes as any writing. What was sent stays as it was; the passes are for the next time they say it.
- * "Later" keeps the piece open on the shelf. A translation never comes here: it is written on its own sheet
- * (../translate) and goes from there into the revision.
+ * the same two passes as any writing, on the same piece. What was sent stays as it was; the passes are for the next
+ * time they say it. "Later" keeps the piece open on the shelf. A translation never comes here: it is written on its own
+ * sheet (../translate) and goes from there into the revision.
  */
-const scenario = $derived(scenarioById(page.params.id ?? ""));
-const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
-const st = $derived(siteOf(scenario?.site));
-const chat = $derived(scenario?.site === "Discord" || scenario?.site === "iMessage");
+const id = $derived(page.params.id ?? "");
+const after = $derived(await afterPlace(id));
+const st = $derived(siteOf(after?.site));
+const chat = $derived(after?.place === "discord" || after?.place === "imessage");
+// Nothing to look back on yet: the exchange goes on in its place (or was never begun).
+$effect(() => {
+	if (!after) goto(`/scenario/${id}`, { replaceState: true });
+	else if (after.open) goto(`/scenario/${id}/play`, { replaceState: true });
+});
 
-// The scenario's piece when it was set aside before (on the shelf, in My writing): coming back works on that one.
-const kept = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.open) : undefined);
-function handoff() {
-	if (!scenario || !sim) return null;
-	const s = situationOf(scenario);
-	// A scenario in a place goes in as the exchange it was (src/scenario/exchange.ts); the learner's turns are the text.
-	const exchange = exchangeOf(scenario, sim, app.prefs.name || "me");
-	const thread = simTurns(sim)
-		.map((m) => `${m.me ? "maple" : m.author}: ${m.text}`)
-		.join("\n");
-	const plan = read<string>(`scenarioPlan:${scenario.id}`, "");
-	return {
-		text: exchange
-			? exchange.transcript
-					.filter((m) => m.learner)
-					.map((m) => m.text)
-					.join(`\n\n${SEP}\n\n`)
-			: sim.mine.join("\n\n"),
-		exchange,
-		background: [scenario.brief[app.lang] ?? scenario.brief.en, plan && `My plan: ${plan}`].filter(Boolean).join("\n\n"),
-		source: `${s ? situationText(s) : ""}\n\nThe conversation:\n${thread}`,
-		scenario: { id: scenario.id, title: scenario.title[app.lang], site: scenario.site },
+let starting = $state(false);
+async function review() {
+	if (!after || starting) return;
+	starting = true;
+	const pieceId = await startPiece({
+		...after.handoff,
+		pieceId: after.pieceId,
 		...$state.snapshot(dev),
 		learner: app.prefs.native,
 		feedback: app.prefs.feedback as Setup["feedback"],
-		lang: app.lang,
-	};
-}
-async function review() {
-	const h = handoff();
-	if (!h) return;
-	const id = await startPiece(h).catch(() => null);
-	if (!id) return toast(tx("startFailed"));
-	goto(`/live/${id}`);
-}
-function later() {
-	const h = handoff();
-	if (!h || !scenario) return;
-	recordWriting({
-		id: kept?.id ?? `q-${scenario.id}-${Date.now()}`,
-		title: scenario.title[app.lang],
-		site: scenario.site,
-		lang: app.lang,
-		open: true,
-		scenarioId: scenario.id,
-		handoff: h,
-	});
-	goto("/");
+		lang: after.language,
+	} as Setup & { pieceId: string }).catch(() => null);
+	starting = false;
+	if (!pieceId) return toast(tx("startFailed"));
+	goto(`/live/${pieceId}`);
 }
 $effect(() => {
-	document.title = `${scenario?.title[app.lang] ?? ""} · ${tx("homeTitle")}`;
+	document.title = `${after?.title ?? ""} · ${tx("homeTitle")}`;
 });
 </script>
 
-<FocusBar exit={{ label: tx("afterLater"), onclick: later }} />
-{#if scenario && sim}
+<FocusBar exit={{ label: tx("afterLater"), onclick: () => goto("/") }} />
+{#if after && !after.open}
 	<main class="after" style:--tone={st.tone} style:--deep={st.deep}>
-		<p class="kicker">{scenario.site} · {scenario.title[app.lang]}</p>
+		<p class="kicker">{after.site} · {after.title}</p>
 		<h1>{tx("afterTitle")}</h1>
 
 		<section class="thread" class:chat aria-label={tx("afterThread")}>
-			{#each simTurns(sim) as m, i}
+			{#each after.thread as m, i}
 				<div class="msg" class:mine={m.me} in:fly={{ y: 8, duration: 300, delay: 150 + i * 120 }}>
 					<span class="who">{m.me ? tx("afterYou") : m.author}</span>
 					<p>{m.text}</p>
@@ -93,16 +65,16 @@ $effect(() => {
 			{/each}
 		</section>
 
-		<section class="next" in:fly={{ y: 10, duration: 350, delay: 250 + simTurns(sim).length * 120 }}>
+		<section class="next" in:fly={{ y: 10, duration: 350, delay: 250 + after.thread.length * 120 }}>
 			<h2>{tx("afterNextTitle")}</h2>
 			<p class="set-out">{tx("afterGoals")}</p>
 			<ul class="goals">
-				{#each sim.goals as g}
+				{#each after.handoff.exchange.scene.goals as g}
 					<li>{g}</li>
 				{/each}
 			</ul>
 			<div class="actions">
-				<Button onclick={review}>{tx("afterReview")}<ArrowRight aria-hidden="true" /></Button>
+				<Button onclick={review} disabled={starting}>{tx("afterReview")}<ArrowRight aria-hidden="true" /></Button>
 			</div>
 		</section>
 	</main>

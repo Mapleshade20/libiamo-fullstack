@@ -14,8 +14,8 @@ import Button from "#lib/components/ui/button/button.svelte";
 import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
 import { keptPiece } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
-import { scenarioById, situationOf } from "#lib/demo/scenarios.ts";
 import { markReused, reused } from "#lib/review/reuse.ts";
+import { scenarioView } from "#lib/scenario/scenario.remote.ts";
 import { pieceById } from "#lib/writing/writing.remote.ts";
 import { wroteAgain } from "#lib/writing/writing.svelte.ts";
 import { page } from "$app/state";
@@ -28,8 +28,8 @@ import { page } from "$app/state";
 const id = $derived(page.params.id ?? "");
 const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
-const scenario = $derived(w?.scenarioId ? scenarioById(w.scenarioId) : undefined);
-const s = $derived(scenario ? situationOf(scenario) : undefined);
+const scenario = $derived(w?.scenarioId ? await scenarioView({ id: w.scenarioId, lang: w.lang }) : null);
+const s = $derived(scenario?.situation);
 // svelte-ignore state_referenced_locally
 const collector = new Collector({ lang: app.lang, native: app.prefs.native, feedback: app.prefs.feedback, model: dev.grader });
 let text = $state("");
@@ -62,7 +62,7 @@ $effect(() => {
 		<p class="lede">{tx("agLede")}</p>
 		{#if s}
 			<Accordion title={tx("agSituation")} class="mb-5">
-				<Situation {s} lang={s.kind === "translate" ? s.sourceLang : app.lang} {collector} />
+				<Situation {s} lang={scenario?.situationLang ?? app.lang} {collector} />
 				{#if collector.halt}
 					<div class="mt-3"><LimitNotice kind={collector.halt.kind} {tx} lang={app.lang} onretry={collector.halt.retry} /></div>
 				{/if}

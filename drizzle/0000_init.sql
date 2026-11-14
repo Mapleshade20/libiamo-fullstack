@@ -14,6 +14,83 @@ CREATE TABLE "account" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "agent_batch" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"exchange_id" integer NOT NULL,
+	"kind" text NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"due_at" timestamp with time zone NOT NULL,
+	"input_message_id" integer,
+	"input_version" integer DEFAULT 0 NOT NULL,
+	"target_ref" text,
+	"participant" text,
+	"attempt" integer DEFAULT 0 NOT NULL,
+	"worker_id" text,
+	"claim_token" text,
+	"claimed_at" timestamp with time zone,
+	"lease_expires_at" timestamp with time zone,
+	"generation_count" integer DEFAULT 0 NOT NULL,
+	"stale_count" integer DEFAULT 0 NOT NULL,
+	"request_messages" jsonb,
+	"raw_response" text,
+	"parsed_result" jsonb,
+	"provider_metadata" jsonb,
+	"error" text,
+	"allow_idle_follow_up" boolean,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "agent_batch_kind_check" CHECK ("agent_batch"."kind" in ('opening', 'reply', 'follow_up', 'world')),
+	CONSTRAINT "agent_batch_status_check" CHECK ("agent_batch"."status" in ('pending', 'processing', 'stale', 'delivery_pending', 'completed', 'no_reply', 'failed', 'cancelled', 'terminated')),
+	CONSTRAINT "agent_batch_counts_check" CHECK ("agent_batch"."input_version" >= 0 and "agent_batch"."generation_count" >= 0 and "agent_batch"."stale_count" >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "agent_delivery" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"batch_id" integer NOT NULL,
+	"sequence" integer NOT NULL,
+	"content" text NOT NULL,
+	"author" text,
+	"reply_to" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"due_at" timestamp with time zone NOT NULL,
+	"delivered_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_delivery_sequence_check" CHECK ("agent_delivery"."sequence" >= 0),
+	CONSTRAINT "agent_delivery_status_check" CHECK ("agent_delivery"."status" in ('pending', 'delivered', 'cancelled'))
+);
+--> statement-breakpoint
+CREATE TABLE "exchange" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"piece_id" uuid NOT NULL,
+	"scenario_id" text,
+	"expires_at" timestamp with time zone NOT NULL,
+	"status" text DEFAULT 'in_progress' NOT NULL,
+	"completion_reason" text,
+	"last_processed_user_message_id" integer,
+	"last_seen_assistant_message_id" integer,
+	"agent_read_up_to_message_id" integer,
+	"follow_up_count" integer DEFAULT 0 NOT NULL,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "exchange_piece_id_unique" UNIQUE("piece_id"),
+	CONSTRAINT "exchange_status_check" CHECK ("exchange"."status" in ('in_progress', 'completed', 'abandoned')),
+	CONSTRAINT "exchange_completion_reason_check" CHECK ("exchange"."completion_reason" is null or "exchange"."completion_reason" in ('user_requested', 'max_turns', 'max_age', 'terminated_abuse')),
+	CONSTRAINT "exchange_follow_up_count_check" CHECK ("exchange"."follow_up_count" between 0 and 6)
+);
+--> statement-breakpoint
+CREATE TABLE "exchange_message" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"exchange_id" integer NOT NULL,
+	"role" text NOT NULL,
+	"content" text NOT NULL,
+	"llm_metadata" jsonb,
+	"response_batch_id" integer,
+	"delivery_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "exchange_message_role_check" CHECK ("exchange_message"."role" in ('user', 'assistant'))
+);
+--> statement-breakpoint
 CREATE TABLE "issue" (
 	"id" text PRIMARY KEY NOT NULL,
 	"date" date NOT NULL,
@@ -315,6 +392,14 @@ CREATE TABLE "work" (
 );
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_batch" ADD CONSTRAINT "agent_batch_exchange_id_exchange_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "public"."exchange"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_delivery" ADD CONSTRAINT "agent_delivery_batch_id_agent_batch_id_fk" FOREIGN KEY ("batch_id") REFERENCES "public"."agent_batch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange" ADD CONSTRAINT "exchange_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange" ADD CONSTRAINT "exchange_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange" ADD CONSTRAINT "exchange_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_exchange_id_exchange_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "public"."exchange"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_response_batch_id_agent_batch_id_fk" FOREIGN KEY ("response_batch_id") REFERENCES "public"."agent_batch"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_delivery_id_agent_delivery_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."agent_delivery"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_issue_id_issue_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issue"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "llm_call" ADD CONSTRAINT "llm_call_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -340,6 +425,16 @@ ALTER TABLE "user_key" ADD CONSTRAINT "user_key_user_id_user_id_fk" FOREIGN KEY 
 ALTER TABLE "user_week" ADD CONSTRAINT "user_week_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "account_provider_account_unique" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "account_user_provider_unique" ON "account" USING btree ("user_id","provider_id");--> statement-breakpoint
+CREATE INDEX "agent_batch_status_due_idx" ON "agent_batch" USING btree ("status","due_at");--> statement-breakpoint
+CREATE INDEX "agent_batch_exchange_status_idx" ON "agent_batch" USING btree ("exchange_id","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_batch_world_outstanding_idx" ON "agent_batch" USING btree ("exchange_id") WHERE "agent_batch"."kind" = 'world' and "agent_batch"."status" in ('pending', 'processing', 'stale', 'delivery_pending');--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_delivery_batch_sequence_idx" ON "agent_delivery" USING btree ("batch_id","sequence");--> statement-breakpoint
+CREATE INDEX "agent_delivery_status_due_idx" ON "agent_delivery" USING btree ("status","due_at");--> statement-breakpoint
+CREATE INDEX "exchange_user_idx" ON "exchange" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "exchange_expiry_idx" ON "exchange" USING btree ("status","expires_at");--> statement-breakpoint
+CREATE INDEX "exchange_message_exchange_idx" ON "exchange_message" USING btree ("exchange_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "exchange_message_delivery_idx" ON "exchange_message" USING btree ("delivery_id");--> statement-breakpoint
+CREATE INDEX "exchange_message_unread_idx" ON "exchange_message" USING btree ("exchange_id","id") WHERE "exchange_message"."role" = 'assistant';--> statement-breakpoint
 CREATE INDEX "llm_call_piece_idx" ON "llm_call" USING btree ("piece_id");--> statement-breakpoint
 CREATE INDEX "llm_call_created_idx" ON "llm_call" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "note_due_idx" ON "note" USING btree ("user_id","due") WHERE "note"."deleted_at" is null;--> statement-breakpoint

@@ -3,7 +3,7 @@
  * migration each time), every time is timestamptz, and jsonb is validated in code on every write. Design:
  * docs/design/2026-11-13-step-3-rebuild.md §5.
  */
-import { type SQL, sql } from "drizzle-orm";
+import { relations, type SQL, sql } from "drizzle-orm";
 import {
 	boolean,
 	check,
@@ -15,17 +15,24 @@ import {
 	type PgColumn,
 	pgTable,
 	primaryKey,
+	serial,
 	text,
 	timestamp,
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
 import {
+	AGENT_BATCH_KINDS,
+	AGENT_BATCH_STATUSES,
+	AGENT_DELIVERY_STATUSES,
 	APP_LANGS,
 	CALL_STATES,
 	DETAILS,
+	EXCHANGE_END_REASONS,
+	EXCHANGE_STATUSES,
 	KEY_PROVIDERS,
 	LEARNABLE,
+	MESSAGE_ROLES,
 	NAME_KINDS,
 	NAME_STATUSES,
 	NOTE_KINDS,
@@ -404,6 +411,156 @@ export const pieceStep = pgTable(
 	},
 	(t) => [primaryKey({ columns: [t.pieceId, t.seq] })],
 );
+
+// --- The exchange (§5.5) ----------------------------------------------------------------------------------------------
+
+/* A scenario's simulated conversation, one per scenario piece: the learner's messages and the cast's replies, composed
+   in the background by the agent worker (server/exchange/agents) in batches and paced out as deliveries. The floor, the
+   lock order, the claim leases and the comment-id scheme are the old practice session's (design §5.5). */
+export const exchange = pgTable(
+	"exchange",
+	{
+		id: serial("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		pieceId: uuid("piece_id")
+			.notNull()
+			.unique()
+			.references(() => piece.id, { onDelete: "cascade" }),
+		scenarioId: text("scenario_id").references(() => scenario.id, { onDelete: "set null" }),
+		expiresAt: at("expires_at").notNull(),
+		status: text("status").notNull().default("in_progress"),
+		completionReason: text("completion_reason"),
+		lastProcessedUserMessageId: integer("last_processed_user_message_id"),
+		lastSeenAssistantMessageId: integer("last_seen_assistant_message_id"),
+		agentReadUpToMessageId: integer("agent_read_up_to_message_id"),
+		followUpCount: integer("follow_up_count").notNull().default(0),
+		startedAt: at("started_at").defaultNow().notNull(),
+		completedAt: at("completed_at"),
+	},
+	(t) => [
+		index("exchange_user_idx").on(t.userId),
+		index("exchange_expiry_idx").on(t.status, t.expiresAt),
+		check("exchange_status_check", oneOf(t.status, EXCHANGE_STATUSES)),
+		check("exchange_completion_reason_check", sql`${t.completionReason} is null or ${oneOf(t.completionReason, EXCHANGE_END_REASONS)}`),
+		check("exchange_follow_up_count_check", sql`${t.followUpCount} between 0 and 6`),
+	],
+);
+
+/* A batch of agent work: one opportunity to answer (or to speak up), claimed by a worker under a lease, composed by one
+   model call, then paced out as deliveries. */
+export const agentBatch = pgTable(
+	"agent_batch",
+	{
+		id: serial("id").primaryKey(),
+		exchangeId: integer("exchange_id")
+			.notNull()
+			.references(() => exchange.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		status: text("status").notNull().default("pending"),
+		dueAt: at("due_at").notNull(),
+		inputMessageId: integer("input_message_id"),
+		inputVersion: integer("input_version").notNull().default(0),
+		/** The comment ref of the message this conversation serves; null for world moments and non-threaded places. */
+		targetRef: text("target_ref"),
+		/** The cast member who takes up this opportunity; written at creation, never redrawn. */
+		participant: text("participant"),
+		/** The attempt number of the input message this batch serves (settlement scopes siblings by it). */
+		attempt: integer("attempt").notNull().default(0),
+		workerId: text("worker_id"),
+		claimToken: text("claim_token"),
+		claimedAt: at("claimed_at"),
+		leaseExpiresAt: at("lease_expires_at"),
+		generationCount: integer("generation_count").notNull().default(0),
+		staleCount: integer("stale_count").notNull().default(0),
+		requestMessages: jsonb("request_messages"),
+		rawResponse: text("raw_response"),
+		parsedResult: jsonb("parsed_result"),
+		providerMetadata: jsonb("provider_metadata"),
+		error: text("error"),
+		allowIdleFollowUp: boolean("allow_idle_follow_up"),
+		createdAt: created(),
+		completedAt: at("completed_at"),
+	},
+	(t) => [
+		index("agent_batch_status_due_idx").on(t.status, t.dueAt),
+		index("agent_batch_exchange_status_idx").on(t.exchangeId, t.status),
+		check("agent_batch_kind_check", oneOf(t.kind, AGENT_BATCH_KINDS)),
+		check("agent_batch_status_check", oneOf(t.status, AGENT_BATCH_STATUSES)),
+		check("agent_batch_counts_check", sql`${t.inputVersion} >= 0 and ${t.generationCount} >= 0 and ${t.staleCount} >= 0`),
+		// At most one outstanding world batch per exchange.
+		uniqueIndex("agent_batch_world_outstanding_idx")
+			.on(t.exchangeId)
+			.where(sql`${t.kind} = 'world' and ${t.status} in ('pending', 'processing', 'stale', 'delivery_pending')`),
+	],
+);
+
+/* One message of a batch, paced out at its own due time. */
+export const agentDelivery = pgTable(
+	"agent_delivery",
+	{
+		id: serial("id").primaryKey(),
+		batchId: integer("batch_id")
+			.notNull()
+			.references(() => agentBatch.id, { onDelete: "cascade" }),
+		sequence: integer("sequence").notNull(),
+		content: text("content").notNull(),
+		/** The cast member who posts it. */
+		author: text("author"),
+		/** A scene message ref, or `@n` for the n-th delivery of the same batch. */
+		replyTo: text("reply_to"),
+		status: text("status").notNull().default("pending"),
+		dueAt: at("due_at").notNull(),
+		deliveredAt: at("delivered_at"),
+		createdAt: created(),
+	},
+	(t) => [
+		uniqueIndex("agent_delivery_batch_sequence_idx").on(t.batchId, t.sequence),
+		index("agent_delivery_status_due_idx").on(t.status, t.dueAt),
+		check("agent_delivery_sequence_check", sql`${t.sequence} >= 0`),
+		check("agent_delivery_status_check", oneOf(t.status, AGENT_DELIVERY_STATUSES)),
+	],
+);
+
+/* What was said in the exchange: the learner's messages and the deliveries once they land. `llm_metadata` holds the
+   message's place-specific facts (client id, thread position, author, the message it quotes). */
+export const exchangeMessage = pgTable(
+	"exchange_message",
+	{
+		id: serial("id").primaryKey(),
+		exchangeId: integer("exchange_id")
+			.notNull()
+			.references(() => exchange.id, { onDelete: "cascade" }),
+		role: text("role").notNull(),
+		content: text("content").notNull(),
+		llmMetadata: jsonb("llm_metadata"),
+		responseBatchId: integer("response_batch_id").references(() => agentBatch.id, { onDelete: "set null" }),
+		deliveryId: integer("delivery_id").references(() => agentDelivery.id, { onDelete: "set null" }),
+		createdAt: created(),
+	},
+	(t) => [
+		index("exchange_message_exchange_idx").on(t.exchangeId),
+		uniqueIndex("exchange_message_delivery_idx").on(t.deliveryId),
+		// Unread counts scan only replies past each exchange's watermark (server/exchange/unread.ts).
+		index("exchange_message_unread_idx").on(t.exchangeId, t.id).where(sql`${t.role} = 'assistant'`),
+		check("exchange_message_role_check", oneOf(t.role, MESSAGE_ROLES)),
+	],
+);
+
+export const exchangeRelations = relations(exchange, ({ many }) => ({ messages: many(exchangeMessage), batches: many(agentBatch) }));
+export const exchangeMessageRelations = relations(exchangeMessage, ({ one }) => ({
+	exchange: one(exchange, { fields: [exchangeMessage.exchangeId], references: [exchange.id] }),
+	delivery: one(agentDelivery, { fields: [exchangeMessage.deliveryId], references: [agentDelivery.id] }),
+}));
+export const agentBatchRelations = relations(agentBatch, ({ one, many }) => ({
+	exchange: one(exchange, { fields: [agentBatch.exchangeId], references: [exchange.id] }),
+	deliveries: many(agentDelivery),
+}));
+export const agentDeliveryRelations = relations(agentDelivery, ({ one }) => ({
+	batch: one(agentBatch, { fields: [agentDelivery.batchId], references: [agentBatch.id] }),
+	message: one(exchangeMessage),
+}));
 
 // --- Notebook and review (§5.6) -------------------------------------------------------------------------------------
 

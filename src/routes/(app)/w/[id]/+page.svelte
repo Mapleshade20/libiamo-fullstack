@@ -11,7 +11,6 @@ import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
 import { keptPiece, siteOf } from "#lib/demo/data.ts";
-import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
 import { notesPending, type Posted } from "#lib/writing/types.ts";
 import { pieceById } from "#lib/writing/writing.remote.ts";
 import { refreshWriting, setPosted } from "#lib/writing/writing.svelte.ts";
@@ -28,10 +27,10 @@ const id = $derived(page.params.id ?? "");
 const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const st = $derived(siteOf(w?.site));
-const scenario = $derived(w?.scenarioId ? scenarioById(w.scenarioId) : undefined);
+const scenario = $derived(w?.scenarioId ? { id: w.scenarioId } : undefined);
 // A scenario's piece was already sent in the simulation: the page shows how the thread took it, and the revision is
 // for next time rather than for posting.
-const sim = $derived(w?.scenarioId ? SIMS[w.scenarioId] : undefined);
+const sim = $derived(w?.scenarioId && r?.ending ? { ending: r.ending } : undefined);
 let view = $state("final");
 const parts = $derived(r ? diffWords(r.original, r.final) : []);
 const learned = $derived(r ? [...r.learned].sort((a, b) => Number(b.own) - Number(a.own)).slice(0, 4) : []);
