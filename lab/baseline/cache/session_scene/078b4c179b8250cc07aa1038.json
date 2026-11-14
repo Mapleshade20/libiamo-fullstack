@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A language learner (their own language: Simplified Chinese (as used in mainland China)) pasted a draft they are about to post or send, with an optional note.\n\nNote: r/WarriorCats 的提问帖。我刚开始读 Darktail’s Judgment，想问 Darkpaw 在月亮石那一段，还想说说我的看法。\n\nDraft:\n<<<\nI’m on the early chapters of Darktail’s Judgment, and I get a little bit confused about the plot that StarClan didn’t show up when Darkpaw was at the moonstone and he went really miserable and furious for that.\n\nRavenpaw said StarClan had travelled with the Clans and left the forest skies, and it would be hard / not worth it to get back here for a distant little kittypet who want to join the Clans. But it was mentioned in the book that it was a overcast day, so without the moonlight it’s natural to be unable to reach StarClan back then when the Clans were still in the forest. (Could someone tell me if there was a similar case in the other books that the night sky’s cloudy when some cat’s at the Moonstone? Or do StarClan have the power to clear the clouds if they want to communicate?)\n\nAnd Darkpaw didn’t go for another try on a clear day; he just chose to transform himself into Darktail👿 instead.\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it, what the writer wants to do, and target: the code of the language they are learning, the one most of the draft is written in (never their own language, even when the note or a passage is in it). platform, audience and purpose in the language the draft is written in (the target language) (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or \"Email\"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in the language of the draft, starting with a verb, the way writing prompts are titled (for example \"Reply to the author of “Long Way Home”\", \"Ask r/WarriorCats why StarClan never came\", \"Thank Sam for the playlist\"); at most about eight words, naming who or what it is for.\nReply with JSON only: {\"site\":\"\",\"community\":\"\",\"reader\":\"\",\"title\":\"\",\"platform\":\"\",\"audience\":\"\",\"purpose\":\"\",\"target\":\"en|es|fr|ja\"}"
+		}
+	],
+	"result": {
+		"text": "{\"site\":\"Reddit\",\"community\":\"r/WarriorCats\",\"reader\":\"u/MoonstoneMoth\",\"title\":\"Ask r/WarriorCats why StarClan skipped Darkpaw's moonstone visit\",\"platform\":\"Reddit question post with personal opinion\",\"audience\":\"Warrior Cats fans on r/WarriorCats\",\"purpose\":\"Ask about StarClan's absence and share a theory\",\"target\":\"en\"}",
+		"usage": {
+			"input": 858,
+			"output": 568,
+			"reasoning": 424,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 3343,
+		"cached": false,
+		"costUsd": 0.0003698
+	},
+	"finish": "stop"
+}

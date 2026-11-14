@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "You are a fluent, native English speaker and a regular of the café's printed autumn menu. Its readers: tourists who read English, choosing at the counter.\nThe writer's note about it, in their words: A translation of this source: 桂花拿铁：用店里自制的桂花糖浆调制，顶上撒一点海盐奶泡。\n栗子巴斯克奶酪蛋糕：外表焦香，里面依然软嫩。\n无酒精热红酒：加了肉桂、橙皮和丁香，适合阴雨天喝。\nGiven names and terms: Osmanthus latte, Basque cheesecake.\nA learner is revising this post:\n<<<\nOsmanthus latte: home made osmanthus syrup, with a little sea salt milk cap.\nChestnut Basque cheesecake: the outside is baked a bit burnt, inside still soft.\nHot red wine (no alcohol-free): cinnamon, orange peel and clove, suitable for rainy days\n>>>\nTheir words: \"Hot red wine (no alcohol-free): cinnamon, orange peel and clove, suitable for rainy days\"\nThe problem the tutor found there: 读者看到 Hot red wine 会以为是温热的红葡萄酒，括号里的“无酒精”又让人困惑：到底是什么饮品。原文是加香料的热饮，这一点在这里没有交代清楚。\nWhat the writer means (confirmed by them): 无酒精热红酒：加了肉桂、橙皮和丁香，适合阴雨天喝。\nThe tutor's version: \"Mulled wine (alcohol-free): cinnamon, orange peel and clove, suitable for rainy days.\"\nThe tutor's choices, numbered, with the reason given for each:\n1. Mulled wine: 英文里加香料热煮的葡萄酒叫 mulled wine。直译成 hot red wine 会让人以为是加热的红葡萄酒，和原文的香料热饮对不上。\n2. alcohol-free: “无酒精”要直接修饰饮品，写成 alcohol-free 放在名字后面。写 no alcohol-free 不是英文说法，读者会看不懂。\nTutors who know the writer is learning English tend to rewrite natural wording too. For each choice: holds is true when the choice fixes the problem above or carries the writer's meaning, or when the writer's own words it replaces really are wrong or unnatural here (a fluent regular would not write them, or readers would take them differently). holds is false when it replaces words of the writer's that regulars here write and readers take as meant: a matter of taste, however the reason puts it. why: one short English sentence. note: when the choice holds but its reason says something untrue about the writer's words, the reason rewritten to say only what is true, in the reason's language, addressed to the writer as the tutor would say it (the new reason itself, never a remark about the old one such as \"the reason should be…\"); else null.\nIf any choice does not hold: ref: the tutor's version with the writer's own words put back at those places (adjusted only as the grammar of the new sentence requires), keeping the [square brackets] the tutor put around key words that remain; alts: the tutor's other versions below, changed the same way; and for each choice that holds, label: its words exactly as they now read in your ref. Else ref and alts null.\nOther versions: \"Mulled wine, non-alcoholic: cinnamon, orange peel and clove, suitable for rainy days.\"; \"Alcohol-free mulled wine: cinnamon, orange peel and clove, suitable for rainy days.\"\nchecks: numbers of the mistakes below that the grader would only flag because of a choice that does not hold; else null.\n1. The drink name is translated word for word as 'hot red wine', so it reads as warm red wine with alcohol.\n2. The writer keeps the broken bracket '(no alcohol-free)', or writes 'no alcohol' in a wrong position.\n3. The alcohol-free information is missing entirely, so the reader cannot tell whether the drink contains alcohol.\nReply with JSON only: {\"verdicts\":[{\"n\":1,\"holds\":true,\"why\":\"\"}],\"ref\":null,\"alts\":null,\"checks\":null}"
+		}
+	],
+	"result": {
+		"text": "{\"verdicts\":[{\"n\":1,\"holds\":true,\"why\":\"\\\"Mulled wine\\\" is the English term for wine heated with spices, while \\\"hot red wine\\\" reads as plain warm wine.\",\"note\":null},{\"n\":2,\"holds\":true,\"why\":\"\\\"No alcohol-free\\\" isn't English, so the alcohol-free note should follow the drink name directly.\",\"note\":null}],\"ref\":null,\"alts\":null,\"checks\":null}",
+		"usage": {
+			"input": 1395,
+			"output": 716,
+			"reasoning": 567,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 4126,
+		"cached": false,
+		"costUsd": 0.0004975
+	},
+	"finish": "stop"
+}

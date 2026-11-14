@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A learner's English draft went through a first pass that fixed its small errors. The text as it now reads, sentences numbered:\n[S1] I've read this fic since the first chapter and the ending makes me cry.\n[S2] The scene when Bluestar didn't look back at the camp is staying with me, because she chooses to go alone even though she's scared.\n\n[S3] * * *\n\n[S4] I think it's more about what she finds.\n[S5] She has made the journey many times, but this time StarClan might tell her Oakheart isn't waiting for her.\n[S6] That is why she makes herself stop thinking of him, I think.\n\nA tutor found these problems on the draft before the first pass. For each: the words it quoted, the first-pass changes near them (before → after), and the problem as written:\n1. quoted: \"I think more about what she find\"\n   changes: \"∅\" → \"it's\"; \"find.\" → \"finds.\"\n   problem: 英语读者看到 \"I think more about\" 时，通常会把它理解为\"我更常想到\"，而不是在两个选项之间做出选择。作者的回答是在\"路上\"和\"到了之后\"之间择一，但这句话没有给出比较的另一边，读者要靠上下文才能推断。\n2. quoted: \"The journey she did many times\"\n   changes: \"The journey she did\" → \"She has made the journey\"; \"maybe StarClan will\" → \"StarClan might\"; \"is not\" → \"isn't\"\n   problem: 英语读者习惯先读主语和动词，句首直接放一个宾语（\"the journey\"）且后面没有代词回指，会让人停顿，以为句子结构不完整，不知道这是在强调什么。\n\nThe learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in Simplified Chinese (as used in mainland China), at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.\nReply with JSON only: {\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"\",\"problem\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "```json\n{\"spots\":[{\"id\":1,\"keep\":true,\"quote\":\"I think it's more about what she finds.\",\"problem\":\"英语读者看到 \\\"I think it's more about what she finds\\\" 时，仍会犹豫作者是在与什么相比。句中没有给出比较的另一方，比如路上的经历与抵达之后的发现，读者只能靠上下文去推断作者的对照，句子本身并没有说明。\"},{\"id\":2,\"keep\":false,\"quote\":\"\",\"problem\":\"\"}]}\n```",
+		"usage": {
+			"input": 885,
+			"output": 883,
+			"reasoning": 711,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 5254,
+		"cached": false,
+		"costUsd": 0.00053
+	},
+	"finish": "stop"
+}

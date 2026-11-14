@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!!**/dist", "!!drizzle", "!!src/lib/components/streak/art"]
+		"includes": ["**", "!!**/dist", "!!drizzle", "!!src/lib/components/streak/art", "!!lab/baseline"]
 	},
 	"formatter": {
 		"enabled": true,

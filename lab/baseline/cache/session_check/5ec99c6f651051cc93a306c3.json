@@ -1,0 +1,25 @@
+{
+	"model": "~anthropic/claude-haiku-latest",
+	"effort": "low",
+	"sample": 0,
+	"messages": [
+		{
+			"role": "user",
+			"content": "A writer revised their Spanish post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero solicitar plaza en el curso de septiembre. Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y tengo muchas ganas de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia pueda cocinar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo. Estoy seguro de que lo voy a pasar muy bien en su escuela. Mirando adelante a oír de usted.\n\nSaludos,\nDaniel Clarke\n>>>\n\nFinal:\n<<<\nEstimada Sra. Morales:\n\nMi nombre es Daniel y yo soy de Manchester, en Inglaterra. Le escribo porque quiero solicitar plaza en el curso de septiembre. Vengo a mejorar mi español porque mi novia es de Granada. El año pasado conocí a su familia, pero no entendí casi nada, y tengo muchas ganas de aprender para poder hablar con ellos.\n\n¿Es posible que usted me envíe información sobre los precios? También tengo algunas preguntas. Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela? Necesito una habitación tranquila para estudiar. Segundo, ¿puedo traer mi bicicleta? Me gusta montar en bici y quiero explorar las montañas. Tercero, no soy exigente, pero no como carne y espero que la familia pueda preparar algo para mí. Mi novia viene conmigo el primer fin de semana.\n\n¿Me puedes decir cuándo empiezan los cursos? Si fuera posible, le agradecería una respuesta antes de fin de mes, ya que tengo que comprar el vuelo. Estoy seguro de que lo voy a pasar muy bien en su escuela. Quedo a la espera de su respuesta, con ilusión.\n\nSaludos,\nDaniel Clarke\n>>>\n\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n- 「Vengo por mejorar mi español: mi novia es de Granada, conocí a su familia el año pasado pero no entendí casi nada, y tengo muchas ganas de aprender para poder hablar con ellos.」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n- 「Primero, prefiero una habitación con familia / un piso compartido, no sé cual es mejor para aprender. ¿Es el piso cerca de la escuela?」→ kept as written\n- 「Tercero, soy vegetariano (I'm not picky but I don't eat meat) y espero que la familia pueda cocinar algo para mí.」→ No soy exigente, pero no como carne.\n- 「Necesito una respuesta antes de fin de mes porque tengo que comprar el vuelo.」→ Quiero decir que presentar el plazo como una necesidad puede sonar a presión a alguien que no te conoce, así que la forma de pedir la respuesta depende de lo que quieras transmitir.\n- 「Mirando adelante a oír de usted.」→ Everything this passage says now: every point, question, hedge and feeling in it stays; only how it is put changes.\n\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short Spanish sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {\"issues\":[{\"kind\":\"lost|changed|duplicated|broken\",\"quote\":\"\",\"note\":\"\"}]}"
+		}
+	],
+	"result": {
+		"text": "{\"issues\":[{\"kind\":\"changed\",\"quote\":\"Si fuera posible, le agradecería una respuesta antes de fin de mes\",\"note\":\"Tu «necesito» era una necesidad firme y ahora es una petición condicional. Si la urgencia es real, ese cambio altera lo que dices.\"}]}",
+		"usage": {
+			"input": 1680,
+			"output": 1238,
+			"reasoning": 1133,
+			"cacheRead": 0,
+			"cacheWrite": 0
+		},
+		"ms": 6052,
+		"cached": false,
+		"costUsd": 0.000787
+	},
+	"finish": "stop"
+}
