@@ -721,7 +721,9 @@
 		"acDeleteNext": "I understand, continue",
 		"acDeleteType": "Type {email} to confirm.",
 		"acDeleteGo": "Delete my account",
-		"acDeleted": "Your account has been deleted."
+		"acDeleted": "Your account has been deleted.",
+		"setDecider": "Checking model",
+		"setDeciderHelp": "Before the tutor starts, a small fast model looks at what you sent: which language it is in, and whether it is something to work on. It runs on your key and costs a few hundredths of a cent."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -1445,6 +1447,8 @@
 		"acDeleteNext": "我明白，继续",
 		"acDeleteType": "输入 {email} 以确认。",
 		"acDeleteGo": "删除我的账户",
-		"acDeleted": "你的账户已删除。"
+		"acDeleted": "你的账户已删除。",
+		"setDecider": "检查模型",
+		"setDeciderHelp": "辅导开始前，一个小而快的模型会先看看你发来的内容：用的是哪种语言，适不适合拿来练。它用你的密钥运行，每次只花几百分之一美分。"
 	}
 }

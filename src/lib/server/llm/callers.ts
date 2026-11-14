@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { graderFor } from "#lib/llm/providers.ts";
+import { decisionModelFor, graderFor } from "#lib/llm/providers.ts";
 import { decryptKey } from "#lib/server/account/key.ts";
 import { db } from "#lib/server/db/index.ts";
 import { userKey } from "#lib/server/db/schema.ts";
@@ -19,10 +19,14 @@ const cache: ModelCache | undefined = LLM_CACHE_DIR ? fileCache(LLM_CACHE_DIR, L
 
 /** The learner's saved key as a route, or null when there is none (or it no longer decrypts). */
 export async function routeOf(userId: string): Promise<Route | null> {
+	return (await keyOf(userId))?.route ?? null;
+}
+async function keyOf(userId: string): Promise<{ route: Route; decision: string | null } | null> {
 	const row = await db.query.userKey.findFirst({ where: eq(userKey.userId, userId) });
 	if (!row) return null;
+	const provider = row.provider as Route["provider"];
 	try {
-		return { provider: row.provider as Route["provider"], model: row.model, apiKey: decryptKey(row.encryptedKey) };
+		return { route: { provider, model: row.model, apiKey: decryptKey(row.encryptedKey) }, decision: decisionModelFor(provider, row.decisionModel) };
 	} catch {
 		// A key saved under another BETTER_AUTH_SECRET: as good as none, and the page leads to the key form.
 		return null;
@@ -38,10 +42,12 @@ export type LearnerScope = {
 	fresh?: boolean;
 };
 export async function learnerCaller(scope: LearnerScope): Promise<Caller> {
-	const route = await routeOf(scope.user.id);
+	const key = await keyOf(scope.user.id);
+	const route = key?.route ?? null;
 	return new Caller({
 		route,
 		grader: route ? graderFor(route.provider, route.model) : undefined,
+		decision: key?.decision,
 		lanes: scope.lanes,
 		cache,
 		fresh: scope.fresh,

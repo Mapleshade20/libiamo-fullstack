@@ -150,6 +150,8 @@ export const userKey = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		provider: text("provider").notNull(),
 		model: text("model").notNull(),
+		/** The model the gate's questions go to, when the provider has a Decisions API; null is its default. */
+		decisionModel: text("decision_model"),
 		encryptedKey: text("encrypted_key").notNull(),
 		createdAt: created(),
 		updatedAt: updated(),
@@ -221,7 +223,9 @@ export const piece = pgTable(
 		authentic: text("authentic"),
 		learned: jsonb("learned"),
 		finishedAt: at("finished_at"),
+		/** Since when its notebook entries are on their way, and how many times they have been asked for. */
 		notesRequestedAt: at("notes_requested_at"),
+		notesTries: integer("notes_tries").notNull().default(0),
 		posted: text("posted"),
 		askedAt: at("asked_at"),
 		againText: text("again_text"),

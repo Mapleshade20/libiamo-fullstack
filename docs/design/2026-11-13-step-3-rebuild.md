@@ -187,8 +187,10 @@ local day. Which face a card shows follows from its review count; no rotation is
 | `session_case` | `id`, `piece_id`, `step_seq`, `note`, `created_by`, `status` (`open`/`fixed`/`wontfix`), `commit`, `created_at`, `closed_at` |
 
 `llm_call` replaces `llm_trace`; the operations monitor's hourly query (`deploy/podman/ops/operations.py`) is changed
-with it. A row's numbers are always written; `messages` and `output` only when the learner has `help_improve` on, and
-they are cleared after 30 days unless the piece has an open case.
+with it. A row's numbers are always written; `messages` and `output` only when the learner has `help_improve` on. A
+row goes, numbers and all, 30 days after the call unless a case holds its piece (decided by the user, 2026-11-14; the
+cases' exception comes with `session_case` in phase 5). Whether a count per learner is kept on the account before
+rows go, to follow use without the table growing, is the user's to decide later.
 
 ## 6. Data flow
 
@@ -205,8 +207,11 @@ call site (tag, effort, schema)
 - **No globals.** The lab's `config.task`, the `chipN` counter, `process.env`, the UI strings read at import and the
   disk cache become parameters or per-session state. Every function of the model layer takes a `Caller`.
 - **Who pays.** A learner's call uses `user_key` and nothing else; without one it stops with `nokey`, a refused key
-  with `refused`, anything else `error`: the three the demo's `LimitNotice` already shows. The environment key serves
-  the gate's decision call, translation sources at publish, name tables and Scene Lab.
+  with `refused`, anything else `error`: the three the demo's `LimitNotice` already shows. The gate's decision is the
+  learner's too (decided by the user, 2026-11-14): their provider's Decisions API where it has one (OpenRouter: Jev,
+  GPT-6 Luna Decisions or Gemini Decision 1, the learner's choice in settings; OpenAI: `gpt-6-luna`), else their chat
+  model with thinking off, its reply read leniently (`server/llm/decide.ts`). The environment key serves translation
+  sources at publish, name tables and Scene Lab.
 - **Providers** are a table in `lib/llm/providers.ts` (base URL, how effort is sent, whether cost is reported, the
   one-press setups). `SceneSchema.target` and every other language list come from the constants.
 - **Lanes and records are two things.** The lab's `trace.ts` holds both the session's scheduling (product logic) and
@@ -336,7 +341,11 @@ than `load` and form actions. They and Svelte's async mode are experimental, so:
 | 7. Launch | the whole app verified; deployment docs; the production reset; `v1.0.0` |
 
 **How the demo comes in.** It is brought in whole and kept running: the app starts as the demo on its browser
-storage, and each phase replaces a part of `lib/demo` with loads and actions, page by page turning rendering on. The
+storage, and each phase replaces a part of `lib/demo` with loads and actions, page by page turning rendering on. Each
+phase from 4 on owns the demo parts its pages touch (decided by the user, 2026-11-14): their data gets its server
+format, what only the browser held moves to the server, and their pages render on the server; `app.svelte.ts` (the
+settings, theme, toasts and `tx` that most pages read) is split into real modules by the end of phase 6, and the root
+`ssr = false` goes then, not on the eve of launch. The
 model layer arrived as `src/model` and was distributed over the domains in phase 2. The work is done
 when `lib/demo`, the root `ssr = false`, the `/lab` pages and the dev panel are gone. SvelteKit, Vite,
 Vitest and TypeScript are a major version behind (the demo's versions were kept so the import changes nothing); the
@@ -362,16 +371,18 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
 
 ## 11. Open
 
-- **`help_improve` off.** Proposed: the call's numbers are kept, its messages and output are not, and the admin's
-  session pages do not list that learner's pieces. To confirm.
 - **The public welcome page** describes the old product (lineups, the book). It needs new content before launch.
 - **Models.** Everything was tuned on Claude Haiku through OpenRouter; DeepSeek Flash, GPT Luna and GLM have not run a
   whole session. One fixture run each before their setups are offered.
 - **Asking about a review answer.** The demo's "Is mine OK too?" on a card's back answered with stand-ins; it was taken
-  out in phase 3 (decided by the user, 2026-11-15) and is to come back later with a real call to the tutor (a new
+  out in phase 3 (decided by the user, 2026-11-14) and is to come back later with a real call to the tutor (a new
   prompt: the card's sentence, the learner's answer and the one they kept, then follow-up questions), like collecting's
   questions about a phrase.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
+- **A count of use per learner** kept on the account before a call's row goes after 30 days (§5.7): the user is
+  considering it.
+- **Users in admin** (asked for by the user, 2026-11-14): a tab listing every account, with its information, its call
+  history (the 30 days `llm_call` keeps) and a way to delete it. Phase 5.
 
 ## 12. State of the work
 
@@ -451,7 +462,7 @@ rate-limit table and every environment list describe what exists.
   developer settings, `/api/fixtures` and `/lab` showed to every learner in a production build (now development and
   admins only).
 
-**Phase 3, what comes back: built** (2026-11-15), waiting for the user's acceptance.
+**Phase 3, what comes back: built** (2026-11-14), waiting for the user's acceptance.
 
 - **Tables.** `note`, `reading`, `review_log`, `practice_day`, `user_week` as §5.2 and §5.6, in the one migration. `note.sentence`
   is an own entry's sentence as settled (with `was`, what was first written there) or a collected one's sentence as read
@@ -469,7 +480,7 @@ rate-limit table and every environment list describe what exists.
 - **The week.** The glasses, the popover and the profile's history read the server; the demo's stand-in history is
   gone. The queue that counts for a day is the language's being worked in (the one the learner sees).
 - **Follow-ups and write-again** were already the server's (phase 2); writing again now credits the day.
-- **Checked** (2026-11-15): the baseline replays identically (all eleven); three pieces finished with notes filed
+- **Checked** (2026-11-14): the baseline replays identically (all eleven); three pieces finished with notes filed
   (seventeen entries, due the next day); in the browser on the dev server: the shelf's review row and the sidebar count,
   the notebook list, filters, an entry, editing and deleting it, a whole sitting of six cards (thirteen ratings, the
   buttons' intervals from the scheduler), the glass filled after it, the profile, collecting two phrases with one live
@@ -477,6 +488,26 @@ rate-limit table and every environment list describe what exists.
   on an empty database (the migration with the new tables, `/health`, a card reviewed and the day's half written,
   SIGTERM).
 - Review's "Is mine OK too?" (the demo's stand-in replies) is taken off the card's back for now (§11).
+
+**Before phase 4: the review's findings** (2026-11-14). A look back over phases 0–3 found three things the user
+decided on:
+
+- **The gate on the learner's key.** `/api/gate` ran on the service's key with no limit on how often a learner could
+  call it. It now runs on the learner's own key like every other call they make (§6.1), with the decision model a
+  setting (shown when their provider runs more than one). `lab/gate-probe.ts` plays the real gate over 29 labelled texts
+  per model; on the service's key: Jev 28/29, Gemini Decision 1 28/29, GPT-6 Luna Decisions 27/29, and as the chat
+  fallback Claude Haiku, DeepSeek Flash and GLM Flash 26/29 each. The chat models' misses are all lenient (two
+  languages interleaved let through as the main one), which the revision copes with; no good text was refused. On the
+  way: a phrase sent to collect was refused as too short by every model (now fine to collect), and a missing
+  authorship answer no longer reads as "published". OpenAI's Decisions API is unit-tested on its documented shapes
+  only (no OpenAI key to try it on).
+- **Notes that fail.** The piece's page asked once more after two minutes, only if it was still open, and a second
+  failure left the piece with nothing in the notebook. Now the server tries again by itself (a sweep every thirty
+  seconds takes pieces asked for over two minutes ago, `piece.notes_tries` counts), and after the third failure, or
+  with no revision left to ask, files what pass 2 reworked as entries without a meaning, which the learner can write in.
+- **Calls kept thirty days.** `llm_call` rows older than thirty days are removed a minute after start and every six
+  hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
+  not list that learner's pieces.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

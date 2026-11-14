@@ -1,5 +1,5 @@
 {
-  "id": "6300af64-ef2d-4fae-a443-dbb8a94abdd6",
+  "id": "051c8e9f-91b0-4382-b234-448953e02738",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -784,6 +784,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "notes_tries": {
+          "name": "notes_tries",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "posted": {
           "name": "posted",
@@ -1611,6 +1618,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "decision_model": {
+          "name": "decision_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "encrypted_key": {
           "name": "encrypted_key",

@@ -1,11 +1,12 @@
-import { and, eq, inArray, max, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, max, ne, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { piece, pieceRevision, pieceStep } from "#lib/server/db/schema.ts";
+import { piece, pieceRevision, pieceStep, user as users } from "#lib/server/db/schema.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { Lanes } from "#lib/server/llm/lanes.ts";
 import { fileOwn } from "#lib/server/notebook/notes.ts";
 import { credit } from "#lib/server/week/days.ts";
-import { learnedFrom } from "#lib/server/writing/learned.ts";
+import { learnedFrom, StandIn } from "#lib/server/writing/learned.ts";
+import { building } from "$app/env";
 import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSION } from "./revision.ts";
 
 /*
@@ -221,20 +222,29 @@ export async function finishPiece(user: Learner, pieceId: string, set: Partial<t
 
 /**
  * The notebook entries of a finished piece, written after its revision ended (the learner is on the piece's page by
- * then; it shows what pass 2 reworked meanwhile). The call is a step on the tape. Once they are filed, or there is no
- * revision left to ask, the revision is not needed again.
+ * then; it shows what pass 2 reworked meanwhile). The call is a step on the tape. A call that fails is tried again two
+ * minutes on, by the sweep below, whether or not the page is still open; after the third, or with no revision left to
+ * ask, what pass 2 reworked is filed as it stands, so a piece never ends with nothing in the notebook. Once its entries
+ * are filed, the revision is not needed again.
  */
 const filing = new Set<string>();
+const NOTES_TRIES = 3;
+export const NOTES_RETRY_MS = 120_000;
 export async function fileNotes(user: Learner, pieceId: string) {
 	if (filing.has(pieceId)) return;
 	filing.add(pieceId);
+	let tries = 0;
 	try {
+		const [p] = await db
+			.update(piece)
+			.set({ notesTries: sql`${piece.notesTries} + 1`, notesRequestedAt: new Date() })
+			.where(and(eq(piece.id, pieceId), isNotNull(piece.notesRequestedAt)))
+			.returning({ tries: piece.notesTries });
+		if (!p) return;
+		tries = p.tries;
 		const h = await openRevision(user, pieceId);
 		const ask = h?.session.noteAsk;
-		if (!h || !ask) {
-			await updatePiece(pieceId, { notesRequestedAt: null });
-			return;
-		}
+		if (!h || !ask) return await fileStandIns(user, pieceId);
 		const notes = await act(pieceId, h, "notes", ask, (s) => s.notes(ask.items, ask.p1));
 		const learned = learnedFrom(ask, notes);
 		await db.transaction(async (tx) => {
@@ -247,12 +257,44 @@ export async function fileNotes(user: Learner, pieceId: string) {
 		});
 		await dropRevision(pieceId);
 	} catch (e) {
-		// The stand-in stays; the piece's page asks again once the wait is over.
-		console.error(`piece ${pieceId}: notes not filed:`, e);
+		console.error(`piece ${pieceId}: notes not filed (try ${tries}):`, e);
+		if (tries >= NOTES_TRIES) await fileStandIns(user, pieceId).catch((e) => console.error(`piece ${pieceId}: stand-ins not filed:`, e));
 	} finally {
 		filing.delete(pieceId);
 	}
 }
+
+/** What pass 2 reworked, filed as the piece's entries without a meaning (the learner can write one in the notebook). */
+async function fileStandIns(user: Learner, pieceId: string) {
+	await db.transaction(async (tx) => {
+		const [p] = await tx
+			.update(piece)
+			.set({ notesRequestedAt: null })
+			.where(and(eq(piece.id, pieceId), isNotNull(piece.notesRequestedAt)))
+			.returning({ id: piece.id, language: piece.language, tutorLanguage: piece.tutorLanguage, learned: piece.learned });
+		if (!p) return;
+		const standIns = StandIn.catch([]).parse(p.learned);
+		await fileOwn(
+			tx,
+			user,
+			p,
+			standIns.map((l) => ({ ...l, note: { phrase: l.text, meaning: "", usage: "", examples: [] } })),
+		);
+	});
+	await dropRevision(pieceId);
+}
+
+/** Pieces whose entries are still not filed two minutes after they were last asked for are asked again. */
+async function sweepNotes() {
+	const due = await db
+		.select({ id: piece.id, user: { id: users.id, helpImprove: users.helpImprove, timeZone: users.timeZone } })
+		.from(piece)
+		.innerJoin(users, eq(users.id, piece.userId))
+		.where(lt(piece.notesRequestedAt, new Date(Date.now() - NOTES_RETRY_MS)))
+		.limit(20);
+	for (const p of due) void fileNotes(p.user, p.id);
+}
+if (!building) setInterval(() => sweepNotes().catch((e) => console.error("notes sweep failed:", e)), 30_000).unref();
 
 /** Once the piece is finished and its notes are filed, its revision is not needed again. */
 export async function dropRevision(pieceId: string) {
