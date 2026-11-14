@@ -1,12 +1,9 @@
 <script lang="ts">
-import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import CornerDownLeft from "@lucide/svelte/icons/corner-down-left";
 import Eye from "@lucide/svelte/icons/eye";
 import Lightbulb from "@lucide/svelte/icons/lightbulb";
-import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
 import { diffChars, diffWords } from "diff";
 import { onMount, tick } from "svelte";
-import { fade } from "svelte/transition";
 import { tip } from "#lib/components/common/tip.ts";
 import RateMark from "#lib/components/review/RateMark.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
@@ -74,25 +71,6 @@ function near(a: string, b: string) {
 	return same / Math.max(a.length, b.length) >= 0.6;
 }
 
-// Asking whether their own wording works (the main app would ask the tutor model; here a stand-in reply).
-let asking = $state<"closed" | "thinking" | "open">("closed");
-let followUp = $state("");
-let thread = $state<{ q?: string; a: string }[]>([]);
-function cannedReply(q?: string) {
-	if (q) return tx("rvAskFollow");
-	if (!shown || !card) return "";
-	const k = shown.verdict === "other" ? "rvAskOther" : shown.verdict === "close" ? "rvAskClose" : "rvAskMiss";
-	return tx(k, { yours: shown.given.trim(), theirs: card.answer });
-}
-function ask(q?: string) {
-	asking = "thinking";
-	setTimeout(() => {
-		thread = [...thread, { q, a: cannedReply(q) }];
-		asking = "open";
-		followUp = "";
-	}, 900);
-}
-
 async function focusNow() {
 	await tick();
 	if (finished) doneBtn?.focus();
@@ -132,8 +110,6 @@ function rate(r: Rating) {
 	shown = null;
 	given = "";
 	placeholder = "";
-	asking = "closed";
-	thread = [];
 	focusNow();
 }
 const minutes = $derived(finished ? Math.max(1, Math.round((Date.now() - started) / 60_000)) : 0);
@@ -211,46 +187,9 @@ onMount(() => {
 				<section class="study" class:in={reviewed > 0} aria-live="polite">
 					<div class="face"><ReviewFace face={card} lang={app.lang} asked={shown ? asked : undefined} /></div>
 					{#if shown}
-						<div class="back">
-							{#if card.why}
-								<p class="why">{card.why}</p>
-							{/if}
-							{#if shown.given.trim() && shown.verdict !== "exact"}
-								<div class="ask">
-									{#if asking === "closed"}
-										<button type="button" class="text-link ask-btn" onclick={() => ask()}>
-											<MessageCircleQuestion class="size-4" aria-hidden="true" />{tx("rvAsk")}
-										</button>
-									{:else}
-										<div class="thread" in:fade={{ duration: 150 }}>
-											{#each thread as m}
-												{#if m.q}
-													<p class="q">{m.q}</p>
-												{/if}
-												<p class="a">{m.a}</p>
-											{/each}
-											{#if asking === "thinking"}
-												<p class="a thinking"><span></span><span></span><span></span></p>
-											{/if}
-											{#if asking === "open"}
-												<form
-													class="follow"
-													onsubmit={(e) => {
-														e.preventDefault();
-														if (followUp.trim()) ask(followUp.trim());
-													}}
-												>
-													<input bind:value={followUp} placeholder={tx("rvAskPh")} aria-label={tx("rvAskPh")}>
-													<button type="submit" class="send" disabled={!followUp.trim()} use:tip={tx("send")}>
-														<ArrowUp class="size-4" aria-hidden="true" />
-													</button>
-												</form>
-											{/if}
-										</div>
-									{/if}
-								</div>
-							{/if}
-						</div>
+						{#if card.why}
+							<div class="back"><p class="why">{card.why}</p></div>
+						{/if}
 					{:else}
 						<form
 							class="answer"
@@ -473,89 +412,6 @@ onMount(() => {
 	color: var(--ink-2);
 	font-size: 15px;
 	line-height: 1.55;
-}
-.ask {
-	margin-top: 12px;
-}
-.ask-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 14px;
-}
-.thread {
-	display: grid;
-	gap: 8px;
-	padding: 12px 14px;
-	border-radius: 6px;
-	background: var(--well);
-	font-size: 14.5px;
-	line-height: 1.55;
-}
-.thread p {
-	margin: 0;
-}
-.q {
-	justify-self: end;
-	max-width: 85%;
-	padding: 4px 10px;
-	border-radius: 6px;
-	background: var(--raised);
-}
-.thinking {
-	display: inline-flex;
-	gap: 4px;
-	height: 1.55em;
-	align-items: center;
-}
-.thinking span {
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: var(--muted);
-	animation: blink 1s infinite;
-}
-.thinking span:nth-child(2) {
-	animation-delay: 0.15s;
-}
-.thinking span:nth-child(3) {
-	animation-delay: 0.3s;
-}
-@keyframes blink {
-	50% {
-		opacity: 0.3;
-	}
-}
-.follow {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	border-radius: 6px;
-	background: var(--raised);
-	border: 1px solid var(--line-soft);
-	padding-inline-end: 4px;
-}
-.follow input {
-	flex: 1;
-	min-width: 0;
-	height: 38px;
-	padding: 0 10px;
-	border: 0;
-	background: none;
-	color: var(--ink);
-	font: inherit;
-	outline: 0;
-}
-.send {
-	width: 30px;
-	height: 30px;
-	border-radius: 6px;
-	background: var(--ink);
-	color: var(--bg);
-}
-.send:disabled {
-	opacity: 0.35;
-	cursor: default;
 }
 .foot {
 	position: fixed;
