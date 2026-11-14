@@ -5,10 +5,12 @@ import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, nameOf, read, tx, write } from "#lib/demo/app.svelte.ts";
-import { HANDOFF_KEY, myWriting, recordWriting } from "#lib/demo/data.ts";
+import { app, nameOf, read, toast, tx, write } from "#lib/demo/app.svelte.ts";
+import { myWriting, recordWriting } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { SIMS, scenarioById, situationOf } from "#lib/demo/scenarios.ts";
+import { startPiece } from "#lib/session/start.ts";
+import type { Setup } from "#lib/session/types.ts";
 import { blockAt, blocksOf, termRuns } from "#lib/translation/blocks.ts";
 import { dev as isDev } from "$app/env";
 import { beforeNavigate, goto } from "$app/navigation";
@@ -90,18 +92,18 @@ function handoff() {
 		scenario: { id: scenario.id, title: scenario.title[app.lang], site: scenario.site },
 		...$state.snapshot(dev),
 		learner: app.prefs.native,
-		feedback: app.prefs.feedback,
+		feedback: app.prefs.feedback as Setup["feedback"],
 		lang: app.lang,
-		pieceId: kept?.id,
 	};
 }
-function done() {
+async function done() {
 	const h = handoff();
 	if (!h || !h.text) return;
+	const id = await startPiece(h).catch(() => null);
+	if (!id) return toast(tx("startFailed"));
 	leaving = true;
-	sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(h));
 	write(draftKey, "");
-	goto("/live");
+	goto(`/live/${id}`);
 }
 // Leaving with something written keeps it on the shelf; coming back (the scenario page, the shelf) opens this page again.
 beforeNavigate(() => {

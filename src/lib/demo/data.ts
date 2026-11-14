@@ -271,7 +271,6 @@ export function whenOf(w: Writing): string {
 			? tx("when_yesterday")
 			: new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(w.at);
 }
-export const HANDOFF_KEY = "rehearsal:handoff";
 export const COLLECT_KEY = "rehearsal:collect";
 
 /* ---------- Review: two kinds of card, by where the phrase came from ---------- */

@@ -410,9 +410,21 @@ rate-limit table and every environment list describe what exists.
   `server/translation`, `text/` for words and diffs, the fixtures with the developer panel in `server/dev`. The lab's
   experiments went with it (the whole-session runner, the simulated learner, the analysis and pass-1 variants, the
   task/stage globals, the vet); the chip counter is per revision. The baseline replays identically after each step.
-- **Next:** pieces, the tape and snapshots (`piece`, `piece_step`, `piece_revision` are in the schema), `resume` and
-  `pass1progress`, replays through snapshots; then the composer, gate, `/live/<piece>`, the piece's page, My writing
-  and the sidebar on the server. The operations monitor's hourly query still names `llm_trace`.
+- **Pieces, the tape and snapshots** (done). A revision belongs to its piece: every action is a `piece_step` row and
+  the snapshot is written with it (and when a background call settles); an idle revision leaves memory after 30
+  minutes, shutdown writes every snapshot. The baseline replays identically, also with the revision thrown away and
+  loaded from its snapshot before every step, and across a server restart.
+- **Coming back** (done). The composer, a scenario's after page and the translation sheet create the piece and open
+  `/live/<piece>` (the setup also handed over in memory, so the page does not ask for it); a reload asks `resume` and
+  lands on §6.2's checkpoints: the scene card, pass 1 typed out at once up to the first card not answered, the end of
+  pass 1, pass 2 with the spots behind the learner greyed in the thread and the next one ready. Instead of
+  `pass1progress`, one `progress` action carries the page's bookmark (pass 1's answers; once pass 2's plan is agreed,
+  the plan, what became of each spot and the conversation about it), because pass 2 also has facts only the page
+  knows (how much help a spot took, for say-it-again and the notes). Neither action is a step on the tape. A spot
+  left half done starts again from its beginning; its materials, grades and hints come back from the revision's
+  memos (an own reading or a question asked again is a new call).
+- **Next:** the notes into `piece.learned` on the server and the revision dropped after them; the piece's page, My
+  writing and the sidebar from the database. The operations monitor's hourly query still names `llm_trace`.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

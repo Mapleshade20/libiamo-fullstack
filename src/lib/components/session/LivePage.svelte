@@ -16,28 +16,26 @@ import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { RTL_LANGS } from "#lib/constants.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
-import { HANDOFF_KEY } from "#lib/demo/data.ts";
 import { dev as demo, saveDev } from "#lib/demo/dev.svelte.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { Post } from "#lib/session/post.ts";
-import { Session } from "#lib/session/session.svelte.ts";
+import { type Resumed, Session } from "#lib/session/session.svelte.ts";
 import type { Setup } from "#lib/session/types.ts";
 import { dev as isDev } from "$app/env";
-import { goto } from "$app/navigation";
 
 /*
- * The session: the scene card, then the two passes over the draft, then the piece's own page. It starts from what the
- * home page (or a scenario) handed over, once: a reload goes back home. Its whole interface speaks the tutor's language;
- * the post keeps the language it is written in.
+ * A piece's revision: the scene card, then the two passes over the draft, then the piece's own page. It starts from
+ * what the page that created the piece handed over, or comes back to where it was (`resumed`: a reload, a restart,
+ * another device). Its whole interface speaks the tutor's language; the post keeps the language it is written in.
  */
-const setup = JSON.parse(sessionStorage.getItem(HANDOFF_KEY) || "null") as Setup | null;
-sessionStorage.removeItem(HANDOFF_KEY);
-if (!setup) goto("/", { replace: true });
-const session = setup ? new Session(setup) : null;
-if (session) session.toast = toast;
-const tt = (k: string, v?: Record<string, string | number>) => session?.tt(k, v) ?? k;
+let { id, setup, resumed }: { id: string; setup: Setup; resumed: Resumed | null } = $props();
+// The page is keyed by the piece: what it was opened with holds for its whole life.
+// svelte-ignore state_referenced_locally
+const session = new Session(setup, id, resumed);
+session.toast = toast;
+const tt = (k: string, v?: Record<string, string | number>) => session.tt(k, v);
 const tx = tt;
-const people = $derived(session?.people());
+const people = $derived(session.people());
 
 let region: HTMLElement | undefined = $state();
 let body: HTMLElement | undefined = $state();
@@ -49,7 +47,7 @@ $effect(() => {
 });
 
 onMount(() => {
-	if (!session || !region || !body || !text) return;
+	if (!region || !body || !text) return;
 	session.post = new Post(text, body, region, session.clock, () => session.phase === 2);
 	loadLang(session.lang).then(() => session.start());
 	// Enter, outside any control, takes a pass-1 note's "Continue".
@@ -68,127 +66,125 @@ onMount(() => {
 	};
 });
 $effect(() => {
-	document.title = `${session?.scene?.title || setup?.scenario?.title || tt("phaseScene")} · Libiamo`;
+	document.title = `${session.scene?.title || setup.scenario?.title || tt("phaseScene")} · Libiamo`;
 });
-const where = $derived(session?.scene?.community || session?.scene?.site || setup?.scenario?.site || "");
+const where = $derived(session.scene?.community || session.scene?.site || setup.scenario?.site || "");
 async function copyQuick() {
-	await navigator.clipboard?.writeText(session?.quick.text ?? "");
+	await navigator.clipboard?.writeText(session.quick.text ?? "");
 	toast(tt("copiedPost"));
 }
 </script>
 
-{#if session && setup}
-	<div class="session" lang={session.lang === "zh-CN" ? "zh-Hans" : session.lang} dir={RTL_LANGS.includes(session.lang) ? "rtl" : "ltr"}>
+<div class="session" lang={session.lang === "zh-CN" ? "zh-Hans" : session.lang} dir={RTL_LANGS.includes(session.lang) ? "rtl" : "ltr"}>
+	{#if session.phase === 0}
+		<Backdrop />
+	{/if}
+	<div class="bar" class:ruled={session.phase > 0}>
+		<FocusBar exit={{ label: tt("leaveSession"), href: "/" }} />
+	</div>
+	<main class="region" class:scene={session.phase === 0} class:p1={session.phase === 1} class:p2={session.phase === 2} bind:this={region}>
 		{#if session.phase === 0}
-			<Backdrop />
+			<h1 class="scene-title">{setup.scenario?.title ?? tt("sceneHeading")}</h1>
+			<SceneCard {session} />
 		{/if}
-		<div class="bar" class:ruled={session.phase > 0}>
-			<FocusBar exit={{ label: tt("leaveSession"), href: "/" }} />
-		</div>
-		<main class="region" class:scene={session.phase === 0} class:p1={session.phase === 1} class:p2={session.phase === 2} bind:this={region}>
-			{#if session.phase === 0}
-				<h1 class="scene-title">{setup.scenario?.title ?? tt("sceneHeading")}</h1>
-				<SceneCard {session} />
-			{/if}
-			<article class="sheet" hidden={session.phase === 0}>
-				<div class="sheet-head">
-					<div>
-						<div class="sheet-meta">
-							{#if session.scene?.site || setup.scenario?.site}
-								<span class="badge">{session.scene?.site || setup.scenario?.site}</span>
-							{/if}
-							<span class="sub">{session.phase === 1 ? tt("subDraft", { where }) : tt("subAfter", { where })}</span>
-						</div>
+		<article class="sheet" hidden={session.phase === 0}>
+			<div class="sheet-head">
+				<div>
+					<div class="sheet-meta">
+						{#if session.scene?.site || setup.scenario?.site}
+							<span class="badge">{session.scene?.site || setup.scenario?.site}</span>
+						{/if}
+						<span class="sub">{session.phase === 1 ? tt("subDraft", { where }) : tt("subAfter", { where })}</span>
 					</div>
 				</div>
-				<div class="post-body" class:veiled={session.recalling} bind:this={body}>
-					{#if session.waiting !== "no"}
-						<div class="waiting-draft" class:leaving={session.waiting === "leaving"} role="status" aria-busy="true" aria-label={tt("readingDraft")}>
-							{#each setup.text.split("\n\n") as p}
-								<p class="para">{p}</p>
-							{/each}
-						</div>
-					{/if}
-					<div class="text" bind:this={text}></div>
-					{#if session.failure}
-						<div class="failure" in:fly={{ y: 4, duration: 300 }}>
-							<LimitNotice kind={session.failure.kind} {tx} lang={session.lang} onretry={session.failure.retry} />
-						</div>
-					{/if}
-					{#if session.p1end && people}
-						{@const e = session.p1end}
-						<div class="p1-card end" style:--who={people.tutor.color} in:fly={{ y: 4, duration: 500 }}>
-							<Speaker who={people.tutor} icon="pen">{tt("p1endDone")}</Speaker>
-							<div class="p1-actions col">
-								<div class="stats">
-									<div><b>{e.fixed}</b><span>{tt("statFixed")}</span></div>
-									<div><b>{e.self}</b><span>{tt("statSelf")}</span></div>
-								</div>
-								<div class="go-row">
-									<Button onclick={() => session.toPass2()}>{tt("toPass2")}<ArrowRight aria-hidden="true" /></Button>
-									<!-- A scenario's or a translation's text is not the learner's to post anywhere: no half-finished copy. -->
-									{#if !setup.exchange && !setup.translation}
-										<Button variant="ghost" disabled={session.quick.busy || !!session.quick.text} onclick={() => session.quickPost()}
-											>{tt("postNow")}</Button
-										>
-									{/if}
-								</div>
-								{#if session.quick.halt}
-									<LimitNotice kind={session.quick.halt} {tx} lang={session.lang} onretry={() => session.quickPost()} />
-								{/if}
-								{#if session.quick.text}
-									<div class="postbox" in:fly={{ y: 4, duration: 400 }}>{session.quick.text}</div>
-									<Button variant="secondary" size="sm" onclick={copyQuick}><Copy aria-hidden="true" />{tt("copyThis")}</Button>
-								{/if}
-							</div>
-						</div>
-					{/if}
-				</div>
-			</article>
-			{#if session.phase === 2}
-				<section class="convo">
-					<Thread {session} />
-					<ReplyBar {session} />
-				</section>
-			{/if}
-		</main>
-		{#if isDev}
-			<!-- Debug only (not part of the product): jump between the scene and the passes; show the model calls. -->
-			<details class="dev">
-				<summary>{tt("devTitle")}</summary>
-				<div class="dev-body">
-					<div class="phases">
-						{#each [tt("phaseScene"), tt("phase1"), tt("phase2")] as name, i}
-							<Button
-								variant={session.phase === i ? "default" : "secondary"}
-								size="sm"
-								disabled={i > 0 && !session.sid}
-								onclick={() => session.jump(i as 0 | 1 | 2)}
-								>{name}</Button
-							>
+			</div>
+			<div class="post-body" class:veiled={session.recalling} bind:this={body}>
+				{#if session.waiting !== "no"}
+					<div class="waiting-draft" class:leaving={session.waiting === "leaving"} role="status" aria-busy="true" aria-label={tt("readingDraft")}>
+						{#each setup.text.split("\n\n") as p}
+							<p class="para">{p}</p>
 						{/each}
 					</div>
-					<div class="limits">
-						<span>{tt("devLimits")}</span>
-						<SegmentedControl
-							label={tt("devLimits")}
-							size="sm"
-							bind:value={demo.limit}
-							onValueChange={saveDev}
-							items={[
-								{ value: "none", label: tt("devLimitNone") },
-								{ value: "nokey", label: tt("devLimitNoKey") },
-								{ value: "refused", label: tt("devLimitRefused") },
-								{ value: "fail", label: tt("devLimitFail") },
-							]}
-						/>
+				{/if}
+				<div class="text" bind:this={text}></div>
+				{#if session.failure}
+					<div class="failure" in:fly={{ y: 4, duration: 300 }}>
+						<LimitNotice kind={session.failure.kind} {tx} lang={session.lang} onretry={session.failure.retry} />
 					</div>
-					<label class="check"><input type="checkbox" bind:checked={devCalls}> {tt("devCalls")}</label>
-				</div>
-			</details>
+				{/if}
+				{#if session.p1end && people}
+					{@const e = session.p1end}
+					<div class="p1-card end" style:--who={people.tutor.color} in:fly={{ y: 4, duration: 500 }}>
+						<Speaker who={people.tutor} icon="pen">{tt("p1endDone")}</Speaker>
+						<div class="p1-actions col">
+							<div class="stats">
+								<div><b>{e.fixed}</b><span>{tt("statFixed")}</span></div>
+								<div><b>{e.self}</b><span>{tt("statSelf")}</span></div>
+							</div>
+							<div class="go-row">
+								<Button onclick={() => session.toPass2()}>{tt("toPass2")}<ArrowRight aria-hidden="true" /></Button>
+								<!-- A scenario's or a translation's text is not the learner's to post anywhere: no half-finished copy. -->
+								{#if !setup.exchange && !setup.translation}
+									<Button variant="ghost" disabled={session.quick.busy || !!session.quick.text} onclick={() => session.quickPost()}
+										>{tt("postNow")}</Button
+									>
+								{/if}
+							</div>
+							{#if session.quick.halt}
+								<LimitNotice kind={session.quick.halt} {tx} lang={session.lang} onretry={() => session.quickPost()} />
+							{/if}
+							{#if session.quick.text}
+								<div class="postbox" in:fly={{ y: 4, duration: 400 }}>{session.quick.text}</div>
+								<Button variant="secondary" size="sm" onclick={copyQuick}><Copy aria-hidden="true" />{tt("copyThis")}</Button>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</article>
+		{#if session.phase === 2}
+			<section class="convo">
+				<Thread {session} />
+				<ReplyBar {session} />
+			</section>
 		{/if}
-	</div>
-{/if}
+	</main>
+	{#if isDev}
+		<!-- Debug only (not part of the product): jump between the scene and the passes; show the model calls. -->
+		<details class="dev">
+			<summary>{tt("devTitle")}</summary>
+			<div class="dev-body">
+				<div class="phases">
+					{#each [tt("phaseScene"), tt("phase1"), tt("phase2")] as name, i}
+						<Button
+							variant={session.phase === i ? "default" : "secondary"}
+							size="sm"
+							disabled={i > 0 && !session.scene}
+							onclick={() => session.jump(i as 0 | 1 | 2)}
+							>{name}</Button
+						>
+					{/each}
+				</div>
+				<div class="limits">
+					<span>{tt("devLimits")}</span>
+					<SegmentedControl
+						label={tt("devLimits")}
+						size="sm"
+						bind:value={demo.limit}
+						onValueChange={saveDev}
+						items={[
+							{ value: "none", label: tt("devLimitNone") },
+							{ value: "nokey", label: tt("devLimitNoKey") },
+							{ value: "refused", label: tt("devLimitRefused") },
+							{ value: "fail", label: tt("devLimitFail") },
+						]}
+					/>
+				</div>
+				<label class="check"><input type="checkbox" bind:checked={devCalls}> {tt("devCalls")}</label>
+			</div>
+		</details>
+	{/if}
+</div>
 
 <style>
 .session {

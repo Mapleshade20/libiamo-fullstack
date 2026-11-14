@@ -14,10 +14,11 @@ import { tip } from "#lib/components/common/tip.ts";
 import { CALLS } from "#lib/components/debug/calls.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, endonym, nameOf, read, toast, tx, write } from "#lib/demo/app.svelte.ts";
-import { COLLECT_KEY, HANDOFF_KEY } from "#lib/demo/data.ts";
+import { COLLECT_KEY } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { keyStop } from "#lib/demo/limits.ts";
 import { sourceStatus } from "#lib/demo/source.ts";
+import { startPiece } from "#lib/session/start.ts";
 import { goto } from "$app/navigation";
 
 /*
@@ -181,13 +182,13 @@ function act(k: string) {
 	}
 	go(g?.lang && app.prefs.learning.includes(g.lang) ? g.lang : app.lang);
 }
-// The page that takes it from here reads the handoff once; the box is emptied for the next thing, as a sent message
-// leaves it.
-function go(lang: string) {
+// The box is emptied for the next thing, as a sent message leaves it. Collecting reads its handoff once; writing
+// becomes a piece first, and its page opens on it.
+async function go(lang: string) {
 	const text = draft.text;
-	draft.text = "";
 	gate = null;
 	if (collect) {
+		draft.text = "";
 		sessionStorage.setItem(
 			COLLECT_KEY,
 			JSON.stringify({ passage: text, lang, native: app.prefs.native, feedback: app.prefs.feedback, model: dev.grader }),
@@ -196,19 +197,20 @@ function go(lang: string) {
 		return;
 	}
 	const notes = draft.notes ? draft.background : "";
-	sessionStorage.setItem(
-		HANDOFF_KEY,
-		JSON.stringify({
-			text,
-			background: notes,
-			source: draft.ctx ? draft.source : "",
-			...$state.snapshot(dev),
-			learner: app.prefs.native,
-			feedback: app.prefs.feedback,
-			lang,
-		}),
-	);
-	goto("/live");
+	checking = true;
+	const id = await startPiece({
+		text,
+		background: notes,
+		source: draft.ctx ? draft.source : "",
+		...$state.snapshot(dev),
+		learner: app.prefs.native,
+		feedback: app.prefs.feedback as "native" | "target",
+		lang,
+	}).catch(() => null);
+	checking = false;
+	if (!id) return toast(tx("startFailed"));
+	draft.text = "";
+	goto(`/live/${id}`);
 }
 
 // A page captured with a script, pasted where the draft goes, is context: it moves there and says so.

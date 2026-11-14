@@ -218,6 +218,10 @@ export class RevisionSession {
 	learned: { construct: string; self: boolean }[] = [];
 	private decided: string[] = [];
 	private detN = 0;
+	/** Pass 1 as the page was given it, for coming back to it. */
+	private p1view?: { doc: Doc; stops: unknown[] };
+	/** The page's own bookmark (what the learner answered so far, which stops are behind them): see `resume`. */
+	private page: Record<string, unknown> | null = null;
 	/** The import without the writer's own draft, and the brief every later call reads instead of it. */
 	readonly source?: Source;
 	private brief?: Promise<string | undefined>;
@@ -297,6 +301,8 @@ export class RevisionSession {
 		this.det = undefined;
 		this.analysis = undefined;
 		this.found = "brief" in this.found ? { brief: this.found.brief } : {};
+		this.p1view = undefined;
+		this.page = null;
 		const n = ++this.detN;
 		this.ai.lanes?.discard((p) => p.startsWith("detect #") && p !== `detect #${n}`);
 		this.start(this.ai.for(`detect #${n}`));
@@ -332,6 +338,8 @@ export class RevisionSession {
 			scene: { platform: scene.platform, audience: scene.audience, purpose: scene.purpose },
 		};
 		this.det = undefined;
+		this.p1view = undefined;
+		this.page = null;
 		this.start(this.ai.for("detect #1"));
 		return { ...scene, ui: feedback };
 	}
@@ -365,6 +373,8 @@ export class RevisionSession {
 			scene: { platform: scene.platform, audience: scene.audience, purpose: scene.purpose },
 		};
 		this.det = undefined;
+		this.p1view = undefined;
+		this.page = null;
 		this.start(this.ai.for("detect #1"));
 		return { ...scene, ui: feedback };
 	}
@@ -558,7 +568,10 @@ export class RevisionSession {
 			choices: [...this.defers, ...this.p1].map((f) => f.before).filter((b) => b.includes("/")),
 			hole: holePattern(this.d.learner, this.d.target),
 		};
-		return { doc: toDoc(this.d.text, spans, this.marks, this.chips), stops };
+		// A new pass 1 (another depth, a corrected scene) is answered from its start.
+		this.p1view = { doc: toDoc(this.d.text, spans, this.marks, this.chips), stops };
+		this.page = null;
+		return this.p1view;
 	}
 	private useThis(x: string) {
 		return this.t("useThisWord", { x: x.replace(/[.。]$/, "") });
@@ -1397,6 +1410,29 @@ export class RevisionSession {
 		return { issues, closing, learned: this.learned, text: this.text };
 	}
 
+	/* ---------- Coming back ---------- */
+
+	/** The page's bookmark, kept with the revision; the page alone reads it. */
+	progress(page: unknown) {
+		if (!page || typeof page !== "object" || Array.isArray(page)) throw new Error("a bookmark is an object");
+		if (JSON.stringify(page).length > 400_000) throw new Error("bookmark too large");
+		this.page = page as Record<string, unknown>;
+		return {};
+	}
+
+	/**
+	 * Where the page was (a reload, a restart, another device): the scene as it was shown, pass 1 as it was given, the
+	 * page's bookmark, and once pass 1's answers are in, the post as it stands. Nothing is asked of a model.
+	 */
+	resume() {
+		return {
+			scene: this.d ? { ...this.scene, ui: this.ui } : null,
+			pass1: this.p1view ?? null,
+			page: this.page,
+			doc: this.p1args ? toDoc(this.text, this.items(), this.marks, this.chips) : null,
+		};
+	}
+
 	/* ---------- The snapshot ---------- */
 
 	/**
@@ -1428,6 +1464,8 @@ export class RevisionSession {
 			ends: this.ends.entries(),
 			glosses: this.glosses.entries(),
 			hints: this.hints.entries(),
+			p1view: this.p1view,
+			page: this.page,
 		};
 	}
 
@@ -1466,6 +1504,8 @@ export class RevisionSession {
 		s.ends.load(state.ends);
 		s.glosses.load(state.glosses);
 		s.hints.load(state.hints);
+		s.p1view = state.p1view;
+		s.page = state.page ?? null;
 		return s;
 	}
 }
@@ -1495,6 +1535,8 @@ export type RevisionState = {
 	ends: [string, Ending][];
 	glosses: [string, Awaited<ReturnType<typeof pieceNotes>>][];
 	hints: [string, { plan: string; example: string }][];
+	p1view?: { doc: Doc; stops: unknown[] };
+	page?: Record<string, unknown> | null;
 };
 
 /**

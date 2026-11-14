@@ -21,6 +21,8 @@ export class Post {
 	typed = -1;
 	/** The learner's own pass-1 answers, which replace the words they fixed wherever the post is rebuilt. */
 	carried: Record<string, string> = {};
+	/** Coming back to pass 1: what the learner already went through is written out at once, without the typing. */
+	instant = false;
 	target = "en";
 	/**
 	 * A scenario's post is the learner's turns; what the others said stands between them, quietly, never typed: `lead`
@@ -222,6 +224,12 @@ export class Post {
 	async typeTo(index: number) {
 		const doc = this.doc;
 		if (!doc) return;
+		if (this.instant) {
+			while (this.typed < index) doc.tokens[++this.typed].el.classList.remove("pending");
+			for (const c of this.ctxAt) if (c.at <= this.typed + 1) c.el.classList.remove("pending");
+			if (this.typed >= 0) doc.tokens[this.typed].el.after(this.caretEl);
+			return;
+		}
 		let steps = 1;
 		while (this.typed < index) {
 			const target = Math.min(index, this.typed + steps);
@@ -258,6 +266,10 @@ export class Post {
 		return toks.length - 1;
 	}
 	private async typeInto(el: HTMLElement, text: string, perChar = 40, alive = () => true) {
+		if (this.instant) {
+			el.textContent += text;
+			return;
+		}
 		perChar *= SLOW;
 		let i = 0;
 		const chars = Array.from(text);
