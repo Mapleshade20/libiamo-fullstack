@@ -1,0 +1,77 @@
+/* The backdrop behind the home page and the scene card (backdrops.ts draws it): nothing, a wallpaper over the
+   whole page, or an old print along the bottom. The page colour itself is always the plain paper. */
+.backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	overflow: hidden;
+}
+.backdrop > * {
+	position: absolute;
+}
+.scene {
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: max(30vw, 34vh);
+}
+.scene.full {
+	top: 0;
+	height: auto;
+}
+.pattern {
+	position: absolute;
+	inset: 0;
+	background-size: 280px 280px;
+	background-position: center top;
+	opacity: 0.26;
+}
+[data-theme="dark"] .pattern {
+	opacity: 0.2;
+}
+.print {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(transparent, #000 50%);
+	mask-image: linear-gradient(transparent, #000 50%);
+}
+/* The paper of the print is lifted to white so only its lines are printed into ours. */
+.print img {
+	position: absolute;
+	max-width: none;
+	bottom: calc(var(--drop) * -1);
+	width: calc(100% * var(--zoom));
+	min-width: 1100px;
+	left: 50%;
+	translate: -50% 0;
+	filter: grayscale(1) sepia(0.35) contrast(1.5) brightness(1.18);
+	mix-blend-mode: multiply;
+	opacity: calc(0.55 * var(--ink, 1));
+}
+/* A painting covers the whole page, faint; seeing the whole picture shows it at full strength. */
+.painting {
+	position: absolute;
+	inset: 0;
+}
+.painting img {
+	position: absolute;
+	max-width: none;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: var(--x) var(--y);
+	filter: saturate(0.8);
+	opacity: 0.3;
+	transition: opacity 0.35s var(--ease-panel);
+}
+.viewing .painting img {
+	opacity: 1;
+}
+[data-theme="dark"] .print img {
+	filter: grayscale(1) contrast(1.5) brightness(1.18) invert(1);
+	mix-blend-mode: screen;
+	opacity: calc(0.22 * var(--ink, 1));
+}

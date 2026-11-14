@@ -1,0 +1,341 @@
+/* The admin pages' shared parts: the desk's paper and fields, lists of rows, quiet status tags. Prefixed, global. */
+
+.adm-page {
+	min-width: 0;
+}
+.adm-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px 20px;
+	margin-bottom: 20px;
+}
+.adm-head h1 {
+	font-weight: 500;
+	letter-spacing: -0.015em;
+}
+.adm-head .acts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.adm-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0 0 8px -4px;
+	padding: 2px 6px 2px 4px;
+	border-radius: 5px;
+	color: var(--muted);
+	font-size: 13.5px;
+	text-decoration: none;
+	transition:
+		color 150ms,
+		background-color 150ms;
+}
+.adm-back:hover {
+	color: var(--ink);
+	background: var(--hover);
+}
+.adm-back:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 60%, transparent);
+}
+
+/* Filters above a list: a segmented control, selects, a search field, on one line when there is room. */
+.adm-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 10px;
+	margin-bottom: 14px;
+}
+.adm-filters .grow {
+	flex: 1;
+}
+.adm-search {
+	position: relative;
+	flex: 0 1 15rem;
+	min-width: 10rem;
+}
+.adm-search svg {
+	position: absolute;
+	top: 50%;
+	left: 11px;
+	translate: 0 -50%;
+	color: var(--muted);
+	pointer-events: none;
+}
+.adm-search .adm-input {
+	height: 36px;
+	padding-left: 34px;
+}
+
+/* A sheet of paper on the desk. */
+.adm-paper {
+	border-radius: 6px;
+	background: var(--raised);
+	border: 1px solid var(--edge);
+	box-shadow: var(--paper-lift);
+}
+.adm-paper.pad {
+	padding: 18px 20px;
+}
+.adm-section {
+	margin-top: 30px;
+}
+.adm-section > h2 {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	margin-bottom: 10px;
+	font-size: 21px;
+}
+.adm-section > h2 .n {
+	font-family: var(--font-sans-stack);
+	font-size: 13px;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Rows on one sheet, divided by hairlines; a row that opens something is a link. */
+.adm-rows {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.adm-rows > li + li {
+	border-top: 1px solid var(--line-soft);
+}
+.adm-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-height: 64px;
+	padding: 12px 16px;
+	color: inherit;
+	text-decoration: none;
+	transition: background-color 150ms;
+}
+a.adm-row:hover {
+	background: var(--hover);
+}
+.adm-rows > li:first-child > .adm-row {
+	border-radius: 6px 6px 0 0;
+}
+.adm-rows > li:last-child > .adm-row {
+	border-radius: 0 0 6px 6px;
+}
+.adm-rows > li:only-child > .adm-row {
+	border-radius: 6px;
+}
+a.adm-row:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ring-c) 80%, transparent);
+}
+.adm-row .main {
+	flex: 1;
+	min-width: 0;
+}
+.adm-row .t {
+	font-size: 15px;
+	line-height: 1.4;
+	color: var(--ink);
+	overflow-wrap: anywhere;
+}
+.adm-row .s {
+	margin-top: 2px;
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--muted);
+}
+.adm-meta {
+	color: var(--muted);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.adm-dot::before {
+	content: "·";
+	margin: 0 6px;
+	color: var(--muted);
+}
+
+/* Status: a quiet tag; tones for what wants attention. */
+.adm-tag {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 4px;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 4px;
+	background: var(--well);
+	color: var(--ink-2);
+	font-size: 12px;
+	white-space: nowrap;
+}
+.adm-tag.ok {
+	background: color-mix(in srgb, var(--ok) 12%, transparent);
+	color: var(--ok);
+}
+.adm-tag.warn {
+	background: color-mix(in srgb, var(--warn) 13%, transparent);
+	color: var(--warn);
+}
+.adm-tag.bad {
+	background: color-mix(in srgb, var(--bad) 11%, transparent);
+	color: var(--bad);
+}
+.adm-tag.mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 11.5px;
+}
+
+/* Fields, as settings draws them. */
+.adm-input {
+	width: 100%;
+	height: 40px;
+	padding: 0 12px;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	background: var(--field);
+	color: var(--ink);
+	font-size: 14.5px;
+	transition:
+		border-color 150ms,
+		box-shadow 150ms;
+}
+textarea.adm-input {
+	height: auto;
+	min-height: 84px;
+	padding: 9px 12px;
+	line-height: 1.55;
+	resize: vertical;
+}
+.adm-input:hover {
+	border-color: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.adm-input:focus {
+	outline: 0;
+	border-color: color-mix(in srgb, var(--ink) 40%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 50%, transparent);
+}
+.adm-field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+.adm-field > .l {
+	font-size: 13.5px;
+	font-weight: 500;
+	color: var(--ink);
+}
+.adm-field > .h {
+	margin-top: -2px;
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: var(--muted);
+}
+.adm-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px 16px;
+}
+.adm-grid .full {
+	grid-column: 1 / -1;
+}
+@media (max-width: 640px) {
+	.adm-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* An icon-only control. */
+.adm-icon {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	transition:
+		color 150ms,
+		background-color 150ms,
+		scale 150ms;
+}
+.adm-icon:hover,
+.adm-icon[aria-pressed="true"],
+.adm-icon[aria-expanded="true"] {
+	color: var(--ink);
+	background: var(--hover);
+}
+.adm-icon:active {
+	scale: 0.97;
+}
+.adm-icon:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 60%, transparent);
+}
+@media (pointer: coarse) {
+	.adm-icon {
+		width: 40px;
+		height: 40px;
+	}
+}
+
+.adm-empty {
+	padding: 40px 16px;
+	text-align: center;
+	color: var(--muted);
+	font-size: 14px;
+}
+@container (max-width: 560px) {
+	.adm-search {
+		flex: 1 1 100%;
+	}
+	.adm-filters .grow {
+		display: none;
+	}
+}
+
+/* Between two admin pages the section column stays put, as the app's bar does, and its current row slides to the new
+   one; the page beside it fades through as on any trip. Leaving admin, the column goes with the page. */
+html[data-vt^="/admin"][data-vt*=">/admin"] .adm-nav {
+	view-transition-name: admin-nav;
+}
+html[data-vt^="/admin"][data-vt*=">/admin"] .adm-nav .cur {
+	view-transition-name: admin-cur;
+}
+html[data-vt^="/admin"][data-vt*=">/admin"] .adm-pick {
+	view-transition-name: admin-pick;
+}
+::view-transition-group(admin-nav),
+::view-transition-group(admin-pick),
+::view-transition-new(admin-nav),
+::view-transition-new(admin-pick) {
+	animation: none;
+}
+::view-transition-old(admin-nav),
+::view-transition-old(admin-pick),
+::view-transition-old(admin-cur) {
+	animation: none;
+	opacity: 0;
+}
+/* The rows' words stay over the sliding sheet (a nested name is otherwise drawn above its parent). */
+::view-transition-group(admin-nav) {
+	z-index: 2;
+}
+::view-transition-group(admin-cur) {
+	z-index: 1;
+	animation-duration: 300ms;
+	animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+::view-transition-new(admin-cur) {
+	animation: none;
+}

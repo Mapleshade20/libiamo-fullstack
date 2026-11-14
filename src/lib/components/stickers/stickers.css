@@ -1,0 +1,307 @@
+/* The navigation stickers, from the main app (components/shell/nav/icons, layout.css "nav-stroke"): drawn objects with
+   a warm near-black outline and a white die-cut rim, pasted at a small tilt. One warm line and one paper for them all;
+   each icon scales itself up by --nav-ink-scale to read at the row's size, and every pen width divides that back out. */
+:root {
+	--nav-line: oklch(0.32 0.018 55);
+	--nav-paper: #fff;
+	--acc-yellow: #c9b87a;
+	--acc-blue: #8fa3b1;
+	--acc-sage: #8faf8f;
+	--acc-rose: #c9a4a4;
+	--ink-wine: oklch(0.45 0.12 18);
+}
+[data-theme="dark"] {
+	--nav-paper: #ebe8e1;
+	--ink-wine: oklch(0.62 0.12 18);
+}
+.st {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	scale: var(--nav-ink-scale, 1);
+}
+.nav-stroke {
+	fill: none;
+	stroke: var(--nav-line);
+	stroke-width: calc(1.55 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.nav-stroke-thin {
+	stroke-width: calc(1 / var(--nav-ink-scale, 1));
+}
+.nav-shine {
+	fill: none;
+	stroke: #fff;
+	stroke-width: calc(1.4 / var(--nav-ink-scale, 1));
+	stroke-linecap: round;
+	opacity: 0.6;
+}
+.nav-cut {
+	fill: var(--nav-paper);
+	stroke: var(--nav-paper);
+	stroke-width: calc(5.4 / var(--nav-ink-scale, 1));
+	stroke-linejoin: round;
+	stroke-linecap: round;
+}
+.nav-cut-line {
+	fill: none;
+}
+
+/* A sticker on its row: pasted at its tilt, a little sun-faded until it is the page you are on. */
+.sticker {
+	display: block;
+	flex: none;
+	width: var(--st-size, 26px);
+	height: var(--st-size, 26px);
+	transform: rotate(var(--tilt, 0deg));
+	filter: drop-shadow(0 1px 1.2px rgb(40 32 24 / 0.3)) saturate(0.72) opacity(0.86);
+	transition:
+		transform 240ms cubic-bezier(0.34, 1.2, 0.5, 1),
+		filter 240ms ease-out;
+}
+[data-theme="dark"] .sticker {
+	filter: drop-shadow(0 1px 1.2px rgb(0 0 0 / 0.5)) saturate(0.72) opacity(0.8) brightness(0.95);
+}
+:hover > .sticker,
+:focus-visible > .sticker {
+	transform: rotate(var(--tilt, 0deg)) translateY(-1.5px) scale(1.04);
+	filter: drop-shadow(0 1.4px 1.8px rgb(40 32 24 / 0.3)) saturate(0.92) opacity(0.96);
+}
+[aria-current="page"] > .sticker,
+.on > .sticker {
+	transform: rotate(calc(var(--tilt, 0deg) - 3deg)) scale(1.1);
+	filter: drop-shadow(0 1.8px 2.4px rgb(40 32 24 / 0.34)) saturate(1) opacity(1);
+}
+[aria-current="page"]:hover > .sticker {
+	transform: rotate(calc(var(--tilt, 0deg) - 3deg)) translateY(-1.5px) scale(1.1);
+}
+
+/* Every sticker says "the page you are on" the way the carton does: a state it stays in, reached by its own motion.
+   Pen on a pad, "New writing": resting, the pen is lifted off a blank line; on its page, it has written the line and
+   rests at its end. */
+.st-pen {
+	--nav-ink-scale: 1.25;
+}
+.st-pen .pad {
+	fill: color-mix(in oklch, var(--acc-yellow) 24%, #fff);
+}
+.st-pen .rule {
+	stroke: color-mix(in oklch, var(--nav-line) 45%, transparent);
+}
+.st-pen .body {
+	fill: var(--ink-wine);
+}
+.st-pen .band {
+	fill: color-mix(in oklch, var(--acc-yellow) 70%, #fff);
+}
+.st-pen .nib {
+	fill: var(--nav-line);
+}
+.st-pen .pen {
+	transform-origin: 13px 23px;
+	transform: translate(-4px, -2.4px) rotate(6deg);
+	transition: transform 420ms cubic-bezier(0.34, 1.2, 0.5, 1);
+}
+.st-pen .squiggle {
+	stroke: var(--ink-wine);
+	stroke-dasharray: 14;
+	stroke-dashoffset: 14;
+	transition: stroke-dashoffset 380ms ease-out;
+}
+[aria-current="page"] .st-pen .pen {
+	transform: translate(1.4px, 3.2px);
+	transition-duration: 560ms;
+}
+[aria-current="page"] .st-pen .squiggle {
+	stroke-dashoffset: 0;
+	transition: stroke-dashoffset 520ms ease-out 60ms;
+}
+
+/* Two cards, "Notebook": resting, squared into a pile; on its page, fanned open. */
+.st-cards {
+	--nav-ink-scale: 1.4;
+}
+.st-cards .back-paper {
+	fill: color-mix(in oklch, var(--acc-blue) 34%, #fff);
+}
+.st-cards .front-paper {
+	fill: color-mix(in oklch, var(--acc-yellow) 12%, #fff);
+}
+.st-cards .rule {
+	stroke: color-mix(in oklch, var(--nav-line) 45%, transparent);
+}
+.st-cards .card {
+	transform-origin: 0px 7.8px;
+	transition: transform 420ms cubic-bezier(0.34, 1.3, 0.5, 1);
+}
+.st-cards .back {
+	transform: rotate(-6deg) translateX(1.2px);
+}
+.st-cards .front {
+	transform: rotate(2deg) translateX(-1px);
+}
+[aria-current="page"] .st-cards .back {
+	transform: rotate(-17deg) translateX(-1.4px);
+}
+[aria-current="page"] .st-cards .front {
+	transform: rotate(12deg) translate(1.6px, -1px);
+}
+
+/* A carton with a lid: "My writing". The lid lifts while it is the page you are on. */
+.st-box {
+	--nav-ink-scale: 1.6;
+}
+.st-box .front {
+	fill: #d4bc8e;
+}
+.st-box .top {
+	fill: #e4d1ab;
+}
+.st-box .side {
+	fill: #b49a6d;
+}
+.st-box .inside {
+	fill: #79684c;
+}
+.st-box .shade {
+	fill: #c1a576;
+}
+.st-box .label {
+	fill: #f6f0e2;
+}
+.st-box .writing,
+.st-box .fold {
+	stroke: #87785e;
+}
+.st-box .fold {
+	opacity: 0.55;
+}
+.st-box .lid {
+	transform-origin: 16px 11px;
+	transition: transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+[aria-current="page"] .st-box .lid {
+	transform: translate(2px, -5px) rotate(12deg);
+}
+
+/* A branch opened against the trunk: suggesting a situation. Pressed, the branch walks back in and lands. */
+.st-pr {
+	--nav-ink-scale: 1.38;
+}
+.st-pr .line {
+	stroke-width: calc(2.4 / var(--nav-ink-scale, 1));
+}
+.st-pr .source {
+	fill: color-mix(in oklch, var(--acc-sage) 66%, #fff);
+}
+.st-pr .target {
+	fill: color-mix(in oklch, var(--acc-rose) 66%, #fff);
+}
+.st-pr .head {
+	fill: color-mix(in oklch, var(--acc-sage) 82%, #fff);
+}
+.st-pr .landing {
+	transform-box: fill-box;
+	transform-origin: 50% 50%;
+}
+.st-pr .arrow {
+	transform-box: fill-box;
+	transform-origin: 50% 0;
+}
+.playing .st-pr .branch,
+.playing .st-pr .branch-cut {
+	stroke-dasharray: 16;
+	animation: branch-draw 580ms cubic-bezier(0.32, 0.9, 0.35, 1);
+}
+.playing .st-pr .arrow {
+	animation: arrow-land 580ms cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+.playing .st-pr .landing {
+	animation: landing-take 580ms cubic-bezier(0.34, 1.5, 0.5, 1);
+}
+@keyframes branch-draw {
+	0% {
+		stroke-dashoffset: 16;
+	}
+	62%,
+	100% {
+		stroke-dashoffset: 0;
+	}
+}
+@keyframes arrow-land {
+	0%,
+	40% {
+		opacity: 0;
+		transform: translateX(3px);
+	}
+	70% {
+		opacity: 1;
+		transform: translateX(-0.8px);
+	}
+	100% {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes landing-take {
+	0%,
+	70% {
+		transform: scale(1);
+	}
+	84% {
+		transform: scale(1.25);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+/* The account: a stranger drawn in the same hand, a head in a disc. Pressed, it nods. */
+.st-me {
+	--nav-ink-scale: 1.08;
+}
+.st-me .disc {
+	fill: color-mix(in oklch, var(--acc-rose) 30%, #fff);
+}
+.st-me .coat {
+	fill: color-mix(in oklch, var(--ink-wine) 70%, #fff);
+}
+.st-me .head {
+	fill: #f3e7da;
+}
+.st-me .bust {
+	transform-origin: 16px 28px;
+}
+.playing .st-me .bust {
+	animation: nod 520ms cubic-bezier(0.34, 1.3, 0.5, 1);
+}
+@keyframes nod {
+	0%,
+	100% {
+		transform: none;
+	}
+	40% {
+		transform: rotate(-7deg) translateY(0.6px);
+	}
+	70% {
+		transform: rotate(3deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sticker,
+	.st-box .lid,
+	.st-pen .pen,
+	.st-pen .squiggle,
+	.st-cards .card {
+		transition: none !important;
+	}
+	.playing .st [class] {
+		animation: none !important;
+	}
+	:hover > .sticker {
+		transform: rotate(var(--tilt, 0deg));
+	}
+}

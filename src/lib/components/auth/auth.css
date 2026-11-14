@@ -1,0 +1,164 @@
+/*
+ * The pages before signing in (routes/(focus)/(auth)): the welcome's paper and type, one narrow column, a serif title
+ * with a word marked by hand. Fields are the app's (40px, 6px corners, a soft ring on focus); a refused one shakes and
+ * says why under it, and the message fades as soon as it is edited.
+ */
+.auth h1 {
+	font-size: clamp(30px, 5vw, 40px);
+	line-height: 1.2;
+	margin: 0 0 12px;
+	text-wrap: balance;
+}
+.auth .lede {
+	margin: 0 0 26px;
+	color: var(--ink-2);
+	font-size: 15.5px;
+	line-height: 1.6;
+}
+.auth form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.auth .fld {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.auth .lbl {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 14px;
+	font-weight: 500;
+}
+.auth .lbl a {
+	font-weight: 400;
+	font-size: 13.5px;
+	color: var(--muted);
+	text-decoration: none;
+}
+.auth .lbl a:hover {
+	color: var(--ink);
+	text-decoration: underline;
+	text-underline-offset: 4px;
+}
+.auth .input {
+	width: 100%;
+	height: 40px;
+	padding: 0 12px;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	background: var(--field);
+	color: var(--ink);
+	font-size: 15px;
+	transition:
+		border-color 150ms,
+		box-shadow 150ms;
+}
+@media (pointer: coarse) {
+	.auth .input {
+		height: 44px;
+	}
+}
+.auth .input:focus {
+	outline: 0;
+	border-color: color-mix(in srgb, var(--ink) 40%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring-c) 50%, transparent);
+}
+.auth .input[aria-invalid="true"] {
+	border-color: var(--destructive);
+}
+.auth .input::placeholder {
+	color: var(--muted);
+}
+.auth .help,
+.auth .err {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--muted);
+}
+.auth .err {
+	color: var(--destructive);
+	animation: err-in 150ms var(--ease-panel);
+}
+@keyframes err-in {
+	from {
+		opacity: 0;
+		transform: translateY(-2px);
+	}
+}
+.auth .go {
+	width: 100%;
+	margin-top: 4px;
+}
+/* "or", on a hairline between the address form and the providers. */
+.auth .or {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 22px 0;
+	font-size: 13px;
+	color: var(--muted);
+}
+.auth .or::before,
+.auth .or::after {
+	content: "";
+	flex: 1;
+	border-top: 1px solid var(--line-soft);
+}
+.auth .foot {
+	margin: 28px 0 0;
+	font-size: 14px;
+	color: var(--muted);
+}
+.auth .foot a,
+.auth .text-link {
+	color: var(--ink);
+	font-weight: 500;
+	text-decoration: underline;
+	text-decoration-color: color-mix(in srgb, var(--ink) 30%, transparent);
+	text-underline-offset: 4px;
+	transition: text-decoration-color 150ms;
+}
+.auth .foot a:hover,
+.auth .text-link:hover {
+	text-decoration-color: var(--ink);
+}
+@media (prefers-reduced-motion: reduce) {
+	.auth .err {
+		animation: none;
+	}
+}
+/* Debug only: ways through what would take a mailbox. */
+.auth .devbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 18px 0 0;
+}
+/* A small card over the title where the page is about a mail: what came, or a link that no longer works. */
+.auth .tile {
+	display: inline-grid;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+	margin-bottom: 18px;
+	border-radius: 6px;
+	background: var(--raised);
+	border: 1px solid var(--edge);
+	box-shadow: var(--paper-lift);
+	color: var(--wine);
+	rotate: -3deg;
+}
+.auth .tile.warn {
+	color: var(--warn);
+	rotate: 3deg;
+}
+.auth .err .also {
+	display: block;
+	margin-top: 2px;
+	color: var(--muted);
+}

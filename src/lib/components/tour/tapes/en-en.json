@@ -1,0 +1,86 @@
+[
+	{
+		"key": "/api/gate",
+		"body": "{\"mode\":\"check\",\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"native\":\"zh-CN\",\"learning\":[\"en\"],\"active\":\"en\"}",
+		"status": 200,
+		"reply": "{\"verdict\":\"ok\",\"lang\":\"en\"}",
+		"ms": 360
+	},
+	{
+		"key": "/api/s",
+		"body": "{\"text\":\"This chapter make me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait the next update!\",\"background\":\"\",\"source\":\"\",\"model\":\"haiku\",\"grader\":\"haiku\",\"cache\":\"on\",\"imageOffset\":0,\"reviewEvery\":30,\"limit\":\"none\",\"learner\":\"zh-CN\",\"feedback\":\"target\",\"lang\":\"en\",\"detail\":\"more\",\"noCache\":false}",
+		"status": 200,
+		"reply": "{\"id\":\"2026-11-10T04-32-08-528Z-haiku\"}",
+		"ms": 14
+	},
+	{
+		"key": "/api/s/*/scene",
+		"body": "{}",
+		"status": 200,
+		"reply": "{\"site\":\"AO3\",\"community\":\"the fic's chapter comments\",\"reader\":\"moonlit_quill\",\"title\":\"Reply to the author about the chapter\",\"platform\":\"AO3 chapter comment\",\"audience\":\"The fic's author and other readers\",\"purpose\":\"Praise the chapter and say they can't wait for the update\",\"target\":\"en\",\"ui\":\"en\"}",
+		"ms": 4
+	},
+	{
+		"key": "/api/s/*/pass1",
+		"body": "{\"detail\":\"more\"}",
+		"status": 200,
+		"reply": "{\"doc\":[[\"This chapter \",{\"item\":\"p1\",\"parts\":[\"make\"]},\" me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait \",{\"item\":\"p2\",\"parts\":[\"\"]},\"the next update!\"]],\"stops\":[{\"item\":\"p1\",\"kind\":\"fix\",\"label\":\"make\",\"initial\":\"make\",\"to\":\"made\",\"hole\":false,\"prompt\":\"The chapter is something they already experienced, so check the verb tense for a past reaction. Have a go:\",\"answers\":{\"made\":{\"ok\":true,\"note\":\"\\\"make\\\" is present tense, but the crying happened in the past, so the verb must be past tense \\\"made\\\".\"}},\"note\":\"\\\"make\\\" is present tense, but the crying happened in the past, so the verb must be past tense \\\"made\\\".\",\"wrongNote\":\"Here it's made. \\\"make\\\" is present tense, but the crying happened in the past, so the verb must be past tense \\\"made\\\".\"},{\"item\":\"p2\",\"kind\":\"fix\",\"label\":\"∅\",\"initial\":\"\",\"to\":\"for\",\"hole\":false,\"prompt\":\"\\\"wait\\\" needs a preposition before the thing you are waiting for, so look at what word follows \\\"wait\\\" in this sentence. Have a go:\",\"answers\":{\"for\":{\"ok\":true,\"note\":\"\\\"I can't wait the next update\\\" is ungrammatical; \\\"wait\\\" needs \\\"for\\\" before \\\"the next update\\\".\"}},\"note\":\"\\\"I can't wait the next update\\\" is ungrammatical; \\\"wait\\\" needs \\\"for\\\" before \\\"the next update\\\".\",\"wrongNote\":\"Here it's for. \\\"I can't wait the next update\\\" is ungrammatical; \\\"wait\\\" needs \\\"for\\\" before \\\"the next update\\\".\"}]}",
+		"ms": 7
+	},
+	{
+		"key": "/api/s/*/pass1done",
+		"body": "{\"own\":{\"p1\":\"made\"},\"keep\":[]}",
+		"status": 200,
+		"reply": "{\"text\":\"This chapter made me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait for the next update!\",\"doc\":[[\"This chapter made me cry on the bus. Draco takes forever to change in this fic, so when Hermione forgave him, I believed it. I can't wait for the next update!\"]]}",
+		"ms": 12
+	},
+	{
+		"key": "/api/s/*/resetP2",
+		"body": "{}",
+		"status": 200,
+		"reply": "{}",
+		"ms": 11
+	},
+	{
+		"key": "/api/s/*/overview",
+		"body": "{}",
+		"status": 200,
+		"reply": "{\"reader\":\"I'm glad it hit you that hard on the bus! Draco's slow change is what made Hermione's forgiveness feel earned, right?\",\"stops\":[{\"id\":\"s1\",\"label\":\"takes forever to change\",\"parts\":[{\"problem\":\"Optional: In English, 'takes forever' usually complains that something is too slow. A reader will likely take Draco's slow change as a flaw of the fic, and the praise in the next clause then seems to contradict it.\",\"question\":\"Do you mean the slow pace is a fault you accept, or the reason the change feels real?\",\"mode\":\"ask\",\"readings\":[{\"label\":\"Strength\",\"meaning\":\"Draco's slow change is what makes the forgiveness feel earned.\"},{\"label\":\"Flaw\",\"meaning\":\"Draco changes too slowly, but the forgiveness still convinced me.\"}]}],\"who\":null}]}",
+		"ms": 6
+	},
+	{
+		"key": "/api/s/*/overviewReply",
+		"body": "{\"said\":null}",
+		"status": 200,
+		"reply": "{\"reply\":\"So the real point is that the chapter hit you emotionally, and you bought Hermione's forgiveness because Draco's change takes its time. The post gets that across clearly, and it ends by asking for the next update. Let's go through how it's built, sentence by sentence.\",\"map\":[{\"depth\":0,\"what\":\"says the chapter made them cry on the bus\",\"note\":\"\",\"hl\":[\"f1\"]},{\"depth\":0,\"what\":\"praises Hermione forgiving Draco as believable, given his slow change\",\"st\":\"fix\",\"note\":\"Optional: In English, 'takes forever' usually complains that something is too slow.\",\"hl\":[\"s1\"]},{\"depth\":0,\"what\":\"says they can't wait for the next update\",\"note\":\"\",\"hl\":[\"f2\"]}],\"stops\":[{\"id\":\"s1\",\"label\":\"takes forever to change\",\"parts\":[{\"problem\":\"Optional: In English, 'takes forever' usually complains that something is too slow. A reader will likely take Draco's slow change as a flaw of the fic, and the praise in the next clause then seems to contradict it.\",\"question\":\"Do you mean the slow pace is a fault you accept, or the reason the change feels real?\",\"mode\":\"ask\",\"readings\":[{\"label\":\"Strength\",\"meaning\":\"Draco's slow change is what makes the forgiveness feel earned.\"},{\"label\":\"Flaw\",\"meaning\":\"Draco changes too slowly, but the forgiveness still convinced me.\"}]}],\"who\":null}],\"doc\":[[{\"item\":\"f1\",\"parts\":[\"This chapter made me cry on the bus.\"]},\" \",{\"item\":\"s1\",\"parts\":[\"Draco takes forever to change in this fic, so when Hermione forgave him, I believed it.\"]},\" \",{\"item\":\"f2\",\"parts\":[\"I can't wait for the next update!\"]}]]}",
+		"ms": 6
+	},
+	{
+		"key": "/api/s/*/material",
+		"body": "{\"id\":\"s1\"}",
+		"status": 200,
+		"reply": "{\"orig\":\"Draco takes forever to change in this fic, so when Hermione forgave him, I believed it.\",\"reader\":\"Wait, you're saying Draco's slow change is bad? Now I'm confused.\",\"ref\":\"Draco's change [is painfully slow] in this fic, and that's what [makes] [the forgiveness feel earned]. When Hermione forgave him, I believed it.\",\"alts\":[\"Draco's change is painfully slow in this fic, which is exactly why the forgiveness feels earned. When Hermione forgave him, I believed it.\",\"The slowness of Draco's change in this fic is what sold me, so when Hermione forgave him, I believed it.\"],\"pieces\":[{\"text\":\"slowness\",\"own\":false},{\"text\":\"earned\",\"own\":false},{\"text\":\"painfully\",\"own\":false},{\"text\":\"forgiveness\",\"own\":false},{\"text\":\"sold me\",\"own\":false}],\"construct\":\"the slowness is what makes X feel earned (the slow part is what makes it work)\",\"why\":[{\"label\":\"painfully\",\"note\":\"Shows the slowness as something the reader felt strongly, and as a good thing. Plain \\\"slow\\\" or \\\"takes forever\\\" sounds like a complaint, which is what the reader took from the original.\"},{\"label\":\"makes\",\"note\":\"Makes the slowness the cause of the forgiveness feeling earned. Writing only \\\"Draco changes slowly, and the forgiveness...\\\" lists two facts without saying the first one is why the second works.\"},{\"label\":\"earned\",\"note\":\"The community's word for a character's growth being deserved, which is exactly the writer's meaning. \\\"Believable\\\" or \\\"good\\\" would drop the idea that the wait was the reason.\"},{\"label\":\"the forgiveness feel earned\",\"note\":\"Keeps the praised event as the subject of the sentence, since the writer's point is about the forgiveness, not about Draco's pace.\"}],\"prompt\":\"Rewrite this line so the wait for Draco's turnaround reads as praise.\",\"success\":\"Okay, that slow burn is exactly why the forgiveness hit me.\"}",
+		"ms": 17715
+	},
+	{
+		"key": "/api/s/*/grade",
+		"body": "{\"id\":\"s1\",\"attempt\":\"I love how slowly Draco changes, so when Hermione forgave him, I believed every bit of it.\"}",
+		"status": 200,
+		"reply": "{\"pass\":true,\"success\":\"Okay, that slow burn is exactly why the forgiveness hit me.\",\"ticks\":[0,1,2,3],\"own\":null,\"choices\":[{\"n\":0,\"mine\":\"I love how slowly Draco changes\",\"verdict\":\"also\",\"note\":\"Here the slowness is praised as something the writer enjoyed, not complained about, so it works. The reference's 'painfully' makes the intensity explicit, which your version leaves to the reader.\"},{\"n\":1,\"mine\":\"so\",\"verdict\":\"also\",\"note\":\"'So' links the slow change to the belief, which is the causal link the writer meant. 'Makes' is more explicit about the slowness causing the effect, but your version does not need it.\"},{\"n\":2,\"mine\":\"I believed every bit of it\",\"verdict\":\"also\",\"note\":\"This says the reader fully believed the forgiveness rather than that it was deserved, so 'earned' is not stated. It still reads correctly here because the 'so' ties the belief to the slow change.\"},{\"n\":3,\"mine\":\"when Hermione forgave him, I believed every bit of it\",\"verdict\":\"also\",\"note\":\"Your sentence keeps the forgiveness as the event and makes the reader's belief the result. The reference puts 'the forgiveness feel earned' as the main clause. Both work here.\"}],\"extra\":[]}",
+		"ms": 8748
+	},
+	{
+		"key": "/api/gate",
+		"body": "{\"mode\":\"collect\",\"text\":\"Honestly, the finale caught me off guard. I went in expecting a tidy ending, and instead it left me staring at the ceiling for an hour. The author knows how to land a punch without making a fuss about it.\",\"native\":\"zh-CN\",\"learning\":[\"en\"],\"active\":\"en\"}",
+		"status": 200,
+		"reply": "{\"verdict\":\"ok\",\"lang\":\"en\"}",
+		"ms": 241
+	},
+	{
+		"key": "/api/collect/explain",
+		"body": "{\"passage\":\"Honestly, the finale caught me off guard. I went in expecting a tidy ending, and instead it left me staring at the ceiling for an hour. The author knows how to land a punch without making a fuss about it.\",\"lang\":\"en\",\"native\":\"zh-CN\",\"feedback\":\"target\",\"model\":\"haiku\",\"highlights\":[{\"n\":1,\"text\":\"caught me off guard\",\"a\":7,\"b\":13}],\"retry\":0}",
+		"status": 200,
+		"reply": "{\"items\":[{\"n\":1,\"phrase\":\"catch someone off guard\",\"meaning\":\"surprise someone when they are not prepared\",\"register\":\"neutral\",\"why\":\"Instead of the plain \\\"surprise me,\\\" this implies you had no defences up and were unready, as if ambushed, which a learner would not naturally convey with \\\"surprise.\\\"\",\"example\":\"The sudden rain caught us off guard, so we had no umbrellas.\",\"span\":\"caught us off guard\"}]}",
+		"ms": 9
+	}
+]

@@ -1,0 +1,603 @@
+@import "tailwindcss";
+@import "../lib/components/common/interaction-motion.css";
+
+/* Dark is the learner's choice on <html data-theme> (app.html sets it before the first paint). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * The demo's palette: claude.ai's warm neutrals (ivory paper, oat cards, near-black ink) and at night its neutral
+ * charcoal. The main app's token names (background, foreground, card, popover, border, ring, …) point at these, so
+ * its components work unchanged; the short names (--ink, --muted, --well, …) are what the pages' own styles use.
+ */
+:root,
+[data-theme="light"] {
+	--bg: #faf9f5;
+	--bg-2: #f5f4ed;
+	--bg-3: #f0eee6;
+	--raised: #fff;
+	--card-bg: #f5f4ed;
+	--card-hover: #f0eee6;
+	--btn: #e8e6dc;
+	--ink: #141413;
+	--ink-2: #3d3d3a;
+	/* At least 4.5:1 on every surface it sits on (paper, cards, hover, buttons). */
+	--muted: #686761;
+	--line: rgba(31, 30, 29, 0.15);
+	--line-soft: rgba(31, 30, 29, 0.08);
+	--well: rgba(31, 30, 29, 0.04);
+	--hover: rgba(31, 30, 29, 0.06);
+	/* Paper on a desk: what the learner handles is lifted by a soft cast shadow; what floats (menus, dialogs) more so. */
+	--paper-lift: 0 1px 0 rgb(60 45 25 / 0.05), 0 6px 16px -8px rgb(60 45 25 / 0.3);
+	--paper-lift-hi: 0 1px 0 rgb(60 45 25 / 0.05), 0 10px 24px -10px rgb(60 45 25 / 0.4);
+	--shadow: var(--paper-lift);
+	--pop: 0 0 0 1px rgb(0 0 0 / 6%), 0 2px 6px rgb(0 0 0 / 5%), 0 4px 42px rgb(0 0 0 / 7%);
+	/* An index card's head rule: the one red, for what is in use (a field being written in, a tip, the review card). */
+	--red: #c4574a;
+	/* One light, from above. A groove is dark inside its top edge and catches light on its lower lip; anything raised
+	   has a lit top edge, a contact shadow and a soft ambient one. */
+	--groove: linear-gradient(rgb(40 30 15 / 0.07), rgb(40 30 15 / 0.04));
+	--groove-shadow: inset 0 1px 2px rgb(40 30 15 / 0.14), 0 1px 0 rgb(255 255 255 / 0.8);
+	--raised-face: linear-gradient(#fff, #fbfaf6);
+	--raised-shadow: 0 0 0 0.5px rgb(40 30 15 / 0.14), 0 1px 2px rgb(40 30 15 / 0.14);
+	/* The typewriter key: a lit face over a visible side (its thickness), which closes when it is pressed. */
+	--key-face: linear-gradient(#2c2b28, #1c1b19);
+	--key-face-hover: linear-gradient(#383632, #252421);
+	--key-edge: #050505;
+	--key-light: inset 0 1px 0 rgb(255 255 255 / 0.08);
+	--key-ink: #faf9f5;
+	--ring-c: oklch(0.8 0.06 85);
+	--bad: #a8432a;
+	--warn: #9a6a1d;
+	--ok: #3f7a55;
+	--cool: #3f6f9a;
+	--accent-c: #d97757;
+	--edge: rgba(31, 30, 29, 0.1);
+	--lift: var(--paper-lift);
+	--mark: #713342;
+	--wine: #8a3a44;
+	--side-bg: #f3f1e9;
+	--field: rgb(255 255 255 / 0.8);
+	--field-strong: #fff;
+	--pill: #fff;
+	color-scheme: light;
+}
+[data-theme="dark"] {
+	--bg: #191919;
+	--bg-2: #141414;
+	--bg-3: #0f0f0f;
+	--raised: #303030;
+	--card-bg: #222222;
+	--card-hover: #282828;
+	--btn: #333333;
+	--ink: #ededed;
+	--ink-2: #c2c2c2;
+	/* At least 4.5:1 on the raised paper too (was 4.4). */
+	--muted: #a3a3a3;
+	--line: rgba(255, 255, 255, 0.1);
+	--line-soft: rgba(255, 255, 255, 0.06);
+	--well: rgba(255, 255, 255, 0.04);
+	--hover: rgba(255, 255, 255, 0.06);
+	--paper-lift: 0 1px 0 rgb(0 0 0 / 0.3), 0 8px 20px -10px rgb(0 0 0 / 0.7);
+	--paper-lift-hi: 0 1px 0 rgb(0 0 0 / 0.3), 0 12px 28px -10px rgb(0 0 0 / 0.8);
+	--shadow: var(--paper-lift);
+	--pop: 0 0 0 1px rgb(255 255 255 / 8%), 0 2px 6px rgb(0 0 0 / 30%), 0 8px 42px rgb(0 0 0 / 45%);
+	--red: #e07b6c;
+	--groove: linear-gradient(rgb(0 0 0 / 0.24), rgb(0 0 0 / 0.14));
+	--groove-shadow: inset 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 0 rgb(255 255 255 / 0.05);
+	--raised-face: linear-gradient(#4f4f4f, #484848);
+	--raised-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.4);
+	--key-face: linear-gradient(#f2f2f2, #e2e2e2);
+	--key-face-hover: linear-gradient(#fafafa, #eaeaea);
+	--key-edge: #9a9a9a;
+	--key-light: inset 0 1px 0 rgb(255 255 255 / 0.6);
+	--key-ink: #191919;
+	--ring-c: rgb(255 255 255 / 0.55);
+	--bad: #e0896f;
+	--warn: #d9a75a;
+	--ok: #7fbf95;
+	--cool: #8fb3d9;
+	--edge: rgba(255, 255, 255, 0.06);
+	--lift: var(--paper-lift);
+	--mark: #b86b7d;
+	--wine: #c9707f;
+	--side-bg: #151515;
+	--field: rgb(255 255 255 / 0.04);
+	--field-strong: rgb(255 255 255 / 0.08);
+	--pill: #4d4d4d;
+	color-scheme: dark;
+}
+
+/* The main app's names for the same colours. */
+:root {
+	--background: var(--bg);
+	--foreground: var(--ink);
+	--card: var(--card-bg);
+	--card-foreground: var(--ink);
+	--popover: var(--raised);
+	--popover-foreground: var(--ink);
+	--primary: var(--ink);
+	--primary-foreground: var(--bg);
+	--secondary: var(--hover);
+	--secondary-foreground: var(--ink);
+	--muted-foreground: var(--muted);
+	--accent: var(--accent-c);
+	--destructive: var(--bad);
+	--success: var(--ok);
+	--warning: var(--warn);
+	--border: var(--line);
+	--input: var(--line);
+	--ring: var(--ring-c);
+	/* Paper corners: a little rounding, never a pill. Things round in life (dots, faces, radios) stay round. */
+	--radius: 6px;
+	--font-serif-stack: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", Georgia, serif;
+	--font-sans-stack: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+	/* The sidebar's width as the page sees it: open, folded to its stickers, or (below 900px) a drawer over the page. */
+	--side-open: 268px;
+	--side-rail: 64px;
+	--side: var(--side-open);
+}
+:root.side-folded {
+	--side: var(--side-rail);
+}
+:root.focused,
+:root.focused.side-folded {
+	--side: 0px;
+}
+@media (max-width: 899px) {
+	:root,
+	:root.side-folded {
+		--side: 0px;
+	}
+}
+
+@theme {
+	--breakpoint-nav: 56.25rem;
+	--ease-panel: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+
+@theme inline {
+	--font-serif: var(--font-serif-stack);
+	--font-sans: var(--font-sans-stack);
+	--font-wordmark: "Italianno", "Snell Roundhand", "Segoe Script", cursive;
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--color-raised: var(--raised);
+	--color-well: var(--well);
+	--color-ink-2: var(--ink-2);
+	--color-mark: var(--mark);
+	--color-ink-wine: var(--wine);
+	--radius-sm: 4px;
+	--radius-md: 5px;
+	--radius-lg: var(--radius);
+	--radius-xl: var(--radius);
+	--radius-2xl: 8px;
+}
+
+/* iOS zooms into any focused field under 16px and stays zoomed. */
+@media (pointer: coarse) {
+	input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
+	textarea,
+	select {
+		font-size: max(1rem, 1em) !important;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html {
+		background: var(--bg);
+	}
+	body {
+		min-height: 100dvh;
+		margin: 0;
+		background: var(--bg);
+		color: var(--ink);
+		font: 15px / 1.6 var(--font-sans-stack);
+		-webkit-font-smoothing: antialiased;
+		padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+		transition:
+			background-color 250ms var(--ease-panel),
+			color 250ms var(--ease-panel);
+	}
+	input,
+	textarea,
+	select,
+	button {
+		font: inherit;
+		color: inherit;
+	}
+	h1,
+	h2 {
+		font-family: var(--font-serif-stack);
+		font-weight: 500;
+		letter-spacing: -0.01em;
+		margin: 0;
+	}
+	h1 {
+		font-size: 32px;
+		line-height: 1.2;
+	}
+	h2 {
+		font-size: 22px;
+		line-height: 1.3;
+	}
+	/* Content is selectable, controls are not. */
+	button,
+	[role="button"],
+	[role="radio"],
+	[role="switch"],
+	[role="option"],
+	[role="menuitem"],
+	[role="menuitemradio"],
+	[role="tab"],
+	summary,
+	select,
+	svg,
+	label:has(input[type="radio"]) {
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	/* A press shows itself (scale, colour); the browser's own tap flash would only cover it. */
+	a,
+	button,
+	[role="button"],
+	label {
+		-webkit-tap-highlight-color: transparent;
+	}
+	a {
+		color: inherit;
+	}
+	[hidden] {
+		display: none !important;
+	}
+}
+
+/* The wordmark, as the main app sets it. */
+.wordmark {
+	position: relative;
+	top: 0.08em;
+	font-family: "Italianno", "Snell Roundhand", "Segoe Script", cursive;
+	font-size: 34px;
+	font-weight: 400;
+	line-height: 1;
+	color: var(--ink);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+/* A small action that reads as text: muted, underlined on a quiet line. */
+.text-link {
+	border: 0;
+	padding: 0;
+	background: none;
+	color: var(--muted);
+	font-size: 13px;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: var(--line);
+	cursor: pointer;
+	transition: color 150ms;
+}
+.text-link:hover {
+	color: var(--ink);
+	text-decoration-color: currentColor;
+}
+
+/* ---------- Moving between pages (root +layout.svelte starts the transition) ---------- */
+/* To and from the session page, which is still a separate document (hooks.server.ts). */
+@media (prefers-reduced-motion: no-preference) {
+	@view-transition {
+		navigation: auto;
+	}
+}
+/* The sidebar is never part of it: it is the same element before and after. The page goes quickly and the next one
+   comes in just after, so two layouts never sit over each other. */
+/* The snapshots never take a click: one that lands mid-transition reaches the page underneath (a second nav click
+   starts the next trip instead of being lost). */
+::view-transition {
+	pointer-events: none;
+}
+::view-transition-old(root) {
+	animation: vt-page-out 120ms ease-out both;
+}
+::view-transition-new(root) {
+	animation: vt-page-in 260ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+::view-transition-old(side),
+::view-transition-new(side) {
+	animation: none;
+}
+/* Parts that carry over on a particular trip (pages name them only for it): the home page's box grows into the scene
+   card or the collect page's sheet, both snapshots drawn at their own size from the top, cut to the growing box, so
+   nothing stretches; the draft sits at the same place in both, so only the home page's bar dissolves. The greeting
+   changes words, so the old one goes before the new one comes. The review row grows into the review card. */
+::view-transition-group(*) {
+	animation-duration: 0.45s;
+	animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-group(card) {
+	overflow: hidden;
+	border-radius: 6px;
+}
+::view-transition-old(card),
+::view-transition-new(card) {
+	height: 100%;
+	width: 100%;
+	object-fit: none;
+	object-position: top;
+}
+::view-transition-new(card) {
+	animation: none;
+}
+::view-transition-old(card) {
+	animation: vt-out 0.18s ease both;
+}
+::view-transition-group(review) {
+	overflow: hidden;
+	border-radius: 6px;
+}
+::view-transition-old(review),
+::view-transition-new(review) {
+	height: 100%;
+	width: 100%;
+	object-fit: none;
+	object-position: top left;
+}
+::view-transition-old(review) {
+	animation: vt-out 0.15s ease both;
+}
+::view-transition-new(review) {
+	animation: vt-in 0.25s 0.1s ease both;
+}
+::view-transition-old(hero-title) {
+	animation: vt-out 0.15s ease both;
+}
+::view-transition-new(hero-title) {
+	animation: vt-in 0.3s 0.12s ease both;
+}
+::view-transition-group(side) {
+	animation: none;
+	z-index: 2;
+}
+/* Switching the language being learned (switchLanguage): the backdrop stays put and only what is on it changes. The
+   page's paper and backdrop are the same before and after, so the root swaps without a fade (a fade dipped the whole
+   page, backdrop and all, through blank); the header and the page's main content go and come back as on a trip. */
+html[data-vt="lang"] .backdrop {
+	view-transition-name: lang-backdrop;
+}
+html[data-vt="lang"] .page > .top {
+	view-transition-name: lang-top;
+}
+html[data-vt="lang"] .page > main {
+	view-transition-name: lang-main;
+}
+html[data-vt="lang"]::view-transition-old(root),
+html[data-vt="lang"]::view-transition-new(root),
+html[data-vt="lang"]::view-transition-group(lang-backdrop),
+html[data-vt="lang"]::view-transition-new(lang-backdrop),
+html[data-vt="lang"]::view-transition-group(lang-top),
+html[data-vt="lang"]::view-transition-group(lang-main) {
+	animation: none;
+}
+/* The sidebar swaps at once: its old snapshot still holds the language menu as it closes, which would linger over the page. */
+html[data-vt="lang"]::view-transition-old(lang-backdrop),
+html[data-vt="lang"]::view-transition-old(side) {
+	display: none;
+}
+html[data-vt="lang"]::view-transition-old(lang-top),
+html[data-vt="lang"]::view-transition-old(lang-main) {
+	animation: vt-page-out 120ms ease-out both;
+}
+html[data-vt="lang"]::view-transition-new(lang-top),
+html[data-vt="lang"]::view-transition-new(lang-main) {
+	animation: vt-lang-in 260ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+@keyframes vt-lang-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+/* A focused page has no sidebar: leaving for one, the bar slides out; coming back, it slides in. */
+html[data-side="out"]::view-transition-old(side) {
+	animation: vt-side-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+html[data-side="in"]::view-transition-new(side) {
+	animation: vt-side-in 300ms var(--ease-panel) 60ms both;
+}
+@keyframes vt-side-out {
+	to {
+		transform: translateX(-100%);
+	}
+}
+@keyframes vt-side-in {
+	from {
+		transform: translateX(-100%);
+	}
+}
+@keyframes vt-page-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes vt-page-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+@keyframes vt-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes vt-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* The hover tip (lib/components/common/tip.ts): a small slip of paper, after a rest of the pointer. */
+.tip-pill {
+	position: fixed;
+	inset: 0 auto auto 0;
+	/* A popover (in the top layer, so it shows over an open dialog): none of the browser's popover box. */
+	margin: 0;
+	border: 0;
+	overflow: visible;
+	z-index: 100;
+	max-width: 260px;
+	padding: 4px 9px;
+	border-radius: 4px;
+	background: var(--raised);
+	color: var(--ink);
+	box-shadow:
+		0 0 0 1px var(--edge),
+		0 6px 14px -6px rgb(60 45 25 / 0.45);
+	font: 500 12px / 1.4 var(--font-sans-stack);
+	white-space: nowrap;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(2px);
+	transition:
+		opacity 120ms var(--ease-panel),
+		transform 120ms var(--ease-panel);
+}
+.tip-pill.long {
+	width: max-content;
+	max-width: 280px;
+	padding: 7px 11px;
+	white-space: normal;
+	font-weight: 400;
+	line-height: 1.5;
+}
+.tip-pill[data-side="top"] {
+	transform: translateY(-2px);
+}
+.tip-pill.on {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.tip-pill {
+		transform: none;
+		transition: opacity 80ms;
+	}
+}
+
+/* ---------- The typewriter key (Button default, the composer's send) ----------
+   It stands on a 2px side; pointed at, it rises a pixel; pressed, it goes all the way down at once and comes back up
+   with a little spring (Josh Comeau's 3D button timings). */
+.key,
+[data-slot="button"][data-variant="default"] {
+	background: var(--key-face);
+	/* The face fills the 1px border too: clipped to the padding box (the button base's bg-clip-padding), it stood a
+	   pixel inside a paper tab's edge on every side, and beside one looked smaller. */
+	background-origin: border-box;
+	background-clip: border-box;
+	color: var(--key-ink);
+	box-shadow:
+		var(--key-light),
+		0 2px 0 var(--key-edge),
+		0 3px 6px -2px rgb(0 0 0 / 0.25);
+	translate: 0 0;
+	transition:
+		translate 500ms cubic-bezier(0.3, 0.7, 0.4, 1),
+		box-shadow 500ms cubic-bezier(0.3, 0.7, 0.4, 1),
+		opacity 150ms;
+}
+.key:hover:not(:disabled),
+[data-slot="button"][data-variant="default"]:hover:not(:disabled, [aria-disabled="true"]) {
+	background: var(--key-face-hover);
+	translate: 0 -1px;
+	box-shadow:
+		var(--key-light),
+		0 3px 0 var(--key-edge),
+		0 4px 8px -2px rgb(0 0 0 / 0.25);
+	transition-duration: 200ms;
+	transition-timing-function: cubic-bezier(0.3, 0.7, 0.4, 1.5);
+}
+.key:active:not(:disabled),
+[data-slot="button"][data-variant="default"]:active:not(:disabled, [aria-disabled="true"]) {
+	scale: 1;
+	translate: 0 2px;
+	box-shadow:
+		var(--key-light),
+		0 0 0 var(--key-edge),
+		0 1px 1px rgb(0 0 0 / 0.2);
+	transition-duration: 34ms;
+}
+.key:disabled,
+[data-slot="button"][data-variant="default"]:is(:disabled, [aria-disabled="true"]) {
+	box-shadow:
+		var(--key-light),
+		0 1px 0 var(--key-edge);
+}
+/* A paper tab (Button secondary): lifted off the desk on a thin edge, pressed flat. */
+[data-slot="button"][data-variant="secondary"] {
+	background: var(--raised-face);
+	box-shadow:
+		var(--raised-shadow),
+		0 1px 0 rgb(40 30 15 / 0.1);
+	transition:
+		translate 400ms cubic-bezier(0.3, 0.7, 0.4, 1),
+		box-shadow 400ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+[data-theme="dark"] [data-slot="button"][data-variant="secondary"] {
+	box-shadow:
+		var(--raised-shadow),
+		0 1px 0 rgb(0 0 0 / 0.35);
+}
+[data-slot="button"][data-variant="secondary"]:hover:not(:disabled, [aria-disabled="true"]) {
+	translate: 0 -1px;
+	transition-duration: 200ms;
+}
+[data-slot="button"][data-variant="secondary"]:active:not(:disabled, [aria-disabled="true"]) {
+	scale: 1;
+	translate: 0 1px;
+	box-shadow:
+		inset 0 1px 2px rgb(40 30 15 / 0.12),
+		0 0 0 0.5px rgb(40 30 15 / 0.16);
+	transition-duration: 34ms;
+}
+/* Their depth is drawn with box-shadow, so focus is an outline instead of the usual ring. */
+.key:focus-visible,
+[data-slot="button"]:is([data-variant="default"], [data-variant="secondary"]):focus-visible {
+	outline: 3px solid color-mix(in oklab, var(--ring) 55%, transparent);
+	outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.key,
+	[data-slot="button"]:is([data-variant="default"], [data-variant="secondary"]) {
+		transition: none;
+	}
+}
