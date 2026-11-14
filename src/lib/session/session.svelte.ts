@@ -1449,8 +1449,9 @@ export class Session {
 		const items = [...own, ...given].map((r) => ({ id: r.id, orig: r.orig || r.before || "", final: r.text ?? "", own: own.includes(r) }));
 		await this.generate(el, () => this.api("end", { learned: asBefore, notes: { items, p1 } }));
 		await refreshWriting();
-		// Finishing a piece counts towards the learner's day; the home page pours the glass when it is full.
-		practised("learned");
+		// Finishing a piece counts towards the learner's day (the server credits it as the piece is finished); the glass
+		// is poured when the week is next shown. The tour's sandbox keeps its own.
+		if (sandboxed()) practised("learned");
 		goto(`/w/${this.sid}`);
 	}
 }

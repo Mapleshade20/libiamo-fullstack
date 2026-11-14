@@ -8,10 +8,11 @@ import { CALLS } from "#lib/components/debug/calls.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { isAppLang } from "#lib/constants.ts";
-import { read, toast, write } from "#lib/demo/app.svelte.ts";
+import { read, sandboxed, toast, write } from "#lib/demo/app.svelte.ts";
 import { COLLECT_KEY, COLLECTED_KEY, type Collected } from "#lib/demo/data.ts";
 import { checkCall, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
+import { removeNotes } from "#lib/notebook/notebook.remote.ts";
 import { goto } from "$app/navigation";
 
 /*
@@ -20,7 +21,7 @@ import { goto } from "$app/navigation";
  * itself speaks the passage's language (the one the door found, as the home page around it does); what the tutor says
  * about a phrase, and asking it more, speak the tutor's. Every phrase is kept the moment it is filled in.
  */
-type Setup = { passage: string; lang: string; native: string; feedback: string; model: string };
+type Setup = { passage: string; lang: string; native: string; feedback: string; model: string; readingId?: string };
 const SETUP = JSON.parse(sessionStorage.getItem(COLLECT_KEY) || "null") as Setup | null;
 if (!SETUP) goto("/", { replace: true });
 const TUTOR = SETUP?.feedback === "target" ? SETUP.lang : (SETUP?.native ?? "en");
@@ -48,7 +49,17 @@ const passage = SETUP?.passage ?? "";
 const segs = [...new Intl.Segmenter(SETUP?.lang ?? "en", { granularity: "word" }).segment(passage)];
 const SENTENCES = [...new Intl.Segmenter(SETUP?.lang ?? "en", { granularity: "sentence" }).segment(passage)];
 type Item = { phrase: string; meaning: string; why: string; register: string; example: string };
-type Mark = { n: number; a: number; b: number; data: Item | null; busy: boolean; failed: boolean; thread: { q: string; a: string | null }[] };
+/** `id`: the notebook entry its phrase is kept as. */
+type Mark = {
+	n: number;
+	a: number;
+	b: number;
+	data: Item | null;
+	id?: string;
+	busy: boolean;
+	failed: boolean;
+	thread: { q: string; a: string | null }[];
+};
 let marks = $state<Mark[]>([]);
 let nextN = 1;
 let openN = $state<number | null>(null);
@@ -66,14 +77,21 @@ const nextWord = (i: number) => {
 	return -1;
 };
 
-/* Kept as soon as filled in: the notebook (localStorage here) holds every phrase, with the sentence it was read in, which
-   review later asks it back in. */
+/* Kept as soon as filled in: the server files every phrase in the notebook as it fills it in, with the sentence it was
+   read in, which review later asks it back in; the passage is kept once, as the reading they come from. A mark undone
+   or changed takes its entry away. The tour's sandbox keeps its own. */
 const batch = `${Date.now()}`;
+let readingId = SETUP?.readingId;
+const forget = (ids: (string | undefined)[]) => {
+	const gone = ids.filter((x): x is string => !!x);
+	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
+};
 function sentenceOf(m: Mark) {
 	const at = segs[m.a].index;
 	return (SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length)?.segment ?? "").trim();
 }
 function store() {
+	if (!sandboxed()) return;
 	const others = read<(Collected & { batch?: string })[]>(COLLECTED_KEY, []).filter((x) => x.batch !== batch);
 	write(COLLECTED_KEY, [
 		...others,
@@ -112,25 +130,36 @@ async function fill() {
 		m.busy = true;
 		m.failed = false;
 	}
-	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b }));
+	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, sentence: sentenceOf(m) }));
 	try {
 		checkCall(`explain:${sent.map((x) => x.text).join("|")}`);
 		stopped = null;
 		const r = await CALLS.traced("/api/collect/explain", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ ...SETUP, highlights: sent, retry: retries }),
+			body: JSON.stringify({ ...SETUP, readingId, highlights: sent, retry: retries }),
 		});
 		if (!r.ok) throw new Error(String(r.status));
-		const { items } = (await r.json()) as { items: (Item & { n: number })[] };
+		const got = (await r.json()) as { readingId?: string; items: (Item & { n: number; id?: string })[] };
+		if (got.readingId && got.readingId !== readingId) {
+			readingId = got.readingId;
+			sessionStorage.setItem(COLLECT_KEY, JSON.stringify({ ...SETUP, readingId }));
+		}
+		const stale: (string | undefined)[] = [];
 		for (const s of sent) {
+			const it = got.items?.find((x) => x.n === s.n);
 			const m = marks.find((x) => x.n === s.n);
-			// A mark changed while its call was out is filled by the next call, not by this one.
-			if (!m || m.a !== s.a || m.b !== s.b) continue;
+			// A mark changed or undone while its call was out is filled by the next call, not by this one.
+			if (!m || m.a !== s.a || m.b !== s.b) {
+				stale.push(it?.id);
+				continue;
+			}
 			m.busy = false;
-			m.data = items?.find((it) => it.n === s.n) ?? null;
+			m.data = it ?? null;
+			m.id = it?.id;
 			if (!m.data) m.failed = true;
 		}
+		forget(stale);
 	} catch (e) {
 		// No key, or a refused one, is said once, above the kept phrases; a failed call is said on each phrase it left empty.
 		const k = stopOf(e);
@@ -163,8 +192,9 @@ function addRange(a: number, b: number) {
 		b = Math.max(b, m.b);
 	}
 	const keep = touching[0];
+	forget(touching.map((m) => m.id));
 	marks = marks.filter((m) => !touching.includes(m) || m === keep);
-	if (keep) Object.assign(keep, { a, b, data: null, busy: false, failed: false });
+	if (keep) Object.assign(keep, { a, b, data: null, id: undefined, busy: false, failed: false });
 	else marks.push({ n: nextN++, a, b, data: null, busy: false, failed: false, thread: [] });
 	openN = keep?.n ?? nextN - 1;
 	queueFill();
@@ -204,6 +234,7 @@ async function up(e: PointerEvent) {
 	addRange(d.from, d.to);
 }
 function drop(m: Mark) {
+	forget([m.id]);
 	marks = marks.filter((x) => x.n !== m.n);
 	store();
 	toast(ui("colRemoved", { phrase: m.data?.phrase ?? textOf(m) }));

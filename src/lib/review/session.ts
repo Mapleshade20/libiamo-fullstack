@@ -1,33 +1,26 @@
+import type { Outcome } from "#lib/notebook/types.ts";
+import type { QueueKind, RatingName } from "./types.ts";
+
 /*
- * One review sitting, Anki-style: new and review cards in a main queue; a card rated within minutes comes back in the
- * same sitting as a learning card. Due learning cards go first; when the main queue runs out, learning cards still
- * waiting are shown early (learn ahead). Graduated and reviewed cards leave the sitting.
+ * One review sitting, Anki-style: new and review cards in a main queue; a card the rating keeps within minutes comes back
+ * in the same sitting as a learning card. Due learning cards go first; when the main queue runs out, learning cards still
+ * waiting are shown early (learn ahead). What each rating does comes from the scheduler (server/review/scheduler.ts) with
+ * the card, so the page moves on at once; the server's answer to the rating says what the next ratings do.
  */
-export type Rating = "again" | "hard" | "good" | "easy";
-export type CardState = "new" | "learning" | "review";
-export const RATINGS: Rating[] = ["again", "hard", "good", "easy"];
-type Step = { label: string; minutes?: number };
-export type Item<C> = { card: C; state: CardState; step: number; due: number; ratings: Rating[] };
+export type { RatingName as Rating } from "./types.ts";
+export { RATINGS } from "./types.ts";
+export type Card = { queue: QueueKind; outcomes: Record<RatingName, Outcome>; dueIn?: number };
+export type Item<C extends Card> = { card: C; queue: QueueKind; due: number; outcomes: Record<RatingName, Outcome>; ratings: RatingName[] };
 
-const M = 60_000;
-/** What each rating does from each state: back in N minutes (stays in the sitting), or a day count (leaves it). */
-const PLAN: Record<string, Record<Rating, Step>> = {
-	"new-0": { again: { label: "1m", minutes: 1 }, hard: { label: "6m", minutes: 6 }, good: { label: "10m", minutes: 10 }, easy: { label: "4d" } },
-	"learning-0": { again: { label: "1m", minutes: 1 }, hard: { label: "6m", minutes: 6 }, good: { label: "10m", minutes: 10 }, easy: { label: "4d" } },
-	"learning-1": { again: { label: "1m", minutes: 1 }, hard: { label: "10m", minutes: 10 }, good: { label: "1d" }, easy: { label: "4d" } },
-	review: { again: { label: "10m", minutes: 10 }, hard: { label: "2d" }, good: { label: "5d" }, easy: { label: "9d" } },
-};
-const plan = (i: { state: CardState; step: number }) => PLAN[i.state === "review" ? "review" : `${i.state}-${i.state === "new" ? 0 : i.step}`];
-export const intervals = (i: { state: CardState; step: number }) => RATINGS.map((r) => plan(i)[r].label);
-
-export function createSitting<C>(cards: { card: C; state: "new" | "review" }[], now = () => Date.now()) {
-	const main: Item<C>[] = cards.map((c) => ({ ...c, step: 0, due: 0, ratings: [] }));
-	const learning: Item<C>[] = [];
+export function createSitting<C extends Card>(cards: C[], now = () => Date.now()) {
+	const t0 = now();
+	const all: Item<C>[] = cards.map((card) => ({ card, queue: card.queue, due: t0 + (card.dueIn ?? 0), outcomes: card.outcomes, ratings: [] }));
+	const main = all.filter((i) => i.queue !== "learning");
+	const learning = all.filter((i) => i.queue === "learning");
 	const done: Item<C>[] = [];
 	const next = (): Item<C> | undefined => {
-		const t = now();
 		learning.sort((a, b) => a.due - b.due);
-		if (learning[0] && learning[0].due <= t) return learning[0];
+		if (learning[0] && learning[0].due <= now()) return learning[0];
 		return main[0] ?? learning[0];
 	};
 	let current = next();
@@ -40,29 +33,34 @@ export function createSitting<C>(cards: { card: C; state: "new" | "review" }[], 
 		},
 		counts() {
 			return {
-				new: main.filter((i) => i.state === "new").length,
+				new: main.filter((i) => i.queue === "new").length,
 				learning: learning.length,
-				review: main.filter((i) => i.state === "review").length,
+				review: main.filter((i) => i.queue === "review").length,
 			};
 		},
-		rate(r: Rating) {
+		/** The buttons' labels for the card shown. */
+		intervals: (i: Item<C>) => (["again", "hard", "good", "easy"] as const).map((r) => i.outcomes[r].label),
+		/** Rates the card shown and moves on; returns it (its rating is sent with it). */
+		rate(r: RatingName) {
 			const it = current;
 			if (!it) return;
-			const step = plan(it)[r];
+			const o = it.outcomes[r];
 			it.ratings.push(r);
 			for (const list of [main, learning]) {
 				const at = list.indexOf(it);
 				if (at >= 0) list.splice(at, 1);
 			}
-			if (step.minutes) {
-				// Again starts the steps over; Good moves one step on; Hard repeats the step.
-				it.step = r === "again" ? 0 : r === "good" ? it.step + 1 : it.step;
-				if (it.state === "review") it.step = 1;
-				it.state = "learning";
-				it.due = now() + step.minutes * M;
+			if (o.stays) {
+				it.queue = "learning";
+				it.due = now() + o.inMs;
 				learning.push(it);
 			} else done.push(it);
 			current = next();
+			return it;
+		},
+		/** The server's word on a rated card: where it is, and what rating it next does. */
+		settle(it: Item<C>, s: { queue: QueueKind; outcomes: Record<RatingName, Outcome> }) {
+			it.outcomes = s.outcomes;
 		},
 	};
 }

@@ -447,6 +447,32 @@ rate-limit table and every environment list describe what exists.
   developer settings, `/api/fixtures` and `/lab` showed to every learner in a production build (now development and
   admins only).
 
+**Phase 3, what comes back: built** (2026-11-15), waiting for the user's acceptance.
+
+- **Tables.** `note`, `reading`, `review_log`, `practice_day`, `user_week` as §5.2 and §5.6, in the one migration. `note.sentence`
+  is an own entry's sentence as settled (with `was`, what was first written there) or a collected one's sentence as read
+  (with `marked`, the words highlighted). Deleting an entry sets `deleted_at` and keeps its review history.
+- **Notes.** Filed when a piece's notes call lands (`fileNotes` → `fileOwn`, once per piece, in the transaction that
+  writes `piece.learned`), and as each collected highlight is filled in (`/api/collect/explain` keeps the reading once
+  and an entry per phrase; a mark undone or changed takes its entry away). New entries are due from the next local day.
+  Which face a card shows is its review count over its faces (`noteFaces`: own sentence, then examples; a collected
+  one's sentence, then its example; bare when the phrase is in none).
+- **Review.** ts-fsrs 6 with FSRS-6, not the package's FSRS-7 default: FSRS-7's first intervals are far longer (a first
+  Easy almost two months, Good-Good five days) and its model overrides the learning steps, which breaks "an empty
+  queue is the day done"; the review log keeps every rating with the card before and after, so a later move to FSRS-7
+  can replay history. Labels follow the demo ("10m", not Anki's "<10m"). ts-fsrs 6 needs Node 24: the image moved to
+  `node:24.22.2-alpine`.
+- **The week.** The glasses, the popover and the profile's history read the server; the demo's stand-in history is
+  gone. The queue that counts for a day is the language's being worked in (the one the learner sees).
+- **Follow-ups and write-again** were already the server's (phase 2); writing again now credits the day.
+- **Checked** (2026-11-15): the baseline replays identically (all eleven); three pieces finished with notes filed
+  (seventeen entries, due the next day); in the browser on the dev server: the shelf's review row and the sidebar count,
+  the notebook list, filters, an entry, editing and deleting it, a whole sitting of six cards (thirteen ratings, the
+  buttons' intervals from the scheduler), the glass filled after it, the profile, collecting two phrases with one live
+  call (one removed again), write-again crediting the day.
+- **Open.** Review's "Is mine OK too?" still answers with the demo's stand-in replies (the demo says the app would ask
+  the tutor); a real call is a new prompt, for the user to decide.
+
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
 `app.prefs` the pages already read, and writes go through remote commands. Decisions taken on the way:

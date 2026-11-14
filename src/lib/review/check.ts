@@ -1,6 +1,8 @@
 /* Checking a typed review answer. By code, never by a model: spelling slips, case, spacing and curly quotes do not count
    against the learner. */
-export type Verdict = "exact" | "close" | "other" | "miss" | "none";
+import type { Verdict } from "#lib/constants.ts";
+
+export type { Verdict };
 export const norm = (s: string) =>
 	s
 		.toLowerCase()

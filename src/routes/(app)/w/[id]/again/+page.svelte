@@ -12,7 +12,7 @@ import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
-import { keptPiece, practised } from "#lib/demo/data.ts";
+import { keptPiece } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { scenarioById, situationOf } from "#lib/demo/scenarios.ts";
 import { markReused, reused } from "#lib/review/reuse.ts";
@@ -41,8 +41,8 @@ const runs = $derived(done ? markReused(text, phrases) : []);
 async function compare() {
 	if (!text.trim() || !w) return shake(area);
 	done = true;
+	// Writing it again is learning something: the day's half (credited where it is kept).
 	wroteAgain(w.id, text).catch(() => toast(tx("error")));
-	practised("learned");
 	await tick();
 	document
 		.getElementById("compare")

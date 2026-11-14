@@ -398,7 +398,7 @@ On/off variables take `1`/`0`; `true`/`false`, `yes`/`no` and `on`/`off` work to
 Compose-only: `APP_IMAGE`, `APP_BIND`, `APP_PORT`.
 
 Build args: `NODE_VERSION`
-(default `22.23.2`).
+(default `24.22.2`; ts-fsrs needs Node 24).
 
 ---
 

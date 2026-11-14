@@ -13,27 +13,30 @@ import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
 import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { app, toast, tx } from "#lib/demo/app.svelte.ts";
-import { historyWeeks, myWriting, reviewDeck } from "#lib/demo/data.ts";
+import { myWriting } from "#lib/demo/data.ts";
+import { notesNow } from "#lib/notebook/notebook.svelte.ts";
+import { historyNow } from "#lib/week/week.svelte.ts";
 
 /*
  * The profile: who the learner is here. Their picture and name (the name edited in a small dialog behind the pencil,
  * as in the main app), a few numbers, and every week they have practised: the whole history the week popover only
  * glimpses. Settings (how the app works for them) are a page of their own.
  */
-const weeks = $derived(historyWeeks(26));
-const goal = $derived(app.prefs.weeklyGoal);
-const met = (days: string[]) => days.filter((d) => d === "full").length >= goal;
+// Each week with the aim it was held to; a week's days are local dates (`YYYY-MM-DD`), drawn as this device's.
+const weeks = $derived((await historyNow(26)).map((w) => ({ ...w, start: new Date(`${w.start}T00:00:00`) })));
+const goal = $derived(weeks[weeks.length - 1].goal);
+const met = (w: { days: string[]; goal: number }) => w.days.filter((d) => d === "full").length >= w.goal;
 // Weeks in a row that met the aim, counting back from last week (this one may still be under way).
 const run = $derived.by(() => {
 	let n = 0;
 	const last = weeks.length - 1;
-	if (met(weeks[last].days)) n++;
-	for (let i = last - 1; i >= 0 && met(weeks[i].days); i--) n++;
+	if (met(weeks[last])) n++;
+	for (let i = last - 1; i >= 0 && met(weeks[i]); i--) n++;
 	return n;
 });
 const total = $derived(weeks.reduce((n, w) => n + w.days.filter((d) => d === "full").length, 0));
 const pieces = $derived(myWriting().filter((w) => w.finishedAt).length);
-const phrases = $derived(reviewDeck().length);
+const phrases = $derived((await notesNow()).length);
 const months = $derived(
 	weeks.map((w, i) =>
 		i === 0 || w.start.getMonth() !== weeks[i - 1].start.getMonth() ? new Intl.DateTimeFormat(app.lang, { month: "short" }).format(w.start) : "",
@@ -129,7 +132,7 @@ onMount(() => {
 					<span></span>
 					{#each weeks as w}
 						<span class="met"
-							>{#if met(w.days)}
+							>{#if met(w)}
 								<Glass drink={DRINKS[2]} look="full" size={15} inkPx={0.9} />
 							{/if}</span
 						>

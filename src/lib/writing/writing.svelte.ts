@@ -1,6 +1,6 @@
 import { account } from "#lib/account/account.svelte.ts";
 import { sandboxed } from "#lib/demo/app.svelte.ts";
-import { recordWriting } from "#lib/demo/data.ts";
+import { practised, recordWriting } from "#lib/demo/data.ts";
 import type { PieceItem, Posted } from "./types.ts";
 import { answerPosted, pieces, writeAgain } from "./writing.remote.ts";
 
@@ -44,7 +44,10 @@ export async function setPosted(id: string, posted: Posted) {
 
 /** The piece written again from memory. */
 export async function wroteAgain(id: string, text: string) {
-	if (sandboxed()) return recordWriting({ id, again: { text, at: Date.now() } });
+	if (sandboxed()) {
+		recordWriting({ id, again: { text, at: Date.now() } });
+		return practised("learned");
+	}
 	await writeAgain({ id, text });
 	await refreshWriting();
 }

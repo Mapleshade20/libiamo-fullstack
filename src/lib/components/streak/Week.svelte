@@ -2,8 +2,10 @@
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import { onMount, tick } from "svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
-import { app, read, tx, write } from "#lib/demo/app.svelte.ts";
-import { dayKey, todayKind, weekCount, weekDays } from "#lib/demo/data.ts";
+import { app, read, sandboxed, tx, write } from "#lib/demo/app.svelte.ts";
+import { lang } from "#lib/notebook/notebook.svelte.ts";
+import { lookAtReviews } from "#lib/week/week.remote.ts";
+import { weekNow } from "#lib/week/week.svelte.ts";
 import Digits from "./Digits.svelte";
 import { DRINKS, type Drink, drinkOf } from "./glass/drinks";
 import Glass from "./glass/Glass.svelte";
@@ -15,27 +17,29 @@ import type { Look, Moment } from "./glass/scene";
  * and garnished when both are done, which is what counts. Nothing is ever lost. Whenever today's glass changes, or a
  * new day clears yesterday's, the popover opens by itself and plays it where the learner can see it.
  */
-const kind = $derived(todayKind());
-const n = $derived(weekCount());
-const goal = $derived(app.prefs.weeklyGoal);
+const view = $derived(await weekNow());
+const days = $derived(view.days.map((d, i) => ({ ...d, i, today: d.day === view.today })));
+const kind = $derived(days.find((d) => d.today)?.kind ?? "none");
+const n = $derived(days.filter((d) => d.kind === "full").length);
+const goal = $derived(view.goal);
 const lookOf = (k: string): Look => (k === "full" ? "full" : k === "learned" || k === "reviewed" ? "up" : "down");
 const RANK: Record<Look, number> = { down: 0, up: 1, full: 2 };
 const today = drinkOf();
-const days = $derived(weekDays());
 const names = $derived(
 	Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(app.lang, { weekday: "narrow" }).format(new Date(2026, 9, 26 + i))),
 );
 let open = $state(false);
 let celebrate = $state(false);
 /** What the glasses show: today's state, except while a change is being played (it starts from the old one). */
-let shown = $state<{ drink: Drink; look: Look }>({ drink: today, look: lookOf(todayKind()) });
+// svelte-ignore state_referenced_locally
+let shown = $state<{ drink: Drink; look: Look }>({ drink: today, look: lookOf(kind) });
 let big = $state<Glass>();
 let playing = false;
 const dark = $derived(app.dark);
 
 type Seen = { day: string; look: Look; drink: string };
 const readSeen = () => read<Seen | null>("glassSeen", null);
-const keepSeen = (look: Look) => write("glassSeen", { day: dayKey(), look, drink: today.id });
+const keepSeen = (look: Look) => write("glassSeen", { day: view.today, look, drink: today.id });
 
 /** The moments from one state to another, today. */
 function forward(from: Look, to: Look): Moment[] {
@@ -66,10 +70,10 @@ async function show(start: { drink: Drink; look: Look }, steps: { m: Moment; nex
 	playing = false;
 }
 function changes() {
-	const to = lookOf(todayKind());
+	const to = lookOf(kind);
 	const seen = readSeen();
 	if (!seen) return keepSeen(to);
-	if (seen.day === dayKey())
+	if (seen.day === view.today)
 		return show(
 			{ drink: today, look: seen.look },
 			forward(seen.look, to).map((m) => ({ m })),
@@ -85,10 +89,11 @@ function changes() {
 	show({ drink: was, look: seen.look }, steps, to);
 }
 onMount(() => {
-	sessionStorage.removeItem("weekEarned");
 	changes();
+	// Nothing to review is the reviews done: a visit that finds the queue empty earns today's half.
+	if (!sandboxed()) lookAtReviews(lang()).catch(() => {});
 });
-// A day earned while this stays on the page (the demo's dev buttons): play it too.
+// A day earned while this stays on the page (the reviews found empty, the tour): play it too.
 $effect(() => {
 	const to = lookOf(kind);
 	if (!playing && RANK[to] > RANK[shown.look]) changes();

@@ -17,8 +17,9 @@ import Sticker from "#lib/components/stickers/Sticker.svelte";
 import type { StickerName } from "#lib/components/stickers/stickers.ts";
 import { hasScenarios } from "#lib/constants.ts";
 import { app, endonym, switchLanguage, tx } from "#lib/demo/app.svelte.ts";
-import { myWriting, reviewDeck, siteOf } from "#lib/demo/data.ts";
+import { myWriting, siteOf } from "#lib/demo/data.ts";
 import { openPiece } from "#lib/demo/reopen.ts";
+import { dueNow } from "#lib/notebook/notebook.svelte.ts";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import EmptyState from "./EmptyState.svelte";
@@ -30,10 +31,11 @@ import { shell } from "./shell.svelte";
  * account and the language being worked in. Folded, it is a rail of stickers that name themselves on hover; on a phone
  * it is a drawer over the page.
  */
+const dueCount = $derived((await dueNow()).count);
 const nav = $derived<{ id: string; href: string; sticker: StickerName | "clink"; label: string; count: number; tilt: number }[]>([
 	{ id: "home", href: "/", sticker: "pen", label: tx("navNew"), count: 0, tilt: -2 },
 	{ id: "library", href: "/library", sticker: "clink", label: tx("navLibrary"), count: 0, tilt: 2 },
-	{ id: "notebook", href: "/notebook", sticker: "cards", label: tx("navNotebook"), count: reviewDeck().length, tilt: 1.5 },
+	{ id: "notebook", href: "/notebook", sticker: "cards", label: tx("navNotebook"), count: dueCount, tilt: 1.5 },
 	{ id: "writing", href: "/writing", sticker: "box", label: tx("navWriting"), count: myWriting().filter((w) => w.open).length, tilt: -1 },
 ]);
 // A scenario belongs to the prompts; a piece to my writing.

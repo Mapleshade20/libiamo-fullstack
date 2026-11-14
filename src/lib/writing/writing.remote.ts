@@ -4,7 +4,9 @@ import { db } from "#lib/server/db/index.ts";
 import { piece } from "#lib/server/db/schema.ts";
 import { learner } from "#lib/server/guard.ts";
 import { fileNotes } from "#lib/server/revision/store.ts";
+import { credit } from "#lib/server/week/days.ts";
 import { pieceOf, piecesOf, postedValue } from "#lib/server/writing/pieces.ts";
+import { week } from "#lib/week/week.remote.ts";
 import { command, query } from "$app/server";
 import type { PieceView } from "./types.ts";
 
@@ -29,13 +31,19 @@ export const answerPosted = command(z.object({ id: pieceId, posted: z.enum(["yes
 		.where(and(mine(u.id, id), isNotNull(piece.finishedAt)));
 });
 
-/** The piece written again from memory, a few days on. */
+/** The piece written again from memory, a few days on: learning something, so the day's half. */
 export const writeAgain = command(z.object({ id: pieceId, text: z.string().trim().min(1).max(20_000) }), async ({ id, text }) => {
 	const u = learner();
-	await db
-		.update(piece)
-		.set({ againText: text, againAt: new Date() })
-		.where(and(mine(u.id, id), isNotNull(piece.finishedAt)));
+	const changed = await db.transaction(async (tx) => {
+		const now = new Date();
+		const [p] = await tx
+			.update(piece)
+			.set({ againText: text, againAt: now })
+			.where(and(mine(u.id, id), isNotNull(piece.finishedAt)))
+			.returning({ language: piece.language });
+		return p ? credit(tx, u, "learned", p.language, now) : false;
+	});
+	if (changed) await week().refresh();
 });
 
 /** The piece's page found its notebook entries still not written two minutes on: they are asked for again. */

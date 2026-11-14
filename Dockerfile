@@ -3,7 +3,7 @@
 # One process: the SvelteKit adapter-node server on :3000. TLS, compression and
 # routing belong to whatever reverse proxy sits in front of it.
 
-ARG NODE_VERSION=22.23.4
+ARG NODE_VERSION=24.22.2
 
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME=/pnpm
