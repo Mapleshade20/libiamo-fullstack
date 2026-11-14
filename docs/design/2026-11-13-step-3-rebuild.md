@@ -430,8 +430,8 @@ rate-limit table and every environment list describe what exists.
   page, My writing, the sidebar and the shelf read the learner's pieces from the server (`pieces`, `pieceById`);
   posted and written-again are commands. The demo's stand-in pieces and the clean-ups of older builds' local data are
   gone; this device keeps only a scenario set aside before its revision (phase 4) and the tour's sandbox.
-- **Next:** the operations monitor's hourly query (`llm_trace` → `llm_call`); then the whole loop checked in the
-  browser beside the demo.
+- The operations monitor's hourly volume check reads `llm_call`.
+- **Next:** the whole loop checked in the browser beside the demo (the production build, desktop and phone).
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

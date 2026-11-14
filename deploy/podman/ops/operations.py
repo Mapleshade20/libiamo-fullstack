@@ -412,7 +412,7 @@ def collect_issues(config, previous, now):
 	except OSError:
 		issues["access_log"] = "Access log unreadable or not provisioned"
 	try:
-		counts = db_query(config, "SELECT count(*),coalesce(sum(completion_tokens),0) FROM llm_trace WHERE created_at > now()-interval '1 hour';")
+		counts = db_query(config, "SELECT count(*),coalesce(sum(completion_tokens),0) FROM llm_call WHERE created_at > now()-interval '1 hour';")
 		calls, tokens = map(int, counts.split("|"))
 		metrics.update(llm_calls_hour=calls, llm_output_tokens_hour=tokens)
 		if calls >= config["llm_calls_per_hour"] or tokens >= config["llm_output_tokens_per_hour"]:
