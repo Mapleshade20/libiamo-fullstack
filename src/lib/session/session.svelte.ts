@@ -6,7 +6,7 @@ import NoteCard from "#lib/components/session/NoteCard.svelte";
 import { isAppLang } from "#lib/constants.ts";
 import { app, forget, read, write } from "#lib/demo/app.svelte.ts";
 import { type Learned, myWriting, type NoteBody, practised, recordWriting } from "#lib/demo/data.ts";
-import { checkCall, type Stop as Halt, stopOf } from "#lib/demo/limits.ts";
+import { checkCall, type Stop as Halt, LimitError, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
 import { Cancelled, Clock, reduced, SLOW } from "./clock";
@@ -217,7 +217,8 @@ export class Session {
 			body: JSON.stringify(body),
 		});
 		const v = await r.json().catch(() => ({}));
-		if (!r.ok) throw new Error(v.error || this.tt("error"));
+		// The server says what stopped a model call: no key, the key refused, or a failure a retry may fix.
+		if (!r.ok) throw v.code === "nokey" || v.code === "refused" ? new LimitError(v.code) : new Error(v.error || this.tt("error"));
 		return v as T;
 	}
 	/** A step asked for again (a restart from the debug panel) reuses its answer. */

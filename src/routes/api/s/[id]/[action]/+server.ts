@@ -1,6 +1,7 @@
+import { learner } from "#lib/server/guard.ts";
+import { stopOf } from "#lib/server/llm/transport.ts";
 import { logSession, sessions } from "#lib/server/sessions.ts";
 import type { LiveSession } from "#model/session/live.ts";
-import { inSession } from "#model/trace.ts";
 
 // Each action is one step of the session page's flow; see src/session/live.ts.
 // biome-ignore lint/suspicious/noExplicitAny: request bodies are checked by the session's methods.
@@ -27,19 +28,22 @@ const ACTIONS: Record<string, (s: LiveSession, b: any) => unknown> = {
 };
 
 export async function POST({ params, request }) {
-	const s = sessions.get(params.id);
+	const u = learner();
+	const held = sessions.get(params.id);
+	const s = held?.owner === u.id ? held.session : null;
 	if (!s) return Response.json({ error: "This session is gone (the server may have restarted). Start again." }, { status: 404 });
 	const fn = ACTIONS[params.action];
 	if (!fn) return Response.json({ error: "unknown action" }, { status: 404 });
 	const b = await request.json().catch(() => ({}));
 	const t0 = Date.now();
 	try {
-		const out = (await inSession(params.id, params.action, () => fn(s, b) as Promise<unknown>, !!s.input.noCache)) ?? {};
+		const out = (await fn(s, b)) ?? {};
 		logSession(params.id, { t: t0, ms: Date.now() - t0, action: params.action, body: b, out });
 		return Response.json(out);
 	} catch (e) {
 		console.error(e);
 		logSession(params.id, { t: Date.now(), action: params.action, error: String(e) });
-		return Response.json({ error: String((e as Error)?.message ?? e) }, { status: 500 });
+		// What stopped a model call, as the page shows it: no key, the key refused, or a failure a retry may fix.
+		return Response.json({ error: String((e as Error)?.message ?? e), code: stopOf(e) }, { status: 500 });
 	}
 }

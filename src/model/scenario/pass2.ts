@@ -3,8 +3,8 @@
 // answered, so each turn is first judged by how it landed, and a turn that landed off because of its wording must get
 // a spot there.
 import { z } from "zod";
+import { type Caller, chat, chatJson, extractJson } from "#lib/server/llm/caller.ts";
 import { type Draft, fbName, LANG_NAMES, levelLine, noteLines } from "../fixtures/types.ts";
-import { chat, chatJson, extractJson, type ModelKey } from "../llm.ts";
 import { AnalysisSchema, leftLine, SCAN_RULE, type Sentence, SHAPE_V6, sentences, TASK_V6 } from "../pass2/analyze.ts";
 import { type Case, draftOf, exchange, SEP } from "./exchange.ts";
 
@@ -38,7 +38,7 @@ export async function analyzeExchange(
 	c: Case,
 	text: string,
 	native: string,
-	model: ModelKey,
+	ai: Caller,
 	evidence: boolean,
 	base: Draft = draftOf(c),
 	stage: "draft" | "pass1" = "pass1",
@@ -80,7 +80,7 @@ export async function analyzeExchange(
 			{ role: "system", content: system },
 			{ role: "user", content: user },
 		],
-		{ model, sample: 0, tag: evidence ? "q2/e" : "q2/p" },
+		{ ai, sample: 0, tag: evidence ? "q2/e" : "q2/p" },
 	);
 	let raw: unknown = null;
 	try {
@@ -96,7 +96,7 @@ export async function analyzeExchange(
 			{ role: "user", content: `The JSON did not validate:\n${parsed.error.message}\nReply with the corrected JSON only.` },
 		],
 		ExchangeAnalysis,
-		{ model, sample: 0, tag: "q2/repair" },
+		{ ai, sample: 0, tag: "q2/repair" },
 	);
 	return { analysis: fixed.value, calls: [res, ...fixed.calls], byTurn };
 }

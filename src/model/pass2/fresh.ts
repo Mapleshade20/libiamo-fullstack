@@ -1,11 +1,11 @@
+import { type Caller, type CallResult, chat } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES, noteLines } from "../fixtures/types.ts";
-import { type CallResult, chat, type ModelKey } from "../llm.ts";
 
 /**
  * A fluent version written from the writer's points rather than edited from their sentences, so it does not inherit the
  * draft's packaging. Pass 2 compares the draft against it to find formulation spots.
  */
-export async function freshNative(d: Draft, model: ModelKey, sample: number): Promise<{ points: string; fresh: string; call: CallResult }> {
+export async function freshNative(d: Draft, ai: Caller, sample: number): Promise<{ points: string; fresh: string; call: CallResult }> {
 	const T = LANG_NAMES[d.target];
 	const system = `You are a fluent, native ${T}-speaking member of this community: ${d.scene.platform}.`;
 	const user = [
@@ -33,7 +33,7 @@ export async function freshNative(d: Draft, model: ModelKey, sample: number): Pr
 			{ role: "system", content: system },
 			{ role: "user", content: user },
 		],
-		{ model, sample, tag: "e6/fresh" },
+		{ ai, sample, tag: "e6/fresh" },
 	);
 	const points = call.text.match(/###\s*POINTS\s*\n([\s\S]*?)(?=\n###\s*FRESH)/)?.[1]?.trim() ?? "";
 	const fresh = call.text.split(/###\s*FRESH\s*\n/)[1]?.trim() ?? "";

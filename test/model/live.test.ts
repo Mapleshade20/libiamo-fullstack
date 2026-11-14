@@ -1,13 +1,13 @@
-// Session state paths the page drives (no model calls: the key is cleared before llm.ts loads, so any call fails).
+// Session state paths the page drives (no model calls: the caller has no key, so any call stops).
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import { Caller } from "#lib/server/llm/caller.ts";
+import { LiveSession } from "#model/session/live.ts";
 
-process.env.OPENROUTER_API_KEY = "";
-process.env.OPENAI_API_KEY = "";
-const { LiveSession } = await import("#model/session/live.ts");
+const nokey = new Caller({ route: null });
 
 function session(text: string) {
-	const s = new LiveSession({ text, learner: "zh-CN", feedback: "native", model: "haiku", grader: "haiku" });
+	const s = new LiveSession({ text, learner: "zh-CN", feedback: "native" }, nokey);
 	const x = s as any;
 	x.d = {
 		id: "t",
@@ -125,7 +125,7 @@ test("the reference word for word passes without a grading call", async () => {
 });
 
 test("a corrected note replaces the old one, and only once the scene is in", async () => {
-	const s = new LiveSession({ text: "Hi all", background: "old note", learner: "zh-CN", feedback: "native", model: "haiku", grader: "haiku" });
+	const s = new LiveSession({ text: "Hi all", background: "old note", learner: "zh-CN", feedback: "native" }, nokey);
 	// No model is reachable here, so the scene call fails and the note stays as it was.
 	await assert.rejects(s.inferScene("new note"));
 	assert.equal(s.input.background, "old note");

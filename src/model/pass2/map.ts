@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { aLearner, cap, type Draft, fbName, LANG_NAMES, noteLines, pinLang } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import { numbered, type Sentence } from "./analyze.ts";
 
 /**
@@ -26,7 +26,7 @@ export const OutlineSchema = z.object({
 });
 export type Outline = z.infer<typeof OutlineSchema>;
 
-export async function outline(d: Draft, ss: Sentence[], model: ModelKey): Promise<{ value: Outline; calls: CallResult[] }> {
+export async function outline(d: Draft, ss: Sentence[], ai: Caller): Promise<{ value: Outline; calls: CallResult[] }> {
 	const F = fbName(d);
 	const user = [
 		`${cap(aLearner(d))} of ${LANG_NAMES[d.target]} wrote this for ${d.scene.platform} (readers: ${d.scene.audience}). What they want to do: ${d.scene.purpose}.`,
@@ -47,7 +47,7 @@ export async function outline(d: Draft, ss: Sentence[], model: ModelKey): Promis
 		pinLang(d),
 		'Reply with JSON only: {"summary":[""],"points":[{"text":"","sentences":[],"parts":[{"kind":"example","text":"","sentences":[2]}]}]}',
 	].join("\n");
-	const r = await chatJson([{ role: "user", content: user }], OutlineSchema, { model, effort: "low", tag: "session/outline" });
+	const r = await chatJson([{ role: "user", content: user }], OutlineSchema, { ai, effort: "low", tag: "session/outline" });
 	return { ...r, value: inPostOrder(oncePerSentence(r.value)) };
 }
 

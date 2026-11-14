@@ -1,5 +1,4 @@
 import { collectInput } from "#lib/server/collect.ts";
-import { traced } from "#lib/server/sessions.ts";
 import { ask } from "#model/collect.ts";
 
 export async function POST({ request }) {
@@ -8,8 +7,6 @@ export async function POST({ request }) {
 		.slice(-6)
 		.map((t: { q: unknown; a: unknown }) => ({ q: String(t.q ?? ""), a: String(t.a ?? "") }));
 	return Response.json({
-		answer: await traced(request, "collect · ask", () =>
-			ask(collectInput(b), String(b.phrase ?? ""), history, String(b.question ?? "").slice(0, 500)),
-		),
+		answer: await ask(await collectInput(b), String(b.phrase ?? ""), history, String(b.question ?? "").slice(0, 500)),
 	});
 }

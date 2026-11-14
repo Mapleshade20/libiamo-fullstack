@@ -1,10 +1,11 @@
 <script lang="ts">
 import ExternalLink from "@lucide/svelte/icons/external-link";
-import { account, RECOMMENDED_KEY, setKey } from "#lib/account/account.svelte.ts";
+import { account, setKey } from "#lib/account/account.svelte.ts";
 import { shake } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
+import { PROVIDERS as BY_ID, RECOMMENDED, SETUPS } from "#lib/llm/providers.ts";
 
 /*
  * The learner's own AI key, which every call runs on (there is no trial). Four providers, the base URL following the
@@ -15,20 +16,9 @@ import Button from "#lib/components/ui/button/button.svelte";
  */
 let { tx, onsaved }: { tx: (k: string, v?: Record<string, string | number>) => string; onsaved?: () => void } = $props();
 
-const PROVIDERS = [
-	{ value: "openrouter", label: "OpenRouter", keys: "https://openrouter.ai/keys" },
-	{ value: "deepseek", label: "DeepSeek", keys: "https://platform.deepseek.com/api_keys" },
-	{ value: "openai", label: "OpenAI", keys: "https://platform.openai.com/api-keys" },
-	{ value: "glm", label: "Zhipu AI / GLM", keys: "https://open.bigmodel.cn/usercenter/apikeys" },
-];
-const PRESETS = [
-	{ name: "Claude Haiku", ...RECOMMENDED_KEY },
-	{ name: "GPT Luna", provider: "openrouter", model: "~openai/gpt-luna-latest" },
-	{ name: "DeepSeek Flash", provider: "deepseek", model: "deepseek-flash" },
-	{ name: "GPT Luna", provider: "openai", model: "gpt-6-luna" },
-];
+const PROVIDERS = Object.entries(BY_ID).map(([value, p]) => ({ value, label: p.label, keys: p.keys }));
 const providerOf = (v: string) => PROVIDERS.find((p) => p.value === v);
-const setupName = (k: { provider: string; model: string }) => PRESETS.find((p) => p.provider === k.provider && p.model === k.model)?.name ?? k.model;
+const setupName = (k: { provider: string; model: string }) => SETUPS.find((p) => p.provider === k.provider && p.model === k.model)?.name ?? k.model;
 
 let replacing = $state(false);
 const formOpen = $derived(!account.me.key || replacing);
@@ -45,11 +35,11 @@ function cancel() {
 	key = "";
 	back();
 }
-let provider = $state(account.me.key?.provider ?? RECOMMENDED_KEY.provider);
-let model = $state(account.me.key?.model ?? RECOMMENDED_KEY.model);
+let provider = $state(account.me.key?.provider ?? RECOMMENDED.provider);
+let model = $state(account.me.key?.model ?? RECOMMENDED.model);
 let key = $state("");
 let keyInput: HTMLInputElement | undefined = $state();
-function usePreset(p: (typeof PRESETS)[number]) {
+function usePreset(p: (typeof SETUPS)[number]) {
 	provider = p.provider;
 	model = p.model;
 	keyInput?.focus();
@@ -66,7 +56,7 @@ async function save(e: SubmitEvent) {
 	const had = !!account.me.key;
 	pending = true;
 	try {
-		await setKey(provider, model.trim() || RECOMMENDED_KEY.model, key.trim());
+		await setKey(provider, model.trim() || RECOMMENDED.model, key.trim());
 	} catch {
 		pending = false;
 		shake(keyInput);
@@ -98,7 +88,7 @@ async function save(e: SubmitEvent) {
 		<!-- biome-ignore lint/a11y/useSemanticElements: a row of toggle buttons, not form fields -->
 		<div class="full presets" role="group" aria-label={tx("setPresets")}>
 			<span class="presets-l">{tx("setPresets")}</span>
-			{#each PRESETS as p, i (p.provider + p.model)}
+			{#each SETUPS as p, i (p.provider + p.model)}
 				<button type="button" class="preset" aria-pressed={provider === p.provider && model === p.model} onclick={() => usePreset(p)}>
 					{p.name}<small>{providerOf(p.provider)?.label}{i === 0 ? ` · ${tx("setRecommended")}` : ""}</small>
 				</button>

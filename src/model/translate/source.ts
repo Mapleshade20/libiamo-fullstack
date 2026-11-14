@@ -6,8 +6,8 @@
 // carries a glossary of the names and terms the learner is not expected to know; its glosses come from the same call
 // as the source, so both use the same words.
 import { z } from "zod";
+import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES, type Lang } from "../fixtures/types.ts";
-import { chat, chatJson, type ModelKey } from "../llm.ts";
 
 export type Term = { term: string; kind: "name" | "term"; note: string };
 export type Gloss = { term: string; gloss: string; shown: string };
@@ -15,7 +15,7 @@ export type Gloss = { term: string; gloss: string; shown: string };
 const TermsSchema = z.object({ terms: z.array(z.object({ term: z.string(), kind: z.enum(["name", "term"]), note: z.string() })) });
 
 /** The names and terms a reader of the original needs but a learner is not there to learn (once per scenario, target only). */
-export async function extractTerms(original: string, target: Lang, context: string, model: ModelKey) {
+export async function extractTerms(original: string, target: Lang, context: string, ai: Caller) {
 	const T = LANG_NAMES[target];
 	const user = [
 		`A ${T} text from ${context}:`,
@@ -26,7 +26,7 @@ export async function extractTerms(original: string, target: Lang, context: stri
 		`List the words a learner translating this into ${T} could not be expected to know or find: names (people, characters, places, groups, titles) and terms of this community or field (fandom vocabulary, jargon, a word used in a special sense here). Not ordinary vocabulary, however advanced, and not the words any regular of this community uses every day ("lore", "pairing" in a fandom): those are what the learner is there to pick up. Terms are narrow jargon a newcomer could not produce. Each with kind "name" or "term" and a short note in ${T} saying what it is here (for a term, what it means in this community). A note says only what this text itself shows (who a name is to the others in it, what happens to them here); never add facts about a work or a person from memory, which are often wrong. When the text says little, the note says little ("a character in the story").`,
 		'Reply with JSON only: {"terms":[{"term":"exactly as written in the text","kind":"name|term","note":""}]}',
 	].join("\n");
-	return (await chatJson([{ role: "user", content: user }], TermsSchema, { model, effort: "low", tag: "translate/terms" })).value.terms;
+	return (await chatJson([{ role: "user", content: user }], TermsSchema, { ai, effort: "low", tag: "translate/terms" })).value.terms;
 }
 
 const SourceSchema = z.object({
@@ -48,7 +48,7 @@ export async function makeSource(
 	target: Lang,
 	native: Lang,
 	context: string,
-	model: ModelKey,
+	ai: Caller,
 	names: Map<string, string | null> = new Map(),
 ) {
 	const T = LANG_NAMES[target];
@@ -66,7 +66,7 @@ export async function makeSource(
 		`3. glossary: one entry per name and term listed above: term (as in the original), shown (exactly as it appears in your source), gloss (a short ${N} note: what it is here; for a name, who or what it names). Like the notes above, only what the text itself shows.`,
 		'Reply with JSON only: {"points":[["..."]],"source":["paragraph 1","paragraph 2"],"glossary":[{"term":"","shown":"","gloss":""}]}',
 	].join("\n");
-	return fixNames((await chatJson([{ role: "user", content: user }], SourceSchema, { model, tag: "translate/source" })).value, terms, names);
+	return fixNames((await chatJson([{ role: "user", content: user }], SourceSchema, { ai, tag: "translate/source" })).value, terms, names);
 }
 
 /**
@@ -118,7 +118,7 @@ const DriftSchema = z.object({
 });
 
 /** Read back blind (a translation of the source alone), then compared with the original paragraph by paragraph. */
-export async function checkSource(original: string[], source: string[], terms: Term[], target: Lang, native: Lang, model: ModelKey) {
+export async function checkSource(original: string[], source: string[], terms: Term[], target: Lang, native: Lang, ai: Caller) {
 	const T = LANG_NAMES[target];
 	const N = LANG_NAMES[native];
 	const back = await chat(
@@ -128,7 +128,7 @@ export async function checkSource(original: string[], source: string[], terms: T
 				content: `Translate this ${N} text into ${T}, paragraph by paragraph, closely, keeping names as written. Reply with the paragraphs only, numbered [1], [2]…\n\n${source.map((p, i) => `[${i + 1}] ${p}`).join("\n\n")}`,
 			},
 		],
-		{ model, effort: "low", tag: "translate/back" },
+		{ ai, effort: "low", tag: "translate/back" },
 	);
 	const user = [
 		`An original ${T} text, a ${N} version of it, and a close translation of that ${N} version back into ${T} (made without seeing the original).`,
@@ -140,7 +140,7 @@ export async function checkSource(original: string[], source: string[], terms: T
 		`List every place where a reader of the ${N} version would take away something the original does not say: a point missing, a point added, a meaning changed (who did what, what is compared, praise turned to blame, a claim turned into a question or a hedge), a name or term changed or mistranslated. Use the back-translation to see what that reader takes away, but it is a translation too: report only what the ${N} version itself says differently (quote its words), never what the back-translation alone added, dropped or misspelt. Not issues: wording that differs but says the same, a feeling a shade stronger or milder ("like" for "love", "smash" for "undermine"), and a register that fits the same kind of place in ${N} (a casual rant stays casual in its own way). kind: missing | added | changed | name | register; original and source: the words concerned; note: what is off, in English.`,
 		'Reply with JSON only: {"issues":[]}',
 	].join("\n");
-	const r = await chatJson([{ role: "user", content: user }], DriftSchema, { model, effort: "low", tag: "translate/check" });
+	const r = await chatJson([{ role: "user", content: user }], DriftSchema, { ai, effort: "low", tag: "translate/check" });
 	return { issues: r.value.issues, back: back.text.trim(), calls: [back, ...r.calls] };
 }
 
@@ -151,7 +151,7 @@ export async function repairSource(
 	issues: z.infer<typeof DriftSchema>["issues"],
 	target: Lang,
 	native: Lang,
-	model: ModelKey,
+	ai: Caller,
 ) {
 	const T = LANG_NAMES[target];
 	const N = LANG_NAMES[native];
@@ -163,6 +163,5 @@ export async function repairSource(
 		`Rewrite only what these issues need so the ${N} version says exactly what the original says, still natural ${N} in the same register, names as in the original. Every other word stays as it is.`,
 		'Reply with JSON only: {"source":["paragraph 1","paragraph 2"]}',
 	].join("\n");
-	return (await chatJson([{ role: "user", content: user }], z.object({ source: z.array(z.string()) }), { model, tag: "translate/repair" })).value
-		.source;
+	return (await chatJson([{ role: "user", content: user }], z.object({ source: z.array(z.string()) }), { ai, tag: "translate/repair" })).value.source;
 }

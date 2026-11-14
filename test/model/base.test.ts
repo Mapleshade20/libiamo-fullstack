@@ -1,11 +1,9 @@
-// pipeline/base.ts without model calls: the key is cleared before llm.ts loads, so any call fails.
+// pipeline/base.ts without model calls: the caller has no key, so any call stops.
 import assert from "node:assert/strict";
 import { test } from "vitest";
-
-process.env.OPENROUTER_API_KEY = "";
-process.env.OPENAI_API_KEY = "";
-const { analysisBase, rebase } = await import("#model/pipeline/base.ts");
-const { withLivePieces } = await import("#model/session/live.ts");
+import { Caller } from "#lib/server/llm/caller.ts";
+import { analysisBase, rebase } from "#model/pipeline/base.ts";
+import { withLivePieces } from "#model/session/live.ts";
 
 const draft = (text: string) => ({
 	id: "t",
@@ -32,7 +30,7 @@ test("spots away from every pass-1 change move onto the pass-1 text without a ca
 			map: [{ role: "x", what: "y", sentences: [3], status: "fix" }],
 			spots: [{ quote: "Clouds alone explain it?", problem: "p", sentences: [3], mode: "one", readings: [] }],
 		},
-		"haiku",
+		new Caller({ route: null }),
 	);
 	assert.equal(r.calls.length, 0);
 	assert.equal(r.analysis.spots[0].quote, "Clouds alone explain it?");

@@ -12,8 +12,8 @@
 // 3. the admin confirms every row of the work's table (wikis that refuse programs, such as the huiji Warriors wiki
 //    behind a bot check, are search links for them); only confirmed rows reach a source.
 import { z } from "zod";
+import { type Caller, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES, type Lang } from "../fixtures/types.ts";
-import { chatJson, type ModelKey } from "../llm.ts";
 import type { Term } from "./source.ts";
 
 export type Work = {
@@ -176,7 +176,7 @@ const JudgeSchema = z.object({
  * Which candidate is this very thing (same work, same character or place), and for what no source gave, the rendering
  * this language's community has settled on, if the model knows one; otherwise the original stays.
  */
-export async function judgeNames(original: string, context: string, terms: Term[], found: Candidate[][], locale: Lang, model: ModelKey, work?: Work) {
+export async function judgeNames(original: string, context: string, terms: Term[], found: Candidate[][], locale: Lang, ai: Caller, work?: Work) {
 	const L = LANG_NAMES[locale];
 	const user = [
 		`A text from ${context}${work ? ` (about ${work.title})` : ""}:`,
@@ -195,7 +195,7 @@ export async function judgeNames(original: string, context: string, terms: Term[
 		`For each: pick is the number of the candidate that is this very thing (the same work, the same character, place or thing; not a namesake), else null. When no candidate fits, proposal is the rendering ${L}-speaking fans or readers actually use, only if you know an established one (an official translation, a name the community has settled on); never coin one. null when there is none or you are not sure: the original is then kept. why: one short line, in English (for a proposal, where the rendering comes from).`,
 		'Reply with JSON only: {"names":[{"term":"","pick":null,"proposal":null,"why":""}]}',
 	].join("\n");
-	const r = (await chatJson([{ role: "user", content: user }], JudgeSchema, { model, tag: "translate/names" })).value.names;
+	const r = (await chatJson([{ role: "user", content: user }], JudgeSchema, { ai, tag: "translate/names" })).value.names;
 	return terms.map((t, i): NameRow => {
 		const j = r.find((x) => x.term === t.term) ?? r[i];
 		const c = j?.pick != null ? found[i][j.pick] : undefined;

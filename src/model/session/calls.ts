@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { aLearner, cap, type Draft, fbName, LANG_NAMES, type Lang, noteLines, pinLang, readerFrame } from "../fixtures/types.ts";
-import { chat, chatJson, type ModelKey } from "../llm.ts";
 import { readerSeat } from "../pass2/analyze.ts";
 import type { Material } from "../pass2/material.ts";
 import { words } from "../words.ts";
@@ -16,11 +16,11 @@ const SceneSchema = z.object({
 	purpose: z.string(),
 	target: z.enum(["en", "es", "fr", "ja"]),
 });
-export async function inferScene(text: string, background: string | undefined, learner: Lang, feedback: "native" | "target", model: ModelKey) {
+export async function inferScene(text: string, background: string | undefined, learner: Lang, feedback: "native" | "target", ai: Caller) {
 	// In "target" mode the writer reads everything in the language they are writing in, which only the draft tells.
 	const F = feedback === "native" ? LANG_NAMES[learner] : "the language the draft is written in (the target language)";
 	const user = `A language learner (their own language: ${LANG_NAMES[learner]}) pasted a draft they are about to post or send, with an optional note.\n\nNote: ${background ?? "(none)"}\n\nDraft:\n<<<\n${text}\n>>>\n\nSay where it will be posted (platform and kind of post), who will read it, what the writer wants to do, and target: the code of the language they are learning, the one most of the draft is written in (never their own language, even when the note or a passage is in it). platform, audience and purpose in ${F} (the writer reads them), whatever language the note is in, a short phrase each (at most about twelve words). The purpose says only what the draft and note show the writer doing; never add aims they do not show.\nAlso give site: the site or medium's short name as its users write it (a site name, or "Email"); community: where on it, as its users write it (a subreddit like r/name, a fic's title, a recipient), short; and reader: a plausible handle or name for one typical reader there, written the way that site shows names.\nAnd title: the piece as an item on the writer's list, in the language of the draft, starting with a verb, the way writing prompts are titled (for example "Reply to the author of “Long Way Home”", "Ask r/WarriorCats why StarClan never came", "Thank Sam for the playlist"); at most about eight words, naming who or what it is for.\nReply with JSON only: {"site":"","community":"","reader":"","title":"","platform":"","audience":"","purpose":"","target":"en|es|fr|ja"}`;
-	return (await chatJson([{ role: "user", content: user }], SceneSchema, { model, effort: "low", tag: "session/scene" })).value;
+	return (await chatJson([{ role: "user", content: user }], SceneSchema, { ai, effort: "low", tag: "session/scene" })).value;
 }
 
 // After the reader's read-back: the tutor answers the learner's confirmation or correction.
@@ -29,7 +29,7 @@ const OverviewSchema = z.object({
 	gist: z.string(),
 	newSpot: z.object({ where: z.string(), problem: z.string(), reading: z.string() }).nullable().optional(),
 });
-export async function overviewReply(d: Draft, text: string, readBack: string, gist: string, learnerSaid: string | null, model: ModelKey) {
+export async function overviewReply(d: Draft, text: string, readBack: string, gist: string, learnerSaid: string | null, ai: Caller) {
 	const L = fbName(d);
 	const user = [
 		...noteLines(d),
@@ -50,7 +50,7 @@ export async function overviewReply(d: Draft, text: string, readBack: string, gi
 		pinLang(d),
 		'Reply with JSON only: {"reply":"","gist":"","newSpot":null}',
 	].join("\n");
-	return (await chatJson([{ role: "user", content: user }], OverviewSchema, { model, effort: "low", tag: "session/overview" })).value;
+	return (await chatJson([{ role: "user", content: user }], OverviewSchema, { ai, effort: "low", tag: "session/overview" })).value;
 }
 
 /** The import itself, first, so the calls that carry it share a cached prefix. */
@@ -59,12 +59,12 @@ const importBlock = (source?: string) =>
 
 // R1: the learner typed what they mean instead of picking a reading. They may instead be saying the tutor misread the
 // spot (a name the tutor did not know, a line that is fine as it is): then nothing here needs fixing.
-export async function ownReading(d: Draft, text: string, spotText: string, problem: string, said: string, model: ModelKey, source?: string) {
+export async function ownReading(d: Draft, text: string, spotText: string, problem: string, said: string, ai: Caller, source?: string) {
 	const L = fbName(d);
 	const user = `${importBlock(source)}${[...noteLines(d), `The writer's ${LANG_NAMES[d.target]} post (${d.scene.platform}):`, "<<<", text, ">>>"].join("\n")}\n\nThey are fixing this part of it: "${spotText}"\nThe problem the tutor saw there: ${problem}\nAsked what they mean, they wrote: "${said}"\n\nfine: true when what they wrote says the problem is not real (the part already says what they mean, or the tutor misread it), so the part can stay as it is; false when they are telling you what they mean.\nreading: what they mean, as one clear ${L} sentence (keep their meaning, do not add to it).\nreply: to them in ${L}, one short sentence, informally: confirm what they mean, or, when fine, agree that the part can stay as it is.\n${pinLang(d)}\nReply with JSON only: {"fine":false,"reading":"","reply":""}`;
 	return (
 		await chatJson([{ role: "user", content: user }], z.object({ fine: z.boolean().default(false), reading: z.string(), reply: z.string() }), {
-			model,
+			ai,
 			effort: "low",
 			tag: "session/own",
 		})
@@ -87,7 +87,7 @@ export async function answerQuestion(
 	mine: string | null,
 	question: string,
 	ctx: QuestionContext,
-	model: ModelKey,
+	ai: Caller,
 	source?: string,
 ) {
 	const F = fbName(d);
@@ -121,7 +121,7 @@ export async function answerQuestion(
 		]
 			.filter((l) => l !== "")
 			.join("\n");
-	return (await chatJson([{ role: "user", content: user }], QuestionSchema, { model, tag: "session/question2" })).value;
+	return (await chatJson([{ role: "user", content: user }], QuestionSchema, { ai, tag: "session/question2" })).value;
 }
 
 // After the reference was revised in answer to a question: the explanation is redone for the new reference.
@@ -133,16 +133,16 @@ export async function explainRef(
 	ref: string,
 	mine: string | null,
 	ctx: { reading: string; problem: string },
-	model: ModelKey,
+	ai: Caller,
 ) {
 	const F = fbName(d);
 	const T = LANG_NAMES[d.target];
 	const user = `${[...noteLines(d), `${cap(aLearner(d))} of ${T} is revising this post for ${d.scene.platform}:`, "<<<", text, ">>>"].join("\n")}\n\nThey rewrote this part of it: "${m.replaces}"\nWhat was wrong with it: ${ctx.problem}\nWhat they mean (confirmed by them): ${ctx.reading}\nThe new reference version: "${ref}"\n${mine ? `Their own version: "${mine}"\n` : ""}\nExplain the reference: why, one entry per choice in it that the learner might not make themselves (label: the ${T} words, exactly as in the reference; note in ${F}: why this choice here, contrasted with what they wrote or would likely write; concrete, never "more natural" alone). alts: one or two other natural ways to say it. construct: the one reusable pattern it teaches, at most eight words, a ${T} frame with one placeholder. ${pinLang(d)}\nReply with JSON only: {"why":[{"label":"","note":""}],"alts":[],"construct":""}`;
-	return (await chatJson([{ role: "user", content: user }], ExplainSchema, { model, effort: "low", tag: "session/explain" })).value;
+	return (await chatJson([{ role: "user", content: user }], ExplainSchema, { ai, effort: "low", tag: "session/explain" })).value;
 }
 
 // R4: the reader reacts to the finished post.
-export async function closingReaction(d: Draft, text: string, model: ModelKey) {
+export async function closingReaction(d: Draft, text: string, ai: Caller) {
 	const system = readerSeat(d);
 	const frame = readerFrame(d);
 	const user = `${frame ? `${frame}\n\nThe post (the reply):\n` : ""}${d.title ? `${d.title}\n\n` : ""}${text}\n\nYou just read this post. Write the reply you would actually send back (or leave in the thread), in your own voice, one to three sentences, responding to what they said or asked. Reply with the reply only.`;
@@ -152,7 +152,7 @@ export async function closingReaction(d: Draft, text: string, model: ModelKey) {
 				{ role: "system", content: system },
 				{ role: "user", content: user },
 			],
-			{ model, effort: "low", tag: "session/closing" },
+			{ ai, effort: "low", tag: "session/closing" },
 		)
 	).text.trim();
 }
@@ -161,23 +161,23 @@ export async function closingReaction(d: Draft, text: string, model: ModelKey) {
 const CheckSchema = z.object({
 	issues: z.array(z.object({ kind: z.enum(["lost", "changed", "duplicated", "broken"]), quote: z.string(), note: z.string() })),
 });
-export async function contentCheck(d: Draft, before: string, after: string, decided: string[], model: ModelKey) {
+export async function contentCheck(d: Draft, before: string, after: string, decided: string[], ai: Caller) {
 	const L = fbName(d);
 	const user = `A writer revised their ${LANG_NAMES[d.target]} post sentence by sentence. Compare the version before the revision with the final one, as an editor protecting what the writer meant.\n\nBefore:\n<<<\n${before}\n>>>\n\nFinal:\n<<<\n${after}\n>>>\n${decided.length ? `\nDuring the revision the writer confirmed what they meant at these places; changes that follow these are intended:\n${decided.map((x) => `- ${x}`).join("\n")}\n` : ""}\nList only real problems in the final version: a point, detail, question or condition from before that is gone (lost); a claim whose meaning changed, e.g. a hedge or a hypothetical that became a flat statement (changed); text that appears twice (duplicated); a sentence that is broken where two pieces were joined (broken). Rewording, reordering and better phrasing are not problems. quote: the exact words from the final version (or, for lost, from before); note: one short ${L} sentence to the writer, informal. [] if there is nothing.\nReply with JSON only: {"issues":[{"kind":"lost|changed|duplicated|broken","quote":"","note":""}]}`;
-	return (await chatJson([{ role: "user", content: user }], CheckSchema, { model, effort: "low", tag: "session/check" })).value.issues;
+	return (await chatJson([{ role: "user", content: user }], CheckSchema, { ai, effort: "low", tag: "session/check" })).value.issues;
 }
 
 // R5: the hint pieces, explained on demand: what each means and how it is used, with an example far from this post.
 const PieceNotesSchema = z.object({ notes: z.array(z.object({ piece: z.string(), gloss: z.string(), example: z.string() })) });
 /** ref: the sentence the pieces come from (never shown), so each is glossed in the sense it has there ("alone" as "only"). */
-export async function pieceNotes(d: Draft, pieces: string[], model: ModelKey, ref?: string) {
+export async function pieceNotes(d: Draft, pieces: string[], ai: Caller, ref?: string) {
 	const F = fbName(d);
 	const T = LANG_NAMES[d.target];
 	const sense = ref
 		? `The sentence they are working towards, for you only (never quote it or give it away): "${ref}". Gloss each hint word in the sense it has in that sentence, not its most common sense ("alone" in "the clouds alone explain it" means "only", not "by oneself").\n\n`
 		: "";
 	const user = `${cap(aLearner(d))} of ${T} is rewriting part of a post. ${sense}Their hint words, exactly ${pieces.length}: ${pieces.map((p) => `"${p}"`).join(", ")}. "a / b" is a choice between two words.\n\nFor each of these hint words and no others, in this order: piece: the hint word as given. gloss: in ${F}, what it means here and how it is used, in one or two short sentences (the kind of word, what it goes with, register if it matters; for a choice, how the two differ). example: one short, natural ${T} sentence that uses it in the same sense, about everyday life and on a topic unrelated to the post (different people, events and subject), so it shows the word without giving away the sentence they are building.\nReply with JSON only: {"notes":[{"piece":"","gloss":"","example":""}]}`;
-	return (await chatJson([{ role: "user", content: user }], PieceNotesSchema, { model, effort: "low", tag: "session/pieces" })).value.notes;
+	return (await chatJson([{ role: "user", content: user }], PieceNotesSchema, { ai, effort: "low", tag: "session/pieces" })).value.notes;
 }
 
 /**
@@ -193,7 +193,7 @@ export async function hintFor(
 	text: string,
 	m: Material,
 	ctx: { problem: string; reading: string; attempt?: string; feedback?: string },
-	model: ModelKey,
+	ai: Caller,
 ) {
 	const F = fbName(d);
 	const T = LANG_NAMES[d.target];
@@ -218,7 +218,7 @@ export async function hintFor(
 	]
 		.filter((l) => l !== "")
 		.join("\n");
-	return (await chatJson([{ role: "user", content: user }], HintSchema, { model, tag: "session/hint" })).value;
+	return (await chatJson([{ role: "user", content: user }], HintSchema, { ai, tag: "session/hint" })).value;
 }
 
 /**
@@ -258,7 +258,7 @@ export function alreadyTheirs(phrase: string, before: string, after: string) {
 	const brought = letters(after).filter((w) => !had.has(w));
 	return !letters(phrase).some((w) => brought.includes(w));
 }
-export async function notesFor(d: Draft, items: NoteItem[], model: ModelKey): Promise<(NoteBody | null)[]> {
+export async function notesFor(d: Draft, items: NoteItem[], ai: Caller): Promise<(NoteBody | null)[]> {
 	if (!items.length) return [];
 	const F = fbName(d);
 	const T = LANG_NAMES[d.target];
@@ -280,7 +280,7 @@ export async function notesFor(d: Draft, items: NoteItem[], model: ModelKey): Pr
 		pinLang(d),
 		'Reply with JSON only: {"notes":[{"n":1,"lesson":"","file":true,"phrase":"","meaning":"","usage":"","examples":[{"t":"","n":""}]},{"n":2,"lesson":"","file":false}]}',
 	].join("\n");
-	const r = (await chatJson([{ role: "user", content: user }], NotesSchema, { model, effort: "low", tag: "session/notes" })).value.notes;
+	const r = (await chatJson([{ role: "user", content: user }], NotesSchema, { ai, effort: "low", tag: "session/notes" })).value.notes;
 	return items.map((x, i) => {
 		const y = r.find((z) => z.n === i + 1);
 		if (!y?.file || !y.phrase || !y.meaning || alreadyTheirs(y.phrase, x.before, x.after)) return null;
@@ -295,7 +295,7 @@ export async function notesFor(d: Draft, items: NoteItem[], model: ModelKey): Pr
  * understand the draft (what happens or what is said, what the draft refers to and answers, how people write there),
  * longer for a longer import.
  */
-export async function briefFor(draft: string, note: string | undefined, source: string, model: ModelKey) {
+export async function briefFor(draft: string, note: string | undefined, source: string, ai: Caller) {
 	const size = words(source).length;
 	const limit = Math.max(350, Math.min(900, Math.round(size / 20 / 50) * 50));
 	const user = [
@@ -322,5 +322,5 @@ export async function briefFor(draft: string, note: string | undefined, source: 
 	]
 		.filter((l) => l !== "")
 		.join("\n");
-	return (await chat([{ role: "user", content: user }], { model, effort: "low", tag: "session/brief" })).text.trim();
+	return (await chat([{ role: "user", content: user }], { ai, effort: "low", tag: "session/brief" })).text.trim();
 }

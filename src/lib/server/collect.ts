@@ -1,10 +1,12 @@
-import { MODELS, type ModelKey } from "#model/llm.ts";
+import { learner } from "#lib/server/guard.ts";
+import { learnerCaller } from "#lib/server/llm/callers.ts";
+import type { CollectInput } from "#model/collect.ts";
 
-// What both of the stealing notebook's calls take (src/collect.ts).
-export const collectInput = (b: Record<string, unknown>) => ({
+// What both of the stealing notebook's calls take (src/model/collect.ts), on the learner's own key.
+export const collectInput = async (b: Record<string, unknown>): Promise<CollectInput> => ({
 	passage: String(b.passage ?? "").slice(0, 12_000),
 	lang: String(b.lang ?? "en"),
 	native: String(b.native ?? "en"),
-	feedback: b.feedback === "target" ? ("target" as const) : ("native" as const),
-	model: (String(b.model) in MODELS ? b.model : "haiku") as ModelKey,
+	feedback: b.feedback === "target" ? "target" : "native",
+	ai: (await learnerCaller({ user: learner() })).for("collect"),
 });

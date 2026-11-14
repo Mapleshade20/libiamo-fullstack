@@ -2,12 +2,12 @@
 // fills in every highlight at once (what it means here, how it sounds, what makes it worth taking, one example of their
 // own to imitate); a second answers their questions about one of them. Nothing here writes for the learner.
 import { z } from "zod";
+import { type Caller, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES } from "./fixtures/types.ts";
-import { chat, chatJson, type ModelKey } from "./llm.ts";
 
 const NAME = LANG_NAMES as Record<string, string>;
 export type Highlight = { n: number; text: string };
-export type CollectInput = { passage: string; lang: string; native: string; feedback: "native" | "target"; model: ModelKey };
+export type CollectInput = { passage: string; lang: string; native: string; feedback: "native" | "target"; ai: Caller };
 
 // Lenient where a model's slip should not cost the learner their highlight: a number as a string, a register named
 // differently (it falls back to neutral).
@@ -58,7 +58,7 @@ export async function explain(d: CollectInput, given: Highlight[], retry = 0): P
 		`Reply with JSON only: {"items":[{"n":1,"phrase":"","meaning":"","register":"neutral","why":"","example":"","span":""}]}`,
 	].join("\n");
 	const { value } = await chatJson([{ role: "user", content: user }], z.object({ items: z.array(Item) }), {
-		model: d.model,
+		ai: d.ai,
 		effort: "low",
 		tag: "collect/explain",
 		sample: retry,
@@ -90,5 +90,5 @@ export async function ask(d: CollectInput, phrase: string, history: Turn[], ques
 		]),
 		{ role: "user" as const, content: question },
 	];
-	return (await chat(msgs, { model: d.model, effort: "low", tag: "collect/ask" })).text.trim();
+	return (await chat(msgs, { ai: d.ai, effort: "low", tag: "collect/ask" })).text.trim();
 }

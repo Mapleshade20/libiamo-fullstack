@@ -31,6 +31,24 @@ export type TutorLanguage = (typeof TUTOR_LANGUAGES)[number];
 /** Where a learner's own key comes from. */
 export const KEY_PROVIDERS = ["openrouter", "deepseek", "openai", "glm"] as const;
 export type KeyProvider = (typeof KEY_PROVIDERS)[number];
+
+/* Pieces and their revision (src/lib/server/db/schema.ts). */
+/** Where a piece came from: the learner's own writing, a scenario's exchange, a translation scenario. */
+export const PIECE_KINDS = ["own", "scenario", "translation"] as const;
+export type PieceKind = (typeof PIECE_KINDS)[number];
+/** writing: a scenario still being played or a translation on its sheet; revising: inside the two passes. */
+export const PIECE_STATES = ["writing", "revising", "finished", "set_aside"] as const;
+export type PieceState = (typeof PIECE_STATES)[number];
+/** How much the tutor brings up: what needs changing, or also what could be put better. */
+export const DETAILS = ["needed", "more"] as const;
+export type Detail = (typeof DETAILS)[number];
+/** What the learner answered when asked whether they posted it. */
+export const POSTED = ["yes", "not_yet", "no"] as const;
+export type Posted = (typeof POSTED)[number];
+/** How a model call ended: repaired is a reply that validated only after one repair; discarded, made ahead of need and never used. */
+export const CALL_STATES = ["done", "failed", "repaired", "discarded"] as const;
+export type CallState = (typeof CALL_STATES)[number];
+
 /* Password bounds. The upper one keeps zxcvbn (superlinear in the length) quick; the field stops typing there. */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;

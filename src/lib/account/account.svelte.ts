@@ -24,7 +24,6 @@ import type { Me } from "./me.ts";
  */
 export type { Me, Via } from "./me.ts";
 
-export const RECOMMENDED_KEY = { provider: "openrouter", model: "~anthropic/claude-haiku-latest" };
 const NOBODY: Me = {
 	email: "",
 	name: "",
