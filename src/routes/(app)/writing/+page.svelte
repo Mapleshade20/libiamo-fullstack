@@ -29,7 +29,8 @@ $effect(() => {
 				>
 					<div class="main">
 						<div class="title">{w.title}</div>
-						<p class="sub">{w.site} · {whenOf(w)}</p>
+						<!-- A piece whose scene has not come yet has no place to name. -->
+						<p class="sub">{[w.site, whenOf(w)].filter(Boolean).join(" · ")}</p>
 					</div>
 					<span class="tag" class:on={w.open}>{tx(STATE[w.open ? "open" : (w.state ?? "revised")])}</span>
 				</a>

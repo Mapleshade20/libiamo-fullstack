@@ -11,11 +11,13 @@ import { autogrow, shake } from "#lib/components/common/motion.ts";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, tx } from "#lib/demo/app.svelte.ts";
-import { practised, recordWriting, writingById } from "#lib/demo/data.ts";
+import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
+import { keptPiece, practised } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { scenarioById, situationOf } from "#lib/demo/scenarios.ts";
 import { markReused, reused } from "#lib/review/reuse.ts";
+import { pieceById } from "#lib/writing/writing.remote.ts";
+import { wroteAgain } from "#lib/writing/writing.svelte.ts";
 import { page } from "$app/state";
 
 /*
@@ -23,7 +25,8 @@ import { page } from "$app/state";
  * formulation, in use. No model call: the new text is laid beside the settled one, and the phrases worked out last
  * time are marked where they came back. It makes a light day of the week, as review does.
  */
-const w = $derived(writingById(page.params.id ?? ""));
+const id = $derived(page.params.id ?? "");
+const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const scenario = $derived(w?.scenarioId ? scenarioById(w.scenarioId) : undefined);
 const s = $derived(scenario ? situationOf(scenario) : undefined);
@@ -38,7 +41,7 @@ const runs = $derived(done ? markReused(text, phrases) : []);
 async function compare() {
 	if (!text.trim() || !w) return shake(area);
 	done = true;
-	recordWriting({ id: w.id, again: { text, at: Date.now() } });
+	wroteAgain(w.id, text).catch(() => toast(tx("error")));
 	practised("learned");
 	await tick();
 	document

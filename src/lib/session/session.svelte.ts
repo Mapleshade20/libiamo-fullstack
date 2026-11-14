@@ -5,9 +5,10 @@ import FixCard from "#lib/components/session/FixCard.svelte";
 import NoteCard from "#lib/components/session/NoteCard.svelte";
 import { isAppLang } from "#lib/constants.ts";
 import { app, forget, read, sandboxed, write } from "#lib/demo/app.svelte.ts";
-import { type Learned, myWriting, type NoteBody, practised, recordWriting } from "#lib/demo/data.ts";
+import { practised } from "#lib/demo/data.ts";
 import { checkCall, type Stop as Halt, LimitError, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
+import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import { goto } from "$app/navigation";
 import { Cancelled, Clock, reduced, SLOW } from "./clock";
 import type { Post, Who } from "./post";
@@ -381,16 +382,8 @@ export class Session {
 	/* ---------- The scene ---------- */
 	private async readScene() {
 		const s = await this.once("scene", () => this.api<Scene>("scene"));
-		// From here it is one of the learner's pieces in My writing: unfinished until the revision ends.
-		const q = this.setup.scenario;
-		recordWriting({
-			id: this.sid,
-			title: q?.title || s.title || this.setup.text.split(/\s+/).slice(0, 8).join(" "),
-			site: q?.site || s.site || s.platform,
-			lang: s.target,
-			open: true,
-			scenarioId: q?.id,
-		});
+		// The scene names the piece and its place: the lists say so.
+		refreshWriting();
 		return s;
 	}
 	private async applyScene(s: Scene) {
@@ -1440,7 +1433,7 @@ export class Session {
 		const own = done.filter((r) => r.text && r.self && !r.skipped);
 		const given = done.filter((r) => r.text && (r.gave || r.skipped));
 		// Pass-1 changes the learner did not make on their own (a fix or a choice they got right is theirs already); the
-		// notes call says which of these and of pass 2's parts earn an entry (src/session/calls.ts notesFor).
+		// notes call says which of these and of pass 2's parts earn an entry (server/revision/pass2 notesFor).
 		const p1 = this.pass1.flatMap((st, i) => {
 			const o = outcomeOf(st, this.answers[i]);
 			if (o.kept || o.deferred || st.kind === "quiet" || st.kind === "tick" || st.kind === "defer") return [];
@@ -1451,56 +1444,13 @@ export class Session {
 			.slice(0, 6)
 			.map((r) => ({ text: r.construct ?? "", own: own.includes(r), before: r.orig || r.before, final: r.text }));
 		const el = this.newStop();
-		const fin = await this.generate(el, () => this.api<{ closing: string; issues: { quote: string; note: string }[] }>("end"));
-		const pid = this.sid;
-		const asking = own.length + given.length + p1.length > 0;
-		// The finished piece keeps what its page shows (/w/<id>): the text, the reader's reply, what was worked out.
-		recordWriting({
-			id: pid,
-			open: false,
-			state: "revised",
-			result: {
-				original: this.setup.text,
-				final: this.post?.plainText() ?? "",
-				closing: fin.closing,
-				reader: this.readerName,
-				learned: asBefore,
-				...(asking ? { notesPending: Date.now() } : {}),
-				leftovers: fin.issues.map((x) => ({ quote: x.quote, note: x.note })),
-				finishedAt: Date.now(),
-				...(this.setup.translation ? { authentic: this.setup.translation.original } : {}),
-			},
-		});
-		// The entries are chosen and written after the learner has moved on (one call); what pass 2 reworked stands in
-		// meanwhile, and stays if the call fails. Rebuilt parts come first, then those given, then pass 1's.
-		if (asking) {
-			const order = [
-				...own.map((r) => ({ id: r.id, own: true })),
-				...given.map((r) => ({ id: r.id, own: false })),
-				...p1.map((id) => ({ id, own: false })),
-			];
-			const settle = (learned?: Learned[]) => {
-				const w = myWriting().find((x) => x.id === pid);
-				if (w?.result) recordWriting({ id: pid, result: { ...w.result, ...(learned ? { learned } : {}), notesPending: undefined } });
-			};
-			this.api<Record<string, { note: NoteBody | null; orig: string; final: string; was?: string }>>("notes", {
-				items: [...own, ...given].map((r) => ({ id: r.id, orig: r.orig || r.before || "", final: r.text ?? "" })),
-				p1,
-			})
-				.then((notes) =>
-					settle(
-						order
-							.flatMap(({ id, own }) => {
-								const n = notes[id];
-								return n?.note ? [{ text: n.note.phrase, own, before: n.orig, final: n.final, ...(n.was ? { was: n.was } : {}), note: n.note }] : [];
-							})
-							.slice(0, 6),
-					),
-				)
-				.catch(() => settle());
-		}
+		// The piece is finished on the server, which then writes its notebook entries (one call, after the learner has
+		// moved on): rebuilt parts first, then those given, then pass 1's. What pass 2 reworked stands in meanwhile.
+		const items = [...own, ...given].map((r) => ({ id: r.id, orig: r.orig || r.before || "", final: r.text ?? "", own: own.includes(r) }));
+		await this.generate(el, () => this.api("end", { learned: asBefore, notes: { items, p1 } }));
+		await refreshWriting();
 		// Finishing a piece counts towards the learner's day; the home page pours the glass when it is full.
 		practised("learned");
-		goto(`/w/${encodeURIComponent(pid)}`);
+		goto(`/w/${this.sid}`);
 	}
 }

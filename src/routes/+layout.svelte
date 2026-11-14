@@ -6,12 +6,9 @@ import "#lib/components/shell/sheet.css";
 import type { Snippet } from "svelte";
 import Toast from "#lib/components/shell/Toast.svelte";
 import Tour from "#lib/components/tour/Tour.svelte";
-import { tidyWriting } from "#lib/demo/data.ts";
 import { onNavigate } from "$app/navigation";
 
 let { children }: { children: Snippet } = $props();
-// Copies of one piece that older builds left in My writing are folded into one.
-tidyWriting();
 
 /*
  * Every navigation is a view transition (the root owns them, as in the main app). Pages name the parts that carry

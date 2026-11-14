@@ -32,7 +32,7 @@ const run = $derived.by(() => {
 	return n;
 });
 const total = $derived(weeks.reduce((n, w) => n + w.days.filter((d) => d === "full").length, 0));
-const pieces = $derived(myWriting().filter((w) => w.result).length);
+const pieces = $derived(myWriting().filter((w) => w.finishedAt).length);
 const phrases = $derived(reviewDeck().length);
 const months = $derived(
 	weeks.map((w, i) =>

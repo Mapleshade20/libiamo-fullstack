@@ -57,6 +57,7 @@ export const CONTENT: Record<string, TourContent> = {
 			site: "AO3",
 			lang: "en",
 			at: now,
+			open: false,
 			state: "revised",
 			result: {
 				original:

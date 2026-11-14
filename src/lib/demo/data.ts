@@ -1,6 +1,7 @@
 import type { Face } from "#lib/review/faces.ts";
+import type { PieceItem, PieceResult } from "#lib/writing/types.ts";
+import { writing } from "#lib/writing/writing.svelte.ts";
 import { app, read, sandboxed, tx, write } from "./app.svelte";
-import { foldCopies } from "./fold";
 
 /* ---------- Sites a piece can be for, with their cover colours (light stamp, dark band) and drawing ---------- */
 export type SiteArt = "quill" | "bubble" | "letter" | "hash" | "chat" | "cards";
@@ -23,7 +24,8 @@ export const siteOf = (name: string | undefined) =>
 	];
 
 /* ---------- The learner's writing ---------- */
-/** What the home page hands the session page, and what reopening a piece hands it again. */
+/** What a scenario's page hands the revision when the learner comes back to a piece set aside (phase 4 moves these
+ *  to the server). */
 export type Handoff = {
 	text: string;
 	background?: string;
@@ -31,239 +33,52 @@ export type Handoff = {
 	lang: string;
 	learner: string;
 	feedback: string;
-	model?: string;
-	grader?: string;
-	cache?: string;
-	pieceId?: string;
 };
-export type Writing = {
-	id: string;
-	title: string;
-	site: string;
-	lang?: string;
-	/** Stand-ins say when in words; real pieces carry a timestamp. */
-	when?: "today" | "yesterday" | "mon" | "last";
-	at?: number;
-	open?: boolean;
-	state?: "posted" | "revised";
-	handoff?: Handoff;
-	/** The scenario it answers, when it came from one. */
-	scenarioId?: string;
-	/** What the finished session left (the piece's page shows it). */
-	result?: PieceResult;
-	/** The follow-up: whether the learner says they posted it, and when they were last asked. */
-	posted?: "yes" | "not-yet" | "no";
-	askedAt?: number;
-	/** Written again from memory a few days on (the follow-up), and when. */
-	again?: { text: string; at: number };
-};
-/** One thing the learner worked out in the session: the phrase they settled on, and whether they found it themselves. */
-/** A notebook entry's body, written when the piece is finished (src/session/calls.ts notesFor). */
-export type NoteBody = { phrase: string; meaning: string; usage: string; examples: { t: string; n: string }[] };
-/** text: the tutor's pattern; before: what the learner first wrote there; final: what they settled on. */
-/** was: for a pass-1 change, just the words it replaced (before and final are then its whole sentence). */
-export type Learned = { text: string; own: boolean; before?: string; final?: string; was?: string; note?: NoteBody };
-export type PieceResult = {
-	original: string;
-	final: string;
-	/** The reader's reaction to the final version. */
-	closing: string;
-	reader: string;
-	learned: Learned[];
-	/**
-	 * While the notebook entries are being chosen and written (since when): `learned` meanwhile holds what pass 2
-	 * reworked, which stands if the call fails or the page was left before it came back.
-	 */
-	notesPending?: number;
-	/** What the final check still flagged, and what pass 2 left alone. */
-	leftovers: { quote: string; note: string }[];
-	/** A translation's text as it was first written, shown beside the learner's final version. */
-	authentic?: string;
-	finishedAt: number;
-};
-/** Whether a piece's notebook entries are still on their way (a call takes seconds; after two minutes it is given up). */
-export const notesPending = (r: PieceResult | undefined, now = Date.now()) => !!r?.notesPending && now - r.notesPending < 120_000;
-const STAND_INS: Record<string, Writing[]> = {
-	en: [
-		{ id: "w1", title: "Reply to the author of “Long Way Home”", site: "AO3", when: "today", open: true, scenarioId: "ao3-fic" },
-		{
-			id: "w2",
-			title: "Ask r/WarriorCats why StarClan never came",
-			site: "Reddit",
-			when: "yesterday",
-			state: "posted",
-			posted: "yes",
-			result: {
-				original:
-					"I have a question that I can't understand for a long time. When the Clans were at the Moonstone and the sky is overcast, StarClan didn't show up. Darktail went really miserable and furious for that, he think StarClan abandoned them.\n\nBut I think it is not StarClan's fault, maybe the clouds alone explain it?",
-				final:
-					"Here's something I've never quite understood. When the Clans went to the Moonstone on an overcast night, StarClan didn't show up. It left Darktail miserable and furious, and he decided StarClan had abandoned them.\n\nBut I don't think that was StarClan's fault. Couldn't the clouds alone explain it?",
-				closing:
-					"Ooh, the clouds theory is actually solid. In the books the Moonstone only works when moonlight hits it, so an overcast night would block it anyway. Nice catch.",
-				reader: "u/frostkit",
-				learned: [
-					{ text: "it left him miserable and furious", own: true, before: "he went really miserable and furious for that" },
-					{ text: "Here's something I've never quite understood", own: false, before: "I have a question that I can't understand for a long time" },
-					{ text: "Couldn't the clouds alone explain it?", own: true, before: "maybe the clouds alone explain it?" },
-				],
-				leftovers: [{ quote: "on an overcast night", note: "Fine as it is; “under a cloudy sky” would sound more like the books." }],
-				finishedAt: Date.now() - 864e5,
-			},
-		},
-		{
-			id: "w3",
-			title: "Ask Professor Lin for a week's extension",
-			site: "Email",
-			when: "mon",
-			state: "revised",
-			scenarioId: "email-extension",
-			result: {
-				original:
-					"Dear Professor Lin,\n\nI want to ask if I can have one more week for the essay. Because my grandmother is in hospital and I go there every day.\n\nThank you,\nMaple",
-				final:
-					"Dear Professor Lin,\n\nWould it be possible to have one more week for the comparative essay? My grandmother is in hospital and I've been visiting her every day, so I haven't been able to give it the time it needs.\n\nThank you for considering it,\nMaple",
-				closing: "Of course. I'm sorry to hear about your grandmother. Take until next Friday, and let me know if you need anything else.",
-				reader: "Prof. Hannah Lin",
-				learned: [
-					{ text: "Would it be possible to have", own: false, before: "I want to ask if I can have" },
-					{ text: "I've been visiting her every day", own: true, before: "I go there every day" },
-				],
-				leftovers: [],
-				finishedAt: Date.now() - 3 * 864e5,
-			},
-		},
-		{
-			id: "w4",
-			title: "Tell #book-club why the ending worked",
-			site: "Discord",
-			when: "last",
-			state: "posted",
-			posted: "yes",
-			scenarioId: "discord-ending",
-			result: {
-				original:
-					"i'm with theo actually\nthe letters in ch 9 is not just setup, she already forgive him there, she just don't say it\nso the ending is only her saying it loud",
-				final:
-					"i'm with theo actually\nthe letters in ch 9 aren't just setup, she's already forgiven him there, she just doesn't say it\nso the ending is just her saying it out loud",
-				closing: "ok that's... a good point. the letter where she keeps his drawing",
-				reader: "juniper",
-				learned: [
-					{ text: "she's already forgiven him", own: true, before: "she already forgive him" },
-					{ text: "saying it out loud", own: false, before: "saying it loud" },
-				],
-				leftovers: [],
-				finishedAt: Date.now() - 6 * 864e5,
-			},
-		},
-		{
-			id: "w5",
-			title: "Thank Sam for the birthday playlist",
-			site: "iMessage",
-			when: "last",
-			state: "revised",
-			scenarioId: "imessage-thanks",
-			result: {
-				original: "omg sam thank you!!\nthe 4th song make me cry on the bus, how you know i love that band\nthe name is so weird but correct lol",
-				final:
-					"omg sam thank you!!\nthe 4th song made me cry on the bus, how did you know i love that band\nthe name is so weird but so accurate lol",
-				closing: "HAHA i knew it. happy birthday you dramatic bus crier 💛",
-				reader: "Sam",
-				learned: [
-					{ text: "how did you know", own: true, before: "how you know" },
-					{ text: "so weird but so accurate", own: false, before: "so weird but correct" },
-				],
-				leftovers: [],
-				finishedAt: Date.now() - 8 * 864e5,
-			},
-		},
-	],
-};
+/**
+ * A piece in the lists. The server keeps the learner's pieces (lib/writing); this device still keeps a scenario set
+ * aside before its revision began (with the handoff to start it), and the tour's pieces in its sandbox (with the result
+ * its page shows).
+ */
+export type Writing = PieceItem & { handoff?: Handoff; result?: PieceResult };
+export type { Learned, NoteBody, PieceResult } from "#lib/writing/types.ts";
+export { notesPending } from "#lib/writing/types.ts";
+
 export const WRITING_KEY = "myWriting";
-/** The learner's pieces in the language being worked in, newest first: theirs from this device, then the stand-ins
- *  (with whatever this device recorded about them: posted, written again). */
+const PIECE_ID = /^[0-9a-f-]{36}$/;
+/** What this device keeps, as the lists read it (a piece with a server id is the server's, never this device's). */
+function kept(): Writing[] {
+	return read<Writing[]>(WRITING_KEY, [])
+		.filter((w) => sandboxed() || !PIECE_ID.test(w.id))
+		.map((w) => ({
+			...w,
+			at: w.at ?? 0,
+			open: !!w.open,
+			finishedAt: w.finishedAt ?? w.result?.finishedAt,
+			learned: w.learned ?? w.result?.learned,
+			notesPending: w.notesPending ?? w.result?.notesPending,
+		}));
+}
+/** The learner's pieces in the language being worked in, newest first. */
 export function myWriting(): Writing[] {
 	void app.version;
-	const stored = read<Writing[]>(WRITING_KEY, []);
-	// The tour shows only its own stand-ins (lib/components/tour/content.ts), a few, so nothing crowds them.
-	const stand = sandboxed() ? [] : (STAND_INS[app.lang] ?? []);
-	const ids = new Set(stand.map((w) => w.id));
-	const real = stored.filter((w) => !ids.has(w.id) && w.lang === app.lang).sort((x, y) => (y.at ?? 0) - (x.at ?? 0));
-	return [...real, ...stand.map((w) => ({ ...w, ...stored.find((x) => x.id === w.id), at: w.at }))];
+	const server = sandboxed() ? [] : writing.list;
+	return [...server, ...kept()].filter((w) => w.lang === app.lang).sort((x, y) => y.at - x.at);
 }
-/** One piece by its id, in whichever language it was written: a link to it works from any workspace. */
-export function writingById(id: string): Writing | undefined {
+/** One piece this device keeps, by its id (the tour's, in its sandbox). */
+export function keptPiece(id: string): Writing | undefined {
 	void app.version;
-	const stored = read<Writing[]>(WRITING_KEY, []);
-	const stand = sandboxed()
-		? undefined
-		: Object.values(STAND_INS)
-				.flat()
-				.find((w) => w.id === id);
-	const own = stored.find((w) => w.id === id);
-	return stand ? { ...stand, ...own, at: stand.at } : own;
-}
-export function tidyWriting() {
-	renameQuests();
-	const all = read<Writing[]>(WRITING_KEY, []);
-	// Before a piece kept its id when the learner went back into it, every return filed a new copy (2026-11-06).
-	const folded = foldCopies(
-		all,
-		new Set(
-			Object.values(STAND_INS)
-				.flat()
-				.map((w) => w.id),
-		),
-	);
-	if (folded.length < all.length) {
-		write(WRITING_KEY, folded);
-		app.touch();
-	}
-}
-/** What admins write is called a scenario everywhere since 2026-11-09; what this device kept under the old word
- *  (a piece's link to it, the handoff to reopen it, a plan written before it) is moved to the new one, once. */
-function renameQuests() {
-	type Old = Writing & { questId?: string; handoff?: Handoff & { quest?: unknown } };
-	const all = read<Old[]>(WRITING_KEY, []);
-	let moved = false;
-	for (const w of all) {
-		if (w.questId !== undefined) {
-			w.scenarioId ??= w.questId;
-			delete w.questId;
-			moved = true;
-		}
-		if (w.handoff && "quest" in w.handoff) {
-			(w.handoff as Record<string, unknown>).scenario ??= w.handoff.quest;
-			delete w.handoff.quest;
-			moved = true;
-		}
-	}
-	if (moved) write(WRITING_KEY, all);
-	if (typeof localStorage === "undefined") return;
-	for (const k of Object.keys(localStorage)) {
-		if (!k.startsWith("questPlan:")) continue;
-		const to = `scenarioPlan:${k.slice("questPlan:".length)}`;
-		if (localStorage.getItem(to) === null) localStorage.setItem(to, localStorage.getItem(k) ?? "");
-		localStorage.removeItem(k);
-	}
+	return kept().find((w) => w.id === id);
 }
 export function recordWriting(entry: Partial<Writing> & { id: string }) {
 	const all = read<Writing[]>(WRITING_KEY, []);
 	const at = all.findIndex((w) => w.id === entry.id);
 	if (at >= 0) all[at] = { ...all[at], ...entry };
-	else
-		all.push(
-			Object.values(STAND_INS)
-				.flat()
-				.some((w) => w.id === entry.id)
-				? (entry as Writing)
-				: { title: "", site: "", at: Date.now(), ...entry },
-		);
+	else all.push({ title: "", site: "", lang: app.lang, open: false, at: Date.now(), ...entry });
 	write(WRITING_KEY, all);
 	app.touch();
 }
 /** When a piece was last touched, as a list says it: today, yesterday, or the date. */
 export function whenOf(w: Writing): string {
-	if (!w.at) return tx(`when_${w.when}`);
 	const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(w.at).setHours(0, 0, 0, 0)) / 864e5);
 	return days === 0
 		? tx("when_today")
@@ -474,11 +289,11 @@ export const todayKind = () => weekDays().find((d) => d.today)?.kind ?? "none";
    "not yet"), then, three days on, writing it again from memory. */
 export type FollowUp = { kind: "posted" | "again"; w: Writing };
 export function followUp(now = Date.now()): FollowUp | undefined {
-	const done = myWriting().filter((w) => w.result);
+	const done = myWriting().filter((w) => w.finishedAt);
 	// A scenario's piece was sent in the simulation already: nothing to ask about posting.
 	const ask = done.find((w) => !w.scenarioId && (!w.posted || (w.posted === "not-yet" && now - (w.askedAt ?? 0) > 864e5)));
 	if (ask && !(ask.posted === "not-yet")) return { kind: "posted", w: ask };
-	const again = done.find((w) => !w.again && now - (w.result as PieceResult).finishedAt >= 3 * 864e5 - 36e5);
+	const again = done.find((w) => !w.again && now - (w.finishedAt ?? now) >= 3 * 864e5 - 36e5);
 	if (again) return { kind: "again", w: again };
 	return ask ? { kind: "posted", w: ask } : undefined;
 }

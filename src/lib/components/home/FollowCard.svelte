@@ -3,7 +3,8 @@ import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Send from "@lucide/svelte/icons/send";
 import Button from "#lib/components/ui/button/button.svelte";
 import { toast, tx } from "#lib/demo/app.svelte.ts";
-import { type FollowUp, recordWriting, siteOf } from "#lib/demo/data.ts";
+import { type FollowUp, siteOf } from "#lib/demo/data.ts";
+import { setPosted } from "#lib/writing/writing.svelte.ts";
 
 /*
  * The shelf's follow-up: one piece, one question. Whether it was posted (answered in place; the card then gives way),
@@ -13,8 +14,10 @@ import { type FollowUp, recordWriting, siteOf } from "#lib/demo/data.ts";
 let { f }: { f: FollowUp } = $props();
 const st = $derived(siteOf(f.w.site));
 function answer(v: "yes" | "not-yet" | "no") {
-	recordWriting({ id: f.w.id, posted: v, state: v === "yes" ? "posted" : f.w.state, askedAt: Date.now() });
-	toast(tx(v === "yes" ? "pcPostedThanks" : "fuNoted"));
+	setPosted(f.w.id, v).then(
+		() => toast(tx(v === "yes" ? "pcPostedThanks" : "fuNoted")),
+		() => toast(tx("error")),
+	);
 }
 </script>
 

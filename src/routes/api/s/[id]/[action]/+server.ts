@@ -1,7 +1,8 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
 import type { RevisionSession } from "#lib/server/revision/revision.ts";
-import { act, bookmark, openRevision, pieceFor, reloadRevision, updatePiece } from "#lib/server/revision/store.ts";
+import { act, bookmark, dropRevision, fileNotes, openRevision, pieceFor, reloadRevision, updatePiece } from "#lib/server/revision/store.ts";
+import { NoteAsk, StandIn } from "#lib/server/writing/learned.ts";
 import { dev } from "$app/env";
 
 // Each action is one step of the revision page's flow (src/lib/session/session.svelte.ts); `id` is the piece's.
@@ -24,7 +25,7 @@ const ACTIONS: Record<string, (s: RevisionSession, b: any) => unknown> = {
 	apply: (s, b) => s.apply(b.id, b.final, !!b.self),
 	keep: (s, b) => s.keep(b.id),
 	resetP2: (s) => s.resetP2(),
-	end: (s) => s.end(),
+	end: (s, b) => s.end(b.notes ? NoteAsk.safeParse(b.notes).data : undefined),
 	replay: (s, b) => s.replay(Number(b.turn), String(b.text ?? "")),
 };
 
@@ -78,8 +79,11 @@ export async function POST({ params, request }) {
 			await updatePiece(params.id, { title: sc.title || undefined, place: sc.site || sc.platform, language: sc.target });
 		}
 		if (params.action === "end") {
-			// The piece is finished: what its page shows is on its row from now on.
+			// The piece is finished: what its page shows is on its row from now on. Its notebook entries are written next,
+			// on the server; what pass 2 reworked stands in until they are.
 			const e = out as Awaited<ReturnType<RevisionSession["end"]>>;
+			const ask = h.session.noteAsk;
+			const asking = !!ask && ask.items.length + ask.p1.length > 0;
 			await updatePiece(params.id, {
 				state: "finished",
 				finishedAt: new Date(),
@@ -88,7 +92,12 @@ export async function POST({ params, request }) {
 				leftovers: e.issues.map((x) => ({ quote: x.quote, note: x.note })),
 				reader: h.session.scene?.reader ?? null,
 				authentic: h.session.input.translation?.original ?? null,
+				learned: StandIn.safeParse(b.learned).data ?? [],
+				notesRequestedAt: asking ? new Date() : null,
 			});
+			// Nothing to file: the revision is not needed again (a page that sends no request, a replay, asks `notes` itself).
+			if (asking) void fileNotes(u, params.id);
+			else if (ask) await dropRevision(params.id);
 		}
 		return Response.json(out);
 	} catch (e) {

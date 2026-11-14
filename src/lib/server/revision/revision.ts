@@ -222,6 +222,8 @@ export class RevisionSession {
 	private p1view?: { doc: Doc; stops: unknown[] };
 	/** The page's own bookmark (what the learner answered so far, which stops are behind them): see `resume`. */
 	private page: Record<string, unknown> | null = null;
+	/** What the notebook is asked for once the revision has ended (server/writing/learned.ts), until it is filed. */
+	noteAsk?: { items: { id: string; orig: string; final: string; own: boolean }[]; p1: string[] };
 	/** The import without the writer's own draft, and the brief every later call reads instead of it. */
 	readonly source?: Source;
 	private brief?: Promise<string | undefined>;
@@ -1404,7 +1406,9 @@ export class RevisionSession {
 		return r ?? { author: null, text: "", before: "" };
 	}
 
-	async end() {
+	/** ask: what the notebook will be asked for (the page knows which parts the learner reworked and how). */
+	async end(ask?: RevisionSession["noteAsk"]) {
+		if (ask) this.noteAsk = ask;
 		const { issues, closing } = await this.endFor(this.text, this.decided);
 		this.ai.lanes?.discard((x) => x.startsWith("end · ") && x !== endPurpose(this.text));
 		return { issues, closing, learned: this.learned, text: this.text };
@@ -1466,6 +1470,7 @@ export class RevisionSession {
 			hints: this.hints.entries(),
 			p1view: this.p1view,
 			page: this.page,
+			noteAsk: this.noteAsk,
 		};
 	}
 
@@ -1506,6 +1511,7 @@ export class RevisionSession {
 		s.hints.load(state.hints);
 		s.p1view = state.p1view;
 		s.page = state.page ?? null;
+		s.noteAsk = state.noteAsk;
 		return s;
 	}
 }
@@ -1537,6 +1543,7 @@ export type RevisionState = {
 	hints: [string, { plan: string; example: string }][];
 	p1view?: { doc: Doc; stops: unknown[] };
 	page?: Record<string, unknown> | null;
+	noteAsk?: RevisionSession["noteAsk"];
 };
 
 /**

@@ -3,6 +3,7 @@ import { db } from "#lib/server/db/index.ts";
 import { piece, pieceRevision, pieceStep } from "#lib/server/db/schema.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { Lanes } from "#lib/server/llm/lanes.ts";
+import { learnedFrom } from "#lib/server/writing/learned.ts";
 import { type RevisionInput, RevisionSession, type RevisionState, SNAPSHOT_VERSION } from "./revision.ts";
 
 /*
@@ -104,7 +105,8 @@ export async function startRevision(
 				language: meta.language ?? user.activeLanguage ?? "en",
 				kind: meta.kind,
 				scenarioId: meta.scenarioId ?? null,
-				title: meta.title ?? "",
+				// Until the scene names it, a piece is called by its first words.
+				title: meta.title ?? input.text.trim().split(/\s+/).slice(0, 8).join(" ").slice(0, 80),
 				place: meta.place ?? "",
 				...fields,
 			})
@@ -196,6 +198,33 @@ export function bookmark(h: Held, page: unknown) {
 /** Change what the piece's row says (the scene's title, the end); the revision itself is in the snapshot. */
 export async function updatePiece(pieceId: string, set: Partial<typeof piece.$inferInsert>) {
 	await db.update(piece).set(set).where(eq(piece.id, pieceId));
+}
+
+/**
+ * The notebook entries of a finished piece, written after its revision ended (the learner is on the piece's page by
+ * then; it shows what pass 2 reworked meanwhile). The call is a step on the tape. Once they are filed, or there is no
+ * revision left to ask, the revision is not needed again.
+ */
+const filing = new Set<string>();
+export async function fileNotes(user: Learner, pieceId: string) {
+	if (filing.has(pieceId)) return;
+	filing.add(pieceId);
+	try {
+		const h = await openRevision(user, pieceId);
+		const ask = h?.session.noteAsk;
+		if (!h || !ask) {
+			await updatePiece(pieceId, { notesRequestedAt: null });
+			return;
+		}
+		const notes = await act(pieceId, h, "notes", ask, (s) => s.notes(ask.items, ask.p1));
+		await updatePiece(pieceId, { learned: learnedFrom(ask, notes), notesRequestedAt: null });
+		await dropRevision(pieceId);
+	} catch (e) {
+		// The stand-in stays; the piece's page asks again once the wait is over.
+		console.error(`piece ${pieceId}: notes not filed:`, e);
+	} finally {
+		filing.delete(pieceId);
+	}
 }
 
 /** Once the piece is finished and its notes are filed, its revision is not needed again. */
