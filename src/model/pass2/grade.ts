@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { aLearner, type Draft, fbName, LANG_NAMES, noteLines, pinLang } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import { VOICE } from "../pass1/context.ts";
 import type { Material } from "./material.ts";
 
@@ -98,7 +98,7 @@ export async function grade(
 	d: Draft,
 	text: string,
 	g: GradeInput,
-	model: ModelKey,
+	ai: Caller,
 	opts: { strategy: "g1" | "g2" | "g3"; sample?: number; effort?: "low" | "medium" },
 ): Promise<{ value: Grade; calls: CallResult[] }> {
 	const T = LANG_NAMES[d.target];
@@ -166,7 +166,7 @@ Each extra item, if any, is {"mine":"","ref":"","ok":true,"note":""}.`;
 			{ role: "user", content: `${context}\n\n${rules}\n\n${shape}` },
 		],
 		GradeSchema,
-		{ model, sample: opts.sample, effort: opts.effort ?? "low", tag: `e4/${opts.strategy}` },
+		{ ai, sample: opts.sample, effort: opts.effort ?? "low", tag: `e4/${opts.strategy}` },
 	);
 	res.value = settle(res.value);
 	return res;

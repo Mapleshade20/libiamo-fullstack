@@ -39,4 +39,11 @@ export const variables = defineEnvVars({
 	SMTP_FROM: { schema: optional },
 	SMTP_USER: { schema: optional },
 	SMTP_PASS: { schema: optional },
+
+	OPENROUTER_API_KEY: {
+		description: "The service's own OpenRouter key, for the calls no learner makes (the composer's gate). Learners' calls use their own key.",
+		schema: optional,
+	},
+	LLM_CACHE_DIR: { description: "Development only: answer model calls from this cache and write new replies to it.", schema: optional },
+	LLM_CACHE_ONLY: { description: "Development only: a call the cache does not hold fails instead of reaching the provider.", schema: flag },
 });

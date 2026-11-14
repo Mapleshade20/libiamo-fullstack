@@ -1,7 +1,8 @@
+import type { Caller } from "#lib/server/llm/caller.ts";
 import catalog from "../../lib/i18n/catalog/ui.json";
 import { parseSource, plainSource, renderSource, type Source, sourceGist, withoutDraft } from "../context/source.ts";
+import { applyEdits, scopeOf } from "../edits.ts";
 import { type Draft, LANG_NAMES, type Lang, replyIn } from "../fixtures/types.ts";
-import type { ModelKey } from "../llm.ts";
 import type { Finding } from "../pass1/strategies.ts";
 import { type Analysis, config, readBack, sentences, spotRange } from "../pass2/analyze.ts";
 import { feedback, grade, placeAt } from "../pass2/grade.ts";
@@ -14,7 +15,6 @@ import { repeats, residue } from "../residue.ts";
 import { type Case, pass1Exchange, replyTo, SEP, turnAt } from "../scenario/exchange.ts";
 import { analyzeExchange, type ExchangeAnalysis } from "../scenario/pass2.ts";
 import { replayReply } from "../scenario/replay.ts";
-import { discard, inBackground, promote, withPurpose } from "../trace.ts";
 import { blockAt, blocksOf } from "../translate/blocks.ts";
 import { analyzeTranslation, pass1Translation, type Translation } from "../translate/passes.ts";
 import { words } from "../words.ts";
@@ -31,7 +31,6 @@ import {
 	ownReading,
 	pieceNotes,
 } from "./calls.ts";
-import { applyEdits, scopeOf } from "./run.ts";
 
 /** The interface strings the page and the server share, per app language (scripts/i18n.ts). */
 const UI: Record<string, Record<string, string>> = catalog;
@@ -171,9 +170,6 @@ export type LiveInput = {
 	detail?: "needed" | "more";
 	learner: Lang;
 	feedback: "native" | "target";
-	model: ModelKey;
-	grader: ModelKey;
-	noCache?: boolean;
 };
 
 export class LiveSession {
@@ -213,16 +209,13 @@ export class LiveSession {
 	private landed?: ExchangeAnalysis["turns"];
 	constructor(
 		public input: LiveInput,
-		/** The session id the debug call bubbles file calls under. */
-		readonly id = "",
+		/** Who pays for the revision's calls, and its background lane. */
+		readonly ai: Caller,
 	) {
 		config.task = "v6";
 		if (input.exchange) this.ex = { id: "scenario", notes: "", ...input.exchange };
 		const source = input.source?.trim() ? (parseSource(input.source) ?? plainSource(input.source)) : null;
 		if (source) this.source = withoutDraft(source, input.text);
-	}
-	private get model() {
-		return this.input.model;
 	}
 	/** The import itself, for the calls that answer the writer: what they say about their source must be checkable. */
 	private get imported() {
@@ -252,7 +245,7 @@ export class LiveSession {
 		// The brief is read while the scene card is up; it does not change with the scene, so a correction keeps it.
 		if (this.source && !this.brief) {
 			const src = renderSource(this.source);
-			this.brief = withPurpose("brief", () => briefFor(this.input.text, this.input.background, src, this.model)).catch(() => undefined);
+			this.brief = briefFor(this.input.text, this.input.background, src, this.ai.for("brief")).catch(() => undefined);
 		}
 		const imported = this.source ? `\nImported as context: ${this.source.label}\n${sourceGist(this.source)}` : "";
 		this.scene = await inferScene(
@@ -260,7 +253,7 @@ export class LiveSession {
 			`${background ?? ""}${imported}`.trim() || undefined,
 			this.input.learner,
 			this.input.feedback,
-			this.model,
+			this.ai.for("scene"),
 		);
 		// The rewritten note replaces the old one only once the scene it gave is in.
 		if (correction) this.input.background = background;
@@ -281,8 +274,8 @@ export class LiveSession {
 		this.det = undefined;
 		this.analysis = undefined;
 		const n = ++this.detN;
-		discard(this.id, (p) => p.startsWith("detect #") && p !== `detect #${n}`);
-		withPurpose(`detect #${n}`, () => this.start());
+		this.ai.lanes?.discard((p) => p.startsWith("detect #") && p !== `detect #${n}`);
+		this.start(this.ai.for(`detect #${n}`));
 		return { ...s, ui: feedback };
 	}
 
@@ -315,7 +308,7 @@ export class LiveSession {
 			scene: { platform: scene.platform, audience: scene.audience, purpose: scene.purpose },
 		};
 		this.det = undefined;
-		withPurpose("detect #1", () => this.start());
+		this.start(this.ai.for("detect #1"));
 		return { ...scene, ui: feedback };
 	}
 
@@ -348,18 +341,18 @@ export class LiveSession {
 			scene: { platform: scene.platform, audience: scene.audience, purpose: scene.purpose },
 		};
 		this.det = undefined;
-		withPurpose("detect #1", () => this.start());
+		this.start(this.ai.for("detect #1"));
 		return { ...scene, ui: feedback };
 	}
 
 	/** Pass 1 and the pass-2 analysis start together, once the brief on any import is ready. */
-	start() {
+	start(ai: Caller = this.ai.for("pass1")) {
 		if (this.det) return;
-		if (this.ex) return this.startScenario();
+		if (this.ex) return this.startScenario(ai);
 		if (this.input.translation) {
 			const t = this.input.translation;
 			config.stage = "draft";
-			const p1 = pass1Translation(this.d, t, this.model);
+			const p1 = pass1Translation(this.d, t, ai);
 			const pass1 = p1.done.then((r) => ({
 				findings: r.findings
 					.filter((f) => !f.optional || (f.pass === 1 && f.after !== undefined))
@@ -368,8 +361,8 @@ export class LiveSession {
 			// The analysis reads the draft, told what pass 1 left for it, then is rebased on the pass-1 text (base.ts).
 			const pass2 = p1.rewrite.then(async (rw) => {
 				const base = analysisBase(this.d, rw.pass1);
-				const a = await withPurpose("analysis", () => analyzeTranslation(this.d, t, this.model, base.left));
-				return { analysis: (await withPurpose("analysis", () => rebase(this.d, base, a, this.model))).analysis, base };
+				const a = await analyzeTranslation(this.d, t, ai.for("analysis"), base.left);
+				return { analysis: (await rebase(this.d, base, a, ai.for("analysis"))).analysis, base };
 			});
 			pass1.catch(() => {});
 			pass2.catch(() => {});
@@ -387,11 +380,9 @@ export class LiveSession {
 		const ready = (this.brief ?? Promise.resolve(undefined)).then((brief) => {
 			if (brief) Object.assign(d, { brief, replyTo: replyIn(brief) });
 			// Pass-2 spots go past a judge (judge.ts) before anyone sees them.
-			const det = detectSplit(d, this.model, 0, { judge: true });
+			const det = detectSplit(d, ai, 0, { judge: true });
 			// The map's outline is its own call over the same text pass 2 reads, made while the writer is in pass 1.
-			this.outline = det.base
-				.then((b) => withPurpose("outline", () => outline({ ...d, text: b.text }, sentences(b.text, d.target), this.model)))
-				.then((r) => r.value);
+			this.outline = det.base.then((b) => outline({ ...d, text: b.text }, sentences(b.text, d.target), ai.for("outline"))).then((r) => r.value);
 			this.outline.catch(() => {});
 			return det;
 		});
@@ -407,10 +398,10 @@ export class LiveSession {
 	}
 
 	/** A scenario's exchange: pass 1 per turn as said at that moment, then the analysis that first judges how each turn landed (Q1, Q2). */
-	private startScenario() {
+	private startScenario(ai: Caller) {
 		const c = this.ex as Case;
 		config.stage = "draft";
-		const p1 = pass1Exchange(c, this.model, this.d);
+		const p1 = pass1Exchange(c, ai, this.d);
 		const pass1 = p1.done.then((r) => ({
 			findings: r.findings
 				.filter((f) => !f.optional || (f.pass === 1 && f.after !== undefined))
@@ -418,9 +409,9 @@ export class LiveSession {
 		}));
 		const pass2 = p1.rewrite.then(async (r) => {
 			const base = analysisBase(this.d, r.pass1);
-			const a = await withPurpose("analysis", () => analyzeExchange(c, this.d.text, r.native, this.model, true, this.d, "draft", base.left));
+			const a = await analyzeExchange(c, this.d.text, r.native, ai.for("analysis"), true, this.d, "draft", base.left);
 			this.landed = a.analysis.turns;
-			const rb = await withPurpose("analysis", () => rebase(this.d, base, a.analysis as Analysis, this.model));
+			const rb = await rebase(this.d, base, a.analysis as Analysis, ai.for("analysis"));
 			return { analysis: rb.analysis, base };
 		});
 		pass1.catch(() => {});
@@ -567,7 +558,7 @@ export class LiveSession {
 		this.rb =
 			this.ex || this.input.translation
 				? Promise.resolve("")
-				: withPurpose("read-back", () => readBack(this.d, this.pass1Text, this.model, 0)).then((c) => c.text.trim());
+				: readBack(this.d, this.pass1Text, this.ai.for("read-back"), 0).then((c) => c.text.trim());
 		this.rb.catch(() => {});
 		const det = this.det;
 		if (det && !this.ex && !this.input.translation) {
@@ -607,7 +598,7 @@ export class LiveSession {
 			return { reply: this.t(p.stops.length ? "agreedReply" : "agreedNone", { n: p.stops.length }), ...p };
 		}
 		const rb = await this.rb!;
-		const ov = await overviewReply(this.d, this.pass1Text, rb, p2.analysis.gist, said, this.model);
+		const ov = await overviewReply(this.d, this.pass1Text, rb, p2.analysis.gist, said, this.ai.for("overviewReply"));
 		return { reply: ov.reply, ...this.plan(p2.analysis, ov.newSpot ?? null, ol) };
 	}
 
@@ -835,7 +826,7 @@ export class LiveSession {
 			key,
 			purpose,
 			make: (bg: boolean) =>
-				(bg ? inBackground : withPurpose)(purpose, async () => {
+				(async (ai: Caller) => {
 					const spot = { sentences: sentence, phrase: anchor, problem, reading, mode: stop.parts[0].mode, wide };
 					const around = text.slice(0, stop.from) + text.slice(stop.to);
 					// The rest of its paragraph: a reference must not say again what is said right next to it.
@@ -854,10 +845,10 @@ export class LiveSession {
 						const said = repeats(plainRef(m.ref), m.replaces, near);
 						return said ? `ref says "${said}" again, which the post already says right next to it: say it once.` : null;
 					};
-					let m = (await material(this.d, text, spot, this.model, 0, this.input.translation?.original)).value;
+					let m = (await material(this.d, text, spot, ai, 0, this.input.translation?.original)).value;
 					const bad = wrong(m);
 					if (bad) {
-						const again = (await material(this.d, text, spot, this.model, 0, this.input.translation?.original, bad)).value;
+						const again = (await material(this.d, text, spot, ai, 0, this.input.translation?.original, bad)).value;
 						if (!wrong(again)) m = again;
 						else if (wrong(m)?.startsWith("replaces")) m = { ...m, replaces: anchor };
 					}
@@ -866,7 +857,7 @@ export class LiveSession {
 					// changed words outside the stop (inside it, changing them is the point); the vet's version is used only if it
 					// carries nothing back (it once put "愤怒" back into "hurt and angry").
 					if (this.outside(m, text, stop)) {
-						const v = (await vetMaterial(this.d, text, spot, m, this.model, 0)).value;
+						const v = (await vetMaterial(this.d, text, spot, m, ai, 0)).value;
 						if (!residue(v.ref, this.d, this.left, around)) m = { ...v, alts: v.alts.filter((a) => !residue(a, this.d, this.left, around)) };
 					}
 					m = trimSame(m, text, stop.from, stop.to);
@@ -875,8 +866,8 @@ export class LiveSession {
 					// what. 2026-11-10: "…a slow burn, and it works, so when…" lost the causal link; "hurt and 愤怒" kept Chinese.
 					const check = async (x: Material) => {
 						const g = (
-							await grade(this.d, text, { reading, problem, material: x, attempt: plainRef(x.ref) }, this.input.grader, {
-								strategy: this.input.grader === "luna" ? "g2" : "g3",
+							await grade(this.d, text, { reading, problem, material: x, attempt: plainRef(x.ref) }, ai, {
+								strategy: ai.grader,
 							})
 						).value;
 						const hit = new Set((g.hits ?? []).flatMap((h, i) => (h ? [i] : [])));
@@ -896,7 +887,7 @@ export class LiveSession {
 								this.d,
 								text,
 								{ ...spot, phrase: m.replaces, wide: false },
-								this.model,
+								ai,
 								0,
 								this.input.translation?.original,
 								`the reference was graded as if a learner had written it: ${first.faults.join("; ")}.`,
@@ -908,7 +899,7 @@ export class LiveSession {
 						trimSame({ ...again, alts: again.alts.filter((a) => !residue(a, this.d, this.left, around)) }, text, stop.from, stop.to),
 					);
 					return second.faults.length <= first.faults.length ? second.m : first.m;
-				}),
+				})(bg ? this.ai.ahead(purpose) : this.ai.for(purpose)),
 		};
 	}
 	/** bg: a guess at what comes next (the background lane); otherwise the learner is waiting, and a queued guess for it goes now. */
@@ -919,7 +910,7 @@ export class LiveSession {
 			m = p.make(bg);
 			m.catch(() => this.materials.delete(p.key));
 			this.materials.set(p.key, m);
-		} else if (!bg) promote(this.id, (x) => x === p.purpose);
+		} else if (!bg) this.ai.lanes?.promote((x) => x === p.purpose);
 		return { ...p, m };
 	}
 	private prefetch(stop?: Stop) {
@@ -941,7 +932,7 @@ export class LiveSession {
 		// nobody chose were a third of the session's cost). Once the learner chooses, its material is written while they
 		// write their version: the stop keeps the same words to replace, so nothing on the page has to move.
 		// Once the writer has said what they mean, the other readings prepared for this stop are not needed (queued ones never start).
-		if (meanings) discard(this.id, (x) => x.startsWith(`material ${stop.id} · `) && x !== f.purpose);
+		if (meanings) this.ai.lanes?.discard((x) => x.startsWith(`material ${stop.id} · `) && x !== f.purpose);
 		const m = withLivePieces(await f.m);
 		Object.assign(stop, {
 			m,
@@ -995,7 +986,7 @@ export class LiveSession {
 		const key = pieces.join("\u0000");
 		let n = this.glosses.get(key);
 		if (!n) {
-			n = withPurpose(`pieces ${id}`, () => pieceNotes(this.d, pieces, this.model, stop.m ? plainRef(stop.m.ref) : undefined));
+			n = pieceNotes(this.d, pieces, this.ai.for(`pieces ${id}`), stop.m ? plainRef(stop.m.ref) : undefined);
 			n.catch(() => this.glosses.delete(key));
 			this.glosses.set(key, n);
 		}
@@ -1018,14 +1009,12 @@ export class LiveSession {
 		const key = [id, m.ref, last?.text ?? ""].join("\u0000");
 		let h = this.hints.get(key);
 		if (!h) {
-			h = withPurpose(`hint ${id}`, () =>
-				hintFor(
-					this.d,
-					this.text,
-					m,
-					{ problem: stop.problem ?? "", reading: stop.reading ?? "", attempt: last?.text, feedback: last?.feedback },
-					this.model,
-				),
+			h = hintFor(
+				this.d,
+				this.text,
+				m,
+				{ problem: stop.problem ?? "", reading: stop.reading ?? "", attempt: last?.text, feedback: last?.feedback },
+				this.ai.for(`hint ${id}`),
 			);
 			h.catch(() => this.hints.delete(key));
 			this.hints.set(key, h);
@@ -1091,12 +1080,10 @@ export class LiveSession {
 			},
 		}));
 		const all = [...fromP2, ...fromP1];
-		const bodies = await withPurpose("notes", () =>
-			notesFor(
-				this.d,
-				all.map((a) => a.item),
-				this.model,
-			),
+		const bodies = await notesFor(
+			this.d,
+			all.map((a) => a.item),
+			this.ai.for("notes"),
 		);
 		// `was`: a pass-1 change's own words, short enough for "instead of" beside the phrase (orig is its whole sentence).
 		return Object.fromEntries(all.map((a, i) => [a.id, { note: bodies[i], orig: a.orig, final: a.final, was: a.was }]));
@@ -1105,7 +1092,7 @@ export class LiveSession {
 	async ownReading(id: string, k: number, said: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
 		const anchor = this.text.slice(stop.from, stop.to).trim();
-		const r = await withPurpose(`reading ${id}`, () => ownReading(this.d, this.text, anchor, stop.parts[k].problem, said, this.model, this.imported));
+		const r = await ownReading(this.d, this.text, anchor, stop.parts[k].problem, said, this.ai.for(`reading ${id}`), this.imported);
 		// What they said may be what later spots need to know (who a name is): every call from now on reads it.
 		this.d.told ??= [];
 		this.d.told.push(`About "${anchor.length > 60 ? `${anchor.slice(0, 58)}…` : anchor}": ${said}`);
@@ -1116,7 +1103,7 @@ export class LiveSession {
 	keep(id: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
 		stop.done = true;
-		discard(this.id, (x) => x.startsWith(`material ${id} · `));
+		this.ai.lanes?.discard((x) => x.startsWith(`material ${id} · `));
 		this.decided.push(`「${this.text.slice(stop.from, stop.to).trim()}」→ kept as written`);
 		this.settled();
 		this.prefetch(this.stops.find((s) => !s.done && !s.gone && s.from >= stop.to));
@@ -1163,16 +1150,13 @@ export class LiveSession {
 		}
 		const anchor = this.text.slice(stop.from, stop.to).trim();
 		const scope = scopeOf(this.text, this.text.includes(m.replaces) ? m.replaces : anchor, attempt);
-		const grader = this.input.grader;
 		const g = (
-			await withPurpose(`grade ${id}`, () =>
-				grade(
-					this.d,
-					this.text,
-					{ reading: stop.reading!, problem: stop.problem!, material: { ...m, replaces: scope }, attempt, earlier: stop.history },
-					grader,
-					{ strategy: grader === "luna" ? "g2" : "g3" },
-				),
+			await grade(
+				this.d,
+				this.text,
+				{ reading: stop.reading!, problem: stop.problem!, material: { ...m, replaces: scope }, attempt, earlier: stop.history },
+				this.ai.for(`grade ${id}`),
+				{ strategy: this.ai.grader },
 			)
 		).value;
 		let out: GradeOut;
@@ -1211,16 +1195,13 @@ export class LiveSession {
 		const m = stop.m;
 		const at = stop.textAt;
 		const scope = scopeOf(at, at.includes(m.replaces) ? m.replaces : at.slice(stop.from, stop.to).trim(), attempt);
-		const grader = this.input.grader;
 		const g = (
-			await withPurpose(`recall ${id}`, () =>
-				grade(
-					this.d,
-					at,
-					{ reading: stop.reading ?? "", problem: stop.problem ?? "", material: { ...m, replaces: scope }, attempt, earlier: [] },
-					grader,
-					{ strategy: grader === "luna" ? "g2" : "g3" },
-				),
+			await grade(
+				this.d,
+				at,
+				{ reading: stop.reading ?? "", problem: stop.problem ?? "", material: { ...m, replaces: scope }, attempt, earlier: [] },
+				this.ai.for(`recall ${id}`),
+				{ strategy: this.ai.grader },
 			)
 		).value;
 		if (g.verdict === "pass") return { pass: true as const };
@@ -1235,31 +1216,27 @@ export class LiveSession {
 	 */
 	async question(id: string, mine: string | null, q: string) {
 		const stop = this.stops.find((s) => s.id === id)!;
-		const a = await withPurpose(`question ${id}`, () =>
-			answerQuestion(
-				this.d,
-				this.text,
-				stop.m!,
-				mine,
-				q,
-				{ reading: stop.reading ?? "", problem: stop.problem ?? "", history: stop.history },
-				this.model,
-				this.imported,
-			),
+		const a = await answerQuestion(
+			this.d,
+			this.text,
+			stop.m!,
+			mine,
+			q,
+			{ reading: stop.reading ?? "", problem: stop.problem ?? "", history: stop.history },
+			this.ai.for(`question ${id}`),
+			this.imported,
 		);
 		// The page shows the answer at once, then asks for the material for the new meaning (and grades again).
 		if (a.kind === "meaning" && a.meaning) return { answer: a.answer, kind: a.kind, meaning: a.meaning };
 		if (a.kind === "ref" && a.revisedRef) {
-			const x = await withPurpose(`explain ${id}`, () =>
-				explainRef(
-					this.d,
-					this.text,
-					stop.m!,
-					plainRef(a.revisedRef!),
-					mine,
-					{ reading: stop.reading ?? "", problem: stop.problem ?? "" },
-					this.model,
-				),
+			const x = await explainRef(
+				this.d,
+				this.text,
+				stop.m!,
+				plainRef(a.revisedRef!),
+				mine,
+				{ reading: stop.reading ?? "", problem: stop.problem ?? "" },
+				this.ai.for(`explain ${id}`),
 			);
 			stop.m = { ...stop.m!, ref: a.revisedRef, why: x.why, alts: x.alts, construct: x.construct };
 			stop.ticks = [];
@@ -1317,8 +1294,7 @@ export class LiveSession {
 		stop.textAt = text;
 		this.text = p.text;
 		// Materials prepared for readings not taken, and for stops this rewrite swallowed, were never used.
-		discard(
-			this.id,
+		this.ai.lanes?.discard(
 			(x) => (x.startsWith(`material ${stop.id} · `) && x !== stop.used) || this.stops.some((o) => o.gone && x.startsWith(`material ${o.id} · `)),
 		);
 		if (stop.m) this.learned.push({ construct: stop.m.construct, self });
@@ -1339,11 +1315,10 @@ export class LiveSession {
 	/** The closing check and the reader's last reply, for one final text; asked for early, so the end does not wait. */
 	private endFor(text: string, decided: string[], bg = false) {
 		let e = this.ends.get(text);
-		if (e && !bg) promote(this.id, (x) => x === endPurpose(text));
+		if (e && !bg) this.ai.lanes?.promote((x) => x === endPurpose(text));
 		if (!e) {
-			e = (bg ? inBackground : withPurpose)(endPurpose(text), () =>
-				Promise.all([contentCheck(this.d, this.pass1Text, text, decided, this.model), this.closing(text)]),
-			).then(([issues, c]) => ({ issues, ...c }));
+			const ai = bg ? this.ai.ahead(endPurpose(text)) : this.ai.for(endPurpose(text));
+			e = Promise.all([contentCheck(this.d, this.pass1Text, text, decided, ai), this.closing(text, ai)]).then(([issues, c]) => ({ issues, ...c }));
 			e.catch(() => this.ends.delete(text));
 			this.ends.set(text, e);
 		}
@@ -1353,8 +1328,8 @@ export class LiveSession {
 	 * A regular's reply to the finished post. A scenario's page ends with how the conversation went on and a translation's
 	 * with the authentic text, so neither asks for one (it used to read a whole exchange, separators and all, as one post).
 	 */
-	private async closing(text: string) {
-		return { closing: this.ex || this.input.translation ? "" : await closingReaction(this.d, text, this.model) };
+	private async closing(text: string, ai: Caller) {
+		return { closing: this.ex || this.input.translation ? "" : await closingReaction(this.d, text, ai) };
 	}
 	/**
 	 * Once the last stop is settled the post is final: its check and the reader's reply start then, while the learner
@@ -1376,13 +1351,13 @@ export class LiveSession {
 	/** A scenario's revised turn, answered again by whoever answered it the first time. */
 	async replay(turn: number, text: string) {
 		if (!this.ex) throw new Error("not a scenario");
-		const r = await withPurpose(`replay T${turn}`, () => replayReply(this.ex as Case, turn, text, this.d, this.model));
+		const r = await replayReply(this.ex as Case, turn, text, this.d, this.ai.for(`replay T${turn}`));
 		return r ?? { author: null, text: "", before: "" };
 	}
 
 	async end() {
 		const { issues, closing } = await this.endFor(this.text, this.decided);
-		discard(this.id, (x) => x.startsWith("end · ") && x !== endPurpose(this.text));
+		this.ai.lanes?.discard((x) => x.startsWith("end · ") && x !== endPurpose(this.text));
 		return { issues, closing, learned: this.learned, text: this.text };
 	}
 }

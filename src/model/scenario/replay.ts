@@ -2,12 +2,13 @@
 // simulation, where nobody real is waiting, unlike a pre-send rehearsal of a real post). They react as themselves to
 // the new words, knowing only what came before; their first reply is shown to them so the difference is honest, not
 // flattering.
+
+import { type Caller, chat } from "#lib/server/llm/caller.ts";
 import type { Draft } from "../fixtures/types.ts";
 import { LANG_NAMES } from "../fixtures/types.ts";
-import { chat, type ModelKey } from "../llm.ts";
 import { type Case, exchange, replyTo, turns } from "./exchange.ts";
 
-export async function replayReply(c: Case, n: number, revised: string, d: Draft, model: ModelKey) {
+export async function replayReply(c: Case, n: number, revised: string, d: Draft, ai: Caller) {
 	const first = replyTo(c, n);
 	if (!first) return null;
 	const T = LANG_NAMES[d.target];
@@ -33,7 +34,7 @@ export async function replayReply(c: Case, n: number, revised: string, d: Draft,
 			{ role: "system", content: system },
 			{ role: "user", content: user },
 		],
-		{ model, effort: "low", tag: "scenario/replay" },
+		{ ai, effort: "low", tag: "scenario/replay" },
 	);
 	return { author: first.author, text: r.text.trim().replace(/^"|"$/g, ""), before: first.text };
 }

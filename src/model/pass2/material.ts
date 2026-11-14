@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { aLearner, type Draft, fbName, LANG_NAMES, noteLines, pinLang } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import { VOICE } from "../pass1/context.ts";
 import { words } from "../words.ts";
 
@@ -30,7 +30,7 @@ export async function material(
 	d: Draft,
 	text: string,
 	spot: SpotInput,
-	model: ModelKey,
+	ai: Caller,
 	sample: number,
 	authentic?: string,
 	fix?: string,
@@ -87,7 +87,7 @@ export async function material(
 			{ role: "user", content: user },
 		],
 		MaterialSchema,
-		{ model, sample, tag: "e3/material" },
+		{ ai, sample, tag: "e3/material" },
 	);
 }
 
@@ -171,7 +171,7 @@ export async function vetMaterial(
 	text: string,
 	spot: SpotInput,
 	m: Material,
-	model: ModelKey,
+	ai: Caller,
 	sample: number,
 ): Promise<{ value: Material; dropped: { label: string; why: string }[]; calls: CallResult[] }> {
 	if (!m.why.length) return { value: m, dropped: [], calls: [] };
@@ -201,7 +201,7 @@ export async function vetMaterial(
 	]
 		.filter((l) => l !== "")
 		.join("\n");
-	const r = await chatJson([{ role: "user", content: user }], VetSchema, { model, sample, effort: "low", tag: "e3/vet-material" });
+	const r = await chatJson([{ role: "user", content: user }], VetSchema, { ai, sample, effort: "low", tag: "e3/vet-material" });
 	const of = new Map(r.value.verdicts.map((v) => [v.n - 1, v]));
 	// A change that holds keeps its row, with its reason corrected where the reason itself was untrue.
 	const why = m.why.map((w, i) => ({ ...w, note: of.get(i)?.holds !== false && of.get(i)?.note?.trim() ? of.get(i)!.note!.trim() : w.note }));

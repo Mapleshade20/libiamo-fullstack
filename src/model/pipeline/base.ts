@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { align, type Hunk } from "../diff.ts";
 import { applyEdits } from "../edits.ts";
 import { type Draft, fbName, LANG_NAMES } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import { type Analysis, leftLine, numbered, type Sentence, sentences, spotRange } from "../pass2/analyze.ts";
 
 /**
@@ -39,12 +39,7 @@ const RebaseSchema = z.object({
  * already did what its problem asks, otherwise quoted and described as the text now reads, never mentioning errors
  * pass 1 fixed. Sentence numbers are moved to the pass-1 text's. Spots and the map come back on `base.text`.
  */
-export async function rebase(
-	d: Draft,
-	base: Base,
-	a: Analysis,
-	model: ModelKey,
-): Promise<{ analysis: Analysis; calls: CallResult[]; dropped: string[] }> {
+export async function rebase(d: Draft, base: Base, a: Analysis, ai: Caller): Promise<{ analysis: Analysis; calls: CallResult[]; dropped: string[] }> {
 	const ds = sentences(d.text, d.target);
 	const bs = sentences(base.text, d.target);
 	const ids = (xs: number[]) => {
@@ -84,7 +79,7 @@ export async function rebase(
 		`The learner now sees only the text as it reads. For each problem: keep false when the first-pass changes already did what the problem asks, so a reader would no longer stumble there; keep true when it is still a problem in the text as it reads. Small corrections (grammar, spelling, a word swapped) only fix problems about those very words: a problem about what the text says or leaves out (a missing point, evidence, a reason), what a reader takes away, or how a sentence is built stays, keep true. For a kept problem: quote, the words of the text as it reads where a reader stumbles now, copied character for character; problem, the same problem said about the text as it reads, in ${F}, at the same length: keep its reasoning and what a reader expects, but never mention an error the first pass fixed (a missing or wrong word, grammar, spelling) and never quote words that are no longer in the text. When nothing in it needs to change, repeat it as it was.`,
 		'Reply with JSON only: {"spots":[{"id":1,"keep":true,"quote":"","problem":""}]}',
 	].join("\n");
-	const r = await chatJson([{ role: "user", content: user }], RebaseSchema, { model, effort: "low", tag: "pass2/rebase" });
+	const r = await chatJson([{ role: "user", content: user }], RebaseSchema, { ai, effort: "low", tag: "pass2/rebase" });
 	const by = new Map(r.value.spots.map((x) => [touched[x.id - 1]?.i, x]));
 	const dropped: string[] = [];
 	const spots = placed.flatMap((p) => {

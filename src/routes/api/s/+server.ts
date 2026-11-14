@@ -1,11 +1,14 @@
+import { learner } from "#lib/server/guard.ts";
+import { learnerCaller } from "#lib/server/llm/callers.ts";
+import { Lanes } from "#lib/server/llm/lanes.ts";
 import { logSession, sessions } from "#lib/server/sessions.ts";
 import { sourceKind } from "#model/context/source.ts";
 import { LANGS, type Lang, normLang } from "#model/fixtures/types.ts";
-import { MODELS, type ModelKey } from "#model/llm.ts";
 import { LiveSession } from "#model/session/live.ts";
 
 // Starts a live session from what the home page handed over.
 export async function POST({ request }) {
+	const u = learner();
 	const b = await request.json();
 	// A piece kept from before Chinese became "zh-CN" still says "zh".
 	b.learner = normLang(b.learner);
@@ -15,8 +18,6 @@ export async function POST({ request }) {
 	const source = String(b.source ?? "").trim();
 	// Any text is fine; a capture that does not read (a broken copy) is refused rather than taken as text.
 	if (sourceKind(source) === "broken") return Response.json({ error: "capture does not read", code: "badSource" }, { status: 400 });
-	const model: ModelKey = b.model in MODELS ? b.model : "deepseek";
-	const grader: ModelKey = b.grader in MODELS ? b.grader : "haiku";
 	// A finished scenario's conversation (src/scenario/exchange.ts), checked for its shape only.
 	const ex = b.exchange;
 	const exchange =
@@ -36,10 +37,11 @@ export async function POST({ request }) {
 					glossary: Array.isArray(tr.glossary) ? tr.glossary : [],
 				}
 			: undefined;
-	const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${model}`;
-	sessions.set(
-		id,
-		new LiveSession(
+	const id = new Date().toISOString().replace(/[:.]/g, "-");
+	const ai = await learnerCaller({ user: u, lanes: new Lanes(), fresh: !!b.noCache });
+	sessions.set(id, {
+		owner: u.id,
+		session: new LiveSession(
 			{
 				exchange,
 				translation,
@@ -50,13 +52,10 @@ export async function POST({ request }) {
 				detail: b.detail === "needed" ? "needed" : "more",
 				learner: (LANGS.includes(b.learner) ? b.learner : "en") as Lang,
 				feedback: b.feedback === "target" ? "target" : "native",
-				model,
-				grader,
-				noCache: !!b.noCache,
 			},
-			id,
+			ai,
 		),
-	);
+	});
 	logSession(id, { t: Date.now(), action: "create", body: b });
 	return Response.json({ id });
 }

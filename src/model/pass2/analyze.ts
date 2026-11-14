@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chat, chatJson } from "#lib/server/llm/caller.ts";
 import { type Draft, fbName, LANG_NAMES, levelLine, noteLines, readerFrame } from "../fixtures/types.ts";
-import { type CallResult, chat, chatJson, type ModelKey } from "../llm.ts";
 import { MISREAD, REGISTER } from "../pass1/context.ts";
 
 export type Sentence = { id: number; from: number; to: number; text: string; para: number };
@@ -252,7 +252,7 @@ const SYSTEM = (d: Draft) =>
 	`You are a ${LANG_NAMES[d.target]} writing tutor. You help writers make their posts say what they mean, for the people who will read them.`;
 
 // T1: ask for the analysis directly.
-export async function t1(d: Draft, text: string, model: ModelKey, sample: number): Promise<Pass2Run> {
+export async function t1(d: Draft, text: string, ai: Caller, sample: number): Promise<Pass2Run> {
 	const ss = sentences(text, d.target);
 	const { value, calls } = await chatJson(
 		[
@@ -260,7 +260,7 @@ export async function t1(d: Draft, text: string, model: ModelKey, sample: number
 			{ role: "user", content: `${context(d, ss)}\n\n${TASK(d)}\n\nReply with JSON only:\n${SHAPE()}` },
 		],
 		AnalysisSchema,
-		{ model, sample, tag: "e2/t1" },
+		{ ai, sample, tag: "e2/t1" },
 	);
 	return { analysis: value, calls, artifacts: {} };
 }
@@ -269,7 +269,7 @@ export async function t1(d: Draft, text: string, model: ModelKey, sample: number
 export async function t2(
 	d: Draft,
 	text: string,
-	model: ModelKey,
+	ai: Caller,
 	sample: number,
 	readBack?: string,
 	native?: string,
@@ -286,7 +286,7 @@ export async function t2(
 			{ role: "system", content: SYSTEM(d) },
 			{ role: "user", content: user },
 		],
-		{ model, sample, tag: readBack ? "e2/t3" : "e2/t2" },
+		{ ai, sample, tag: readBack ? "e2/t3" : "e2/t2" },
 	);
 	const argument = res.text.match(/###\s*ARGUMENT\s*\n([\s\S]*?)(?=\n###\s*JSON)/)?.[1]?.trim() ?? "(missing)";
 	const json = res.text.split(/###\s*JSON/)[1] ?? res.text;
@@ -300,7 +300,7 @@ export async function t2(
 			{ role: "user", content: `The JSON did not validate:\n${parsed.error.message}\nReply with the corrected JSON only.` },
 		],
 		AnalysisSchema,
-		{ model, sample, tag: "e2/t2/repair" },
+		{ ai, sample, tag: "e2/t2/repair" },
 	);
 	return { analysis: fixed.value, calls: [res, ...fixed.calls], artifacts: { argument, ...(readBack ? { readBack } : {}) } };
 }
@@ -320,7 +320,7 @@ function extract(t: string): unknown {
 export const readerSeat = (d: Pick<Draft, "scene" | "target">) =>
 	`You read ${LANG_NAMES[d.target]} only. If this post is written to one particular person (an email, a letter, a direct message), you are that person (${d.scene.audience}), reading what was written to you; otherwise you are a regular on ${d.scene.platform}.`;
 
-export async function readBack(d: Draft, text: string, model: ModelKey, sample: number): Promise<CallResult> {
+export async function readBack(d: Draft, text: string, ai: Caller, sample: number): Promise<CallResult> {
 	const system = readerSeat(d);
 	const frame = readerFrame(d);
 	const user = `${frame ? `${frame}\n\nThe post (the reply):\n` : ""}${d.title ? `${d.title}\n\n` : ""}${text}\n\nYou just read this post. Write the first thing you would write back (or reply in the thread): one or two short sentences in ${LANG_NAMES[d.target]}, in your own voice, that says back what you understood them to be asking or saying, so they can tell whether you got it. If something was unclear to you, say how you read it. Reply with the reply only.`;
@@ -329,13 +329,13 @@ export async function readBack(d: Draft, text: string, model: ModelKey, sample: 
 			{ role: "system", content: system },
 			{ role: "user", content: user },
 		],
-		{ model, sample, effort: "low", tag: "e2/reader" },
+		{ ai, sample, effort: "low", tag: "e2/reader" },
 	);
 }
 
-export async function t3(d: Draft, text: string, model: ModelKey, sample: number): Promise<Pass2Run> {
-	const rb = await readBack(d, text, model, sample);
-	const run = await t2(d, text, model, sample, rb.text.trim());
+export async function t3(d: Draft, text: string, ai: Caller, sample: number): Promise<Pass2Run> {
+	const rb = await readBack(d, text, ai, sample);
+	const run = await t2(d, text, ai, sample, rb.text.trim());
 	return { ...run, calls: [rb, ...run.calls] };
 }
 

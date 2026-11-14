@@ -4,8 +4,33 @@
  * docs/design/2026-11-13-step-3-rebuild.md §5.
  */
 import { type SQL, sql } from "drizzle-orm";
-import { boolean, check, index, integer, type PgColumn, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { APP_LANGS, KEY_PROVIDERS, LEARNABLE, ROLES, TUTOR_LANGUAGES } from "#lib/constants.ts";
+import {
+	boolean,
+	check,
+	doublePrecision,
+	index,
+	integer,
+	jsonb,
+	type PgColumn,
+	pgTable,
+	primaryKey,
+	text,
+	timestamp,
+	uniqueIndex,
+	uuid,
+} from "drizzle-orm/pg-core";
+import {
+	APP_LANGS,
+	CALL_STATES,
+	DETAILS,
+	KEY_PROVIDERS,
+	LEARNABLE,
+	PIECE_KINDS,
+	PIECE_STATES,
+	POSTED,
+	ROLES,
+	TUTOR_LANGUAGES,
+} from "#lib/constants.ts";
 
 const at = (name: string) => timestamp(name, { withTimezone: true });
 const created = () => at("created_at").defaultNow().notNull();
@@ -127,3 +152,133 @@ export const userKey = pgTable(
 	},
 	(t) => [check("user_key_provider_check", oneOf(t.provider, KEY_PROVIDERS))],
 );
+
+// --- Pieces (§5.4) ----------------------------------------------------------------------------------------------------
+
+/* One piece of the learner's writing, from the draft to what the revision left. `place` is where it is for as its
+   cover names it (a scenario's place, or the site the scene inferred). `scenario_id` gains its reference with the
+   scenario tables (phase 4). Only the guarded move to `finished` credits the day. */
+export const piece = pgTable(
+	"piece",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		language: text("language").notNull(),
+		kind: text("kind").notNull(),
+		scenarioId: text("scenario_id"),
+		place: text("place").notNull().default(""),
+		title: text("title").notNull().default(""),
+		text: text("text").notNull(),
+		background: text("background"),
+		/** What the learner imported as context (a capture of the page, or any text). */
+		context: text("context"),
+		/** The language the tutor speaks in this piece (a code: the learner's own or the target). */
+		tutorLanguage: text("tutor_language").notNull(),
+		detail: text("detail").notNull().default("needed"),
+		provider: text("provider"),
+		model: text("model"),
+		state: text("state").notNull().default("revising"),
+		final: text("final"),
+		closing: text("closing"),
+		reader: text("reader"),
+		leftovers: jsonb("leftovers"),
+		authentic: text("authentic"),
+		learned: jsonb("learned"),
+		finishedAt: at("finished_at"),
+		notesRequestedAt: at("notes_requested_at"),
+		posted: text("posted"),
+		askedAt: at("asked_at"),
+		againText: text("again_text"),
+		againAt: at("again_at"),
+		/** The commit that ran the revision, for reading a case against the code that made it. */
+		sha: text("sha"),
+		createdAt: created(),
+		updatedAt: updated(),
+	},
+	(t) => [
+		check("piece_language_check", oneOf(t.language, LEARNABLE)),
+		check("piece_kind_check", oneOf(t.kind, PIECE_KINDS)),
+		check("piece_detail_check", oneOf(t.detail, DETAILS)),
+		check("piece_state_check", oneOf(t.state, PIECE_STATES)),
+		check("piece_posted_check", sql`${t.posted} is null or ${oneOf(t.posted, POSTED)}`),
+		check("piece_finished_check", sql`(${t.state} = 'finished') = (${t.finishedAt} is not null)`),
+		index("piece_user_idx").on(t.userId, t.language, t.updatedAt),
+		uniqueIndex("piece_open_scenario_unique")
+			.on(t.userId, t.scenarioId)
+			.where(sql`${t.scenarioId} is not null and ${t.state} in ('writing', 'revising')`),
+	],
+);
+
+/** The revision's snapshot (src/lib/server/revision/snapshot.ts), apart from `piece` so lists never read it. */
+export const pieceRevision = pgTable("piece_revision", {
+	pieceId: uuid("piece_id")
+		.primaryKey()
+		.references(() => piece.id, { onDelete: "cascade" }),
+	version: integer("version").notNull(),
+	state: jsonb("state").notNull(),
+	updatedAt: updated(),
+});
+
+/** The tape: every action the page sent in the revision, and what it got back. */
+export const pieceStep = pgTable(
+	"piece_step",
+	{
+		pieceId: uuid("piece_id")
+			.notNull()
+			.references(() => piece.id, { onDelete: "cascade" }),
+		seq: integer("seq").notNull(),
+		action: text("action").notNull(),
+		body: jsonb("body"),
+		response: jsonb("response"),
+		error: text("error"),
+		ms: integer("ms"),
+		at: at("at").defaultNow().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.pieceId, t.seq] })],
+);
+
+// --- Calls (§5.7) -----------------------------------------------------------------------------------------------------
+
+/* Every model call, written after the fact. The numbers always; `messages` and `output` only while the learner helps
+   improve Libiamo. A call on the environment's key (the gate) has no piece and may have no learner. */
+export const llmCall = pgTable(
+	"llm_call",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		pieceId: uuid("piece_id").references(() => piece.id, { onDelete: "cascade" }),
+		stepSeq: integer("step_seq"),
+		purpose: text("purpose").notNull(),
+		tag: text("tag").notNull(),
+		provider: text("provider").notNull(),
+		model: text("model").notNull(),
+		effort: text("effort"),
+		state: text("state").notNull(),
+		background: boolean("background").default(false).notNull(),
+		/** The system prompt, stored once in `llm_prompt`. */
+		promptHash: text("prompt_hash"),
+		messages: jsonb("messages"),
+		output: text("output"),
+		error: text("error"),
+		promptTokens: integer("prompt_tokens"),
+		completionTokens: integer("completion_tokens"),
+		reasoningTokens: integer("reasoning_tokens"),
+		cacheRead: integer("cache_read"),
+		cacheWrite: integer("cache_write"),
+		costUsd: doublePrecision("cost_usd"),
+		latencyMs: integer("latency_ms"),
+		createdAt: created(),
+	},
+	(t) => [
+		check("llm_call_state_check", oneOf(t.state, CALL_STATES)),
+		index("llm_call_piece_idx").on(t.pieceId),
+		index("llm_call_created_idx").on(t.createdAt),
+	],
+);
+
+export const llmPrompt = pgTable("llm_prompt", {
+	hash: text("hash").primaryKey(),
+	text: text("text").notNull(),
+});

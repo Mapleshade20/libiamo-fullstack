@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import type { Analysis, Sentence } from "./analyze.ts";
 
 /**
@@ -12,7 +12,7 @@ export async function vetFormulation(
 	ss: Sentence[],
 	a: Analysis,
 	fresh: string,
-	model: ModelKey,
+	ai: Caller,
 	sample: number,
 ): Promise<{ analysis: Analysis; dropped: { problem: string; why: string }[]; call?: CallResult }> {
 	const ids = a.spots.map((s, i) => ({ s, i })).filter(({ s }) => s.kind === "formulation");
@@ -31,7 +31,7 @@ export async function vetFormulation(
 	const r = await chatJson(
 		[{ role: "user", content: user }],
 		z.object({ verdicts: z.array(z.object({ id: z.number(), keep: z.boolean(), why: z.string() })) }),
-		{ model, sample, effort: "low", tag: "e6/vet" },
+		{ ai, sample, effort: "low", tag: "e6/vet" },
 	);
 	const drop = new Set(r.value.verdicts.filter((v) => !v.keep).map((v) => v.id - 1));
 	return {

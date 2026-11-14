@@ -2,8 +2,9 @@
 // in code first, then one Decisions API call (OpenRouter alpha; a typed choice with probabilities, no text), which costs
 // a few hundredths of a cent and answers in about 200 ms. Findings: scripts/gate-probe.ts, runs/gate/.
 // Never blocks on its own failure: no answer means "go ahead, in the language being worked in".
+
+import type { Recorder } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES } from "./fixtures/types.ts";
-import { begin, finish } from "./trace.ts";
 
 const LANGUAGE_NAMES = LANG_NAMES as Record<string, string>;
 
@@ -57,9 +58,9 @@ export function precheck(text: string, mode: GateMode): Gate | null {
 }
 
 export type Choice = { choice: string; probabilities: Record<string, number> };
-async function decide(input: GateInput): Promise<Record<string, Choice> | null> {
-	// The same credentials as every other call (src/llm.ts); the Decisions API is OpenRouter's, so only an OpenRouter key.
-	const key = process.env.OPENROUTER_API_KEY || (/openrouter/.test(process.env.OPENAI_BASE_URL ?? "") ? process.env.OPENAI_API_KEY : undefined);
+/** The service's own key pays: the Decisions API is OpenRouter's, so only an OpenRouter key. */
+export type GateCall = { key?: string; record?: Recorder };
+async function decide(input: GateInput, { key, record }: GateCall): Promise<Record<string, Choice> | null> {
 	if (!key) {
 		console.warn("gate: no OpenRouter key");
 		return null;
@@ -108,8 +109,18 @@ async function decide(input: GateInput): Promise<Record<string, Choice> | null> 
 		},
 		questions,
 	};
-	// Shown with the page's other calls (the debug bubbles), like any model call.
-	const trace = begin("gate/decide", MODEL, [{ role: "user", content: JSON.stringify(body, null, 2) }]);
+	const messages = [{ role: "user" as const, content: JSON.stringify(body, null, 2) }];
+	const base = {
+		purpose: "gate",
+		tag: "gate/decide",
+		model: MODEL,
+		provider: "openrouter",
+		effort: "low" as const,
+		background: false,
+		messages,
+		step: null,
+	};
+	const t0 = Date.now();
 	try {
 		const r = await fetch(DECISIONS, {
 			method: "POST",
@@ -119,30 +130,32 @@ async function decide(input: GateInput): Promise<Record<string, Choice> | null> 
 		});
 		if (!r.ok) {
 			console.warn(`gate: HTTP ${r.status}`);
-			finish(trace, { state: "failed", error: `HTTP ${r.status}` });
+			record?.({ ...base, state: "failed", error: `HTTP ${r.status}`, ms: Date.now() - t0 });
 			return null;
 		}
 		const j = (await r.json()) as { answers?: Record<string, Choice>; usage?: { cost?: number; prompt_tokens?: number } };
-		finish(trace, {
+		record?.({
+			...base,
 			state: "done",
 			output: JSON.stringify(j.answers, null, 2),
-			cost: j.usage?.cost,
-			tokens: j.usage?.prompt_tokens ? { input: j.usage.prompt_tokens, output: 0, reasoning: 0 } : undefined,
+			costUsd: j.usage?.cost,
+			usage: { input: j.usage?.prompt_tokens ?? 0, output: 0, reasoning: 0 },
+			ms: Date.now() - t0,
 		});
 		return j.answers ?? null;
 	} catch (e) {
 		console.warn("gate:", (e as Error).message);
-		finish(trace, { state: "failed", error: (e as Error).message });
+		record?.({ ...base, state: "failed", error: (e as Error).message, ms: Date.now() - t0 });
 		return null;
 	}
 }
 
 const p = (c: Choice | undefined, k: string) => c?.probabilities?.[k] ?? (c?.choice === k ? 1 : 0);
 
-export async function gate(input: GateInput): Promise<Gate> {
+export async function gate(input: GateInput, call: GateCall = {}): Promise<Gate> {
 	const pre = precheck(input.text, input.mode);
 	if (pre) return pre;
-	const a = await decide(input);
+	const a = await decide(input, call);
 	return a ? judge(input, a) : { verdict: "ok", lang: input.active };
 }
 

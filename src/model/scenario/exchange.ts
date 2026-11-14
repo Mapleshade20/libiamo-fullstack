@@ -4,9 +4,9 @@
 // learner had not seen yet).
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Caller, chat } from "#lib/server/llm/caller.ts";
 import { align } from "../diff.ts";
 import { type Draft, LANG_NAMES } from "../fixtures/types.ts";
-import { chat, type ModelKey } from "../llm.ts";
 import { DRAFT_CONVENTIONS, draftBlock, ROUTING, VOICE } from "../pass1/context.ts";
 import { label, MARK_RULES, merge, section } from "../pass1/strategies.ts";
 
@@ -95,7 +95,7 @@ export function replyTo(c: Case, n: number): Msg | undefined {
  * Pass 1 over the exchange: each turn written natively as it would have been said then, and the draft fixed against it.
  * `rewrite` resolves first (pass 2's analysis compares with its native version while the labels are written).
  */
-export function pass1Exchange(c: Case, model: ModelKey, d: Draft = draftOf(c)) {
+export function pass1Exchange(c: Case, ai: Caller, d: Draft = draftOf(c)) {
 	const block = `${draftBlock(d)}\n\nThe draft is the writer's turns in a conversation that has already happened, in order, separated by lines "${SEP}". Here is the whole exchange, so you know what each turn answers and what the others said in between (their messages are context, not part of the draft):\n<<<\n${exchange(c)}\n>>>`;
 	const system = `You are a ${LANG_NAMES[d.target]} writing tutor going over what a learner wrote in an online conversation, so they can say it better next time.\n\n${DRAFT_CONVENTIONS(d)}\n\n${ROUTING}\n\n${VOICE(d)}`;
 	const user = `${block}\n\nWork in two steps.\n\nStep 1. Under the heading "### NATIVE", write each of the writer's turns as a fluent ${LANG_NAMES[d.target]} speaker of this community would have written it at that moment, saying what the writer wanted to say there, in their voice and at their length, knowing only what had been said up to that turn. Keep the "${SEP}" lines between turns.\n\nStep 2. Under the heading "### PASS 1", write out the draft after pass 1. Use your native version to notice everything in the draft that is not how it would naturally be said, then fix every pass-1 problem in place. ${MARK_RULES} Keep the "${SEP}" lines exactly.\n\nReply with the two sections only.`;
@@ -104,11 +104,11 @@ export function pass1Exchange(c: Case, model: ModelKey, d: Draft = draftOf(c)) {
 			{ role: "system", content: system },
 			{ role: "user", content: user },
 		],
-		{ model, sample: 0, tag: "q1/b/rewrite" },
+		{ ai, sample: 0, tag: "q1/b/rewrite" },
 	).then((res) => ({ res, native: section(res.text, "NATIVE"), pass1: section(res.text, "PASS 1") }));
 	const done = rewrite.then(async ({ res, native, pass1 }) => {
 		const { hunks, opens } = align(d.text, pass1, d.target);
-		const labels = await label({ ...d, brief: exchange(c) }, hunks, opens, model, 0, "q1/b/label");
+		const labels = await label({ ...d, brief: exchange(c) }, hunks, opens, ai, 0, "q1/b/label");
 		return { d, native, pass1, findings: merge(hunks, opens, labels.value), calls: [res, ...labels.calls] };
 	});
 	rewrite.catch(() => {});

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { align } from "#model/diff.ts";
+import { applyEdits, scopeOf } from "#model/edits.ts";
 import { sentences, spotRange } from "#model/pass2/analyze.ts";
 import { withAttempt } from "#model/pass2/grade.ts";
 import { rebracket } from "#model/pass2/material.ts";
-import { applyEdits, scopeOf } from "#model/session/run.ts";
 
 const broken = "Wow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates. It makes so much sense.";
 

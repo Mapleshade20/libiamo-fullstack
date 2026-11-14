@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type Caller, type CallResult, chatJson } from "#lib/server/llm/caller.ts";
 import { type Draft, LANG_NAMES } from "../fixtures/types.ts";
-import { type CallResult, chatJson, type ModelKey } from "../llm.ts";
 import { MISREAD, REGISTER } from "../pass1/context.ts";
 import type { Analysis } from "./analyze.ts";
 
@@ -30,7 +30,7 @@ const HeardSchema = z.object({ heard: z.array(z.object({ id: z.number(), heard: 
  * anchored the judge when it was asked to say it itself (E13: it then took "just another great line" as "nothing
  * special" with the tutor). The judge compares this with what the writer means.
  */
-async function hear(d: Draft, quotes: string[], model: ModelKey, sample: number) {
+async function hear(d: Draft, quotes: string[], ai: Caller, sample: number) {
 	const T = LANG_NAMES[d.target];
 	const user = [
 		`You are a fluent, native ${T} speaker and a regular of ${d.scene.platform}, and this post is written to you: you are among its readers (${d.scene.audience}), the one it addresses when it addresses someone.`,
@@ -44,14 +44,14 @@ async function hear(d: Draft, quotes: string[], model: ModelKey, sample: number)
 		"",
 		'Reply with JSON only: {"heard":[{"id":1,"heard":"..."}]}',
 	].join("\n");
-	return chatJson([{ role: "user", content: user }], HeardSchema, { model, sample, effort: "low", tag: "e13/hear" });
+	return chatJson([{ role: "user", content: user }], HeardSchema, { ai, sample, effort: "low", tag: "e13/hear" });
 }
 
 /** left: the passages pass 1 left as written for the writer (any script: an English aside in a Spanish email too). */
 export async function judgeSpots(
 	d: Draft,
 	spots: Spot[],
-	model: ModelKey,
+	ai: Caller,
 	sample: number,
 	left: string[] = [],
 ): Promise<{
@@ -82,7 +82,7 @@ export async function judgeSpots(
 		? await hear(
 				d,
 				asked.map((x) => x.words),
-				model,
+				ai,
 				sample,
 			)
 		: null;
@@ -113,7 +113,7 @@ export async function judgeSpots(
 		`Where the tutor says readers would take the words another way than the writer means, or that they are off in register, judge the words as a reader reaches them. How a regular reading it fresh took them is given: it is your evidence, do not work it out again. Compare it with what the post as a whole shows the writer means, not with what the tutor supposes they mean (the tutor guesses, and often reads a learner's intent into words that say exactly what their writer wanted). Taken another way means the fresh reading is at odds with the rest of the post in attitude, act, claim or strength: a complaint heard in a post that praises, a demand in one that only hopes. When the fresh reading turns the attitude or the act the other way (a complaint, however mild, where the post praises; a demand where it hopes; doubt where it agrees), the verdict is "needed", even when the words that follow set it right and even when regulars sometimes write it that way. "better" when the direction is the same and only the strength is off. The fresh reading also says how the words land on the one addressed: when they would feel pressured, talked down to, put off or kept at a distance in a way the writer would not want (off in register, as defined above), the verdict is "needed" too, even when some regulars write it that way; that it is common here does not make it welcome. When the fresh reading fits the rest of the post and lands as the writer would want, the words do what the writer wants: "wrong".`,
 		'Reply with JSON only: {"verdicts":[{"id":1,"verdict":"wrong|better|needed","why":"one short English sentence"}]}',
 	].join("\n");
-	const r = await chatJson([{ role: "user", content: user }], VerdictSchema, { model, sample, effort: "low", tag: "e10/judge" });
+	const r = await chatJson([{ role: "user", content: user }], VerdictSchema, { ai, sample, effort: "low", tag: "e10/judge" });
 	const of = new Map(r.value.verdicts.map((v) => [items[v.id - 1]?.i, v]));
 	return {
 		spots: spots
