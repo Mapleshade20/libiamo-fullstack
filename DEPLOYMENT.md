@@ -61,7 +61,7 @@ unit.
 It then stops and lists whatever still says `CHANGE_ME`. Fill those in:
 
 ```sh
-$EDITOR ~/.config/libiamo/app.env    # ORIGIN, OAuth, SMTP_*, OPENAI_API_KEY
+$EDITOR ~/.config/libiamo/app.env    # ORIGIN, BETTER_AUTH_SECRET, SMTP_*, OAuth
 systemctl --user start libiamo-app
 ```
 
@@ -255,19 +255,8 @@ any external allowlists that explicitly contain the old hostname.
 
 ### Search indexing
 
-`/sitemap.xml` and `/robots.txt` use runtime `ORIGIN`, as do public canonical
-and sharing URLs. Keep `ORIGIN` set to the
-public HTTPS origin, not the container address. The public search allowlist in
-`src/lib/app/seo.ts` supplies both the sitemap and public metadata. All other
-pages, including authentication, app and error pages, receive `noindex`.
-`robots.txt` keeps crawlers out of signed-in surfaces (`CRAWL_DISALLOWED_PATHS`
-in the same file), which only redirect anonymous visitors; authentication, not
-robots rules, protects learner data.
-
-After deployment, verify the domain in Google Search Console via DNS, submit
-`https://libiamo.net/sitemap.xml`, and inspect/request indexing for
-`https://libiamo.net/welcome`. The unauthenticated `/` redirect remains temporary because `/`
-serves Quest Hall for signed-in learners. Do not submit it as a second homepage.
+The public welcome page, the privacy policy, the sitemap and `robots.txt` return with the public pages (phase 6 of the
+rebuild, `docs/design/2026-11-13-step-3-rebuild.md`); until then every page needs an account.
 
 ---
 
@@ -384,29 +373,25 @@ database.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `ORIGIN` | yes | Public origin, no trailing path. Must match the real URL. |
-| `DATABASE_URL` | yes | **secret.** Host is `127.0.0.1` in a pod, `database` under compose. |
+| `ORIGIN` | yes | Public origin, no trailing path. Must match the real URL: Better Auth accepts requests only from it and builds mail links from it. |
+| `DATABASE_URL` | yes | **secret.** Host is the container name under quadlet, `database` under compose. |
 | `POSTGRES_DB` / `POSTGRES_USER` | – | Default `libiamo`. Read only at cluster creation. |
 | `POSTGRES_PASSWORD` | yes | **secret.** Must match `DATABASE_URL`. |
 | `RUN_MIGRATIONS` | – | Default `1`: the entrypoint migrates on every start. `0` to migrate out of band. |
-| `BETTER_AUTH_SECRET` | yes | **secret.** Changing it logs everyone out. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth credentials. Both are required to enable the provider; the secret is sensitive. |
-| `SMTP_*` | yes | **secret** (`SMTP_PASS`). Sign-up requires email verification. `SMTP_SECURE=1` for implicit TLS (port 465). |
-| `OPENAI_API_KEY` | yes | **secret.** |
-| `OPENAI_BASE_URL` / `OPENAI_MODEL` | yes | OpenAI-compatible endpoint. |
-| `TRIAL_TOKEN_BUDGET` | – | Default `50000`. Provider-reported output-token budget (reasoning included) for non-BYOK users, released in thirds: at sign-up, after 24 h and after 48 h. |
-| `TRIAL_TOKEN_HOLD` | – | Default `4096`. Tokens each trial call holds before the provider answers, so concurrent calls cannot overspend; settled to actual usage afterwards. |
+| `BETTER_AUTH_SECRET` | yes | **secret**, 32+ characters. Signs sessions and encrypts learners' keys: changing it logs everyone out and makes saved keys unreadable. |
+| `ADMIN_EMAILS` | – | Comma-separated addresses that become admins when they sign in with the address verified. A fresh database needs no SQL. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth. Both are required to offer the provider; the secret is sensitive. |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth, likewise. |
+| `SMTP_*` | yes | **secret** (`SMTP_PASS`). An account starts by confirming its address. `SMTP_SECURE=1` for implicit TLS (port 465). Without `SMTP_HOST` mail is printed to the log (development only). |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on signing in, signing up, the confirmation mail and password resets, shown only when Cloudflare asks for a click. Both empty turns it off; setting only one refuses to start. |
+| `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, address change (requested and completed), password change or reset, login-method link or unlink, and admin grant. Lines carry addresses and IPs. |
 | `ADDRESS_HEADER` | – | Header holding the visitor's address; see [Visitor address](#visitor-address). Empty: none. |
-| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on sign-in, sign-up, password reset and Profile's email and password changes. Both empty turns it off; setting only one refuses to start. |
-| `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, email change (requested and completed), password change or reset, and login-method link or unlink. Lines carry email addresses and IPs. |
-| `DISABLED_LANGUAGES` | – | Default empty. Comma-separated learning languages (`en`, `es`, `fr`, `ja`) that are opening soon: sign-up and the Hall's language switcher show them but refuse them with an "Opening soon" note. Learners already studying one are unaffected. Listing all four is ignored. |
-| `LLM_LAB` | – | Default `1`. `0` disables LLM tracing, staff prompt overrides and the Lab worker. |
-| `LLM_LAB_PROVIDERS` | – | JSON array of `{"id","label","baseUrl","apiKey","model"}` admins can pick in the Lab; never debits trial quota. |
-| `LLM_LAB_CONCURRENCY` | – | Default `3`. Parallel Lab run calls. |
+| `OPENROUTER_API_KEY` | – | **secret.** The server's own model calls (the session's, until learners' keys carry them in phase 2). |
 | `BODY_SIZE_LIMIT` | – | Default `20M`; adapter-node's own default is only 512K. |
 | `TZ` | – | Default `Asia/Shanghai`. |
-| `LLM_DEBUG` / `DB_DEBUG` | – | `1` logs LLM request/response bodies or SQL. Leave off in production. |
+| `DB_DEBUG` | – | `1` logs every query. Leave off in production. |
+
+The server checks these when it starts (`src/env.ts`) and refuses to run with a required one missing.
 
 On/off variables take `1`/`0`; `true`/`false`, `yes`/`no` and `on`/`off` work too.
 

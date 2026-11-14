@@ -67,25 +67,17 @@ password accept up to 128, Better Auth's former default, so earlier passwords st
 
 ## Proxy rate limits
 
-Rate limiting is left to the reverse proxy, per endpoint and client IP. Form actions are told apart by their query, so `hooks.server.ts`
-(`server/auth/action-url.ts`) refuses a POST to these pages unless its action is spelled exactly
-`?/name`: Caddy's `query` matcher does not match a query it cannot parse (an unescaped `;`) and the two
-decode keys differently, either of which would let a request run the action without matching the rule.
+Rate limiting is left to the reverse proxy, per endpoint and client IP. Since the rebuild (2026-11-13) there are no
+form actions: the pages call Better Auth from the browser, and the app's own writes are remote functions, posted to
+`/_app/remote/<file hash>/<name>`.
 
 | Endpoint | Why |
 | --- | --- |
-| `POST /sign-in` | Password guessing; resends verification mail to unverified accounts. |
-| `POST /sign-up` | Account creation and verification mail. |
-| `POST /forgot-password?/requestReset` | Sends mail. |
-| `POST /forgot-password?/resetPassword` | Reset-token guessing. |
-| `POST /profile?/changeEmail` | Sends mail. |
-| `POST /profile?/changePassword` | Current-password guessing. |
-| `POST /profile?/sendPasswordSetup` | Sends mail. |
-| `POST /profile?/linkSocialAccount`, `?/unlinkSocialAccount` | Login-method changes. |
-| `POST /api/auth/sign-in/email`, `/sign-up/email`, `/sign-in/social` | The same flows called directly. |
+| `POST /api/auth/sign-in/email`, `/sign-up/email`, `/sign-in/social` | Password guessing, account creation, verification mail. |
 | `POST /api/auth/request-password-reset`, `/reset-password`, `/send-verification-email` | Mail and reset tokens. |
-| `POST /api/auth/change-email`, `/change-password`, `/verify-password`, `/delete-user` | Account takeover with a stolen session, password oracle. |
+| `POST /api/auth/change-password`, `/verify-password`, `/change-email` | Account takeover with a stolen session, password oracle. |
 | `POST /api/auth/link-social`, `/unlink-account`, `/update-user` | Login-method and profile changes. |
+| `POST /_app/remote/*/requestEmailChange` | Checks the password, then sends mail. |
 | `GET /api/auth/verify-email`, `/reset-password/*`, `GET,POST /api/auth/callback/*` | Token and OAuth-state guessing. |
 
 The proxy must resolve the visitor's address itself and pass it on in the header `ADDRESS_HEADER`
@@ -93,8 +85,7 @@ names (setup: DEPLOYMENT.md, "Visitor address"). Turnstile's `remoteip` and the 
 that header, the same one adapter-node trusts; without it they record no address rather than a
 client-supplied one.
 
-New actions or endpoints that send mail or change credentials belong in this table, and new pages
-with such actions in `RATE_LIMITED_ACTION_ROUTES`.
+New endpoints or remote functions that send mail or change credentials belong in this table.
 
 ## Not done here
 

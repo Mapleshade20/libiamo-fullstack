@@ -385,7 +385,13 @@ postgres.js 4, `src/env.ts` declaring the environment (Kit 3's replacement for `
 The dev server's CSS can order a global sheet after a page's scoped rules where the build does not (an admin row's line
 height differs by a pixel in dev only); judge looks on the build.
 
-**Next, in order:** `AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
+**Phase 1 is done** (2026-11-13): accounts below; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`, the abuse-protection
+rate-limit table and every environment list describe what exists.
+
+**Next: phase 2, the loop** (§8): transport, lanes and records; the model layer and the revision moved onto them with
+snapshots; the replays passing, also through snapshots; composer, gate, `/live`, the piece's page, My writing, the
+sidebar. Phase 2 starts by recording a replay baseline with the code as imported (§7). The operations monitor's hourly
+query still names `llm_trace` and changes with `llm_call`.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
