@@ -88,20 +88,26 @@ export const MARK_RULES = `Wrap each pass-2 span in ${OPEN} ${CLOSE}, leaving it
 
 // The native version first (what a fluent poster would write), then the pass-1 version against it.
 /** The rewrite (which pass 2 reads) resolves before its labels (which only pass 1's cards need). */
-export function rewritePass1(d: Draft, ai: Caller, sample: number) {
+/** Pass 1's rewrite of a draft: the draft with every pass-1 problem fixed, and (where asked for) a fluent version. A
+ *  revision keeps it, so after a reload the passes that read it can go on without asking for it again. */
+export type Rewrite = { pass1: string; native?: string };
+
+export function rewritePass1(d: Draft, ai: Caller, sample: number, given?: Rewrite) {
 	const system = `You are a ${LANG_NAMES[d.target]} writing tutor making the first pass over a learner's draft before they post it.\n\n${DRAFT_CONVENTIONS(d)}\n\n${ROUTING}\n\n${VOICE(d)}`;
 	const user = `${draftBlock(d)}\n\nWork in two steps.\n\nStep 1. Under the heading "### NATIVE", write the post as a fluent ${LANG_NAMES[d.target]} speaker of this community would write it, saying what this writer wants to say, in their voice and at their length. Where their intent is unclear, make your best guess.\n\nStep 2. Under the heading "### PASS 1", write out the draft after pass 1. Use your native version to notice everything in the draft that is not how it would naturally be said, then fix every pass-1 problem in place. ${MARK_RULES}\n\nReply with the two sections only.`;
-	const rewrite = chat(
-		[
-			{ role: "system", content: system },
-			{ role: "user", content: user },
-		],
-		{ ai, sample, tag: "e1/s3/rewrite" },
-	).then((res) => ({ res, native: section(res.text, "NATIVE"), pass1: section(res.text, "PASS 1") }));
+	const rewrite: Promise<{ res: CallResult | null; native: string; pass1: string }> = given
+		? Promise.resolve({ res: null, native: given.native ?? "", pass1: given.pass1 })
+		: chat(
+				[
+					{ role: "system", content: system },
+					{ role: "user", content: user },
+				],
+				{ ai, sample, tag: "e1/s3/rewrite" },
+			).then((res) => ({ res, native: section(res.text, "NATIVE"), pass1: section(res.text, "PASS 1") }));
 	const done = rewrite.then(async ({ res, native, pass1 }): Promise<Pass1Run> => {
 		const { hunks, opens } = align(d.text, pass1, d.target);
 		const labels = await label(d, hunks, opens, ai, sample, "e1/s3/label");
-		return { findings: merge(hunks, opens, labels.value), calls: [res, ...labels.calls], artifacts: { native, rewrite: pass1 } };
+		return { findings: merge(hunks, opens, labels.value), calls: [...(res ? [res] : []), ...labels.calls], artifacts: { native, rewrite: pass1 } };
 	});
 	rewrite.catch(() => {});
 	done.catch(() => {});

@@ -1,6 +1,6 @@
 import type { Caller } from "#lib/server/llm/caller.ts";
 import type { Draft } from "#lib/server/revision/draft.ts";
-import { type Finding, rewritePass1 } from "#lib/server/revision/pass1/rewrite.ts";
+import { type Finding, type Rewrite, rewritePass1 } from "#lib/server/revision/pass1/rewrite.ts";
 import { analyze } from "#lib/server/revision/pass2/analyze.ts";
 import { freshNative } from "#lib/server/revision/pass2/fresh.ts";
 import { judgeSpots } from "#lib/server/revision/pass2/judge.ts";
@@ -15,8 +15,8 @@ const betterTier = (findings: Finding[]) =>
  * as soon as its rewrite is labelled while the analysis is still running. Optional pass-1 changes are kept as tier
  * "better", for writers who asked to see more.
  */
-export function detectSplit(d: Draft, ai: Caller, sample: number, opts: { judge?: boolean } = {}) {
-	const p1 = rewritePass1(d, ai, sample);
+export function detectSplit(d: Draft, ai: Caller, sample: number, opts: { judge?: boolean } = {}, given?: Rewrite) {
+	const p1 = rewritePass1(d, ai, sample, given);
 	const pass1 = p1.done.then((r) => ({ findings: betterTier(r.findings), calls: r.calls }));
 	const base = p1.rewrite.then((rw) => analysisBase(d, rw.pass1));
 	// The analysis reads the draft as written, told which spans pass 1 left for it; then it is rebased on the pass-1
@@ -39,5 +39,7 @@ export function detectSplit(d: Draft, ai: Caller, sample: number, opts: { judge?
 	pass1.catch(() => {});
 	pass2.catch(() => {});
 	base.catch(() => {});
-	return { pass1, pass2, base };
+	const rewrite = p1.rewrite.then(({ pass1, native }): Rewrite => ({ pass1, native }));
+	rewrite.catch(() => {});
+	return { pass1, pass2, base, rewrite };
 }
