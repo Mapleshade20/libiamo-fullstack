@@ -380,12 +380,12 @@ postgres.js 4, `src/env.ts` declaring the environment (Kit 3's replacement for `
 | `pnpm test` | 21 files, 109 tests pass |
 | replay | the lab's 2026-11-12 session: 14 steps identical, then `notes` differs by the `was` field the lab added after recording |
 | pages | the production build matches the demo pixel for pixel on 32 of 36 screenshots (desktop and phone); the rest differ by subpixels or data |
-| container | not built yet |
+| container | builds and boots under `podman-compose` on an empty database: the migration applies, `/health` is ok, SIGTERM closes the pool |
 
 The dev server's CSS can order a global sheet after a page's scoped rules where the build does not (an admin row's line
 height differs by a pixel in dev only); judge looks on the build.
 
-**Next, in order:** the image boots under compose with an empty database; Better Auth from `legacy` (version 1.7)
+**Next, in order:** Better Auth from `legacy` (version 1.7)
 behind the demo's auth pages; the welcome, settings and the key on real accounts through remote functions;
 `AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
 
