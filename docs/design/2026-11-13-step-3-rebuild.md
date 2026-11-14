@@ -393,7 +393,7 @@ height differs by a pixel in dev only); judge looks on the build.
 **Phase 1 is done** (2026-11-13): accounts below; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`, the abuse-protection
 rate-limit table and every environment list describe what exists.
 
-**Phase 2, the loop: under way.**
+**Phase 2, the loop: done but for the side-by-side look.**
 
 - **The baseline** (2026-11-14). The lab's recordings did not replay (of 270, 149 miss the cache because their prompts
   changed, 64 crashed the server, 52 differed at the first step), so a new one was recorded with the code as imported:
@@ -431,7 +431,12 @@ rate-limit table and every environment list describe what exists.
   posted and written-again are commands. The demo's stand-in pieces and the clean-ups of older builds' local data are
   gone; this device keeps only a scenario set aside before its revision (phase 4) and the tour's sandbox.
 - The operations monitor's hourly volume check reads `llm_call`.
-- **Next:** the whole loop checked in the browser beside the demo (the production build, desktop and phone).
+- **Checked in the browser** (2026-11-14, headless Chromium on the baseline cache): coming back at each checkpoint of
+  own writing (pass 1 part answered and at its end, pass 2 after the plan and after a spot), the composer into
+  `/live/<piece>` with its view transition, and the whole loop of the translation case on the dev server and on the
+  production build: pass 1, three spots, the end, the piece's page with its entries filed by the server. No page
+  changed its look beyond a place left out of My writing's line when a piece has none yet; a side-by-side with the
+  demo on desktop and phone is still to do.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
