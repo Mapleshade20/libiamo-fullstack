@@ -337,8 +337,8 @@ than `load` and form actions. They and Svelte's async mode are experimental, so:
 
 **How the demo comes in.** It is brought in whole and kept running: the app starts as the demo on its browser
 storage, and each phase replaces a part of `lib/demo` with loads and actions, page by page turning rendering on. The
-model layer arrives as `src/model` (alias `$model`) and is distributed over the domains in phase 2. The work is done
-when `lib/demo`, `src/model`, the root `ssr = false`, the `/lab` pages and the dev panel are gone. SvelteKit, Vite,
+model layer arrived as `src/model` and was distributed over the domains in phase 2. The work is done
+when `lib/demo`, the root `ssr = false`, the `/lab` pages and the dev panel are gone. SvelteKit, Vite,
 Vitest and TypeScript are a major version behind (the demo's versions were kept so the import changes nothing); the
 upgrade is its own step in phase 1, with the migration guides read first.
 
@@ -393,18 +393,26 @@ height differs by a pixel in dev only); judge looks on the build.
 **Phase 1 is done** (2026-11-13): accounts below; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`, the abuse-protection
 rate-limit table and every environment list describe what exists.
 
-**Next: phase 2, the loop** (§8): transport, lanes and records; the model layer and the revision moved onto them with
-snapshots; the replays passing, also through snapshots; composer, gate, `/live`, the piece's page, My writing, the
-sidebar. Phase 2 starts by recording a replay baseline with the code as imported (§7): of the lab's 270 recordings
-replayed from its cache on 2026-11-13, 149 miss the cache (their prompts changed since), 64 crash the server (the
-unhandled rejection below), 52 differ at the first step, and only 2026-11-12T00-56 runs to its last step (where it
-differs by the `was` field added after it), so the baseline is new recordings of every way in and both tutor
-languages. The operations monitor's hourly
-query still names `llm_trace` and changes with `llm_call`. The lab's `LiveSession` leaves background promises without a
-handler (`det.base` from the detection started at `pass1`): when such a call fails the rejection is unhandled and Node
-exits, taking every learner's session with it (found replaying the lab's recordings against the dev server). The
-`RevisionSession` must own every background promise, and the server should log an unhandled rejection rather than
-exit.
+**Phase 2, the loop: under way.**
+
+- **The baseline** (2026-11-14). The lab's recordings did not replay (of 270, 149 miss the cache because their prompts
+  changed, 64 crashed the server, 52 differed at the first step), so a new one was recorded with the code as imported:
+  `lab/record.mjs` plays eleven cases (`lab/baseline/cases.json`: own writing in English and in Spanish, the mail,
+  Discord, Reddit and AO3 places, a translation; both tutor languages) on Claude Haiku with a scripted learner whose
+  choices rotate, so between them they send every action of the protocol. $0.35. The sessions and the cache are in
+  `lab/baseline/`; `lab/replay.mjs` with `lab/account.mjs` replays them.
+- **Calls** (done). `server/llm`: the provider table (`lib/llm/providers.ts`, shared with the key form), the transport,
+  the dev cache, per-revision lanes and debug calls, `llm_call` records, and the `Caller` every model function takes.
+  Learners' calls run on their saved key only ("nokey" without one, "refused" when the provider says so, both shown by
+  the page's notice); the gate runs on `OPENROUTER_API_KEY`. The server logs an unhandled rejection instead of exiting.
+- **The model layer distributed** (done). `src/model` is gone: the revision in `server/revision` (`RevisionSession` in
+  `revision.ts`), the gate in `server/writing`, collecting in `server/notebook`, sources and names in
+  `server/translation`, `text/` for words and diffs, the fixtures with the developer panel in `server/dev`. The lab's
+  experiments went with it (the whole-session runner, the simulated learner, the analysis and pass-1 variants, the
+  task/stage globals, the vet); the chip counter is per revision. The baseline replays identically after each step.
+- **Next:** pieces, the tape and snapshots (`piece`, `piece_step`, `piece_revision` are in the schema), `resume` and
+  `pass1progress`, replays through snapshots; then the composer, gate, `/live/<piece>`, the piece's page, My writing
+  and the sidebar on the server. The operations monitor's hourly query still names `llm_trace`.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

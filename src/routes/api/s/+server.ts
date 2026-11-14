@@ -1,10 +1,10 @@
 import { learner } from "#lib/server/guard.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
 import { Lanes } from "#lib/server/llm/lanes.ts";
+import { LANGS, type Lang, normLang } from "#lib/server/revision/draft.ts";
+import { RevisionSession } from "#lib/server/revision/revision.ts";
 import { logSession, sessions } from "#lib/server/sessions.ts";
-import { sourceKind } from "#model/context/source.ts";
-import { LANGS, type Lang, normLang } from "#model/fixtures/types.ts";
-import { LiveSession } from "#model/session/live.ts";
+import { sourceKind } from "#lib/server/writing/source.ts";
 
 // Starts a live session from what the home page handed over.
 export async function POST({ request }) {
@@ -41,7 +41,7 @@ export async function POST({ request }) {
 	const ai = await learnerCaller({ user: u, lanes: new Lanes(), fresh: !!b.noCache });
 	sessions.set(id, {
 		owner: u.id,
-		session: new LiveSession(
+		session: new RevisionSession(
 			{
 				exchange,
 				translation,

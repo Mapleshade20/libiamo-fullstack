@@ -1,7 +1,7 @@
 import { learner } from "#lib/server/guard.ts";
 import { serviceKey } from "#lib/server/llm/callers.ts";
 import { recorder } from "#lib/server/llm/records.ts";
-import { gate } from "#model/gate.ts";
+import { gate } from "#lib/server/writing/gate.ts";
 
 // The composer's door (src/model/gate.ts): is this something to work on, and in which language? The service pays.
 export async function POST({ request }) {

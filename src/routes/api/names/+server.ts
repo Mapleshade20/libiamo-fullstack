@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { error } from "@sveltejs/kit";
 import { repoPath } from "#lib/server/paths.ts";
-import type { NameTable } from "#model/translate/names.ts";
-import { WORKS } from "#model/translate/works.ts";
+import type { NameTable } from "#lib/server/translation/names.ts";
+import { WORKS } from "#lib/server/translation/works.ts";
 import { dev } from "$app/env";
 
 // The works' name tables (seed/names/<work>.<locale>.json, written by scripts/names.ts), for the admin to confirm.

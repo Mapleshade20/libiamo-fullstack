@@ -1,11 +1,11 @@
 import { learner } from "#lib/server/guard.ts";
 import { stopOf } from "#lib/server/llm/transport.ts";
+import type { RevisionSession } from "#lib/server/revision/revision.ts";
 import { logSession, sessions } from "#lib/server/sessions.ts";
-import type { LiveSession } from "#model/session/live.ts";
 
 // Each action is one step of the session page's flow; see src/session/live.ts.
 // biome-ignore lint/suspicious/noExplicitAny: request bodies are checked by the session's methods.
-const ACTIONS: Record<string, (s: LiveSession, b: any) => unknown> = {
+const ACTIONS: Record<string, (s: RevisionSession, b: any) => unknown> = {
 	scene: (s, b) => s.inferScene(b.correction || undefined),
 	start: (s) => s.start(),
 	pass1: (s, b) => s.pass1(b.detail === "needed" || b.detail === "more" ? b.detail : undefined),

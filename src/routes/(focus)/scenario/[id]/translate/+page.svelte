@@ -9,7 +9,7 @@ import { app, nameOf, read, tx, write } from "#lib/demo/app.svelte.ts";
 import { HANDOFF_KEY, myWriting, recordWriting } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { SIMS, scenarioById, situationOf } from "#lib/demo/scenarios.ts";
-import { blockAt, blocksOf, termRuns } from "#model/translate/blocks.ts";
+import { blockAt, blocksOf, termRuns } from "#lib/translation/blocks.ts";
 import { dev as isDev } from "$app/env";
 import { beforeNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
