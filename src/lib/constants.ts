@@ -21,3 +21,13 @@ export function langName(code: string, inLang: string): string {
 }
 /** A language's own name for itself, as a switch lists them: a learner finds their language whatever the interface is in. */
 export const endonym = (code: string) => langName(code, code);
+
+/* Account values the database checks (src/lib/server/db/schema.ts). */
+export const ROLES = ["learner", "admin"] as const;
+export type Role = (typeof ROLES)[number];
+/** The tutor speaks the learner's own language or the one they write in. */
+export const TUTOR_LANGUAGES = ["native", "target"] as const;
+export type TutorLanguage = (typeof TUTOR_LANGUAGES)[number];
+/** Where a learner's own key comes from. */
+export const KEY_PROVIDERS = ["openrouter", "deepseek", "openai", "glm"] as const;
+export type KeyProvider = (typeof KEY_PROVIDERS)[number];

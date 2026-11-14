@@ -5,5 +5,5 @@
 		"sourceMap": true,
 		"strict": true
 	},
-	"include": ["src", "vite.config.ts", "test"]
+	"include": ["src", "vite.config.ts", "drizzle.config.ts", "drizzle.prod.config.ts", "test"]
 }
