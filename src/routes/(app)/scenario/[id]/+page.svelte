@@ -10,8 +10,8 @@ import Button from "#lib/components/ui/button/button.svelte";
 import { app, demoOpens, read, tx, write } from "#lib/demo/app.svelte.ts";
 import { myWriting, siteOf } from "#lib/demo/data.ts";
 import { reopen } from "#lib/demo/reopen.ts";
-import { SIMS, scenarioById, scenarioState, situationOf } from "#lib/demo/scenarios.ts";
 import { notesNow } from "#lib/notebook/notebook.svelte.ts";
+import { scenarioView } from "#lib/scenario/scenario.remote.ts";
 import { page } from "$app/state";
 
 /*
@@ -19,16 +19,16 @@ import { page } from "$app/state";
  * is there, what they want out of it (the main app's objectives), and how it starts, shown in the place's own look.
  * Then a moment to prepare: phrases from their own notebook that could fit, and a plan in their own words (planning
  * before a task makes what follows more fluent and more ambitious); the session afterwards reads the plan as their
- * notes. The button opens the place: the main app's simulated surface (in the demo, a placeholder for it), or for a
- * translation, the sheet it is written on.
+ * notes. The button opens the place: the simulated surface, or for a translation, the sheet it is written on. The plan
+ * stays on this device until the learner goes in (phase 4b keeps it with the piece from then on).
  */
-const scenario = $derived(scenarioById(page.params.id ?? ""));
-const s = $derived(scenario ? situationOf(scenario) : undefined);
-const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
+const scenario = $derived(await scenarioView({ id: page.params.id ?? "", lang: app.lang }));
+const s = $derived(scenario?.situation);
+const sim = $derived(scenario?.scene);
 const st = $derived(scenario ? siteOf(scenario.site) : undefined);
-const progress = $derived(scenario ? scenarioState(scenario.id) : "new");
-const started = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.open) : undefined);
-const written = $derived(scenario ? myWriting().find((w) => w.scenarioId === scenario.id && w.finishedAt) : undefined);
+const progress = $derived(scenario?.state ?? "new");
+const started = $derived(scenario?.openPiece ? myWriting().find((w) => w.id === scenario.openPiece) : undefined);
+const written = $derived(scenario?.writtenPiece);
 // Phrases the learner already owns that could serve here: their notebook's latest few (phase 4 ranks them by fit).
 const owned = $derived((await notesNow()).slice(0, 4).map((n) => n.phrase));
 const planKey = $derived(`scenarioPlan:${page.params.id}`);
@@ -37,9 +37,10 @@ $effect(() => {
 	plan = read<string>(planKey, "");
 });
 const savePlan = () => write(planKey, plan);
-const enter = $derived(scenario?.site === "Translate" ? tx("qEnterTr") : tx("qEnter", { site: scenario?.site ?? "" }));
+const translation = $derived(scenario?.kind === "translation");
+const enter = $derived(translation ? tx("qEnterTr") : tx("qEnter", { site: scenario?.site ?? "" }));
 $effect(() => {
-	document.title = `${scenario?.title[app.lang] ?? tx("navLibrary")} · ${tx("homeTitle")}`;
+	document.title = `${scenario?.title ?? tx("navLibrary")} · ${tx("homeTitle")}`;
 });
 </script>
 
@@ -50,18 +51,18 @@ $effect(() => {
 		<a class="back" href="/library"><ArrowLeft class="size-4" aria-hidden="true" />{tx("shelfAll")}</a>
 		<header>
 			<p class="meta">
-				<span class="place">{scenario.site}</span><span>{tx("aboutMin", { m: scenario.min })}</span>
+				<span class="place">{scenario.site}</span><span>{tx("aboutMin", { m: scenario.minutes })}</span>
 				{#if progress === "open"}
 					<span class="on">{tx("scenarioActive")}</span>
 				{:else if progress === "written"}
 					<span>{tx("scenarioWritten")}</span>
 				{/if}
 			</p>
-			<h1>{scenario.title[app.lang]}</h1>
-			<p class="line">{scenario.line[app.lang]}</p>
+			<h1>{scenario.title}</h1>
+			<p class="line">{scenario.line}</p>
 			<!-- What a newcomer would not know (the game, what happened before); most scenarios have none. -->
-			{#if scenario.site !== "Translate" && scenario.brief[app.lang]}
-				<p class="intro" lang={app.lang}>{scenario.brief[app.lang]}</p>
+			{#if !translation && scenario.introduction}
+				<p class="intro" lang={app.lang}>{scenario.introduction}</p>
 			{/if}
 		</header>
 
@@ -78,7 +79,7 @@ $effect(() => {
 							<div>
 								<dt>{tx("qThere")}</dt>
 								<dd class="cast">
-									{#each sim.cast as c}
+									{#each sim.people as c}
 										<span class="person"
 											><span class="avatar" aria-hidden="true">{c.name.replace(/^u\//, "").slice(0, 1).toUpperCase()}</span
 											><span><b>{c.name}</b> <small>{c.who}</small></span></span
@@ -101,8 +102,8 @@ $effect(() => {
 				{/if}
 
 				<section aria-labelledby="sit-h">
-					<h2 id="sit-h" class="label">{tx(scenario.site === "Translate" ? "qToTranslate" : "qStarts")}</h2>
-					<div class="paper"><Situation {s} lang={s.kind === "translate" ? s.sourceLang : app.lang} /></div>
+					<h2 id="sit-h" class="label">{tx(translation ? "qToTranslate" : "qStarts")}</h2>
+					<div class="paper"><Situation {s} lang={scenario.situationLang} /></div>
 				</section>
 			</div>
 
@@ -126,12 +127,12 @@ $effect(() => {
 					{#if started}
 						<Button class="w-full" onclick={() => reopen(started)}>{tx("qContinue")}<ArrowRight aria-hidden="true" /></Button>
 					{:else}
-						<Button class="w-full" href="/scenario/{scenario.id}/{scenario.site === "Translate" ? "translate" : "play"}"
+						<Button class="w-full" href="/scenario/{scenario.id}/{translation ? "translate" : "play"}"
 							>{enter}<ArrowRight aria-hidden="true" /></Button
 						>
 					{/if}
 					{#if written}
-						<a class="seen" href="/w/{written.id}">{tx("qSeeIt")}</a>
+						<a class="seen" href="/w/{written}">{tx("qSeeIt")}</a>
 					{/if}
 				</div>
 			</aside>

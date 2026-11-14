@@ -14,6 +14,24 @@ CREATE TABLE "account" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "issue" (
+	"id" text PRIMARY KEY NOT NULL,
+	"date" date NOT NULL,
+	"title" jsonb NOT NULL,
+	"line" jsonb NOT NULL,
+	"tone" text NOT NULL,
+	"deep" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "issue_scenario" (
+	"issue_id" text NOT NULL,
+	"scenario_id" text NOT NULL,
+	"position" integer NOT NULL,
+	CONSTRAINT "issue_scenario_issue_id_scenario_id_pk" PRIMARY KEY("issue_id","scenario_id")
+);
+--> statement-breakpoint
 CREATE TABLE "llm_call" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"user_id" text,
@@ -44,6 +62,22 @@ CREATE TABLE "llm_call" (
 CREATE TABLE "llm_prompt" (
 	"hash" text PRIMARY KEY NOT NULL,
 	"text" text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "name_rendering" (
+	"work_id" text NOT NULL,
+	"locale" text NOT NULL,
+	"term" text NOT NULL,
+	"kind" text DEFAULT 'name' NOT NULL,
+	"rendering" text DEFAULT '' NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"origin" text,
+	"url" text,
+	"why" text,
+	"candidates" jsonb,
+	CONSTRAINT "name_rendering_work_id_locale_term_pk" PRIMARY KEY("work_id","locale","term"),
+	CONSTRAINT "name_rendering_kind_check" CHECK ("name_rendering"."kind" in ('name', 'term')),
+	CONSTRAINT "name_rendering_status_check" CHECK ("name_rendering"."status" in ('pending', 'confirmed'))
 );
 --> statement-breakpoint
 CREATE TABLE "note" (
@@ -80,6 +114,7 @@ CREATE TABLE "piece" (
 	"language" text NOT NULL,
 	"kind" text NOT NULL,
 	"scenario_id" text,
+	"source_id" uuid,
 	"place" text DEFAULT '' NOT NULL,
 	"title" text DEFAULT '' NOT NULL,
 	"text" text NOT NULL,
@@ -165,6 +200,44 @@ CREATE TABLE "review_log" (
 	CONSTRAINT "review_log_verdict_check" CHECK ("review_log"."verdict" is null or "review_log"."verdict" in ('exact', 'close', 'other', 'miss', 'none'))
 );
 --> statement-breakpoint
+CREATE TABLE "scenario" (
+	"id" text PRIMARY KEY NOT NULL,
+	"kind" text NOT NULL,
+	"place" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"minutes" integer NOT NULL,
+	"urgency" text,
+	"max_turns" integer,
+	"work_id" text,
+	"versions" jsonb NOT NULL,
+	"created_by" text,
+	"published_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "scenario_kind_check" CHECK ("scenario"."kind" in ('exchange', 'translation')),
+	CONSTRAINT "scenario_place_check" CHECK ("scenario"."place" in ('ao3', 'reddit', 'email', 'discord', 'imessage', 'translation')),
+	CONSTRAINT "scenario_status_check" CHECK ("scenario"."status" in ('draft', 'published', 'withdrawn')),
+	CONSTRAINT "scenario_urgency_check" CHECK ("scenario"."urgency" is null or "scenario"."urgency" in ('high', 'medium', 'low')),
+	CONSTRAINT "scenario_kind_place_check" CHECK (("scenario"."kind" = 'translation') = ("scenario"."place" = 'translation')),
+	CONSTRAINT "scenario_minutes_check" CHECK ("scenario"."minutes" > 0),
+	CONSTRAINT "scenario_max_turns_check" CHECK ("scenario"."max_turns" is null or "scenario"."max_turns" > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "scenario_source" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"scenario_id" text NOT NULL,
+	"language" text NOT NULL,
+	"native" text NOT NULL,
+	"title" text DEFAULT '' NOT NULL,
+	"text" text DEFAULT '' NOT NULL,
+	"glossary" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"state" text DEFAULT 'pending' NOT NULL,
+	"notes" jsonb,
+	"original_hash" text,
+	"made_at" timestamp with time zone,
+	CONSTRAINT "scenario_source_state_check" CHECK ("scenario_source"."state" in ('pending', 'checked', 'notes', 'confirmed', 'failed'))
+);
+--> statement-breakpoint
 CREATE TABLE "session" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
@@ -233,19 +306,35 @@ CREATE TABLE "verification" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "work" (
+	"id" text PRIMARY KEY NOT NULL,
+	"title" text NOT NULL,
+	"wikidata" text,
+	"wikis" jsonb,
+	"manual" jsonb
+);
+--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_issue_id_issue_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issue"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "llm_call" ADD CONSTRAINT "llm_call_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "llm_call" ADD CONSTRAINT "llm_call_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "name_rendering" ADD CONSTRAINT "name_rendering_work_id_work_id_fk" FOREIGN KEY ("work_id") REFERENCES "public"."work"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note" ADD CONSTRAINT "note_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note" ADD CONSTRAINT "note_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note" ADD CONSTRAINT "note_reading_id_reading_id_fk" FOREIGN KEY ("reading_id") REFERENCES "public"."reading"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "piece" ADD CONSTRAINT "piece_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "piece" ADD CONSTRAINT "piece_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "piece" ADD CONSTRAINT "piece_source_id_scenario_source_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."scenario_source"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "piece_revision" ADD CONSTRAINT "piece_revision_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "piece_step" ADD CONSTRAINT "piece_step_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "practice_day" ADD CONSTRAINT "practice_day_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reading" ADD CONSTRAINT "reading_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_log" ADD CONSTRAINT "review_log_note_id_note_id_fk" FOREIGN KEY ("note_id") REFERENCES "public"."note"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_log" ADD CONSTRAINT "review_log_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scenario" ADD CONSTRAINT "scenario_work_id_work_id_fk" FOREIGN KEY ("work_id") REFERENCES "public"."work"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scenario" ADD CONSTRAINT "scenario_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scenario_source" ADD CONSTRAINT "scenario_source_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_key" ADD CONSTRAINT "user_key_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_week" ADD CONSTRAINT "user_week_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -259,5 +348,6 @@ CREATE INDEX "piece_user_idx" ON "piece" USING btree ("user_id","language","upda
 CREATE UNIQUE INDEX "piece_open_scenario_unique" ON "piece" USING btree ("user_id","scenario_id") WHERE "piece"."scenario_id" is not null and "piece"."state" in ('writing', 'revising');--> statement-breakpoint
 CREATE INDEX "reading_user_idx" ON "reading" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "review_log_note_idx" ON "review_log" USING btree ("note_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "scenario_source_unique" ON "scenario_source" USING btree ("scenario_id","language","native");--> statement-breakpoint
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");

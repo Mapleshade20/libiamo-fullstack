@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Collector } from "#lib/components/collect/collector.svelte.ts";
-import type { Situation } from "#lib/demo/scenarios.ts";
+import type { Situation } from "#lib/scenario/types.ts";
 import Passage from "./Passage.svelte";
 
 /*

@@ -1,0 +1,975 @@
+{
+	"version": 1,
+	"scenarios": [
+		{
+			"id": "ao3-fic",
+			"kind": "exchange",
+			"place": "ao3",
+			"status": "published",
+			"minutes": 10,
+			"urgency": "low",
+			"maxTurns": null,
+			"publishedAt": "2026-09-02",
+			"versions": {
+				"en": {
+					"title": "Comment on a fic you loved",
+					"line": "The author asked readers which scene stayed with them.",
+					"introduction": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+					"you": "A reader who followed the fic for two years",
+					"people": [
+						{
+							"name": "mossfur_writes",
+							"who": "the author",
+							"notes": ""
+						},
+						{
+							"name": "lichenpaw",
+							"who": "another reader",
+							"notes": ""
+						}
+					],
+					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
+					"others": "",
+					"opening": {
+						"workTitle": "Long Way Home",
+						"authorName": "mossfur_writes",
+						"chapterTitle": "Chapter 24: The Moonstone",
+						"bodyExcerpt": "Bluestar did not look back at the camp. The moor was silver under a moon that had not been there an hour ago, and the cold came up through her paws like an old argument she had never finished. She thought of Oakheart, and then she made herself stop thinking of him, and walked on.",
+						"endNote": "That's the end! Thank you for sticking with this for two years. If you have a second, tell me which scene stayed with you, I read every comment."
+					},
+					"followed": []
+				},
+				"es": {
+					"title": "Comenta un fic que te encantó",
+					"line": "La autora preguntó qué escena se les quedó grabada.",
+					"you": "A reader who followed the fic for two years",
+					"people": [
+						{
+							"name": "lunadepapel",
+							"who": "the author",
+							"notes": ""
+						}
+					],
+					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
+					"others": "",
+					"opening": {
+						"workTitle": "El largo camino",
+						"authorName": "lunadepapel",
+						"chapterTitle": "Capítulo 24: La piedra lunar",
+						"bodyExcerpt": "Estrella Azul no miró atrás. El páramo brillaba bajo una luna que una hora antes no estaba, y el frío le subía por las patas como una discusión que nunca terminó.",
+						"endNote": "¡Fin! Gracias por acompañarme dos años. Si tienen un momento, díganme qué escena se les quedó grabada: leo todos los comentarios."
+					},
+					"followed": []
+				},
+				"fr": {
+					"title": "Commente une fic que tu as adorée",
+					"line": "L'autrice demande quelle scène vous a marqués.",
+					"you": "A reader who followed the fic for two years",
+					"people": [
+						{
+							"name": "plume_de_lune",
+							"who": "the author",
+							"notes": ""
+						}
+					],
+					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
+					"others": "",
+					"opening": {
+						"workTitle": "Le long chemin",
+						"authorName": "plume_de_lune",
+						"chapterTitle": "Chapitre 24 : La Pierre de Lune",
+						"bodyExcerpt": "Étoile Bleue ne se retourna pas. La lande était argentée sous une lune qui n'était pas là une heure plus tôt, et le froid lui montait dans les pattes comme une vieille dispute jamais finie.",
+						"endNote": "C'est fini ! Merci de m'avoir suivie pendant deux ans. Si vous avez une seconde, dites-moi quelle scène vous a marqués, je lis tous les commentaires."
+					},
+					"followed": []
+				},
+				"ja": {
+					"title": "好きだった二次創作に感想を書く",
+					"line": "作者が、どの場面が心に残ったかを読者に聞いている。",
+					"you": "A reader who followed the fic for two years",
+					"people": [
+						{
+							"name": "tsukiyo_kaku",
+							"who": "the author",
+							"notes": ""
+						}
+					],
+					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
+					"others": "",
+					"opening": {
+						"workTitle": "帰り道",
+						"authorName": "tsukiyo_kaku",
+						"chapterTitle": "第24章 月の石",
+						"bodyExcerpt": "ブルースターは野営地を振り返らなかった。一時間前にはなかった月の下で荒野は銀色に光り、冷たさが、決着のつかなかった口論のように足の裏から這い上がってきた。",
+						"endNote": "完結です！二年間ありがとうございました。もしよければ、どの場面が心に残ったか教えてください。コメントは全部読んでいます。"
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "reddit-practice",
+			"kind": "exchange",
+			"place": "reddit",
+			"status": "published",
+			"minutes": 12,
+			"urgency": "low",
+			"maxTurns": null,
+			"publishedAt": "2026-09-10",
+			"versions": {
+				"en": {
+					"title": "Answer a question in r/languagelearning",
+					"line": "Someone asks how you practise writing every day.",
+					"you": "A Redditor who writes in English every day",
+					"people": [
+						{
+							"name": "u/quietfern",
+							"who": "asked the question",
+							"notes": ""
+						},
+						{
+							"name": "u/tallgrass_42",
+							"who": "already answered",
+							"notes": ""
+						}
+					],
+					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "How do you actually practise writing? Not apps, real writing.",
+							"body": "I can read pretty well at this point (B2-ish) but whenever I try to write a comment or an email it takes forever and still sounds stiff. What do you actually do every day? Journals? Discord? I'd love specifics.",
+							"subreddit": "languagelearning",
+							"author": "u/quietfern"
+						},
+						"previousComments": [
+							{
+								"author": "u/tallgrass_42",
+								"text": "Honestly, replying to things I care about. Fandom comments got me further than any textbook."
+							}
+						]
+					},
+					"followed": []
+				},
+				"es": {
+					"title": "Responde una pregunta en r/languagelearning",
+					"line": "Alguien pregunta cómo practicas la escritura cada día.",
+					"you": "A Redditor who writes in English every day",
+					"people": [
+						{
+							"name": "u/helecho_quieto",
+							"who": "asked the question",
+							"notes": ""
+						}
+					],
+					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "¿Cómo practicáis la escritura de verdad?",
+							"body": "Leo bastante bien (B2) pero escribir un correo me cuesta muchísimo y suena rígido. ¿Qué hacéis cada día? Me encantarían detalles concretos.",
+							"subreddit": "languagelearning",
+							"author": "u/helecho_quieto"
+						},
+						"previousComments": []
+					},
+					"followed": []
+				},
+				"fr": {
+					"title": "Réponds à une question sur r/languagelearning",
+					"line": "Quelqu'un demande comment tu t'entraînes à écrire chaque jour.",
+					"you": "A Redditor who writes in English every day",
+					"people": [
+						{
+							"name": "u/fougere_calme",
+							"who": "asked the question",
+							"notes": ""
+						}
+					],
+					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "Comment vous entraînez-vous vraiment à écrire ?",
+							"body": "Je lis plutôt bien (B2) mais écrire un mail me prend une éternité et ça sonne raide. Vous faites quoi, concrètement, chaque jour ?",
+							"subreddit": "languagelearning",
+							"author": "u/fougere_calme"
+						},
+						"previousComments": []
+					},
+					"followed": []
+				},
+				"ja": {
+					"title": "r/languagelearning の質問に答える",
+					"line": "毎日どうやって書く練習をしているか聞かれている。",
+					"you": "A Redditor who writes in English every day",
+					"people": [
+						{
+							"name": "u/shizuka_shida",
+							"who": "asked the question",
+							"notes": ""
+						}
+					],
+					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "みんな実際どうやって書く練習してる？",
+							"body": "読むのはそこそこできる（B2くらい）けど、メールやコメントを書くとすごく時間がかかって不自然になる。毎日具体的に何をしてる？",
+							"subreddit": "languagelearning",
+							"author": "u/shizuka_shida"
+						},
+						"previousComments": []
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "email-extension",
+			"kind": "exchange",
+			"place": "email",
+			"status": "published",
+			"minutes": 8,
+			"urgency": "medium",
+			"maxTurns": null,
+			"publishedAt": "2026-09-15",
+			"versions": {
+				"en": {
+					"title": "Ask your professor for an extension",
+					"line": "Polite, short, with a reason that holds up.",
+					"you": "A student with a family emergency",
+					"people": [
+						{
+							"name": "Prof. Hannah Lin",
+							"who": "your professor",
+							"notes": ""
+						}
+					],
+					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "Prof. Hannah Lin",
+								"to": "",
+								"subject": "Reminder: essay due Friday",
+								"body": "Dear all,\n\nA quick reminder that the comparative essay is due this Friday at 5 pm. If something serious is getting in the way, write to me before the deadline, not after.\n\nBest,\nHannah Lin"
+							}
+						]
+					},
+					"followed": []
+				},
+				"es": {
+					"title": "Pide una prórroga a tu profesora",
+					"line": "Educado, breve y con un motivo creíble.",
+					"you": "A student with a family emergency",
+					"people": [
+						{
+							"name": "Prof. Lucía Ortega",
+							"who": "your professor",
+							"notes": ""
+						}
+					],
+					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "Prof. Lucía Ortega",
+								"to": "",
+								"subject": "Recordatorio: ensayo el viernes",
+								"body": "Hola a todos:\n\nOs recuerdo que el ensayo se entrega este viernes a las 17 h. Si tenéis algún problema serio, escribidme antes del plazo, no después.\n\nUn saludo,\nLucía Ortega"
+							}
+						]
+					},
+					"followed": []
+				},
+				"fr": {
+					"title": "Demande un délai à ton professeur",
+					"line": "Poli, court, avec une raison qui tient la route.",
+					"you": "A student with a family emergency",
+					"people": [
+						{
+							"name": "M. Laurent Petit",
+							"who": "your professor",
+							"notes": ""
+						}
+					],
+					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "M. Laurent Petit",
+								"to": "",
+								"subject": "Rappel : dissertation vendredi",
+								"body": "Bonjour à tous,\n\nPetit rappel : la dissertation est à rendre vendredi à 17 h. En cas de vrai problème, écrivez-moi avant la date limite, pas après.\n\nBien à vous,\nLaurent Petit"
+							}
+						]
+					},
+					"followed": []
+				},
+				"ja": {
+					"title": "教授に締め切りの延長をお願いする",
+					"line": "丁寧に、短く、納得できる理由を添えて。",
+					"you": "A student with a family emergency",
+					"people": [
+						{
+							"name": "林 先生",
+							"who": "your professor",
+							"notes": ""
+						}
+					],
+					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "林 先生",
+								"to": "",
+								"subject": "リマインダー：レポート締め切りは金曜",
+								"body": "皆さん\n\n比較レポートの締め切りは今週金曜17時です。やむを得ない事情がある場合は、締め切り前に連絡してください。\n\n林"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "discord-ending",
+			"kind": "exchange",
+			"place": "discord",
+			"status": "published",
+			"minutes": 10,
+			"urgency": "high",
+			"maxTurns": 20,
+			"publishedAt": "2026-09-20",
+			"versions": {
+				"en": {
+					"title": "Join the talk in #book-club",
+					"line": "They're arguing about the ending. Pick a side.",
+					"you": "A book-club regular who liked the ending",
+					"people": [
+						{
+							"name": "juniper",
+							"who": "thinks it was rushed",
+							"notes": ""
+						},
+						{
+							"name": "theo",
+							"who": "thinks it was earned",
+							"notes": ""
+						},
+						{
+							"name": "mira",
+							"who": "runs the club",
+							"notes": ""
+						}
+					],
+					"goals": ["Take a side on the ending", "Back it up with something from the book"],
+					"others": "",
+					"opening": {
+						"serverName": "Readers' Corner",
+						"channelName": "book-club",
+						"previousMessages": [
+							{
+								"sender": "juniper",
+								"text": "ok I finished it. the ending felt rushed?? she forgives him in like two pages"
+							},
+							{
+								"sender": "theo",
+								"text": "nah it was set up the whole time, the letters in ch 9"
+							},
+							{
+								"sender": "juniper",
+								"text": "set up ≠ earned imo"
+							},
+							{
+								"sender": "mira",
+								"text": "anyone who hasn't weighed in yet? 👀"
+							}
+						]
+					},
+					"followed": []
+				},
+				"es": {
+					"title": "Únete a la charla en #club-de-lectura",
+					"line": "Discuten sobre el final. Elige un bando.",
+					"you": "A book-club regular who liked the ending",
+					"people": [
+						{
+							"name": "nerea",
+							"who": "thinks it was rushed",
+							"notes": ""
+						},
+						{
+							"name": "teo",
+							"who": "thinks it was earned",
+							"notes": ""
+						}
+					],
+					"goals": ["Take a side on the ending", "Back it up with something from the book"],
+					"others": "",
+					"opening": {
+						"serverName": "Rincón de lectores",
+						"channelName": "club-de-lectura",
+						"previousMessages": [
+							{
+								"sender": "nerea",
+								"text": "acabé el libro. el final fue muy rápido, ¿no?"
+							},
+							{
+								"sender": "teo",
+								"text": "qué va, estaba preparado desde las cartas del capítulo 9"
+							}
+						]
+					},
+					"followed": []
+				},
+				"fr": {
+					"title": "Rejoins la discussion dans #club-lecture",
+					"line": "Ça débat sur la fin. Choisis ton camp.",
+					"you": "A book-club regular who liked the ending",
+					"people": [
+						{
+							"name": "lou",
+							"who": "thinks it was rushed",
+							"notes": ""
+						},
+						{
+							"name": "théo",
+							"who": "thinks it was earned",
+							"notes": ""
+						}
+					],
+					"goals": ["Take a side on the ending", "Back it up with something from the book"],
+					"others": "",
+					"opening": {
+						"serverName": "Coin lecture",
+						"channelName": "club-lecture",
+						"previousMessages": [
+							{
+								"sender": "lou",
+								"text": "j'ai fini. la fin était bâclée non ?"
+							},
+							{
+								"sender": "théo",
+								"text": "non, tout était préparé avec les lettres du chapitre 9"
+							}
+						]
+					},
+					"followed": []
+				},
+				"ja": {
+					"title": "#読書会 の話に加わる",
+					"line": "結末について議論中。どちらかの立場を取ろう。",
+					"you": "A book-club regular who liked the ending",
+					"people": [
+						{
+							"name": "みお",
+							"who": "thinks it was rushed",
+							"notes": ""
+						},
+						{
+							"name": "てつ",
+							"who": "thinks it was earned",
+							"notes": ""
+						}
+					],
+					"goals": ["Take a side on the ending", "Back it up with something from the book"],
+					"others": "",
+					"opening": {
+						"serverName": "読書の部屋",
+						"channelName": "読書会",
+						"previousMessages": [
+							{
+								"sender": "みお",
+								"text": "読み終わった。結末、急すぎない？"
+							},
+							{
+								"sender": "てつ",
+								"text": "いや、9章の手紙からずっと伏線あったよ"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "translate-menu",
+			"kind": "translation",
+			"place": "translation",
+			"status": "published",
+			"minutes": 15,
+			"publishedAt": "2026-09-25",
+			"versions": {
+				"en": {
+					"title": "Translate a café's new menu",
+					"line": "Keep it short and appetising.",
+					"introduction": "A small café wants its autumn menu in English for tourists. Short, appetising lines, not a word-for-word list.",
+					"original": "Osmanthus latte: house-made osmanthus syrup, a little sea-salt foam on top.\nChestnut basque cheesecake: caramelised outside, still soft inside.\nMulled wine (alcohol-free): cinnamon, orange peel and clove, for rainy days.",
+					"where": "the café's printed autumn menu",
+					"readers": "tourists who read English, choosing at the counter",
+					"terms": ["Osmanthus latte", "Basque cheesecake"]
+				}
+			},
+			"sources": [
+				{
+					"language": "en",
+					"native": "zh-CN",
+					"title": "秋季限定菜单",
+					"text": "桂花拿铁：用店里自制的桂花糖浆调制，顶上撒一点海盐奶泡。\n栗子巴斯克奶酪蛋糕：外表焦香，里面依然软嫩。\n无酒精热红酒：加了肉桂、橙皮和丁香，适合阴雨天喝。",
+					"glossary": [
+						{
+							"term": "Osmanthus latte",
+							"shown": "桂花拿铁",
+							"gloss": "以店内自制桂花糖浆为主要原料的拿铁咖啡，是这里的招牌饮品。"
+						},
+						{
+							"term": "Basque cheesecake",
+							"shown": "巴斯克奶酪蛋糕",
+							"gloss": "一种有名的奶酪蛋糕做法，这里指外部焦糖化、内部柔软的蛋糕。"
+						}
+					],
+					"state": "confirmed"
+				}
+			]
+		},
+		{
+			"id": "translate-crow",
+			"kind": "translation",
+			"place": "translation",
+			"status": "published",
+			"minutes": 20,
+			"publishedAt": "2026-11-08",
+			"versions": {
+				"en": {
+					"title": "Translate a fan's rant about Crow & Tawny",
+					"line": "Keep the heat: fans should hear one of their own.",
+					"introduction": "A fellow fan wants their rant about Crowfeather and Tawnypelt posted to r/WarriorCats. It should read like a fan wrote it in English.",
+					"original": "Where do I even start? Crowfeather and Tawnypelt as a couple is ridiculous. There was absolutely no buildup to it, and it feels completely out of character for both of them. It also undermines major parts of their established stories and relationships and rewrites years of lore for the sake of a pairing that we literally never asked for.\n\nCrowfeather's character has always been defined by his complicated, deeply emotional relationships with Feathertail and Leafpool and the lasting impact those loves had on him. Throwing him into a romance with Tawnypelt ignores the emotional baggage and growth that have shaped him for so long. Likewise, Tawnypelt's story has never revolved around romance in the way Crowfeather's has. She's been portrayed as fiercely independent, devoted to ShadowClan, so why has she suddenly started acting like a teenage girl?\n\nDon't get me wrong, I love the idea of two older cats falling in love even after the deaths of their respective mates--but these two are not the characters for that.",
+					"where": "a post in r/WarriorCats, the Warriors fan subreddit",
+					"readers": "Warriors fans who have read the books",
+					"terms": ["Crowfeather", "Tawnypelt", "Feathertail", "Leafpool", "ShadowClan"]
+				}
+			},
+			"sources": [
+				{
+					"language": "en",
+					"native": "zh-CN",
+					"title": "r/WarriorCats 的吐槽帖",
+					"text": "从哪说起呢？鸦羽和褐皮在一起简直离谱。完全没有任何铺垫，而且感觉两个人都极其不符合他们的性格。这还破坏了他们各自故事和关系里的重要部分，为了一对我们压根没人想要的组合，把好几年的设定都改写了。\n\n鸦羽这个角色一直以来都是靠他和羽尾、叶池之间复杂又深刻的感情来塑造的，那些感情对他的影响也一直延续到现在。把他硬塞进和褐皮的恋情里，就等于无视了这么多年来塑造他的情感包袱和成长。褐皮的故事也从来不是像鸦羽那样围绕爱情展开的，她一直被写成独立坚强、忠于影族的样子，那怎么突然就像个青春期少女一样了？\n\n别误会，我很喜欢两个年纪大的猫在各自伴侣死后又重新相爱的设定，但这两个角色不适合这样的故事。",
+					"glossary": [
+						{
+							"term": "Crowfeather",
+							"shown": "鸦羽",
+							"gloss": "角色名，一只公猫，其过去的恋情是羽尾和叶池，文中讨论他与她们的感情。"
+						},
+						{
+							"term": "Tawnypelt",
+							"shown": "褐皮",
+							"gloss": "角色名，一只母猫，文中被描写为独立坚强、忠于影族，被与鸦羽配对。"
+						},
+						{
+							"term": "Feathertail",
+							"shown": "羽尾",
+							"gloss": "角色名，鸦羽过去的爱人之一。"
+						},
+						{
+							"term": "Leafpool",
+							"shown": "叶池",
+							"gloss": "角色名，鸦羽过去的爱人之一。"
+						},
+						{
+							"term": "ShadowClan",
+							"shown": "影族",
+							"gloss": "群体名，猫族的一个部族，褐皮效忠于它。"
+						}
+					],
+					"state": "confirmed"
+				}
+			]
+		},
+		{
+			"id": "reddit-theory",
+			"kind": "exchange",
+			"place": "reddit",
+			"status": "published",
+			"minutes": 12,
+			"urgency": "low",
+			"maxTurns": null,
+			"publishedAt": "2026-10-12",
+			"versions": {
+				"en": {
+					"title": "Post your theory in r/WarriorCats",
+					"line": "A thread about why StarClan went quiet.",
+					"introduction": "In Warriors, StarClan are the spirits of dead cats, and medicine cats meet them at the Moonstone. In the recent books they have gone quiet, and fans argue about why.",
+					"you": "A Warriors fan with a theory",
+					"people": [
+						{
+							"name": "u/ashpelt_fan",
+							"who": "asked for theories",
+							"notes": ""
+						},
+						{
+							"name": "u/frostkit",
+							"who": "blames the Moonpool",
+							"notes": ""
+						}
+					],
+					"goals": ["Put forward your theory", "Point to something in the books"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "Why did StarClan go quiet in the Broken Code arc? Theories?",
+							"body": "Rereading and I still don't get it. Was it the impostor, or were they always weaker than the Clans thought? Give me your best theory with evidence.",
+							"subreddit": "WarriorCats",
+							"author": "u/ashpelt_fan"
+						},
+						"previousComments": [
+							{
+								"author": "u/frostkit",
+								"text": "I think the Moonpool itself was the problem, not StarClan."
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "imessage-thanks",
+			"kind": "exchange",
+			"place": "imessage",
+			"status": "published",
+			"minutes": 5,
+			"urgency": "high",
+			"maxTurns": 20,
+			"publishedAt": "2026-10-20",
+			"versions": {
+				"en": {
+					"title": "Thank a friend for a birthday playlist",
+					"line": "Say which song got you, not just thanks.",
+					"you": "Sam's close friend, on your birthday",
+					"people": [
+						{
+							"name": "Sam",
+							"who": "made you a playlist",
+							"notes": ""
+						}
+					],
+					"goals": ["Thank Sam", "Say which song got you"],
+					"others": "",
+					"opening": {
+						"previousMessages": [
+							{
+								"sender": "Sam",
+								"text": "happy birthday!! made you something 🎧"
+							},
+							{
+								"sender": "Sam",
+								"text": "it's called 'songs that sound like your handwriting' don't ask"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "email-landlord",
+			"kind": "exchange",
+			"place": "email",
+			"status": "published",
+			"minutes": 8,
+			"urgency": "medium",
+			"maxTurns": null,
+			"publishedAt": "2026-10-26",
+			"versions": {
+				"en": {
+					"title": "Tell your landlord the heating is broken",
+					"line": "Firm but friendly, and ask when it'll be fixed.",
+					"you": "A tenant whose heating stopped working",
+					"people": [
+						{
+							"name": "David",
+							"who": "Greenway Lettings",
+							"notes": ""
+						}
+					],
+					"goals": ["Say what's broken and since when", "Ask for a date it'll be fixed"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "Greenway Lettings",
+								"to": "",
+								"subject": "Welcome to your new flat",
+								"body": "Hi,\n\nWelcome! If anything needs fixing, just email this address and we'll get back to you within two working days.\n\nKind regards,\nDavid, Greenway Lettings"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "ao3-ghost",
+			"kind": "exchange",
+			"place": "ao3",
+			"status": "published",
+			"minutes": 8,
+			"urgency": "low",
+			"maxTurns": null,
+			"publishedAt": "2026-10-28",
+			"versions": {
+				"en": {
+					"title": "Comment on a ghost story",
+					"line": "Tell the author what actually scared you.",
+					"you": "A reader who got properly scared",
+					"people": [
+						{
+							"name": "hollowbirch",
+							"who": "the author",
+							"notes": ""
+						}
+					],
+					"goals": ["Tell the author what scared you", "Be specific"],
+					"others": "",
+					"opening": {
+						"workTitle": "The Lantern on the Stairs",
+						"authorName": "hollowbirch",
+						"chapterTitle": "Oneshot",
+						"bodyExcerpt": "Every night the lantern moved one step lower. Nobody carried it. By the thirteenth night it was standing at the bottom of the stairs, lit, as if it was waiting for someone to go up.",
+						"endNote": "Happy Halloween! Short and spooky, as promised. Did it get you?"
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "reddit-costume",
+			"kind": "exchange",
+			"place": "reddit",
+			"status": "published",
+			"minutes": 10,
+			"urgency": "low",
+			"maxTurns": null,
+			"publishedAt": "2026-10-28",
+			"versions": {
+				"en": {
+					"title": "Help someone with a last-minute costume",
+					"line": "They have a bedsheet, a lamp and two hours.",
+					"you": "Someone good at last-minute costumes",
+					"people": [
+						{
+							"name": "u/panic_pumpkin",
+							"who": "needs a costume",
+							"notes": ""
+						}
+					],
+					"goals": ["Give one idea that works with a bedsheet and a lamp", "Make it doable in two hours"],
+					"others": "",
+					"opening": {
+						"post": {
+							"title": "Party in 2 hours, I own a white bedsheet and a desk lamp. Help.",
+							"body": "Not a ghost, everyone will be a ghost. Ideas?",
+							"subreddit": "halloween",
+							"author": "u/panic_pumpkin"
+						},
+						"previousComments": []
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "discord-movie",
+			"kind": "exchange",
+			"place": "discord",
+			"status": "published",
+			"minutes": 8,
+			"urgency": "high",
+			"maxTurns": 20,
+			"publishedAt": "2026-10-28",
+			"versions": {
+				"en": {
+					"title": "Pick tonight's horror film in #movie-night",
+					"line": "Make your case in two or three messages.",
+					"you": "A friend who wants a real horror film",
+					"people": [
+						{
+							"name": "ren",
+							"who": "gave the options",
+							"notes": ""
+						},
+						{
+							"name": "ines",
+							"who": "wants Paddington 2",
+							"notes": ""
+						}
+					],
+					"goals": ["Pick a film", "Win the vote"],
+					"others": "",
+					"opening": {
+						"serverName": "Friday Night",
+						"channelName": "movie-night",
+						"previousMessages": [
+							{
+								"sender": "ren",
+								"text": "options: The Others, Hereditary, or Paddington 2 for the cowards"
+							},
+							{
+								"sender": "ines",
+								"text": "I vote paddington and I'm not ashamed"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "email-neighbour",
+			"kind": "exchange",
+			"place": "email",
+			"status": "published",
+			"minutes": 6,
+			"urgency": "medium",
+			"maxTurns": null,
+			"publishedAt": "2026-10-28",
+			"versions": {
+				"en": {
+					"title": "Invite your neighbours to trick-or-treat",
+					"line": "A note for the building's mailing list.",
+					"you": "A neighbour with a bowl of sweets",
+					"people": [
+						{
+							"name": "Marta",
+							"who": "flat 3",
+							"notes": ""
+						}
+					],
+					"goals": ["Invite the kids", "Say when and where"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "Building 14 residents",
+								"to": "",
+								"subject": "Halloween?",
+								"body": "Hi all,\n\nIs anyone doing anything for the kids this year? Last year it was a bit quiet.\n\nMarta (flat 3)"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "email-club",
+			"kind": "exchange",
+			"place": "email",
+			"status": "published",
+			"minutes": 8,
+			"urgency": "medium",
+			"maxTurns": null,
+			"publishedAt": "2026-09-01",
+			"versions": {
+				"en": {
+					"title": "Ask to join a university club late",
+					"line": "Sign-ups closed last week.",
+					"you": "A student who missed the sign-up",
+					"people": [
+						{
+							"name": "Chess Society",
+							"who": "the organisers",
+							"notes": ""
+						}
+					],
+					"goals": ["Ask to join late", "Give a short reason"],
+					"others": "",
+					"opening": {
+						"emails": [
+							{
+								"from": "Chess Society",
+								"to": "",
+								"subject": "Sign-ups are closed",
+								"body": "Thanks to everyone who signed up! Registration is now closed for this term.\n\nChess Society"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		},
+		{
+			"id": "discord-roommate",
+			"kind": "exchange",
+			"place": "discord",
+			"status": "published",
+			"minutes": 6,
+			"urgency": "high",
+			"maxTurns": 20,
+			"publishedAt": "2026-09-01",
+			"versions": {
+				"en": {
+					"title": "Find a study buddy in #freshers",
+					"line": "Introduce yourself without being boring.",
+					"you": "A fresher looking for a study partner",
+					"people": [
+						{
+							"name": "kai",
+							"who": "also doing stats",
+							"notes": ""
+						}
+					],
+					"goals": ["Introduce yourself", "Find someone to study with"],
+					"others": "",
+					"opening": {
+						"serverName": "Uni 2026",
+						"channelName": "freshers",
+						"previousMessages": [
+							{
+								"sender": "kai",
+								"text": "anyone else doing intro to stats? looking for people to suffer with"
+							}
+						]
+					},
+					"followed": []
+				}
+			}
+		}
+	],
+	"issues": [
+		{
+			"id": "halloween",
+			"date": "2026-10-28",
+			"title": {
+				"en": "The spooky issue"
+			},
+			"line": {
+				"en": "Ghost stories, costumes and a vote on tonight's film."
+			},
+			"tone": "#e8c9a6",
+			"deep": "#4a3424",
+			"scenarios": ["ao3-ghost", "reddit-costume", "discord-movie", "email-neighbour"]
+		},
+		{
+			"id": "back-to-school",
+			"date": "2026-09-01",
+			"title": {
+				"en": "Back to school"
+			},
+			"line": {
+				"en": "Late sign-ups, new people, first emails."
+			},
+			"tone": "#cfdcc4",
+			"deep": "#33442c",
+			"scenarios": ["email-club", "discord-roommate", "email-extension"]
+		}
+	]
+}

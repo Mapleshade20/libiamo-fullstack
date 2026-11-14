@@ -4,18 +4,19 @@ import { reducedMotion } from "#lib/components/common/motion.ts";
 import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
+import { hasScenarios } from "#lib/constants.ts";
 import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
 import { followUp, myWriting } from "#lib/demo/data.ts";
 import { dev } from "#lib/demo/dev.svelte.ts";
 import { reopen } from "#lib/demo/reopen.ts";
-import { shelfScenarios } from "#lib/demo/scenarios.ts";
 import { dueNow } from "#lib/notebook/notebook.svelte.ts";
+import { shelfScenarios } from "#lib/scenario/scenario.remote.ts";
 import FollowCard from "./FollowCard.svelte";
 import ScenarioCard from "./ScenarioCard.svelte";
 
 /*
  * Below the box: review as a slim row (only when cards are due), then at most four cards, in this order: the piece the
- * learner left unfinished, two scenarios (lib/demo/scenarios.ts shelfScenarios: the current issue first), and a card for
+ * learner left unfinished, two scenarios (server/scenario shelfScenariosOf: the current issue first), and a card for
  * suggesting a situation (a link beside "All scenarios" when the shelf is full). A language without
  * prompts keeps the first and the last. The heading is drawn once per visit.
  */
@@ -23,7 +24,8 @@ let { head }: { head: string } = $props();
 const follow = $derived(followUp());
 const openPiece = $derived(myWriting().find((w) => w.open));
 // Four at most: continue, follow-up, then scenarios; the "+" card only when there is room.
-const prompts = $derived(shelfScenarios(app.lang).slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
+const offered = $derived(hasScenarios(app.lang) ? await shelfScenarios(app.lang) : []);
+const prompts = $derived(offered.slice(0, 4 - (openPiece ? 1 : 0) - (follow ? 1 : 0)));
 const roomForAdd = $derived((openPiece ? 1 : 0) + (follow ? 1 : 0) + prompts.length < 4);
 const deck = $derived(await dueNow());
 const add = createPlay();
@@ -125,7 +127,7 @@ function hold(on: boolean) {
 			</div>
 		{/if}
 		{#each prompts as q (q.id)}
-			<ScenarioCard site={q.site} title={q.title[app.lang]} line={q.line[app.lang]} meta={tx("aboutMin", { m: q.min })} href="/scenario/{q.id}" />
+			<ScenarioCard site={q.site} title={q.title} line={q.line} meta={tx("aboutMin", { m: q.minutes })} href="/scenario/{q.id}" />
 		{/each}
 		{#if roomForAdd}
 			<a class="card add" href="/contribute" class:playing={add.playing} onpointerdown={() => add.play()}>

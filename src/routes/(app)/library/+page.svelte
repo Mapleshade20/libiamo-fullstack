@@ -7,32 +7,30 @@ import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { hasScenarios } from "#lib/constants.ts";
 import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
 import { siteOf } from "#lib/demo/data.ts";
-import { currentIssue, ISSUES, pool, rank, type Scenario, scenarioById, scenarioState, situationOf } from "#lib/demo/scenarios.ts";
+import { library } from "#lib/scenario/scenario.remote.ts";
+import type { ScenarioCard as Card } from "#lib/scenario/types.ts";
 
 /*
  * The prompts: this month's issue (a themed handful the admin publishes on a date), then the evergreen pool, which
  * has no schedule and is ranked by code ("for you": not written yet first, places taking turns, newer first), then the
  * back issues. A place filter and a time filter narrow the pool.
  */
-const issue = $derived(currentIssue(app.lang));
-const issueScenarios = $derived(
-	issue ? issue.scenarios.map((id) => scenarioById(id) as Scenario).filter((q) => q.title[app.lang] && situationOf(q)) : [],
-);
+const lib = $derived(hasScenarios(app.lang) ? await library(app.lang) : { pool: [], past: [] });
+const issue = $derived(lib.issue);
 let sort = $state("for");
 let place = $state("all");
 let time = $state("any");
-const all = $derived(pool(app.lang));
-const places = $derived([...new Set(all.map((q) => q.site))]);
+const places = $derived([...new Set(lib.pool.map((q) => q.site))]);
+// The pool comes ranked for this learner; "newest" is the same list by when each was published.
 const shown = $derived.by(() => {
-	const list = all.filter((q) => (place === "all" || q.site === place) && (time === "any" || (time === "short" ? q.min <= 8 : q.min > 8)));
-	return sort === "for" ? rank(list) : [...list].sort((a, b) => b.added.localeCompare(a.added));
+	const list = lib.pool.filter(
+		(q) => (place === "all" || q.site === place) && (time === "any" || (time === "short" ? q.minutes <= 8 : q.minutes > 8)),
+	);
+	return sort === "for" ? list : [...list].sort((a, b) => b.publishedAt - a.publishedAt);
 });
-const past = $derived(ISSUES.filter((i) => i.id !== issue?.id && i.scenarios.some((id) => scenarioById(id)?.title[app.lang])));
 const dateOf = (d: string) => new Intl.DateTimeFormat(app.lang, { month: "long", day: "numeric" }).format(new Date(`${d}T12:00`));
-const metaOf = (q: Scenario) => {
-	const s = scenarioState(q.id);
-	return s === "written" ? tx("scenarioWritten") : s === "open" ? tx("scenarioActive") : tx("aboutMin", { m: q.min });
-};
+const metaOf = (q: Card) =>
+	q.state === "written" ? tx("scenarioWritten") : q.state === "open" ? tx("scenarioActive") : tx("aboutMin", { m: q.minutes });
 $effect(() => {
 	document.title = `${tx("navLibrary")} · ${tx("homeTitle")}`;
 });
@@ -53,20 +51,12 @@ $effect(() => {
 			<section class="issue" style:--tone={issue.tone} style:--deep={issue.deep} aria-labelledby="issue-h">
 				<div class="masthead">
 					<span class="kicker">{tx("libIssue")} · {dateOf(issue.date)}</span>
-					<h2 id="issue-h">{issue.title[app.lang] ?? issue.title.en}</h2>
-					<p>{issue.line[app.lang] ?? issue.line.en}</p>
+					<h2 id="issue-h">{issue.title}</h2>
+					<p>{issue.line}</p>
 				</div>
 				<div class="grid">
-					{#each issueScenarios as q (q.id)}
-						<ScenarioCard
-							compact
-							site={q.site}
-							title={q.title[app.lang]}
-							line={q.line[app.lang]}
-							meta={metaOf(q)}
-							state={scenarioState(q.id)}
-							href="/scenario/{q.id}"
-						/>
+					{#each issue.scenarios as q (q.id)}
+						<ScenarioCard compact site={q.site} title={q.title} line={q.line} meta={metaOf(q)} state={q.state} href="/scenario/{q.id}" />
 					{/each}
 				</div>
 			</section>
@@ -112,14 +102,7 @@ $effect(() => {
 						{#if shown.length}
 							<div class="grid">
 								{#each shown as q (q.id)}
-									<ScenarioCard
-										site={q.site}
-										title={q.title[app.lang]}
-										line={q.line[app.lang]}
-										meta={metaOf(q)}
-										state={scenarioState(q.id)}
-										href="/scenario/{q.id}"
-									/>
+									<ScenarioCard site={q.site} title={q.title} line={q.line} meta={metaOf(q)} state={q.state} href="/scenario/{q.id}" />
 								{/each}
 							</div>
 						{:else}
@@ -130,20 +113,18 @@ $effect(() => {
 			</div>
 		</section>
 
-		{#if past.length}
+		{#if lib.past.length}
 			<section class="past" aria-labelledby="past-h">
 				<h2 id="past-h">{tx("libPast")}</h2>
 				<ul>
-					{#each past as i (i.id)}
+					{#each lib.past as i (i.id)}
 						<li style:--tone={i.tone} style:--deep={i.deep}>
 							<span class="spine" aria-hidden="true"></span>
 							<div class="main">
-								<div class="t">{i.title[app.lang] ?? i.title.en} <span class="d">{dateOf(i.date)}</span></div>
+								<div class="t">{i.title} <span class="d">{dateOf(i.date)}</span></div>
 								<div class="links">
-									{#each i.scenarios.map((id) => scenarioById(id)).filter((q) => q?.title[app.lang]) as q (q?.id)}
-										{#if q}
-											<a href="/scenario/{q.id}" style:--dot={siteOf(q.site).tone}>{q.title[app.lang]}</a>
-										{/if}
+									{#each i.scenarios as q (q.id)}
+										<a href="/scenario/{q.id}" style:--dot={siteOf(q.site).tone}>{q.title}</a>
 									{/each}
 								</div>
 							</div>

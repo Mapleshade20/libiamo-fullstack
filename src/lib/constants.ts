@@ -49,6 +49,25 @@ export type Posted = (typeof POSTED)[number];
 export const CALL_STATES = ["done", "failed", "repaired", "discarded"] as const;
 export type CallState = (typeof CALL_STATES)[number];
 
+/* Scenarios (src/lib/server/db/schema.ts). */
+/** An exchange is played in a simulated place; a translation is written on its sheet. */
+export const SCENARIO_KINDS = ["exchange", "translation"] as const;
+export type ScenarioKind = (typeof SCENARIO_KINDS)[number];
+/** Where a scenario happens: the five simulated places, or the translation sheet. */
+export const PLACES = ["ao3", "reddit", "email", "discord", "imessage", "translation"] as const;
+export type Place = (typeof PLACES)[number];
+export type ExchangePlace = Exclude<Place, "translation">;
+export const SCENARIO_STATUSES = ["draft", "published", "withdrawn"] as const;
+export type ScenarioStatus = (typeof SCENARIO_STATUSES)[number];
+/** How quickly the others answer in an exchange. */
+export const URGENCIES = ["high", "medium", "low"] as const;
+export type Urgency = (typeof URGENCIES)[number];
+/** A translation's source in a learner language: made and checked at publish, or confirmed by an admin. */
+export const SOURCE_STATES = ["pending", "checked", "notes", "confirmed", "failed"] as const;
+export type SourceState = (typeof SOURCE_STATES)[number];
+export const NAME_KINDS = ["name", "term"] as const;
+export const NAME_STATUSES = ["pending", "confirmed"] as const;
+
 /* The notebook and review (src/lib/server/db/schema.ts). */
 /** Where an entry came from: the learner's own writing (a finished piece), or something they read and collected. */
 export const NOTE_KINDS = ["own", "collected"] as const;
