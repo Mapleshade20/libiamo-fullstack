@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { tx } from "$lib/demo/app.svelte";
-import { around, type Face } from "$lib/review/faces";
+import { tx } from "#lib/demo/app.svelte.ts";
+import { around, type Face } from "#lib/review/faces.ts";
 
 /*
  * The front of a review card (lib/review/faces.ts), for review itself and for the notebook's preview: the cue (what

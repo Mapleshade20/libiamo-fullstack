@@ -2,15 +2,15 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import ReviewFace from "#lib/components/review/ReviewFace.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, toast, tx } from "#lib/demo/app.svelte.ts";
+import { editNote, noteById } from "#lib/demo/notes.ts";
+import { around, fixedPart } from "#lib/review/faces.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import ReviewFace from "$lib/components/review/ReviewFace.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "$lib/demo/app.svelte";
-import { editNote, noteById } from "$lib/demo/notes";
-import { around, fixedPart } from "$lib/review/faces";
 
 /*
  * One notebook entry. Its look says what each part is, so it needs no headings: the phrase (the page's one serif

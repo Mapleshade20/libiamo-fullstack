@@ -1,18 +1,18 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
-import { dev as isDev } from "$app/environment";
+import { autogrow } from "#lib/components/common/motion.ts";
+import { tip } from "#lib/components/common/tip.ts";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, nameOf, read, tx, write } from "#lib/demo/app.svelte.ts";
+import { HANDOFF_KEY, myWriting, recordWriting } from "#lib/demo/data.ts";
+import { dev } from "#lib/demo/dev.svelte.ts";
+import { SIMS, scenarioById, situationOf } from "#lib/demo/scenarios.ts";
+import { blockAt, blocksOf, termRuns } from "#model/translate/blocks.ts";
+import { dev as isDev } from "$app/env";
 import { beforeNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
-import { autogrow } from "$lib/components/common/motion";
-import { tip } from "$lib/components/common/tip";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, nameOf, read, tx, write } from "$lib/demo/app.svelte";
-import { HANDOFF_KEY, myWriting, recordWriting } from "$lib/demo/data";
-import { dev } from "$lib/demo/dev.svelte";
-import { SIMS, scenarioById, situationOf } from "$lib/demo/scenarios";
-import { blockAt, blocksOf, termRuns } from "$model/translate/blocks.ts";
 
 /*
  * Writing a translation. Sources come from anywhere (a book, a blog, a forum post, a menu), so the page imitates none

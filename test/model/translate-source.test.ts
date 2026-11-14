@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { fixNames, keepNames } from "$model/translate/source.ts";
+import { fixNames, keepNames } from "#model/translate/source.ts";
 
 test("names go back to the original's spelling in the source and the glosses; terms keep their rendering", () => {
 	const r = keepNames(

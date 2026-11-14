@@ -10,22 +10,22 @@ import Plus from "@lucide/svelte/icons/plus";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Undo2 from "@lucide/svelte/icons/undo-2";
 import X from "@lucide/svelte/icons/x";
+import CaptureImport from "#lib/components/admin/CaptureImport.svelte";
+import OpeningEditor from "#lib/components/admin/OpeningEditor.svelte";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { autogrow } from "#lib/components/common/motion.ts";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
+import Situation from "#lib/components/scenario/Situation.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { fmtDay, langEn, type SimExtra, SOURCES, type SourceRow, scenarioStatus, simExtra, URGENCY, written } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { SCENARIOS, type Scenario, SIMS, type Sim, type Situation as Sit } from "#lib/demo/scenarios.ts";
 import { page } from "$app/state";
-import CaptureImport from "$lib/components/admin/CaptureImport.svelte";
-import OpeningEditor from "$lib/components/admin/OpeningEditor.svelte";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import { autogrow } from "$lib/components/common/motion";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import { tip } from "$lib/components/common/tip";
-import ScenarioCard from "$lib/components/home/ScenarioCard.svelte";
-import Situation from "$lib/components/scenario/Situation.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { fmtDay, langEn, type SimExtra, SOURCES, type SourceRow, scenarioStatus, simExtra, URGENCY, written } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
-import { SCENARIOS, type Scenario, SIMS, type Sim, type Situation as Sit } from "$lib/demo/scenarios";
 
 /*
  * One scenario. A place scenario: where it happens and how the simulation paces it; each learning language's version

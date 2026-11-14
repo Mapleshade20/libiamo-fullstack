@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { playTape, stopTape, type Tape } from "$lib/components/tour/tape.ts";
+import { playTape, stopTape, type Tape } from "#lib/components/tour/tape.ts";
 
 // The tour's tape stands in for every model call: a browser-like global with a fetch that must never be reached for them.
 const reached: string[] = [];

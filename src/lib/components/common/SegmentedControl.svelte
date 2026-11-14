@@ -6,7 +6,7 @@ export type SegmentedItem = { value: string; label: string; href?: string; disab
 
 <script lang="ts">
 import { onMount, untrack } from "svelte";
-import { cn } from "$lib/utils";
+import { cn } from "#lib/utils.ts";
 
 /*
  * One of a few short modes or views: a recess in the desk with a paper slip pushed to the chosen item

@@ -1,7 +1,7 @@
 <script lang="ts">
-import { dev } from "$app/environment";
-import NameTables from "$lib/components/admin/NameTables.svelte";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
+import NameTables from "#lib/components/admin/NameTables.svelte";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { dev } from "$app/env";
 </script>
 
 <FocusBar exit={{ label: "Home", href: "/" }} />

@@ -1,9 +1,9 @@
 <script lang="ts">
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import Send from "@lucide/svelte/icons/send";
-import Button from "$lib/components/ui/button/button.svelte";
-import { toast, tx } from "$lib/demo/app.svelte";
-import { type FollowUp, recordWriting, siteOf } from "$lib/demo/data";
+import Button from "#lib/components/ui/button/button.svelte";
+import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { type FollowUp, recordWriting, siteOf } from "#lib/demo/data.ts";
 
 /*
  * The shelf's follow-up: one piece, one question. Whether it was posted (answered in place; the card then gives way),

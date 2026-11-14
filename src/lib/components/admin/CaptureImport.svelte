@@ -1,10 +1,10 @@
 <script lang="ts">
 import Check from "@lucide/svelte/icons/check";
 import Copy from "@lucide/svelte/icons/copy";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { toast } from "$lib/demo/app.svelte";
-import { sourceStatus } from "$lib/demo/source";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { sourceStatus } from "#lib/demo/source.ts";
 
 /*
  * Importing a page capture into a scenario: the console script for the place (the same scripts learners use for

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { matchExplained } from "$model/collect.ts";
-import { type Choice, judge, precheck } from "$model/gate.ts";
+import { matchExplained } from "#model/collect.ts";
+import { type Choice, judge, precheck } from "#model/gate.ts";
 
 const item = (n: number, phrase: string) => ({ n, phrase, meaning: "", register: "neutral" as const, why: "", example: "" });
 

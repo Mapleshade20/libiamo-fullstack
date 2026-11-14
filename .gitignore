@@ -43,3 +43,4 @@ vite.config.ts.timestamp-*
 # Python
 __pycache__/
 *.py[cod]
+/.vitest

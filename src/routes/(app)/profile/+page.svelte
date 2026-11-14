@@ -3,17 +3,17 @@ import Camera from "@lucide/svelte/icons/camera";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import Pencil from "@lucide/svelte/icons/pencil";
 import { onMount, tick } from "svelte";
-import InfoTip from "$lib/components/common/InfoTip.svelte";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import { shake } from "$lib/components/common/motion";
-import { tip } from "$lib/components/common/tip";
-import AvatarSticker from "$lib/components/stickers/AvatarSticker.svelte";
-import { DRINKS } from "$lib/components/streak/glass/drinks";
-import Glass from "$lib/components/streak/glass/Glass.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { account } from "$lib/demo/account.svelte";
-import { app, toast, tx } from "$lib/demo/app.svelte";
-import { historyWeeks, myWriting, reviewDeck } from "$lib/demo/data";
+import InfoTip from "#lib/components/common/InfoTip.svelte";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import { tip } from "#lib/components/common/tip.ts";
+import AvatarSticker from "#lib/components/stickers/AvatarSticker.svelte";
+import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
+import Glass from "#lib/components/streak/glass/Glass.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { account } from "#lib/demo/account.svelte.ts";
+import { app, toast, tx } from "#lib/demo/app.svelte.ts";
+import { historyWeeks, myWriting, reviewDeck } from "#lib/demo/data.ts";
 
 /*
  * The profile: who the learner is here. Their picture and name (the name edited in a small dialog behind the pencil,

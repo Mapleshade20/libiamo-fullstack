@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { type Case, draftOf, exchange, replyTo, SEP, turnAt } from "$model/scenario/exchange.ts";
-import { turnSentences } from "$model/scenario/pass2.ts";
+import { type Case, draftOf, exchange, replyTo, SEP, turnAt } from "#model/scenario/exchange.ts";
+import { turnSentences } from "#model/scenario/pass2.ts";
 
 const c: Case = {
 	id: "t",

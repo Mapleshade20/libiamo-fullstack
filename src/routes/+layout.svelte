@@ -1,13 +1,13 @@
 <script lang="ts">
 import "./layout.css";
-import "$lib/components/stickers/stickers.css";
-import "$lib/components/debug/calls.css";
-import "$lib/components/shell/sheet.css";
+import "#lib/components/stickers/stickers.css";
+import "#lib/components/debug/calls.css";
+import "#lib/components/shell/sheet.css";
 import type { Snippet } from "svelte";
+import Toast from "#lib/components/shell/Toast.svelte";
+import Tour from "#lib/components/tour/Tour.svelte";
+import { tidyWriting } from "#lib/demo/data.ts";
 import { onNavigate } from "$app/navigation";
-import Toast from "$lib/components/shell/Toast.svelte";
-import Tour from "$lib/components/tour/Tour.svelte";
-import { tidyWriting } from "$lib/demo/data";
 
 let { children }: { children: Snippet } = $props();
 // Copies of one piece that older builds left in My writing are folded into one.

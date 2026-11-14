@@ -2,10 +2,10 @@
 import CornerDownRight from "@lucide/svelte/icons/corner-down-right";
 import Plus from "@lucide/svelte/icons/plus";
 import X from "@lucide/svelte/icons/x";
-import { autogrow } from "$lib/components/common/motion";
-import { tip } from "$lib/components/common/tip";
-import Button from "$lib/components/ui/button/button.svelte";
-import type { Situation } from "$lib/demo/scenarios";
+import { autogrow } from "#lib/components/common/motion.ts";
+import { tip } from "#lib/components/common/tip.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import type { Situation } from "#lib/demo/scenarios.ts";
 
 /*
  * What the learner finds when they arrive, in the place's terms (the main app's opening state): a Reddit post and its

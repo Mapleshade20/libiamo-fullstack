@@ -1,7 +1,7 @@
 <script lang="ts">
 import Eye from "@lucide/svelte/icons/eye";
 import EyeOff from "@lucide/svelte/icons/eye-off";
-import { tip } from "$lib/components/common/tip";
+import { tip } from "#lib/components/common/tip.ts";
 
 /* A password with an eye to show it: one field, no "type it again", since what was typed can be read before sending. */
 let {

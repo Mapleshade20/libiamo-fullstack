@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { repeats, residue } from "$model/residue.ts";
+import { repeats, residue } from "#model/residue.ts";
 
 const zh = { learner: "zh-CN", target: "en" };
 const es = { learner: "en", target: "es" };

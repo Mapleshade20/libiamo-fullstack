@@ -1,21 +1,21 @@
 <script lang="ts">
-import "$lib/components/session/post.css";
+import "#lib/components/session/post.css";
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Flag from "@lucide/svelte/icons/flag";
 import Terminal from "@lucide/svelte/icons/terminal";
 import { slide } from "svelte/transition";
+import CallDetail from "#lib/components/admin/CallDetail.svelte";
+import Signals from "#lib/components/admin/Signals.svelte";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { autogrow } from "#lib/components/common/motion.ts";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import Speaker from "#lib/components/session/Speaker.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { CASES, fmtClock, fmtCost, fmtWhen, langEn, type RecordedCall, type RecordedStep, sessionById } from "#lib/demo/admin.ts";
+import { CALLS, STEPS } from "#lib/demo/admin-session.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
 import { page } from "$app/state";
-import CallDetail from "$lib/components/admin/CallDetail.svelte";
-import Signals from "$lib/components/admin/Signals.svelte";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import { autogrow } from "$lib/components/common/motion";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import { tip } from "$lib/components/common/tip";
-import Speaker from "$lib/components/session/Speaker.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { CASES, fmtClock, fmtCost, fmtWhen, langEn, type RecordedCall, type RecordedStep, sessionById } from "$lib/demo/admin";
-import { CALLS, STEPS } from "$lib/demo/admin-session";
-import { toast } from "$lib/demo/app.svelte";
 
 /*
  * One session as its record has it (docs/design/2026-11-11-session-records.md): on the left what the learner saw and

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { esc, fitText, liveFit, wordGap } from "$lib/session/text.ts";
+import { esc, fitText, liveFit, wordGap } from "#lib/session/text.ts";
 
 test("text helpers escape what they are given", () => {
 	assert.equal(esc('"<&>'), "&quot;&lt;&amp;&gt;");

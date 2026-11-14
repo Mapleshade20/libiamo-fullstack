@@ -1,7 +1,7 @@
 <script lang="ts" module>
 import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
 import { tv, type VariantProps } from "tailwind-variants";
-import { cn, type WithElementRef } from "$lib/utils.js";
+import { cn, type WithElementRef } from "#lib/utils.ts";
 
 /*
  * Libiamo's desk style (docs/step2/2026-11-01-visual-styles.md): the primary action is a typewriter key that goes

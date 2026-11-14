@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { blockAt, blocksOf, termRuns } from "$model/translate/blocks.ts";
+import { blockAt, blocksOf, termRuns } from "#model/translate/blocks.ts";
 
 const slices = (t: string, byLine: boolean) => blocksOf(t, byLine).map((b) => t.slice(b.from, b.to));
 

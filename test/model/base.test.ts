@@ -4,8 +4,8 @@ import { test } from "vitest";
 
 process.env.OPENROUTER_API_KEY = "";
 process.env.OPENAI_API_KEY = "";
-const { analysisBase, rebase } = await import("$model/pipeline/base.ts");
-const { withLivePieces } = await import("$model/session/live.ts");
+const { analysisBase, rebase } = await import("#model/pipeline/base.ts");
+const { withLivePieces } = await import("#model/session/live.ts");
 
 const draft = (text: string) => ({
 	id: "t",

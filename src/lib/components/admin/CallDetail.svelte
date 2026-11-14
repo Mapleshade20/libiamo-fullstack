@@ -1,10 +1,10 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Copy from "@lucide/svelte/icons/copy";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import { tip } from "$lib/components/common/tip";
-import { fmtClock, fmtCost, type RecordedCall } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import { fmtClock, fmtCost, type RecordedCall } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * One model call of a session: what it was for, the model and effort, when it ran and what it cost, the messages it

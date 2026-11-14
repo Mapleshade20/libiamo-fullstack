@@ -9,8 +9,8 @@ import MessageCircleQuestionMark from "@lucide/svelte/icons/message-circle-quest
 import PenLine from "@lucide/svelte/icons/pen-line";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
-import { tip } from "$lib/components/common/tip";
-import { SIGNALS, type Signal } from "$lib/demo/admin";
+import { tip } from "#lib/components/common/tip.ts";
+import { SIGNALS, type Signal } from "#lib/demo/admin.ts";
 
 /*
  * A session's signals as small marks, each named on hover: the learner's pushback in ink, the system's struggles in

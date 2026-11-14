@@ -1,11 +1,11 @@
 <script lang="ts">
 import Search from "@lucide/svelte/icons/search";
-import Signals from "$lib/components/admin/Signals.svelte";
-import LanguageFlag from "$lib/components/common/LanguageFlag.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import { tip } from "$lib/components/common/tip";
-import { fmtCost, fmtWhen, langEn, SESSIONS, SIGNALS } from "$lib/demo/admin";
+import Signals from "#lib/components/admin/Signals.svelte";
+import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import { fmtCost, fmtWhen, langEn, SESSIONS, SIGNALS } from "#lib/demo/admin.ts";
 
 /*
  * Every session, to look through now and then. Signals come from the record alone (the learner pushing back, the

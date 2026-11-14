@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { hintOf, verdictOf } from "$lib/review/check.ts";
+import { hintOf, verdictOf } from "#lib/review/check.ts";
 
 const own = { kind: "own" as const, answer: "it left him miserable and furious", also: ["it left him furious and miserable"] };
 const read = { kind: "collected" as const, answer: "For what it's worth" };
@@ -25,7 +25,7 @@ test("the hint keeps each word's first letter and length", () => {
 });
 
 test("reuse finds worked-out phrases in a new text, whatever the case or quotes", async () => {
-	const { reused, markReused } = await import("$lib/review/reuse.ts");
+	const { reused, markReused } = await import("#lib/review/reuse.ts");
 	assert.deepEqual(reused("Would it be possible to have ONE more week?", ["would it be possible to have", "I've been visiting her"]), [true, false]);
 	assert.deepEqual(
 		markReused("So it left him miserable.", ["it left him miserable"]).map((r) => r.hit),

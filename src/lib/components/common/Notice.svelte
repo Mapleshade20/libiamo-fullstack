@@ -4,7 +4,7 @@ import CircleCheck from "@lucide/svelte/icons/circle-check";
 import Info from "@lucide/svelte/icons/info";
 import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 import type { Snippet } from "svelte";
-import { cn } from "$lib/utils";
+import { cn } from "#lib/utils.ts";
 
 /* A message that needs attention: a quiet tinted well with an icon. Text stays ink; the tone colours the icon and tint. */
 let {

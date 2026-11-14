@@ -2,12 +2,12 @@
 import Megaphone from "@lucide/svelte/icons/megaphone";
 import Plus from "@lucide/svelte/icons/plus";
 import { slide } from "svelte/transition";
-import { autogrow } from "$lib/components/common/motion";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { type AdminAnnouncement as Ann, adminAnnouncements, fmtDay, langEn } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
+import { autogrow } from "#lib/components/common/motion.ts";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { type AdminAnnouncement as Ann, adminAnnouncements, fmtDay, langEn } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * Announcements: written per interface language (a learner sees theirs, else English), shown on the home page as a

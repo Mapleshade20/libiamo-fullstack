@@ -1,12 +1,12 @@
 <script lang="ts">
 import "./auth.css";
 import { tick } from "svelte";
-import { dev } from "$app/environment";
-import ModalDialog from "$lib/components/common/ModalDialog.svelte";
-import { shake } from "$lib/components/common/motion";
-import Button from "$lib/components/ui/button/button.svelte";
-import { account, confirmEmailChange, hasPassword, requestEmailChange } from "$lib/demo/account.svelte";
-import { toast, tx } from "$lib/demo/app.svelte";
+import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import { account, confirmEmailChange, hasPassword, requestEmailChange } from "#lib/demo/account.svelte.ts";
+import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { dev } from "$app/env";
 import PasswordField from "./PasswordField.svelte";
 
 /*

@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { LiveSession } from "$model/session/live.ts";
-import { inSession } from "$model/trace.ts";
+import type { LiveSession } from "#model/session/live.ts";
+import { inSession } from "#model/trace.ts";
 import { repoPath } from "./paths";
 
 /* The live sessions this server holds (they live in memory, so a restart forgets them), and each one's log under

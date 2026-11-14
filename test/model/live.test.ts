@@ -4,7 +4,7 @@ import { test } from "vitest";
 
 process.env.OPENROUTER_API_KEY = "";
 process.env.OPENAI_API_KEY = "";
-const { LiveSession } = await import("$model/session/live.ts");
+const { LiveSession } = await import("#model/session/live.ts");
 
 function session(text: string) {
 	const s = new LiveSession({ text, learner: "zh-CN", feedback: "native", model: "haiku", grader: "haiku" });

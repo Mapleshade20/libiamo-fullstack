@@ -2,17 +2,17 @@
 import X from "@lucide/svelte/icons/x";
 import { onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import { CALLS } from "#lib/components/debug/calls.ts";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { isAppLang } from "#lib/constants.ts";
+import { read, toast, write } from "#lib/demo/app.svelte.ts";
+import { COLLECT_KEY, COLLECTED_KEY, type Collected } from "#lib/demo/data.ts";
+import { checkCall, stopOf } from "#lib/demo/limits.ts";
+import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import { reducedMotion } from "$lib/components/common/motion";
-import { CALLS } from "$lib/components/debug/calls";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { isAppLang } from "$lib/constants";
-import { read, toast, write } from "$lib/demo/app.svelte";
-import { COLLECT_KEY, COLLECTED_KEY, type Collected } from "$lib/demo/data";
-import { checkCall, stopOf } from "$lib/demo/limits";
-import { loadLang, t } from "$lib/i18n/index.svelte";
 
 /*
  * The stealing notebook (偷词本): what the learner pasted from their reading, to highlight what they want to own. A
@@ -22,7 +22,7 @@ import { loadLang, t } from "$lib/i18n/index.svelte";
  */
 type Setup = { passage: string; lang: string; native: string; feedback: string; model: string };
 const SETUP = JSON.parse(sessionStorage.getItem(COLLECT_KEY) || "null") as Setup | null;
-if (!SETUP) goto("/", { replaceState: true });
+if (!SETUP) goto("/", { replace: true });
 const TUTOR = SETUP?.feedback === "target" ? SETUP.lang : (SETUP?.native ?? "en");
 const LANG = isAppLang(TUTOR) ? TUTOR : "en";
 const UI = SETUP && isAppLang(SETUP.lang) ? SETUP.lang : "en";

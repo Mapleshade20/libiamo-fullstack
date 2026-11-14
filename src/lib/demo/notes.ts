@@ -1,4 +1,4 @@
-import { type Face, facesOf } from "$lib/review/faces";
+import { type Face, facesOf } from "#lib/review/faces.ts";
 import { app, sandboxed, tx, write } from "./app.svelte";
 import {
 	CARD_NOTE,

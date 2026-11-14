@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { DRINKS, drinkOf, insideHalf } from "$lib/components/streak/glass/drinks.ts";
-import { Rocker, STEP, Surface } from "$lib/components/streak/glass/physics.ts";
-import { type Moment, Scene } from "$lib/components/streak/glass/scene.ts";
+import { DRINKS, drinkOf, insideHalf } from "#lib/components/streak/glass/drinks.ts";
+import { Rocker, STEP, Surface } from "#lib/components/streak/glass/physics.ts";
+import { type Moment, Scene } from "#lib/components/streak/glass/scene.ts";
 
 const run = (s: Scene, seconds: number) => {
 	for (let t = 0; t < seconds; t += 1 / 60) s.tick(1 / 60);

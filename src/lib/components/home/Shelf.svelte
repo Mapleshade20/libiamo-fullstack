@@ -1,14 +1,14 @@
 <script lang="ts">
 import { fade } from "svelte/transition";
-import { reducedMotion } from "$lib/components/common/motion";
-import { createPlay } from "$lib/components/stickers/play.svelte";
-import Sticker from "$lib/components/stickers/Sticker.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, nameOf, tx } from "$lib/demo/app.svelte";
-import { followUp, myWriting, reviewDeck } from "$lib/demo/data";
-import { dev } from "$lib/demo/dev.svelte";
-import { reopen } from "$lib/demo/reopen";
-import { shelfScenarios } from "$lib/demo/scenarios";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import { createPlay } from "#lib/components/stickers/play.svelte.ts";
+import Sticker from "#lib/components/stickers/Sticker.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, nameOf, tx } from "#lib/demo/app.svelte.ts";
+import { followUp, myWriting, reviewDeck } from "#lib/demo/data.ts";
+import { dev } from "#lib/demo/dev.svelte.ts";
+import { reopen } from "#lib/demo/reopen.ts";
+import { shelfScenarios } from "#lib/demo/scenarios.ts";
 import FollowCard from "./FollowCard.svelte";
 import ScenarioCard from "./ScenarioCard.svelte";
 

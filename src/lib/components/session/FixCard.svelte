@@ -1,9 +1,9 @@
 <script lang="ts">
 import CornerDownLeft from "@lucide/svelte/icons/corner-down-left";
 import { onMount } from "svelte";
-import TwoStep from "$lib/components/common/TwoStep.svelte";
-import { tip } from "$lib/components/common/tip";
-import Button from "$lib/components/ui/button/button.svelte";
+import TwoStep from "#lib/components/common/TwoStep.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import Button from "#lib/components/ui/button/button.svelte";
 import Speaker from "./Speaker.svelte";
 
 /* A slip the learner can fix themselves: their words in the box, ready to change. Once they answer, the box itself says

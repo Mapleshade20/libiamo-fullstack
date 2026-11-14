@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { createSitting, intervals } from "$lib/review/session.ts";
+import { createSitting, intervals } from "#lib/review/session.ts";
 
 test("a card rated within minutes comes back in the same sitting, after the main queue", () => {
 	const t = 0;

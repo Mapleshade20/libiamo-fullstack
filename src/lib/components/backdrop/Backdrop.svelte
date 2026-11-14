@@ -1,5 +1,5 @@
 <script lang="ts">
-import { app } from "$lib/demo/app.svelte";
+import { app } from "#lib/demo/app.svelte.ts";
 import { renderBackdrop } from "./backdrops";
 import { backdropState } from "./state.svelte";
 import "./backdrop.css";

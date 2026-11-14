@@ -2,14 +2,14 @@
 import MailCheck from "@lucide/svelte/icons/mail-check";
 import MailClock from "@lucide/svelte/icons/mail-clock";
 import { onMount } from "svelte";
-import { dev } from "$app/environment";
+import MarkedLine from "#lib/components/common/MarkedLine.svelte";
+import Notice from "#lib/components/common/Notice.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { account, auth, confirmEmail, enter, atx as tx } from "#lib/demo/account.svelte.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { dev } from "$app/env";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import MarkedLine from "$lib/components/common/MarkedLine.svelte";
-import Notice from "$lib/components/common/Notice.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { account, auth, confirmEmail, enter, atx as tx } from "$lib/demo/account.svelte";
-import { toast } from "$lib/demo/app.svelte";
 
 /*
  * After signing up: the address the link went to, a way to send it again (after a minute) or to use another address.
@@ -73,7 +73,7 @@ $effect(() => {
 			variant="ghost"
 			size="sm"
 			class="text-muted-foreground"
-			onclick={() => goto("/verify?expired", { replaceState: true }).then(() => (expired = true))}
+			onclick={() => goto("/verify?expired", { replace: true }).then(() => (expired = true))}
 			>{tx("devExpiredLink")}</Button
 		>
 	</p>

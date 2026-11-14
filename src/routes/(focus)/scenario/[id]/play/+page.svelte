@@ -1,11 +1,11 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, tx } from "#lib/demo/app.svelte.ts";
+import { siteOf } from "#lib/demo/data.ts";
+import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, tx } from "$lib/demo/app.svelte";
-import { siteOf } from "$lib/demo/data";
-import { SIMS, scenarioById } from "$lib/demo/scenarios";
 
 /*
  * Stands in for the simulation. In the main app this is the place itself (its AO3, Reddit, Discord, iMessage or mail
@@ -16,7 +16,7 @@ const scenario = $derived(scenarioById(page.params.id ?? ""));
 const sim = $derived(scenario ? SIMS[scenario.id] : undefined);
 const st = $derived(siteOf(scenario?.site));
 const LENGTH = 6000;
-const leave = () => goto(`/scenario/${page.params.id}/after`, { replaceState: true });
+const leave = () => goto(`/scenario/${page.params.id}/after`, { replace: true });
 onMount(() => {
 	const t = setTimeout(leave, LENGTH);
 	return () => clearTimeout(t);

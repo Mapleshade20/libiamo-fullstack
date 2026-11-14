@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { foldCopies } from "$lib/demo/fold.ts";
+import { foldCopies } from "#lib/demo/fold.ts";
 
 const piece = (id: string, at: number, extra: object = {}) => ({ id, at, lang: "en", handoff: { text: "Brokenstar…" }, ...extra });
 test("copies of one piece fold into one, a finished copy first, then the newest", () => {

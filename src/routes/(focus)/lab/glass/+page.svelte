@@ -1,9 +1,9 @@
 <script lang="ts">
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import { DRINKS } from "$lib/components/streak/glass/drinks";
-import Glass from "$lib/components/streak/glass/Glass.svelte";
-import type { Look, Moment } from "$lib/components/streak/glass/scene";
-import Button from "$lib/components/ui/button/button.svelte";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
+import Glass from "#lib/components/streak/glass/Glass.svelte";
+import type { Look, Moment } from "#lib/components/streak/glass/scene.ts";
+import Button from "#lib/components/ui/button/button.svelte";
 
 /*
  * The week's glasses, every look and moment of each, for judging them (dev only; recordings drive it by URL:

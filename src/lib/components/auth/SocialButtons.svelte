@@ -1,8 +1,8 @@
 <script lang="ts">
 import LoaderCircle from "@lucide/svelte/icons/loader-circle";
-import SocialProviderIcon from "$lib/components/common/SocialProviderIcon.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { continueWith } from "$lib/demo/account.svelte";
+import SocialProviderIcon from "#lib/components/common/SocialProviderIcon.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { continueWith } from "#lib/demo/account.svelte.ts";
 
 /* Google and GitHub, under the address form: the same buttons sign in and sign up (a new account goes on to set up). */
 let { tx }: { tx: (key: string, vars?: Record<string, string>) => string } = $props();

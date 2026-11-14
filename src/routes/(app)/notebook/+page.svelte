@@ -1,11 +1,11 @@
 <script lang="ts">
 import { blur } from "svelte/transition";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, tx } from "$lib/demo/app.svelte";
-import { reviewDeck } from "$lib/demo/data";
-import { type Note, notebook } from "$lib/demo/notes";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, tx } from "#lib/demo/app.svelte.ts";
+import { reviewDeck } from "#lib/demo/data.ts";
+import { type Note, notebook } from "#lib/demo/notes.ts";
 
 /* The notebook: every phrase the learner keeps, whether it came out of their own writing (what they reworked in a
    session) or was collected from something they read. Review runs over all of it; each entry opens its own page. */

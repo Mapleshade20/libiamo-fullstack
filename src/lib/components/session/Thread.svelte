@@ -1,10 +1,10 @@
 <script lang="ts">
 import { cubicInOut } from "svelte/easing";
 import { fly } from "svelte/transition";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import { reducedMotion } from "$lib/components/common/motion";
-import type { Msg, Session } from "$lib/session/session.svelte";
-import { rich } from "$lib/session/text";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import type { Msg, Session } from "#lib/session/session.svelte.ts";
+import { rich } from "#lib/session/text.ts";
 import ArgumentMap from "./ArgumentMap.svelte";
 import HintBox from "./HintBox.svelte";
 import Speaker from "./Speaker.svelte";

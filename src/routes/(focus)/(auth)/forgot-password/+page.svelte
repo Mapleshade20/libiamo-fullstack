@@ -1,15 +1,15 @@
 <script lang="ts">
 import MailClock from "@lucide/svelte/icons/mail-clock";
 import { tick } from "svelte";
-import { dev } from "$app/environment";
+import PasswordField from "#lib/components/auth/PasswordField.svelte";
+import MarkedLine from "#lib/components/common/MarkedLine.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import Notice from "#lib/components/common/Notice.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { auth, atx as tx, weakPassword } from "#lib/demo/account.svelte.ts";
+import { dev } from "$app/env";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import PasswordField from "$lib/components/auth/PasswordField.svelte";
-import MarkedLine from "$lib/components/common/MarkedLine.svelte";
-import { shake } from "$lib/components/common/motion";
-import Notice from "$lib/components/common/Notice.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { auth, atx as tx, weakPassword } from "$lib/demo/account.svelte";
 
 /*
  * A forgotten password: the address, then the same answer whether or not it has an account. The mail's link comes back
@@ -36,11 +36,11 @@ function save(e: SubmitEvent) {
 	e.preventDefault();
 	const weak = password ? weakPassword(password, auth.email) : "auPwMissing";
 	if (weak) return refuse(weak);
-	goto("/sign-in?reset", { replaceState: true });
+	goto("/sign-in?reset", { replace: true });
 }
 function again() {
 	sent = false;
-	goto("/forgot-password", { replaceState: true });
+	goto("/forgot-password", { replace: true });
 }
 $effect(() => {
 	document.title = `${tx(token ? "auRsTitleShort" : "auFgTitleShort")} · Libiamo`;
@@ -115,10 +115,10 @@ $effect(() => {
 {#if dev && (sent || token)}
 	<!-- Debug only: what the mail's link would do. -->
 	<p class="devbar">
-		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=demo", { replaceState: true })}
+		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=demo", { replace: true })}
 			>{tx("devOpenLink")}</Button
 		>
-		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=expired", { replaceState: true })}
+		<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => goto("/forgot-password?token=expired", { replace: true })}
 			>{tx("devExpiredLink")}</Button
 		>
 	</p>

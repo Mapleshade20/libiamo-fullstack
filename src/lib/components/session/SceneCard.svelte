@@ -1,9 +1,9 @@
 <script lang="ts">
-import ChoiceGroup from "$lib/components/common/ChoiceGroup.svelte";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import { autogrow, shake } from "$lib/components/common/motion";
-import Button from "$lib/components/ui/button/button.svelte";
-import type { Session } from "$lib/session/session.svelte";
+import ChoiceGroup from "#lib/components/common/ChoiceGroup.svelte";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import { autogrow, shake } from "#lib/components/common/motion.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import type { Session } from "#lib/session/session.svelte.ts";
 
 /*
  * The scene card stands where the home page's box stood (the view transition grows one into the other): the draft as

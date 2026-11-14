@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"engines": {
-		"node": ">=22.0.0"
+		"node": ">=22.17.0"
 	},
 	"scripts": {
 		"dev": "vite dev",
@@ -17,28 +17,31 @@
 		"test": "vitest run --reporter agent"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.4",
-		"@internationalized/date": "^3.12.4",
-		"@lucide/svelte": "^1.64.0",
-		"@sveltejs/adapter-node": "^5.5.7",
-		"@sveltejs/kit": "^2.70.3",
-		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@biomejs/biome": "2.6.7",
+		"@lucide/svelte": "^1.72.0",
+		"@sveltejs/adapter-node": "^6.0.2",
+		"@sveltejs/kit": "^3.2.0",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",
-		"@types/node": "^24",
-		"bits-ui": "2.16.4",
+		"@types/node": "^22",
+		"bits-ui": "^2.21.0",
 		"clsx": "^2.1.1",
 		"diff": "^9.0.0",
 		"openai": "^7.39.0",
 		"rough-notation": "^0.5.1",
 		"svelte": "^5.57.3",
-		"svelte-check": "^4.7.7",
+		"svelte-check": "^4.7.8",
 		"tailwind-merge": "^3.7.0",
-		"tailwind-variants": "^3.3.1",
+		"tailwind-variants": "^4.0.2",
 		"tailwindcss": "^4.3.3",
-		"typescript": "^5.9.3",
-		"vite": "^7.3.7",
-		"vitest": "^4.1.2",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.8",
+		"vitest": "^5.1.0",
 		"zod": "^4.6.7"
 	},
-	"packageManager": "pnpm@11.5.0"
+	"packageManager": "pnpm@11.5.0",
+	"imports": {
+		"#lib/*": "./src/lib/*",
+		"#model/*": "./src/model/*"
+	}
 }

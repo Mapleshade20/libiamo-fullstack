@@ -4,19 +4,19 @@ import Check from "@lucide/svelte/icons/check";
 import Circle from "@lucide/svelte/icons/circle";
 import { tick } from "svelte";
 import { fly } from "svelte/transition";
+import { Collector } from "#lib/components/collect/collector.svelte.ts";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import { autogrow, shake } from "#lib/components/common/motion.ts";
+import Situation from "#lib/components/scenario/Situation.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, tx } from "#lib/demo/app.svelte.ts";
+import { practised, recordWriting, writingById } from "#lib/demo/data.ts";
+import { dev } from "#lib/demo/dev.svelte.ts";
+import { scenarioById, situationOf } from "#lib/demo/scenarios.ts";
+import { markReused, reused } from "#lib/review/reuse.ts";
 import { page } from "$app/state";
-import { Collector } from "$lib/components/collect/collector.svelte";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import { autogrow, shake } from "$lib/components/common/motion";
-import Situation from "$lib/components/scenario/Situation.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, tx } from "$lib/demo/app.svelte";
-import { practised, recordWriting, writingById } from "$lib/demo/data";
-import { dev } from "$lib/demo/dev.svelte";
-import { scenarioById, situationOf } from "$lib/demo/scenarios";
-import { markReused, reused } from "$lib/review/reuse";
 
 /*
  * Writing a piece again from memory, a few days on (the shelf's follow-up). The strongest retrieval there is: the whole

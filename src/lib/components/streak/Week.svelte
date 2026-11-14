@@ -1,9 +1,9 @@
 <script lang="ts">
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import { onMount, tick } from "svelte";
-import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
-import { app, read, tx, write } from "$lib/demo/app.svelte";
-import { dayKey, todayKind, weekCount, weekDays } from "$lib/demo/data";
+import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import { app, read, tx, write } from "#lib/demo/app.svelte.ts";
+import { dayKey, todayKind, weekCount, weekDays } from "#lib/demo/data.ts";
 import Digits from "./Digits.svelte";
 import { DRINKS, type Drink, drinkOf } from "./glass/drinks";
 import Glass from "./glass/Glass.svelte";

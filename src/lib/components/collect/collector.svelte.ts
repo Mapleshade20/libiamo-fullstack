@@ -1,7 +1,7 @@
-import { CALLS } from "$lib/components/debug/calls";
-import { read, write } from "$lib/demo/app.svelte";
-import { COLLECTED_KEY } from "$lib/demo/data";
-import { checkCall, stopOf } from "$lib/demo/limits";
+import { CALLS } from "#lib/components/debug/calls.ts";
+import { read, write } from "#lib/demo/app.svelte.ts";
+import { COLLECTED_KEY } from "#lib/demo/data.ts";
+import { checkCall, stopOf } from "#lib/demo/limits.ts";
 
 /*
  * Phrases kept from something read, wherever it is read (a scenario's situation, later the session's context): each

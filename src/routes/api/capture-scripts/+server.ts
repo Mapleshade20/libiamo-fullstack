@@ -1,4 +1,3 @@
-import { json } from "@sveltejs/kit";
-import { CAPTURE_SCRIPTS } from "$model/context/scripts.ts";
+import { CAPTURE_SCRIPTS } from "#model/context/scripts.ts";
 
-export const GET = () => json(CAPTURE_SCRIPTS);
+export const GET = () => Response.json(CAPTURE_SCRIPTS);

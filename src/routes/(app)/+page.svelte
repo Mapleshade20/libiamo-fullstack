@@ -1,14 +1,14 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import Backdrop from "$lib/components/backdrop/Backdrop.svelte";
-import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
-import Composer from "$lib/components/home/Composer.svelte";
-import DevPanel from "$lib/components/home/DevPanel.svelte";
-import Inbox from "$lib/components/home/Inbox.svelte";
-import Shelf from "$lib/components/home/Shelf.svelte";
-import { shell } from "$lib/components/shell/shell.svelte";
-import { ANNOUNCEMENTS, dateOf, local, readIds } from "$lib/demo/announcements";
-import { toast, tx } from "$lib/demo/app.svelte";
+import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
+import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import Composer from "#lib/components/home/Composer.svelte";
+import DevPanel from "#lib/components/home/DevPanel.svelte";
+import Inbox from "#lib/components/home/Inbox.svelte";
+import Shelf from "#lib/components/home/Shelf.svelte";
+import { shell } from "#lib/components/shell/shell.svelte.ts";
+import { ANNOUNCEMENTS, dateOf, local, readIds } from "#lib/demo/announcements.ts";
+import { toast, tx } from "#lib/demo/app.svelte.ts";
 
 /*
  * The home page: unread things above the greeting, the box, and the shelf. The greeting and the shelf's heading are

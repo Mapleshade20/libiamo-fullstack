@@ -1,29 +1,29 @@
 <script lang="ts">
-import "$lib/components/session/post.css";
-import "$lib/components/session/card.css";
+import "#lib/components/session/post.css";
+import "#lib/components/session/card.css";
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Copy from "@lucide/svelte/icons/copy";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
-import { dev as isDev } from "$app/environment";
+import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import ReplyBar from "#lib/components/session/ReplyBar.svelte";
+import SceneCard from "#lib/components/session/SceneCard.svelte";
+import Speaker from "#lib/components/session/Speaker.svelte";
+import Thread from "#lib/components/session/Thread.svelte";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { RTL_LANGS } from "#lib/constants.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { HANDOFF_KEY } from "#lib/demo/data.ts";
+import { dev as demo, saveDev } from "#lib/demo/dev.svelte.ts";
+import { loadLang } from "#lib/i18n/index.svelte.ts";
+import { Post } from "#lib/session/post.ts";
+import { Session } from "#lib/session/session.svelte.ts";
+import type { Setup } from "#lib/session/types.ts";
+import { dev as isDev } from "$app/env";
 import { goto } from "$app/navigation";
-import Backdrop from "$lib/components/backdrop/Backdrop.svelte";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import ReplyBar from "$lib/components/session/ReplyBar.svelte";
-import SceneCard from "$lib/components/session/SceneCard.svelte";
-import Speaker from "$lib/components/session/Speaker.svelte";
-import Thread from "$lib/components/session/Thread.svelte";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { RTL_LANGS } from "$lib/constants";
-import { toast } from "$lib/demo/app.svelte";
-import { HANDOFF_KEY } from "$lib/demo/data";
-import { dev as demo, saveDev } from "$lib/demo/dev.svelte";
-import { loadLang } from "$lib/i18n/index.svelte";
-import { Post } from "$lib/session/post";
-import { Session } from "$lib/session/session.svelte";
-import type { Setup } from "$lib/session/types";
 
 /*
  * The session: the scene card, then the two passes over the draft, then the piece's own page. It starts from what the
@@ -32,7 +32,7 @@ import type { Setup } from "$lib/session/types";
  */
 const setup = JSON.parse(sessionStorage.getItem(HANDOFF_KEY) || "null") as Setup | null;
 sessionStorage.removeItem(HANDOFF_KEY);
-if (!setup) goto("/", { replaceState: true });
+if (!setup) goto("/", { replace: true });
 const session = setup ? new Session(setup) : null;
 if (session) session.toast = toast;
 const tt = (k: string, v?: Record<string, string | number>) => session?.tt(k, v) ?? k;

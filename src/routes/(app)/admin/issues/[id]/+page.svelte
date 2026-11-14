@@ -1,14 +1,14 @@
 <script lang="ts">
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
+import Checkbox from "#lib/components/common/Checkbox.svelte";
+import SiteArt from "#lib/components/home/SiteArt.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { adminIssues, issueState } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { siteOf } from "#lib/demo/data.ts";
+import { SCENARIOS } from "#lib/demo/scenarios.ts";
 import { page } from "$app/state";
-import Checkbox from "$lib/components/common/Checkbox.svelte";
-import SiteArt from "$lib/components/home/SiteArt.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { adminIssues, issueState } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
-import { siteOf } from "$lib/demo/data";
-import { SCENARIOS } from "$lib/demo/scenarios";
 
 /*
  * One issue: its name and line as the shelf shows them, the day it comes out, its colours, and the four to six

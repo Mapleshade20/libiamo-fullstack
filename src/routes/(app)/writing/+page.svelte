@@ -1,8 +1,8 @@
 <script lang="ts">
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import { tx } from "$lib/demo/app.svelte";
-import { myWriting, whenOf } from "$lib/demo/data";
-import { openPiece } from "$lib/demo/reopen";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { tx } from "#lib/demo/app.svelte.ts";
+import { myWriting, whenOf } from "#lib/demo/data.ts";
+import { openPiece } from "#lib/demo/reopen.ts";
 
 /* Everything the learner has brought here to write, newest first: what is still open, what they revised, and what they
    told us they posted. Opening one goes back into its session (the main app's archive and the sidebar's recents). */

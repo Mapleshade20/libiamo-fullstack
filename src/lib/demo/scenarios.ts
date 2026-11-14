@@ -1,5 +1,5 @@
-import { hasScenarios } from "$lib/constants";
-import type { Exchange, ExMsg } from "$lib/session/types";
+import { hasScenarios } from "#lib/constants.ts";
+import type { Exchange, ExMsg } from "#lib/session/types.ts";
 import { app } from "./app.svelte";
 import { myWriting } from "./data";
 

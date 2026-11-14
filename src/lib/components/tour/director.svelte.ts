@@ -1,11 +1,11 @@
 import { tick } from "svelte";
+import { CALLS } from "#lib/components/debug/calls.ts";
+import { app, enterSandbox, leaveSandbox } from "#lib/demo/app.svelte.ts";
+import { COLLECT_KEY, HANDOFF_KEY } from "#lib/demo/data.ts";
+import { t } from "#lib/i18n/index.svelte.ts";
+import { pacing } from "#lib/session/clock.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import { CALLS } from "$lib/components/debug/calls";
-import { app, enterSandbox, leaveSandbox } from "$lib/demo/app.svelte";
-import { COLLECT_KEY, HANDOFF_KEY } from "$lib/demo/data";
-import { t } from "$lib/i18n/index.svelte";
-import { pacing } from "$lib/session/clock";
 import { playTape, recordTape, stopTape, type Tape } from "./tape";
 
 /*
@@ -94,7 +94,7 @@ class Director {
 		this.keys = null;
 		this.cursor.shown = false;
 		this.epoch++;
-		if (page.url.pathname !== "/" || page.url.search) await goto("/", { replaceState: true });
+		if (page.url.pathname !== "/" || page.url.search) await goto("/", { replace: true });
 		await tick();
 		document.getElementById("draft")?.focus({ preventScroll: true });
 	}
