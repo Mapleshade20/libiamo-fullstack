@@ -22,7 +22,8 @@ const oneOf = (column: PgColumn, values: readonly string[]): SQL => sql`${column
 // --- Account (§5.1) ---------------------------------------------------------------------------------------------------
 
 /* Better Auth's user, with the learner's settings. A new account has no languages until the welcome sets them
-   (`onboarded_at`). `image` is Better Auth's and never used: pictures are Gravatar's. */
+   (`onboarded_at`). `image` is Better Auth's and never used: pictures are Gravatar's. Deleting an account deletes the
+   row, and every table that belongs to a learner references it `on delete cascade`, so nothing of theirs stays. */
 export const user = pgTable(
 	"user",
 	{
@@ -42,7 +43,6 @@ export const user = pgTable(
 		onboardedAt: at("onboarded_at"),
 		/** The address a change is waiting on until its link is opened (Better Auth keeps none). */
 		pendingEmail: text("pending_email"),
-		deletedAt: at("deleted_at"),
 		createdAt: created(),
 		updatedAt: updated(),
 	},

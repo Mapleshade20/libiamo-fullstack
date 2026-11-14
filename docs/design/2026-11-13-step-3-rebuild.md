@@ -83,13 +83,18 @@ comment-id scheme embeds.
 
 | Table | Columns |
 |---|---|
-| `user` (Better Auth) | `id`, `name`, `email`, `email_verified`, `role` (`learner`/`admin`), `native_language`, `learning_languages text[]`, `active_language` (one of them), `tutor_language` (`native`/`target`), `weekly_goal` 1–7 default 3, `time_zone`, `help_improve` default true, `onboarded_at`, `deleted_at`, timestamps. Better Auth's `image` column exists and is never written or read (pictures are Gravatar's). |
+| `user` (Better Auth) | `id`, `name`, `email`, `email_verified`, `role` (`learner`/`admin`), `native_language`, `learning_languages text[]`, `active_language` (one of them), `tutor_language` (`native`/`target`), `weekly_goal` 1–7 default 3, `time_zone`, `help_improve` default true, `onboarded_at`, `pending_email`, timestamps. Better Auth's `image` column exists and is never written or read (pictures are Gravatar's). |
 | `session`, `account`, `verification` | Better Auth's own |
 | `user_key` | `user_id` pk, `provider` (`openrouter`/`deepseek`/`openai`/`glm`), `model`, `encrypted_key` (AES-GCM), timestamps |
 
 `help_improve` replaces the `llm_trace_opt_out` table. `time_zone` is the browser's validated zone, kept so server work
 (a note's first due day, the day a finish counts for) does not depend on a request. An account whose verified address
 is in `ADMIN_EMAILS` becomes an admin when it signs in, so a fresh database needs no manual SQL.
+
+**Deleting an account** (decided by the user, 2026-11-13) deletes the `user` row, and every table that belongs to a
+learner references it `on delete cascade` (`llm_call` too: its messages hold their writing), so nothing of theirs stays
+and there is no `deleted_at`. Settings offers it at the right end of its last row (the links); the dialog asks for a
+press, then the address typed by hand, pasting refused.
 
 ### 5.2 The week
 
@@ -390,8 +395,16 @@ rate-limit table and every environment list describe what exists.
 
 **Next: phase 2, the loop** (§8): transport, lanes and records; the model layer and the revision moved onto them with
 snapshots; the replays passing, also through snapshots; composer, gate, `/live`, the piece's page, My writing, the
-sidebar. Phase 2 starts by recording a replay baseline with the code as imported (§7). The operations monitor's hourly
-query still names `llm_trace` and changes with `llm_call`.
+sidebar. Phase 2 starts by recording a replay baseline with the code as imported (§7): of the lab's 270 recordings
+replayed from its cache on 2026-11-13, 149 miss the cache (their prompts changed since), 64 crash the server (the
+unhandled rejection below), 52 differ at the first step, and only 2026-11-12T00-56 runs to its last step (where it
+differs by the `was` field added after it), so the baseline is new recordings of every way in and both tutor
+languages. The operations monitor's hourly
+query still names `llm_trace` and changes with `llm_call`. The lab's `LiveSession` leaves background promises without a
+handler (`det.base` from the detection started at `pass1`): when such a call fails the rejection is unhandled and Node
+exits, taking every learner's session with it (found replaying the lab's recordings against the dev server). The
+`RevisionSession` must own every background promise, and the server should log an unhandled rejection rather than
+exit.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and
@@ -409,7 +422,7 @@ and settings pages; the account reaches the pages through `me` (a remote query) 
 - An address that already has an account gets the sign-up's answer, and its mailbox a "you already have an account" mail
   (`onExistingUserSignUp`).
 - Mails are English and plain until the catalog has mail strings; without `SMTP_HOST` they print to the console.
-- The demo has no account deletion, so Better Auth's is off. **Open:** whether to add it, and where.
+- Better Auth's own `deleteUser` stays off: the app's `deleteAccount` command deletes the row (§5.1).
 - Four strings joined the catalog in every language: `auSomethingWrong`, `auCaptchaFailed`, `acWrongPw`,
   `auSocialFailed`.
 

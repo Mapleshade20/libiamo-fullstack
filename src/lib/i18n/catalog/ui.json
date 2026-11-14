@@ -722,7 +722,14 @@
 		"auSomethingWrong": "That didn't go through. Try again in a moment.",
 		"auCaptchaFailed": "We couldn't confirm you're not a bot. Try again.",
 		"acWrongPw": "That's not your current password.",
-		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email."
+		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email.",
+		"setDeleteAccount": "Delete account",
+		"acDeleteTitle": "Delete your account?",
+		"acDeleteLede": "Everything goes with it: what you've written, your notes and reviews, your week and your saved key. It can't be undone.",
+		"acDeleteNext": "I understand, continue",
+		"acDeleteType": "Type {email} to confirm.",
+		"acDeleteGo": "Delete my account",
+		"acDeleted": "Your account has been deleted."
 	},
 	"ru": {
 		"next": "Дальше",
@@ -1447,7 +1454,14 @@
 		"auSomethingWrong": "Не получилось. Попробуйте ещё раз чуть позже.",
 		"auCaptchaFailed": "Не удалось подтвердить, что вы не бот. Попробуйте ещё раз.",
 		"acWrongPw": "Это не ваш текущий пароль.",
-		"auSocialFailed": "Вход через этот аккаунт не завершился. Попробуйте ещё раз или войдите по почте."
+		"auSocialFailed": "Вход через этот аккаунт не завершился. Попробуйте ещё раз или войдите по почте.",
+		"setDeleteAccount": "Удалить аккаунт",
+		"acDeleteTitle": "Удалить аккаунт?",
+		"acDeleteLede": "Вместе с ним исчезнет всё: ваши тексты, заметки и повторения, ваша неделя и сохранённый ключ. Отменить это нельзя.",
+		"acDeleteNext": "Понятно, продолжить",
+		"acDeleteType": "Введите {email} для подтверждения.",
+		"acDeleteGo": "Удалить мой аккаунт",
+		"acDeleted": "Ваш аккаунт удалён."
 	},
 	"es": {
 		"next": "Siguiente",
@@ -2172,7 +2186,14 @@
 		"auSomethingWrong": "No se pudo completar. Inténtalo de nuevo en un momento.",
 		"auCaptchaFailed": "No pudimos confirmar que no eres un bot. Inténtalo de nuevo.",
 		"acWrongPw": "Esa no es tu contraseña actual.",
-		"auSocialFailed": "No se completó el inicio de sesión con esa cuenta. Inténtalo de nuevo o usa tu correo."
+		"auSocialFailed": "No se completó el inicio de sesión con esa cuenta. Inténtalo de nuevo o usa tu correo.",
+		"setDeleteAccount": "Eliminar cuenta",
+		"acDeleteTitle": "¿Eliminar tu cuenta?",
+		"acDeleteLede": "Se borra todo con ella: lo que has escrito, tus notas y repasos, tu semana y tu clave guardada. No se puede deshacer.",
+		"acDeleteNext": "Entendido, continuar",
+		"acDeleteType": "Escribe {email} para confirmar.",
+		"acDeleteGo": "Eliminar mi cuenta",
+		"acDeleted": "Tu cuenta se ha eliminado."
 	},
 	"de": {
 		"next": "Nächste",
@@ -2897,7 +2918,14 @@
 		"auSomethingWrong": "Das hat nicht geklappt. Versuch es gleich noch einmal.",
 		"auCaptchaFailed": "Wir konnten nicht bestätigen, dass du kein Bot bist. Versuch es noch einmal.",
 		"acWrongPw": "Das ist nicht dein aktuelles Passwort.",
-		"auSocialFailed": "Die Anmeldung mit diesem Konto wurde nicht abgeschlossen. Versuch es noch einmal oder nutze deine E-Mail."
+		"auSocialFailed": "Die Anmeldung mit diesem Konto wurde nicht abgeschlossen. Versuch es noch einmal oder nutze deine E-Mail.",
+		"setDeleteAccount": "Konto löschen",
+		"acDeleteTitle": "Dein Konto löschen?",
+		"acDeleteLede": "Alles geht mit: was du geschrieben hast, deine Notizen und Wiederholungen, deine Woche und dein gespeicherter Schlüssel. Das lässt sich nicht rückgängig machen.",
+		"acDeleteNext": "Verstanden, weiter",
+		"acDeleteType": "Gib {email} ein, um zu bestätigen.",
+		"acDeleteGo": "Mein Konto löschen",
+		"acDeleted": "Dein Konto wurde gelöscht."
 	},
 	"tr": {
 		"next": "Sonraki",
@@ -3622,7 +3650,14 @@
 		"auSomethingWrong": "Bu işlem tamamlanamadı. Birazdan tekrar dene.",
 		"auCaptchaFailed": "Bot olmadığını doğrulayamadık. Tekrar dene.",
 		"acWrongPw": "Bu mevcut şifren değil.",
-		"auSocialFailed": "Bu hesapla giriş tamamlanmadı. Tekrar dene ya da e-postanı kullan."
+		"auSocialFailed": "Bu hesapla giriş tamamlanmadı. Tekrar dene ya da e-postanı kullan.",
+		"setDeleteAccount": "Hesabı sil",
+		"acDeleteTitle": "Hesabın silinsin mi?",
+		"acDeleteLede": "Her şey onunla birlikte gider: yazdıkların, notların ve tekrarların, haftan ve kayıtlı anahtarın. Geri alınamaz.",
+		"acDeleteNext": "Anladım, devam et",
+		"acDeleteType": "Onaylamak için {email} yaz.",
+		"acDeleteGo": "Hesabımı sil",
+		"acDeleted": "Hesabın silindi."
 	},
 	"fa": {
 		"next": "بعدی",
@@ -4347,7 +4382,14 @@
 		"auSomethingWrong": "انجام نشد. کمی بعد دوباره امتحان کنید.",
 		"auCaptchaFailed": "نتوانستیم تأیید کنیم که ربات نیستید. دوباره امتحان کنید.",
 		"acWrongPw": "این رمز عبور فعلی شما نیست.",
-		"auSocialFailed": "ورود با این حساب کامل نشد. دوباره امتحان کنید یا با ایمیل وارد شوید."
+		"auSocialFailed": "ورود با این حساب کامل نشد. دوباره امتحان کنید یا با ایمیل وارد شوید.",
+		"setDeleteAccount": "حذف حساب",
+		"acDeleteTitle": "حساب شما حذف شود؟",
+		"acDeleteLede": "همه‌چیز با آن حذف می‌شود: نوشته‌هایتان، یادداشت‌ها و مرورها، هفته‌تان و کلید ذخیره‌شده. این کار برگشت‌پذیر نیست.",
+		"acDeleteNext": "متوجهم، ادامه",
+		"acDeleteType": "برای تأیید، {email} را تایپ کنید.",
+		"acDeleteGo": "حساب مرا حذف کن",
+		"acDeleted": "حساب شما حذف شد."
 	},
 	"fr": {
 		"next": "Suivant",
@@ -5072,7 +5114,14 @@
 		"auSomethingWrong": "Ça n'a pas abouti. Réessaie dans un instant.",
 		"auCaptchaFailed": "Nous n'avons pas pu confirmer que tu n'es pas un robot. Réessaie.",
 		"acWrongPw": "Ce n'est pas ton mot de passe actuel.",
-		"auSocialFailed": "La connexion avec ce compte n'a pas abouti. Réessaie, ou utilise ton e-mail."
+		"auSocialFailed": "La connexion avec ce compte n'a pas abouti. Réessaie, ou utilise ton e-mail.",
+		"setDeleteAccount": "Supprimer le compte",
+		"acDeleteTitle": "Supprimer ton compte ?",
+		"acDeleteLede": "Tout part avec lui : ce que tu as écrit, tes notes et tes révisions, ta semaine et ta clé enregistrée. C'est irréversible.",
+		"acDeleteNext": "J'ai compris, continuer",
+		"acDeleteType": "Tape {email} pour confirmer.",
+		"acDeleteGo": "Supprimer mon compte",
+		"acDeleted": "Ton compte a été supprimé."
 	},
 	"ja": {
 		"next": "次へ",
@@ -5797,7 +5846,14 @@
 		"auSomethingWrong": "うまくいかなかった。少し待ってからもう一度試してみて。",
 		"auCaptchaFailed": "ボットでないことを確認できなかった。もう一度試してみて。",
 		"acWrongPw": "いまのパスワードと違うよ。",
-		"auSocialFailed": "そのアカウントでのログインが完了しなかった。もう一度試すか、メールアドレスでログインしてみて。"
+		"auSocialFailed": "そのアカウントでのログインが完了しなかった。もう一度試すか、メールアドレスでログインしてみて。",
+		"setDeleteAccount": "アカウントを削除",
+		"acDeleteTitle": "アカウントを削除する？",
+		"acDeleteLede": "書いたもの、ノートと復習、週の記録、保存したキーまで、すべてが一緒に消えるよ。元には戻せない。",
+		"acDeleteNext": "わかった、続ける",
+		"acDeleteType": "確認のため {email} と入力してね。",
+		"acDeleteGo": "アカウントを削除する",
+		"acDeleted": "アカウントを削除したよ。"
 	},
 	"pt": {
 		"next": "Próximo",
@@ -6522,7 +6578,14 @@
 		"auSomethingWrong": "Não deu certo. Tente de novo daqui a pouco.",
 		"auCaptchaFailed": "Não conseguimos confirmar que você não é um robô. Tente de novo.",
 		"acWrongPw": "Essa não é a sua senha atual.",
-		"auSocialFailed": "O login com essa conta não foi concluído. Tente de novo ou use seu e-mail."
+		"auSocialFailed": "O login com essa conta não foi concluído. Tente de novo ou use seu e-mail.",
+		"setDeleteAccount": "Excluir conta",
+		"acDeleteTitle": "Excluir sua conta?",
+		"acDeleteLede": "Tudo vai junto: o que você escreveu, suas notas e revisões, sua semana e sua chave salva. Não dá para desfazer.",
+		"acDeleteNext": "Entendi, continuar",
+		"acDeleteType": "Digite {email} para confirmar.",
+		"acDeleteGo": "Excluir minha conta",
+		"acDeleted": "Sua conta foi excluída."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -7247,7 +7310,14 @@
 		"auSomethingWrong": "没能完成。稍等一下再试。",
 		"auCaptchaFailed": "没能确认你不是机器人。再试一次。",
 		"acWrongPw": "这不是你现在的密码。",
-		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。"
+		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。",
+		"setDeleteAccount": "删除账户",
+		"acDeleteTitle": "要删除你的账户吗？",
+		"acDeleteLede": "所有内容都会一起删除：你写过的东西、笔记和复习记录、每周进度，以及保存的密钥。删除后无法恢复。",
+		"acDeleteNext": "我明白，继续",
+		"acDeleteType": "输入 {email} 以确认。",
+		"acDeleteGo": "删除我的账户",
+		"acDeleted": "你的账户已删除。"
 	},
 	"vi": {
 		"next": "Tiếp",
@@ -7972,7 +8042,14 @@
 		"auSomethingWrong": "Chưa thực hiện được. Hãy thử lại sau một lát.",
 		"auCaptchaFailed": "Chúng tôi chưa xác nhận được bạn không phải bot. Hãy thử lại.",
 		"acWrongPw": "Đó không phải mật khẩu hiện tại của bạn.",
-		"auSocialFailed": "Đăng nhập bằng tài khoản đó chưa hoàn tất. Hãy thử lại hoặc dùng email."
+		"auSocialFailed": "Đăng nhập bằng tài khoản đó chưa hoàn tất. Hãy thử lại hoặc dùng email.",
+		"setDeleteAccount": "Xóa tài khoản",
+		"acDeleteTitle": "Xóa tài khoản của bạn?",
+		"acDeleteLede": "Mọi thứ sẽ mất theo: những gì bạn đã viết, ghi chú và lượt ôn tập, tuần của bạn và khóa đã lưu. Không thể hoàn tác.",
+		"acDeleteNext": "Tôi hiểu, tiếp tục",
+		"acDeleteType": "Nhập {email} để xác nhận.",
+		"acDeleteGo": "Xóa tài khoản của tôi",
+		"acDeleted": "Tài khoản của bạn đã bị xóa."
 	},
 	"it": {
 		"next": "Avanti",
@@ -8697,7 +8774,14 @@
 		"auSomethingWrong": "Non è andata a buon fine. Riprova tra un momento.",
 		"auCaptchaFailed": "Non siamo riusciti a confermare che non sei un bot. Riprova.",
 		"acWrongPw": "Non è la tua password attuale.",
-		"auSocialFailed": "L'accesso con quell'account non è stato completato. Riprova o usa la tua email."
+		"auSocialFailed": "L'accesso con quell'account non è stato completato. Riprova o usa la tua email.",
+		"setDeleteAccount": "Elimina account",
+		"acDeleteTitle": "Eliminare il tuo account?",
+		"acDeleteLede": "Se ne va tutto: ciò che hai scritto, le tue note e i ripassi, la tua settimana e la chiave salvata. Non si può annullare.",
+		"acDeleteNext": "Ho capito, continua",
+		"acDeleteType": "Scrivi {email} per confermare.",
+		"acDeleteGo": "Elimina il mio account",
+		"acDeleted": "Il tuo account è stato eliminato."
 	},
 	"ar": {
 		"next": "التالي",
@@ -9422,7 +9506,14 @@
 		"auSomethingWrong": "لم يكتمل ذلك. حاول مرة أخرى بعد قليل.",
 		"auCaptchaFailed": "لم نتمكن من التأكد من أنك لست روبوتًا. حاول مرة أخرى.",
 		"acWrongPw": "هذه ليست كلمة مرورك الحالية.",
-		"auSocialFailed": "لم يكتمل تسجيل الدخول بذلك الحساب. حاول مرة أخرى أو استخدم بريدك الإلكتروني."
+		"auSocialFailed": "لم يكتمل تسجيل الدخول بذلك الحساب. حاول مرة أخرى أو استخدم بريدك الإلكتروني.",
+		"setDeleteAccount": "حذف الحساب",
+		"acDeleteTitle": "هل تريد حذف حسابك؟",
+		"acDeleteLede": "سيُحذف كل شيء معه: ما كتبته، وملاحظاتك ومراجعاتك، وأسبوعك، ومفتاحك المحفوظ. لا يمكن التراجع عن ذلك.",
+		"acDeleteNext": "أفهم ذلك، متابعة",
+		"acDeleteType": "اكتب {email} للتأكيد.",
+		"acDeleteGo": "احذف حسابي",
+		"acDeleted": "تم حذف حسابك."
 	},
 	"pl": {
 		"next": "Dalej",
@@ -10147,7 +10238,14 @@
 		"auSomethingWrong": "Nie udało się. Spróbuj ponownie za chwilę.",
 		"auCaptchaFailed": "Nie udało się potwierdzić, że nie jesteś botem. Spróbuj ponownie.",
 		"acWrongPw": "To nie jest Twoje obecne hasło.",
-		"auSocialFailed": "Logowanie tym kontem nie zostało dokończone. Spróbuj ponownie lub użyj e-maila."
+		"auSocialFailed": "Logowanie tym kontem nie zostało dokończone. Spróbuj ponownie lub użyj e-maila.",
+		"setDeleteAccount": "Usuń konto",
+		"acDeleteTitle": "Usunąć Twoje konto?",
+		"acDeleteLede": "Wszystko zniknie razem z nim: to, co napisałeś, notatki i powtórki, Twój tydzień i zapisany klucz. Tego nie da się cofnąć.",
+		"acDeleteNext": "Rozumiem, dalej",
+		"acDeleteType": "Wpisz {email}, aby potwierdzić.",
+		"acDeleteGo": "Usuń moje konto",
+		"acDeleted": "Twoje konto zostało usunięte."
 	},
 	"el": {
 		"next": "Επόμενο",
@@ -10872,7 +10970,14 @@
 		"auSomethingWrong": "Δεν ολοκληρώθηκε. Δοκίμασε ξανά σε λίγο.",
 		"auCaptchaFailed": "Δεν μπορέσαμε να επιβεβαιώσουμε ότι δεν είσαι bot. Δοκίμασε ξανά.",
 		"acWrongPw": "Αυτός δεν είναι ο τρέχων κωδικός σου.",
-		"auSocialFailed": "Η σύνδεση με αυτόν τον λογαριασμό δεν ολοκληρώθηκε. Δοκίμασε ξανά ή χρησιμοποίησε το email σου."
+		"auSocialFailed": "Η σύνδεση με αυτόν τον λογαριασμό δεν ολοκληρώθηκε. Δοκίμασε ξανά ή χρησιμοποίησε το email σου.",
+		"setDeleteAccount": "Διαγραφή λογαριασμού",
+		"acDeleteTitle": "Να διαγραφεί ο λογαριασμός σου;",
+		"acDeleteLede": "Όλα φεύγουν μαζί του: όσα έγραψες, οι σημειώσεις και οι επαναλήψεις σου, η εβδομάδα σου και το αποθηκευμένο κλειδί. Δεν αναιρείται.",
+		"acDeleteNext": "Κατάλαβα, συνέχεια",
+		"acDeleteType": "Πληκτρολόγησε {email} για επιβεβαίωση.",
+		"acDeleteGo": "Διαγραφή του λογαριασμού μου",
+		"acDeleted": "Ο λογαριασμός σου διαγράφηκε."
 	},
 	"nl": {
 		"next": "Volgende",
@@ -11597,7 +11702,14 @@
 		"auSomethingWrong": "Dat is niet gelukt. Probeer het zo nog eens.",
 		"auCaptchaFailed": "We konden niet bevestigen dat je geen bot bent. Probeer het opnieuw.",
 		"acWrongPw": "Dat is niet je huidige wachtwoord.",
-		"auSocialFailed": "Inloggen met dat account is niet gelukt. Probeer het opnieuw of gebruik je e-mail."
+		"auSocialFailed": "Inloggen met dat account is niet gelukt. Probeer het opnieuw of gebruik je e-mail.",
+		"setDeleteAccount": "Account verwijderen",
+		"acDeleteTitle": "Je account verwijderen?",
+		"acDeleteLede": "Alles gaat mee: wat je hebt geschreven, je notities en herhalingen, je week en je opgeslagen sleutel. Dit kan niet ongedaan worden gemaakt.",
+		"acDeleteNext": "Begrepen, doorgaan",
+		"acDeleteType": "Typ {email} om te bevestigen.",
+		"acDeleteGo": "Mijn account verwijderen",
+		"acDeleted": "Je account is verwijderd."
 	},
 	"id": {
 		"next": "Berikutnya",
@@ -12322,7 +12434,14 @@
 		"auSomethingWrong": "Itu belum berhasil. Coba lagi sebentar lagi.",
 		"auCaptchaFailed": "Kami tidak bisa memastikan kamu bukan bot. Coba lagi.",
 		"acWrongPw": "Itu bukan kata sandimu saat ini.",
-		"auSocialFailed": "Masuk dengan akun itu belum selesai. Coba lagi, atau gunakan emailmu."
+		"auSocialFailed": "Masuk dengan akun itu belum selesai. Coba lagi, atau gunakan emailmu.",
+		"setDeleteAccount": "Hapus akun",
+		"acDeleteTitle": "Hapus akunmu?",
+		"acDeleteLede": "Semuanya ikut terhapus: tulisanmu, catatan dan ulasan, minggumu, dan kunci yang tersimpan. Tidak bisa dibatalkan.",
+		"acDeleteNext": "Saya mengerti, lanjutkan",
+		"acDeleteType": "Ketik {email} untuk mengonfirmasi.",
+		"acDeleteGo": "Hapus akun saya",
+		"acDeleted": "Akunmu telah dihapus."
 	},
 	"ko": {
 		"next": "다음 곳",
@@ -13047,6 +13166,13 @@
 		"auSomethingWrong": "처리되지 않았어요. 잠시 후 다시 시도해 주세요.",
 		"auCaptchaFailed": "봇이 아닌지 확인하지 못했어요. 다시 시도해 주세요.",
 		"acWrongPw": "현재 비밀번호가 아니에요.",
-		"auSocialFailed": "그 계정으로 로그인하지 못했어요. 다시 시도하거나 이메일로 로그인해 주세요."
+		"auSocialFailed": "그 계정으로 로그인하지 못했어요. 다시 시도하거나 이메일로 로그인해 주세요.",
+		"setDeleteAccount": "계정 삭제",
+		"acDeleteTitle": "계정을 삭제할까요?",
+		"acDeleteLede": "쓴 글, 노트와 복습 기록, 이번 주 기록, 저장한 키까지 모두 함께 사라져요. 되돌릴 수 없어요.",
+		"acDeleteNext": "이해했어요, 계속",
+		"acDeleteType": "확인하려면 {email}을(를) 입력하세요.",
+		"acDeleteGo": "내 계정 삭제",
+		"acDeleted": "계정이 삭제되었어요."
 	}
 }

@@ -10,6 +10,7 @@ import { account, cancelEmailChange, connect, disconnect, hasPassword } from "#l
 import { SOCIAL_PROVIDERS, type SocialProviderId, socialFailureKey } from "#lib/auth/social.ts";
 import ChangeEmail from "#lib/components/auth/ChangeEmail.svelte";
 import ChangePassword from "#lib/components/auth/ChangePassword.svelte";
+import DeleteAccount from "#lib/components/auth/DeleteAccount.svelte";
 import KeyForm from "#lib/components/auth/KeyForm.svelte";
 import { BACKDROPS, backdropChoice, ofDay, PATTERNS, SERIES } from "#lib/components/backdrop/backdrops.ts";
 import { setBackdrop } from "#lib/components/backdrop/state.svelte.ts";
@@ -83,6 +84,7 @@ function dropLanguage(l: string) {
 // How they sign in: the address and the password change in dialogs (lib/components/auth).
 let emailOpen = $state(false);
 let pwOpen = $state(false);
+let deleteOpen = $state(false);
 // Appearance: the backdrop is kept on this device (the main app keeps it on the account).
 let backdrop = $state(backdropChoice().backdrop as string);
 let pattern = $state(backdropChoice().pattern as string);
@@ -331,18 +333,22 @@ onMount(() => {
 	<ChangeEmail bind:open={emailOpen} />
 	<ChangePassword bind:open={pwOpen} />
 
-	<nav class="links" aria-label={tx("setLinks")}>
-		{#each ["setLinkHome", "setLinkChangelog", "setLinkPrivacy", "setLinkTerms"] as k (k)}
-			<a
-				href="/settings"
-				onclick={(e) => {
-					e.preventDefault();
-					demoOpens();
-				}}
-				>{tx(k)}</a
-			>
-		{/each}
-	</nav>
+	<div class="foot">
+		<nav class="links" aria-label={tx("setLinks")}>
+			{#each ["setLinkHome", "setLinkChangelog", "setLinkPrivacy", "setLinkTerms"] as k (k)}
+				<a
+					href="/settings"
+					onclick={(e) => {
+						e.preventDefault();
+						demoOpens();
+					}}
+					>{tx(k)}</a
+				>
+			{/each}
+		</nav>
+		<button type="button" class="delete" aria-haspopup="dialog" onclick={() => (deleteOpen = true)}>{tx("setDeleteAccount")}</button>
+	</div>
+	<DeleteAccount bind:open={deleteOpen} />
 </main>
 
 <style>
@@ -497,11 +503,26 @@ section > h2 {
 .s .link:hover {
 	text-decoration-color: var(--ink);
 }
+.foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 6px 18px;
+	margin-top: 36px;
+}
 .links {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px 18px;
-	margin-top: 36px;
+}
+.delete {
+	color: var(--muted);
+	font-size: 13px;
+	transition: color 150ms;
+}
+.delete:hover {
+	color: var(--destructive);
 }
 .links a {
 	color: var(--muted);

@@ -10,6 +10,7 @@ import {
 	cancelEmailChange as cancelChange,
 	finishWelcome as finish,
 	me,
+	deleteAccount as remove,
 	requestEmailChange as requestChange,
 	saveKey,
 	savePrefs,
@@ -211,6 +212,14 @@ export async function disconnect(provider: SocialProviderId): Promise<string | n
 	const { error } = await authClient.unlinkAccount({ accountId: link.id });
 	await hydrate();
 	return error ? refusal(error) : null;
+}
+
+/** Deletes the account (the address typed to confirm it), and leaves for the sign-in page. */
+export async function deleteAccount(email: string) {
+	await remove({ email });
+	await authClient.signOut().catch(() => {});
+	adopt(null);
+	await goto("/sign-in", { replace: true });
 }
 
 export async function signOut(to = "/sign-in") {

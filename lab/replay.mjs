@@ -2,7 +2,9 @@
 // step's response with the recorded one. Run the server with the lab's call cache, read only, so nothing is spent:
 //
 //   LLM_CACHE_DIR=../rehearsal-lab/runs/cache LLM_CACHE_ONLY=1 pnpm dev --port 5180
-//   node lab/replay.mjs http://127.0.0.1:5180 ../rehearsal-lab/runs/live/<id>.jsonl ...
+//   COOKIE="better-auth.session_token=..." node lab/replay.mjs http://127.0.0.1:5180 ../rehearsal-lab/runs/live/<id>.jsonl ...
+//
+// The endpoints need a signed-in learner: COOKIE is a session cookie from the dev server.
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -16,7 +18,11 @@ if (!origin || !files.length) {
 /** Ids of loose chips come from a counter the whole process shares (`c12`), so they differ between runs. */
 const normal = (v) => JSON.parse(JSON.stringify(v ?? {}).replace(/"c\d+"/g, '"c#"'));
 const post = async (path, body) => {
-	const r = await fetch(`${origin}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
+	const r = await fetch(`${origin}${path}`, {
+		method: "POST",
+		headers: { "content-type": "application/json", cookie: process.env.COOKIE ?? "" },
+		body: JSON.stringify(body ?? {}),
+	});
 	return { status: r.status, json: await r.json().catch(() => null) };
 };
 /** Where two values first differ, as a path. */
