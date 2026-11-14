@@ -389,6 +389,22 @@ height differs by a pixel in dev only); judge looks on the build.
 behind the demo's auth pages; the welcome, settings and the key on real accounts through remote functions;
 `AGENTS.md`, `README.md`, `DEPLOYMENT.md` and the environment lists rewritten for what exists.
 
+Found while preparing Better Auth:
+
+- better-auth 1.7 (legacy ran 1.6): the core schema it generates matches §5.1; its breaking changes touch SSO, OAuth
+  provider, MCP and captcha-plugin paths, none of which this app uses. The project's pnpm refuses packages younger than
+  its minimum release age, so take the newest version old enough (1.7.21 on 2026-11-13).
+- The demo shows a pending new address with a cancel; Better Auth keeps no pending address (the change link is a signed
+  token), so `user` gains `pending_email`, set on request and cleared on confirm or cancel.
+- The demo's password messages are catalog keys (`auPwShort`, `auPwGuessable`); zxcvbn's warnings are English phrases.
+  Map the server's refusal onto the demo's keys rather than showing zxcvbn's text.
+- Check how 1.7 answers a sign-up for an address that already has an account with verification required: the demo
+  promises the same page either way.
+- Turnstile has no place in the demo's pages: render it with `appearance: "interaction-only"`, so it shows only when
+  Cloudflare wants a click.
+- Form actions are gone with remote functions, so legacy's canonical `?/action` check (`action-url.ts`) has nothing to
+  guard; the proxy's limits apply to `/api/auth/*`, and the table in the abuse-protection design follows.
+
 ### Decided by the user after the handover (2026-11-13)
 
 **No base path.** The app is only ever served from the root of its host; sub-path deployment goes, and the demo's bare
