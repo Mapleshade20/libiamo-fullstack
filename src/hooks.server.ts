@@ -4,7 +4,7 @@ import { svelteKitHandler } from "better-auth/svelte-kit";
 import { auth } from "#lib/server/auth/auth.ts";
 import { sql } from "#lib/server/db/index.ts";
 import { flushRevisions } from "#lib/server/revision/store.ts";
-import { building } from "$app/env";
+import { building, dev } from "$app/env";
 
 /* adapter-node emits this once every connection has closed (SIGTERM from tini, SIGINT, or idle). */
 process.on("sveltekit:shutdown", async (reason) => {
@@ -49,6 +49,8 @@ const handleAccess: Handle = ({ event, resolve }) => {
 	if (!user) redirect(303, "/sign-in");
 	if (!user.onboardedAt && path !== "/welcome") redirect(303, "/welcome");
 	if ((path === "/admin" || path.startsWith("/admin/")) && user.role !== "admin") return new Response("Not found", { status: 404 });
+	// The lab's pages are debug tools: development and admins only.
+	if ((path === "/lab" || path.startsWith("/lab/")) && !dev && user.role !== "admin") return new Response("Not found", { status: 404 });
 	return resolve(event);
 };
 

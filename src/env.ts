@@ -33,7 +33,10 @@ export const variables = defineEnvVars({
 	TURNSTILE_SITE_KEY: { description: "Cloudflare Turnstile; both keys or neither.", schema: optional },
 	TURNSTILE_SECRET_KEY: { schema: optional },
 
-	SMTP_HOST: { description: "Without it, mail is printed to the console (development only).", schema: optional },
+	SMTP_HOST: {
+		description: "Mail is sent only with SMTP_HOST, SMTP_USER and SMTP_PASS; otherwise it is printed to the console (development only).",
+		schema: optional,
+	},
 	SMTP_PORT: { schema: (value) => Number(value?.trim() || 465) },
 	SMTP_SECURE: { schema: (value) => (value === undefined ? true : flag(value)) },
 	SMTP_FROM: { schema: optional },
