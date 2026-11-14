@@ -393,7 +393,7 @@ height differs by a pixel in dev only); judge looks on the build.
 **Phase 1 is done** (2026-11-13): accounts below; `AGENTS.md`, `README.md`, `DEPLOYMENT.md`, the abuse-protection
 rate-limit table and every environment list describe what exists.
 
-**Phase 2, the loop: done but for the side-by-side look.**
+**Phase 2, the loop: done** (accepted 2026-11-14, with phase 1 checked again).
 
 - **The baseline** (2026-11-14). The lab's recordings did not replay (of 270, 149 miss the cache because their prompts
   changed, 64 crashed the server, 52 differed at the first step), so a new one was recorded with the code as imported:
@@ -435,8 +435,17 @@ rate-limit table and every environment list describe what exists.
   own writing (pass 1 part answered and at its end, pass 2 after the plan and after a spot), the composer into
   `/live/<piece>` with its view transition, and the whole loop of the translation case on the dev server and on the
   production build: pass 1, three spots, the end, the piece's page with its entries filed by the server. No page
-  changed its look beyond a place left out of My writing's line when a piece has none yet; a side-by-side with the
-  demo on desktop and phone is still to do.
+  changed its look beyond a place left out of My writing's line when a piece has none yet.
+- **Accepted before phase 3** (2026-11-14). Accounts end to end in the browser with Turnstile on (Cloudflare's
+  click-to-pass test key): sign-up, the link from the console, the welcome, a key saved in settings, a new address
+  confirmed by its link, sign-out, a password reset by mail, sign-in with both new, the account deleted with nothing
+  left behind. The image built and booted under `podman compose` on an empty database (migration, `/health`, sign-in,
+  a piece, `resume`, `nokey` without a key, SIGTERM). The production build beside the demo, desktop and phone, light
+  and dark: home, My writing, the piece's page, the scene card, pass 1, pass 2. Found and fixed on the way: the
+  Turnstile widget never rendered (the site key came after the widget looked for it), so no signed-out form could be
+  sent with captcha on; mail went out with a host but no password instead of being printed; the call bubbles, the
+  developer settings, `/api/fixtures` and `/lab` showed to every learner in a production build (now development and
+  admins only).
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

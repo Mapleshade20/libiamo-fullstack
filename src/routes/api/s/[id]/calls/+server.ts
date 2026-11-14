@@ -1,10 +1,12 @@
 import { learner } from "#lib/server/guard.ts";
 import type { LiveCall } from "#lib/server/llm/lanes.ts";
 import { heldRevision } from "#lib/server/revision/store.ts";
+import { dev } from "$app/env";
 
-// Debug only: a revision's model calls as server-sent events, for the page's call bubbles.
+// Debug only (development, or an admin): a revision's model calls as server-sent events, for the page's call bubbles.
 export function GET({ params, request }) {
 	const u = learner();
+	if (!dev && u.role !== "admin") return new Response("Not found", { status: 404 });
 	const lanes = heldRevision(params.id, u.id)?.session.ai.lanes;
 	if (!lanes) return new Response(null, { status: 204 });
 	let send: (c: LiveCall) => void;

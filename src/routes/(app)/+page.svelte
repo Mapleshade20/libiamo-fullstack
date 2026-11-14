@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { debugging } from "#lib/client/debug.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import Composer from "#lib/components/home/Composer.svelte";
@@ -121,7 +122,9 @@ $effect(() => {
 	</section>
 	<Shelf head={shelfHead} />
 </main>
-<div class="dev-wrap" class:away={shell.viewing}><DevPanel onfixture={(f) => composer?.fill(f)} /></div>
+{#if debugging()}
+	<div class="dev-wrap" class:away={shell.viewing}><DevPanel onfixture={(f) => composer?.fill(f)} /></div>
+{/if}
 
 <style>
 .home {

@@ -5,6 +5,7 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Copy from "@lucide/svelte/icons/copy";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import { debugging } from "#lib/client/debug.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
@@ -21,7 +22,6 @@ import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { Post } from "#lib/session/post.ts";
 import { type Resumed, Session } from "#lib/session/session.svelte.ts";
 import type { Setup } from "#lib/session/types.ts";
-import { dev as isDev } from "$app/env";
 
 /*
  * A piece's revision: the scene card, then the two passes over the draft, then the piece's own page. It starts from
@@ -149,7 +149,7 @@ async function copyQuick() {
 			</section>
 		{/if}
 	</main>
-	{#if isDev}
+	{#if debugging()}
 		<!-- Debug only (not part of the product): jump between the scene and the passes; show the model calls. -->
 		<details class="dev">
 			<summary>{tt("devTitle")}</summary>

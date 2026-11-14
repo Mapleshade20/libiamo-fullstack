@@ -3,7 +3,9 @@
    the bottom, at most eight. A bubble opens its call (purpose, model, timing, tokens, prompt and reply). Every page that
    makes model calls shows them: the session page, the home page's gate, collecting. The server traces each call under
    a trace id (src/trace.ts) and streams them on /api/s/<id>/calls; a page that is not a session makes up its own id
-   and sends it as `x-trace` with its requests (`traced`). Hidden with html.no-calls. */
+   and sends it as `x-trace` with its requests (`traced`). Hidden with html.no-calls. Shown only in development and to
+   admins: a learner never sees them. */
+import { debugging } from "#lib/client/debug.ts";
 export const CALLS = (() => {
 	const SHOWN = 8;
 	const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -103,6 +105,7 @@ export const CALLS = (() => {
 	}
 	/** Follows the calls of a trace id (a session, or a page's own id). `keep` leaves the bubbles already shown. */
 	function watch(id, { keep = false } = {}) {
+		if (!debugging()) return;
 		source?.close();
 		source = null;
 		if (!keep) {
