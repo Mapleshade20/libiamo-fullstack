@@ -1,5 +1,4 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import { captcha } from "#lib/auth/captcha.svelte.ts";
 
 /* Cloudflare Turnstile, "interaction-only": nothing shows unless Cloudflare asks for a click. Without a site key, nothing. */
@@ -8,7 +7,6 @@ type Api = {
 	reset: (id: string) => void;
 	remove: (id: string) => void;
 };
-let box: HTMLDivElement | undefined = $state();
 const api = () => (window as unknown as { turnstile?: Api }).turnstile;
 
 function load(): Promise<void> {
@@ -23,14 +21,17 @@ function load(): Promise<void> {
 	});
 }
 
-onMount(() => {
+/* Rendered from the box itself once it is in the page, and again whenever the site key changes: the key comes with the
+   auth layout's setup, which may arrive before or after the box. */
+function widget(box: HTMLElement) {
 	const siteKey = captcha.siteKey;
-	if (!siteKey || !box) return;
+	if (!siteKey) return;
 	let id: string | null = null;
+	let gone = false;
 	load()
 		.then(() => {
 			const t = api();
-			if (!t || !box) return;
+			if (!t || gone) return;
 			id = t.render(box, {
 				sitekey: siteKey,
 				appearance: "interaction-only",
@@ -41,13 +42,14 @@ onMount(() => {
 		})
 		.catch(() => {});
 	return () => {
+		gone = true;
 		if (id) api()?.remove(id);
 		captcha.reset = null;
 	};
-});
+}
 </script>
 
-<div class="turnstile" bind:this={box}></div>
+<div class="turnstile" {@attach widget}></div>
 
 <style>
 .turnstile:empty {
