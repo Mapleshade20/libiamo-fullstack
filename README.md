@@ -30,8 +30,9 @@ pnpm dev               # http://127.0.0.1:5173
 
 `pnpm check` (types and Biome) and `pnpm test` must pass before a change is done.
 
-`lab/replay.mjs` replays a session the rehearsal lab recorded against the dev server, with the lab's call cache read
-only (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`), so a porting mistake shows as a differing response and nothing is spent.
+`lab/replay.mjs` replays the recorded revisions in `lab/baseline/` against the dev server, answering every model call
+from their cache (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`), so a change in behaviour shows as a differing response and
+nothing is spent.
 
 ## Deploying
 

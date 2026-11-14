@@ -1,4 +1,4 @@
-import { FIXTURES } from "#model/fixtures/index.ts";
+import { FIXTURES } from "#lib/server/dev/fixtures/index.ts";
 
 // Test drafts for the developer settings.
 export const GET = () =>

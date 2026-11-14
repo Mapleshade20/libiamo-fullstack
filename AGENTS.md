@@ -22,8 +22,8 @@ pnpm db:migrate   # apply migrations
 The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an archive); the plan, the data model, the order of work and its current state are `docs/design/2026-11-13-step-3-rebuild.md` (§12 is the state). Read it before structural work.
 
 - **The demo is the product.** Its pages, components, copy, colours and motion are the source of truth; match them rather than restyle. Judge looks on the production build beside the demo (`pnpm dev` in rehearsal-lab `app/`, port 4793): the dev server can order CSS differently. Pixel parity is not the goal; no worse experience is.
-- **Strangler.** `src/lib/demo` still keeps most data in browser storage and the root layout renders in the browser (`ssr = false`). Each phase replaces a part of it with the server; never add browser storage for data the server will own. Done when `lib/demo`, `src/model`, the root `ssr = false`, the `/lab` pages and the dev panel are gone.
-- **The model layer** is the lab's, in `src/model` (`#model/...`), until phase 2 distributes it. Every model call goes through a `Caller` (`server/llm/caller.ts`: who pays, the purpose, the revision's background lane, the record), never a global; learners' calls run on their own key only (`server/llm/callers.ts`).
+- **Strangler.** `src/lib/demo` still keeps most data in browser storage and the root layout renders in the browser (`ssr = false`). Each phase replaces a part of it with the server; never add browser storage for data the server will own. Done when `lib/demo`, the root `ssr = false`, the `/lab` pages and the dev panel are gone.
+- **The model layer** came from the lab and lives in its domains: the revision in `server/revision` (`revision.ts` is the server side of one revision), the gate in `server/writing`, collecting in `server/notebook`, translation sources and names in `server/translation`, pure text helpers in `text/`. Every model call goes through a `Caller` (`server/llm/caller.ts`: who pays, the purpose, the revision's background lane, the record), never a global; learners' calls run on their own key only (`server/llm/callers.ts`).
 - **The replay baseline** (`lab/baseline/`, recorded by `lab/record.mjs`) is the model flow's acceptance test: `lab/replay.mjs` plays its sessions against a dev server answering from `lab/baseline/cache` only (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`; `lab/account.mjs` makes the account). Every response must be identical; a difference is a change in behaviour. A prompt changed on purpose means recording the baseline again (about $0.35).
 - No database is in production yet: until launch the schema is one migration, `drizzle/0000_init.sql`, regenerated (delete `drizzle/`, `pnpm db:generate --name init`) rather than stacked.
 
@@ -60,7 +60,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 
 ## Implementation conventions
 
-- Imports use the subpath aliases `#lib/...` and `#model/...` with explicit extensions (`#lib/utils.ts`, `#lib/account/account.svelte.ts`).
+- Imports use the subpath alias `#lib/...` with explicit extensions (`#lib/utils.ts`, `#lib/account/account.svelte.ts`).
 - Split code by where it runs (`<domain>/` shared, `components/<domain>/`, `server/<domain>/`, `client/`), then by domain; the domains are in §4 of the rebuild design. "Session" alone is never a name: the auth session, a revision and an exchange are three things.
 - Svelte 5 runes only, tabs for indentation. Svelte component CSS is unlayered and beats Tailwind utilities regardless of specificity: helper classes in `<style>` must not set properties that responsive utilities need to override.
 - Fix Biome's findings in the code; a suppression comment says why.

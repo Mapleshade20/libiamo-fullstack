@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { collectInput } from "#lib/server/collect.ts";
-import { explain } from "#model/collect.ts";
+import { explain } from "#lib/server/notebook/collect.ts";
 
 export async function POST({ request }) {
 	const b = await request.json();

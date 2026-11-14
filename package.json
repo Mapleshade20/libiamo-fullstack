@@ -49,8 +49,7 @@
 	},
 	"packageManager": "pnpm@11.5.0",
 	"imports": {
-		"#lib/*": "./src/lib/*",
-		"#model/*": "./src/model/*"
+		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
 		"drizzle-kit": "^0.31.11",

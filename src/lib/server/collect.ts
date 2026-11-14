@@ -1,6 +1,6 @@
 import { learner } from "#lib/server/guard.ts";
 import { learnerCaller } from "#lib/server/llm/callers.ts";
-import type { CollectInput } from "#model/collect.ts";
+import type { CollectInput } from "#lib/server/notebook/collect.ts";
 
 // What both of the stealing notebook's calls take (src/model/collect.ts), on the learner's own key.
 export const collectInput = async (b: Record<string, unknown>): Promise<CollectInput> => ({

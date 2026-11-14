@@ -1,5 +1,5 @@
 import { collectInput } from "#lib/server/collect.ts";
-import { ask } from "#model/collect.ts";
+import { ask } from "#lib/server/notebook/collect.ts";
 
 export async function POST({ request }) {
 	const b = await request.json();

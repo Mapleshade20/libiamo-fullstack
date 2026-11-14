@@ -6,7 +6,7 @@ import { onMount } from "svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { langEn as nameOf } from "#lib/demo/admin.ts";
-import type { NameRow, NameTable, Work } from "#model/translate/names.ts";
+import type { NameRow, NameTable, Work } from "#lib/server/translation/names.ts";
 
 /*
  * The admin's name tables (src/translate/names.ts): for each work and learner language, how every name and term is
