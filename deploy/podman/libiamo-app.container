@@ -29,7 +29,6 @@ AutoUpdate=registry
 
 # Declared here rather than relying on the image's HEALTHCHECK: an image built
 # in OCI format drops that field, so it cannot be counted on.
-# Append the base path if the image was built with a non-empty BASE_PATH.
 HealthCmd=wget -qO /dev/null http://127.0.0.1:3000/health
 HealthInterval=30s
 HealthTimeout=5s

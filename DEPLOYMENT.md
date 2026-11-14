@@ -216,7 +216,7 @@ that identify or terminate the public origin in this order:
 
 1. Add the apex DNS record or Cloudflare Tunnel public hostname for
    `libiamo.net`, provision its TLS certificate, and make the reverse proxy serve
-   the app for that host. Keep `BASE_PATH` empty.
+   the app for that host.
 2. Before switching traffic, add the new OAuth callbacks:
    `https://libiamo.net/api/auth/callback/google` and
    `https://libiamo.net/api/auth/callback/github`. Update the providers' homepage
@@ -255,21 +255,18 @@ any external allowlists that explicitly contain the old hostname.
 
 ### Search indexing
 
-`/sitemap.xml` and `/robots.txt` use runtime `ORIGIN` and the build-time
-`BASE_PATH`, as do public canonical and sharing URLs. Keep `ORIGIN` set to the
+`/sitemap.xml` and `/robots.txt` use runtime `ORIGIN`, as do public canonical
+and sharing URLs. Keep `ORIGIN` set to the
 public HTTPS origin, not the container address. The public search allowlist in
 `src/lib/app/seo.ts` supplies both the sitemap and public metadata. All other
 pages, including authentication, app and error pages, receive `noindex`.
 `robots.txt` keeps crawlers out of signed-in surfaces (`CRAWL_DISALLOWED_PATHS`
 in the same file), which only redirect anonymous visitors; authentication, not
-robots rules, protects learner data. Crawlers read `robots.txt` only at the
-domain root, so with a sub-path deployment whatever serves the root must
-provide it.
+robots rules, protects learner data.
 
 After deployment, verify the domain in Google Search Console via DNS, submit
 `https://libiamo.net/sitemap.xml`, and inspect/request indexing for
-`https://libiamo.net/welcome`. With a sub-path deployment, include `BASE_PATH`
-in both URLs. The unauthenticated `/` redirect remains temporary because `/`
+`https://libiamo.net/welcome`. The unauthenticated `/` redirect remains temporary because `/`
 serves Quest Hall for signed-in learners. Do not submit it as a second homepage.
 
 ---
@@ -327,7 +324,7 @@ git push origin v0.1.0
 ```
 
 Publishes `:0.1.0`, `:0.1`, `:latest` and `:sha-<commit>`. You can also run it
-manually from *Actions → Publish image*, choosing platforms and a `base_path`.
+manually from *Actions → Publish image*, choosing the platforms.
 
 Defaults to `linux/amd64`; `linux/arm64` is available but QEMU-emulated and
 several times slower.
@@ -340,18 +337,7 @@ log in on the server first:
 podman login ghcr.io -u <github-user>    # password = PAT with read:packages
 ```
 
-### Base path
-
-`BASE_PATH` is compiled into the client bundle by SvelteKit — it **cannot** be
-changed at runtime. The published image is built with `BASE_PATH=""` and serves
-from the root of a domain. To host under a sub-path, rebuild:
-
-```sh
-podman build --build-arg BASE_PATH=/app -t libiamo:app .
-```
-
-Then proxy *without* stripping the prefix, because the Node server expects to see
-`/app` on every request.
+The app is served from the root of its host; there is no sub-path deployment.
 
 ---
 
@@ -426,7 +412,7 @@ On/off variables take `1`/`0`; `true`/`false`, `yes`/`no` and `on`/`off` work to
 
 Compose-only: `APP_IMAGE`, `APP_BIND`, `APP_PORT`.
 
-Build args: `BASE_PATH` (compiled in; `""` = domain root), `NODE_VERSION`
+Build args: `NODE_VERSION`
 (default `22.23.2`).
 
 ---
@@ -453,7 +439,7 @@ serve `LogDriver=journald` — these units use `k8s-file` for exactly this reaso
 
 **Container starts but never reports healthy.** An image built in OCI format
 loses its `HEALTHCHECK`, so `libiamo-app.container` declares `HealthCmd=`
-itself. If you build with a non-empty `BASE_PATH`, add it to that URL.
+itself.
 
 **Port already in use on 3000.** Usually a previous non-container deployment.
 `ss -tlnp | grep 3000` names the process.
@@ -468,6 +454,3 @@ so sign-up still appears to succeed; only the message is lost.
 
 **502 or truncated responses during feedback / translation evaluation.** The proxy
 timed out on a long LLM call. Raise `proxy_read_timeout` (§3).
-
-**Assets 404 under a sub-path.** The image was built with the wrong `BASE_PATH`,
-or the proxy strips the prefix. See §5.

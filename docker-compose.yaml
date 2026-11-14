@@ -33,9 +33,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Compile-time. "" serves from the domain root.
-        BASE_PATH: "${BASE_PATH-}"
 
     restart: unless-stopped
     init: true

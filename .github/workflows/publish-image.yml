@@ -14,11 +14,6 @@ on:
         options:
           - linux/amd64
           - linux/amd64,linux/arm64
-      base_path:
-        description: "SvelteKit base path, compiled in. Empty = domain root."
-        required: false
-        default: ""
-        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -74,8 +69,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            BASE_PATH=${{ inputs.base_path || '' }}
           # Cache layers in the registry so pnpm install/build are not repeated.
           cache-from: type=gha
           cache-to: type=gha,mode=max
