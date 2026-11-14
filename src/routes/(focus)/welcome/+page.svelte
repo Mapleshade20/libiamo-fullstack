@@ -4,6 +4,8 @@ import Check from "@lucide/svelte/icons/check";
 import { onMount } from "svelte";
 import { MediaQuery } from "svelte/reactivity";
 import { blur, fly } from "svelte/transition";
+import { account, auth, speak } from "#lib/account/account.svelte.ts";
+import { finishWelcome } from "#lib/account/onboarding.svelte.ts";
 import KeyForm from "#lib/components/auth/KeyForm.svelte";
 import ChoiceGroup from "#lib/components/common/ChoiceGroup.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
@@ -15,9 +17,7 @@ import { drinkOf } from "#lib/components/streak/glass/drinks.ts";
 import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS, type AppLang, endonym, hasScenarios, isAppLang, LEARNABLE, langName } from "#lib/constants.ts";
-import { account, auth, speak } from "#lib/demo/account.svelte.ts";
 import { app, applyLang } from "#lib/demo/app.svelte.ts";
-import { finishWelcome } from "#lib/demo/onboarding.svelte.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
 
@@ -72,7 +72,7 @@ async function finish(tour: boolean) {
 	app.save();
 	await loadLang(app.prefs.active);
 	applyLang();
-	finishWelcome(tour);
+	await finishWelcome(tour);
 	goto("/");
 }
 $effect(() => {

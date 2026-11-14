@@ -1,4 +1,4 @@
-import { account } from "./account.svelte";
+import { account } from "#lib/account/account.svelte.ts";
 import { sandboxed } from "./app.svelte";
 import { dev } from "./dev.svelte";
 

@@ -629,9 +629,6 @@
 		"auRsGo": "Save password",
 		"auRsExpLede": "Ask for a new one.",
 		"auRsAgain": "Send a new link",
-		"devOpenLink": "Open the mail's link",
-		"devExpiredLink": "An expired link",
-		"devFillAccount": "Fill in this browser's account",
 		"welName": "What should we *call* you?",
 		"welNameLede": "It's the name on what you post and send in the scenes. You can change it any time.",
 		"welNameLabel": "Your name",
@@ -721,7 +718,11 @@
 		"limitRefusedBody": "The key may be wrong or revoked, or its credit used up. Check it with your provider, then try again. Nothing you wrote is lost.",
 		"limitCheckKey": "Check your key",
 		"devLimitNoKey": "No key",
-		"devLimitRefused": "Key refused"
+		"devLimitRefused": "Key refused",
+		"auSomethingWrong": "That didn't go through. Try again in a moment.",
+		"auCaptchaFailed": "We couldn't confirm you're not a bot. Try again.",
+		"acWrongPw": "That's not your current password.",
+		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -1353,9 +1354,6 @@
 		"auRsGo": "保存密码",
 		"auRsExpLede": "再申请一个吧。",
 		"auRsAgain": "重新发送链接",
-		"devOpenLink": "打开邮件里的链接",
-		"devExpiredLink": "过期的链接",
-		"devFillAccount": "填入本浏览器的账号",
 		"welName": "我们该怎么*称呼*你？",
 		"welNameLede": "情景里你发的帖子和消息都署这个名字，随时可以改。",
 		"welNameLabel": "你的名字",
@@ -1445,6 +1443,10 @@
 		"limitRefusedBody": "密钥可能填错了、已被撤销，或者余额用完了。去服务商那里检查后再试一次，你写的内容都还在。",
 		"limitCheckKey": "检查密钥",
 		"devLimitNoKey": "没有密钥",
-		"devLimitRefused": "密钥被拒"
+		"devLimitRefused": "密钥被拒",
+		"auSomethingWrong": "没能完成。稍等一下再试。",
+		"auCaptchaFailed": "没能确认你不是机器人。再试一次。",
+		"acWrongPw": "这不是你现在的密码。",
+		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。"
 	}
 }

@@ -1,10 +1,10 @@
 <script lang="ts">
 import ExternalLink from "@lucide/svelte/icons/external-link";
+import { account, RECOMMENDED_KEY, setKey } from "#lib/account/account.svelte.ts";
 import { shake } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { account, RECOMMENDED_KEY, setKey } from "#lib/demo/account.svelte.ts";
 
 /*
  * The learner's own AI key, which every call runs on (there is no trial). Four providers, the base URL following the
@@ -54,17 +54,26 @@ function usePreset(p: (typeof PRESETS)[number]) {
 	model = p.model;
 	keyInput?.focus();
 }
-// The demo never keeps the key itself: the main app encrypts it on the server.
-function save(e: SubmitEvent) {
+// The server encrypts the key; it is never sent back.
+let pending = $state(false);
+async function save(e: SubmitEvent) {
 	e.preventDefault();
 	if (!key.trim()) {
 		shake(keyInput);
 		keyInput?.focus();
 		return;
 	}
-	key = "";
 	const had = !!account.me.key;
-	setKey({ provider, model: model.trim() || RECOMMENDED_KEY.model });
+	pending = true;
+	try {
+		await setKey(provider, model.trim() || RECOMMENDED_KEY.model, key.trim());
+	} catch {
+		pending = false;
+		shake(keyInput);
+		return;
+	}
+	pending = false;
+	key = "";
 	replacing = false;
 	if (had) back();
 	onsaved?.();
@@ -111,7 +120,7 @@ function save(e: SubmitEvent) {
 			{#if account.me.key}
 				<Button variant="ghost" onclick={cancel}>{tx("setCancel")}</Button>
 			{/if}
-			<Button type="submit" variant="secondary">{tx("setSaveKey")}</Button>
+			<Button type="submit" variant="secondary" disabled={pending}>{tx("setSaveKey")}</Button>
 		</div>
 	</form>
 </Reveal>

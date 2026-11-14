@@ -1,5 +1,5 @@
 {
-  "id": "9e51b504-f2d2-472f-b442-35da524710ea",
+  "id": "06d9fd7a-a427-423e-bead-375e0106a119",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -346,6 +346,12 @@
         "onboarded_at": {
           "name": "onboarded_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_email": {
+          "name": "pending_email",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

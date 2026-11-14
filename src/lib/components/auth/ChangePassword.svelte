@@ -1,12 +1,11 @@
 <script lang="ts">
 import "./auth.css";
 import { tick } from "svelte";
+import { account, auth, changePassword, hasPassword, requestPasswordReset, signOut, weakPassword } from "#lib/account/account.svelte.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { account, auth, hasPassword, passwordSet, signOut, weakPassword } from "#lib/demo/account.svelte.ts";
 import { toast, tx } from "#lib/demo/app.svelte.ts";
-import { dev } from "$app/env";
 import PasswordField from "./PasswordField.svelte";
 
 /*
@@ -22,6 +21,7 @@ let sent = $state(false);
 let curIn: HTMLInputElement | null = $state(null);
 let nextIn: HTMLInputElement | null = $state(null);
 let errors = $state<{ current?: string; next?: string }>({});
+let pending = $state(false);
 $effect(() => {
 	if (!open) return;
 	current = next = "";
@@ -33,7 +33,7 @@ async function submit(e: SubmitEvent) {
 	e.preventDefault();
 	errors = {
 		current: current ? undefined : "auPwMissing",
-		next: !next ? "auPwMissing" : next === current ? "acSamePw" : (weakPassword(next, account.me.email) ?? undefined),
+		next: !next ? "auPwMissing" : next === current ? "acSamePw" : ((await weakPassword(next, account.me.email)) ?? undefined),
 	};
 	const el = errors.current ? curIn : errors.next ? nextIn : null;
 	if (el) {
@@ -42,8 +42,27 @@ async function submit(e: SubmitEvent) {
 		shake(el);
 		return;
 	}
+	pending = true;
+	const refused = await changePassword(current, next, others);
+	pending = false;
+	if (refused) {
+		errors = refused === "acWrongPw" ? { current: refused } : { next: refused };
+		await tick();
+		const el = errors.current ? curIn : nextIn;
+		el?.focus();
+		shake(el);
+		return;
+	}
 	open = false;
 	toast(tx(others ? "acPwChangedOthers" : "acPwChanged"));
+}
+/** A provider's account: the mailed link sets its first password. */
+async function sendSetLink() {
+	pending = true;
+	const refused = await requestPasswordReset(account.me.email);
+	pending = false;
+	if (refused) toast(tx(refused));
+	else sent = true;
 }
 function forgot() {
 	// The reset is for someone signed out: this device signs out, and the reset page starts from the address.
@@ -60,26 +79,13 @@ function forgot() {
 			{#if sent}
 				<p class="lede">{tx("acSetPwSent", { email: account.me.email })}</p>
 				<div class="acts">
-					{#if dev}
-						<Button
-							variant="ghost"
-							size="sm"
-							class="me-auto text-muted-foreground"
-							onclick={() => {
-								passwordSet();
-								open = false;
-								toast(tx("acPwSetDone"));
-							}}
-							>{tx("devOpenLink")}</Button
-						>
-					{/if}
 					<Button onclick={() => (open = false)}>{tx("acOk")}</Button>
 				</div>
 			{:else}
 				<p class="lede">{tx("acSetPwLede", { email: account.me.email })}</p>
 				<div class="acts">
 					<Button variant="secondary" onclick={() => (open = false)}>{tx("setCancel")}</Button>
-					<Button onclick={() => (sent = true)} data-initial-focus>{tx("acSendLink")}</Button>
+					<Button onclick={sendSetLink} disabled={pending} data-initial-focus>{tx("acSendLink")}</Button>
 				</div>
 			{/if}
 		{:else}
@@ -135,7 +141,7 @@ function forgot() {
 				<label class="others"><input type="checkbox" bind:checked={others}>{tx("acSignOutOthers")}</label>
 				<div class="acts">
 					<Button variant="secondary" onclick={() => (open = false)}>{tx("setCancel")}</Button>
-					<Button type="submit">{tx("auRsGo")}</Button>
+					<Button type="submit" disabled={pending}>{tx("auRsGo")}</Button>
 				</div>
 			</form>
 		{/if}

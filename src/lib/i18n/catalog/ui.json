@@ -629,9 +629,6 @@
 		"auRsGo": "Save password",
 		"auRsExpLede": "Ask for a new one.",
 		"auRsAgain": "Send a new link",
-		"devOpenLink": "Open the mail's link",
-		"devExpiredLink": "An expired link",
-		"devFillAccount": "Fill in this browser's account",
 		"welName": "What should we *call* you?",
 		"welNameLede": "It's the name on what you post and send in the scenes. You can change it any time.",
 		"welNameLabel": "Your name",
@@ -721,7 +718,11 @@
 		"limitRefusedBody": "The key may be wrong or revoked, or its credit used up. Check it with your provider, then try again. Nothing you wrote is lost.",
 		"limitCheckKey": "Check your key",
 		"devLimitNoKey": "No key",
-		"devLimitRefused": "Key refused"
+		"devLimitRefused": "Key refused",
+		"auSomethingWrong": "That didn't go through. Try again in a moment.",
+		"auCaptchaFailed": "We couldn't confirm you're not a bot. Try again.",
+		"acWrongPw": "That's not your current password.",
+		"auSocialFailed": "Signing in with that account didn't finish. Try again, or use your email."
 	},
 	"ru": {
 		"next": "Дальше",
@@ -1353,9 +1354,6 @@
 		"auRsGo": "Сохранить пароль",
 		"auRsExpLede": "Запроси новую ссылку.",
 		"auRsAgain": "Отправить новую ссылку",
-		"devOpenLink": "Открыть ссылку из письма",
-		"devExpiredLink": "Просроченная ссылка",
-		"devFillAccount": "Подставить аккаунт этого браузера",
 		"welName": "Как тебя *называть*?",
 		"welNameLede": "Это имя будет стоять под твоими постами и сообщениями в сценах. Его можно поменять в любой момент.",
 		"welNameLabel": "Твоё имя",
@@ -1445,7 +1443,11 @@
 		"limitRefusedBody": "Возможно, ключ неверный или отозван, а может, закончился баланс. Проверь это у своего провайдера и попробуй ещё раз. Всё, что ты написал, сохранилось.",
 		"limitCheckKey": "Проверить ключ",
 		"devLimitNoKey": "Нет ключа",
-		"devLimitRefused": "Ключ отклонён"
+		"devLimitRefused": "Ключ отклонён",
+		"auSomethingWrong": "Не получилось. Попробуйте ещё раз чуть позже.",
+		"auCaptchaFailed": "Не удалось подтвердить, что вы не бот. Попробуйте ещё раз.",
+		"acWrongPw": "Это не ваш текущий пароль.",
+		"auSocialFailed": "Вход через этот аккаунт не завершился. Попробуйте ещё раз или войдите по почте."
 	},
 	"es": {
 		"next": "Siguiente",
@@ -2077,9 +2079,6 @@
 		"auRsGo": "Guardar contraseña",
 		"auRsExpLede": "Pide uno nuevo.",
 		"auRsAgain": "Enviar enlace nuevo",
-		"devOpenLink": "Abrir el enlace del correo",
-		"devExpiredLink": "Un enlace caducado",
-		"devFillAccount": "Rellenar la cuenta de este navegador",
 		"welName": "¿Cómo te *llamamos*?",
 		"welNameLede": "Es el nombre con el que publicas y envías mensajes en las escenas. Lo puedes cambiar cuando quieras.",
 		"welNameLabel": "Tu nombre",
@@ -2169,7 +2168,11 @@
 		"limitRefusedBody": "Puede que la clave esté mal, la hayan revocado o se haya agotado el saldo. Revísalo con tu proveedor y vuelve a intentarlo. No se ha perdido nada de lo que escribiste.",
 		"limitCheckKey": "Revisa tu clave",
 		"devLimitNoKey": "Sin clave",
-		"devLimitRefused": "Clave rechazada"
+		"devLimitRefused": "Clave rechazada",
+		"auSomethingWrong": "No se pudo completar. Inténtalo de nuevo en un momento.",
+		"auCaptchaFailed": "No pudimos confirmar que no eres un bot. Inténtalo de nuevo.",
+		"acWrongPw": "Esa no es tu contraseña actual.",
+		"auSocialFailed": "No se completó el inicio de sesión con esa cuenta. Inténtalo de nuevo o usa tu correo."
 	},
 	"de": {
 		"next": "Nächste",
@@ -2801,9 +2804,6 @@
 		"auRsGo": "Passwort speichern",
 		"auRsExpLede": "Fordere einfach einen neuen an.",
 		"auRsAgain": "Neuen Link senden",
-		"devOpenLink": "Link aus der E-Mail öffnen",
-		"devExpiredLink": "Abgelaufener Link",
-		"devFillAccount": "Konto dieses Browsers eintragen",
 		"welName": "Wie sollen wir dich *nennen*?",
 		"welNameLede": "Das ist der Name, unter dem du in den Szenen postest und schreibst. Du kannst ihn jederzeit ändern.",
 		"welNameLabel": "Dein Name",
@@ -2893,7 +2893,11 @@
 		"limitRefusedBody": "Der Schlüssel ist vielleicht falsch oder widerrufen, oder das Guthaben ist aufgebraucht. Prüf es bei deinem Anbieter und versuch es dann noch mal. Nichts, was du geschrieben hast, ist verloren.",
 		"limitCheckKey": "Schlüssel prüfen",
 		"devLimitNoKey": "Kein Schlüssel",
-		"devLimitRefused": "Schlüssel abgelehnt"
+		"devLimitRefused": "Schlüssel abgelehnt",
+		"auSomethingWrong": "Das hat nicht geklappt. Versuch es gleich noch einmal.",
+		"auCaptchaFailed": "Wir konnten nicht bestätigen, dass du kein Bot bist. Versuch es noch einmal.",
+		"acWrongPw": "Das ist nicht dein aktuelles Passwort.",
+		"auSocialFailed": "Die Anmeldung mit diesem Konto wurde nicht abgeschlossen. Versuch es noch einmal oder nutze deine E-Mail."
 	},
 	"tr": {
 		"next": "Sonraki",
@@ -3525,9 +3529,6 @@
 		"auRsGo": "Şifreyi kaydet",
 		"auRsExpLede": "Yeni bir tane iste.",
 		"auRsAgain": "Yeni link gönder",
-		"devOpenLink": "Maildeki linki aç",
-		"devExpiredLink": "Süresi dolmuş link",
-		"devFillAccount": "Bu tarayıcının hesabını doldur",
 		"welName": "Sana *nasıl* hitap edelim?",
 		"welNameLede": "Sahnelerde paylaştığın gönderilerde ve mesajlarda bu isim görünür. İstediğin zaman değiştirebilirsin.",
 		"welNameLabel": "Adın",
@@ -3617,7 +3618,11 @@
 		"limitRefusedBody": "Anahtar yanlış olabilir, iptal edilmiş olabilir ya da kredin bitmiş olabilir. Sağlayıcında kontrol edip tekrar dene. Yazdığın hiçbir şey kaybolmadı.",
 		"limitCheckKey": "Anahtarı kontrol et",
 		"devLimitNoKey": "Anahtar yok",
-		"devLimitRefused": "Anahtar reddedildi"
+		"devLimitRefused": "Anahtar reddedildi",
+		"auSomethingWrong": "Bu işlem tamamlanamadı. Birazdan tekrar dene.",
+		"auCaptchaFailed": "Bot olmadığını doğrulayamadık. Tekrar dene.",
+		"acWrongPw": "Bu mevcut şifren değil.",
+		"auSocialFailed": "Bu hesapla giriş tamamlanmadı. Tekrar dene ya da e-postanı kullan."
 	},
 	"fa": {
 		"next": "بعدی",
@@ -4249,9 +4254,6 @@
 		"auRsGo": "ذخیرهٔ رمز",
 		"auRsExpLede": "یک درخواست تازه بده.",
 		"auRsAgain": "ارسال لینک تازه",
-		"devOpenLink": "باز کردن لینک داخل ایمیل",
-		"devExpiredLink": "لینک منقضی‌شده",
-		"devFillAccount": "پر کردن با حساب این مرورگر",
 		"welName": "دوست داری ما تو رو *چی* صدا بزنیم؟",
 		"welNameLede": "همون اسمیه که زیر پست‌ها و پیام‌های صحنه‌ها می‌نویسی. هر وقت خواستی می‌تونی عوضش کنی.",
 		"welNameLabel": "اسمت",
@@ -4341,7 +4343,11 @@
 		"limitRefusedBody": "شاید کلید اشتباه باشه یا لغو شده باشه، یا اعتبارش تموم شده باشه. نزد ارائه‌دهنده‌ات بررسی کن و دوباره امتحان کن. چیزی از آنچه نوشته‌ای از بین نرفته.",
 		"limitCheckKey": "بررسی کلید",
 		"devLimitNoKey": "بدون کلید",
-		"devLimitRefused": "کلید رد شد"
+		"devLimitRefused": "کلید رد شد",
+		"auSomethingWrong": "انجام نشد. کمی بعد دوباره امتحان کنید.",
+		"auCaptchaFailed": "نتوانستیم تأیید کنیم که ربات نیستید. دوباره امتحان کنید.",
+		"acWrongPw": "این رمز عبور فعلی شما نیست.",
+		"auSocialFailed": "ورود با این حساب کامل نشد. دوباره امتحان کنید یا با ایمیل وارد شوید."
 	},
 	"fr": {
 		"next": "Suivant",
@@ -4973,9 +4979,6 @@
 		"auRsGo": "Enregistrer le mot de passe",
 		"auRsExpLede": "Demande-en un nouveau.",
 		"auRsAgain": "Renvoyer un lien",
-		"devOpenLink": "Ouvrir le lien du mail",
-		"devExpiredLink": "Un lien expiré",
-		"devFillAccount": "Remplir avec le compte de ce navigateur",
 		"welName": "Comment on doit te *appeler* ?",
 		"welNameLede": "C'est le nom qui figure sur ce que tu publies et envoies dans les scènes. Tu peux le changer à tout moment.",
 		"welNameLabel": "Ton nom",
@@ -5065,7 +5068,11 @@
 		"limitRefusedBody": "La clé est peut-être erronée ou révoquée, ou son crédit épuisé. Vérifie-la auprès de ton fournisseur, puis réessaie. Rien de ce que tu as écrit n'est perdu.",
 		"limitCheckKey": "Vérifier la clé",
 		"devLimitNoKey": "Pas de clé",
-		"devLimitRefused": "Clé refusée"
+		"devLimitRefused": "Clé refusée",
+		"auSomethingWrong": "Ça n'a pas abouti. Réessaie dans un instant.",
+		"auCaptchaFailed": "Nous n'avons pas pu confirmer que tu n'es pas un robot. Réessaie.",
+		"acWrongPw": "Ce n'est pas ton mot de passe actuel.",
+		"auSocialFailed": "La connexion avec ce compte n'a pas abouti. Réessaie, ou utilise ton e-mail."
 	},
 	"ja": {
 		"next": "次へ",
@@ -5697,9 +5704,6 @@
 		"auRsGo": "パスワードを保存",
 		"auRsExpLede": "新しいものを申請し直してね。",
 		"auRsAgain": "新しいリンクを送る",
-		"devOpenLink": "メールのリンクを開く",
-		"devExpiredLink": "期限切れのリンク",
-		"devFillAccount": "このブラウザのアカウントを入力",
 		"welName": "何て*呼ぼう*？",
 		"welNameLede": "場面であなたが投稿やメッセージを送るときに使う名前だよ。あとでいつでも変えられるよ。",
 		"welNameLabel": "名前",
@@ -5789,7 +5793,11 @@
 		"limitRefusedBody": "キーが間違っているか、無効になっているか、残高が切れているかも。サービス側で確認してから、もう一度試してね。書いた内容は消えてないから大丈夫。",
 		"limitCheckKey": "キーを確認",
 		"devLimitNoKey": "キーなし",
-		"devLimitRefused": "キーが拒否された"
+		"devLimitRefused": "キーが拒否された",
+		"auSomethingWrong": "うまくいかなかった。少し待ってからもう一度試してみて。",
+		"auCaptchaFailed": "ボットでないことを確認できなかった。もう一度試してみて。",
+		"acWrongPw": "いまのパスワードと違うよ。",
+		"auSocialFailed": "そのアカウントでのログインが完了しなかった。もう一度試すか、メールアドレスでログインしてみて。"
 	},
 	"pt": {
 		"next": "Próximo",
@@ -6421,9 +6429,6 @@
 		"auRsGo": "Salvar senha",
 		"auRsExpLede": "Peça um novo.",
 		"auRsAgain": "Enviar novo link",
-		"devOpenLink": "Abrir o link do e-mail",
-		"devExpiredLink": "Um link expirado",
-		"devFillAccount": "Preencher a conta deste navegador",
 		"welName": "Como a gente pode *chamar* você?",
 		"welNameLede": "É o nome que aparece nos posts e mensagens das cenas. Você pode mudar quando quiser.",
 		"welNameLabel": "Seu nome",
@@ -6513,7 +6518,11 @@
 		"limitRefusedBody": "A chave pode estar errada ou revogada, ou o crédito pode ter acabado. Confira no seu provedor e tente de novo. Nada do que você escreveu se perdeu.",
 		"limitCheckKey": "Conferir chave",
 		"devLimitNoKey": "Sem chave",
-		"devLimitRefused": "Chave recusada"
+		"devLimitRefused": "Chave recusada",
+		"auSomethingWrong": "Não deu certo. Tente de novo daqui a pouco.",
+		"auCaptchaFailed": "Não conseguimos confirmar que você não é um robô. Tente de novo.",
+		"acWrongPw": "Essa não é a sua senha atual.",
+		"auSocialFailed": "O login com essa conta não foi concluído. Tente de novo ou use seu e-mail."
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -7145,9 +7154,6 @@
 		"auRsGo": "保存密码",
 		"auRsExpLede": "再申请一个吧。",
 		"auRsAgain": "重新发送链接",
-		"devOpenLink": "打开邮件里的链接",
-		"devExpiredLink": "过期的链接",
-		"devFillAccount": "填入本浏览器的账号",
 		"welName": "我们该怎么*称呼*你？",
 		"welNameLede": "情景里你发的帖子和消息都署这个名字，随时可以改。",
 		"welNameLabel": "你的名字",
@@ -7237,7 +7243,11 @@
 		"limitRefusedBody": "密钥可能填错了、已被撤销，或者余额用完了。去服务商那里检查后再试一次，你写的内容都还在。",
 		"limitCheckKey": "检查密钥",
 		"devLimitNoKey": "没有密钥",
-		"devLimitRefused": "密钥被拒"
+		"devLimitRefused": "密钥被拒",
+		"auSomethingWrong": "没能完成。稍等一下再试。",
+		"auCaptchaFailed": "没能确认你不是机器人。再试一次。",
+		"acWrongPw": "这不是你现在的密码。",
+		"auSocialFailed": "用这个账号登录没有完成。再试一次，或者用邮箱登录。"
 	},
 	"vi": {
 		"next": "Tiếp",
@@ -7869,9 +7879,6 @@
 		"auRsGo": "Lưu mật khẩu",
 		"auRsExpLede": "Yêu cầu một liên kết mới nhé.",
 		"auRsAgain": "Gửi liên kết mới",
-		"devOpenLink": "Mở liên kết trong email",
-		"devExpiredLink": "Liên kết đã hết hạn",
-		"devFillAccount": "Điền tài khoản của trình duyệt này",
 		"welName": "Chúng tôi nên *gọi* bạn là gì?",
 		"welNameLede": "Tên này sẽ hiện trên các bài đăng và tin nhắn trong tình huống của bạn. Lúc nào cũng có thể đổi.",
 		"welNameLabel": "Tên của bạn",
@@ -7961,7 +7968,11 @@
 		"limitRefusedBody": "Có thể khóa đã nhập sai hoặc đã bị thu hồi, hoặc số dư đã hết. Bạn kiểm tra lại với nhà cung cấp rồi thử lại nhé. Nội dung bạn viết vẫn còn nguyên.",
 		"limitCheckKey": "Kiểm tra khóa",
 		"devLimitNoKey": "Chưa có khóa",
-		"devLimitRefused": "Khóa bị từ chối"
+		"devLimitRefused": "Khóa bị từ chối",
+		"auSomethingWrong": "Chưa thực hiện được. Hãy thử lại sau một lát.",
+		"auCaptchaFailed": "Chúng tôi chưa xác nhận được bạn không phải bot. Hãy thử lại.",
+		"acWrongPw": "Đó không phải mật khẩu hiện tại của bạn.",
+		"auSocialFailed": "Đăng nhập bằng tài khoản đó chưa hoàn tất. Hãy thử lại hoặc dùng email."
 	},
 	"it": {
 		"next": "Avanti",
@@ -8593,9 +8604,6 @@
 		"auRsGo": "Salva password",
 		"auRsExpLede": "Richiedine uno nuovo.",
 		"auRsAgain": "Invia un nuovo link",
-		"devOpenLink": "Apri il link della mail",
-		"devExpiredLink": "Un link scaduto",
-		"devFillAccount": "Inserisci l'account di questo browser",
 		"welName": "Come ti *chiamiamo*?",
 		"welNameLede": "È il nome con cui firmi i post e i messaggi nelle scene. Puoi cambiarlo quando vuoi.",
 		"welNameLabel": "Il tuo nome",
@@ -8685,7 +8693,11 @@
 		"limitRefusedBody": "La chiave potrebbe essere sbagliata o revocata, oppure il credito è esaurito. Controllala con il tuo fornitore, poi riprova. Quello che hai scritto non è andato perso.",
 		"limitCheckKey": "Controlla la chiave",
 		"devLimitNoKey": "Nessuna chiave",
-		"devLimitRefused": "Chiave rifiutata"
+		"devLimitRefused": "Chiave rifiutata",
+		"auSomethingWrong": "Non è andata a buon fine. Riprova tra un momento.",
+		"auCaptchaFailed": "Non siamo riusciti a confermare che non sei un bot. Riprova.",
+		"acWrongPw": "Non è la tua password attuale.",
+		"auSocialFailed": "L'accesso con quell'account non è stato completato. Riprova o usa la tua email."
 	},
 	"ar": {
 		"next": "التالي",
@@ -9317,9 +9329,6 @@
 		"auRsGo": "حفظ كلمة المرور",
 		"auRsExpLede": "اطلب واحدًا جديدًا.",
 		"auRsAgain": "أرسل رابطًا جديدًا",
-		"devOpenLink": "افتح الرابط في البريد",
-		"devExpiredLink": "رابط منتهي الصلاحية",
-		"devFillAccount": "ملء بيانات حساب هذا المتصفح",
 		"welName": "بماذا *نناديك*؟",
 		"welNameLede": "هذا الاسم يظهر على منشوراتك ورسائلك في المشاهد. يمكنك تغييره في أي وقت.",
 		"welNameLabel": "اسمك",
@@ -9409,7 +9418,11 @@
 		"limitRefusedBody": "ممكن المفتاح يكون غلط أو انسحب، أو الرصيد خلص. تأكد منه عند المزوّد وجرّب مرة ثانية. ما ضاع أي شيء كتبته.",
 		"limitCheckKey": "تحقق من المفتاح",
 		"devLimitNoKey": "لا يوجد مفتاح",
-		"devLimitRefused": "المفتاح مرفوض"
+		"devLimitRefused": "المفتاح مرفوض",
+		"auSomethingWrong": "لم يكتمل ذلك. حاول مرة أخرى بعد قليل.",
+		"auCaptchaFailed": "لم نتمكن من التأكد من أنك لست روبوتًا. حاول مرة أخرى.",
+		"acWrongPw": "هذه ليست كلمة مرورك الحالية.",
+		"auSocialFailed": "لم يكتمل تسجيل الدخول بذلك الحساب. حاول مرة أخرى أو استخدم بريدك الإلكتروني."
 	},
 	"pl": {
 		"next": "Dalej",
@@ -10041,9 +10054,6 @@
 		"auRsGo": "Zapisz hasło",
 		"auRsExpLede": "Poproś o nowy.",
 		"auRsAgain": "Wyślij nowy link",
-		"devOpenLink": "Otwórz link z maila",
-		"devExpiredLink": "Wygasły link",
-		"devFillAccount": "Wypełnij kontem z tej przeglądarki",
 		"welName": "Jak mamy *cię* nazywać?",
 		"welNameLede": "To imię pojawi się pod twoimi postami i wiadomościami w scenkach. Możesz je zmienić w każdej chwili.",
 		"welNameLabel": "Twoje imię",
@@ -10133,7 +10143,11 @@
 		"limitRefusedBody": "Klucz może być błędny albo unieważniony, albo skończyły się środki. Sprawdź go u dostawcy i spróbuj ponownie. Twój tekst jest bezpieczny.",
 		"limitCheckKey": "Sprawdź klucz",
 		"devLimitNoKey": "Brak klucza",
-		"devLimitRefused": "Klucz odrzucony"
+		"devLimitRefused": "Klucz odrzucony",
+		"auSomethingWrong": "Nie udało się. Spróbuj ponownie za chwilę.",
+		"auCaptchaFailed": "Nie udało się potwierdzić, że nie jesteś botem. Spróbuj ponownie.",
+		"acWrongPw": "To nie jest Twoje obecne hasło.",
+		"auSocialFailed": "Logowanie tym kontem nie zostało dokończone. Spróbuj ponownie lub użyj e-maila."
 	},
 	"el": {
 		"next": "Επόμενο",
@@ -10765,9 +10779,6 @@
 		"auRsGo": "Αποθήκευση κωδικού",
 		"auRsExpLede": "Ζήτα ένα καινούργιο.",
 		"auRsAgain": "Στείλε νέο σύνδεσμο",
-		"devOpenLink": "Άνοιξε τον σύνδεσμο του email",
-		"devExpiredLink": "Ένας σύνδεσμος που έληξε",
-		"devFillAccount": "Συμπλήρωσε τον λογαριασμό αυτού του προγράμματος περιήγησης",
 		"welName": "Πώς να σε *φωνάζουμε*;",
 		"welNameLede": "Είναι το όνομα που θα υπάρχει στις αναρτήσεις και τα μηνύματα που στέλνεις στα σενάρια. Μπορείς να το αλλάξεις όποτε θες.",
 		"welNameLabel": "Το όνομά σου",
@@ -10857,7 +10868,11 @@
 		"limitRefusedBody": "Το κλειδί μπορεί να είναι λάθος ή ανακληθεί, ή να έχει εξαντληθεί το υπόλοιπό του. Έλεγξέ το στον πάροχό σου και δοκίμασε ξανά. Τίποτα από όσα έγραψες δεν χάθηκε.",
 		"limitCheckKey": "Έλεγξε το κλειδί",
 		"devLimitNoKey": "Χωρίς κλειδί",
-		"devLimitRefused": "Το κλειδί απορρίφθηκε"
+		"devLimitRefused": "Το κλειδί απορρίφθηκε",
+		"auSomethingWrong": "Δεν ολοκληρώθηκε. Δοκίμασε ξανά σε λίγο.",
+		"auCaptchaFailed": "Δεν μπορέσαμε να επιβεβαιώσουμε ότι δεν είσαι bot. Δοκίμασε ξανά.",
+		"acWrongPw": "Αυτός δεν είναι ο τρέχων κωδικός σου.",
+		"auSocialFailed": "Η σύνδεση με αυτόν τον λογαριασμό δεν ολοκληρώθηκε. Δοκίμασε ξανά ή χρησιμοποίησε το email σου."
 	},
 	"nl": {
 		"next": "Volgende",
@@ -11489,9 +11504,6 @@
 		"auRsGo": "Wachtwoord opslaan",
 		"auRsExpLede": "Vraag een nieuwe aan.",
 		"auRsAgain": "Nieuwe link sturen",
-		"devOpenLink": "Open de link uit de mail",
-		"devExpiredLink": "Een verlopen link",
-		"devFillAccount": "Vul het account van deze browser in",
 		"welName": "Hoe mogen we je *noemen*?",
 		"welNameLede": "Dit is de naam die bij je berichten en reacties in de scènes staat. Je kunt hem altijd wijzigen.",
 		"welNameLabel": "Je naam",
@@ -11581,7 +11593,11 @@
 		"limitRefusedBody": "De sleutel is misschien fout of ingetrokken, of het tegoed is op. Check het bij je dienst en probeer het dan opnieuw. Wat je schreef is niet kwijt.",
 		"limitCheckKey": "Controleer je sleutel",
 		"devLimitNoKey": "Geen sleutel",
-		"devLimitRefused": "Sleutel geweigerd"
+		"devLimitRefused": "Sleutel geweigerd",
+		"auSomethingWrong": "Dat is niet gelukt. Probeer het zo nog eens.",
+		"auCaptchaFailed": "We konden niet bevestigen dat je geen bot bent. Probeer het opnieuw.",
+		"acWrongPw": "Dat is niet je huidige wachtwoord.",
+		"auSocialFailed": "Inloggen met dat account is niet gelukt. Probeer het opnieuw of gebruik je e-mail."
 	},
 	"id": {
 		"next": "Berikutnya",
@@ -12213,9 +12229,6 @@
 		"auRsGo": "Simpan kata sandi",
 		"auRsExpLede": "Minta yang baru aja, ya.",
 		"auRsAgain": "Kirim tautan baru",
-		"devOpenLink": "Buka tautan di email",
-		"devExpiredLink": "Tautan yang sudah kedaluwarsa",
-		"devFillAccount": "Isi dengan akun di browser ini",
 		"welName": "Mau kami *panggil* apa kamu?",
 		"welNameLede": "Nama ini akan muncul di postingan dan pesan yang kamu kirim dalam skenario. Bisa diubah kapan saja.",
 		"welNameLabel": "Namamu",
@@ -12305,7 +12318,11 @@
 		"limitRefusedBody": "Kunci mungkin salah atau sudah dicabut, atau saldonya habis. Cek ke penyedia layananmu, lalu coba lagi. Tulisanmu tidak hilang.",
 		"limitCheckKey": "Cek kunci",
 		"devLimitNoKey": "Tidak ada kunci",
-		"devLimitRefused": "Kunci ditolak"
+		"devLimitRefused": "Kunci ditolak",
+		"auSomethingWrong": "Itu belum berhasil. Coba lagi sebentar lagi.",
+		"auCaptchaFailed": "Kami tidak bisa memastikan kamu bukan bot. Coba lagi.",
+		"acWrongPw": "Itu bukan kata sandimu saat ini.",
+		"auSocialFailed": "Masuk dengan akun itu belum selesai. Coba lagi, atau gunakan emailmu."
 	},
 	"ko": {
 		"next": "다음 곳",
@@ -12937,9 +12954,6 @@
 		"auRsGo": "비밀번호 저장",
 		"auRsExpLede": "새로 하나 요청해 봐.",
 		"auRsAgain": "새 링크 보내기",
-		"devOpenLink": "메일의 링크 열기",
-		"devExpiredLink": "만료된 링크",
-		"devFillAccount": "이 브라우저의 계정 채우기",
 		"welName": "뭐라고 *불러*줄까?",
 		"welNameLede": "장면에서 올리는 글과 보내는 메시지에 쓰일 이름이야. 언제든 바꿀 수 있어.",
 		"welNameLabel": "이름",
@@ -13029,6 +13043,10 @@
 		"limitRefusedBody": "키가 잘못됐거나 취소됐을 수도 있고, 크레딧이 다 떨어졌을 수도 있어요. 서비스에서 확인한 다음 다시 해 보세요. 쓴 글은 하나도 사라지지 않았어요.",
 		"limitCheckKey": "키 확인하기",
 		"devLimitNoKey": "키 없음",
-		"devLimitRefused": "키 거절됨"
+		"devLimitRefused": "키 거절됨",
+		"auSomethingWrong": "처리되지 않았어요. 잠시 후 다시 시도해 주세요.",
+		"auCaptchaFailed": "봇이 아닌지 확인하지 못했어요. 다시 시도해 주세요.",
+		"acWrongPw": "현재 비밀번호가 아니에요.",
+		"auSocialFailed": "그 계정으로 로그인하지 못했어요. 다시 시도하거나 이메일로 로그인해 주세요."
 	}
 }

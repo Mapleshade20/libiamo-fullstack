@@ -40,6 +40,8 @@ export const user = pgTable(
 		timeZone: text("time_zone"),
 		helpImprove: boolean("help_improve").default(true).notNull(),
 		onboardedAt: at("onboarded_at"),
+		/** The address a change is waiting on until its link is opened (Better Auth keeps none). */
+		pendingEmail: text("pending_email"),
 		deletedAt: at("deleted_at"),
 		createdAt: created(),
 		updatedAt: updated(),

@@ -41,6 +41,7 @@ CREATE TABLE "user" (
 	"time_zone" text,
 	"help_improve" boolean DEFAULT true NOT NULL,
 	"onboarded_at" timestamp with time zone,
+	"pending_email" text,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
