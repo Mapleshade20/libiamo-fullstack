@@ -67,8 +67,7 @@ password accept up to 128, Better Auth's former default, so earlier passwords st
 
 ## Proxy rate limits
 
-Rate limiting is left to the reverse proxy, per endpoint and client IP. Paths below are relative to
-`BASE_PATH`. Form actions are told apart by their query, so `hooks.server.ts`
+Rate limiting is left to the reverse proxy, per endpoint and client IP. Form actions are told apart by their query, so `hooks.server.ts`
 (`server/auth/action-url.ts`) refuses a POST to these pages unless its action is spelled exactly
 `?/name`: Caddy's `query` matcher does not match a query it cannot parse (an unescaped `;`) and the two
 decode keys differently, either of which would let a request run the action without matching the rule.

@@ -2,10 +2,6 @@
 #
 # One process: the SvelteKit adapter-node server on :3000. TLS, compression and
 # routing belong to whatever reverse proxy sits in front of it.
-#
-# BASE_PATH is compiled into the client bundle by SvelteKit, so it is a build arg
-# and cannot be changed at runtime. Default "" serves the app from the root of a
-# domain; build with --build-arg BASE_PATH=/app to mount it under a sub-path.
 
 ARG NODE_VERSION=22.23.4
 
@@ -29,8 +25,6 @@ RUN pnpm install --prod --frozen-lockfile
 
 # --- Build --------------------------------------------------------------------
 FROM base AS build
-ARG BASE_PATH=""
-ENV BASE_PATH=${BASE_PATH}
 
 # SvelteKit's post-build analysis imports server modules, and $lib/server/db
 # throws at module scope when DATABASE_URL is absent. These placeholders satisfy
@@ -47,8 +41,6 @@ RUN pnpm build
 
 # --- Runtime ------------------------------------------------------------------
 FROM node:${NODE_VERSION}-alpine AS runtime
-
-ARG BASE_PATH=""
 
 # tini reaps zombies and forwards signals so `docker stop` triggers SvelteKit's
 # graceful shutdown hook rather than a SIGKILL.
@@ -69,9 +61,6 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 # adapter-node otherwise caps request bodies at 512K.
 ENV BODY_SIZE_LIMIT=20M
-# Informational at runtime (the value is already compiled into the bundle), but
-# the healthcheck needs it to build the right URL.
-ENV BASE_PATH=${BASE_PATH}
 
 # The stock `node` user (uid/gid 1000) owns everything above.
 USER node
@@ -79,7 +68,7 @@ USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+(process.env.BASE_PATH||'')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["/sbin/tini", "--", "/app/deploy/docker-entrypoint.sh"]
 CMD ["node", "build/index.js"]

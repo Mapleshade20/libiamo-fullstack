@@ -352,7 +352,7 @@ def collect_issues(config, previous, now):
 				e = container_env(d)
 				origin = e.get("ORIGIN", "").rstrip("/")
 				if origin.startswith("https://"):
-					public_url = origin + e.get("BASE_PATH", "") + "/health"
+					public_url = origin + "/health"
 			s = d["State"]
 			if not s.get("Running") or s.get("Health", {}).get("Status") == "unhealthy":
 				issues[name] = "Container stopped or unhealthy"

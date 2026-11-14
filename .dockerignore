@@ -17,8 +17,7 @@ node_modules
 .svelte-kit
 .deploy
 
-# Build artifacts — the image rebuilds these itself, and copying a host build
-# would smuggle in a stale BASE_PATH.
+# Build artifacts — the image rebuilds these itself.
 build
 coverage
 
