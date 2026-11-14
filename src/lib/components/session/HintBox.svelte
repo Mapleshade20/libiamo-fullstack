@@ -1,6 +1,6 @@
 <script lang="ts">
-import { reducedMotion } from "$lib/components/common/motion";
-import type { Hint } from "$lib/session/session.svelte";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import type { Hint } from "#lib/session/session.svelte.ts";
 
 /*
  * A spot's pieces (words the learner already used, solid; words to bring in, dashed) and, once asked for, the second
@@ -93,7 +93,7 @@ async function pick(i: number) {
 		{#if hint.rung.lead}
 			<div class="rung-lead">{hint.rung.lead}</div>
 		{/if}
-		<!-- Built by $lib/session/text.ts from escaped words only. -->
+		<!-- Built by #lib/session/text.ts from escaped words only. -->
 		<div class="rung">{@html hint.rung.html}</div>
 	{/if}
 </div>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { BACKGROUND_LANES, begin, discard, finish, gate, inBackground, inSession, promote, withPurpose } from "$model/trace.ts";
+import { BACKGROUND_LANES, begin, discard, finish, gate, inBackground, inSession, promote, withPurpose } from "#model/trace.ts";
 
 /** A fake provider call through the lane: resolves when `done` is called, records when it started. */
 function fakeCall(purpose: string, bg: boolean, started: string[]) {

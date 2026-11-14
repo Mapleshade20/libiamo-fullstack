@@ -1,4 +1,4 @@
-import { MODELS, type ModelKey } from "$model/llm.ts";
+import { MODELS, type ModelKey } from "#model/llm.ts";
 
 // What both of the stealing notebook's calls take (src/collect.ts).
 export const collectInput = (b: Record<string, unknown>) => ({

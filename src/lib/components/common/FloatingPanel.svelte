@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Popover } from "bits-ui";
 import type { Snippet } from "svelte";
-import { cn } from "$lib/utils";
+import { cn } from "#lib/utils.ts";
 
 let {
 	open = $bindable(false),

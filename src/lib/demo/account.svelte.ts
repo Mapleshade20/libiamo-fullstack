@@ -1,6 +1,6 @@
+import { APP_LANGS, type AppLang, isAppLang, RTL_LANGS } from "#lib/constants.ts";
+import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
-import { APP_LANGS, type AppLang, isAppLang, RTL_LANGS } from "$lib/constants";
-import { loadLang, t } from "$lib/i18n/index.svelte";
 import { applyLang } from "./app.svelte";
 import { needsWelcome, newAccount } from "./onboarding.svelte";
 
@@ -101,9 +101,9 @@ export function weakPassword(pw: string, email: string): string | null {
 /* ---------- The flows ---------- */
 // Into the app: the welcome for an account that has not set up, else home, speaking the language worked in.
 export function enter() {
-	if (needsWelcome()) return goto("/welcome", { replaceState: true });
+	if (needsWelcome()) return goto("/welcome", { replace: true });
 	applyLang();
-	return goto("/", { replaceState: true });
+	return goto("/", { replace: true });
 }
 
 /** Signing in with an address and password. Wrong ones get one message, never which of the two was wrong. */

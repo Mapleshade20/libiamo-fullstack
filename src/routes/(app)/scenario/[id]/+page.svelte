@@ -2,16 +2,16 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Languages from "@lucide/svelte/icons/languages";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import { autogrow } from "#lib/components/common/motion.ts";
+import Situation from "#lib/components/scenario/Situation.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, demoOpens, read, tx, write } from "#lib/demo/app.svelte.ts";
+import { myWriting, reviewDeck, siteOf } from "#lib/demo/data.ts";
+import { reopen } from "#lib/demo/reopen.ts";
+import { SIMS, scenarioById, scenarioState, situationOf } from "#lib/demo/scenarios.ts";
 import { page } from "$app/state";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import { autogrow } from "$lib/components/common/motion";
-import Situation from "$lib/components/scenario/Situation.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, demoOpens, read, tx, write } from "$lib/demo/app.svelte";
-import { myWriting, reviewDeck, siteOf } from "$lib/demo/data";
-import { reopen } from "$lib/demo/reopen";
-import { SIMS, scenarioById, scenarioState, situationOf } from "$lib/demo/scenarios";
 
 /*
  * Before a scenario: everything the learner should carry into the simulation, on one page. Who they are there, who else

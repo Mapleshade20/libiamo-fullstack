@@ -1,5 +1,5 @@
 <script lang="ts">
-import "$lib/components/admin/admin.css";
+import "#lib/components/admin/admin.css";
 import BookOpenText from "@lucide/svelte/icons/book-open-text";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Flag from "@lucide/svelte/icons/flag";
@@ -9,9 +9,9 @@ import Megaphone from "@lucide/svelte/icons/megaphone";
 import Newspaper from "@lucide/svelte/icons/newspaper";
 import ScrollText from "@lucide/svelte/icons/scroll-text";
 import type { Snippet } from "svelte";
+import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import { CASES, FEEDBACK, SOURCES, SUGGESTIONS } from "#lib/demo/admin.ts";
 import { page } from "$app/state";
-import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
-import { CASES, FEEDBACK, SOURCES, SUGGESTIONS } from "$lib/demo/admin";
 
 /*
  * The admin pages: what learners practise on (scenarios, issues, the names in translations), what they tell us (the

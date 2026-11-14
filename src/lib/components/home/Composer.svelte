@@ -5,20 +5,20 @@ import Link2 from "@lucide/svelte/icons/link-2";
 import NotebookPen from "@lucide/svelte/icons/notebook-pen";
 import PenLine from "@lucide/svelte/icons/pen-line";
 import { onMount, tick } from "svelte";
+import LimitNotice from "#lib/components/common/LimitNotice.svelte";
+import { autogrow, reducedMotion, shake } from "#lib/components/common/motion.ts";
+import Notice from "#lib/components/common/Notice.svelte";
+import Reveal from "#lib/components/common/Reveal.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import { CALLS } from "#lib/components/debug/calls.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, endonym, nameOf, read, toast, tx, write } from "#lib/demo/app.svelte.ts";
+import { COLLECT_KEY, HANDOFF_KEY } from "#lib/demo/data.ts";
+import { dev } from "#lib/demo/dev.svelte.ts";
+import { keyStop } from "#lib/demo/limits.ts";
+import { sourceStatus } from "#lib/demo/source.ts";
 import { goto } from "$app/navigation";
-import LimitNotice from "$lib/components/common/LimitNotice.svelte";
-import { autogrow, reducedMotion, shake } from "$lib/components/common/motion";
-import Notice from "$lib/components/common/Notice.svelte";
-import Reveal from "$lib/components/common/Reveal.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import { tip } from "$lib/components/common/tip";
-import { CALLS } from "$lib/components/debug/calls";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, endonym, nameOf, read, toast, tx, write } from "$lib/demo/app.svelte";
-import { COLLECT_KEY, HANDOFF_KEY } from "$lib/demo/data";
-import { dev } from "$lib/demo/dev.svelte";
-import { keyStop } from "$lib/demo/limits";
-import { sourceStatus } from "$lib/demo/source";
 
 /*
  * The box on the home page, for one of two things: the learner's own writing (checked over two passes on the session

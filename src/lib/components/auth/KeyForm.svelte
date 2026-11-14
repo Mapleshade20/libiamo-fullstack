@@ -1,10 +1,10 @@
 <script lang="ts">
 import ExternalLink from "@lucide/svelte/icons/external-link";
-import { shake } from "$lib/components/common/motion";
-import Reveal from "$lib/components/common/Reveal.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { account, RECOMMENDED_KEY, setKey } from "$lib/demo/account.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import Reveal from "#lib/components/common/Reveal.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { account, RECOMMENDED_KEY, setKey } from "#lib/demo/account.svelte.ts";
 
 /*
  * The learner's own AI key, which every call runs on (there is no trial). Four providers, the base URL following the

@@ -1,8 +1,8 @@
 <script lang="ts">
-import { createPlay } from "$lib/components/stickers/play.svelte";
-import Sticker from "$lib/components/stickers/Sticker.svelte";
-import type { StickerName } from "$lib/components/stickers/stickers";
-import Button from "$lib/components/ui/button/button.svelte";
+import { createPlay } from "#lib/components/stickers/play.svelte.ts";
+import Sticker from "#lib/components/stickers/Sticker.svelte";
+import type { StickerName } from "#lib/components/stickers/stickers.ts";
+import Button from "#lib/components/ui/button/button.svelte";
 
 /*
  * What a list says before anything is in it: the sticker of the page it belongs to, set on an empty sheet of the same

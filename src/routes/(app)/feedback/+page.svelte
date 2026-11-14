@@ -5,11 +5,11 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
-import { autogrow, shake } from "$lib/components/common/motion";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import { tip } from "$lib/components/common/tip";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import { tx } from "$lib/demo/app.svelte";
+import { autogrow, shake } from "#lib/components/common/motion.ts";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { tx } from "#lib/demo/app.svelte.ts";
 
 /*
  * Feedback about Libiamo itself: what it is about (an idea, something wrong, anything else) and a box, sent like a

@@ -1,4 +1,4 @@
-import { langName } from "$lib/constants";
+import { langName } from "#lib/constants.ts";
 import { ANNOUNCEMENTS } from "./announcements";
 import { ISSUES, SCENARIOS, type Scenario } from "./scenarios";
 

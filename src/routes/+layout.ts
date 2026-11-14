@@ -2,7 +2,7 @@
 export const ssr = false;
 
 export async function load() {
-	const { ready, applyLang } = await import("$lib/demo/app.svelte");
+	const { ready, applyLang } = await import("#lib/demo/app.svelte.ts");
 	await ready();
 	applyLang();
 	return {};

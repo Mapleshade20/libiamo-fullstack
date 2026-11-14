@@ -1,12 +1,12 @@
 <script lang="ts">
 import { fly } from "svelte/transition";
-import { autogrow, shake } from "$lib/components/common/motion";
-import Notice from "$lib/components/common/Notice.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, endonym, read, tx, write } from "$lib/demo/app.svelte";
-import { sourceStatus } from "$lib/demo/source";
+import { autogrow, shake } from "#lib/components/common/motion.ts";
+import Notice from "#lib/components/common/Notice.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, endonym, read, tx, write } from "#lib/demo/app.svelte.ts";
+import { sourceStatus } from "#lib/demo/source.ts";
 
 /*
  * Suggesting a situation (the shelf's "+" card): something real the learner had to write, or saw someone write, that

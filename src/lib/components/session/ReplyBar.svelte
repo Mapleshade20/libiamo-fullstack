@@ -1,10 +1,10 @@
 <script lang="ts">
 import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import { tick } from "svelte";
-import TwoStep from "$lib/components/common/TwoStep.svelte";
-import { tip } from "$lib/components/common/tip";
-import Button from "$lib/components/ui/button/button.svelte";
-import type { Session } from "$lib/session/session.svelte";
+import TwoStep from "#lib/components/common/TwoStep.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import type { Session } from "#lib/session/session.svelte.ts";
 import Disc from "./Disc.svelte";
 
 /*

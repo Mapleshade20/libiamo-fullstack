@@ -1,5 +1,5 @@
-import { APP_LANGS, type AppLang, endonym, isAppLang, LEARNABLE, langName, RTL_LANGS } from "$lib/constants";
-import { loadLang, t } from "$lib/i18n/index.svelte";
+import { APP_LANGS, type AppLang, endonym, isAppLang, LEARNABLE, langName, RTL_LANGS } from "#lib/constants.ts";
+import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 
 /*
  * Everything the demo would load from the main app's server, kept on this device instead: the learner's settings,

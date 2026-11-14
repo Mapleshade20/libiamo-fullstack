@@ -1,4 +1,4 @@
-import { bus, type Call, sessionCalls } from "$model/trace.ts";
+import { bus, type Call, sessionCalls } from "#model/trace.ts";
 
 // Debug only: a trace id's model calls as server-sent events, for the page's call bubbles.
 export function GET({ params, request }) {

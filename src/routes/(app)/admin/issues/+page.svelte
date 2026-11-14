@@ -1,8 +1,8 @@
 <script lang="ts">
 import Plus from "@lucide/svelte/icons/plus";
-import Button from "$lib/components/ui/button/button.svelte";
-import { adminIssues, fmtDay, issueState } from "$lib/demo/admin";
-import { scenarioById } from "$lib/demo/scenarios";
+import Button from "#lib/components/ui/button/button.svelte";
+import { adminIssues, fmtDay, issueState } from "#lib/demo/admin.ts";
+import { scenarioById } from "#lib/demo/scenarios.ts";
 
 /*
  * Issues: an occasional themed handful of scenarios with a date, shown first on the shelf for about a month, then

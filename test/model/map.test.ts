@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { inPostOrder, type Outline, oncePerSentence } from "$model/pass2/map.ts";
+import { inPostOrder, type Outline, oncePerSentence } from "#model/pass2/map.ts";
 
 const part = (sentences: number[], extra = {}) => ({ kind: "detail", text: "", sentences, ...extra });
 

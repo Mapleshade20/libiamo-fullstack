@@ -2,7 +2,7 @@
 import Check from "@lucide/svelte/icons/check";
 import CheckCheck from "@lucide/svelte/icons/check-check";
 import X from "@lucide/svelte/icons/x";
-import type { Rating } from "$lib/review/session";
+import type { Rating } from "#lib/review/session.ts";
 
 /*
  * A rating as a teacher marks the margin: ✕ again, ~ hard, ✓ good, ✓✓ easy, each in its rating's colour. The shape

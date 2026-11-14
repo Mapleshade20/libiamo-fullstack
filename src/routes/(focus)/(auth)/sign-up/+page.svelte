@@ -1,11 +1,11 @@
 <script lang="ts">
 import { tick } from "svelte";
-import PasswordField from "$lib/components/auth/PasswordField.svelte";
-import SocialButtons from "$lib/components/auth/SocialButtons.svelte";
-import MarkedLine from "$lib/components/common/MarkedLine.svelte";
-import { shake } from "$lib/components/common/motion";
-import Button from "$lib/components/ui/button/button.svelte";
-import { auth, signUp, atx as tx, weakPassword } from "$lib/demo/account.svelte";
+import PasswordField from "#lib/components/auth/PasswordField.svelte";
+import SocialButtons from "#lib/components/auth/SocialButtons.svelte";
+import MarkedLine from "#lib/components/common/MarkedLine.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import { auth, signUp, atx as tx, weakPassword } from "#lib/demo/account.svelte.ts";
 
 /*
  * A new account: an address and a password, nothing else. The languages, the name and the rest are the welcome's, after

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { siteOf } from "$lib/demo/data";
+import { siteOf } from "#lib/demo/data.ts";
 import SiteArt from "./SiteArt.svelte";
 
 /*

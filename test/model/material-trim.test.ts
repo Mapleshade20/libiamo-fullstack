@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { trimSame } from "$model/pass2/material.ts";
+import { trimSame } from "#model/pass2/material.ts";
 
 test("a reference that starts inside the previous sentence loses that fragment, in the span, the reference and the alternatives", () => {
 	const text = "When the Clans are at the Moonstone the moonlight cannot reach the stone. Maybe the clouds alone explain it?";

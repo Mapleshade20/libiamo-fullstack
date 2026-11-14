@@ -7,16 +7,16 @@ import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question"
 import { diffChars, diffWords } from "diff";
 import { onMount, tick } from "svelte";
 import { fade } from "svelte/transition";
+import { tip } from "#lib/components/common/tip.ts";
+import RateMark from "#lib/components/review/RateMark.svelte";
+import ReviewFace from "#lib/components/review/ReviewFace.svelte";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, tx } from "#lib/demo/app.svelte.ts";
+import { practised, type ReviewCard, reviewDeck } from "#lib/demo/data.ts";
+import { hintOf, type Verdict, verdictOf } from "#lib/review/check.ts";
+import { createSitting, intervals, RATINGS, type Rating } from "#lib/review/session.ts";
 import { goto } from "$app/navigation";
-import { tip } from "$lib/components/common/tip";
-import RateMark from "$lib/components/review/RateMark.svelte";
-import ReviewFace from "$lib/components/review/ReviewFace.svelte";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, tx } from "$lib/demo/app.svelte";
-import { practised, type ReviewCard, reviewDeck } from "$lib/demo/data";
-import { hintOf, type Verdict, verdictOf } from "$lib/review/check";
-import { createSitting, intervals, RATINGS, type Rating } from "$lib/review/session";
 
 /*
  * Review: one card at a time, Anki's way. The learner answers first (the field says what to write), then the card
@@ -25,7 +25,7 @@ import { createSitting, intervals, RATINGS, type Rating } from "$lib/review/sess
  * The counts below are what is left: new, learning, review. At the end, the sitting's cards and how each went.
  */
 const deck: ReviewCard[] = reviewDeck();
-if (!deck.length) goto("/", { replaceState: true });
+if (!deck.length) goto("/", { replace: true });
 // Stand-in scheduling state: cards kept today are new; of the rest, every third is new too.
 const sitting = createSitting(
 	deck.map((card, i) => ({ card, state: card.id.startsWith("c") || i % 3 === 2 ? ("new" as const) : ("review" as const) })),

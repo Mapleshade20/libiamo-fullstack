@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { Collector } from "$lib/components/collect/collector.svelte";
-import HighlightText from "$lib/components/collect/HighlightText.svelte";
+import type { Collector } from "#lib/components/collect/collector.svelte.ts";
+import HighlightText from "#lib/components/collect/HighlightText.svelte";
 
 /* A passage of a situation: highlightable when the page collects, plain otherwise. */
 let {

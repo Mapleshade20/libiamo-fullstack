@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { parseSource, plainSource, renderSource, sourceKind, withoutDraft } from "$model/context/source.ts";
-import { replyIn } from "$model/fixtures/types.ts";
+import { parseSource, plainSource, renderSource, sourceKind, withoutDraft } from "#model/context/source.ts";
+import { replyIn } from "#model/fixtures/types.ts";
 
 const draft = "Actually later revealed as Stormfang xD";
 const capture = JSON.stringify({

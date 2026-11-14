@@ -6,11 +6,11 @@ import Terminal from "@lucide/svelte/icons/terminal";
 import X from "@lucide/svelte/icons/x";
 import { flip } from "svelte/animate";
 import { fade } from "svelte/transition";
-import FloatingPanel from "$lib/components/common/FloatingPanel.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import { tip } from "$lib/components/common/tip";
-import { CASES, type CaseRow, fmtDay, sessionById } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
+import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import { CASES, type CaseRow, fmtDay, sessionById } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * Cases: steps flagged in sessions, with what is wrong. They are the regression set: Claude Code pulls a case (read only

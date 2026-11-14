@@ -1,4 +1,4 @@
-import { type AppLang, isAppLang } from "$lib/constants";
+import { type AppLang, isAppLang } from "#lib/constants.ts";
 
 /*
  * The demo's interface strings: web/i18n/source.json (en and zh-CN by hand), translated into the other interface

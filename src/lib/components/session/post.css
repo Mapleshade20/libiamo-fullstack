@@ -1,4 +1,4 @@
-/* The post as $lib/session/post.ts draws it: one span per character, marks, strikes and insertions, the map's
+/* The post as #lib/session/post.ts draws it: one span per character, marks, strikes and insertions, the map's
    highlight, the drawers pass 1's cards open in. Global because Svelte does not draw these elements. */
 
 .session {

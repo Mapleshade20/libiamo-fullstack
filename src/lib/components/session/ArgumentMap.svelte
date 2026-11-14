@@ -1,8 +1,8 @@
 <script lang="ts">
 import { onMount, untrack } from "svelte";
-import { reducedMotion } from "$lib/components/common/motion";
-import { clamp } from "$lib/session/text";
-import type { MapRow } from "$lib/session/types";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import { clamp } from "#lib/session/text.ts";
+import type { MapRow } from "#lib/session/types.ts";
 
 /*
  * The argument map: the post's points, and under each, joined by a thin line, the parts that serve it. A plain

@@ -113,7 +113,7 @@ The standard and its reasons: `docs/design/2026-10-02-design-language.md`. Pract
 - Agents must not sign their work: no `Co-Authored-By` trailers, "Generated with" lines or other agent attribution in commits, PRs or files.
 - Run `pnpm check` and `pnpm test` before finishing code changes. Write essential tests for new TypeScript behavior; avoid redundant tests.
 - Use chrome to debug and verify changes.
-- Tests mirror `src/` under `test/`; DB tests mock `$lib/server/db` via `vi.hoisted()`. `*.dom.test.ts` files run in a jsdom project with browser conditions (real `mount`, effects and timers); plain tests compile Svelte for the server, where `$effect` never runs. Use fixed dates for time-dependent tests to avoid midnight flakiness.
+- Tests mirror `src/` under `test/`; DB tests mock `#lib/server/db` via `vi.hoisted()`. `*.dom.test.ts` files run in a jsdom project with browser conditions (real `mount`, effects and timers); plain tests compile Svelte for the server, where `$effect` never runs. Use fixed dates for time-dependent tests to avoid midnight flakiness.
 - Test semantics, navigation, accessibility, state behavior, and data relationships rather than freezing editorial/UI wording. Prompt tests should verify roles/order, structured inputs, schemas, and behavioral contracts rather than prose fragments or arbitrary words. Assert exact text only when it is a product/protocol contract.
 - For big changes, use `docs/design/` for the proposed work and important decisions, then `docs/writeup/` for a concise human-readable account of what changed.
     - Design frontmatter: `title`, `type` (bug / feature / ux / performance / accessibility / security / tech-debt / test; may be multiple), `status` (needs-approval → wip → done; only a human may mark done).

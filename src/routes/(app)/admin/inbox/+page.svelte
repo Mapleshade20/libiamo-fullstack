@@ -5,13 +5,13 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import { tip } from "$lib/components/common/tip";
-import Button from "$lib/components/ui/button/button.svelte";
-import { FEEDBACK, fmtDay, langEn, SUGGESTIONS } from "$lib/demo/admin";
-import { toast } from "$lib/demo/app.svelte";
-import { scenarioById } from "$lib/demo/scenarios";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import { tip } from "#lib/components/common/tip.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import { FEEDBACK, fmtDay, langEn, SUGGESTIONS } from "#lib/demo/admin.ts";
+import { toast } from "#lib/demo/app.svelte.ts";
+import { scenarioById } from "#lib/demo/scenarios.ts";
 
 /*
  * What learners send: situations they suggest for scenarios (the shelf's "+" card) and feedback about the app (the

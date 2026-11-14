@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { lockBodyScroll } from "$lib/client/scroll-lock";
+import { lockBodyScroll } from "#lib/client/scroll-lock.ts";
 
 /**
  * The shared shell for the small modals on the profile: the paper-coloured card,

@@ -1,12 +1,12 @@
 <script lang="ts">
+import { backdropState } from "#lib/components/backdrop/state.svelte.ts";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { markAllUnread } from "#lib/demo/announcements.ts";
+import { tx } from "#lib/demo/app.svelte.ts";
+import { dev, saveDev } from "#lib/demo/dev.svelte.ts";
+import { onboarding, replayWelcome } from "#lib/demo/onboarding.svelte.ts";
 import { goto } from "$app/navigation";
-import { backdropState } from "$lib/components/backdrop/state.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { markAllUnread } from "$lib/demo/announcements";
-import { tx } from "$lib/demo/app.svelte";
-import { dev, saveDev } from "$lib/demo/dev.svelte";
-import { onboarding, replayWelcome } from "$lib/demo/onboarding.svelte";
 
 /* Debug only (not part of the product): test drafts, which models the demo calls, and ways to see what would otherwise
    take days or minutes. The learner's own choices are on the settings page. */

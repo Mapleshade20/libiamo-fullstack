@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import TwoStep from "$lib/components/common/TwoStep.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
+import TwoStep from "#lib/components/common/TwoStep.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
 import Speaker from "./Speaker.svelte";
 
 /* The tutor's note on a mark, and the way on. `keepable`: the learner may keep what they wrote (a change they know is

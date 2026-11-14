@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { HTMLInputAttributes } from "svelte/elements";
-import { cn } from "$lib/utils";
+import { cn } from "#lib/utils.ts";
 
 /*
  * On/off that applies immediately. A native checkbox with the switch role, so forms and labels keep

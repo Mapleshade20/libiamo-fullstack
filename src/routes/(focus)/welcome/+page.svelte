@@ -4,22 +4,22 @@ import Check from "@lucide/svelte/icons/check";
 import { onMount } from "svelte";
 import { MediaQuery } from "svelte/reactivity";
 import { blur, fly } from "svelte/transition";
+import KeyForm from "#lib/components/auth/KeyForm.svelte";
+import ChoiceGroup from "#lib/components/common/ChoiceGroup.svelte";
+import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
+import MarkedLine from "#lib/components/common/MarkedLine.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import Select from "#lib/components/common/Select.svelte";
+import Sticker from "#lib/components/stickers/Sticker.svelte";
+import { drinkOf } from "#lib/components/streak/glass/drinks.ts";
+import Glass from "#lib/components/streak/glass/Glass.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { APP_LANGS, type AppLang, endonym, hasScenarios, isAppLang, LEARNABLE, langName } from "#lib/constants.ts";
+import { account, auth, speak } from "#lib/demo/account.svelte.ts";
+import { app, applyLang } from "#lib/demo/app.svelte.ts";
+import { finishWelcome } from "#lib/demo/onboarding.svelte.ts";
+import { loadLang, t } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
-import KeyForm from "$lib/components/auth/KeyForm.svelte";
-import ChoiceGroup from "$lib/components/common/ChoiceGroup.svelte";
-import LanguageFlag from "$lib/components/common/LanguageFlag.svelte";
-import MarkedLine from "$lib/components/common/MarkedLine.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import Select from "$lib/components/common/Select.svelte";
-import Sticker from "$lib/components/stickers/Sticker.svelte";
-import { drinkOf } from "$lib/components/streak/glass/drinks";
-import Glass from "$lib/components/streak/glass/Glass.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { APP_LANGS, type AppLang, endonym, hasScenarios, isAppLang, LEARNABLE, langName } from "$lib/constants";
-import { account, auth, speak } from "$lib/demo/account.svelte";
-import { app, applyLang } from "$lib/demo/app.svelte";
-import { finishWelcome } from "$lib/demo/onboarding.svelte";
-import { loadLang, t } from "$lib/i18n/index.svelte";
 
 /*
  * The first visit, after signing up: a few questions, one at a time, each with a word marked by hand, then a tour of the

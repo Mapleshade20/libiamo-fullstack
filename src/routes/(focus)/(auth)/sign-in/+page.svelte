@@ -1,15 +1,15 @@
 <script lang="ts">
 import { tick } from "svelte";
-import { dev } from "$app/environment";
+import PasswordField from "#lib/components/auth/PasswordField.svelte";
+import SocialButtons from "#lib/components/auth/SocialButtons.svelte";
+import MarkedLine from "#lib/components/common/MarkedLine.svelte";
+import { shake } from "#lib/components/common/motion.ts";
+import Notice from "#lib/components/common/Notice.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { account, auth, signIn, atx as tx } from "#lib/demo/account.svelte.ts";
+import { dev } from "$app/env";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import PasswordField from "$lib/components/auth/PasswordField.svelte";
-import SocialButtons from "$lib/components/auth/SocialButtons.svelte";
-import MarkedLine from "$lib/components/common/MarkedLine.svelte";
-import { shake } from "$lib/components/common/motion";
-import Notice from "$lib/components/common/Notice.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { account, auth, signIn, atx as tx } from "$lib/demo/account.svelte";
 
 /*
  * Signing in: the address and password, or a provider. A wrong pair gets one message that never says which of the two

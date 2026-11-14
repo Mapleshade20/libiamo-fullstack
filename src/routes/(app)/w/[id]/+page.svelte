@@ -3,16 +3,16 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Copy from "@lucide/svelte/icons/copy";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import { diffWords } from "diff";
+import Accordion from "#lib/components/common/Accordion.svelte";
+import InfoTip from "#lib/components/common/InfoTip.svelte";
+import LoadingReveal from "#lib/components/common/LoadingReveal.svelte";
+import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
+import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, toast, tx } from "#lib/demo/app.svelte.ts";
+import { notesPending, recordWriting, siteOf, writingById } from "#lib/demo/data.ts";
+import { SIMS, scenarioById } from "#lib/demo/scenarios.ts";
 import { page } from "$app/state";
-import Accordion from "$lib/components/common/Accordion.svelte";
-import InfoTip from "$lib/components/common/InfoTip.svelte";
-import LoadingReveal from "$lib/components/common/LoadingReveal.svelte";
-import SegmentedControl from "$lib/components/common/SegmentedControl.svelte";
-import EmptyState from "$lib/components/shell/EmptyState.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "$lib/demo/app.svelte";
-import { notesPending, recordWriting, siteOf, writingById } from "$lib/demo/data";
-import { SIMS, scenarioById } from "$lib/demo/scenarios";
 
 /*
  * A finished piece's own page: what the session becomes when it ends, and what My writing and the sidebar open later.

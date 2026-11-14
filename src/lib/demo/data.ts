@@ -1,4 +1,4 @@
-import type { Face } from "$lib/review/faces";
+import type { Face } from "#lib/review/faces.ts";
 import { app, read, sandboxed, tx, write } from "./app.svelte";
 import { foldCopies } from "./fold";
 

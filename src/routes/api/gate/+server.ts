@@ -1,12 +1,11 @@
-import { json } from "@sveltejs/kit";
-import { traced } from "$lib/server/sessions";
-import { gate } from "$model/gate.ts";
+import { traced } from "#lib/server/sessions.ts";
+import { gate } from "#model/gate.ts";
 
 // The composer's door (src/gate.ts): is this something to work on, and in which language?
 export async function POST({ request }) {
 	const b = await request.json();
 	const strs = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
-	return json(
+	return Response.json(
 		await traced(request, "gate", () =>
 			gate({
 				mode: b.mode === "collect" ? "collect" : "check",

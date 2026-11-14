@@ -1,8 +1,8 @@
 <script lang="ts">
-import { dev } from "$app/environment";
+import { app } from "#lib/demo/app.svelte.ts";
+import { onboarding } from "#lib/demo/onboarding.svelte.ts";
+import { dev } from "$app/env";
 import { page } from "$app/state";
-import { app } from "$lib/demo/app.svelte";
-import { onboarding } from "$lib/demo/onboarding.svelte";
 import { hasContent } from "./content";
 import { director } from "./director.svelte";
 import { CHAPTERS } from "./script";

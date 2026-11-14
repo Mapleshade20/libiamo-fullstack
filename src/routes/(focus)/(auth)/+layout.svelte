@@ -1,12 +1,12 @@
 <script lang="ts">
-import "$lib/components/auth/auth.css";
+import "#lib/components/auth/auth.css";
 import { onMount, type Snippet } from "svelte";
+import Select from "#lib/components/common/Select.svelte";
+import { APP_LANGS, endonym, isAppLang } from "#lib/constants.ts";
+import { account, auth, setAuthLang, speak, atx as tx } from "#lib/demo/account.svelte.ts";
+import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import Select from "$lib/components/common/Select.svelte";
-import { APP_LANGS, endonym, isAppLang } from "$lib/constants";
-import { account, auth, setAuthLang, speak, atx as tx } from "$lib/demo/account.svelte";
-import { loadLang } from "$lib/i18n/index.svelte";
 
 /*
  * Signing in, signing up, confirming an address, a new password: the welcome's top bar (the wordmark, and here the
@@ -18,7 +18,7 @@ $effect(() => sessionStorage.setItem("authEmail", auth.email));
 onMount(() => {
 	speak(auth.lang);
 	void loadLang(auth.lang);
-	if (account.signedIn && ["/sign-in", "/sign-up"].includes(page.url.pathname)) goto("/", { replaceState: true });
+	if (account.signedIn && ["/sign-in", "/sign-up"].includes(page.url.pathname)) goto("/", { replace: true });
 });
 </script>
 

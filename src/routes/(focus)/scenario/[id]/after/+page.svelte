@@ -1,15 +1,15 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { fly } from "svelte/transition";
+import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { app, read, tx } from "#lib/demo/app.svelte.ts";
+import { HANDOFF_KEY, myWriting, recordWriting, siteOf } from "#lib/demo/data.ts";
+import { dev } from "#lib/demo/dev.svelte.ts";
+import { exchangeOf, SIMS, scenarioById, simTurns, situationOf, situationText } from "#lib/demo/scenarios.ts";
+import { SEP } from "#lib/session/types.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import FocusBar from "$lib/components/shell/FocusBar.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { app, read, tx } from "$lib/demo/app.svelte";
-import { HANDOFF_KEY, myWriting, recordWriting, siteOf } from "$lib/demo/data";
-import { dev } from "$lib/demo/dev.svelte";
-import { exchangeOf, SIMS, scenarioById, simTurns, situationOf, situationText } from "$lib/demo/scenarios";
-import { SEP } from "$lib/session/types";
 
 /*
  * Out of the place: how it ended, before any correcting. First the thread as the learner left it (what they sent, how

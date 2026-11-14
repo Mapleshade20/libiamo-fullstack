@@ -2,11 +2,11 @@
 import Megaphone from "@lucide/svelte/icons/megaphone";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { tick } from "svelte";
-import { reducedMotion } from "$lib/components/common/motion";
-import Reveal from "$lib/components/common/Reveal.svelte";
-import Button from "$lib/components/ui/button/button.svelte";
-import { ANNOUNCEMENTS, type Announcement, dateOf, local, markRead, REPLIES, type Reply, readIds } from "$lib/demo/announcements";
-import { app, demoOpens, sandboxed, tx } from "$lib/demo/app.svelte";
+import { reducedMotion } from "#lib/components/common/motion.ts";
+import Reveal from "#lib/components/common/Reveal.svelte";
+import Button from "#lib/components/ui/button/button.svelte";
+import { ANNOUNCEMENTS, type Announcement, dateOf, local, markRead, REPLIES, type Reply, readIds } from "#lib/demo/announcements.ts";
+import { app, demoOpens, sandboxed, tx } from "#lib/demo/app.svelte.ts";
 import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
 
 /*

@@ -1,7 +1,7 @@
 <script lang="ts">
 import X from "@lucide/svelte/icons/x";
 import type { Snippet } from "svelte";
-import { tip } from "$lib/components/common/tip";
+import { tip } from "#lib/components/common/tip.ts";
 
 /*
  * The top of every focused page, one standard for all of them (review, collect, a scenario's way in and out, the

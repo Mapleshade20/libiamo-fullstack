@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { test } from "vitest";
-import { LANGS } from "$model/fixtures/types.ts";
+import { LANGS } from "#model/fixtures/types.ts";
 
 /*
  * The interface strings (src/lib/i18n/catalog): source.json is written by hand in en and zh-CN, ui.json is the i18n

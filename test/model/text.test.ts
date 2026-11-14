@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { align } from "$model/diff.ts";
-import { sentences, spotRange } from "$model/pass2/analyze.ts";
-import { withAttempt } from "$model/pass2/grade.ts";
-import { rebracket } from "$model/pass2/material.ts";
-import { applyEdits, scopeOf } from "$model/session/run.ts";
+import { align } from "#model/diff.ts";
+import { sentences, spotRange } from "#model/pass2/analyze.ts";
+import { withAttempt } from "#model/pass2/grade.ts";
+import { rebracket } from "#model/pass2/material.ts";
+import { applyEdits, scopeOf } from "#model/session/run.ts";
 
 const broken = "Wow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates. It makes so much sense.";
 
@@ -174,7 +174,7 @@ test("a rewrite that only straightens quotes, or marks the words for pass 2, cha
 });
 
 test("a repaired version keeps to the learner's stretch even when the grader copies the rest of the post in", async () => {
-	const { within } = await import("$model/session/live.ts");
+	const { within } = await import("#model/session/live.ts");
 	const text =
 		"Wow... The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates for his own ambition and hunger for power. It makes so much sense.";
 	const scope = "The way you wrote Brokenstar’s inner dialogue explains so well how he manipulated his clanmates";
@@ -199,7 +199,7 @@ test("text without spaces: a fragment attempt for a Japanese phrase replaces onl
 });
 
 test("text without spaces: a hint piece made only of the writer's own Japanese words is theirs", async () => {
-	const { pieceOwnership } = await import("$model/pass2/material.ts");
+	const { pieceOwnership } = await import("#model/pass2/material.ts");
 	const draft = "昨日は友達と映画を見に行きました。";
 	assert.equal(pieceOwnership(draft, "友達と映画"), "own");
 	assert.equal(pieceOwnership(draft, "楽しかった"), "new");
@@ -215,7 +215,7 @@ test("rebracket matches whole words", () => {
 });
 
 test("a stop inside a larger one is marked first; the larger one once it is done", async () => {
-	const { shown } = await import("$model/session/live.ts");
+	const { shown } = await import("#model/session/live.ts");
 	const inner = { id: "s2", from: 10, to: 20 };
 	const outer = { id: "s3", from: 0, to: 40 };
 	const same = { id: "s4", from: 0, to: 40 };

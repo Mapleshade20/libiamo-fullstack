@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { alreadyTheirs } from "$model/session/calls.ts";
+import { alreadyTheirs } from "#model/session/calls.ts";
 
 test("a phrase with a word the change brought in is new to the learner", () => {
 	assert.equal(alreadyTheirs("furious about", "for", "about"), false);

@@ -3,7 +3,7 @@ export type ChoiceItem = { value: string; label: string; description?: string; d
 </script>
 
 <script lang="ts">
-import { cn } from "$lib/utils";
+import { cn } from "#lib/utils.ts";
 
 /*
  * One of a few options that each need a line of explanation: white radio cards with a visible dot.

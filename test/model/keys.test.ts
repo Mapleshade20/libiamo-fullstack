@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { markKeys } from "$model/pass2/keys.ts";
+import { markKeys } from "#model/pass2/keys.ts";
 
 const row = (label: string, note = "") => ({ label, note });
 test("marks what each explained choice changed, not the words the writer already had", () => {

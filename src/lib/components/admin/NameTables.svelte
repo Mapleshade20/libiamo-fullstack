@@ -3,10 +3,10 @@ import Check from "@lucide/svelte/icons/check";
 import ExternalLink from "@lucide/svelte/icons/external-link";
 import Search from "@lucide/svelte/icons/search";
 import { onMount } from "svelte";
-import { tip } from "$lib/components/common/tip";
-import Button from "$lib/components/ui/button/button.svelte";
-import { langEn as nameOf } from "$lib/demo/admin";
-import type { NameRow, NameTable, Work } from "$model/translate/names.ts";
+import { tip } from "#lib/components/common/tip.ts";
+import Button from "#lib/components/ui/button/button.svelte";
+import { langEn as nameOf } from "#lib/demo/admin.ts";
+import type { NameRow, NameTable, Work } from "#model/translate/names.ts";
 
 /*
  * The admin's name tables (src/translate/names.ts): for each work and learner language, how every name and term is
