@@ -546,8 +546,25 @@ decided on:
   the same piece, "Later" leaves it on the shelf, where it opens back in its place or on the after page. A finished
   scenario piece's page shows how the others answered last from the exchange. Checked end to end: the place, the
   after page, the revision on the same piece (pass 1 done), every call recorded on the learner's key.
-- **4d. Translations.** The sheet keeps its draft in `piece.text`; the source runner (§6.4) on the service key; name
-  tables.
+- **Replies on the home page** (done 2026-11-14). The stack above the greeting shows the learner's unread replies by
+  exchange (`unreadReplies`), asks again when the cast's next reply falls due, and opens the place, or the after page
+  once the exchange is over; the after page marks the thread read. Pieces past their revision are not listed.
+- **4d. Translations** (done 2026-11-14). The sheet's draft is the piece's text (`writing`), saved as the learner types
+  (the first words create the piece with the plan as its background, which then waits on the shelf and opens the
+  sheet again); "done" starts the revision on the same piece, and `/api/s` takes the source, the original and the
+  scenario from the piece (`server/translation/sheet.ts`), so the original never reaches the page (recorded sessions
+  still hand a translation over whole). The source runner (`server/translation/runner.ts`, started in
+  `hooks.server.ts`) makes `pending` sources one at a time on the service key (`serviceCaller`, Claude Haiku): terms
+  (the model's, plus the version's `terms`), the source by the original's paragraphs, or its lines for a menu, with a
+  title, names as the work's confirmed table says, the blind check, one repair, a second check; `checked`, `notes` with
+  what is left, or `failed`; without the service key the rows wait. `queueSources` is what publishing will call.
+  Works and their name tables are in the database (`work`, `name_rendering`, `server/translation/tables.ts`) and in
+  the content document; `/admin/names` reads and saves them (the file-backed `/api/names` and `/lab/names` went);
+  `buildNameTable` looks a text's names up and leaves them for the admin. Tried on the dev server: a draft kept across
+  a reload, the shelf, "done" into the revision with the translation scene; a Japanese source of the menu made and
+  checked (about $0.01 on the service key, removed after). With no Japanese name table its menu items stayed in
+  English, as the rule says: phase 5's publishing must build each language's table and have it confirmed before it
+  queues the sources.
 - **4e. Scene Lab.** The agents' new input (`people`, `others`, `followed`) judged from the learner's seat.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome

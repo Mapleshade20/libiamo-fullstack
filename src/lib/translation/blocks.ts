@@ -4,6 +4,15 @@
  */
 export type Block = { from: number; to: number };
 
+/** A text without a blank line is laid out by lines (a menu), any other by paragraphs. */
+export const isByLine = (text: string) => !/\n\s*\n/.test(text.trim());
+
+/** The text of each block, and what joins them back into a text laid out the same way. */
+export function unitsOf(text: string) {
+	const byLine = isByLine(text);
+	return { units: blocksOf(text, byLine).map((b) => text.slice(b.from, b.to)), join: byLine ? "\n" : "\n\n" };
+}
+
 /** The non-empty blocks of a text, trimmed, with their offsets. */
 export function blocksOf(text: string, byLine: boolean): Block[] {
 	const out: Block[] = [];

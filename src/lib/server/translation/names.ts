@@ -15,30 +15,7 @@ import { z } from "zod";
 import { type Caller, chatJson } from "#lib/server/llm/caller.ts";
 import { LANG_NAMES, type Lang } from "#lib/server/revision/draft.ts";
 import type { Term } from "#lib/server/translation/source.ts";
-
-export type Work = {
-	id: string;
-	title: string;
-	wikidata?: string;
-	/** MediaWiki APIs of the work's wikis, by language ("en" for the original's). */
-	wikis?: { api: string; lang: string }[];
-	/** Wikis a program cannot read (a bot check): links for the admin, {q} is the name. */
-	manual?: { lang: string; name: string; search: string }[];
-};
-export type Candidate = { rendering: string; source: "wikidata" | "wikipedia" | "wiki"; url: string; about: string };
-export type NameRow = {
-	term: string;
-	kind: Term["kind"];
-	/** null: written as in the original. */
-	rendering: string | null;
-	status: "pending" | "confirmed";
-	/** Where the rendering came from: a source, the model, or the admin. */
-	origin: Candidate["source"] | "model" | "admin" | "none";
-	url?: string;
-	why?: string;
-	candidates?: Candidate[];
-};
-export type NameTable = { work: string; locale: Lang; rows: NameRow[] };
+import type { Candidate, NameRow, Work } from "#lib/translation/names.ts";
 
 const UA = "Libiamo/0.1 (translation scenario name lookup)";
 /** How Wikimedia names a locale: the wiki, the script variant to read titles in, the label keys in order of trust. */
@@ -215,14 +192,3 @@ export async function judgeNames(original: string, context: string, terms: Term[
 		return { term: t.term, kind: t.kind, rendering: null, status: "pending", origin: "none", why: j?.why, candidates: found[i] };
 	});
 }
-
-/** New rows join a work's table; what the admin confirmed stays as they left it. */
-export function mergeTable(table: NameTable, rows: NameRow[]): NameTable {
-	const byTerm = new Map(table.rows.map((r) => [r.term, r]));
-	for (const r of rows) if (byTerm.get(r.term)?.status !== "confirmed") byTerm.set(r.term, r);
-	return { ...table, rows: [...byTerm.values()] };
-}
-
-/** The renderings a source may use: confirmed rows only (a row still pending is written as in the original). */
-export const confirmedNames = (t: NameTable | undefined) =>
-	new Map((t?.rows ?? []).filter((r) => r.status === "confirmed").map((r) => [r.term, r.rendering]));

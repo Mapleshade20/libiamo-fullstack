@@ -6,12 +6,14 @@ import { sql } from "#lib/server/db/index.ts";
 import { ensureAgentReplyWorker, stopAgentReplyWorker } from "#lib/server/exchange/agents/boot.ts";
 import { pruneCalls } from "#lib/server/llm/records.ts";
 import { flushRevisions } from "#lib/server/revision/store.ts";
+import { ensureSourceRunner, stopSourceRunner } from "#lib/server/translation/runner.ts";
 import { building, dev } from "$app/env";
 
 /* adapter-node emits this once every connection has closed (SIGTERM from tini, SIGINT, or idle). */
 process.on("sveltekit:shutdown", async (reason) => {
 	console.log(`shutdown: ${reason}`);
 	// The cast's replies in flight finish first; every revision in memory is written, so a restart picks each one up.
+	stopSourceRunner();
 	await stopAgentReplyWorker();
 	await flushRevisions();
 	await sql.end({ timeout: 5 });
@@ -20,8 +22,10 @@ process.on("sveltekit:shutdown", async (reason) => {
    process every learner's revision lives in. */
 process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e));
 
-/* The cast of every exchange answers from a worker in this process (server/exchange/agents). */
+/* The cast of every exchange answers from a worker in this process (server/exchange/agents); translation sources are
+   made by another (server/translation/runner.ts). */
 ensureAgentReplyWorker();
+ensureSourceRunner();
 
 /* Model call records older than thirty days go (design §5.7): a minute after start, then every six hours. */
 if (!building) {
