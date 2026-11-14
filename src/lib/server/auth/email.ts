@@ -9,15 +9,15 @@ import { ORIGIN, SMTP_FROM, SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_SECURE, SMTP_U
 
 export type Mail = { to: string; subject: string; text: string; html: string };
 
-const transport = SMTP_HOST
-	? nodemailer.createTransport({
-			host: SMTP_HOST,
-			port: SMTP_PORT,
-			secure: SMTP_SECURE,
-			auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-		})
-	: null;
-if (!transport && !dev) console.warn("mail: SMTP_HOST is not set; account mail is printed to the console instead of sent");
+/* Mail is sent only when the server, the account and its password are all set. Anything less (a development .env
+   that names the server but leaves the password out) prints each mail and its link to the console instead. */
+const missing = Object.entries({ SMTP_HOST, SMTP_USER, SMTP_PASS })
+	.filter(([, v]) => !v)
+	.map(([k]) => k);
+const transport = missing.length
+	? null
+	: nodemailer.createTransport({ host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+if (!transport) (dev ? console.info : console.warn)(`mail: ${missing.join(", ")} not set; account mail is printed to the console instead of sent`);
 
 const html = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 

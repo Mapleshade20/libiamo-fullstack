@@ -22,7 +22,7 @@ The application is being rebuilt from the product's demo; the plan, the data mod
 ## Developing
 
 ```sh
-cp .env.example .env   # a database, ORIGIN, BETTER_AUTH_SECRET; leave SMTP_HOST empty to read mails in the console
+cp .env.example .env   # a database, ORIGIN, BETTER_AUTH_SECRET; leave SMTP_PASS empty to read mails in the console
 pnpm install
 pnpm db:migrate
 pnpm dev               # http://127.0.0.1:5173

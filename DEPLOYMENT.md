@@ -382,7 +382,7 @@ database.
 | `ADMIN_EMAILS` | – | Comma-separated addresses that become admins when they sign in with the address verified. A fresh database needs no SQL. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Google OAuth. Both are required to offer the provider; the secret is sensitive. |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | GitHub OAuth, likewise. |
-| `SMTP_*` | yes | **secret** (`SMTP_PASS`). An account starts by confirming its address. `SMTP_SECURE=1` for implicit TLS (port 465). Without `SMTP_HOST` mail is printed to the log (development only). |
+| `SMTP_*` | yes | **secret** (`SMTP_PASS`). An account starts by confirming its address. `SMTP_SECURE=1` for implicit TLS (port 465). Mail is sent only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are all set; otherwise it is printed to the log (development only). |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | no | **secret** (`TURNSTILE_SECRET_KEY`). Cloudflare Turnstile on signing in, signing up, the confirmation mail and password resets, shown only when Cloudflare asks for a click. Both empty turns it off; setting only one refuses to start. |
 | `AUTH_AUDIT_LOG` | – | Default `0`. `1` prints one JSON line (`{"type":"auth-audit",...}`) per sign-up, address change (requested and completed), password change or reset, login-method link or unlink, and admin grant. Lines carry addresses and IPs. |
 | `ADDRESS_HEADER` | – | Header holding the visitor's address; see [Visitor address](#visitor-address). Empty: none. |
