@@ -2,10 +2,11 @@
 import Megaphone from "@lucide/svelte/icons/megaphone";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { tick } from "svelte";
+import { announcements, readAnnouncement } from "#lib/account/announcements.remote.ts";
+import { dateOf, local } from "#lib/account/announcements.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { ANNOUNCEMENTS, type Announcement, dateOf, local, markRead, readIds } from "#lib/demo/announcements.ts";
 import { app, sandboxed, tx } from "#lib/demo/app.svelte.ts";
 import { unreadReplies } from "#lib/exchange/exchange.remote.ts";
 import { type UnreadInboxItem, unreadTargetHref } from "#lib/exchange/unread.ts";
@@ -21,10 +22,14 @@ import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
  */
 let { mark }: { mark: () => HTMLElement | undefined } = $props();
 
+type Announcement = NonNullable<typeof notices.current>[number];
 type Item = { key: string; ann?: Announcement; reply?: UnreadInboxItem };
 const unread = unreadReplies();
+const notices = announcements();
+// Acknowledged here, gone at once (the query catches up after).
+let gone = $state<number[]>([]);
 const items = $derived<Item[]>([
-	...ANNOUNCEMENTS.filter((a) => !readIds().has(a.id)).map((a) => ({ key: `a${a.id}`, ann: a })),
+	...(sandboxed() ? [] : (notices.current ?? [])).filter((a) => !a.read && !gone.includes(a.id)).map((a) => ({ key: `a${a.id}`, ann: a })),
 	...(sandboxed() ? [] : (unread.current?.items ?? [])).map((r) => ({ key: `r${r.exchangeId}`, reply: r })),
 ]);
 $effect(() => {
@@ -73,7 +78,8 @@ async function acknowledge(id: number) {
 		await tossInto(card, (target.querySelector("svg") ?? target).getBoundingClientRect());
 		absorbInto(target.querySelectorAll("path"));
 	}
-	markRead(id);
+	gone = [...gone, id];
+	void readAnnouncement(id).catch(() => {});
 	openAnn = null;
 	acking = false;
 	await tick();

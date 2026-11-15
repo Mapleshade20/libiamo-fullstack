@@ -1,25 +1,34 @@
 <script lang="ts">
 import Megaphone from "@lucide/svelte/icons/megaphone";
 import Plus from "@lucide/svelte/icons/plus";
+import Trash2 from "@lucide/svelte/icons/trash-2";
 import { slide } from "svelte/transition";
+import { announcementList, deleteOneAnnouncement, saveOneAnnouncement } from "#lib/admin/announcements.remote.ts";
 import { autogrow } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
+import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { type AdminAnnouncement as Ann, adminAnnouncements, fmtDay, langEn } from "#lib/demo/admin.ts";
+import { APP_LANGS } from "#lib/constants.ts";
+import { fmtDay, langEn } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * Announcements: written per interface language (a learner sees theirs, else English), shown on the home page as a
- * card that opens in place, until the date set here. The editor keeps the card beside it as learners will read it.
+ * card that opens in place, through the last day set here. The editor keeps the card beside it as learners will read it.
  */
-let list = $state<Ann[]>(adminAnnouncements());
-let editing = $state<Ann | null>(null);
+type Ann = Awaited<ReturnType<typeof announcementList>>[number];
+type Editing = Omit<Ann, "id" | "read"> & { id: number | null };
+const list = $derived(await announcementList());
+let editing = $state<Editing | null>(null);
 let lang = $state("en");
-const LANGS = ["en", "zh-CN", "es", "fr", "ja", "de"];
-const langsOf = (a: Ann) => Object.keys(a.title);
+let saving = $state(false);
+const LANGS = APP_LANGS;
+const langsOf = (a: Pick<Ann, "title">) => Object.keys(a.title);
 function start(a?: Ann) {
-	editing = a ?? { id: Date.now(), date: null, until: "", title: { en: "" }, body: { en: "" }, read: 0 };
+	editing = a
+		? structuredClone($state.snapshot({ id: a.id, publishedAt: a.publishedAt, until: a.until, title: a.title, body: a.body }))
+		: { id: null, publishedAt: null, until: "", title: { en: "" }, body: { en: "" } };
 	lang = "en";
 }
 function addLang(l: string) {
@@ -28,15 +37,29 @@ function addLang(l: string) {
 	editing.body[l] = "";
 	lang = l;
 }
-function publish() {
-	if (!editing) return;
-	const e = editing;
-	if (!list.some((a) => a.id === e.id)) list.unshift(e);
-	e.date = e.date ?? new Date();
+async function save(publish: boolean) {
+	if (!editing || saving) return;
+	saving = true;
+	const e = $state.snapshot(editing);
+	// A language left empty is not one it is written in.
+	const langs = Object.keys(e.title).filter((l) => e.title[l]?.trim() && e.body[l]?.trim());
+	const pick = (o: Record<string, string>) => Object.fromEntries(langs.map((l) => [l, o[l].trim()]));
+	const ok = await saveOneAnnouncement({ id: e.id, title: pick(e.title), body: pick(e.body), until: e.until, publish })
+		.then(() => true)
+		.catch(() => false);
+	saving = false;
+	if (!ok) return toast("Could not save it");
 	editing = null;
-	toast("Published (demo)");
+	toast(publish && !e.publishedAt ? "Published" : "Saved");
 }
-const live = (a: Ann) => !!a.date && (!a.until || new Date(a.until) >= new Date("2026-11-11"));
+async function remove() {
+	if (editing?.id == null) return;
+	const id = editing.id;
+	editing = null;
+	await deleteOneAnnouncement(id).catch(() => toast("Could not delete it"));
+}
+const today = new Date().toISOString().slice(0, 10);
+const live = (a: Ann) => !!a.publishedAt && (!a.until || a.until >= today);
 </script>
 
 <div class="adm-page">
@@ -82,7 +105,7 @@ const live = (a: Ann) => !!a.date && (!a.until || new Date(a.until) >= new Date(
 						<div class="head">
 							<span class="ic"><Megaphone class="size-5" aria-hidden="true" /></span>
 							<span class="copy"
-								><span class="meta">{fmtDay((e.date ?? new Date()).toISOString())}</span
+								><span class="meta">{fmtDay(e.publishedAt ?? new Date().toISOString())}</span
 								><span class="t" {lang}>{e.title[lang] || "Title"}</span></span
 							>
 						</div>
@@ -95,8 +118,19 @@ const live = (a: Ann) => !!a.date && (!a.until || new Date(a.until) >= new Date(
 				</section>
 			</div>
 			<div class="acts">
+				{#if e.id !== null}
+					<button type="button" class="adm-icon" aria-label="Delete this announcement" use:tip={"Delete"} onclick={remove}>
+						<Trash2 class="size-4" aria-hidden="true" />
+					</button>
+					<span class="grow"></span>
+				{/if}
 				<Button variant="secondary" onclick={() => (editing = null)}>Cancel</Button>
-				<Button disabled={!e.title.en?.trim() || !e.body.en?.trim()} onclick={publish}>{e.date ? "Save" : "Publish"}</Button>
+				{#if !e.publishedAt}
+					<Button variant="secondary" disabled={saving} onclick={() => save(false)}>Save draft</Button>
+				{/if}
+				<Button disabled={!e.title.en?.trim() || !e.body.en?.trim() || saving} onclick={() => save(true)}
+					>{e.publishedAt ? "Save" : "Publish"}</Button
+				>
 			</div>
 		</div>
 	{/if}
@@ -110,14 +144,14 @@ const live = (a: Ann) => !!a.date && (!a.until || new Date(a.until) >= new Date(
 							<span class="t">{a.title.en}</span>
 							<span class="s">{langsOf(a).map(langEn).join(", ")}</span>
 						</span>
-						{#if !a.date}
+						{#if !a.publishedAt}
 							<span class="adm-tag">Draft</span>
 						{:else if live(a)}
 							<span class="adm-tag ok">Showing</span>
 						{:else}
 							<span class="adm-tag">Ended</span>
 						{/if}
-						<span class="adm-meta num">{a.date ? `${a.read} read` : ""}</span>
+						<span class="adm-meta num">{a.publishedAt ? `${a.read} read` : ""}</span>
 						<span class="adm-meta day">{a.until ? `until ${fmtDay(a.until)}` : ""}</span>
 					</button>
 				</li>
@@ -127,6 +161,9 @@ const live = (a: Ann) => !!a.date && (!a.until || new Date(a.until) >= new Date(
 </div>
 
 <style>
+.grow {
+	flex: 1;
+}
 .editor {
 	margin-bottom: 20px;
 }

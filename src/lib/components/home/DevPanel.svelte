@@ -1,9 +1,9 @@
 <script lang="ts">
+import { unreadAnnouncements } from "#lib/account/announcements.remote.ts";
 import { onboarding } from "#lib/account/onboarding.svelte.ts";
 import { backdropState } from "#lib/components/backdrop/state.svelte.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { markAllUnread } from "#lib/demo/announcements.ts";
 import { tx } from "#lib/demo/app.svelte.ts";
 import { dev, saveDev } from "#lib/demo/dev.svelte.ts";
 import { goto } from "$app/navigation";
@@ -111,7 +111,8 @@ function step(d: number) {
 			/>
 		</div>
 		<div>
-			<span class="label">{tx("devAnnouncements")}</span><Button variant="secondary" size="sm" onclick={markAllUnread}>{tx("devUnread")}</Button>
+			<span class="label">{tx("devAnnouncements")}</span
+			><Button variant="secondary" size="sm" onclick={() => unreadAnnouncements()}>{tx("devUnread")}</Button>
 		</div>
 		<div>
 			<span class="label">{tx("devWelcome")}</span>
