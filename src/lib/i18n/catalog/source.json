@@ -719,7 +719,8 @@
 		"exEnded": "This conversation has ended.",
 		"exNoTurns": "No turns left.",
 		"exTurnsLeft": "Turns left",
-		"exUnavailable": "Not available in this simulation."
+		"exUnavailable": "Not available in this simulation.",
+		"auAgree": "Signing up means you accept the"
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -1441,6 +1442,7 @@
 		"exEnded": "这段对话已经结束。",
 		"exNoTurns": "没有剩余回合了。",
 		"exTurnsLeft": "剩余回合",
-		"exUnavailable": "这个模拟里用不了。"
+		"exUnavailable": "这个模拟里用不了。",
+		"auAgree": "注册即表示你同意"
 	}
 }

@@ -62,6 +62,8 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 const SIGNED_OUT = ["/sign-in", "/sign-up", "/verify", "/forgot-password"];
 /** Paths that answer anyone: Better Auth, the probe, the interface strings the signed-out pages speak. */
 const OPEN = ["/api/auth/", "/health", "/api/i18n/"];
+/** The documents anyone may read, signed in, signed out or not set up yet (routes/(public)). */
+const DOCUMENTS = ["/terms", "/privacy", "/changelog"];
 
 /*
  * Who may see what, decided here before any page or remote function runs (a redirect thrown inside a query called
@@ -71,7 +73,7 @@ const OPEN = ["/api/auth/", "/health", "/api/i18n/"];
 const handleAccess: Handle = ({ event, resolve }) => {
 	const path = event.url.pathname;
 	const user = event.locals.user;
-	if (building || OPEN.some((p) => path.startsWith(p))) return resolve(event);
+	if (building || OPEN.some((p) => path.startsWith(p)) || DOCUMENTS.includes(path)) return resolve(event);
 	if (path.startsWith("/_app/remote/")) return resolve(event);
 	if (path.startsWith("/api/")) return user ? resolve(event) : Response.json({ error: "Sign in first." }, { status: 401 });
 	if (SIGNED_OUT.includes(path)) {

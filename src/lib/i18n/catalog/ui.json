@@ -719,7 +719,8 @@
 		"exEnded": "This conversation has ended.",
 		"exNoTurns": "No turns left.",
 		"exTurnsLeft": "Turns left",
-		"exUnavailable": "Not available in this simulation."
+		"exUnavailable": "Not available in this simulation.",
+		"auAgree": "Signing up means you accept the"
 	},
 	"ru": {
 		"next": "Дальше",
@@ -1441,7 +1442,8 @@
 		"exEnded": "Этот разговор окончен.",
 		"exNoTurns": "Ходов не осталось.",
 		"exTurnsLeft": "Осталось ходов",
-		"exUnavailable": "Недоступно в этой симуляции."
+		"exUnavailable": "Недоступно в этой симуляции.",
+		"auAgree": "Регистрируясь, вы принимаете"
 	},
 	"es": {
 		"next": "Siguiente",
@@ -2163,7 +2165,8 @@
 		"exEnded": "Esta conversación ha terminado.",
 		"exNoTurns": "No quedan turnos.",
 		"exTurnsLeft": "Turnos restantes",
-		"exUnavailable": "No disponible en esta simulación."
+		"exUnavailable": "No disponible en esta simulación.",
+		"auAgree": "Al registrarte aceptas"
 	},
 	"de": {
 		"next": "Nächste",
@@ -2885,7 +2888,8 @@
 		"exEnded": "Dieses Gespräch ist beendet.",
 		"exNoTurns": "Keine Züge mehr übrig.",
 		"exTurnsLeft": "Verbleibende Züge",
-		"exUnavailable": "In dieser Simulation nicht verfügbar."
+		"exUnavailable": "In dieser Simulation nicht verfügbar.",
+		"auAgree": "Mit der Registrierung akzeptierst du"
 	},
 	"tr": {
 		"next": "Sonraki",
@@ -3607,7 +3611,8 @@
 		"exEnded": "Bu konuşma sona erdi.",
 		"exNoTurns": "Hiç tur kalmadı.",
 		"exTurnsLeft": "Kalan tur",
-		"exUnavailable": "Bu simülasyonda kullanılamaz."
+		"exUnavailable": "Bu simülasyonda kullanılamaz.",
+		"auAgree": "Kaydolarak şunları kabul edersin:"
 	},
 	"fa": {
 		"next": "بعدی",
@@ -4329,7 +4334,8 @@
 		"exEnded": "این گفت‌وگو تمام شده است.",
 		"exNoTurns": "نوبتی باقی نمانده.",
 		"exTurnsLeft": "نوبت‌های باقی‌مانده",
-		"exUnavailable": "در این شبیه‌سازی در دسترس نیست."
+		"exUnavailable": "در این شبیه‌سازی در دسترس نیست.",
+		"auAgree": "با ثبت‌نام این‌ها را می‌پذیری:"
 	},
 	"fr": {
 		"next": "Suivant",
@@ -5051,7 +5057,8 @@
 		"exEnded": "Cette conversation est terminée.",
 		"exNoTurns": "Plus aucun tour.",
 		"exTurnsLeft": "Tours restants",
-		"exUnavailable": "Indisponible dans cette simulation."
+		"exUnavailable": "Indisponible dans cette simulation.",
+		"auAgree": "En t’inscrivant, tu acceptes"
 	},
 	"ja": {
 		"next": "次へ",
@@ -5773,7 +5780,8 @@
 		"exEnded": "この会話は終了しました。",
 		"exNoTurns": "残りターンはありません。",
 		"exTurnsLeft": "残りターン",
-		"exUnavailable": "このシミュレーションでは使えません。"
+		"exUnavailable": "このシミュレーションでは使えません。",
+		"auAgree": "登録すると、次に同意したことになります："
 	},
 	"pt": {
 		"next": "Próximo",
@@ -6495,7 +6503,8 @@
 		"exEnded": "Esta conversa terminou.",
 		"exNoTurns": "Não restam turnos.",
 		"exTurnsLeft": "Turnos restantes",
-		"exUnavailable": "Indisponível nesta simulação."
+		"exUnavailable": "Indisponível nesta simulação.",
+		"auAgree": "Ao se cadastrar, você aceita"
 	},
 	"zh-CN": {
 		"next": "下一处",
@@ -7217,7 +7226,8 @@
 		"exEnded": "这段对话已经结束。",
 		"exNoTurns": "没有剩余回合了。",
 		"exTurnsLeft": "剩余回合",
-		"exUnavailable": "这个模拟里用不了。"
+		"exUnavailable": "这个模拟里用不了。",
+		"auAgree": "注册即表示你同意"
 	},
 	"vi": {
 		"next": "Tiếp",
@@ -7939,7 +7949,8 @@
 		"exEnded": "Cuộc trò chuyện này đã kết thúc.",
 		"exNoTurns": "Hết lượt rồi.",
 		"exTurnsLeft": "Lượt còn lại",
-		"exUnavailable": "Không có trong mô phỏng này."
+		"exUnavailable": "Không có trong mô phỏng này.",
+		"auAgree": "Khi đăng ký, bạn đồng ý với"
 	},
 	"it": {
 		"next": "Avanti",
@@ -8661,7 +8672,8 @@
 		"exEnded": "Questa conversazione è finita.",
 		"exNoTurns": "Turni esauriti.",
 		"exTurnsLeft": "Turni rimasti",
-		"exUnavailable": "Non disponibile in questa simulazione."
+		"exUnavailable": "Non disponibile in questa simulazione.",
+		"auAgree": "Registrandoti accetti"
 	},
 	"ar": {
 		"next": "التالي",
@@ -9383,7 +9395,8 @@
 		"exEnded": "انتهت هذه المحادثة.",
 		"exNoTurns": "لم تبقَ أدوار.",
 		"exTurnsLeft": "الأدوار المتبقية",
-		"exUnavailable": "غير متاح في هذه المحاكاة."
+		"exUnavailable": "غير متاح في هذه المحاكاة.",
+		"auAgree": "بالتسجيل فإنك توافق على"
 	},
 	"pl": {
 		"next": "Dalej",
@@ -10105,7 +10118,8 @@
 		"exEnded": "Ta rozmowa się zakończyła.",
 		"exNoTurns": "Nie zostały żadne tury.",
 		"exTurnsLeft": "Pozostałe tury",
-		"exUnavailable": "Niedostępne w tej symulacji."
+		"exUnavailable": "Niedostępne w tej symulacji.",
+		"auAgree": "Rejestrując się, akceptujesz"
 	},
 	"el": {
 		"next": "Επόμενο",
@@ -10827,7 +10841,8 @@
 		"exEnded": "Αυτή η συζήτηση τελείωσε.",
 		"exNoTurns": "Δεν απέμειναν γύροι.",
 		"exTurnsLeft": "Γύροι που απομένουν",
-		"exUnavailable": "Δεν είναι διαθέσιμο σε αυτή την προσομοίωση."
+		"exUnavailable": "Δεν είναι διαθέσιμο σε αυτή την προσομοίωση.",
+		"auAgree": "Με την εγγραφή αποδέχεσαι"
 	},
 	"nl": {
 		"next": "Volgende",
@@ -11549,7 +11564,8 @@
 		"exEnded": "Dit gesprek is afgelopen.",
 		"exNoTurns": "Geen beurten meer.",
 		"exTurnsLeft": "Beurten over",
-		"exUnavailable": "Niet beschikbaar in deze simulatie."
+		"exUnavailable": "Niet beschikbaar in deze simulatie.",
+		"auAgree": "Door je aan te melden ga je akkoord met"
 	},
 	"id": {
 		"next": "Berikutnya",
@@ -12271,7 +12287,8 @@
 		"exEnded": "Percakapan ini sudah berakhir.",
 		"exNoTurns": "Giliran sudah habis.",
 		"exTurnsLeft": "Sisa giliran",
-		"exUnavailable": "Tidak tersedia di simulasi ini."
+		"exUnavailable": "Tidak tersedia di simulasi ini.",
+		"auAgree": "Dengan mendaftar, kamu menyetujui"
 	},
 	"ko": {
 		"next": "다음 곳",
@@ -12993,6 +13010,7 @@
 		"exEnded": "이 대화는 끝났어요.",
 		"exNoTurns": "남은 턴이 없어요.",
 		"exTurnsLeft": "남은 턴",
-		"exUnavailable": "이 시뮬레이션에서는 사용할 수 없어요."
+		"exUnavailable": "이 시뮬레이션에서는 사용할 수 없어요.",
+		"auAgree": "가입하면 다음에 동의하게 돼요:"
 	}
 }
