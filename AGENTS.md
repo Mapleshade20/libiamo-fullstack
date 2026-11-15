@@ -35,7 +35,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 
 ### Access
 
-- `hooks.server.ts` decides who may see a page before anything runs: signed out → `/sign-in`, not set up (`onboarded_at` null) → `/welcome`, `/admin` → 404 unless the role is admin, `/api/*` → 401. Never rely on `redirect()`/`error()` inside a remote query for this: called from the browser it is not honoured (sveltejs/kit#17262).
+- `hooks.server.ts` decides who may see a page before anything runs: signed out → `/sign-in` (the site's address → `/about`; `/about` and the documents answer anyone), not set up (`onboarded_at` null) → `/welcome`, `/admin` → 404 unless the role is admin, `/api/*` → 401. Never rely on `redirect()`/`error()` inside a remote query for this: called from the browser it is not honoured (sveltejs/kit#17262).
 - Every remote function and endpoint is a public URL whatever page calls it: begin with `learner()` or `admin()` (`server/guard.ts`) and scope rows by the learner's `user_id`.
 - Better Auth has no session cookie cache: every request reads the session and user, so settings the app writes hold on the next request. Its `baseURL` is `ORIGIN` alone (it appends `/api/auth`); requests from another origin are refused, so `ORIGIN` must match the browser's URL in development too.
 

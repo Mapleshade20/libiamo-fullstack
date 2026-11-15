@@ -62,8 +62,8 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 const SIGNED_OUT = ["/sign-in", "/sign-up", "/verify", "/forgot-password"];
 /** Paths that answer anyone: Better Auth, the probe, the interface strings the signed-out pages speak. */
 const OPEN = ["/api/auth/", "/health", "/api/i18n/"];
-/** The documents anyone may read, signed in, signed out or not set up yet (routes/(public)). */
-const DOCUMENTS = ["/terms", "/privacy", "/changelog"];
+/** The pages anyone may read, signed in, signed out or not set up yet (routes/(public)). */
+const DOCUMENTS = ["/about", "/terms", "/privacy", "/changelog"];
 
 /*
  * Who may see what, decided here before any page or remote function runs (a redirect thrown inside a query called
@@ -80,7 +80,8 @@ const handleAccess: Handle = ({ event, resolve }) => {
 		if (user && (path === "/sign-in" || path === "/sign-up")) redirect(303, user.onboardedAt ? "/" : "/welcome");
 		return resolve(event);
 	}
-	if (!user) redirect(303, "/sign-in");
+	// A visitor at the site's address sees what Libiamo is; anywhere else, the way in.
+	if (!user) redirect(303, path === "/" ? "/about" : "/sign-in");
 	if (!user.onboardedAt && path !== "/welcome") redirect(303, "/welcome");
 	if ((path === "/admin" || path.startsWith("/admin/")) && user.role !== "admin") return new Response("Not found", { status: 404 });
 	return resolve(event);
