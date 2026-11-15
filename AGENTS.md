@@ -15,7 +15,9 @@ pnpm check        # svelte-check + biome check --write (format included; use for
 pnpm test         # unit and integration tests
 pnpm db:generate --name migration_name  # generate a migration (needs tty)
 pnpm db:migrate   # apply migrations
-node --experimental-transform-types lab/seed.ts  # the scenarios and issues (lab/seed/scenarios.json) into the dev database
+node --experimental-transform-types lab/seed.ts  # works, name tables, scenarios and issues (lab/seed/scenarios.json) into the dev database
+pnpm case pull <piece>            # a piece's record into cases/ (git-ignored), its replies into cases/cache (CASE_DATABASE_URL, read only)
+pnpm case replay <origin> <piece>|--all|--open  # replay cases on a server with LLM_CACHE_DIR=cases/cache
 ```
 
 ## The rebuild
@@ -25,7 +27,7 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 - **The demo is the product.** Its pages, components, copy, colours and motion are the source of truth; match them rather than restyle. Judge looks on the production build beside the demo (`pnpm dev` in rehearsal-lab `app/`, port 4793): the dev server can order CSS differently. Pixel parity is not the goal; no worse experience is.
 - **Strangler.** `src/lib/demo` still keeps most data in browser storage and the root layout renders in the browser (`ssr = false`). Each phase replaces a part of it with the server; never add browser storage for data the server will own. Done when `lib/demo`, the root `ssr = false`, the `/lab` pages and the dev panel are gone.
 - **The model layer** came from the lab and lives in its domains: the revision in `server/revision` (`revision.ts` is the server side of one revision), the gate in `server/writing`, collecting in `server/notebook`, translation sources and names in `server/translation`, pure text helpers in `text/`. Every model call goes through a `Caller` (`server/llm/caller.ts`: who pays, the purpose, the revision's background lane, the record), never a global; learners' calls run on their own key only (`server/llm/callers.ts`), the gate's too. Typed choices with probabilities go through `server/llm/decide.ts`: the provider's Decisions API where it has one (`decisions` in `lib/llm/providers.ts`; OpenRouter and OpenAI take different request shapes), else the chat model with thinking off. Thresholds over the probabilities do not carry from one model to another: run `lab/gate-probe.ts` after changing the gate's questions or adding a model.
-- `llm_call` rows are removed thirty days after the call (`pruneCalls`, started in `hooks.server.ts`).
+- `llm_call` rows are removed thirty days after the call (`pruneCalls`, started in `hooks.server.ts`), except a piece's while an open case (`session_case`) holds it. The admin's sessions (`server/admin/sessions.ts`) never list a learner who does not help improve Libiamo.
 - **The replay baseline** (`lab/baseline/`, recorded by `lab/record.mjs`) is the model flow's acceptance test: `lab/replay.mjs` plays its sessions against a dev server answering from `lab/baseline/cache` only (`LLM_CACHE_DIR`, `LLM_CACHE_ONLY=1`; `lab/account.mjs` makes the account). Every response must be identical; a difference is a change in behaviour. A prompt changed on purpose means recording the baseline again (about $0.35). Replay on a freshly started server: after a hot update of server modules the dev server can lose `LLM_CACHE_*` (calls then reach the provider on the account's real key).
 - No database is in production yet: until launch the schema is one migration, `drizzle/0000_init.sql`, regenerated (delete `drizzle/`, `pnpm db:generate --name init`) rather than stacked.
 
@@ -49,6 +51,11 @@ The app is being rebuilt from the product's demo (rehearsal-lab `app/`, now an a
 - Each half of a day (`practice_day`) is written only in the transaction that earned it (`server/week/days.ts` `credit`): the guarded move of a piece to `finished` (`finishPiece`), a write-again, a rating that leaves the queue of its language empty, a visit that finds it empty (`lookAtReviews`). Learning something on a day with nothing to review is the whole day. Days are in the learner's `time_zone`, weeks start on Monday and keep the goal they were held to (`user_week`).
 - Review runs on ts-fsrs (`server/review/scheduler.ts`): FSRS-6, steps 1m/10m, relearning 10m, learn ahead 20 minutes (at least the longest step, so an empty queue means the day's reviews are done), review cards due at the start of their local day, new notes from the next local day. The page rates without waiting, from each card's previewed outcomes; ratings are sent one after another. ts-fsrs 6 needs Node 24 (the image's `NODE_VERSION`).
 - The revision's protocol (`POST /api/s`, then `/api/s/<id>/<action>`) stays as the demo has it: it is also the tape, the tour's and `case replay`'s format. `<id>` is the piece's: the page that sends a draft in creates the piece (`lib/session/start.ts`) and opens `/live/<piece>`. Two actions are not steps and stay off the tape: `progress` (the page's bookmark, kept in the snapshot) and `resume` (where the revision was, for a reload, a restart or another device). Anything the page alone knows that coming back needs goes into the bookmark.
+
+### Admin
+
+- The admin pages (`routes/(app)/admin`, English) read and write through `lib/admin/*.remote.ts`, each function behind `admin()`; their server side is `server/admin`. A scenario is saved whole and its versions validated by kind and place (`saveScenario`); publishing a translation queues its sources. What waits on the admin (sources to look at, the inbox, open cases) is one query (`waiting`) the commands refresh.
+- What learners send (suggestions, feedback) and announcements are tables (§5.3); a learner reads announcements through `lib/account/announcements.remote.ts`.
 
 ### Database
 

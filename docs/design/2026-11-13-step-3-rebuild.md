@@ -509,6 +509,38 @@ decided on:
   hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
   not list that learner's pieces.
 
+**Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
+commits:
+
+- **5a.** `suggestion`, `feedback`, `announcement`, `announcement_read`, `session_case` (§5.3, §5.7). The shelf's "+"
+  page files suggestions (five waiting at most) and shows what became of each, with the reason when one is set aside;
+  the feedback page files the kind, the text, the page it came from and the browser. The inbox makes a draft scenario
+  of a suggestion (its place, language and purpose as the title) or sets it aside. The scenario editor edits the
+  stored version whole: the opening in each place's own terms (AO3 tags, summary, end note and comment tree; a mail
+  thread; a Discord channel or DM; an iMessage group), the people with their notes, others, what followed, a version
+  hidden from learners; export and import carry the content document's shape; drafts can be deleted until someone
+  writes in them, published ones withdrawn. A translation names its work's name table and lists its sources with what
+  the check left, to confirm or make again. A work-bound source now waits for its names: the runner looks the
+  scenario's names up for that language and leaves the source in `notes` with the names until the admin has
+  confirmed every one in `/admin/names`, then it is made again (the rule §11 asked phase 5 to keep).
+- **5b.** Issues and announcements on the server; the home page's announcements and the tray of read ones come from
+  it, the developer settings' "unread" clears the learner's reads.
+- **5c.** Sessions are the pieces that went into a revision, read from the tape and the calls with the signals of the
+  session-records design (`server/admin/sessions.ts`: the learner keeping, saying it themselves, asking, failing three
+  tries in a row, taking the tutor's version, leaving for an hour; failed calls, a lost point, a wait over eight
+  seconds, three times the median cost). A session shows each step as the learner saw it with its calls; a flag on a
+  step opens a case, cases are open, fixed with a commit, or won't fix, and an open case keeps its piece's calls past
+  the thirty days. Learners who do not help improve Libiamo are not listed. The users tab lists every account (setup,
+  writing, calls kept and their cost), opens on its calls, and deletes an account with its address typed again.
+- **5d.** `pnpm case pull` copies a piece's tape and calls (production read only, `CASE_DATABASE_URL`) into `cases/`
+  and writes the recorded replies into `cases/cache` keyed as the transport keys requests; `pnpm case replay` plays a
+  case's tape against a server on that cache and stops at the first step that differs, showing both. Tried on two
+  pieces against a cache-only server: every step as recorded.
+
+`lib/demo/admin.ts`, `admin-session.ts`, `announcements.ts` and `scenarios.ts` are gone (the translation sheet keeps
+its two development samples itself). Not done: choosing where the learner comes in from an imported capture (the
+import still only checks the paste), and the admin's announcements are written in each language by hand.
+
 **Phase 4, scenarios: done** (2026-11-14; the user has not looked at it yet). In steps, each committed with the app running:
 
 - **4a. Scenario data** (done 2026-11-14). `scenario`, `scenario_source`, `issue`, `issue_scenario`, `work`, `name_rendering` (§5.3);

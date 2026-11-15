@@ -44,3 +44,6 @@ vite.config.ts.timestamp-*
 __pycache__/
 *.py[cod]
 /.vitest
+
+# Cases pulled from production (lab/case.mjs): learners' words, never committed
+/cases
