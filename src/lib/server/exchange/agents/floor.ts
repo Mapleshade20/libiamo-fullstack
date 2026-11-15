@@ -174,7 +174,7 @@ export function drawWorldParticipant(input: {
 	const owner = scene.counterpart.name;
 	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
 	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
-	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	const strangers = scene.strangers ? passersBy(ui, input.language, draw, 3, taken) : [];
 	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
 	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;
 	const people = [...new Set([...entries.slice(-20).map((entry) => entry.author), ...(quiet ? [quiet] : [])])].filter((name) => name !== learnerName);
@@ -379,7 +379,7 @@ export function allocateParticipants(input: {
 	const owner = scene.counterpart.name;
 	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
 	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
-	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	const strangers = scene.strangers ? passersBy(ui, input.language, draw, 3, taken) : [];
 	// A member who has not spoken yet may be the one who does now, or a quiet group stays a duet.
 	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
 	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;
@@ -481,7 +481,7 @@ export function drawSceneMoment(input: {
 	const owner = scene.counterpart.name;
 	const posted = new Set(entries.filter((entry) => entry.role === "cast").map((entry) => entry.author));
 	const taken = new Set([learnerName, ...scene.cast.map((person) => person.name), ...posted]);
-	const strangers = scene.open ? passersBy(ui, input.language, draw, 3, taken) : [];
+	const strangers = scene.strangers ? passersBy(ui, input.language, draw, 3, taken) : [];
 	// A member who has not spoken yet may be the one who does now, or a quiet group stays a duet.
 	const silent = scene.cast.map((person) => person.name).filter((name) => name !== owner && name !== learnerName && !posted.has(name));
 	const quiet = silent.length ? silent[Math.floor(draw() * silent.length)] : undefined;

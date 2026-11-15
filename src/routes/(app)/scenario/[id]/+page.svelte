@@ -109,14 +109,17 @@ $effect(() => {
 
 			<aside class="prep" aria-labelledby="prep-h">
 				<h2 id="prep-h" class="label">{tx("qPrep")}</h2>
-				<Accordion title={tx("qOwned")} open>
-					<div class="chips">
-						{#each owned as p}
-							<span class="chip">{p}</span>
-						{/each}
-					</div>
-				</Accordion>
-				<Accordion title={tx("qPlan")} class="mt-2">
+				<!-- A notebook with nothing in it yet has nothing to offer here: the plan comes first, open. -->
+				{#if owned.length}
+					<Accordion title={tx("qOwned")} open>
+						<div class="chips">
+							{#each owned as p}
+								<span class="chip">{p}</span>
+							{/each}
+						</div>
+					</Accordion>
+				{/if}
+				<Accordion title={tx("qPlan")} class={owned.length ? "mt-2" : ""} open={!owned.length}>
 					<textarea bind:value={plan} use:autogrow={plan} oninput={savePlan} rows="3" placeholder={tx("qPlanPh")} aria-label={tx("qPlan")}></textarea>
 					<Button variant="ghost" size="sm" class="mt-1 -ms-2 text-muted-foreground" onclick={demoOpens}
 						><Languages aria-hidden="true" />{tx("qHowSay")}</Button

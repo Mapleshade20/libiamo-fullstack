@@ -32,7 +32,10 @@ const SURFACES: Record<ExchangePlace, Component<SurfaceProps>> = {
 
 const id = $derived(page.params.id ?? "");
 const where = $derived({ scenarioId: id, lang: app.lang });
-const view = $derived(await placeOf(where));
+// Read without awaiting: the page polls this query while the cast composes, and an awaited refresh is an async batch
+// that a click landing at the same moment rebases (sveltejs/svelte#18895 leaves the place's effects unrun).
+const place = $derived(placeOf(where));
+const view = $derived(place.current);
 // The place speaks the language learnt, whatever the interface's.
 $effect(() => {
 	if (view) void loadLang(view.language);
@@ -54,7 +57,7 @@ const api: ExchangeApi = {
 		if (ex !== null) await finishPlace(ex);
 	},
 	async refresh() {
-		await placeOf(where).refresh();
+		await place.refresh();
 	},
 	async hint(input) {
 		const ex = exchangeId();
@@ -65,7 +68,7 @@ const api: ExchangeApi = {
 		const ex = exchangeId();
 		if (ex === null) return;
 		const r = await readInPlace({ exchangeId: ex, messageId });
-		if (r.worldScheduled) await placeOf(where).refresh();
+		if (r.worldScheduled) await place.refresh();
 	},
 };
 const Surface = $derived(view ? SURFACES[view.place] : null);
@@ -94,7 +97,7 @@ $effect(() => {
 			{api}
 		/>
 	{/key}
-{:else}
+{:else if !place.loading}
 	<main class="grid min-h-dvh place-items-center">
 		<EmptyState art="clink" title={tx("qMissing")} action={{ label: tx("shelfAll"), href: "/library" }} />
 	</main>

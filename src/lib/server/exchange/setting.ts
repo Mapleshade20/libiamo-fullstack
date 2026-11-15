@@ -25,12 +25,14 @@ export type Setting = {
 type Reader = Pick<typeof db, "select">;
 
 /** The opening as the places and the floor read it: the version's opening with its people named. */
-export function sceneOpening(v: Pick<ExchangeVersion, "opening" | "people">): Record<string, unknown> {
+export function sceneOpening(v: Pick<ExchangeVersion, "opening" | "people"> & { others?: string }): Record<string, unknown> {
 	const [first, ...rest] = v.people;
 	return {
 		...(v.opening as Record<string, unknown>),
 		...(first ? { counterpartName: first.name } : {}),
 		...(rest.length ? { members: rest.map((p) => p.name).join(", ") } : {}),
+		// Passers-by join an open place only when the scenario says who else may turn up.
+		strangers: !!v.others?.trim(),
 	};
 }
 

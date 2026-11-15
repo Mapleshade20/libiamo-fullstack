@@ -22,6 +22,8 @@ export type Scene = {
 	group: boolean;
 	/** People outside the cast may join, as on public channels and threads. */
 	open: boolean;
+	/** Passers-by may: an open place whose scenario says who else may turn up (`strangers` in the opening state). */
+	strangers: boolean;
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -101,7 +103,7 @@ export function resolveScene(ui: ExchangePlace, openingState: unknown, seed: str
 		return true;
 	});
 	const open = ui === "reddit" || ui === "ao3" || (ui === "discord" && !dm);
-	return { counterpart, cast, group: open || cast.length > 1, open };
+	return { counterpart, cast, group: open || cast.length > 1, open, strangers: open && state.strangers !== false };
 }
 
 /** Group chats that live on while the learner is silent: time passes in them every minute or two. */

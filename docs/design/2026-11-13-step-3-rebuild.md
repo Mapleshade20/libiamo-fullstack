@@ -379,9 +379,6 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
   prompt: the card's sentence, the learner's answer and the one they kept, then follow-up questions), like collecting's
   questions about a phrase.
 - **A long exchange.** How many turns pass 2 may take on before it must choose (iMessage allows 20).
-- **The pace of async places.** The seeded AO3 and Reddit scenarios are `low` urgency (replies about ten minutes on,
-  at most forty), mail `medium` (two, at most eight), the chats `high` (half a minute). A learner who ends the exchange
-  before anyone answered goes over a thread with no reply. To settle in Scene Lab (4e) with the learner's seat in mind.
 - **A count of use per learner** kept on the account before a call's row goes after 30 days (§5.7): the user is
   considering it.
 - **Users in admin** (asked for by the user, 2026-11-14): a tab listing every account, with its information, its call
@@ -565,7 +562,30 @@ decided on:
   checked (about $0.01 on the service key, removed after). With no Japanese name table its menu items stayed in
   English, as the rule says: phase 5's publishing must build each language's table and have it confirmed before it
   queues the sources.
-- **4e. Scene Lab.** The agents' new input (`people`, `others`, `followed`) judged from the learner's seat.
+- **4e. The scenes from the learner's seat** (done 2026-11-14). Every person in the seeded scenarios has `notes` (how they
+  take the learner's message, what they will and will not do: the professor grants a week for a serious reason asked in
+  time, the letting agent names a date only when asked for one) and the public threads say who else may turn up. Legacy's
+  Scene Lab harness (a simulated clock over the old recipe layer) was not ported: the scenes were played in the real
+  places on the dev server, through the worker and the polling, one per place (mail, Reddit, AO3, Discord, iMessage) on
+  Claude Haiku with a learner's slips, and read as a learner. Found and fixed on the way:
+  - a name that writes in the opening but is not one of the people became a second persona (the landlord's mail came
+    from "Greenway Lettings" and "David" in turn); the seed is fixed and versions are now refused when the opening names
+    someone the people do not have (`openingNames`);
+  - passers-by joined every open place (a stranger answered first in the book club); they now come only where the
+    scenario says who else may turn up (`others`, carried as `strangers` in the opening state);
+  - the AO3 place did not show the chapter's end note the scenario page shows (the author's question the learner
+    answers), and the cast's setting did not have it either;
+  - the play page read the place with an awaited query it polls, and a click during a refresh hit
+    sveltejs/svelte#18895 (an async batch rebased twice leaves effects unrun: in development an invariant error, in
+    production a stale place); it reads the query's current value instead;
+  - a scenario page with an empty notebook showed an empty "Phrases you already own"; the plan opens instead.
+  What reads well: the notes show (the author asks about a detail she planted, Sam remembers why the piano song went
+  in), replies answer the learner, mail stays formal and signed. Left as they are: the odd "last time I…" from the
+  asker, a content hint once in English though asked for the learner's language (three more were right), a mail place
+  that stays in Sent after sending until the learner opens the inbox (legacy's).
+  **The pace of async places** (from §11): AO3 and Reddit go from `low` (a reply about ten minutes on, at most forty) to
+  `medium` like mail (about two, at most eight), so a reply usually lands while the learner is still there; one that
+  comes later is announced on the home page. Discord and iMessage stay `high`.
 
 **Accounts (done 2026-11-13).** Better Auth 1.7 behind the demo's sign-in, sign-up, confirm, forgot-password, welcome
 and settings pages; the account reaches the pages through `me` (a remote query) poured into the `account` and

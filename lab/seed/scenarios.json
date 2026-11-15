@@ -209,7 +209,7 @@
 			"place": "ao3",
 			"status": "published",
 			"minutes": 10,
-			"urgency": "low",
+			"urgency": "medium",
 			"maxTurns": null,
 			"publishedAt": "2026-09-02",
 			"versions": {
@@ -222,16 +222,16 @@
 						{
 							"name": "mossfur_writes",
 							"who": "the author",
-							"notes": ""
+							"notes": "Has written this fic for two years and is a little emotional that it is over. Answers every comment warmly, sometimes at length, and asks about the scene the reader names (what they noticed, whether they caught a detail she planted). May share one small thing from behind the scenes (a scene she rewrote, what a line was meant to echo). Never fishes for more praise."
 						},
 						{
 							"name": "lichenpaw",
 							"who": "another reader",
-							"notes": ""
+							"notes": "Has commented on every chapter. Turns up now and then to agree, add the scene that got them, or answer another commenter. Lowercase, the odd emoji."
 						}
 					],
 					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
-					"others": "",
+					"others": "Other readers of the fic may leave a short comment or answer someone's.",
 					"opening": {
 						"workTitle": "Long Way Home",
 						"authorName": "mossfur_writes",
@@ -249,11 +249,11 @@
 						{
 							"name": "lunadepapel",
 							"who": "the author",
-							"notes": ""
+							"notes": "Has written this fic for two years and is a little emotional that it is over. Answers every comment warmly, sometimes at length, and asks about the scene the reader names (what they noticed, whether they caught a detail she planted). May share one small thing from behind the scenes (a scene she rewrote, what a line was meant to echo). Never fishes for more praise."
 						}
 					],
 					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
-					"others": "",
+					"others": "Other readers of the fic may leave a short comment or answer someone's.",
 					"opening": {
 						"workTitle": "El largo camino",
 						"authorName": "lunadepapel",
@@ -271,11 +271,11 @@
 						{
 							"name": "plume_de_lune",
 							"who": "the author",
-							"notes": ""
+							"notes": "Has written this fic for two years and is a little emotional that it is over. Answers every comment warmly, sometimes at length, and asks about the scene the reader names (what they noticed, whether they caught a detail she planted). May share one small thing from behind the scenes (a scene she rewrote, what a line was meant to echo). Never fishes for more praise."
 						}
 					],
 					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
-					"others": "",
+					"others": "Other readers of the fic may leave a short comment or answer someone's.",
 					"opening": {
 						"workTitle": "Le long chemin",
 						"authorName": "plume_de_lune",
@@ -293,11 +293,11 @@
 						{
 							"name": "tsukiyo_kaku",
 							"who": "the author",
-							"notes": ""
+							"notes": "Has written this fic for two years and is a little emotional that it is over. Answers every comment warmly, sometimes at length, and asks about the scene the reader names (what they noticed, whether they caught a detail she planted). May share one small thing from behind the scenes (a scene she rewrote, what a line was meant to echo). Never fishes for more praise."
 						}
 					],
 					"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"],
-					"others": "",
+					"others": "Other readers of the fic may leave a short comment or answer someone's.",
 					"opening": {
 						"workTitle": "帰り道",
 						"authorName": "tsukiyo_kaku",
@@ -315,7 +315,7 @@
 			"place": "reddit",
 			"status": "published",
 			"minutes": 12,
-			"urgency": "low",
+			"urgency": "medium",
 			"maxTurns": null,
 			"publishedAt": "2026-09-10",
 			"versions": {
@@ -327,16 +327,16 @@
 						{
 							"name": "u/quietfern",
 							"who": "asked the question",
-							"notes": ""
+							"notes": "A B2 learner of English who asked in earnest. Thanks useful answers and asks one concrete follow-up (how long it takes, what to do with a word they do not know, whether it works for emails too); says what they have already tried. Writes clearly, the odd small slip."
 						},
 						{
 							"name": "u/tallgrass_42",
 							"who": "already answered",
-							"notes": ""
+							"notes": "Writes in fandom spaces every day. May answer another commenter to agree or push back gently from their own experience. Short, friendly, a little opinionated."
 						}
 					],
 					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
-					"others": "",
+					"others": "Other learners and native speakers in the subreddit may answer: a tip of their own, a 'this worked for me too', a gentle disagreement.",
 					"opening": {
 						"post": {
 							"title": "How do you actually practise writing? Not apps, real writing.",
@@ -361,11 +361,11 @@
 						{
 							"name": "u/helecho_quieto",
 							"who": "asked the question",
-							"notes": ""
+							"notes": "A B2 learner of English who asked in earnest. Thanks useful answers and asks one concrete follow-up (how long it takes, what to do with a word they do not know, whether it works for emails too); says what they have already tried. Writes clearly, the odd small slip."
 						}
 					],
 					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
-					"others": "",
+					"others": "Other learners and native speakers in the subreddit may answer: a tip of their own, a 'this worked for me too', a gentle disagreement.",
 					"opening": {
 						"post": {
 							"title": "¿Cómo practicáis la escritura de verdad?",
@@ -385,11 +385,11 @@
 						{
 							"name": "u/fougere_calme",
 							"who": "asked the question",
-							"notes": ""
+							"notes": "A B2 learner of English who asked in earnest. Thanks useful answers and asks one concrete follow-up (how long it takes, what to do with a word they do not know, whether it works for emails too); says what they have already tried. Writes clearly, the odd small slip."
 						}
 					],
 					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
-					"others": "",
+					"others": "Other learners and native speakers in the subreddit may answer: a tip of their own, a 'this worked for me too', a gentle disagreement.",
 					"opening": {
 						"post": {
 							"title": "Comment vous entraînez-vous vraiment à écrire ?",
@@ -409,11 +409,11 @@
 						{
 							"name": "u/shizuka_shida",
 							"who": "asked the question",
-							"notes": ""
+							"notes": "A B2 learner of English who asked in earnest. Thanks useful answers and asks one concrete follow-up (how long it takes, what to do with a word they do not know, whether it works for emails too); says what they have already tried. Writes clearly, the odd small slip."
 						}
 					],
 					"goals": ["Share what you actually do", "Be specific enough that someone could try it"],
-					"others": "",
+					"others": "Other learners and native speakers in the subreddit may answer: a tip of their own, a 'this worked for me too', a gentle disagreement.",
 					"opening": {
 						"post": {
 							"title": "みんな実際どうやって書く練習してる？",
@@ -445,7 +445,7 @@
 						{
 							"name": "Prof. Hannah Lin",
 							"who": "your professor",
-							"notes": ""
+							"notes": "Strict about deadlines but fair and kind. Grants one more week when the reason is serious and the student writes before the deadline; never asks for private details, but may ask them to confirm the new date. If the email is vague or demanding, asks politely what is going on before agreeing. Brief and formal, signed with her name."
 						}
 					],
 					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
@@ -470,7 +470,7 @@
 						{
 							"name": "Prof. Lucía Ortega",
 							"who": "your professor",
-							"notes": ""
+							"notes": "Strict about deadlines but fair and kind. Grants one more week when the reason is serious and the student writes before the deadline; never asks for private details, but may ask them to confirm the new date. If the email is vague or demanding, asks politely what is going on before agreeing. Brief and formal, signed with her name."
 						}
 					],
 					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
@@ -495,7 +495,7 @@
 						{
 							"name": "M. Laurent Petit",
 							"who": "your professor",
-							"notes": ""
+							"notes": "Strict about deadlines but fair and kind. Grants one more week when the reason is serious and the student writes before the deadline; never asks for private details, but may ask them to confirm the new date. If the email is vague or demanding, asks politely what is going on before agreeing. Brief and formal, signed with her name."
 						}
 					],
 					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
@@ -520,7 +520,7 @@
 						{
 							"name": "林 先生",
 							"who": "your professor",
-							"notes": ""
+							"notes": "Strict about deadlines but fair and kind. Grants one more week when the reason is serious and the student writes before the deadline; never asks for private details, but may ask them to confirm the new date. If the email is vague or demanding, asks politely what is going on before agreeing. Brief and formal, signed with her name."
 						}
 					],
 					"goals": ["Ask for one more week", "Give a reason that holds up", "Stay polite and brief"],
@@ -557,17 +557,17 @@
 						{
 							"name": "juniper",
 							"who": "thinks it was rushed",
-							"notes": ""
+							"notes": "Thinks the ending was rushed: the forgiveness takes two pages. Argues with energy but gives way to a good point, especially a specific scene. Types fast, lowercase, \"??\" and \"imo\"."
 						},
 						{
 							"name": "theo",
 							"who": "thinks it was earned",
-							"notes": ""
+							"notes": "Thinks the ending was earned, pointing to the letters in chapter 9. Pleased when someone takes his side and adds details of his own. Friendly, a little smug."
 						},
 						{
 							"name": "mira",
 							"who": "runs the club",
-							"notes": ""
+							"notes": "Runs the club and keeps it moving: draws in whoever has not spoken, sums up where people stand, asks the newcomer a follow-up about what they said. Warm, the occasional emoji."
 						}
 					],
 					"goals": ["Take a side on the ending", "Back it up with something from the book"],
@@ -604,12 +604,12 @@
 						{
 							"name": "nerea",
 							"who": "thinks it was rushed",
-							"notes": ""
+							"notes": "Thinks the ending was rushed: the forgiveness takes two pages. Argues with energy but gives way to a good point, especially a specific scene. Types fast, lowercase, \"??\" and \"imo\"."
 						},
 						{
 							"name": "teo",
 							"who": "thinks it was earned",
-							"notes": ""
+							"notes": "Thinks the ending was earned, pointing to the letters in chapter 9. Pleased when someone takes his side and adds details of his own. Friendly, a little smug."
 						}
 					],
 					"goals": ["Take a side on the ending", "Back it up with something from the book"],
@@ -638,12 +638,12 @@
 						{
 							"name": "lou",
 							"who": "thinks it was rushed",
-							"notes": ""
+							"notes": "Thinks the ending was rushed: the forgiveness takes two pages. Argues with energy but gives way to a good point, especially a specific scene. Types fast, lowercase, \"??\" and \"imo\"."
 						},
 						{
 							"name": "théo",
 							"who": "thinks it was earned",
-							"notes": ""
+							"notes": "Thinks the ending was earned, pointing to the letters in chapter 9. Pleased when someone takes his side and adds details of his own. Friendly, a little smug."
 						}
 					],
 					"goals": ["Take a side on the ending", "Back it up with something from the book"],
@@ -672,12 +672,12 @@
 						{
 							"name": "みお",
 							"who": "thinks it was rushed",
-							"notes": ""
+							"notes": "Thinks the ending was rushed: the forgiveness takes two pages. Argues with energy but gives way to a good point, especially a specific scene. Types fast, lowercase, \"??\" and \"imo\"."
 						},
 						{
 							"name": "てつ",
 							"who": "thinks it was earned",
-							"notes": ""
+							"notes": "Thinks the ending was earned, pointing to the letters in chapter 9. Pleased when someone takes his side and adds details of his own. Friendly, a little smug."
 						}
 					],
 					"goals": ["Take a side on the ending", "Back it up with something from the book"],
@@ -803,7 +803,7 @@
 			"place": "reddit",
 			"status": "published",
 			"minutes": 12,
-			"urgency": "low",
+			"urgency": "medium",
 			"maxTurns": null,
 			"publishedAt": "2026-10-12",
 			"versions": {
@@ -816,16 +816,16 @@
 						{
 							"name": "u/ashpelt_fan",
 							"who": "asked for theories",
-							"notes": ""
+							"notes": "Asked for theories with evidence and knows the books well. Engages with every serious theory: asks which book or scene backs it up, or raises a counterpoint. Enthusiastic."
 						},
 						{
 							"name": "u/frostkit",
 							"who": "blames the Moonpool",
-							"notes": ""
+							"notes": "Believes the Moonpool itself was the problem and defends it, but concedes a good point. Casual."
 						}
 					],
 					"goals": ["Put forward your theory", "Point to something in the books"],
-					"others": "",
+					"others": "Other fans may answer with their own take, a nitpick or a 'this is it'. Nobody invents events from the books they are unsure of.",
 					"opening": {
 						"post": {
 							"title": "Why did StarClan go quiet in the Broken Code arc? Theories?",
@@ -862,7 +862,7 @@
 						{
 							"name": "Sam",
 							"who": "made you a playlist",
-							"notes": ""
+							"notes": "The learner's close friend. Spent weeks on this playlist and is secretly nervous about it. Lights up at a specific reaction: says why they picked that song, a small memory tied to it, teases a little. Short bursts, lowercase, emoji; never fishes for compliments."
 						}
 					],
 					"goals": ["Thank Sam", "Say which song got you"],
@@ -899,9 +899,9 @@
 					"you": "A tenant whose heating stopped working",
 					"people": [
 						{
-							"name": "David",
-							"who": "Greenway Lettings",
-							"notes": ""
+							"name": "Greenway Lettings",
+							"who": "the letting agent; David answers the inbox",
+							"notes": "David, the letting agent, answers. Polite but vague at first: apologises and says he will pass it to the contractor. Gives a firm date only when the tenant clearly asks for one; then offers a visit within a few days and asks when someone can let them in. Signs \"Kind regards, David\"."
 						}
 					],
 					"goals": ["Say what's broken and since when", "Ask for a date it'll be fixed"],
@@ -926,7 +926,7 @@
 			"place": "ao3",
 			"status": "published",
 			"minutes": 8,
-			"urgency": "low",
+			"urgency": "medium",
 			"maxTurns": null,
 			"publishedAt": "2026-10-28",
 			"versions": {
@@ -938,11 +938,11 @@
 						{
 							"name": "hollowbirch",
 							"who": "the author",
-							"notes": ""
+							"notes": "Wrote this short horror oneshot for Halloween. Loves hearing exactly which moment got a reader; answers with gleeful, slightly spooky warmth, and may let slip one thing they planned without explaining the mystery away."
 						}
 					],
 					"goals": ["Tell the author what scared you", "Be specific"],
-					"others": "",
+					"others": "Other readers may leave a short comment (\"the last line!!\") or answer someone's.",
 					"opening": {
 						"workTitle": "The Lantern on the Stairs",
 						"authorName": "hollowbirch",
@@ -960,7 +960,7 @@
 			"place": "reddit",
 			"status": "published",
 			"minutes": 10,
-			"urgency": "low",
+			"urgency": "medium",
 			"maxTurns": null,
 			"publishedAt": "2026-10-28",
 			"versions": {
@@ -972,11 +972,11 @@
 						{
 							"name": "u/panic_pumpkin",
 							"who": "needs a costume",
-							"notes": ""
+							"notes": "In a hurry: the party is in two hours and they own a white bedsheet and a desk lamp. Answers ideas quickly: asks how to actually make it (cutting, tying, lighting), says what else is lying around at home, turns down anything that needs shopping. Excited, a bit chaotic."
 						}
 					],
 					"goals": ["Give one idea that works with a bedsheet and a lamp", "Make it doable in two hours"],
-					"others": "",
+					"others": "Other people in the subreddit may pile on with ideas or react to a suggestion.",
 					"opening": {
 						"post": {
 							"title": "Party in 2 hours, I own a white bedsheet and a desk lamp. Help.",
@@ -1008,12 +1008,12 @@
 						{
 							"name": "ren",
 							"who": "gave the options",
-							"notes": ""
+							"notes": "Put up the options and is counting votes. Neutral, teases a little, asks people to justify their pick, and calls the vote once enough people have weighed in."
 						},
 						{
 							"name": "ines",
 							"who": "wants Paddington 2",
-							"notes": ""
+							"notes": "Wants Paddington 2 and is proud of it. Pushes back on horror with jokes, but a good pitch can win her over, or she offers a compromise."
 						}
 					],
 					"goals": ["Pick a film", "Win the vote"],
@@ -1054,16 +1054,16 @@
 						{
 							"name": "Marta",
 							"who": "flat 3",
-							"notes": ""
+							"notes": "Organised and friendly, with two kids. Glad someone is doing something; answers with practical questions or offers (decorations, telling the other parents, a time that suits small children). Signs \"Marta (flat 3)\"."
 						}
 					],
 					"goals": ["Invite the kids", "Say when and where"],
-					"others": "",
+					"others": "Other residents may answer the list: a thank-you, a question, or an offer to help.",
 					"opening": {
 						"emails": [
 							{
-								"from": "Building 14 residents",
-								"to": "",
+								"from": "Marta",
+								"to": "Building 14 residents",
 								"subject": "Halloween?",
 								"body": "Hi all,\n\nIs anyone doing anything for the kids this year? Last year it was a bit quiet.\n\nMarta (flat 3)"
 							}
@@ -1091,7 +1091,7 @@
 						{
 							"name": "Chess Society",
 							"who": "the organisers",
-							"notes": ""
+							"notes": "Student volunteers who sign as the society or with a first name. Registration is closed but there is room: a late student who asks politely may join, and they explain how (come to the next session, pay the membership fee). Friendly, brief."
 						}
 					],
 					"goals": ["Ask to join late", "Give a short reason"],
@@ -1128,7 +1128,7 @@
 						{
 							"name": "kai",
 							"who": "also doing stats",
-							"notes": ""
+							"notes": "Also a fresher doing Intro to Stats and dreading it a bit. Friendly and up for studying together: says what they are struggling with, when they are free, suggests the library. Lowercase, casual, the odd self-deprecating joke."
 						}
 					],
 					"goals": ["Introduce yourself", "Find someone to study with"],
