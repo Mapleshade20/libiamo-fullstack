@@ -97,3 +97,4 @@ $effect(() => {
 </form>
 <SocialButtons {tx} />
 <p class="foot">{tx("auUpHave")} <a href="/sign-in">{tx("auUpHaveLink")}</a></p>
+<p class="foot agree">{tx("auAgree")} <a href="/terms">{tx("setLinkTerms")}</a> · <a href="/privacy">{tx("setLinkPrivacy")}</a></p>

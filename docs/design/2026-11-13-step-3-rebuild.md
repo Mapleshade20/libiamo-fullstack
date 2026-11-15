@@ -532,8 +532,12 @@ on the server on real data.
   collecting from the box and reloading; a plan typed, reloaded, and taken by the piece on going in; sign-up in a
   picked language, the link, the welcome, home, the account deleted; the whole tour on the real pages with no request
   reaching the server but the learner's own visit. Found on the way: the tour's glass compared a proxied drink.
-- **Still to do in phase 6:** the public pages (terms, privacy, changelog; settings links to them) and the welcome page
-  for visitors (§11).
+- **The documents** (6b). `/terms`, `/privacy`, `/changelog` for anyone (routes/(public), English), written for the
+  rebuilt app: the privacy policy says what is kept, the own-key requests and their records (thirty days, words only
+  with "Help improve Libiamo", longer for an open case), Gravatar, Turnstile, the fonts and pictures the browser loads,
+  the cookies and the fourteen days of backups. Settings links to them; signing up says it accepts them. Waiting for
+  the user's review before launch.
+- **Still to do in phase 6:** the welcome page for visitors (§11).
 
 **Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
 commits:
