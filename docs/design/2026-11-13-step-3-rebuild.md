@@ -509,7 +509,7 @@ decided on:
   hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
   not list that learner's pieces.
 
-**Phase 4, scenarios: in progress** (started 2026-11-14). In steps, each committed with the app running:
+**Phase 4, scenarios: done** (2026-11-14; the user has not looked at it yet). In steps, each committed with the app running:
 
 - **4a. Scenario data** (done 2026-11-14). `scenario`, `scenario_source`, `issue`, `issue_scenario`, `work`, `name_rendering` (§5.3);
   versions and openings validated by zod (`lib/scenario/versions.ts`, `lib/exchange/opening.ts`: the legacy per-place
