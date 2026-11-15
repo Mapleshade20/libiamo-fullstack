@@ -44,6 +44,32 @@ describe("the floor of a group scene", () => {
 		}
 	});
 
+	it("brings no passers-by into an open place whose scenario names no others", () => {
+		const closed = resolveScene(
+			"reddit",
+			{ post: { author: "op" }, previousComments: [{ author: "alex", text: "x" }], strangers: false },
+			1,
+			"Maple",
+		);
+		const known = new Set(["op", "alex"]);
+		for (let seed = 0; seed < 60; seed += 1) {
+			const entries = [cast(1, "alex"), learner(2, 1)];
+			const moment = drawSceneMoment({ ui: "reddit", language: "en", entries, scene: closed, learnerName: "Maple", seed });
+			for (const person of moment?.around ?? []) expect(known.has(person.name)).toBe(true);
+			const takers = allocateParticipants({
+				ui: "reddit",
+				language: "en",
+				entries,
+				scene: closed,
+				learnerName: "Maple",
+				seed,
+				count: 3,
+				target: entries[1],
+			});
+			for (const name of takers) expect(known.has(name)).toBe(true);
+		}
+	});
+
 	it("has the person a Discord reply quotes answer it, not whoever spoke last", () => {
 		const channel = resolveScene(
 			"discord",

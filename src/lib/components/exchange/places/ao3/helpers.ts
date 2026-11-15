@@ -6,6 +6,8 @@ export type Ao3OpeningState = {
 	chapterTitle?: string;
 	summary?: string;
 	bodyExcerpt?: string;
+	/** The author's note after the chapter. */
+	endNote?: string;
 	rating?: string;
 	archiveWarning?: string;
 	categories?: string[];
@@ -27,6 +29,7 @@ export function describeWork(opening: Ao3OpeningState) {
 		chapterTitle: threadText(opening.chapterTitle, "Chapter 1"),
 		summary: threadText(opening.summary),
 		excerpt: threadText(opening.bodyExcerpt, "(Chapter text continues here...)"),
+		endNote: threadText(opening.endNote),
 		tags: [
 			["Rating", [threadText(opening.rating, "Teen And Up Audiences")]],
 			["Archive Warning", [threadText(opening.archiveWarning, "No Archive Warnings Apply")]],

@@ -34,6 +34,13 @@ let { work }: { work: ReturnType<typeof describeWork> } = $props();
 <section class="min-h-[220px] py-4 text-[15px]">
 	<h2 class="mb-4 text-center font-[Georgia,serif] text-xl font-normal">{work.chapterTitle}</h2>
 	<div class="mx-auto max-w-3xl leading-6"><MarkdownRenderer content={work.excerpt} /></div>
+	{#if work.endNote}
+		<!-- AO3's end notes: the author's word after the chapter. -->
+		<div class="mx-auto mt-8 max-w-3xl border border-[#ccc] bg-[#fdfdfd] p-4">
+			<p class="font-bold">Notes:</p>
+			<blockquote class="m-0"><MarkdownRenderer content={work.endNote} /></blockquote>
+		</div>
+	{/if}
 </section>
 
 <style>

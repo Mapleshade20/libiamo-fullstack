@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { ExchangePlace } from "#lib/constants.ts";
 import type { Situation } from "#lib/scenario/types.ts";
+import { flattenOpeningComments } from "./comment-thread.ts";
+import { parseMailAddress } from "./mail.ts";
 
 /*
  * What a place shows when the learner arrives (design §5.3): the old per-place opening state, without the counterpart's
@@ -131,4 +133,21 @@ export function situationOf(place: ExchangePlace, opening: unknown, first = ""):
 			return { kind: "chat", place: o.groupName || first, messages: o.previousMessages.map((m) => ({ author: m.sender, text: m.text })) };
 		}
 	}
+}
+
+/**
+ * Everyone the opening names as writing something (senders, mail authors, commenters, the post's or work's author). Each
+ * must be one of the version's people: a name the people do not have becomes a second persona the cast also voices.
+ */
+export function openingNames(place: ExchangePlace, opening: unknown): string[] {
+	const o = (opening ?? {}) as Record<string, unknown>;
+	const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+	const names: string[] = [];
+	if (place === "imessage" || place === "discord") for (const m of list(o.previousMessages)) names.push(String(m.sender ?? ""));
+	if (place === "email") for (const e of list(o.emails)) names.push(parseMailAddress(String(e.from ?? "")).name);
+	if (place === "reddit" || place === "ao3") {
+		names.push(String(place === "reddit" ? ((o.post as Record<string, unknown> | undefined)?.author ?? "") : (o.authorName ?? "")));
+		names.push(...flattenOpeningComments(place, o).map((c) => c.author));
+	}
+	return [...new Set(names.map((n) => n.trim()).filter(Boolean))];
 }

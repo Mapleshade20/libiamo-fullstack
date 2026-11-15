@@ -33,7 +33,13 @@ describe("scenario setting", () => {
 	});
 });
 
-const scene = (name: string, address = "") => ({ counterpart: { name, address }, cast: [{ name, address }], group: false, open: false });
+const scene = (name: string, address = "") => ({
+	counterpart: { name, address },
+	cast: [{ name, address }],
+	group: false,
+	open: false,
+	strangers: false,
+});
 
 describe("chat transcript", () => {
 	it("puts opening messages before the session and labels roles relative to the learner", () => {

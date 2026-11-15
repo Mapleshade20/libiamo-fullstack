@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ExchangePlace, ScenarioKind } from "#lib/constants.ts";
-import { OPENINGS } from "#lib/exchange/opening.ts";
+import { OPENINGS, openingNames } from "#lib/exchange/opening.ts";
 
 /*
  * A scenario's versions (design §5.3), keyed by the language learnt and validated on every write. A version may be a
@@ -54,7 +54,14 @@ export function versionsSchema(kind: ScenarioKind, place: string) {
 			? TranslationVersion
 			: ExchangeVersion.superRefine((v, ctx) => {
 					const r = OPENINGS[place as ExchangePlace]?.safeParse(v.opening);
-					if (!r?.success) ctx.addIssue({ code: "custom", path: ["opening"], message: r ? r.error.message : `no place ${place}` });
+					if (!r?.success) {
+						ctx.addIssue({ code: "custom", path: ["opening"], message: r ? r.error.message : `no place ${place}` });
+						return;
+					}
+					const people = new Set(v.people.map((p) => p.name));
+					for (const name of openingNames(place as ExchangePlace, v.opening))
+						if (!people.has(name))
+							ctx.addIssue({ code: "custom", path: ["opening"], message: `${name} writes in the opening but is not one of the people` });
 				});
 	return z.record(z.string(), one);
 }

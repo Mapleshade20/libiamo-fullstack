@@ -142,6 +142,7 @@ export function renderScenarioSetting(ui: ExchangePlace, openingState: JsonRecor
 			for (const [label, value] of lists) if (strings(value).length) lines.push(`${label}: ${strings(value).join(", ")}`);
 			if (text(state.summary)) lines.push(`Summary:\n${text(state.summary)}`);
 			if (text(state.bodyExcerpt)) lines.push(`Excerpt:\n${text(state.bodyExcerpt)}`);
+			if (text(state.endNote)) lines.push(`Author's note after the chapter:\n${text(state.endNote)}`);
 			break;
 		}
 		default:
