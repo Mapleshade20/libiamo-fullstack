@@ -4,11 +4,12 @@ import { account } from "#lib/account/account.svelte.ts";
 import { page } from "$app/state";
 
 /*
- * The documents anyone may read, signed in or not: the terms, the privacy policy, the changelog. They are in English
- * whatever the page around them speaks, as one plain column with the way into the app at the top.
+ * The pages anyone may read, signed in or not: what Libiamo is, the terms, the privacy policy, the changelog. They are
+ * in English whatever the page around them speaks, as one plain column with the way into the app at the top.
  */
 let { children }: { children: Snippet } = $props();
 const LINKS = [
+	{ href: "/about", label: "About" },
 	{ href: "/terms", label: "Terms of Service" },
 	{ href: "/privacy", label: "Privacy Policy" },
 	{ href: "/changelog", label: "Changelog" },
@@ -18,8 +19,8 @@ const LINKS = [
 <div class="doc-page" lang="en">
 	<a class="skip" href="#doc">Skip to content</a>
 	<header class="top">
-		<a class="wordmark" href="/">Libiamo</a>
-		<a class="enter" href="/">{account.signedIn ? "Open Libiamo" : "Sign in"}</a>
+		<a class="wordmark" href={account.signedIn ? "/" : "/about"}>Libiamo</a>
+		<a class="enter" href={account.signedIn ? "/" : "/sign-in"}>{account.signedIn ? "Open Libiamo" : "Sign in"}</a>
 	</header>
 	<main id="doc" class="doc">{@render children()}</main>
 	<footer class="foot">
@@ -129,13 +130,13 @@ const LINKS = [
 .doc :global(li + li) {
 	margin-top: 6px;
 }
-.doc :global(a:not(.enter)) {
+.doc :global(:is(p, li) a) {
 	color: var(--ink);
 	text-decoration: underline;
 	text-decoration-color: var(--line);
 	text-underline-offset: 3px;
 }
-.doc :global(a:not(.enter):hover) {
+.doc :global(:is(p, li) a:hover) {
 	text-decoration-color: var(--ink);
 }
 .foot {

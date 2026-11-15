@@ -371,7 +371,8 @@ Once, at phase 7: a last dump of the old database, stop both units, remove the d
 
 ## 11. Open
 
-- **The public welcome page** describes the old product (lineups, the book). It needs new content before launch.
+- **The page for visitors.** A plain placeholder at `/about` (where a visitor at `/` goes) until the user designs the
+  real one, more striking (decided by the user, 2026-11-16).
 - **Models.** Everything was tuned on Claude Haiku through OpenRouter; DeepSeek Flash, GPT Luna and GLM have not run a
   whole session. One fixture run each before their setups are offered.
 - **Asking about a review answer.** The demo's "Is mine OK too?" on a card's back answered with stand-ins; it was taken
@@ -537,7 +538,8 @@ on the server on real data.
   with "Help improve Libiamo", longer for an open case), Gravatar, Turnstile, the fonts and pictures the browser loads,
   the cookies and the fourteen days of backups. Settings links to them; signing up says it accepts them. Waiting for
   the user's review before launch.
-- **Still to do in phase 6:** the welcome page for visitors (§11).
+- **The page for visitors** is a placeholder at `/about` for now (§11): a visitor at `/` goes there; it says what
+  Libiamo is and leads to signing up or in.
 
 **Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
 commits:
