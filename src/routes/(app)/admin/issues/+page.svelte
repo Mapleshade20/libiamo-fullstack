@@ -1,8 +1,8 @@
 <script lang="ts">
 import Plus from "@lucide/svelte/icons/plus";
 import { issueList } from "#lib/admin/issues.remote.ts";
+import { fmtDay } from "#lib/admin/records.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { fmtDay } from "#lib/demo/admin.ts";
 
 /*
  * Issues: an occasional themed handful of scenarios with a date, shown first on the shelf for about a month, then

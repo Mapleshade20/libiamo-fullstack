@@ -4,6 +4,8 @@ import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Flag from "@lucide/svelte/icons/flag";
 import Terminal from "@lucide/svelte/icons/terminal";
 import { slide } from "svelte/transition";
+import { fmtClock, fmtCost, fmtDay, fmtWhen, langEn, type RecordedCall, type RecordedStep } from "#lib/admin/records.ts";
+import { caseList, flagStep, sessionOne } from "#lib/admin/sessions.remote.ts";
 import CallDetail from "#lib/components/admin/CallDetail.svelte";
 import Signals from "#lib/components/admin/Signals.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
@@ -12,8 +14,6 @@ import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Speaker from "#lib/components/session/Speaker.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { CASES, fmtClock, fmtCost, fmtWhen, langEn, type RecordedCall, type RecordedStep, sessionById } from "#lib/demo/admin.ts";
-import { CALLS, STEPS } from "#lib/demo/admin-session.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
 import { page } from "$app/state";
 
@@ -21,14 +21,15 @@ import { page } from "$app/state";
  * One session as its record has it (docs/design/2026-11-11-session-records.md): on the left what the learner saw and
  * did, step by step, with how long they waited and the calls each step made; on the right every call of the session
  * by when it started, or the one opened. Any step can be flagged with a note, which makes the session a case and keeps
- * its calls past 30 days. The command copies what Claude Code runs to reproduce it locally. Every session shows the
- * one recorded fixture (lib/demo/admin-session.ts).
+ * its calls past 30 days. The command copies what Claude Code runs to reproduce it locally.
  */
-const row = $derived(sessionById(Number(page.params.id)) ?? sessionById(2611)!);
-let steps = $state<RecordedStep[]>(structuredClone(STEPS));
-const byId = new Map(CALLS.map((c) => [c.id, c]));
-const longest = Math.max(...CALLS.map((c) => c.ms));
-const ofStep = new Map(STEPS.flatMap((s) => s.calls.map((id) => [id, s.id] as const)));
+const row = $derived(await sessionOne(page.params.id ?? ""));
+const cases = $derived(await caseList());
+const CALLS = $derived(row?.callRecords ?? []);
+const steps = $derived(row?.steps ?? []);
+const byId = $derived(new Map(CALLS.map((c) => [c.id, c])));
+const longest = $derived(Math.max(1, ...CALLS.map((c) => c.ms)));
+const ofStep = $derived(new Map(steps.flatMap((s) => s.calls.map((id) => [id, s.id] as const))));
 let open = $state<RecordedCall | null>(null);
 // What the phone's sheet shows: kept while it slides away after closing.
 let last = $state<RecordedCall | null>(null);
@@ -37,12 +38,12 @@ const wide = $derived(width >= 900);
 let tab = $state("steps");
 let flagging = $state<string | null>(null);
 let note = $state("");
-const who = {
+const who = $derived({
 	tutor: { name: "Tutor", color: "var(--tutor)", icon: "pen" },
-	reader: { name: "u/MoonstoneMoth", color: "var(--reader-who)", icon: "reader" },
-	me: { name: "Maple", color: "var(--me)", icon: "person" },
-};
-const KIND = { free: "Free writing", scenario: "Scenario", translation: "Translation" };
+	reader: { name: row?.reader ?? "Reader", color: "var(--reader-who)", icon: "reader" },
+	me: { name: row?.learner ?? "Learner", color: "var(--me)", icon: "person" },
+});
+const KIND = { own: "Free writing", scenario: "Scenario", translation: "Translation" };
 function show(c: RecordedCall) {
 	open = c;
 	last = c;
@@ -51,17 +52,20 @@ function show(c: RecordedCall) {
 		for (const e of document.querySelectorAll(".step.lit")) e.classList.remove("lit");
 	}, 1200);
 }
-function saveFlag(s: RecordedStep) {
-	s.flag = { note: note.trim(), by: "Maple", at: "2026-11-11", case: Math.max(...CASES.map((c) => c.id)) + 1 };
+async function saveFlag(s: RecordedStep) {
+	if (!row) return;
+	const id = await flagStep({ pieceId: row.id, stepSeq: Number(s.id), note: note.trim() }).catch(() => null);
+	if (id === null) return toast("Could not flag it");
 	flagging = null;
 	note = "";
-	toast(`Case ${s.flag.case} opened`);
+	toast(`Case ${id} opened`);
 }
 async function copyCommand() {
+	if (!row) return;
 	await navigator.clipboard?.writeText(`pnpm case pull ${row.id}`).catch(() => {});
 	toast(`Copied: pnpm case pull ${row.id}`);
 }
-const caseOf = (n: number) => CASES.find((c) => c.id === n);
+const caseOf = (n: number) => cases.find((c) => c.id === n);
 </script>
 
 {#snippet callList()}
@@ -81,163 +85,169 @@ const caseOf = (n: number) => CASES.find((c) => c.id === n);
 
 <div class="adm-page" bind:clientWidth={width}>
 	<a class="adm-back" href="/admin/sessions"><ArrowLeft class="size-4" aria-hidden="true" />Sessions</a>
-	<header class="adm-head">
-		<div class="ttl">
-			<h1>{row.title}</h1>
-			<p class="facts">
-				<span>{row.learner}</span><span class="adm-dot">{langEn(row.native)} → {langEn(row.lang)}</span><span class="adm-dot">{KIND[row.kind]}</span
-				><span class="adm-dot">{fmtWhen(row.at)}</span><span class="adm-dot">{row.minutes} min</span
-				><span class="adm-dot">{row.calls} calls · {fmtCost(row.cost)}</span
-				><span class="adm-dot"><span class="adm-tag mono" use:tip={"The code that ran it"}>{row.sha}</span></span>
-			</p>
-			{#if row.signals.length}
-				<div class="sigs"><Signals signals={row.signals} labels /></div>
-			{/if}
-		</div>
-		<div class="acts">
-			<Button variant="secondary" onclick={copyCommand}><Terminal aria-hidden="true" />Copy pull command</Button>
-		</div>
-	</header>
+	{#if !row}
+		<p class="adm-empty adm-paper">No such session, or its learner does not help improve Libiamo.</p>
+	{:else}
+		<header class="adm-head">
+			<div class="ttl">
+				<h1>{row.title}</h1>
+				<p class="facts">
+					<span>{row.learner}</span><span class="adm-dot">{langEn(row.native)} → {langEn(row.lang)}</span><span class="adm-dot">{KIND[row.kind]}</span
+					><span class="adm-dot">{fmtWhen(row.at)}</span><span class="adm-dot">{row.minutes} min</span
+					><span class="adm-dot">{row.calls} calls · {fmtCost(row.cost)}</span>
+					{#if row.sha}
+						<span class="adm-dot"><span class="adm-tag mono" use:tip={"The code that ran it"}>{row.sha}</span></span>
+					{/if}
+				</p>
+				{#if row.signals.length}
+					<div class="sigs"><Signals signals={row.signals} labels /></div>
+				{/if}
+			</div>
+			<div class="acts">
+				<Button variant="secondary" onclick={copyCommand}><Terminal aria-hidden="true" />Copy pull command</Button>
+			</div>
+		</header>
 
-	{#if !wide}
-		<div class="tabs">
-			<SegmentedControl
-				label="View"
-				size="sm"
-				bind:value={tab}
-				items={[
-					{ value: "steps", label: "Steps" },
-					{ value: "calls", label: `Calls ${CALLS.length}` },
-				]}
-			/>
-		</div>
-	{/if}
+		{#if !wide}
+			<div class="tabs">
+				<SegmentedControl
+					label="View"
+					size="sm"
+					bind:value={tab}
+					items={[
+						{ value: "steps", label: "Steps" },
+						{ value: "calls", label: `Calls ${CALLS.length}` },
+					]}
+				/>
+			</div>
+		{/if}
 
-	<div class="cols" class:wide>
-		{#if wide || tab === "steps"}
-			<ol class="steps session">
-				{#each steps as s (s.id)}
-					<li class="step" id="step-{s.id}" class:flagged={!!s.flag}>
-						<div class="rail"><span class="clock">{fmtClock(s.at)}</span></div>
-						<div class="body">
-							<div class="sh">
-								<span class="label">{s.label}</span>
-								{#if s.wait}
-									<span class="adm-tag" class:warn={s.wait > 8}>waited {s.wait.toFixed(0)} s</span>
+		<div class="cols" class:wide>
+			{#if wide || tab === "steps"}
+				<ol class="steps session">
+					{#each steps as s (s.id)}
+						<li class="step" id="step-{s.id}" class:flagged={!!s.flag}>
+							<div class="rail"><span class="clock">{fmtClock(s.at)}</span></div>
+							<div class="body">
+								<div class="sh">
+									<span class="label">{s.label}</span>
+									{#if s.wait}
+										<span class="adm-tag" class:warn={s.wait > 8}>waited {s.wait.toFixed(0)} s</span>
+									{/if}
+									<span class="grow"></span>
+									{#if !s.flag}
+										<button
+											type="button"
+											class="adm-icon flag-btn"
+											aria-label="Flag this step"
+											aria-expanded={flagging === s.id}
+											use:tip={"Flag this step"}
+											onclick={() => {
+												flagging = flagging === s.id ? null : s.id;
+												note = "";
+											}}
+										>
+											<Flag class="size-4" aria-hidden="true" />
+										</button>
+									{/if}
+								</div>
+								{#each s.lines as l, i (i)}
+									{#if l.who === "card"}
+										<p class="card-line">{l.text}</p>
+									{:else if l.who === "choices"}
+										<ul class="pills" aria-label="Buttons offered">
+											{#each l.text.split(" | ") as p}
+												<li class="pill">{p}</li>
+											{/each}
+										</ul>
+									{:else}
+										<Speaker
+											who={who[l.who]}
+											icon={who[l.who].icon}
+											kind={l.who === "reader" ? "reader" : l.who === "me" ? "me" : ""}
+											grouped={i > 0 && s.lines[i - 1].who === l.who}
+										>
+											{#each l.text.split("\n\n") as p}
+												<p>{p}</p>
+											{/each}
+										</Speaker>
+									{/if}
+								{/each}
+								{#if s.calls.length}
+									<div class="chips">
+										{#each s.calls as id (id)}
+											{@const c = byId.get(id)}
+											{#if c}
+												<button type="button" class="chip" aria-pressed={open?.id === id} onclick={() => show(c)}>
+													{c.purpose}<span>{(c.ms / 1000).toFixed(1)} s</span>
+												</button>
+											{/if}
+										{/each}
+									</div>
 								{/if}
-								<span class="grow"></span>
-								{#if !s.flag}
-									<button
-										type="button"
-										class="adm-icon flag-btn"
-										aria-label="Flag this step"
-										aria-expanded={flagging === s.id}
-										use:tip={"Flag this step"}
-										onclick={() => {
-											flagging = flagging === s.id ? null : s.id;
-											note = "";
+								{#if flagging === s.id}
+									<form
+										class="flag-form"
+										transition:slide={{ duration: 200 }}
+										onsubmit={(e) => {
+											e.preventDefault();
+											saveFlag(s);
 										}}
 									>
-										<Flag class="size-4" aria-hidden="true" />
-									</button>
+										<textarea
+											class="adm-input"
+											rows="2"
+											use:autogrow={note}
+											bind:value={note}
+											placeholder="What is wrong here"
+											aria-label="What is wrong here"
+											data-initial-focus
+										></textarea>
+										<div class="fa">
+											<Button variant="secondary" size="sm" onclick={() => (flagging = null)}>Cancel</Button
+											><Button size="sm" type="submit" disabled={!note.trim()}>Flag</Button>
+										</div>
+									</form>
+								{/if}
+								{#if s.flag}
+									{@const k = caseOf(s.flag.case)}
+									<div class="flag-note">
+										<p>{s.flag.note}</p>
+										<p class="by">
+											<a href="/admin/cases">Case {s.flag.case}</a>
+											· {s.flag.by}, {fmtDay(s.flag.at)}
+											{#if k?.status === "fixed"}
+												· <span class="adm-tag ok">Fixed in <span class="mono">{k.commit}</span></span>
+											{:else if k?.status === "wontfix"}
+												· Won't fix
+											{/if}
+										</p>
+									</div>
+								{/if}
+								{#if s.signals?.includes("left")}
+									<p class="end">The learner left here.</p>
 								{/if}
 							</div>
-							{#each s.lines as l, i (i)}
-								{#if l.who === "card"}
-									<p class="card-line">{l.text}</p>
-								{:else if l.who === "choices"}
-									<ul class="pills" aria-label="Buttons offered">
-										{#each l.text.split(" | ") as p}
-											<li class="pill">{p}</li>
-										{/each}
-									</ul>
-								{:else}
-									<Speaker
-										who={who[l.who]}
-										icon={who[l.who].icon}
-										kind={l.who === "reader" ? "reader" : l.who === "me" ? "me" : ""}
-										grouped={i > 0 && s.lines[i - 1].who === l.who}
-									>
-										{#each l.text.split("\n\n") as p}
-											<p>{p}</p>
-										{/each}
-									</Speaker>
-								{/if}
-							{/each}
-							{#if s.calls.length}
-								<div class="chips">
-									{#each s.calls as id (id)}
-										{@const c = byId.get(id)}
-										{#if c}
-											<button type="button" class="chip" aria-pressed={open?.id === id} onclick={() => show(c)}>
-												{c.purpose}<span>{(c.ms / 1000).toFixed(1)} s</span>
-											</button>
-										{/if}
-									{/each}
-								</div>
-							{/if}
-							{#if flagging === s.id}
-								<form
-									class="flag-form"
-									transition:slide={{ duration: 200 }}
-									onsubmit={(e) => {
-										e.preventDefault();
-										saveFlag(s);
-									}}
-								>
-									<textarea
-										class="adm-input"
-										rows="2"
-										use:autogrow={note}
-										bind:value={note}
-										placeholder="What is wrong here"
-										aria-label="What is wrong here"
-										data-initial-focus
-									></textarea>
-									<div class="fa">
-										<Button variant="secondary" size="sm" onclick={() => (flagging = null)}>Cancel</Button
-										><Button size="sm" type="submit" disabled={!note.trim()}>Flag</Button>
-									</div>
-								</form>
-							{/if}
-							{#if s.flag}
-								{@const k = caseOf(s.flag.case)}
-								<div class="flag-note">
-									<p>{s.flag.note}</p>
-									<p class="by">
-										<a href="/admin/cases">Case {s.flag.case}</a>
-										· {s.flag.by}, {s.flag.at}
-										{#if k?.status === "fixed"}
-											· <span class="adm-tag ok">Fixed in <span class="mono">{k.commit}</span></span>
-										{:else if k?.status === "wontfix"}
-											· Won't fix
-										{/if}
-									</p>
-								</div>
-							{/if}
-							{#if s.signals?.includes("left")}
-								<p class="end">The learner left here.</p>
-							{/if}
-						</div>
-					</li>
-				{/each}
-			</ol>
-		{/if}
-		{#if wide}
-			<aside class="panel adm-paper" aria-label="Calls">
-				{#if open}
-					{#key open.id}
-						<CallDetail call={open} onback={() => (open = null)} />
-					{/key}
-				{:else}
-					<h2 class="ph">Calls <span>{CALLS.length}</span></h2>
-					{@render callList()}
-				{/if}
-			</aside>
-		{:else if tab === "calls"}
-			<div class="adm-paper pad">{@render callList()}</div>
-		{/if}
-	</div>
+						</li>
+					{/each}
+				</ol>
+			{/if}
+			{#if wide}
+				<aside class="panel adm-paper" aria-label="Calls">
+					{#if open}
+						{#key open.id}
+							<CallDetail call={open} onback={() => (open = null)} />
+						{/key}
+					{:else}
+						<h2 class="ph">Calls <span>{CALLS.length}</span></h2>
+						{@render callList()}
+					{/if}
+				</aside>
+			{:else if tab === "calls"}
+				<div class="adm-paper pad">{@render callList()}</div>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 {#if !wide}

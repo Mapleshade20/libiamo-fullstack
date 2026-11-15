@@ -1,6 +1,7 @@
 <script lang="ts">
 import Plus from "@lucide/svelte/icons/plus";
 import Search from "@lucide/svelte/icons/search";
+import { fmtDay } from "#lib/admin/records.ts";
 import { scenarioList } from "#lib/admin/scenarios.remote.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
@@ -8,7 +9,6 @@ import { tip } from "#lib/components/common/tip.ts";
 import SiteArt from "#lib/components/home/SiteArt.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { LEARNABLE, langName } from "#lib/constants.ts";
-import { fmtDay } from "#lib/demo/admin.ts";
 import { siteOf } from "#lib/demo/data.ts";
 
 /*
