@@ -27,9 +27,11 @@ import {
 	AGENT_DELIVERY_STATUSES,
 	APP_LANGS,
 	CALL_STATES,
+	CASE_STATUSES,
 	DETAILS,
 	EXCHANGE_END_REASONS,
 	EXCHANGE_STATUSES,
+	FEEDBACK_KINDS,
 	KEY_PROVIDERS,
 	LEARNABLE,
 	MESSAGE_ROLES,
@@ -45,6 +47,8 @@ import {
 	SCENARIO_KINDS,
 	SCENARIO_STATUSES,
 	SOURCE_STATES,
+	SUGGESTION_PLACES,
+	SUGGESTION_STATUSES,
 	TUTOR_LANGUAGES,
 	URGENCIES,
 	VERDICTS,
@@ -321,6 +325,78 @@ export const issueScenario = pgTable(
 		position: integer("position").notNull(),
 	},
 	(t) => [primaryKey({ columns: [t.issueId, t.scenarioId] })],
+);
+
+/* A situation a learner suggests for a scenario (the shelf's "+"): where it was, what was there (text, or a page
+   capture), what they wanted to do, what they wrote. The admin makes a scenario of it or sets it aside with a reason
+   the learner reads. */
+export const suggestion = pgTable(
+	"suggestion",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		place: text("place").notNull(),
+		language: text("language").notNull(),
+		situation: text("situation").notNull(),
+		capture: jsonb("capture"),
+		purpose: text("purpose").notNull(),
+		mine: text("mine"),
+		status: text("status").notNull().default("pending"),
+		reason: text("reason"),
+		scenarioId: text("scenario_id").references(() => scenario.id, { onDelete: "set null" }),
+		createdAt: created(),
+		resolvedAt: at("resolved_at"),
+	},
+	(t) => [
+		check("suggestion_place_check", oneOf(t.place, SUGGESTION_PLACES)),
+		check("suggestion_status_check", oneOf(t.status, SUGGESTION_STATUSES)),
+		index("suggestion_user_idx").on(t.userId, t.createdAt),
+	],
+);
+
+/* Feedback about Libiamo itself, with the page and browser it came from. */
+export const feedback = pgTable(
+	"feedback",
+	{
+		id: uuid("id").primaryKey().default(sql`uuidv7()`),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		text: text("text").notNull(),
+		page: text("page"),
+		browser: text("browser"),
+		createdAt: created(),
+		doneAt: at("done_at"),
+	},
+	(t) => [check("feedback_kind_check", oneOf(t.kind, FEEDBACK_KINDS))],
+);
+
+/* A notice for every learner above the greeting, written per interface language (`title`, `body` keyed by language),
+   shown from `published_at` until `expires_at`; who has acknowledged it is `announcement_read`. */
+export const announcement = pgTable("announcement", {
+	id: serial("id").primaryKey(),
+	title: jsonb("title").notNull(),
+	body: jsonb("body").notNull(),
+	publishedAt: at("published_at"),
+	expiresAt: at("expires_at"),
+	createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+	createdAt: created(),
+});
+export const announcementRead = pgTable(
+	"announcement_read",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		announcementId: integer("announcement_id")
+			.notNull()
+			.references(() => announcement.id, { onDelete: "cascade" }),
+		readAt: at("read_at").defaultNow().notNull(),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.announcementId] })],
 );
 
 // --- Pieces (§5.4) ----------------------------------------------------------------------------------------------------
@@ -686,6 +762,26 @@ export const llmCall = pgTable(
 		index("llm_call_piece_idx").on(t.pieceId),
 		index("llm_call_created_idx").on(t.createdAt),
 	],
+);
+
+/* A flagged step of a piece's revision with the admin's note: the regression set. While a case is open its piece's
+   calls are kept past thirty days. */
+export const sessionCase = pgTable(
+	"session_case",
+	{
+		id: serial("id").primaryKey(),
+		pieceId: uuid("piece_id")
+			.notNull()
+			.references(() => piece.id, { onDelete: "cascade" }),
+		stepSeq: integer("step_seq"),
+		note: text("note").notNull(),
+		createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+		status: text("status").notNull().default("open"),
+		commit: text("commit"),
+		createdAt: created(),
+		closedAt: at("closed_at"),
+	},
+	(t) => [check("session_case_status_check", oneOf(t.status, CASE_STATUSES)), index("session_case_piece_idx").on(t.pieceId)],
 );
 
 export const llmPrompt = pgTable("llm_prompt", {

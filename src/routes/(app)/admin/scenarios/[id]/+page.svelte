@@ -8,11 +8,15 @@ import FileUp from "@lucide/svelte/icons/file-up";
 import Lock from "@lucide/svelte/icons/lock";
 import Plus from "@lucide/svelte/icons/plus";
 import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
+import Trash2 from "@lucide/svelte/icons/trash-2";
 import Undo2 from "@lucide/svelte/icons/undo-2";
 import X from "@lucide/svelte/icons/x";
+import { type FlatComment, flattenComments, isThreaded, nestComments } from "#lib/admin/opening-form.ts";
+import { confirm, deleteOne, remake, saveOne, scenarioOne, withdrawOne } from "#lib/admin/scenarios.remote.ts";
 import CaptureImport from "#lib/components/admin/CaptureImport.svelte";
 import OpeningEditor from "#lib/components/admin/OpeningEditor.svelte";
 import Accordion from "#lib/components/common/Accordion.svelte";
+import Checkbox from "#lib/components/common/Checkbox.svelte";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { autogrow } from "#lib/components/common/motion.ts";
@@ -22,125 +26,199 @@ import { tip } from "#lib/components/common/tip.ts";
 import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { fmtDay, langEn, type SimExtra, SOURCES, type SourceRow, scenarioStatus, simExtra, URGENCY, written } from "#lib/demo/admin.ts";
+import { type ExchangePlace, LEARNABLE, type Place, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
+import { fmtDay, langEn, URGENCY } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
-import { SCENARIOS, type Scenario, SIMS, type Sim, type Situation as Sit } from "#lib/demo/scenarios.ts";
+import { openingNames, situationOf } from "#lib/exchange/opening.ts";
+import { blankOpening, blankVersion } from "#lib/scenario/blank.ts";
+import { SITE_OF } from "#lib/scenario/types.ts";
+import type { ExchangeVersion, TranslationVersion, Version } from "#lib/scenario/versions.ts";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 /*
  * One scenario. A place scenario: where it happens and how the simulation paces it; each learning language's version
- * (title, the card's line, the introduction learners and every model read, and the opening in the place's own terms,
- * written or imported from a page capture); then the conversation: who the learner is, what they want, each person
- * there with their notes, who else may turn up, and how the real conversation went on (from the capture; learners
- * never see it). A translation: the original, its terms, and a source per learner language, checked, then confirmed
- * or made again. Once learners have written in it, where it happens is fixed. Export and import carry a scenario
- * between developers' machines as JSON.
+ * (title, the card's line, the introduction learners and every model read, and the opening in the place's own terms);
+ * then the conversation: who the learner is, what they want, each person there with their notes, who else may turn up,
+ * and how the real conversation went on (learners never see it). A translation: the original, the terms its source
+ * must give, whose name table it follows, and a source per learner language, made when it is published, checked,
+ * then confirmed or made again. Once learners have written in it, where it happens is fixed. Export and import carry a
+ * scenario between developers' machines as JSON (the content document's shape).
  */
-const KIND: Record<string, Sit["kind"]> = { AO3: "ao3", Reddit: "reddit", Email: "email", Discord: "chat", iMessage: "chat", Translate: "translate" };
+type Draft = {
+	id: string;
+	kind: "exchange" | "translation";
+	place: Place;
+	status: ScenarioStatus;
+	minutes: number;
+	urgency: Urgency | null;
+	maxTurns: number | null;
+	workId: string | null;
+	versions: Record<string, Version>;
+};
 const isNew = $derived(page.params.id === "new");
-const blankSim = (): Sim => ({ you: "", goals: [""], cast: [], mine: [], ending: [] });
-const blank = (): Scenario => ({
-	id: "new",
-	site: "Reddit",
-	min: 10,
-	added: new Date().toISOString().slice(0, 10),
-	title: { en: "" },
-	line: { en: "" },
-	brief: { en: "" },
-	situation: { en: emptySituation("Reddit") },
+const loaded = $derived(isNew ? null : await scenarioOne(page.params.id ?? ""));
+const blank = (): Draft => ({
+	id: "",
+	kind: "exchange",
+	place: "reddit",
+	status: "draft",
+	minutes: 10,
+	urgency: "medium",
+	maxTurns: null,
+	workId: null,
+	versions: { en: blankVersion("exchange", "reddit", "") },
 });
-const found = $derived(isNew ? undefined : SCENARIOS.find((x) => x.id === page.params.id));
-let s = $state<Scenario>(blank());
-let sim = $state<Sim>(blankSim());
-let extra = $state<SimExtra>(simExtra(""));
-let sources = $state<SourceRow[]>([]);
-let status = $state<"draft" | "published" | "withdrawn">("draft");
+let d = $state<Draft>(blank());
+/** A thread's comments per language, flat while edited (lib/admin/opening-form.ts). */
+let threads = $state<Record<string, FlatComment[]>>({});
 let lang = $state("en");
 let view = $state("edit");
+let idTouched = $state(false);
+let saving = $state(false);
+let problem = $state("");
+
+function take(src: Draft) {
+	const copy = structuredClone(src);
+	threads = {};
+	if (isThreaded(copy.place))
+		for (const [l, v] of Object.entries(copy.versions)) {
+			const op = (v as ExchangeVersion).opening as Record<string, unknown>;
+			threads[l] = flattenComments(copy.place, op.previousComments);
+			delete op.previousComments;
+		}
+	d = copy;
+	lang = Object.keys(copy.versions)[0] ?? "en";
+	problem = "";
+}
+// The page edits its own copy, taken again when another scenario is opened (not when a save refreshes the same one).
+let shown = "";
 $effect.pre(() => {
-	const src = found ?? blank();
-	s = structuredClone($state.snapshot(src) as Scenario);
-	sim = structuredClone(SIMS[src.id] ?? blankSim());
-	extra = simExtra(src.id);
-	sources = structuredClone(SOURCES[src.id] ?? []);
-	status = found && scenarioStatus(found.id) !== "draft" ? "published" : "draft";
-	lang = Object.keys(src.situation)[0] ?? "en";
+	const key = isNew ? "new" : (loaded?.id ?? "");
+	if (key === shown) return;
+	shown = key;
+	if (isNew) take(blank());
+	else if (loaded) {
+		const { publishedAt: _p, written: _w, sources: _s, works: _k, ...draft } = loaded;
+		take(draft as Draft);
+	}
 });
-const translate = $derived(s.site === "Translate");
-/** Learners have written in it: where it happens (and so its kind) stays. */
-const locked = $derived(!isNew && status !== "draft" && written(s.id) > 0);
+
+const translate = $derived(d.kind === "translation");
+const locked = $derived(!isNew && (loaded?.written ?? 0) > 0);
+const v = $derived(d.versions[lang]);
+const ev = $derived(translate ? undefined : (v as ExchangeVersion | undefined));
+const tv = $derived(translate ? (v as TranslationVersion | undefined) : undefined);
+const missing = $derived(LEARNABLE.filter((l) => !d.versions[l]));
+const SITES = (["ao3", "reddit", "email", "discord", "imessage", "translation"] as const).map((p) => ({
+	value: p,
+	label: p === "translation" ? "Translation" : SITE_OF[p],
+}));
 let importing = $state(false);
 let menu = $state(false);
 let jsonOpen = $state(false);
 let json = $state("");
 let withdrawing = $state(false);
-const sit = $derived(s.situation[lang] as Sit | undefined);
-const SITES = ["AO3", "Reddit", "Email", "Discord", "iMessage", "Translate"].map((v) => ({ value: v, label: v === "Translate" ? "Translation" : v }));
-const LEARNABLE = ["en", "es", "fr", "ja"];
-const NATIVE = ["zh-CN", "ja", "es", "fr", "de", "ko"];
-const missing = $derived(LEARNABLE.filter((l) => !s.situation[l]));
-function emptySituation(site: string): Sit {
-	const k = KIND[site];
-	if (k === "ao3") return { kind: "ao3", work: "", author: "", chapter: "", excerpt: "", note: "" };
-	if (k === "reddit") return { kind: "reddit", sub: "", title: "", author: "", body: "", comments: [] };
-	if (k === "email") return { kind: "email", from: "", subject: "", body: "" };
-	if (k === "translate") return { kind: "translate", brief: "", source: "", sourceLang: "", original: "", glossary: [], where: "", readers: "" };
-	return { kind: "chat", place: "", messages: [] };
+let deleting = $state(false);
+
+/** The opening as stored: a thread's comments nested again. */
+function openingOf(l: string, x: ExchangeVersion) {
+	const op = { ...(x.opening as Record<string, unknown>) };
+	if (isThreaded(d.place)) op.previousComments = nestComments(d.place, threads[l] ?? []);
+	return op;
 }
-function setSite(v: string) {
-	const was = s.site;
-	s.site = v as Scenario["site"];
-	if (v === "Translate") {
-		s.situation = { en: emptySituation(v) };
-		lang = "en";
-		sources = NATIVE.map((l) => ({ lang: l, state: "none", notes: [] }));
-		return;
-	}
-	if (was === "Translate") s.situation = { en: emptySituation(v) };
-	for (const l of Object.keys(s.situation)) if (s.situation[l].kind !== KIND[v]) s.situation[l] = emptySituation(v);
+function versionsOut(): Record<string, Version> {
+	if (translate) return $state.snapshot(d.versions) as Record<string, Version>;
+	return Object.fromEntries(
+		Object.entries($state.snapshot(d.versions) as Record<string, ExchangeVersion>).map(([l, x]) => [l, { ...x, opening: openingOf(l, x) }]),
+	);
+}
+
+function setPlace(p: string) {
+	const place = p as Place;
+	const toTranslation = place === "translation";
+	if (toTranslation !== translate) {
+		d.kind = toTranslation ? "translation" : "exchange";
+		d.versions = { [lang]: blankVersion(d.kind, place, v?.title ?? "") };
+		d.urgency = toTranslation ? null : "medium";
+		d.maxTurns = null;
+		threads = {};
+	} else if (!toTranslation)
+		for (const x of Object.values(d.versions) as ExchangeVersion[]) x.opening = blankOpening(place as ExchangePlace, x.people[0]?.name || undefined);
+	if (isThreaded(place)) for (const l of Object.keys(d.versions)) threads[l] = [];
+	d.place = place;
 }
 function addLanguage(l: string) {
-	s.situation[l] = emptySituation(s.site);
-	s.title[l] = "";
-	s.line[l] = "";
-	s.brief[l] = "";
+	d.versions[l] = blankVersion(d.kind, d.place, "");
+	if (isThreaded(d.place)) threads[l] = [];
 	lang = l;
 	view = "edit";
 }
-function save(publish: boolean) {
-	if (publish) status = "published";
-	toast(
-		publish
-			? translate
-				? "Published: sources are being made for each learner language (demo)"
-				: "Published (demo: nothing is stored)"
-			: "Saved (demo: nothing is stored)",
-	);
+function removeLanguage() {
+	if (Object.keys(d.versions).length < 2) return;
+	delete d.versions[lang];
+	delete threads[lang];
+	lang = Object.keys(d.versions)[0];
 }
-/** Everything a scenario is, as one JSON a developer can hand to another. */
-const exported = () =>
-	JSON.stringify({ scenario: $state.snapshot(s), conversation: { ...$state.snapshot(sim), ...$state.snapshot(extra) } }, null, 2);
+/** A new scenario's id follows its first title until the admin writes one. */
+const slug = (t: string) =>
+	t
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 40);
+$effect(() => {
+	if (isNew && !idTouched) d.id = slug(Object.values(d.versions)[0]?.title ?? "");
+});
+
+async function save(publish: boolean) {
+	if (saving) return;
+	saving = true;
+	problem = "";
+	const draft = { ...$state.snapshot(d), versions: versionsOut() };
+	const r = await saveOne({ draft, isNew, publish }).catch((e) => ({ ok: false as const, error: (e as Error).message || "Could not save." }));
+	saving = false;
+	if (!r.ok) {
+		problem = r.error;
+		return;
+	}
+	toast(publish ? (translate ? "Published: sources are being made for each learner language" : "Published") : "Saved");
+	if (isNew) goto(`/admin/scenarios/${draft.id}`, { replaceState: true });
+}
+async function withdraw() {
+	withdrawing = false;
+	await withdrawOne(d.id).catch(() => toast("Could not withdraw it"));
+	d.status = "withdrawn";
+}
+async function remove() {
+	deleting = false;
+	const ok = await deleteOne(d.id)
+		.then(() => true)
+		.catch(() => false);
+	if (!ok) return toast("Learners have written in it: withdraw it instead");
+	goto("/admin/scenarios", { replaceState: true });
+}
+
+/** Everything a scenario is, as one JSON a developer can hand to another (lab/seed/scenarios.json's shape). */
+const exported = () => JSON.stringify({ ...$state.snapshot(d), versions: versionsOut() }, null, "\t");
 function download() {
 	menu = false;
 	const a = document.createElement("a");
 	a.href = URL.createObjectURL(new Blob([exported()], { type: "application/json" }));
-	a.download = `scenario-${s.id}.json`;
+	a.download = `scenario-${d.id || "new"}.json`;
 	a.click();
 	URL.revokeObjectURL(a.href);
 }
 let jsonError = $state("");
 function importJson() {
 	try {
-		const v = JSON.parse(json);
-		if (!v?.scenario?.situation) throw new Error("not a scenario");
-		if (locked && v.scenario.site !== s.site) throw new Error("learners have written in this scenario, so where it happens cannot change");
-		s = { ...v.scenario, id: s.id };
-		if (v.conversation) {
-			const { urgency, maxTurns, notes, others, followed, ...rest } = v.conversation;
-			sim = { ...blankSim(), ...rest };
-			extra = { ...simExtra(""), urgency, maxTurns, notes: notes ?? {}, others: others ?? "", followed: followed ?? [] };
-		}
-		lang = Object.keys(s.situation)[0] ?? "en";
+		const raw = JSON.parse(json);
+		const x = raw?.scenarios?.[0] ?? raw;
+		if (!x?.versions || !x.kind || !x.place) throw new Error("not a scenario");
+		if (locked && x.place !== d.place) throw new Error("learners have written in this scenario, so where it happens cannot change");
+		take({ ...blank(), ...x, id: isNew ? (x.id ?? "") : d.id, status: d.status });
+		if (isNew && x.id) idTouched = true;
 		jsonOpen = false;
 		json = "";
 		toast("Imported: review it, then save");
@@ -148,58 +226,63 @@ function importJson() {
 		jsonError = e instanceof SyntaxError ? "That is not valid JSON." : `It cannot be imported: ${(e as Error).message}.`;
 	}
 }
-/** Who speaks in the opening: each of them is one of the People, with notes like anyone else. */
-const speakers = (x: Sit | undefined): string[] => {
-	if (!x) return [];
-	if (x.kind === "reddit") return [x.author, ...x.comments.map((c) => c.author)];
-	if (x.kind === "chat") return x.messages.map((m) => m.author);
-	if (x.kind === "email") return [x.from];
-	if (x.kind === "ao3") return [x.author];
-	return [];
-};
-const unlisted = $derived([
-	...new Set(
-		speakers(sit)
-			.map((n) => n.trim())
-			.filter((n) => n && !sim.cast.some((c) => c.name.trim() === n)),
-	),
-]);
-const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
-	confirmed: { label: "Confirmed", tone: "ok" },
+
+/** Whoever writes in the opening must be one of the People (the server refuses it otherwise). */
+const unlisted = $derived(
+	ev ? openingNames(d.place as ExchangePlace, openingOf(lang, ev)).filter((n) => !ev.people.some((p) => p.name.trim() === n)) : [],
+);
+const preview = $derived(ev ? situationOf(d.place as ExchangePlace, openingOf(lang, ev), ev.people[0]?.name) : undefined);
+
+const STATE: Record<SourceState, { label: string; tone: string }> = {
+	pending: { label: "Being made", tone: "" },
 	checked: { label: "Checked, to confirm", tone: "" },
-	notes: { label: "Checker notes", tone: "warn" },
-	none: { label: "Not made yet", tone: "" },
+	notes: { label: "To look at", tone: "warn" },
+	confirmed: { label: "Confirmed", tone: "ok" },
+	failed: { label: "Failed", tone: "warn" },
 };
+type Issue = { paragraph: number; kind: string; original: string; source: string; note: string };
+const notesOf = (n: unknown) => (n ?? {}) as { issues?: Issue[]; names?: string[]; error?: string };
+const sources = $derived(loaded?.sources ?? []);
+// While sources are being made, the page asks again now and then.
+$effect(() => {
+	if (!sources.some((s) => s.state === "pending")) return;
+	const t = setInterval(() => scenarioOne(d.id).refresh(), 10_000);
+	return () => clearInterval(t);
+});
+const sourceAct = (fn: typeof remake, sourceId: string) => fn({ scenarioId: d.id, sourceId }).catch(() => toast("Could not do that"));
 </script>
 
 <div class="adm-page">
 	<a class="adm-back" href="/admin/scenarios"><ArrowLeft class="size-4" aria-hidden="true" />Scenarios</a>
 	<header class="adm-head">
 		<div class="ttl">
-			<h1>{isNew ? "New scenario" : s.title.en || "Untitled"}</h1>
+			<h1>{isNew ? "New scenario" : Object.values(d.versions)[0]?.title || "Untitled"}</h1>
 			<p class="adm-meta">
-				{#if status === "draft"}
+				{#if d.status === "draft"}
 					<span class="adm-tag">Draft</span>
-				{:else if status === "withdrawn"}
+				{:else if d.status === "withdrawn"}
 					<span class="adm-tag">Withdrawn</span>
 				{:else}
 					<span class="adm-tag ok">Published</span>
 				{/if}
-				{#if !isNew}
+				{#if loaded}
 					<span class="since"
-						>Added
-						{fmtDay(s.added)}
-						{#if written(s.id) && status !== "draft"}
-							{" · "}{written(s.id)}
-							pieces written
+						>{loaded.id}
+						{#if loaded.publishedAt}
+							{" · "}Published {fmtDay(loaded.publishedAt)}
+						{/if}
+						{#if loaded.written}
+							{" · "}{loaded.written}
+							{loaded.written > 1 ? "pieces" : "piece"}
+							written
 						{/if}</span
 					>
 				{/if}
 			</p>
 		</div>
 		<div class="acts">
-			{#if !isNew}
-				<Button variant="secondary" href="/scenario/{s.id}" target="_blank" rel="noopener"><ExternalLink aria-hidden="true" />As a learner</Button>
+			{#if !isNew && d.status === "published"}
+				<Button variant="secondary" href="/scenario/{d.id}" target="_blank" rel="noopener"><ExternalLink aria-hidden="true" />As a learner</Button>
 			{/if}
 			<FloatingPanel bind:open={menu} label="More" align="end" role="menu" plainTrigger triggerClass="adm-icon more" class="w-52">
 				{#snippet trigger()}
@@ -219,7 +302,7 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 				>
 					<FileUp class="size-4 text-muted-foreground" aria-hidden="true" />Import JSON
 				</button>
-				{#if status === "published"}
+				{#if d.status === "published"}
 					<div class="menu-sep"></div>
 					<button
 						type="button"
@@ -231,16 +314,31 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 					>
 						<Undo2 class="size-4 text-muted-foreground" aria-hidden="true" />Withdraw
 					</button>
+				{:else if !isNew && !loaded?.written}
+					<div class="menu-sep"></div>
+					<button
+						type="button"
+						class="floating-menu-item"
+						onclick={() => {
+							menu = false;
+							deleting = true;
+						}}
+					>
+						<Trash2 class="size-4 text-muted-foreground" aria-hidden="true" />Delete
+					</button>
 				{/if}
 			</FloatingPanel>
-			{#if status === "published"}
-				<Button onclick={() => save(false)}>Save</Button>
+			{#if d.status === "published"}
+				<Button onclick={() => save(false)} disabled={saving}>Save</Button>
 			{:else}
-				<Button variant="secondary" onclick={() => save(false)}>Save draft</Button>
-				<Button onclick={() => save(true)}>{status === "withdrawn" ? "Publish again" : "Publish"}</Button>
+				<Button variant="secondary" onclick={() => save(false)} disabled={saving}>Save draft</Button>
+				<Button onclick={() => save(true)} disabled={saving}>{d.status === "withdrawn" ? "Publish again" : "Publish"}</Button>
 			{/if}
 		</div>
 	</header>
+	{#if problem}
+		<p class="adm-paper pad problem" role="alert">{problem}</p>
+	{/if}
 
 	<section class="adm-section first" aria-labelledby="h-place">
 		<h2 id="h-place">Place</h2>
@@ -255,24 +353,19 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 					{/if}</span
 				>
 				{#if locked}
-					<input class="adm-input" value={SITES.find((x) => x.value === s.site)?.label} disabled aria-labelledby="where-l">
+					<input class="adm-input" value={SITES.find((x) => x.value === d.place)?.label} disabled aria-labelledby="where-l">
 				{:else}
-					<Select
-						aria-label="Where"
-						value={s.site}
-						onValueChange={setSite}
-						items={isNew || translate ? SITES : SITES.filter((x) => x.value !== "Translate")}
-					/>
+					<Select aria-label="Where" value={d.place} onValueChange={setPlace} items={SITES} />
 				{/if}
 			</div>
 			<label class="adm-field">
 				<span class="l">Minutes</span>
-				<input class="adm-input" type="number" min="3" max="40" bind:value={s.min}>
+				<input class="adm-input" type="number" min="3" max="40" bind:value={d.minutes}>
 			</label>
 			{#if !translate}
 				<div class="adm-field">
 					<span class="l" id="urg-l">Replies come</span>
-					<Select aria-label="Replies come" bind:value={extra.urgency} items={URGENCY} />
+					<Select aria-label="Replies come" value={d.urgency ?? "medium"} onValueChange={(u) => (d.urgency = u as Urgency)} items={URGENCY} />
 				</div>
 				<label class="adm-field">
 					<span class="l">Most turns</span>
@@ -281,154 +374,60 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 						type="number"
 						min="1"
 						placeholder="No limit"
-						value={extra.maxTurns ?? ""}
-						oninput={(e) => (extra.maxTurns = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+						value={d.maxTurns ?? ""}
+						oninput={(e) => (d.maxTurns = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
 					>
 				</label>
+			{:else}
+				<div class="adm-field">
+					<span class="l">Name table</span>
+					<Select
+						aria-label="Name table"
+						value={d.workId ?? ""}
+						onValueChange={(w) => (d.workId = w || null)}
+						items={[{ value: "", label: "None (names as in the original)" }, ...(loaded?.works ?? []).map((w) => ({ value: w.id, label: w.title }))]}
+					/>
+				</div>
 			{/if}
-			<label class="adm-field full">
-				<span class="l">Title in English</span>
-				<input class="adm-input" bind:value={s.title.en} placeholder={translate ? "Translate a café's new menu" : "Comment on a fic you loved"}>
-			</label>
+			{#if isNew}
+				<label class="adm-field full">
+					<span class="l">Id</span>
+					<span class="h">In its address (/scenario/{d.id || "…"}); it cannot change once saved.</span>
+					<input class="adm-input" bind:value={d.id} oninput={() => (idTouched = true)} placeholder="comment-on-a-fic" pattern="[a-z0-9-]{"{2,60}"}">
+				</label>
+			{/if}
 		</div>
 	</section>
 
-	{#if translate && sit?.kind === "translate"}
-		{@const t = sit}
-		<section class="adm-section" aria-labelledby="h-orig">
-			<h2 id="h-orig">Original</h2>
-			<div class="adm-paper pad adm-grid">
-				<label class="adm-field full">
-					<span class="l">Introduction</span>
-					<span class="h">Shown to learners with the source, and read by every model.</span>
-					<textarea class="adm-input" rows="2" use:autogrow={s.brief.en} bind:value={s.brief.en}></textarea>
-				</label>
-				<label class="adm-field">
-					<span class="l">Where it appears</span>
-					<input class="adm-input" bind:value={t.where} placeholder="a post in r/WarriorCats">
-				</label>
-				<label class="adm-field">
-					<span class="l">Who reads it</span>
-					<input class="adm-input" bind:value={t.readers} placeholder="fans who have read the books">
-				</label>
-				<label class="adm-field full">
-					<span class="l">Text, as first written in English</span>
-					<textarea class="adm-input" rows="8" use:autogrow={t.original} bind:value={t.original} lang="en"></textarea>
-				</label>
-			</div>
-		</section>
-
-		<section class="adm-section" aria-labelledby="h-terms">
-			<h2 id="h-terms">Terms <span class="n">{t.glossary?.length ?? 0}</span></h2>
-			<div class="adm-paper">
-				{#if t.glossary?.length}
-					<ul class="adm-rows">
-						{#each t.glossary as g, i (i)}
-							<li class="term">
-								<input class="adm-input plain" bind:value={g.term} aria-label="Term" placeholder="Term">
-								<input
-									class="adm-input plain"
-									bind:value={g.gloss}
-									aria-label="What a learner is told about {g.term}"
-									placeholder="What a learner is told about it"
-								>
-								<button type="button" class="adm-icon" aria-label="Remove {g.term}" use:tip={"Remove"} onclick={() => t.glossary?.splice(i, 1)}>
-									<X class="size-4" aria-hidden="true" />
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-				<div class="foot" class:only={!t.glossary?.length}>
-					<Button
+	<section class="adm-section" aria-labelledby="h-ver">
+		<div class="ver-head">
+			<h2 id="h-ver">{translate ? "Original" : "Versions"}</h2>
+			<span class="grow"></span>
+			{#if Object.keys(d.versions).length > 1}
+				<SegmentedControl
+					label="Learning language"
+					size="sm"
+					bind:value={lang}
+					items={Object.keys(d.versions).map((l) => ({ value: l, label: langEn(l) }))}
+				/>
+			{/if}
+			{#if missing.length}
+				<div class="w-40">
+					<Select
+						aria-label="Add a language"
+						size="sm"
 						variant="ghost"
-						size="sm"
-						onclick={() => {
-							t.glossary ??= [];
-							t.glossary.push({ term: "", shown: "", gloss: "" });
-						}}
-						><Plus aria-hidden="true" />Add a term</Button
-					>
-					<a class="text-link" href="/admin/names">How names are written per language</a>
-				</div>
-			</div>
-		</section>
-
-		<section class="adm-section" aria-labelledby="h-src">
-			<h2 id="h-src">Sources</h2>
-			<div class="adm-paper">
-				<ul class="adm-rows">
-					{#each sources as r (r.lang)}
-						<li class="src">
-							<div class="src-head">
-								<span class="nm">{langEn(r.lang)}</span>
-								<span class="adm-tag {STATE[r.state].tone}">{STATE[r.state].label}</span>
-								<span class="grow"></span>
-								{#if r.state === "none"}
-									<Button variant="secondary" size="sm" disabled={!t.original?.trim()} onclick={() => toast("Making the source (demo)")}>Make</Button>
-								{:else}
-									<button
-										type="button"
-										class="adm-icon"
-										aria-label="Make again"
-										use:tip={"Make again"}
-										onclick={() => toast("Making it again (demo)")}
-									>
-										<RotateCcw class="size-4" aria-hidden="true" />
-									</button>
-									{#if r.state !== "confirmed"}
-										<Button size="sm" onclick={() => (r.state = "confirmed")}>Confirm</Button>
-									{/if}
-								{/if}
-							</div>
-							{#if r.notes.length || r.text}
-								<Accordion variant="plain" title={r.notes.length ? `${r.notes.length} notes from the check` : "The source"} class="src-acc">
-									{#if r.notes.length}
-										<ul class="notes">
-											{#each r.notes as n}
-												<li>{n}</li>
-											{/each}
-										</ul>
-									{/if}
-									{#if r.text}
-										<p class="src-text" lang={r.lang}>{r.text}</p>
-									{/if}
-								</Accordion>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			</div>
-		</section>
-	{:else}
-		<section class="adm-section" aria-labelledby="h-ver">
-			<div class="ver-head">
-				<h2 id="h-ver">Versions</h2>
-				<span class="grow"></span>
-				{#if Object.keys(s.situation).length > 1}
-					<SegmentedControl
-						label="Learning language"
-						size="sm"
-						bind:value={lang}
-						items={Object.keys(s.situation).map((l) => ({ value: l, label: langEn(l) }))}
+						placeholder="Add a language"
+						value=""
+						onValueChange={addLanguage}
+						items={missing.map((l) => ({ value: l, label: langEn(l) }))}
 					/>
-				{/if}
-				{#if missing.length}
-					<div class="w-40">
-						<Select
-							aria-label="Add a language"
-							size="sm"
-							variant="ghost"
-							placeholder="Add a language"
-							value=""
-							onValueChange={addLanguage}
-							items={missing.map((l) => ({ value: l, label: langEn(l) }))}
-						/>
-					</div>
-				{/if}
-			</div>
-			<div class="adm-paper">
-				<div class="ver-bar">
+				</div>
+			{/if}
+		</div>
+		<div class="adm-paper">
+			<div class="ver-bar">
+				{#if !translate}
 					<SegmentedControl
 						label="View"
 						size="sm"
@@ -438,84 +437,211 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 							{ value: "preview", label: "Preview" },
 						]}
 					/>
-					<span class="grow"></span>
-					{#if ["AO3", "Reddit", "Discord"].includes(s.site)}
-						<Button variant="ghost" size="sm" onclick={() => (importing = true)}><ClipboardPaste aria-hidden="true" />Import a capture</Button>
+				{/if}
+				{#if v}
+					<!-- biome-ignore lint/a11y/noLabelWithoutControl: Checkbox renders a native checkbox inside the label -->
+					<label class="hide"
+						><Checkbox bind:checked={() => !!v.draft, (x) => (v.draft = x || undefined)} /><span>Hidden from learners in {langEn(lang)}</span></label
+					>
+				{/if}
+				<span class="grow"></span>
+				{#if ["ao3", "reddit", "discord"].includes(d.place)}
+					<Button variant="ghost" size="sm" onclick={() => (importing = true)}><ClipboardPaste aria-hidden="true" />Import a capture</Button>
+				{/if}
+				{#if Object.keys(d.versions).length > 1}
+					<Button variant="ghost" size="sm" onclick={removeLanguage}><X aria-hidden="true" />Remove {langEn(lang)}</Button>
+				{/if}
+			</div>
+			{#if view === "preview" && ev && preview}
+				<div class="preview">
+					<div class="card-wrap">
+						<ScenarioCard site={SITE_OF[d.place]} title={ev.title || "Untitled"} line={ev.line} meta="{d.minutes} min" />
+					</div>
+					<div class="sit">
+						{#if ev.introduction}
+							<p class="intro" {lang}>{ev.introduction}</p>
+						{/if}
+						<Situation s={preview} {lang} />
+					</div>
+				</div>
+			{:else if view === "preview" && ev}
+				<p class="pad none">The opening is not complete yet, so there is nothing to show.</p>
+			{:else if v}
+				<div class="pad adm-grid">
+					<label class="adm-field full"><span class="l">Title</span><input class="adm-input" bind:value={v.title} {lang}></label>
+					<label class="adm-field full"><span class="l">Line on the card</span><input class="adm-input" bind:value={v.line} {lang}></label>
+					<label class="adm-field full">
+						<span class="l">Introduction</span>
+						<span class="h"
+							>{translate
+								? "Shown to learners with the source, and read by every model: who wants it and why."
+								: "Shown to learners above the scene, and read by every model: what a newcomer would not know (the game, what happened before). Most scenarios need none."}</span
+						>
+						<textarea
+							class="adm-input"
+							rows="2"
+							use:autogrow={v.introduction}
+							bind:value={() => v.introduction ?? "", (x) => (v.introduction = x)}
+							{lang}
+						></textarea>
+					</label>
+					{#if tv}
+						<label class="adm-field">
+							<span class="l">Where it appears</span>
+							<input class="adm-input" bind:value={tv.where} placeholder="a post in r/WarriorCats">
+						</label>
+						<label class="adm-field">
+							<span class="l">Who reads it</span>
+							<input class="adm-input" bind:value={tv.readers} placeholder="fans who have read the books">
+						</label>
+						<label class="adm-field full">
+							<span class="l">Text, as first written in {langEn(lang)}</span>
+							<textarea class="adm-input" rows="8" use:autogrow={tv.original} bind:value={tv.original} {lang}></textarea>
+						</label>
+					{:else if ev}
+						<div class="full rule" role="presentation"></div>
+						<div class="full">
+							<OpeningEditor place={d.place as ExchangePlace} opening={ev.opening as Record<string, unknown>} comments={threads[lang] ?? []} {lang} />
+						</div>
 					{/if}
 				</div>
-				{#if view === "preview" && sit}
-					<div class="preview">
-						<div class="card-wrap">
-							<ScenarioCard site={s.site} title={s.title[lang] || s.title.en || "Untitled"} line={s.line[lang] ?? ""} meta="{s.min} min" />
-						</div>
-						<div class="sit">
-							{#if s.brief[lang]}
-								<p class="intro" {lang}>{s.brief[lang]}</p>
-							{/if}
-							<Situation s={sit} {lang} />
-						</div>
-					</div>
-				{:else if sit}
-					<div class="pad adm-grid">
-						{#if lang !== "en"}
-							<label class="adm-field full"><span class="l">Title</span><input class="adm-input" bind:value={s.title[lang]} {lang}></label>
-						{/if}
-						<label class="adm-field full"><span class="l">Line on the card</span><input class="adm-input" bind:value={s.line[lang]} {lang}></label>
-						<label class="adm-field full">
-							<span class="l">Introduction</span>
-							<span class="h"
-								>Shown to learners above the scene, and read by every model: what a newcomer would not know (the game, what happened before). Most
-								scenarios need none.</span
-							>
-							<textarea class="adm-input" rows="2" use:autogrow={s.brief[lang]} bind:value={s.brief[lang]} {lang}></textarea>
-						</label>
-						<div class="full rule" role="presentation"></div>
-						<div class="full"><OpeningEditor s={sit} {lang} /></div>
-					</div>
+			{/if}
+		</div>
+	</section>
+
+	{#if tv}
+		<section class="adm-section" aria-labelledby="h-terms">
+			<h2 id="h-terms">Terms the source must give <span class="n">{tv.terms.length}</span></h2>
+			<div class="adm-paper">
+				{#if tv.terms.length}
+					<ul class="adm-rows">
+						{#each tv.terms as _, i (i)}
+							<li class="term">
+								<input class="adm-input plain" bind:value={tv.terms[i]} aria-label="Term" placeholder="Term, as in the original" {lang}>
+								<button type="button" class="adm-icon" aria-label="Remove {tv.terms[i]}" use:tip={"Remove"} onclick={() => tv.terms.splice(i, 1)}>
+									<X class="size-4" aria-hidden="true" />
+								</button>
+							</li>
+						{/each}
+					</ul>
 				{/if}
+				<div class="foot" class:only={!tv.terms.length}>
+					<Button variant="ghost" size="sm" onclick={() => tv.terms.push("")}><Plus aria-hidden="true" />Add a term</Button>
+					<span class="h grow">The model finds the others; what each means is written with each source.</span>
+					<a class="text-link" href="/admin/names">How names are written</a>
+				</div>
 			</div>
 		</section>
 
+		{#if !isNew}
+			<section class="adm-section" aria-labelledby="h-src">
+				<h2 id="h-src">Sources</h2>
+				<div class="adm-paper">
+					{#if sources.length}
+						<ul class="adm-rows">
+							{#each sources as r (r.id)}
+								{@const n = notesOf(r.notes)}
+								<li class="src">
+									<div class="src-head">
+										<span class="nm">{langEn(r.native)}{Object.keys(d.versions).length > 1 ? ` → ${langEn(r.language)}` : ""}</span>
+										<span class="adm-tag {STATE[r.state].tone}">{STATE[r.state].label}</span>
+										<span class="grow"></span>
+										{#if r.state !== "pending"}
+											<button type="button" class="adm-icon" aria-label="Make again" use:tip={"Make again"} onclick={() => sourceAct(remake, r.id)}>
+												<RotateCcw class="size-4" aria-hidden="true" />
+											</button>
+										{/if}
+										{#if r.state === "checked" || (r.state === "notes" && !n.names?.length)}
+											<Button size="sm" onclick={() => sourceAct(confirm, r.id)}>Confirm</Button>
+										{/if}
+									</div>
+									{#if n.names?.length}
+										<p class="src-why">
+											Waiting for names to be confirmed: {n.names.join(", ")}.
+											<a class="text-link" href="/admin/names">Name tables</a>, then make it again.
+										</p>
+									{:else if n.error}
+										<p class="src-why">{n.error}</p>
+									{/if}
+									{#if n.issues?.length || r.text}
+										<Accordion
+											variant="plain"
+											title={n.issues?.length ? `${n.issues.length} ${n.issues.length > 1 ? "notes" : "note"} from the check` : "The source"}
+											class="src-acc"
+										>
+											{#if n.issues?.length}
+												<ul class="notes">
+													{#each n.issues as x}
+														<li>¶{x.paragraph} · {x.kind}: “{x.original}” / “{x.source}”: {x.note}</li>
+													{/each}
+												</ul>
+											{/if}
+											{#if r.title}
+												<p class="src-title" lang={r.native}>{r.title}</p>
+											{/if}
+											{#if r.text}
+												<p class="src-text" lang={r.native}>{r.text}</p>
+											{/if}
+										</Accordion>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="adm-empty">Sources are made for every learner language when it is published.</p>
+					{/if}
+				</div>
+			</section>
+		{/if}
+	{:else if ev}
 		<section class="adm-section" aria-labelledby="h-sim">
-			<h2 id="h-sim">Conversation</h2>
+			<h2 id="h-sim">Conversation{Object.keys(d.versions).length > 1 ? ` · ${langEn(lang)}` : ""}</h2>
 			<div class="adm-paper pad adm-grid">
 				<label class="adm-field full"
 					><span class="l">The learner is</span>
-					<input class="adm-input" bind:value={sim.you} placeholder="A reader who followed the fic for two years"></label
+					<input class="adm-input" bind:value={ev.you} placeholder="A reader who followed the fic for two years"></label
 				>
 				<div class="adm-field full">
 					<span class="l">What they want</span>
-					{#each sim.goals as _, i (i)}
+					{#each ev.goals as _, i (i)}
 						<div class="msg">
-							<input class="adm-input" bind:value={sim.goals[i]} aria-label="Goal {i + 1}">
-							<button type="button" class="adm-icon" aria-label="Remove goal" onclick={() => sim.goals.splice(i, 1)}>
+							<input class="adm-input" bind:value={ev.goals[i]} aria-label="Goal {i + 1}" {lang}>
+							<button type="button" class="adm-icon" aria-label="Remove goal" onclick={() => ev.goals.splice(i, 1)}>
 								<X class="size-4" aria-hidden="true" />
 							</button>
 						</div>
 					{/each}
 					<div>
-						<Button variant="ghost" size="sm" onclick={() => sim.goals.push("")}><Plus aria-hidden="true" />Add a goal</Button>
+						<Button variant="ghost" size="sm" onclick={() => ev.goals.push("")}><Plus aria-hidden="true" />Add a goal</Button>
 					</div>
 				</div>
 				<div class="adm-field full">
 					<span class="l">People</span>
+					<span class="h">The first is whom the learner answers.</span>
 					<ul class="cast">
-						{#each sim.cast as c, i (i)}
+						{#each ev.people as c, i (i)}
 							<li class="person">
 								<div class="ph">
 									<input class="adm-input who" bind:value={c.name} aria-label="Name" placeholder="Name">
 									<input class="adm-input" bind:value={c.who} aria-label="Who {c.name} is" placeholder="Who they are, in a few words">
-									<button type="button" class="adm-icon" aria-label="Remove {c.name}" use:tip={"Remove"} onclick={() => sim.cast.splice(i, 1)}>
+									<button
+										type="button"
+										class="adm-icon"
+										aria-label="Remove {c.name}"
+										use:tip={"Remove"}
+										disabled={ev.people.length < 2}
+										onclick={() => ev.people.splice(i, 1)}
+									>
 										<X class="size-4" aria-hidden="true" />
 									</button>
 								</div>
 								<textarea
 									class="adm-input notes"
 									rows="2"
-									use:autogrow={extra.notes[c.name]}
-									bind:value={() => extra.notes[c.name] ?? "", (v) => (extra.notes[c.name] = v)}
+									use:autogrow={c.notes}
+									bind:value={c.notes}
 									aria-label="Notes on {c.name}"
-									placeholder="What they want, what they know that the learner needs"
+									placeholder="How they take what the learner says, what they will and will not do, what they know"
 								></textarea>
 							</li>
 						{/each}
@@ -524,35 +650,38 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 						<p class="unlisted">
 							<span>In the opening, not here yet:</span>
 							{#each unlisted as n (n)}
-								<button type="button" class="add-person" onclick={() => sim.cast.push({ name: n, who: "" })}>
+								<button type="button" class="add-person" onclick={() => ev.people.push({ name: n, who: "", notes: "" })}>
 									<Plus class="size-3.5" aria-hidden="true" />{n}
 								</button>
 							{/each}
 						</p>
 					{/if}
 					<div>
-						<Button variant="ghost" size="sm" onclick={() => sim.cast.push({ name: "", who: "" })}><Plus aria-hidden="true" />Add someone</Button>
+						<Button variant="ghost" size="sm" onclick={() => ev.people.push({ name: "", who: "", notes: "" })}
+							><Plus aria-hidden="true" />Add someone</Button
+						>
 					</div>
 				</div>
 				<div class="full">
-					<Accordion variant="plain" title="Others who may turn up" open={!!extra.others}>
+					<Accordion variant="plain" title="Others who may turn up" open={!!ev.others}>
+						<p class="h">On a public thread or channel: the kind of people who pass by. Without it, nobody else joins.</p>
 						<textarea
 							class="adm-input"
 							rows="2"
-							use:autogrow={extra.others}
-							bind:value={extra.others}
+							use:autogrow={ev.others}
+							bind:value={ev.others}
 							aria-label="Others who may turn up"
 							placeholder="The kind of people who pass by here. Their names are drawn when they appear."
 						></textarea>
 					</Accordion>
-					<Accordion variant="plain" title={extra.followed.length ? `What really followed · ${extra.followed.length}` : "What really followed"}>
+					<Accordion variant="plain" title={ev.followed.length ? `What really followed · ${ev.followed.length}` : "What really followed"}>
 						<p class="h">From the capture: what was said after the opening. The people draw on it; learners never see it.</p>
-						{#if extra.followed.length}
+						{#if ev.followed.length}
 							<ul class="followed">
-								{#each extra.followed as f, i (i)}
+								{#each ev.followed as f, i (i)}
 									<li>
 										<b>{f.author}</b><span>{f.text}</span
-										><button type="button" class="adm-icon" aria-label="Remove" onclick={() => extra.followed.splice(i, 1)}>
+										><button type="button" class="adm-icon" aria-label="Remove" onclick={() => ev.followed.splice(i, 1)}>
 											<X class="size-4" aria-hidden="true" />
 										</button>
 									</li>
@@ -568,7 +697,7 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 	{/if}
 </div>
 
-<CaptureImport bind:open={importing} site={s.site} />
+<CaptureImport bind:open={importing} site={SITE_OF[d.place]} />
 
 <ModalDialog bind:open={jsonOpen} labelledby="json-h">
 	<h2 id="json-h" class="mb-2">Import JSON</h2>
@@ -596,21 +725,45 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 	<p class="imp-p">Learners stop finding it on the shelf and in the library. Pieces already written from it stay theirs.</p>
 	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 		<Button variant="secondary" onclick={() => (withdrawing = false)} data-initial-focus>Cancel</Button>
-		<Button
-			variant="destructive-solid"
-			onclick={() => {
-				withdrawing = false;
-				status = "withdrawn";
-				toast("Withdrawn (demo)");
-			}}
-			>Withdraw</Button
-		>
+		<Button variant="destructive-solid" onclick={withdraw}>Withdraw</Button>
+	</div>
+</ModalDialog>
+
+<ModalDialog bind:open={deleting} labelledby="del-h">
+	<h2 id="del-h" class="mb-2">Delete this draft?</h2>
+	<p class="imp-p">Nobody has written in it. It is gone for good, and leaves any issue it was in.</p>
+	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+		<Button variant="secondary" onclick={() => (deleting = false)} data-initial-focus>Cancel</Button>
+		<Button variant="destructive-solid" onclick={remove}>Delete</Button>
 	</div>
 </ModalDialog>
 
 <style>
 .ttl {
 	min-width: 0;
+}
+.problem {
+	margin: 0 0 16px;
+	color: var(--warn);
+	font-size: 14px;
+	white-space: pre-line;
+}
+.hide {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: 12px;
+	font-size: 13px;
+	color: var(--muted);
+}
+.src-why {
+	margin: 6px 0 0;
+	font-size: 13.5px;
+	color: var(--ink-2);
+}
+.src-title {
+	margin: 8px 0 0;
+	font-weight: 600;
 }
 .ttl .adm-meta {
 	display: flex;
@@ -846,7 +999,7 @@ const STATE: Record<SourceRow["state"], { label: string; tone: string }> = {
 	padding: 8px 10px 8px 12px;
 }
 .term .adm-input.plain:first-child {
-	flex: 0 0 11rem;
+	flex: 1;
 }
 .adm-input.plain {
 	border-color: transparent;

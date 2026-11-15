@@ -102,6 +102,19 @@ export type Register = (typeof REGISTERS)[number];
 export const VERDICTS = ["exact", "close", "other", "miss", "none"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
+/* What learners send in, and what the admin does with it (src/lib/server/db/schema.ts). */
+/** A suggested situation: waiting, made into a scenario, or set aside with a reason the learner reads. */
+export const SUGGESTION_STATUSES = ["pending", "live", "unused"] as const;
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
+/** Where a suggested situation happened ("other" when it is none of the places). */
+export const SUGGESTION_PLACES = ["ao3", "reddit", "email", "discord", "imessage", "other"] as const;
+export type SuggestionPlace = (typeof SUGGESTION_PLACES)[number];
+export const FEEDBACK_KINDS = ["idea", "bug", "other"] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+/** A case (a flagged step of a piece's revision): open, fixed by a commit, or left as it is. */
+export const CASE_STATUSES = ["open", "fixed", "wontfix"] as const;
+export type CaseStatus = (typeof CASE_STATUSES)[number];
+
 /* Password bounds. The upper one keeps zxcvbn (superlinear in the length) quick; the field stops typing there. */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;

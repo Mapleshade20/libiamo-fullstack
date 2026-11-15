@@ -5,33 +5,26 @@ import Notice from "#lib/components/common/Notice.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, endonym, read, tx, write } from "#lib/demo/app.svelte.ts";
+import { SUGGESTION_PLACES, type SuggestionPlace } from "#lib/constants.ts";
+import { app, endonym, toast, tx } from "#lib/demo/app.svelte.ts";
 import { sourceStatus } from "#lib/demo/source.ts";
+import { mySuggestions, suggest } from "#lib/scenario/suggestion.remote.ts";
+import { SITE_OF } from "#lib/scenario/types.ts";
 
 /*
  * Suggesting a situation (the shelf's "+" card): something real the learner had to write, or saw someone write, that
  * could become a scenario. Short on purpose: where it was, what was there (pasted text, or a page captured with the
  * same scripts as the composer's context, so the admin can cut it the way they cut their own captures), what they
  * wanted to do, and what they wrote, if they did. An admin curates it before anyone practises on it, changing names
- * and removing anything personal; the page says so. At most five wait for review at a time (the main app's limit).
+ * and removing anything personal; the page says so. At most five wait for review at a time; one set aside says why.
  */
-type Suggestion = {
-	id: string;
-	place: string;
-	lang: string;
-	situation: string;
-	purpose: string;
-	mine?: string;
-	at: number;
-	status: "pending" | "live" | "unused";
-};
-const KEY = "suggestions";
 const LIMIT = 5;
-const PLACES = ["AO3", "Reddit", "Email", "Discord", "iMessage", "other"];
+const placeName = (p: SuggestionPlace) => (p === "other" ? tx("ctElsewhere") : SITE_OF[p]);
 
-let list = $state<Suggestion[]>(read<Suggestion[]>(KEY, []));
+const list = $derived(await mySuggestions());
 const pending = $derived(list.filter((s) => s.status === "pending").length);
-let place = $state("Reddit");
+let place = $state<SuggestionPlace>("reddit");
+let sending = $state(false);
 let lang = $state(app.lang);
 let situation = $state("");
 let purpose = $state("");
@@ -43,8 +36,9 @@ let errors = $state<{ situation?: boolean; purpose?: boolean }>({});
 const status = $derived(sourceStatus(situation, tx));
 const fmt = (at: number) => new Intl.DateTimeFormat(app.lang, { month: "short", day: "numeric" }).format(at);
 
-function submit(e: SubmitEvent) {
+async function submit(e: SubmitEvent) {
 	e.preventDefault();
+	if (sending) return;
 	errors = { situation: !situation.trim() || status.kind === "broken", purpose: !purpose.trim() };
 	const first = errors.situation ? sitEl : errors.purpose ? purposeEl : null;
 	if (first) {
@@ -52,20 +46,18 @@ function submit(e: SubmitEvent) {
 		first.focus();
 		return;
 	}
-	list = [
-		{
-			id: `s${Date.now()}`,
-			place,
-			lang,
-			situation: situation.trim(),
-			purpose: purpose.trim(),
-			mine: mine.trim() || undefined,
-			at: Date.now(),
-			status: "pending",
-		},
-		...list,
-	];
-	write(KEY, list);
+	sending = true;
+	const r = await suggest({
+		place,
+		language: lang,
+		situation: situation.trim(),
+		purpose: purpose.trim(),
+		mine: mine.trim() || undefined,
+	}).catch(() => null);
+	sending = false;
+	// Refused at the limit, the page shows the limit (the list has been refreshed); a failure keeps what was typed.
+	if (!r) return toast(tx("auSomethingWrong"));
+	if (!r.ok) return;
 	situation = purpose = mine = "";
 	sent = true;
 	scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -94,11 +86,7 @@ $effect(() => {
 			<div class="two">
 				<div class="field">
 					<span class="name">{tx("ctPlace")}</span>
-					<Select
-						aria-label={tx("ctPlace")}
-						bind:value={place}
-						items={PLACES.map((p) => ({ value: p, label: p === "other" ? tx("ctElsewhere") : p }))}
-					/>
+					<Select aria-label={tx("ctPlace")} bind:value={place} items={SUGGESTION_PLACES.map((p) => ({ value: p, label: placeName(p) }))} />
 				</div>
 				<div class="field">
 					<span class="name">{tx("ctLang")}</span>
@@ -146,7 +134,7 @@ $effect(() => {
 			<p class="privacy">{tx("ctPrivacy")}</p>
 			<div class="actions">
 				<Button variant="secondary" href="/">{tx("setCancel")}</Button>
-				<Button type="submit">{tx("ctSend")}</Button>
+				<Button type="submit" disabled={sending}>{tx("ctSend")}</Button>
 			</div>
 		</form>
 	{/if}
@@ -159,7 +147,10 @@ $effect(() => {
 					<div class="row">
 						<div class="main">
 							<div class="title">{s.purpose}</div>
-							<p class="sub">{s.place === "other" ? tx("ctElsewhere") : s.place} · {endonym(s.lang)} · {fmt(s.at)}</p>
+							<p class="sub">{placeName(s.place)} · {endonym(s.language)} · {fmt(s.at)}</p>
+							{#if s.status === "unused" && s.reason}
+								<p class="sub why">{s.reason}</p>
+							{/if}
 						</div>
 						<span class="tag" class:on={s.status === "live"}>{tx(`ct_${s.status}`)}</span>
 					</div>

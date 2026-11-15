@@ -87,6 +87,16 @@ export async function confirmedNamesOf(workId: string | null, locale: string): P
 	return new Map(rows.map((r) => [r.term, r.rendering || null]));
 }
 
+/** Which of these terms the work's table in this language has, and how far: confirmed or still to confirm. */
+export async function namesStateOf(workId: string, locale: string, terms: string[]) {
+	const rows = await db
+		.select({ term: nameRendering.term, status: nameRendering.status })
+		.from(nameRendering)
+		.where(and(eq(nameRendering.workId, workId), eq(nameRendering.locale, locale)));
+	const status = new Map(rows.map((r) => [r.term, r.status]));
+	return { missing: terms.filter((t) => !status.has(t)), pending: terms.filter((t) => status.get(t) === "pending") };
+}
+
 /**
  * Looks up the names and terms of a text in a language and writes what was found as rows to confirm. The work's own
  * title is a name too ("a cat in 猫武士"). Confirmed rows stay as they are.
