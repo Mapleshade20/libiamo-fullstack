@@ -1,12 +1,14 @@
 <script lang="ts">
 import Plus from "@lucide/svelte/icons/plus";
 import Search from "@lucide/svelte/icons/search";
+import { scenarioList } from "#lib/admin/scenarios.remote.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import SiteArt from "#lib/components/home/SiteArt.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { adminScenarios, fmtDay, languagesOf, SOURCES, scenarioStatus, written } from "#lib/demo/admin.ts";
+import { LEARNABLE, langName } from "#lib/constants.ts";
+import { fmtDay } from "#lib/demo/admin.ts";
 import { siteOf } from "#lib/demo/data.ts";
 
 /*
@@ -16,21 +18,18 @@ import { siteOf } from "#lib/demo/data.ts";
 let kind = $state("all");
 let lang = $state("all");
 let q = $state("");
-const LANGS = [
+const all = $derived(await scenarioList());
+const LANGS = $derived([
 	{ value: "all", label: "All languages" },
-	{ value: "en", label: "English" },
-	{ value: "es", label: "Español" },
-	{ value: "fr", label: "Français" },
-	{ value: "ja", label: "日本語" },
-];
+	...LEARNABLE.filter((l) => all.some((s) => s.languages.includes(l))).map((l) => ({ value: l, label: langName(l, l) })),
+]);
 const list = $derived(
-	adminScenarios()
-		.filter((s) => kind === "all" || (kind === "translate") === (s.site === "Translate"))
-		.filter((s) => lang === "all" || languagesOf(s).includes(lang))
-		.filter((s) => !q.trim() || `${s.title.en} ${s.line.en} ${s.site}`.toLowerCase().includes(q.trim().toLowerCase()))
-		.toSorted((a, b) => b.added.localeCompare(a.added)),
+	all
+		.filter((s) => kind === "all" || (kind === "translate") === (s.kind === "translation"))
+		.filter((s) => lang === "all" || s.languages.includes(lang))
+		.filter((s) => !q.trim() || `${s.id} ${s.title} ${s.line} ${s.site}`.toLowerCase().includes(q.trim().toLowerCase()))
+		.toSorted((a, b) => (b.publishedAt ?? b.updatedAt).localeCompare(a.publishedAt ?? a.updatedAt)),
 );
-const notes = (id: string) => (SOURCES[id] ?? []).filter((s) => s.state === "notes").length;
 </script>
 
 <div class="adm-page">
@@ -63,23 +62,25 @@ const notes = (id: string) => (SOURCES[id] ?? []).filter((s) => s.state === "not
 			<ul class="adm-rows">
 				{#each list as s (s.id)}
 					{@const st = siteOf(s.site)}
-					{@const status = scenarioStatus(s.id)}
 					<li>
 						<a class="adm-row" href="/admin/scenarios/{s.id}">
 							<span class="art" style:--tone={st.tone} style:--deep={st.deep}><SiteArt art={st.art} size={30} /></span>
 							<div class="main">
-								<div class="t">{s.title.en}</div>
-								<div class="s">{s.line.en}</div>
+								<div class="t">{s.title}</div>
+								<div class="s">{s.line}</div>
 							</div>
 							<div class="side">
-								{#if status === "draft"}
+								{#if s.status === "draft"}
 									<span class="adm-tag">Draft</span>
-								{:else if status === "notes"}
-									<span class="adm-tag warn">{notes(s.id)} source to check</span>
+								{:else if s.status === "withdrawn"}
+									<span class="adm-tag">Withdrawn</span>
 								{/if}
-								<span class="adm-meta langs" use:tip={"Learning languages"}>{languagesOf(s).join(" ")}</span>
-								<span class="adm-meta num" use:tip={"Pieces written"}>{status === "draft" ? "–" : written(s.id)}</span>
-								<span class="adm-meta day" use:tip={"Added"}>{fmtDay(s.added)}</span>
+								{#if s.toCheck}
+									<span class="adm-tag warn">{s.toCheck} {s.toCheck > 1 ? "sources" : "source"} to check</span>
+								{/if}
+								<span class="adm-meta langs" use:tip={"Learning languages"}>{s.languages.join(" ")}</span>
+								<span class="adm-meta num" use:tip={"Pieces written"}>{s.status === "draft" ? "–" : s.written}</span>
+								<span class="adm-meta day" use:tip={s.publishedAt ? "Published" : "Last saved"}>{fmtDay(s.publishedAt ?? s.updatedAt)}</span>
 							</div>
 						</a>
 					</li>

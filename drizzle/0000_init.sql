@@ -59,6 +59,23 @@ CREATE TABLE "agent_delivery" (
 	CONSTRAINT "agent_delivery_status_check" CHECK ("agent_delivery"."status" in ('pending', 'delivered', 'cancelled'))
 );
 --> statement-breakpoint
+CREATE TABLE "announcement" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"title" jsonb NOT NULL,
+	"body" jsonb NOT NULL,
+	"published_at" timestamp with time zone,
+	"expires_at" timestamp with time zone,
+	"created_by" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "announcement_read" (
+	"user_id" text NOT NULL,
+	"announcement_id" integer NOT NULL,
+	"read_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "announcement_read_user_id_announcement_id_pk" PRIMARY KEY("user_id","announcement_id")
+);
+--> statement-breakpoint
 CREATE TABLE "exchange" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
@@ -89,6 +106,18 @@ CREATE TABLE "exchange_message" (
 	"delivery_id" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "exchange_message_role_check" CHECK ("exchange_message"."role" in ('user', 'assistant'))
+);
+--> statement-breakpoint
+CREATE TABLE "feedback" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"user_id" text NOT NULL,
+	"kind" text NOT NULL,
+	"text" text NOT NULL,
+	"page" text,
+	"browser" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"done_at" timestamp with time zone,
+	CONSTRAINT "feedback_kind_check" CHECK ("feedback"."kind" in ('idea', 'bug', 'other'))
 );
 --> statement-breakpoint
 CREATE TABLE "issue" (
@@ -327,6 +356,37 @@ CREATE TABLE "session" (
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
+CREATE TABLE "session_case" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"piece_id" uuid NOT NULL,
+	"step_seq" integer,
+	"note" text NOT NULL,
+	"created_by" text,
+	"status" text DEFAULT 'open' NOT NULL,
+	"commit" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"closed_at" timestamp with time zone,
+	CONSTRAINT "session_case_status_check" CHECK ("session_case"."status" in ('open', 'fixed', 'wontfix'))
+);
+--> statement-breakpoint
+CREATE TABLE "suggestion" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"user_id" text NOT NULL,
+	"place" text NOT NULL,
+	"language" text NOT NULL,
+	"situation" text NOT NULL,
+	"capture" jsonb,
+	"purpose" text NOT NULL,
+	"mine" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"reason" text,
+	"scenario_id" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp with time zone,
+	CONSTRAINT "suggestion_place_check" CHECK ("suggestion"."place" in ('ao3', 'reddit', 'email', 'discord', 'imessage', 'other')),
+	CONSTRAINT "suggestion_status_check" CHECK ("suggestion"."status" in ('pending', 'live', 'unused'))
+);
+--> statement-breakpoint
 CREATE TABLE "user" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -394,12 +454,16 @@ CREATE TABLE "work" (
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_batch" ADD CONSTRAINT "agent_batch_exchange_id_exchange_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "public"."exchange"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_delivery" ADD CONSTRAINT "agent_delivery_batch_id_agent_batch_id_fk" FOREIGN KEY ("batch_id") REFERENCES "public"."agent_batch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "announcement" ADD CONSTRAINT "announcement_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "announcement_read" ADD CONSTRAINT "announcement_read_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "announcement_read" ADD CONSTRAINT "announcement_read_announcement_id_announcement_id_fk" FOREIGN KEY ("announcement_id") REFERENCES "public"."announcement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange" ADD CONSTRAINT "exchange_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange" ADD CONSTRAINT "exchange_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange" ADD CONSTRAINT "exchange_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_exchange_id_exchange_id_fk" FOREIGN KEY ("exchange_id") REFERENCES "public"."exchange"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_response_batch_id_agent_batch_id_fk" FOREIGN KEY ("response_batch_id") REFERENCES "public"."agent_batch"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exchange_message" ADD CONSTRAINT "exchange_message_delivery_id_agent_delivery_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."agent_delivery"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedback" ADD CONSTRAINT "feedback_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_issue_id_issue_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issue"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_scenario" ADD CONSTRAINT "issue_scenario_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "llm_call" ADD CONSTRAINT "llm_call_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -421,6 +485,10 @@ ALTER TABLE "scenario" ADD CONSTRAINT "scenario_work_id_work_id_fk" FOREIGN KEY 
 ALTER TABLE "scenario" ADD CONSTRAINT "scenario_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario_source" ADD CONSTRAINT "scenario_source_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "session_case" ADD CONSTRAINT "session_case_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "session_case" ADD CONSTRAINT "session_case_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "suggestion" ADD CONSTRAINT "suggestion_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "suggestion" ADD CONSTRAINT "suggestion_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_key" ADD CONSTRAINT "user_key_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_week" ADD CONSTRAINT "user_week_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "account_provider_account_unique" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
@@ -445,4 +513,6 @@ CREATE INDEX "reading_user_idx" ON "reading" USING btree ("user_id");--> stateme
 CREATE INDEX "review_log_note_idx" ON "review_log" USING btree ("note_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scenario_source_unique" ON "scenario_source" USING btree ("scenario_id","language","native");--> statement-breakpoint
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "session_case_piece_idx" ON "session_case" USING btree ("piece_id");--> statement-breakpoint
+CREATE INDEX "suggestion_user_idx" ON "suggestion" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");

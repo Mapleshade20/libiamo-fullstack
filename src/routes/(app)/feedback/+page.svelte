@@ -5,29 +5,41 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
+import { sendFeedback } from "#lib/account/feedback.remote.ts";
 import { autogrow, shake } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
-import { tx } from "#lib/demo/app.svelte.ts";
+import type { FeedbackKind } from "#lib/constants.ts";
+import { toast, tx } from "#lib/demo/app.svelte.ts";
+import { page } from "$app/state";
 
 /*
  * Feedback about Libiamo itself: what it is about (an idea, something wrong, anything else) and a box, sent like a
  * message. The app is young and shaped by what learners tell us, so this sits in the account menu, one click away.
- * (The demo keeps nothing; the main app would file it with the page and browser it came from.)
+ * It is filed with the page the learner came from and their browser.
  */
-let kind = $state("idea");
+let kind = $state<FeedbackKind>("idea");
+let sending = $state(false);
 let text = $state("");
 let sent = $state(false);
 let box: HTMLElement | undefined = $state();
 let area: HTMLTextAreaElement | undefined = $state();
-function send(e: SubmitEvent) {
+async function send(e: SubmitEvent) {
 	e.preventDefault();
+	if (sending) return;
 	if (!text.trim()) {
 		shake(box);
 		area?.focus();
 		return;
 	}
+	sending = true;
+	const from = page.url.searchParams.get("from") ?? (document.referrer ? new URL(document.referrer).pathname : undefined);
+	const ok = await sendFeedback({ kind, text: text.trim(), page: from?.slice(0, 500) })
+		.then(() => true)
+		.catch(() => false);
+	sending = false;
+	if (!ok) return toast(tx("auSomethingWrong"));
 	sent = true;
 	text = "";
 }
@@ -64,7 +76,7 @@ onMount(() => {
 					aria-label={tx("navFeedback")}
 				></textarea>
 				<div class="bar">
-					<button type="submit" class="go" disabled={!text.trim()} use:tip={tx("send")}>
+					<button type="submit" class="go" disabled={!text.trim() || sending} use:tip={tx("send")}>
 						<ArrowUp class="size-[17px]" strokeWidth={2.4} aria-hidden="true" />
 					</button>
 				</div>

@@ -10,13 +10,13 @@ import type { Lang } from "#lib/server/revision/draft.ts";
 import { unitsOf } from "#lib/translation/blocks.ts";
 import { building } from "$app/env";
 import { checkSource, extractTerms, makeSource, repairSource, type Term } from "./source.ts";
-import { confirmedNamesOf } from "./tables.ts";
+import { buildNameTable, confirmedNamesOf, namesStateOf } from "./tables.ts";
 
 /*
  * Making a translation scenario's sources (design §6.4). Publishing queues a `pending` source for each learner language;
  * a runner in the server process makes them one at a time on the service's key: the terms, the source written from the
- * original's points (names as the work's confirmed table says), a blind back-translation and drift check, one repair
- * and a second check. A source with nothing left is `checked` and offered; one with drift left is `notes` for the
+ * original's points (names as the work's confirmed table says; while any is still to confirm the source waits in
+ * `notes` with those names), a blind back-translation and drift check, one repair and a second check. A source with nothing left is `checked` and offered; one with drift left is `notes` for the
  * admin, with what the check still finds; one that could not be made is `failed`. Pending rows left by a restart are
  * picked up again.
  */
@@ -53,6 +53,29 @@ export async function makeSourceRow(id: string, ai: Caller = serviceCaller()) {
 		const { units: original, join } = unitsOf(v.original);
 		const context = `${v.where}, read by ${v.readers}`;
 		const terms = await termsFor(v, target, ai);
+		// A work's names are written as its table says, and only once the admin has confirmed them: names nobody has looked
+		// up yet are looked up, and the source waits (with the names in its notes) until every one is confirmed.
+		if (row.s.workId) {
+			const state = await namesStateOf(
+				row.s.workId,
+				native,
+				terms.map((t) => t.term),
+			);
+			if (state.missing.length)
+				await buildNameTable(row.s.workId, native, { original: v.original, context, terms: terms.filter((t) => state.missing.includes(t.term)) }, ai);
+			const { pending } = await namesStateOf(
+				row.s.workId,
+				native,
+				terms.map((t) => t.term),
+			);
+			if (pending.length) {
+				await db
+					.update(scenarioSource)
+					.set({ state: "notes", notes: { names: pending }, madeAt: new Date() })
+					.where(and(eq(scenarioSource.id, id), eq(scenarioSource.state, "pending")));
+				return;
+			}
+		}
 		const names = await confirmedNamesOf(row.s.workId, native);
 		const made = await makeSource(original, terms, target, native, context, ai, names);
 		let source = made.source.map(unnumbered);
@@ -103,7 +126,7 @@ export async function queueSources(scenarioId: string, opts: { natives?: readonl
 				})
 				.returning({ id: scenarioSource.id })
 		: await q.onConflictDoNothing().returning({ id: scenarioSource.id });
-	kick();
+	kickSources();
 	return done.length;
 }
 
@@ -141,7 +164,7 @@ declare global {
 	var __sourceRunner: ReturnType<typeof setInterval> | undefined;
 }
 
-function kick() {
+export function kickSources() {
 	if (globalThis.__sourceRunner) void sweepSources();
 }
 

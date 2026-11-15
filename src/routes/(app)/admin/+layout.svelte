@@ -8,46 +8,38 @@ import Languages from "@lucide/svelte/icons/languages";
 import Megaphone from "@lucide/svelte/icons/megaphone";
 import Newspaper from "@lucide/svelte/icons/newspaper";
 import ScrollText from "@lucide/svelte/icons/scroll-text";
+import Users from "@lucide/svelte/icons/users";
 import type { Snippet } from "svelte";
+import { waiting } from "#lib/admin/admin.remote.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
-import { CASES, FEEDBACK, SOURCES, SUGGESTIONS } from "#lib/demo/admin.ts";
 import { page } from "$app/state";
 
 /*
  * The admin pages: what learners practise on (scenarios, issues, the names in translations), what they tell us (the
- * inbox) and what we tell them (announcements), and how sessions actually went (sessions, cases). One column of
+ * inbox) and what we tell them (announcements), how sessions actually went (sessions, cases), and who they are (users). One column of
  * sections beside the page when there is room, a menu above it when there is not. Counts are only for what waits on
  * the admin.
  */
 let { children }: { children: Snippet } = $props();
-const groups = [
+const counts = waiting();
+const n = $derived(counts.current ?? { scenarios: 0, inbox: 0, cases: 0 });
+const groups = $derived([
 	[
-		{
-			href: "/admin/scenarios",
-			label: "Scenarios",
-			icon: BookOpenText,
-			count: Object.values(SOURCES)
-				.flat()
-				.filter((s) => s.state === "notes").length,
-		},
+		{ href: "/admin/scenarios", label: "Scenarios", icon: BookOpenText, count: n.scenarios },
 		{ href: "/admin/issues", label: "Issues", icon: Newspaper, count: 0 },
 		{ href: "/admin/names", label: "Names", icon: Languages, count: 0 },
 	],
 	[
-		{
-			href: "/admin/inbox",
-			label: "Inbox",
-			icon: Inbox,
-			count: SUGGESTIONS.filter((s) => s.status === "pending").length + FEEDBACK.filter((f) => !f.done).length,
-		},
+		{ href: "/admin/inbox", label: "Inbox", icon: Inbox, count: n.inbox },
 		{ href: "/admin/announcements", label: "Announcements", icon: Megaphone, count: 0 },
 	],
 	[
 		{ href: "/admin/sessions", label: "Sessions", icon: ScrollText, count: 0 },
-		{ href: "/admin/cases", label: "Cases", icon: Flag, count: CASES.filter((c) => c.status === "open").length },
+		{ href: "/admin/cases", label: "Cases", icon: Flag, count: n.cases },
+		{ href: "/admin/users", label: "Users", icon: Users, count: 0 },
 	],
-];
-const all = groups.flat();
+]);
+const all = $derived(groups.flat());
 const current = $derived(all.find((s) => page.url.pathname === s.href || page.url.pathname.startsWith(`${s.href}/`)));
 let menuOpen = $state(false);
 </script>

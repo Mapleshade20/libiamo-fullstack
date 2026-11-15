@@ -5,13 +5,16 @@ import Lightbulb from "@lucide/svelte/icons/lightbulb";
 import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { flip } from "svelte/animate";
 import { fade, slide } from "svelte/transition";
+import { inbox, makeScenario, markFeedbackDone, setSuggestionAside } from "#lib/admin/inbox.remote.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { FEEDBACK, fmtDay, langEn, SUGGESTIONS } from "#lib/demo/admin.ts";
+import type { SuggestionPlace } from "#lib/constants.ts";
+import { fmtDay, langEn } from "#lib/demo/admin.ts";
 import { toast } from "#lib/demo/app.svelte.ts";
-import { scenarioById } from "#lib/demo/scenarios.ts";
+import { SITE_OF } from "#lib/scenario/types.ts";
+import { goto } from "$app/navigation";
 
 /*
  * What learners send: situations they suggest for scenarios (the shelf's "+" card) and feedback about the app (the
@@ -19,30 +22,33 @@ import { scenarioById } from "#lib/demo/scenarios.ts";
  * or is set aside with a reason the learner sees; feedback is marked done once read and acted on.
  */
 let tab = $state("suggestions");
-let sug = $state(structuredClone(SUGGESTIONS));
-let fb = $state(structuredClone(FEEDBACK));
+const data = $derived(await inbox());
+const sug = $derived(data.suggestions);
+const fb = $derived(data.feedback);
+const placeName = (p: string) => (p === "other" ? "Elsewhere" : SITE_OF[p as Exclude<SuggestionPlace, "other">]);
 const pending = $derived(sug.filter((s) => s.status === "pending"));
 const handled = $derived(sug.filter((s) => s.status !== "pending"));
 const open = $derived(fb.filter((f) => !f.done));
 const done = $derived(fb.filter((f) => f.done));
-let declining = $state<number | null>(null);
+let declining = $state<string | null>(null);
 let reason = $state("");
 const KIND = {
 	idea: { icon: Lightbulb, label: "Idea" },
 	bug: { icon: Bug, label: "Something wrong" },
 	other: { icon: MessageCircle, label: "Other" },
 };
-function use(id: number) {
-	const s = sug.find((x) => x.id === id);
-	if (s) s.status = "live";
-	toast("A draft scenario was made from it (demo)");
+async function use(id: string) {
+	const scenarioId = await makeScenario(id).catch(() => null);
+	if (!scenarioId) return toast("Could not make a scenario of it");
+	goto(`/admin/scenarios/${scenarioId}`);
 }
-function decline(id: number) {
-	const s = sug.find((x) => x.id === id);
-	if (s) Object.assign(s, { status: "unused", reason: reason.trim() });
+async function decline(id: string) {
+	const why = reason.trim();
 	declining = null;
 	reason = "";
+	await setSuggestionAside({ id, reason: why }).catch(() => toast("Could not set it aside"));
 }
+const feedbackDone = (id: string, done: boolean) => markFeedbackDone({ id, done }).catch(() => toast("Could not save that"));
 </script>
 
 <div class="adm-page">
@@ -65,16 +71,16 @@ function decline(id: number) {
 				{#each pending as s (s.id)}
 					<li class="adm-paper card" animate:flip={{ duration: 250 }} out:fade={{ duration: 150 }}>
 						<div class="who">
-							<span>{s.by}</span><span class="adm-dot">{s.place}</span><span class="adm-dot">{langEn(s.lang)}</span><span class="grow"></span
-							><span class="adm-meta">{fmtDay(s.at)}</span>
+							<span>{s.by}</span><span class="adm-dot">{placeName(s.place)}</span><span class="adm-dot">{langEn(s.language)}</span
+							><span class="grow"></span><span class="adm-meta">{fmtDay(s.at)}</span>
 						</div>
-						<p class="sit" lang={s.lang}>{s.situation}</p>
+						<p class="sit" lang={s.language}>{s.situation}</p>
 						<dl>
 							<dt>Wanted to</dt>
-							<dd lang={s.lang}>{s.purpose}</dd>
+							<dd lang={s.language}>{s.purpose}</dd>
 							{#if s.mine}
 								<dt>Wrote</dt>
-								<dd class="mine" lang={s.lang}>{s.mine}</dd>
+								<dd class="mine" lang={s.language}>{s.mine}</dd>
 							{/if}
 						</dl>
 						{#if declining === s.id}
@@ -121,7 +127,7 @@ function decline(id: number) {
 					{#each handled as s (s.id)}
 						<li class="adm-row small">
 							<div class="main">
-								<div class="t" lang={s.lang}>{s.situation}</div>
+								<div class="t" lang={s.language}>{s.situation}</div>
 								<div class="s">
 									{s.by}
 									·
@@ -132,9 +138,9 @@ function decline(id: number) {
 								</div>
 							</div>
 							{#if s.status === "live"}
-								{@const sc = s.scenario ? scenarioById(s.scenario) : undefined}
+								{@const sc = s.scenario}
 								{#if sc}
-									<a class="adm-tag ok" href="/admin/scenarios/{sc.id}">Became “{sc.title.en}”</a>
+									<a class="adm-tag ok" href="/admin/scenarios/{sc.id}">Became “{sc.title}”</a>
 								{:else}
 									<span class="adm-tag ok">Draft made</span>
 								{/if}
@@ -155,9 +161,9 @@ function decline(id: number) {
 						<span class="kind" use:tip={K.label}><K.icon class="size-4" aria-hidden="true" /></span>
 						<div class="main">
 							<p class="text">{f.text}</p>
-							<p class="adm-meta wrap">{f.by} · {f.page} · {f.browser} · {fmtDay(f.at)}</p>
+							<p class="adm-meta wrap">{[f.by, f.page, f.browser, fmtDay(f.at)].filter(Boolean).join(" · ")}</p>
 						</div>
-						<button type="button" class="adm-icon" aria-label="Done" use:tip={"Done"} onclick={() => (f.done = true)}>
+						<button type="button" class="adm-icon" aria-label="Done" use:tip={"Done"} onclick={() => feedbackDone(f.id, true)}>
 							<Check class="size-4" aria-hidden="true" />
 						</button>
 					</li>
@@ -175,7 +181,7 @@ function decline(id: number) {
 								<div class="t">{f.text}</div>
 								<div class="s">{f.by} · {fmtDay(f.at)}</div>
 							</div>
-							<button type="button" class="adm-icon" aria-label="Not done" use:tip={"Back to the inbox"} onclick={() => (f.done = false)}>
+							<button type="button" class="adm-icon" aria-label="Not done" use:tip={"Back to the inbox"} onclick={() => feedbackDone(f.id, false)}>
 								<Check class="size-4" aria-hidden="true" />
 							</button>
 						</li>
