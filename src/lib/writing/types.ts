@@ -32,6 +32,9 @@ export type PieceItem = {
 	state?: "posted" | "revised";
 };
 
+/** A piece in the lists, with what its page shows when the tour's sandbox holds it. */
+export type Writing = PieceItem & { result?: PieceResult };
+
 /** What a finished revision left, as the piece's page shows it. */
 export type PieceResult = {
 	original: string;

@@ -5,20 +5,23 @@ import Link2 from "@lucide/svelte/icons/link-2";
 import NotebookPen from "@lucide/svelte/icons/notebook-pen";
 import PenLine from "@lucide/svelte/icons/pen-line";
 import { onMount, tick } from "svelte";
+import { app } from "#lib/account/app.svelte.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow, reducedMotion, shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
 import Reveal from "#lib/components/common/Reveal.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
-import { CALLS } from "#lib/components/debug/calls.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { keepReading, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, endonym, nameOf, read, toast, tx, write } from "#lib/demo/app.svelte.ts";
-import { COLLECT_KEY } from "#lib/demo/data.ts";
-import { dev } from "#lib/demo/dev.svelte.ts";
-import { keyStop } from "#lib/demo/limits.ts";
-import { sourceStatus } from "#lib/demo/source.ts";
+import { endonym, nameOf, tx } from "#lib/i18n/tx.ts";
+import { keyStop } from "#lib/llm/stops.ts";
+import { startReading } from "#lib/notebook/notebook.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
+import { keepDraft, loadDraft } from "#lib/writing/draft.ts";
+import { sourceStatus } from "#lib/writing/source-status.ts";
+import { browser } from "$app/env";
 import { goto } from "$app/navigation";
 
 /*
@@ -28,22 +31,20 @@ import { goto } from "$app/navigation";
  * its tip, so it fits any width; ⌘/Ctrl+Enter sends from anywhere on the page.
  */
 type Draft = { text: string; background: string; source: string; notes: boolean; ctx: boolean; grab: boolean; mode: "check" | "collect" };
-const storeKey = "homeDraft";
-const draft = $state<Draft>({
-	text: "",
-	background: "",
-	source: "",
-	notes: false,
-	ctx: false,
-	grab: false,
-	mode: "check",
-	...read<Partial<Draft>>(storeKey, {}),
+const draft = $state<Draft>({ text: "", background: "", source: "", notes: false, ctx: false, grab: false, mode: "check" });
+// What the learner is writing stays on this device until they send it (lib/writing/draft.ts); the tour's never does.
+let kept = false;
+onMount(() => {
+	if (!sandboxed()) Object.assign(draft, loadDraft<Draft>());
+	kept = true;
 });
-// What the learner is writing stays on this device until they send it, so a reload or a closed tab loses nothing.
-$effect(() => write(storeKey, $state.snapshot(draft)));
+$effect(() => {
+	const now = $state.snapshot(draft);
+	if (kept && !sandboxed()) keepDraft(now);
+});
 
-const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-const touch = matchMedia("(pointer: coarse)").matches;
+const mac = browser && /Mac|iPhone|iPad/.test(navigator.platform);
+const touch = browser && matchMedia("(pointer: coarse)").matches;
 const collect = $derived(draft.mode === "collect");
 const status = $derived(sourceStatus(draft.source, tx));
 const placeholderFor = (mode: string) => tx(mode === "collect" ? "collectPlaceholder" : "composePlaceholder");
@@ -152,7 +153,7 @@ async function start() {
 	checking = true;
 	let g: Gate | null = null;
 	try {
-		g = await CALLS.traced("/api/gate", {
+		g = await fetch("/api/gate", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ mode: draft.mode, text: draft.text, native: app.prefs.native, learning: app.prefs.learning, active: app.lang }),
@@ -188,12 +189,13 @@ async function go(lang: string) {
 	const text = draft.text;
 	gate = null;
 	if (collect) {
+		checking = true;
+		const id = sandboxed() ? "tour" : await startReading({ passage: text, lang: lang as never }).catch(() => null);
+		checking = false;
+		if (!id) return toast(tx("startFailed"));
+		if (sandboxed()) keepReading(id, text, lang);
 		draft.text = "";
-		sessionStorage.setItem(
-			COLLECT_KEY,
-			JSON.stringify({ passage: text, lang, native: app.prefs.native, feedback: app.prefs.feedback, model: dev.grader }),
-		);
-		goto("/collect");
+		goto(`/collect/${id}`);
 		return;
 	}
 	const notes = draft.notes ? draft.background : "";
@@ -202,7 +204,6 @@ async function go(lang: string) {
 		text,
 		background: notes,
 		source: draft.ctx ? draft.source : "",
-		...$state.snapshot(dev),
 		learner: app.prefs.native,
 		feedback: app.prefs.feedback as "native" | "target",
 		lang,
@@ -223,8 +224,9 @@ async function onPaste(e: ClipboardEvent) {
 	draft.ctx = true;
 	toast(tx("srcMoved"));
 }
-const scripts = fetch("/api/capture-scripts").then((r) => r.json() as Promise<Record<string, string>>);
+let scripts: Promise<Record<string, string>> | null = null;
 async function copyScript(k: string) {
+	scripts ??= fetch("/api/capture-scripts").then((r) => r.json());
 	await navigator.clipboard.writeText((await scripts)[k]);
 	toast(tx("grabCopied"));
 }
@@ -232,18 +234,13 @@ async function copyScript(k: string) {
 onMount(() => {
 	const onKey = (e: KeyboardEvent) => {
 		if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.isComposing || e.repeat) return;
-		if ((document.activeElement as HTMLElement | null)?.closest?.(".dev, .floating-panel")) return;
+		if ((document.activeElement as HTMLElement | null)?.closest?.(".floating-panel")) return;
 		e.preventDefault();
 		start();
 	};
 	addEventListener("keydown", onKey);
 	return () => removeEventListener("keydown", onKey);
 });
-
-/** The developer settings fill the box with a test draft. */
-export function fill(f: { text: string; background?: string }) {
-	Object.assign(draft, { text: f.text, background: f.background ?? "", notes: !!f.background, mode: "check" });
-}
 </script>
 
 <div class="composer" bind:this={card}>

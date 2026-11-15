@@ -4,16 +4,17 @@ import Check from "@lucide/svelte/icons/check";
 import Circle from "@lucide/svelte/icons/circle";
 import { tick } from "svelte";
 import { fly } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import { Collector } from "#lib/components/collect/collector.svelte.ts";
 import Accordion from "#lib/components/common/Accordion.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow, shake } from "#lib/components/common/motion.ts";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { sandboxed, tourPiece } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
-import { keptPiece } from "#lib/demo/data.ts";
-import { dev } from "#lib/demo/dev.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { markReused, reused } from "#lib/review/reuse.ts";
 import { scenarioView } from "#lib/scenario/scenario.remote.ts";
 import { pieceById } from "#lib/writing/writing.remote.ts";
@@ -26,12 +27,12 @@ import { page } from "$app/state";
  * time are marked where they came back. It makes a light day of the week, as review does.
  */
 const id = $derived(page.params.id ?? "");
-const w = $derived(sandboxed() ? keptPiece(id) : await pieceById(id));
+const w = $derived(sandboxed() ? tourPiece(id) : await pieceById(id));
 const r = $derived(w?.result);
 const scenario = $derived(w?.scenarioId ? await scenarioView({ id: w.scenarioId, lang: w.lang }) : null);
 const s = $derived(scenario?.situation);
 // svelte-ignore state_referenced_locally
-const collector = new Collector({ lang: app.lang, native: app.prefs.native, feedback: app.prefs.feedback, model: dev.grader });
+const collector = new Collector({ lang: app.lang, native: app.prefs.native, feedback: app.prefs.feedback });
 let text = $state("");
 let done = $state(false);
 let area: HTMLTextAreaElement | undefined = $state();

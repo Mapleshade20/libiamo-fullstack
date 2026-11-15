@@ -2,15 +2,15 @@
 import Check from "@lucide/svelte/icons/check";
 import Copy from "@lucide/svelte/icons/copy";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
-import { sourceStatus } from "#lib/demo/source.ts";
+import { sourceStatus } from "#lib/writing/source-status.ts";
 
 /*
  * Importing a page capture into a scenario: the console script for the place (the same scripts learners use for
  * context, src/context/scripts.ts, from /api/capture-scripts), then the copy pasted here and checked the way the
- * composer checks it (lib/demo/source.ts). Choosing where the learner comes in and filling the fields from it is the
- * main app's (lib/admin/capture.ts) and comes with the merge; the demo keeps nothing.
+ * composer checks it (lib/writing/source-status.ts). Choosing where the learner comes in and filling the fields from it
+ * is not built yet: nothing is kept from it.
  */
 let { open = $bindable(false), site }: { open?: boolean; site: string } = $props();
 const PLATFORMS = [
@@ -19,7 +19,7 @@ const PLATFORMS = [
 	{ key: "discord", label: "Discord", how: "In the channel, after scrolling up until the history you want is loaded." },
 ];
 const here = $derived(PLATFORMS.find((p) => p.label === site)?.key);
-const scripts = fetch("/api/capture-scripts").then((r) => r.json() as Promise<Record<string, string>>);
+let scripts: Promise<Record<string, string>> | null = null;
 let copied = $state<string | null>(null);
 let pasted = $state("");
 const EN: Record<string, string> = {
@@ -30,6 +30,7 @@ const EN: Record<string, string> = {
 const en = (key: string, vars: Record<string, string | number> = {}) => (EN[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 const status = $derived(sourceStatus(pasted, en));
 async function copyScript(k: string) {
+	scripts ??= fetch("/api/capture-scripts").then((r) => r.json());
 	await navigator.clipboard?.writeText((await scripts)[k]).catch(() => {});
 	// The button says so: a toast would sit under the dialog's backdrop.
 	copied = k;

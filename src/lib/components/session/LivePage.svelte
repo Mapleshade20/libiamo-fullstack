@@ -5,19 +5,16 @@ import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import Copy from "@lucide/svelte/icons/copy";
 import { onMount } from "svelte";
 import { fly } from "svelte/transition";
-import { debugging } from "#lib/client/debug.ts";
 import Backdrop from "#lib/components/backdrop/Backdrop.svelte";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
-import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import ReplyBar from "#lib/components/session/ReplyBar.svelte";
 import SceneCard from "#lib/components/session/SceneCard.svelte";
 import Speaker from "#lib/components/session/Speaker.svelte";
 import Thread from "#lib/components/session/Thread.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { RTL_LANGS } from "#lib/constants.ts";
-import { toast } from "#lib/demo/app.svelte.ts";
-import { dev as demo, saveDev } from "#lib/demo/dev.svelte.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
 import { Post } from "#lib/session/post.ts";
 import { type Resumed, Session } from "#lib/session/session.svelte.ts";
@@ -40,11 +37,6 @@ const people = $derived(session.people());
 let region: HTMLElement | undefined = $state();
 let body: HTMLElement | undefined = $state();
 let text: HTMLElement | undefined = $state();
-let devCalls = $state(localStorage.getItem("devCalls") !== "off");
-$effect(() => {
-	document.documentElement.classList.toggle("no-calls", !devCalls);
-	localStorage.setItem("devCalls", devCalls ? "on" : "off");
-});
 
 onMount(() => {
 	if (!region || !body || !text) return;
@@ -149,41 +141,6 @@ async function copyQuick() {
 			</section>
 		{/if}
 	</main>
-	{#if debugging()}
-		<!-- Debug only (not part of the product): jump between the scene and the passes; show the model calls. -->
-		<details class="dev">
-			<summary>{tt("devTitle")}</summary>
-			<div class="dev-body">
-				<div class="phases">
-					{#each [tt("phaseScene"), tt("phase1"), tt("phase2")] as name, i}
-						<Button
-							variant={session.phase === i ? "default" : "secondary"}
-							size="sm"
-							disabled={i > 0 && !session.scene}
-							onclick={() => session.jump(i as 0 | 1 | 2)}
-							>{name}</Button
-						>
-					{/each}
-				</div>
-				<div class="limits">
-					<span>{tt("devLimits")}</span>
-					<SegmentedControl
-						label={tt("devLimits")}
-						size="sm"
-						bind:value={demo.limit}
-						onValueChange={saveDev}
-						items={[
-							{ value: "none", label: tt("devLimitNone") },
-							{ value: "nokey", label: tt("devLimitNoKey") },
-							{ value: "refused", label: tt("devLimitRefused") },
-							{ value: "fail", label: tt("devLimitFail") },
-						]}
-					/>
-				</div>
-				<label class="check"><input type="checkbox" bind:checked={devCalls}> {tt("devCalls")}</label>
-			</div>
-		</details>
-	{/if}
 </div>
 
 <style>
@@ -431,64 +388,8 @@ async function copyQuick() {
 	flex-direction: column;
 	min-height: 0;
 }
-/* At the foot of the model calls' corner (debug/calls.css). Open, it stands over them. */
-.dev {
-	position: fixed;
-	left: 14px;
-	bottom: 14px;
-	z-index: 30;
-	font-size: 13px;
-}
-.dev > summary {
-	list-style: none;
-	display: inline-flex;
-	align-items: center;
-	height: 32px;
-	padding: 0 12px;
-	border-radius: 6px;
-	border: 1px dashed var(--line);
-	background: var(--raised);
-	color: var(--muted);
-	cursor: pointer;
-	transition: opacity 0.2s ease;
-}
-.dev > summary::-webkit-details-marker {
-	display: none;
-}
-.dev[open] {
-	z-index: 85;
-}
-.dev-body {
-	position: absolute;
-	left: 0;
-	bottom: 40px;
-	padding: 12px;
-	border-radius: 6px;
-	border: 1px solid var(--edge);
-	background: var(--raised);
-	box-shadow: var(--pop);
-	white-space: nowrap;
-}
-.phases {
-	display: flex;
-	gap: 6px;
-}
 .failure {
 	margin-top: 4px;
-}
-.limits {
-	display: grid;
-	gap: 6px;
-	margin-top: 12px;
-	color: var(--muted);
-}
-.check {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-top: 10px;
-	color: var(--muted);
-	cursor: pointer;
 }
 @media (max-width: 760px) {
 	.session {

@@ -8,6 +8,8 @@ import ShieldCheck from "@lucide/svelte/icons/shield-check";
 import UserRound from "@lucide/svelte/icons/user-round";
 import { tick } from "svelte";
 import { account, signOut } from "#lib/account/account.svelte.ts";
+import { app } from "#lib/account/app.svelte.ts";
+import { switchLanguage } from "#lib/account/language.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
@@ -16,10 +18,11 @@ import { createPlay } from "#lib/components/stickers/play.svelte.ts";
 import Sticker from "#lib/components/stickers/Sticker.svelte";
 import type { StickerName } from "#lib/components/stickers/stickers.ts";
 import { hasScenarios } from "#lib/constants.ts";
-import { app, endonym, switchLanguage, tx } from "#lib/demo/app.svelte.ts";
-import { myWriting, siteOf } from "#lib/demo/data.ts";
-import { openPiece } from "#lib/demo/reopen.ts";
+import { endonym, tx } from "#lib/i18n/tx.ts";
 import { dueNow } from "#lib/notebook/notebook.svelte.ts";
+import { openPiece } from "#lib/writing/open.ts";
+import { siteOf } from "#lib/writing/sites.ts";
+import { myWriting } from "#lib/writing/writing.svelte.ts";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import EmptyState from "./EmptyState.svelte";
@@ -253,7 +256,7 @@ const MENU_CLOSE_MS = 160;
 		<FloatingPanel bind:open={meOpen} label={app.prefs.name} side={menuSide} align="start" role="menu" plainTrigger triggerClass="me" class="w-56">
 			{#snippet trigger()}
 				<span class="contents" data-tip={app.prefs.name} role="presentation">
-					<AvatarSticker name={app.prefs.name} photo={app.prefs.avatar} drawn={meOpen || mine} />
+					<AvatarSticker name={app.prefs.name} photo={account.me.picture ?? undefined} drawn={meOpen || mine} />
 					<span class="words">{app.prefs.name}</span>
 				</span>
 			{/snippet}

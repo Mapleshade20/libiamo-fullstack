@@ -1,15 +1,17 @@
 <script lang="ts">
 import { fly } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import { autogrow, shake } from "#lib/components/common/motion.ts";
 import Notice from "#lib/components/common/Notice.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { SUGGESTION_PLACES, type SuggestionPlace } from "#lib/constants.ts";
-import { app, endonym, toast, tx } from "#lib/demo/app.svelte.ts";
-import { sourceStatus } from "#lib/demo/source.ts";
+import { endonym, tx } from "#lib/i18n/tx.ts";
 import { mySuggestions, suggest } from "#lib/scenario/suggestion.remote.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
+import { sourceStatus } from "#lib/writing/source-status.ts";
 
 /*
  * Suggesting a situation (the shelf's "+" card): something real the learner had to write, or saw someone write, that

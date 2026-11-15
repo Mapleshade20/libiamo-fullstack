@@ -1,8 +1,10 @@
 <script lang="ts">
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import { onMount, tick } from "svelte";
+import { app } from "#lib/account/app.svelte.ts";
 import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
-import { app, read, sandboxed, tx, write } from "#lib/demo/app.svelte.ts";
+import { keepTourGlass, sandboxed, tourGlass } from "#lib/components/tour/sandbox.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { lang } from "#lib/notebook/notebook.svelte.ts";
 import { lookAtReviews } from "#lib/week/week.remote.ts";
 import { weekNow } from "#lib/week/week.svelte.ts";
@@ -32,14 +34,27 @@ let open = $state(false);
 let celebrate = $state(false);
 /** What the glasses show: today's state, except while a change is being played (it starts from the old one). */
 // svelte-ignore state_referenced_locally
-let shown = $state<{ drink: Drink; look: Look }>({ drink: today, look: lookOf(kind) });
+let shown = $state.raw<{ drink: Drink; look: Look }>({ drink: today, look: lookOf(kind) });
 let big = $state<Glass>();
 let playing = false;
 const dark = $derived(app.dark);
 
+/* What today's glass last played on this device (only how it moves; the days themselves are the server's), so a
+   change is played once. The tour keeps its own. */
 type Seen = { day: string; look: Look; drink: string };
-const readSeen = () => read<Seen | null>("glassSeen", null);
-const keepSeen = (look: Look) => write("glassSeen", { day: view.today, look, drink: today.id });
+function readSeen(): Seen | null {
+	if (sandboxed()) return tourGlass();
+	try {
+		return JSON.parse(localStorage.getItem("glassSeen") ?? "null");
+	} catch {
+		return null;
+	}
+}
+function keepSeen(look: Look) {
+	const seen = { day: view.today, look, drink: today.id };
+	if (sandboxed()) keepTourGlass(seen);
+	else localStorage.setItem("glassSeen", JSON.stringify(seen));
+}
 
 /** The moments from one state to another, today. */
 function forward(from: Look, to: Look): Moment[] {

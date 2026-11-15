@@ -1,13 +1,13 @@
 import { tick } from "svelte";
-import { CALLS } from "#lib/components/debug/calls.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import ChoiceCard from "#lib/components/session/ChoiceCard.svelte";
 import FixCard from "#lib/components/session/FixCard.svelte";
 import NoteCard from "#lib/components/session/NoteCard.svelte";
+import { practised, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { isAppLang } from "#lib/constants.ts";
-import { app, forget, read, sandboxed, write } from "#lib/demo/app.svelte.ts";
-import { practised } from "#lib/demo/data.ts";
-import { checkCall, type Stop as Halt, LimitError, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
+import { type Stop as Halt, LimitError, needKey, stopOf } from "#lib/llm/stops.ts";
+import { clearDraft } from "#lib/writing/draft.ts";
 import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import { goto } from "$app/navigation";
 import { Cancelled, Clock, reduced, SLOW } from "./clock";
@@ -84,8 +84,6 @@ export type BarSpec = {
 	/** Something in the thread that must end up fully in view before the bar changes. */
 	keep?: () => Element | null;
 };
-
-const HANDOFF_DETAIL = "detail";
 
 /**
  * The page's bookmark, kept with the revision on the server (the `progress` action) so a reload, a restart or another
@@ -191,7 +189,7 @@ export class Session {
 		this.sid = sid;
 		this.resumed = resumed;
 		this.background = setup.background ?? "";
-		this.detail = setup.detail ?? (read<string>(HANDOFF_DETAIL, "needed") === "more" ? "more" : "needed");
+		this.detail = setup.detail ?? app.look.detail;
 		// The session speaks the tutor's language: the learner's own, or the one they write in, as they chose in their
 		// settings. Its buttons and prompts too: they are the tutor's side of the conversation.
 		this.lang = this.pick(setup.feedback === "target" && setup.lang ? setup.lang : setup.learner);
@@ -258,7 +256,7 @@ export class Session {
 
 	/* ---------- Server ---------- */
 	private async api<T>(action: string, body: object = {}): Promise<T> {
-		checkCall(`${action}:${JSON.stringify(body)}`);
+		needKey();
 		const r = await fetch(`/api/s/${this.sid}/${action}`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -319,7 +317,6 @@ export class Session {
 	/* ---------- Running ---------- */
 	/** From the start, or back where the revision was. */
 	async start() {
-		CALLS.watch(this.sid);
 		const r = this.resumed;
 		if (!r) return this.run(0);
 		if (r.scene) await this.applyScene(r.scene);
@@ -335,11 +332,6 @@ export class Session {
 		this.answer = null;
 		this.go = null;
 		this.cont = null;
-	}
-	/** Debug only: jump to a phase (pass 2 needs pass 1's text first). */
-	jump(i: 0 | 1 | 2) {
-		if (i > 0 && !this.scene) return;
-		this.run(i);
 	}
 	private async run(i: 0 | 1 | 2) {
 		this.clock.next();
@@ -423,7 +415,7 @@ export class Session {
 			if (!alive()) return;
 		}
 		// The draft is on its way now; the home page's box starts empty next time.
-		forget("homeDraft");
+		if (!sandboxed()) clearDraft();
 		this.run(1);
 	}
 	/** The scene card's "Start" (or, after a failure, "Try again"). */
@@ -433,7 +425,7 @@ export class Session {
 	setDetail(d: "more" | "needed") {
 		if (d === this.detail) return;
 		this.detail = d;
-		write(HANDOFF_DETAIL, d);
+		if (!sandboxed()) app.saveLook({ detail: d });
 		// Another depth means another first pass.
 		this.memo.delete("pass1");
 		this.doc1 = null;

@@ -1,13 +1,15 @@
-// The pages still keep most of their data on the device (lib/demo), so they render in the browser only.
-export const ssr = false;
+import { adopt, auth } from "#lib/account/account.svelte.ts";
+import { shell } from "#lib/components/shell/shell.svelte.ts";
+import type { AppLang } from "#lib/constants.ts";
+import { provideLang } from "#lib/i18n/index.svelte.ts";
+import { writing } from "#lib/writing/writing.svelte.ts";
 
-export async function load() {
-	const { ready, applyLang } = await import("#lib/demo/app.svelte.ts");
-	const { hydrate } = await import("#lib/account/account.svelte.ts");
-	const { refreshWriting } = await import("#lib/writing/writing.svelte.ts");
-	await hydrate();
-	await refreshWriting();
-	await ready();
-	applyLang();
-	return {};
+/* The server's answer poured into the state the pages read: on the server for this request, in the browser once. */
+export function load({ data }) {
+	for (const [l, d] of Object.entries(data.dicts)) provideLang(l as AppLang, d);
+	auth.lang = data.firstLang;
+	adopt(data.me);
+	writing.list = data.pieces;
+	shell.folded = data.folded;
+	return { clock: data.clock };
 }

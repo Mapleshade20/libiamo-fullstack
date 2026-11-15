@@ -1,25 +1,17 @@
 <script lang="ts">
 import Image from "@lucide/svelte/icons/image";
 import Menu from "@lucide/svelte/icons/menu";
-import { onMount, type Snippet } from "svelte";
-import { account } from "#lib/account/account.svelte.ts";
-import { needsWelcome } from "#lib/account/onboarding.svelte.ts";
+import type { Snippet } from "svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Sidebar from "#lib/components/shell/Sidebar.svelte";
 import { shell } from "#lib/components/shell/shell.svelte.ts";
 import Week from "#lib/components/streak/Week.svelte";
 import { director } from "#lib/components/tour/director.svelte.ts";
-import { tx } from "#lib/demo/app.svelte.ts";
-import { goto } from "$app/navigation";
+import { tx } from "#lib/i18n/tx.ts";
 
 /* The app's pages: the bar beside them stays put between them (it is not part of the page's transition), the page
    fades through. The top bar holds the drawer's button on a phone, and the week. */
 let { children }: { children: Snippet } = $props();
-// Signed out, the way in (lib/demo/account.svelte.ts); a first visit sets up before anything else (onboarding.svelte.ts).
-onMount(() => {
-	if (!account.signedIn) goto("/sign-in", { replace: true });
-	else if (needsWelcome()) goto("/welcome", { replace: true });
-});
 </script>
 
 <!-- The tour remounts the pages when it starts, ends or changes chapter, so they read its stand-in data afresh. -->

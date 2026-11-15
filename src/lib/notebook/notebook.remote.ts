@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LEARNABLE, VERDICTS } from "#lib/constants.ts";
 import { learner } from "#lib/server/guard.ts";
-import { deleteNotes, dueOf, editNote, noteOf, notesOf, queueOf, rateNote } from "#lib/server/notebook/notes.ts";
+import { addReading, deleteNotes, dueOf, editNote, noteOf, notesOf, queueOf, rateNote, readingOf } from "#lib/server/notebook/notes.ts";
 import { week } from "#lib/week/week.remote.ts";
 import { command, query, requested } from "$app/server";
 import { RATINGS } from "../review/types.ts";
@@ -47,3 +47,11 @@ export const rate = command(
 		return { queue: r.queue, outcomes: r.outcomes };
 	},
 );
+
+/** Something pasted to collect from: kept as a reading at once, so its page (/collect/<id>) can be opened again. */
+export const startReading = command(z.object({ passage: z.string().trim().min(1).max(12_000), lang: language }), async ({ passage, lang }) =>
+	addReading(learner().id, passage, lang),
+);
+
+/** A reading of theirs, to collect from. */
+export const readingById = query(z.string(), async (id) => (UUID.test(id) ? readingOf(learner().id, id) : null));

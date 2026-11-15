@@ -329,6 +329,16 @@ CREATE TABLE "scenario" (
 	CONSTRAINT "scenario_max_turns_check" CHECK ("scenario"."max_turns" is null or "scenario"."max_turns" > 0)
 );
 --> statement-breakpoint
+CREATE TABLE "scenario_plan" (
+	"user_id" text NOT NULL,
+	"scenario_id" text NOT NULL,
+	"language" text NOT NULL,
+	"text" text NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "scenario_plan_user_id_scenario_id_language_pk" PRIMARY KEY("user_id","scenario_id","language"),
+	CONSTRAINT "scenario_plan_language_check" CHECK ("scenario_plan"."language" in ('en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh-CN', 'ru', 'ar', 'nl', 'tr', 'pl'))
+);
+--> statement-breakpoint
 CREATE TABLE "scenario_source" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"scenario_id" text NOT NULL,
@@ -401,6 +411,10 @@ CREATE TABLE "user" (
 	"weekly_goal" integer DEFAULT 3 NOT NULL,
 	"time_zone" text,
 	"help_improve" boolean DEFAULT true NOT NULL,
+	"theme" text DEFAULT 'system' NOT NULL,
+	"backdrop" text DEFAULT 'none' NOT NULL,
+	"pattern" text DEFAULT 'blossom' NOT NULL,
+	"detail" text DEFAULT 'needed' NOT NULL,
 	"onboarded_at" timestamp with time zone,
 	"pending_email" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -411,6 +425,10 @@ CREATE TABLE "user" (
 	CONSTRAINT "user_learning_languages_check" CHECK ("user"."learning_languages" <@ array['en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh-CN', 'ru', 'ar', 'nl', 'tr', 'pl']::text[]),
 	CONSTRAINT "user_active_language_check" CHECK ("user"."active_language" is null or "user"."active_language" = any("user"."learning_languages")),
 	CONSTRAINT "user_tutor_language_check" CHECK ("user"."tutor_language" in ('native', 'target')),
+	CONSTRAINT "user_theme_check" CHECK ("user"."theme" in ('system', 'light', 'dark')),
+	CONSTRAINT "user_backdrop_check" CHECK ("user"."backdrop" in ('none', 'pattern', 'image', 'painting')),
+	CONSTRAINT "user_pattern_check" CHECK ("user"."pattern" in ('blossom', 'wheat', 'ginkgo', 'snow')),
+	CONSTRAINT "user_detail_check" CHECK ("user"."detail" in ('needed', 'more')),
 	CONSTRAINT "user_weekly_goal_check" CHECK ("user"."weekly_goal" between 1 and 7),
 	CONSTRAINT "user_onboarded_check" CHECK ("user"."onboarded_at" is null or ("user"."native_language" is not null and "user"."active_language" is not null))
 );
@@ -483,6 +501,8 @@ ALTER TABLE "review_log" ADD CONSTRAINT "review_log_note_id_note_id_fk" FOREIGN 
 ALTER TABLE "review_log" ADD CONSTRAINT "review_log_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario" ADD CONSTRAINT "scenario_work_id_work_id_fk" FOREIGN KEY ("work_id") REFERENCES "public"."work"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario" ADD CONSTRAINT "scenario_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scenario_plan" ADD CONSTRAINT "scenario_plan_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scenario_plan" ADD CONSTRAINT "scenario_plan_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scenario_source" ADD CONSTRAINT "scenario_source_scenario_id_scenario_id_fk" FOREIGN KEY ("scenario_id") REFERENCES "public"."scenario"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_case" ADD CONSTRAINT "session_case_piece_id_piece_id_fk" FOREIGN KEY ("piece_id") REFERENCES "public"."piece"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

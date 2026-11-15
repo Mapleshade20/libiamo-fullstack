@@ -2,12 +2,14 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Pencil from "@lucide/svelte/icons/pencil";
 import Trash2 from "@lucide/svelte/icons/trash-2";
+import { app } from "#lib/account/app.svelte.ts";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import ReviewFace from "#lib/components/review/ReviewFace.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { editTourNote, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, sandboxed, toast, tx } from "#lib/demo/app.svelte.ts";
-import { editSandboxNote } from "#lib/demo/notes.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { changeNote, due, noteById, notebook, removeNotes } from "#lib/notebook/notebook.remote.ts";
 import { lang, noteNow } from "#lib/notebook/notebook.svelte.ts";
 import { around, fixedPart } from "#lib/review/faces.ts";
@@ -51,7 +53,7 @@ async function save(e: SubmitEvent) {
 	const edit = { phrase: phrase.trim(), gloss: gloss.trim() };
 	busy = true;
 	try {
-		if (sandboxed()) editSandboxNote(n.id, edit);
+		if (sandboxed()) editTourNote(n.id, edit);
 		else await changeNote({ id: n.id, ...edit }).updates(noteById(n.id), notebook(lang()));
 		editing = false;
 		toast(tx("noteSaved"));
@@ -65,7 +67,7 @@ async function remove() {
 	if (!n || busy) return;
 	busy = true;
 	try {
-		if (sandboxed()) editSandboxNote(n.id, { deleted: true });
+		if (sandboxed()) editTourNote(n.id, { deleted: true });
 		else await removeNotes([n.id]).updates(notebook(lang()), due(lang()));
 		deleting = false;
 		toast(tx("noteDeleted"));

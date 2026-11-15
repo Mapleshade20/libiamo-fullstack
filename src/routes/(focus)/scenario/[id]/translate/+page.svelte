@@ -1,18 +1,18 @@
 <script lang="ts">
 import ArrowRight from "@lucide/svelte/icons/arrow-right";
 import { untrack } from "svelte";
+import { app } from "#lib/account/app.svelte.ts";
 import { autogrow } from "#lib/components/common/motion.ts";
 import { tip } from "#lib/components/common/tip.ts";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, forget, nameOf, read, toast, tx } from "#lib/demo/app.svelte.ts";
-import { dev } from "#lib/demo/dev.svelte.ts";
+import { nameOf, tx } from "#lib/i18n/tx.ts";
 import { saveDraft, sheet } from "#lib/scenario/scenario.remote.ts";
 import { startPiece } from "#lib/session/start.ts";
 import type { Setup } from "#lib/session/types.ts";
 import { blockAt, blocksOf, isByLine, termRuns } from "#lib/translation/blocks.ts";
-import { dev as isDev } from "$app/env";
 import { beforeNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -29,14 +29,6 @@ const id = $derived(page.params.id ?? "");
 const data = $derived(await sheet({ id, lang: app.lang }));
 const scenario = $derived(data?.scenario);
 const s = $derived(scenario?.situation.kind === "translate" ? scenario.situation : undefined);
-/** Development only: a draft with a learner's mistakes and words left in their own language, per scenario. */
-const SAMPLES: Record<string, string> = {
-	"translate-menu":
-		"Osmanthus latte: home made osmanthus sauce, with a little sea salt milk cap.\nChestnut basque: the outside is baked a bit burnt, inside still soft.\nHot red wine (no alcohol version): cinnamon, orange skin and clove, suitable for rainy day.",
-	"translate-crow":
-		"I don't even know where to start. Crowfeather and Tawnypelt become couple is so ridiculous. There is completely no 铺垫, and both of them are very OOC. It also make a mess of their original story and relationship, and rewrite many years' setting for a CP nobody want.\n\nCrowfeather's character is always supported by his complicated and emotional relationship with Feathertail and Leafpool, and the long influence of those feelings on him. Force him into a love with Tawnypelt is ignoring his emotional baggage and growth for so many years. Tawnypelt's story is never about love, not like Crowfeather. She is always a very independent cat who is 死心塌地 loyal to ShadowClan, why suddenly she start to fall in love like a young girl?\n\nDon't misunderstand, I really like the idea of two old cats fall in love again after lose their partners, but these two characters are really not suitable for this kind of story.",
-};
-const sample = $derived(SAMPLES[id]);
 // One line per item (a menu) or blank-line paragraphs (prose): the sheet follows the source.
 const byLine = $derived(!!s && isByLine(s.source));
 const units = $derived(s ? blocksOf(s.source, byLine).map((b) => s.source.slice(b.from, b.to)) : []);
@@ -51,7 +43,7 @@ $effect(() => {
 	loaded = d.scenario.id;
 	untrack(() => (text = d.draft));
 	// Already gone into its revision (another tab, another device): it goes on there.
-	if (d.revising && d.pieceId) goto(`/live/${d.pieceId}`, { replaceState: true });
+	if (d.revising && d.pieceId) goto(`/live/${d.pieceId}`, { replace: true });
 });
 const blocks = $derived(blocksOf(text, byLine));
 let caret = $state(0);
@@ -63,7 +55,6 @@ let all = $state(false);
 
 const native = $derived(nameOf(s?.sourceLang ?? app.prefs.native));
 const target = $derived(nameOf(app.lang));
-const planKey = $derived(`scenarioPlan:${id}`);
 
 function track() {
 	if (!area) return;
@@ -80,10 +71,9 @@ function flush() {
 	const where = { id, lang: app.lang };
 	chain = chain.then(async (pieceId) => {
 		if (now === saved && pieceId) return pieceId;
-		const r = await saveDraft({ ...where, text: now, plan: read<string>(planKey, "") || undefined }).catch(() => null);
+		const r = await saveDraft({ ...where, text: now }).catch(() => null);
 		if (!r) return pieceId;
 		saved = now;
-		if (r.pieceId) forget(planKey);
 		return r.pieceId ?? pieceId;
 	});
 	return chain;
@@ -116,7 +106,6 @@ async function done() {
 		? await startPiece({
 				text: text.trim(),
 				pieceId,
-				...$state.snapshot(dev),
 				learner: app.prefs.native,
 				feedback: app.prefs.feedback as Setup["feedback"],
 				lang: app.lang,
@@ -217,19 +206,6 @@ $effect(() => {
 				></textarea>
 				<div class="foot">
 					<p class="stuck">{tx("trStuck", { lang: native })}</p>
-					{#if isDev && sample}
-						<!-- Debug only: a sample draft with mistakes and words left in the learner's language. -->
-						<Button
-							variant="ghost"
-							size="sm"
-							class="text-muted-foreground"
-							onclick={() => {
-								text = sample;
-								save();
-							}}
-							>{tx("devSample")}</Button
-						>
-					{/if}
 					<Button disabled={!text.trim() || leaving} onclick={done}>{tx("trDone")}<ArrowRight aria-hidden="true" /></Button>
 				</div>
 			</section>

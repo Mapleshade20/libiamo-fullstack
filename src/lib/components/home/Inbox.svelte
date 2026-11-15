@@ -4,12 +4,15 @@ import MessageCircle from "@lucide/svelte/icons/message-circle";
 import { tick } from "svelte";
 import { announcements, readAnnouncement } from "#lib/account/announcements.remote.ts";
 import { dateOf, local } from "#lib/account/announcements.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import { reducedMotion } from "#lib/components/common/motion.ts";
 import Reveal from "#lib/components/common/Reveal.svelte";
+import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, sandboxed, tx } from "#lib/demo/app.svelte.ts";
 import { unreadReplies } from "#lib/exchange/exchange.remote.ts";
 import { type UnreadInboxItem, unreadTargetHref } from "#lib/exchange/unread.ts";
+import { tx } from "#lib/i18n/tx.ts";
+import { browser } from "$app/env";
 import { goto } from "$app/navigation";
 import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
 
@@ -44,7 +47,7 @@ function ageOf(seconds: number | null) {
 	const [n, unit] = s < 3600 ? [s / 60, "minute"] : s < 86_400 ? [s / 3600, "hour"] : [s / 86_400, "day"];
 	return new Intl.NumberFormat(app.lang, { style: "unit", unit, unitDisplay: unit === "day" ? "long" : "short" }).format(Math.floor(n));
 }
-const touch = matchMedia("(pointer: coarse)").matches;
+const touch = browser && matchMedia("(pointer: coarse)").matches;
 let openAnn = $state<number | null>(null);
 let spread = $state(false);
 let acking = $state(false);

@@ -12,8 +12,8 @@ import FloatingPanel from "#lib/components/common/FloatingPanel.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * Cases: steps flagged in sessions, with what is wrong. They are the regression set: Claude Code pulls a case (read only

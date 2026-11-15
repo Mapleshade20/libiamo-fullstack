@@ -1,5 +1,6 @@
-import { app } from "#lib/demo/app.svelte.ts";
-import type { Collected, Writing } from "#lib/demo/data.ts";
+import { app } from "#lib/account/app.svelte.ts";
+import type { Writing } from "#lib/writing/types.ts";
+import type { Collected } from "./sandbox.svelte.ts";
 
 /*
  * What the tour writes, reads and finds already there, per language being learned: the draft it checks, the passage it

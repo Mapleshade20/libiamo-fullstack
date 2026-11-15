@@ -26,9 +26,9 @@ import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import ScenarioCard from "#lib/components/home/ScenarioCard.svelte";
 import Situation from "#lib/components/scenario/Situation.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { type ExchangePlace, LEARNABLE, type Place, type ScenarioStatus, type SourceState, type Urgency } from "#lib/constants.ts";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { openingNames, situationOf } from "#lib/exchange/opening.ts";
 import { blankOpening, blankVersion } from "#lib/scenario/blank.ts";
 import { SITE_OF } from "#lib/scenario/types.ts";
@@ -189,7 +189,7 @@ async function save(publish: boolean) {
 		return;
 	}
 	toast(publish ? (translate ? "Published: sources are being made for each learner language" : "Published") : "Saved");
-	if (isNew) goto(`/admin/scenarios/${draft.id}`, { replaceState: true });
+	if (isNew) goto(`/admin/scenarios/${draft.id}`, { replace: true });
 }
 async function withdraw() {
 	withdrawing = false;
@@ -202,7 +202,7 @@ async function remove() {
 		.then(() => true)
 		.catch(() => false);
 	if (!ok) return toast("Learners have written in it: withdraw it instead");
-	goto("/admin/scenarios", { replaceState: true });
+	goto("/admin/scenarios", { replace: true });
 }
 
 /** Everything a scenario is, as one JSON a developer can hand to another (lab/seed/scenarios.json's shape). */

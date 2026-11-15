@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { learner } from "#lib/server/guard.ts";
+import { planOf, savePlan } from "#lib/server/scenario/plans.ts";
 import { libraryOf, scenarioViewOf, shelfScenariosOf } from "#lib/server/scenario/scenarios.ts";
 import { saveSheet, sheetOf } from "#lib/server/translation/sheet.ts";
 import { pieces } from "#lib/writing/writing.remote.ts";
@@ -16,12 +17,15 @@ export const scenarioView = query(z.object({ id: z.string().max(60), lang }), as
 export const sheet = query(z.object({ id: z.string().max(60), lang }), async ({ id, lang }) => sheetOf(learner(), id, lang));
 
 /** Keeps the sheet's draft as the learner types (the piece is created with the first words). */
-export const saveDraft = command(
-	z.object({ id: z.string().max(60), lang, text: z.string().max(60_000), plan: z.string().max(4000).optional() }),
-	async ({ id, lang, text, plan }) => {
-		const saved = await saveSheet(learner(), { scenarioId: id, language: lang, text, plan });
-		// A new piece is one of theirs now: the shelf and the scenario page show it.
-		if (saved?.created) await Promise.all([pieces().refresh(), scenarioView({ id, lang }).refresh()]);
-		return { pieceId: saved?.id ?? null };
-	},
+export const saveDraft = command(z.object({ id: z.string().max(60), lang, text: z.string().max(60_000) }), async ({ id, lang, text }) => {
+	const saved = await saveSheet(learner(), { scenarioId: id, language: lang, text });
+	// A new piece is one of theirs now: the shelf and the scenario page show it.
+	if (saved?.created) await Promise.all([pieces().refresh(), scenarioView({ id, lang }).refresh()]);
+	return { pieceId: saved?.id ?? null };
+});
+
+/** The plan typed on a scenario's page before going in (the piece takes it when it is created). */
+export const plan = query(z.object({ id: z.string().max(60), lang }), async ({ id, lang }) => planOf(learner().id, id, lang));
+export const keepPlan = command(z.object({ id: z.string().max(60), lang, text: z.string().max(4000) }), async ({ id, lang, text }) =>
+	savePlan(learner().id, id, lang, text),
 );

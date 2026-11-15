@@ -13,8 +13,8 @@ import { autogrow } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import Speaker from "#lib/components/session/Speaker.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { toast } from "#lib/demo/app.svelte.ts";
 import { page } from "$app/state";
 
 /*

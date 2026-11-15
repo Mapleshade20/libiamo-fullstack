@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Component } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import type { ExchangeApi } from "#lib/components/exchange/actions.ts";
 import ConversationReadReceipt from "#lib/components/exchange/ConversationReadReceipt.svelte";
 import type { SurfaceProps } from "#lib/components/exchange/controller.svelte.ts";
@@ -11,9 +12,9 @@ import IMessageUI from "#lib/components/exchange/places/imessage/IMessageUI.svel
 import RedditUI from "#lib/components/exchange/places/reddit/RedditUI.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import type { ExchangePlace } from "#lib/constants.ts";
-import { app, forget, read, tx } from "#lib/demo/app.svelte.ts";
 import { enterPlace, finishPlace, hintInPlace, placeOf, readInPlace, sendToPlace } from "#lib/exchange/exchange.remote.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -41,12 +42,10 @@ $effect(() => {
 	if (view) void loadLang(view.language);
 });
 const exchangeId = () => view?.persisted?.id ?? null;
-const planKey = $derived(`scenarioPlan:${id}`);
 
 const api: ExchangeApi = {
 	async start() {
-		await enterPlace({ ...where, plan: read<string>(planKey, "") });
-		forget(planKey);
+		await enterPlace(where);
 	},
 	async send(fields) {
 		const ex = exchangeId();
@@ -74,7 +73,7 @@ const api: ExchangeApi = {
 const Surface = $derived(view ? SURFACES[view.place] : null);
 // An exchange already over is read on the after page.
 $effect(() => {
-	if (view?.persisted && view.persisted.status !== "in_progress") goto(`/scenario/${id}/after`, { replaceState: true });
+	if (view?.persisted && view.persisted.status !== "in_progress") goto(`/scenario/${id}/after`, { replace: true });
 });
 $effect(() => {
 	document.title = `${view?.title ?? ""} · ${tx("homeTitle")}`;
@@ -87,7 +86,7 @@ $effect(() => {
 		<Surface
 			scenarioId={view.scenarioId}
 			userName={account.me.name}
-			avatarUrl={app.prefs.avatar ?? ""}
+			avatarUrl={account.me.picture ?? ""}
 			language={view.language}
 			persisted={view.persisted}
 			openingState={view.openingState}

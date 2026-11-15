@@ -6,8 +6,8 @@ import { parseMailAddress } from "./mail.ts";
 
 /*
  * What a place shows when the learner arrives (design §5.3): the old per-place opening state, without the counterpart's
- * name and the members, which a version's `people` replaces. An AO3 chapter also keeps its end note, which the demo's
- * scenario page draws. The scenario page draws a quieter projection of it (`situationOf`).
+ * name and the members, which a version's `people` replaces. An AO3 chapter also keeps its end note, which the
+ * place draws under the chapter. The scenario page draws a quieter projection of it (`situationOf`).
  */
 const line = z.string().max(500);
 const body = z.string().max(20_000);

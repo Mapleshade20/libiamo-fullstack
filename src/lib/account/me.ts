@@ -1,4 +1,4 @@
-import type { AppLang, TutorLanguage } from "#lib/constants.ts";
+import type { AppLang, Backdrop, Detail, PatternName, Theme, TutorLanguage } from "#lib/constants.ts";
 
 export type Via = "email" | "google" | "github";
 
@@ -6,6 +6,8 @@ export type Via = "email" | "google" | "github";
 export type Me = {
 	email: string;
 	name: string;
+	/** Gravatar's picture for the address, if it has one. */
+	picture: string | null;
 	verified: boolean;
 	/** How the account was made. */
 	via: Via;
@@ -20,5 +22,6 @@ export type Me = {
 	role: "learner" | "admin";
 	/** Whether the welcome is done; until then there are no settings. */
 	onboarded: boolean;
+	look: { theme: Theme; backdrop: Backdrop; pattern: PatternName; detail: Detail };
 	prefs: { native: AppLang; learning: string[]; active: string; feedback: TutorLanguage; weeklyGoal: number; helpImprove: boolean } | null;
 };

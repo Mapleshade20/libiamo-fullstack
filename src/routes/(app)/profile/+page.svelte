@@ -4,18 +4,20 @@ import ExternalLink from "@lucide/svelte/icons/external-link";
 import Pencil from "@lucide/svelte/icons/pencil";
 import { onMount, tick } from "svelte";
 import { account } from "#lib/account/account.svelte.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import ModalDialog from "#lib/components/common/ModalDialog.svelte";
 import { shake } from "#lib/components/common/motion.ts";
 import { tip } from "#lib/components/common/tip.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import AvatarSticker from "#lib/components/stickers/AvatarSticker.svelte";
 import { DRINKS } from "#lib/components/streak/glass/drinks.ts";
 import Glass from "#lib/components/streak/glass/Glass.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
-import { app, toast, tx } from "#lib/demo/app.svelte.ts";
-import { myWriting } from "#lib/demo/data.ts";
+import { tx } from "#lib/i18n/tx.ts";
 import { notesNow } from "#lib/notebook/notebook.svelte.ts";
 import { historyNow } from "#lib/week/week.svelte.ts";
+import { myWriting } from "#lib/writing/writing.svelte.ts";
 
 /*
  * The profile: who the learner is here. Their picture and name (the name edited in a small dialog behind the pencil,
@@ -73,7 +75,7 @@ function saveName(e: SubmitEvent) {
 	toast(tx("setSaved"));
 }
 
-// The picture is Gravatar's for the account's address, as in the main app (server/account/gravatar.ts): changing it
+// The picture is Gravatar's for the account's address, as the server finds it (server/account/gravatar.ts): changing it
 // happens there, so the camera says where and with which address, and asks before leaving.
 let gravatar = $state(false);
 
@@ -88,7 +90,7 @@ onMount(() => {
 <main class="sheet">
 	<header class="me">
 		<div class="pic">
-			<AvatarSticker name={app.prefs.name} photo={app.prefs.avatar} size={84} />
+			<AvatarSticker name={app.prefs.name} photo={account.me.picture ?? undefined} size={84} />
 			<button
 				type="button"
 				class="pic-btn"

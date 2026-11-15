@@ -509,6 +509,32 @@ decided on:
   hours (§5.7). `help_improve` off is as proposed: numbers without words, and the admin's session pages (phase 5) will
   not list that learner's pieces.
 
+**Phase 6, first run: under way** (2026-11-16). Asked for by the user: no trace of the demo left, every page rendered
+on the server on real data.
+
+- **The demo is gone.** `lib/demo` is deleted. `app.svelte.ts` is split into `account/app.svelte.ts` (settings and look),
+  `account/language.ts`, `account/look.svelte.ts`, `i18n/tx.ts`, `shell/toast.svelte.ts`; `data.ts` into
+  `writing/sites.ts`, `writing/writing.svelte.ts` (lists, follow-ups), `writing/open.ts`, `writing/source-status.ts` and
+  the tour's sandbox. The developer settings, the call bubbles (and their event stream, `/api/s/<id>/calls`), the
+  simulated limits, the fixtures (`/api/fixtures`, `server/dev`), the sample drafts, `/lab/glass` and the revision
+  page's phase switcher are removed; the admin's sessions page is where calls are read. The scenario page's "How do I
+  say…" stand-in is removed until it is built.
+- **Server rendering.** The root `ssr = false` is gone. State that belongs to a learner is made per request on the
+  server (`lib/scope.ts`); the root layout's load brings the account, the pieces, the interface strings and the display
+  clock (the places' dates were in 1970 and UTC without it); `hooks.server.ts` writes `<html>` (language, direction,
+  theme, backdrop, sidebar). The home page's greeting is drawn on the server in the learner's time zone.
+- **Off the device.** Theme, backdrop, pattern and pass 1's depth are `user` columns (`saveLook`); the sidebar's fold
+  and the signed-out pages' language are cookies; the picture is Gravatar's, looked up by the server
+  (`server/account/gravatar.ts`); a scenario's plan is `scenario_plan`, taken by the piece; something pasted to collect
+  from is a `reading` at once (`/collect/<reading>`, reload-safe). The tour's sandbox is memory only.
+- **Checked** (2026-11-16): every page answers 200 from the server signed in, signed out and as admin, and hydrates
+  without errors (dev server and the production build); theme, backdrop and fold render from the server after a change;
+  collecting from the box and reloading; a plan typed, reloaded, and taken by the piece on going in; sign-up in a
+  picked language, the link, the welcome, home, the account deleted; the whole tour on the real pages with no request
+  reaching the server but the learner's own visit. Found on the way: the tour's glass compared a proxied drink.
+- **Still to do in phase 6:** the public pages (terms, privacy, changelog; settings links to them) and the welcome page
+  for visitors (§11).
+
 **Phase 5, admin: done** (2026-11-14; the user has not looked at it yet). The demo's admin pages on the server, in four
 commits:
 

@@ -1,16 +1,13 @@
 <script lang="ts">
-import { app } from "#lib/demo/app.svelte.ts";
+import { app } from "#lib/account/app.svelte.ts";
 import { renderBackdrop } from "./backdrops";
-import { backdropState } from "./state.svelte";
 import "./backdrop.css";
 
 /* The backdrop behind the home page and the scene card, as the learner set it (settings): nothing, a wallpaper, an
    old print along the bottom, or a faint painting. */
 let host: HTMLElement | undefined = $state();
 $effect(() => {
-	void app.dark;
-	void backdropState.version;
-	if (host) renderBackdrop(host);
+	if (host) renderBackdrop(host, { backdrop: app.look.backdrop, pattern: app.look.pattern }, app.dark);
 });
 </script>
 

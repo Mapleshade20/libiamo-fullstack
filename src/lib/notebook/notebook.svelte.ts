@@ -1,7 +1,6 @@
+import { app } from "#lib/account/app.svelte.ts";
+import { sandboxed, tourDeck, tourNotebook } from "#lib/components/tour/sandbox.svelte.ts";
 import type { LEARNABLE } from "#lib/constants.ts";
-import { app, sandboxed } from "#lib/demo/app.svelte.ts";
-import { sandboxDeck } from "#lib/demo/data.ts";
-import { sandboxNotebook } from "#lib/demo/notes.ts";
 import { due, noteById, notebook, reviewQueue } from "./notebook.remote.ts";
 import type { DueSummary, Note, ReviewCard } from "./types.ts";
 
@@ -13,20 +12,16 @@ export const lang = () => app.lang as (typeof LEARNABLE)[number];
  * while it plays. Call these where the page reads them (a derived, the template), so the queries follow.
  */
 export function dueNow(): DueSummary | Promise<DueSummary> {
-	void app.version;
 	if (!sandboxed()) return due(lang());
-	const d = sandboxDeck();
+	const d = tourDeck();
 	return { count: d.length, first: d.slice(0, 2).map((c) => ({ phrase: c.phrase, where: c.where })) };
 }
 export function notesNow(): Note[] | Promise<Note[]> {
-	void app.version;
-	return sandboxed() ? sandboxNotebook() : notebook(lang());
+	return sandboxed() ? tourNotebook() : notebook(lang());
 }
 export function noteNow(id: string): Note | null | Promise<Note | null> {
-	void app.version;
-	return sandboxed() ? (sandboxNotebook().find((n) => n.id === id) ?? null) : noteById(id);
+	return sandboxed() ? (tourNotebook().find((n) => n.id === id) ?? null) : noteById(id);
 }
 export function deckNow(): ReviewCard[] | Promise<ReviewCard[]> {
-	void app.version;
-	return sandboxed() ? sandboxDeck() : reviewQueue(lang());
+	return sandboxed() ? tourDeck() : reviewQueue(lang());
 }

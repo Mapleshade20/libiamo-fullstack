@@ -5,7 +5,7 @@ import Languages from "@lucide/svelte/icons/languages";
 import Mail from "@lucide/svelte/icons/mail";
 import MessageSquare from "@lucide/svelte/icons/message-square";
 import MessagesSquare from "@lucide/svelte/icons/messages-square";
-import type { SiteArt } from "#lib/demo/data.ts";
+import type { SiteArt } from "#lib/writing/sites.ts";
 
 /*
  * A site's drawing, as a two-colour print: the lucide icon in a thick clay stroke set a little off its register, then

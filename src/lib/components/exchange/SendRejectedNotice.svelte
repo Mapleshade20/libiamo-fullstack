@@ -1,5 +1,5 @@
 <script lang="ts">
-import { toast } from "#lib/demo/app.svelte.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import { t } from "#lib/i18n/index.svelte.ts";
 import type { ExchangeController } from "./controller.svelte.ts";
 

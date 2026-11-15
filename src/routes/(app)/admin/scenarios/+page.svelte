@@ -9,7 +9,7 @@ import { tip } from "#lib/components/common/tip.ts";
 import SiteArt from "#lib/components/home/SiteArt.svelte";
 import Button from "#lib/components/ui/button/button.svelte";
 import { LEARNABLE, langName } from "#lib/constants.ts";
-import { siteOf } from "#lib/demo/data.ts";
+import { siteOf } from "#lib/writing/sites.ts";
 
 /*
  * Every scenario, newest first. A place scenario is written once per learning language; a translation once, with a

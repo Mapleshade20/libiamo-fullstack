@@ -1,7 +1,10 @@
-/* The shell's own state: whether the bar is folded to its stickers (a desktop preference), whether the phone's drawer
-   is open, and what the current page asks of the top bar. */
+import { keepCookie } from "#lib/client/cookie.ts";
+import { learnerState } from "#lib/scope.ts";
+
+/* The shell's own state: whether the bar is folded to its stickers (this device's, in a cookie the server reads),
+   whether the phone's drawer is open, and what the current page asks of the top bar. */
 class Shell {
-	folded = $state(document.documentElement.classList.contains("side-folded"));
+	folded = $state(false);
 	drawer = $state(false);
 	/** The home page shows a button to see its backdrop whole. */
 	viewable = $state(false);
@@ -9,11 +12,11 @@ class Shell {
 	setFolded(on: boolean) {
 		this.folded = on;
 		document.documentElement.classList.toggle("side-folded", on);
-		localStorage.setItem("sideFolded", on ? "1" : "0");
+		keepCookie("side", on ? "folded" : "open");
 	}
 	setDrawer(on: boolean) {
 		this.drawer = on;
 		document.documentElement.classList.toggle("drawer", on);
 	}
 }
-export const shell = new Shell();
+export const shell = learnerState(() => new Shell());

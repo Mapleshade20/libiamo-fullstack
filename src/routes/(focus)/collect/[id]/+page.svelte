@@ -2,28 +2,33 @@
 import X from "@lucide/svelte/icons/x";
 import { onMount, tick } from "svelte";
 import { fly, slide } from "svelte/transition";
+import { app } from "#lib/account/app.svelte.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { reducedMotion } from "#lib/components/common/motion.ts";
-import { CALLS } from "#lib/components/debug/calls.ts";
 import FocusBar from "#lib/components/shell/FocusBar.svelte";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { keepCollected, sandboxed, tourReading } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { isAppLang } from "#lib/constants.ts";
-import { read, sandboxed, toast, write } from "#lib/demo/app.svelte.ts";
-import { COLLECT_KEY, COLLECTED_KEY, type Collected } from "#lib/demo/data.ts";
-import { checkCall, stopOf } from "#lib/demo/limits.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
-import { removeNotes } from "#lib/notebook/notebook.remote.ts";
+import { htmlLang } from "#lib/i18n/langs.ts";
+import { answered, needKey, stopOf } from "#lib/llm/stops.ts";
+import { readingById, removeNotes } from "#lib/notebook/notebook.remote.ts";
 import { goto } from "$app/navigation";
+import { page } from "$app/state";
 
 /*
  * The stealing notebook (偷词本): what the learner pasted from their reading, to highlight what they want to own. A
  * focused page like the session's: the home page's box grows into the passage, the heading changes words. The page
  * itself speaks the passage's language (the one the door found, as the home page around it does); what the tutor says
- * about a phrase, and asking it more, speak the tutor's. Every phrase is kept the moment it is filled in.
+ * about a phrase, and asking it more, speak the tutor's. Every phrase is kept the moment it is filled in. The passage
+ * was kept as a reading when it was sent from the home page (the tour's, in its sandbox), so the page opens again.
  */
-type Setup = { passage: string; lang: string; native: string; feedback: string; model: string; readingId?: string };
-const SETUP = JSON.parse(sessionStorage.getItem(COLLECT_KEY) || "null") as Setup | null;
-if (!SETUP) goto("/", { replace: true });
+const found = sandboxed() ? tourReading(page.params.id ?? "") : await readingById(page.params.id ?? "");
+const SETUP = found ? { passage: found.passage, lang: found.lang, native: app.prefs.native, feedback: app.prefs.feedback } : null;
+onMount(() => {
+	if (!SETUP) goto("/", { replace: true });
+});
 const TUTOR = SETUP?.feedback === "target" ? SETUP.lang : (SETUP?.native ?? "en");
 const LANG = isAppLang(TUTOR) ? TUTOR : "en";
 const UI = SETUP && isAppLang(SETUP.lang) ? SETUP.lang : "en";
@@ -33,8 +38,10 @@ loadLang(UI);
 const tx = (key: string, vars?: Record<string, string | number>) => t(LANG, key, vars);
 /** The page's own words. */
 const ui = (key: string, vars?: Record<string, string | number>) => t(UI, key, vars);
-const htmlLang = (l: string) => (l === "zh-CN" ? "zh-Hans" : l);
-const touch = matchMedia("(pointer: coarse)").matches;
+let touch = $state(false);
+onMount(() => {
+	touch = matchMedia("(pointer: coarse)").matches;
+});
 const REG: Record<string, string> = {
 	neutral: "regNeutral",
 	casual: "regCasual",
@@ -81,7 +88,7 @@ const nextWord = (i: number) => {
    read in, which review later asks it back in; the passage is kept once, as the reading they come from. A mark undone
    or changed takes its entry away. The tour's sandbox keeps its own. */
 const batch = `${Date.now()}`;
-let readingId = SETUP?.readingId;
+const readingId = sandboxed() ? undefined : found?.id;
 const forget = (ids: (string | undefined)[]) => {
 	const gone = ids.filter((x): x is string => !!x);
 	if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
@@ -90,18 +97,17 @@ function sentenceOf(m: Mark) {
 	const at = segs[m.a].index;
 	return (SENTENCES.find((x) => at >= x.index && at < x.index + x.segment.length)?.segment ?? "").trim();
 }
+/** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 function store() {
-	if (!sandboxed()) return;
-	const others = read<(Collected & { batch?: string })[]>(COLLECTED_KEY, []).filter((x) => x.batch !== batch);
-	write(COLLECTED_KEY, [
-		...others,
-		...marks
+	if (!sandboxed() || !SETUP) return;
+	keepCollected(
+		batch,
+		marks
 			.filter((m) => m.data)
 			.map((m) => {
 				const d = m.data as Item;
 				return {
-					batch,
-					lang: SETUP?.lang,
+					lang: SETUP.lang,
 					phrase: d.phrase,
 					meaning: d.meaning,
 					why: d.why,
@@ -109,10 +115,9 @@ function store() {
 					example: d.example,
 					marked: textOf(m),
 					sentence: sentenceOf(m),
-					at: Date.now(),
 				};
 			}),
-	]);
+	);
 }
 
 /* Filling in: every change waits a moment, then all marks not filled in yet go in one call. Asking again after a
@@ -132,19 +137,15 @@ async function fill() {
 	}
 	const sent = todo.map((m) => ({ n: m.n, text: textOf(m), a: m.a, b: m.b, sentence: sentenceOf(m) }));
 	try {
-		checkCall(`explain:${sent.map((x) => x.text).join("|")}`);
+		needKey();
 		stopped = null;
-		const r = await CALLS.traced("/api/collect/explain", {
+		const r = await fetch("/api/collect/explain", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ ...SETUP, readingId, highlights: sent, retry: retries }),
 		});
-		if (!r.ok) throw new Error(String(r.status));
-		const got = (await r.json()) as { readingId?: string; items: (Item & { n: number; id?: string })[] };
-		if (got.readingId && got.readingId !== readingId) {
-			readingId = got.readingId;
-			sessionStorage.setItem(COLLECT_KEY, JSON.stringify({ ...SETUP, readingId }));
-		}
+		await answered(r);
+		const got = (await r.json()) as { items: (Item & { n: number; id?: string })[] };
 		const stale: (string | undefined)[] = [];
 		for (const s of sent) {
 			const it = got.items?.find((x) => x.n === s.n);
@@ -245,12 +246,14 @@ async function askAbout(m: Mark, q: string) {
 	const turn = m.thread[m.thread.length - 1];
 	openN = m.n;
 	try {
-		checkCall(`ask:${q}`);
-		const r = await CALLS.traced("/api/collect/ask", {
+		needKey();
+		const r = await fetch("/api/collect/ask", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ ...SETUP, phrase: m.data.phrase, history: m.thread.filter((x) => x.a !== null), question: q }),
-		}).then((x: Response) => x.json());
+		})
+			.then(answered)
+			.then((x: Response) => x.json());
 		turn.a = r.answer ?? tx("colFailed");
 	} catch (e) {
 		const k = stopOf(e);

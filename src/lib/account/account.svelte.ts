@@ -2,9 +2,11 @@ import { captchaHeaders } from "#lib/auth/captcha.svelte.ts";
 import { authClient } from "#lib/auth/client.ts";
 import { passwordProblem } from "#lib/auth/password-strength.ts";
 import type { SocialProviderId } from "#lib/auth/social.ts";
-import { APP_LANGS, type AppLang, isAppLang, RTL_LANGS } from "#lib/constants.ts";
-import { app, applyLang } from "#lib/demo/app.svelte.ts";
+import { keepCookie } from "#lib/client/cookie.ts";
+import type { AppLang } from "#lib/constants.ts";
 import { loadLang, t } from "#lib/i18n/index.svelte.ts";
+import { dirOf, htmlLang } from "#lib/i18n/langs.ts";
+import { learnerState } from "#lib/scope.ts";
 import { goto } from "$app/navigation";
 import {
 	cancelEmailChange as cancelChange,
@@ -14,20 +16,23 @@ import {
 	requestEmailChange as requestChange,
 	saveDecisionModel,
 	saveKey,
-	savePrefs,
 } from "./account.remote.ts";
+import { app, firstPrefs } from "./app.svelte.ts";
+import { applyLang } from "./language.ts";
 import type { Me } from "./me.ts";
 
 /*
- * The signed-in account in the browser: what the server says (`me`), the settings it holds poured into `app.prefs`
- * (which the pages read), and the flows of the auth pages through Better Auth. Before signing in there is no learning
- * language yet, so those pages speak the browser's language, or the one picked in their corner.
+ * The signed-in account: what the server says (`me`, given to the root layout's load, asked again after anything that
+ * may change it), the settings it holds poured into `app` (which the pages read), and the flows of the auth pages
+ * through Better Auth. Before signing in there is no learning language yet, so those pages speak the browser's
+ * language, or the one picked in their corner.
  */
 export type { Me, Via } from "./me.ts";
 
 const NOBODY: Me = {
 	email: "",
 	name: "",
+	picture: null,
 	verified: false,
 	via: "email",
 	hasPassword: false,
@@ -35,18 +40,25 @@ const NOBODY: Me = {
 	key: null,
 	role: "learner",
 	onboarded: false,
+	look: { theme: "system", backdrop: "none", pattern: "blossom", detail: "needed" },
 	prefs: null,
 };
 
-export const account = $state<{ me: Me; signedIn: boolean }>({ me: NOBODY, signedIn: false });
+export const account = learnerState(() => {
+	const a = $state<{ me: Me; signedIn: boolean }>({ me: NOBODY, signedIn: false });
+	return a;
+});
 
-function adopt(m: Me | null) {
+/** Takes in who is signed in: the root layout's load (on the server and in the browser), and every `hydrate()`. */
+export function adopt(m: Me | null) {
 	account.me = m ?? NOBODY;
 	account.signedIn = !!m;
-	if (m?.prefs) app.prefs = { ...app.prefs, ...m.prefs, name: m.name };
-	else if (m) app.prefs = { ...app.prefs, name: m.name };
+	app.onboarded = !!m?.onboarded;
+	if (m) app.look = { ...m.look };
+	if (m?.prefs) app.prefs = { ...m.prefs, name: m.name };
+	else if (m) app.prefs = { ...firstPrefs(auth.lang), name: m.name };
 }
-/** Asks the server who is signed in (on load, and after anything that may have changed it). */
+/** Asks the server again who is signed in (after anything that may have changed it). */
 export async function hydrate() {
 	adopt(
 		await me()
@@ -54,21 +66,6 @@ export async function hydrate() {
 			.then(() => me()),
 	);
 }
-
-/* The settings live on the server once the welcome is done; `app.save()` sends them there. */
-app.persist = () => {
-	if (!account.signedIn || !account.me.onboarded) return;
-	const p = app.prefs;
-	void savePrefs({
-		name: p.name,
-		native: p.native,
-		learning: p.learning as never,
-		active: p.active as never,
-		feedback: p.feedback,
-		weeklyGoal: p.weeklyGoal,
-		helpImprove: p.helpImprove,
-	}).catch((e) => console.error("settings were not saved", e));
-};
 
 /** The welcome's end: the settings it chose, and the account is set up. */
 export async function finishWelcome() {
@@ -86,32 +83,26 @@ export async function finishWelcome() {
 	await hydrate();
 }
 
-/** The browser's interface language. Chinese is Simplified only: zh-TW, zh-HK and zh-Hant do not pick it. */
-export function browserLang(): AppLang {
-	const nav = (navigator.language || "en").toLowerCase();
-	if (/^zh\b/.test(nav)) return /hant|tw|hk|mo/.test(nav) ? "en" : "zh-CN";
-	return APP_LANGS.find((l) => nav.startsWith(l.toLowerCase())) ?? "en";
-}
-const picked = sessionStorage.getItem("authLang");
 /**
- * The language of the pages before signing in, and the address typed on one of them, carried to the next (never in the
- * URL): from signing in to a forgotten password, from signing up to the inbox page.
+ * The language of the pages before signing in (the browser's, or the one picked in their corner, kept in a cookie the
+ * server reads), and the address typed on one of them, carried to the next (never in the URL): from signing in to a
+ * forgotten password, from signing up to the inbox page.
  */
-export const auth = $state<{ lang: AppLang; email: string }>({
-	lang: isAppLang(picked) ? picked : browserLang(),
-	email: sessionStorage.getItem("authEmail") ?? "",
+export const auth = learnerState(() => {
+	const a = $state<{ lang: AppLang; email: string }>({ lang: "en", email: "" });
+	return a;
 });
 /** A string of the pages before signing in. */
 export const atx = (key: string, vars?: Record<string, string | number>) => t(auth.lang, key, vars);
 export async function setAuthLang(l: AppLang) {
-	auth.lang = l;
-	sessionStorage.setItem("authLang", l);
 	await loadLang(l);
+	auth.lang = l;
+	keepCookie("lang", l);
 	speak(l);
 }
 export function speak(l: string) {
-	document.documentElement.lang = l === "zh-CN" ? "zh-Hans" : l;
-	document.documentElement.dir = RTL_LANGS.includes(l) ? "rtl" : "ltr";
+	document.documentElement.lang = htmlLang(l);
+	document.documentElement.dir = dirOf(l);
 }
 
 /** What is wrong with a new password, as a catalog key, or null; the server asks again. */
@@ -125,9 +116,9 @@ const refusal = (e: Failure, fallback = "auSomethingWrong") =>
 
 /** Into the app: the welcome for an account that has not set up, else home, speaking the language worked in. */
 export function enter() {
-	if (!account.me.onboarded) return goto("/welcome", { replace: true });
+	if (!account.me.onboarded) return goto("/welcome", { replace: true, invalidateAll: true });
 	applyLang();
-	return goto("/", { replace: true });
+	return goto("/", { replace: true, invalidateAll: true });
 }
 
 /** An address and password. Wrong ones get one message, never which of the two was wrong. */
@@ -224,11 +215,11 @@ export async function deleteAccount(email: string) {
 	await remove({ email });
 	await authClient.signOut().catch(() => {});
 	adopt(null);
-	await goto("/sign-in", { replace: true });
+	await goto("/sign-in", { replace: true, invalidateAll: true });
 }
 
 export async function signOut(to = "/sign-in") {
 	await authClient.signOut();
 	adopt(null);
-	await goto(to);
+	await goto(to, { invalidateAll: true });
 }

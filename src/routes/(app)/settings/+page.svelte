@@ -7,13 +7,15 @@ import { flip } from "svelte/animate";
 import { slide } from "svelte/transition";
 import { signInSetup } from "#lib/account/account.remote.ts";
 import { account, cancelEmailChange, connect, disconnect, hasPassword, setDecisionModel } from "#lib/account/account.svelte.ts";
+import { app } from "#lib/account/app.svelte.ts";
+import { switchLanguage } from "#lib/account/language.ts";
+import { setTheme } from "#lib/account/look.svelte.ts";
 import { SOCIAL_PROVIDERS, type SocialProviderId, socialFailureKey } from "#lib/auth/social.ts";
 import ChangeEmail from "#lib/components/auth/ChangeEmail.svelte";
 import ChangePassword from "#lib/components/auth/ChangePassword.svelte";
 import DeleteAccount from "#lib/components/auth/DeleteAccount.svelte";
 import KeyForm from "#lib/components/auth/KeyForm.svelte";
-import { BACKDROPS, backdropChoice, ofDay, PATTERNS, SERIES } from "#lib/components/backdrop/backdrops.ts";
-import { setBackdrop } from "#lib/components/backdrop/state.svelte.ts";
+import { ofDay, SERIES } from "#lib/components/backdrop/backdrops.ts";
 import ChoiceGroup from "#lib/components/common/ChoiceGroup.svelte";
 import InfoTip from "#lib/components/common/InfoTip.svelte";
 import LanguageFlag from "#lib/components/common/LanguageFlag.svelte";
@@ -23,10 +25,11 @@ import Select from "#lib/components/common/Select.svelte";
 import SocialProviderIcon from "#lib/components/common/SocialProviderIcon.svelte";
 import Switch from "#lib/components/common/Switch.svelte";
 import { tip } from "#lib/components/common/tip.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
-import { APP_LANGS, hasScenarios, LEARNABLE } from "#lib/constants.ts";
-import { app, demoOpens, endonym, nameOf, setTheme, switchLanguage, THEMES, type Theme, toast, tx } from "#lib/demo/app.svelte.ts";
+import { APP_LANGS, BACKDROPS, type Backdrop, hasScenarios, LEARNABLE, PATTERN_NAMES, type PatternName, THEMES, type Theme } from "#lib/constants.ts";
 import { loadLang } from "#lib/i18n/index.svelte.ts";
+import { endonym, nameOf, tx } from "#lib/i18n/tx.ts";
 import { decisionModelFor, PROVIDERS } from "#lib/llm/providers.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -88,9 +91,8 @@ function dropLanguage(l: string) {
 let emailOpen = $state(false);
 let pwOpen = $state(false);
 let deleteOpen = $state(false);
-// Appearance: the backdrop is kept on this device (the main app keeps it on the account).
-let backdrop = $state(backdropChoice().backdrop as string);
-let pattern = $state(backdropChoice().pattern as string);
+// Appearance: kept on the account, like every setting.
+const backdrop = $derived(app.look.backdrop);
 const pictures = $derived(backdrop === "painting" && app.dark ? null : SERIES[backdrop as keyof typeof SERIES]?.());
 const backdropHelp = $derived(
 	app.dark && backdrop === "painting"
@@ -229,7 +231,7 @@ onMount(() => {
 			{#snippet themeCtl()}
 				<SegmentedControl
 					label={tx("setTheme")}
-					value={app.theme}
+					value={app.look.theme}
 					onValueChange={(v) => {
 						setTheme(v as Theme);
 						saved();
@@ -241,12 +243,12 @@ onMount(() => {
 			{#snippet backdropCtl()}
 				<SegmentedControl
 					label={tx("backdropLabel")}
-					bind:value={backdrop}
+					value={app.look.backdrop}
 					onValueChange={(v) => {
-						setBackdrop("backdrop", v);
+						app.saveLook({ backdrop: v as Backdrop });
 						saved();
 					}}
-					items={BACKDROPS.map((v: string) => ({
+					items={BACKDROPS.map((v) => ({
 						value: v,
 						label: tx(({ none: "bgNone", pattern: "bgPattern", image: "bgImage", painting: "bgPainting" } as Record<string, string>)[v]),
 						disabled: v === "painting" && app.dark,
@@ -257,12 +259,12 @@ onMount(() => {
 			{#snippet patternCtl()}
 				<SegmentedControl
 					label={tx("patternLabel")}
-					bind:value={pattern}
+					value={app.look.pattern}
 					onValueChange={(v) => {
-						setBackdrop("pattern", v);
+						app.saveLook({ pattern: v as PatternName });
 						saved();
 					}}
-					items={Object.keys(PATTERNS).map((v) => ({ value: v, label: tx(`pat_${v}`) }))}
+					items={PATTERN_NAMES.map((v) => ({ value: v, label: tx(`pat_${v}`) }))}
 				/>
 			{/snippet}
 			<Reveal open={backdrop === "pattern"}> {@render row(tx("patternLabel"), "", patternCtl)} </Reveal>
@@ -352,15 +354,12 @@ onMount(() => {
 
 	<div class="foot">
 		<nav class="links" aria-label={tx("setLinks")}>
-			{#each ["setLinkHome", "setLinkChangelog", "setLinkPrivacy", "setLinkTerms"] as k (k)}
-				<a
-					href="/settings"
-					onclick={(e) => {
-						e.preventDefault();
-						demoOpens();
-					}}
-					>{tx(k)}</a
-				>
+			{#each [
+				["setLinkChangelog", "/changelog"],
+				["setLinkPrivacy", "/privacy"],
+				["setLinkTerms", "/terms"],
+			] as [k, href] (k)}
+				<a {href}>{tx(k)}</a>
 			{/each}
 		</nav>
 		<button type="button" class="delete" aria-haspopup="dialog" onclick={() => (deleteOpen = true)}>{tx("setDeleteAccount")}</button>

@@ -9,9 +9,9 @@ import { autogrow } from "#lib/components/common/motion.ts";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import Select from "#lib/components/common/Select.svelte";
 import { tip } from "#lib/components/common/tip.ts";
+import { toast } from "#lib/components/shell/toast.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { APP_LANGS } from "#lib/constants.ts";
-import { toast } from "#lib/demo/app.svelte.ts";
 
 /*
  * Announcements: written per interface language (a learner sees theirs, else English), shown on the home page as a

@@ -1,8 +1,24 @@
 import { error } from "@sveltejs/kit";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { APP_LANGS, type AppLang, KEY_PROVIDERS, type KeyProvider, LEARNABLE, TUTOR_LANGUAGES } from "#lib/constants.ts";
+import {
+	APP_LANGS,
+	type AppLang,
+	BACKDROPS,
+	type Backdrop,
+	DETAILS,
+	type Detail,
+	KEY_PROVIDERS,
+	type KeyProvider,
+	LEARNABLE,
+	PATTERN_NAMES,
+	type PatternName,
+	THEMES,
+	type Theme,
+	TUTOR_LANGUAGES,
+} from "#lib/constants.ts";
 import { PROVIDERS } from "#lib/llm/providers.ts";
+import { gravatarOf } from "#lib/server/account/gravatar.ts";
 import { encryptKey } from "#lib/server/account/key.ts";
 import { clientIp, logAuthEvent } from "#lib/server/auth/audit.ts";
 import { auth } from "#lib/server/auth/auth.ts";
@@ -22,18 +38,20 @@ import type { Me } from "./me.ts";
 export const me = query(async (): Promise<Me | null> => {
 	const u = getRequestEvent().locals.user;
 	if (!u) return null;
-	const [accounts, [key]] = await Promise.all([
+	const [accounts, [key], picture] = await Promise.all([
 		db
 			.select({ id: account.id, providerId: account.providerId, createdAt: account.createdAt })
 			.from(account)
 			.where(eq(account.userId, u.id))
 			.orderBy(asc(account.createdAt)),
 		db.select({ provider: userKey.provider, model: userKey.model, decision: userKey.decisionModel }).from(userKey).where(eq(userKey.userId, u.id)),
+		gravatarOf(u.email),
 	]);
 	const first = accounts[0]?.providerId;
 	return {
 		email: u.email,
 		name: u.name,
+		picture,
 		verified: u.emailVerified,
 		via: first === "google" || first === "github" ? first : "email",
 		hasPassword: accounts.some((a) => a.providerId === "credential"),
@@ -54,6 +72,12 @@ export const me = query(async (): Promise<Me | null> => {
 					helpImprove: u.helpImprove,
 				}
 			: null,
+		look: {
+			theme: u.theme as Theme,
+			backdrop: u.backdrop as Backdrop,
+			pattern: u.pattern as PatternName,
+			detail: u.detail as Detail,
+		},
 	};
 });
 
@@ -110,6 +134,20 @@ export const savePrefs = command(Prefs, async (p) => {
 		await week().refresh();
 	}
 });
+
+/** How the pages look (and how much pass 1 marks): any of it, at once. */
+export const saveLook = command(
+	z.object({
+		theme: z.enum(THEMES).optional(),
+		backdrop: z.enum(BACKDROPS).optional(),
+		pattern: z.enum(PATTERN_NAMES).optional(),
+		detail: z.enum(DETAILS).optional(),
+	}),
+	async (look) => {
+		const u = learner();
+		if (Object.values(look).some((v) => v !== undefined)) await db.update(user).set(look).where(eq(user.id, u.id));
+	},
+);
 
 /** The welcome's end: the settings, and the account is set up. */
 export const finishWelcome = command(Prefs, async (p) => {
