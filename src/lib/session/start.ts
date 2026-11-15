@@ -1,3 +1,4 @@
+import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { needKey } from "#lib/llm/stops.ts";
 import { refreshWriting } from "#lib/writing/writing.svelte.ts";
 import type { Setup } from "./types";
@@ -10,6 +11,7 @@ import type { Setup } from "./types";
 let handed: { id: string; setup: Setup } | null = null;
 
 export async function startPiece(setup: Setup): Promise<string> {
+	const active = captureTourState();
 	needKey();
 	const r = await fetch("/api/s", {
 		method: "POST",
@@ -17,6 +19,7 @@ export async function startPiece(setup: Setup): Promise<string> {
 		body: JSON.stringify(setup),
 	});
 	const v = await r.json().catch(() => ({}));
+	if (!active()) throw new DOMException("Tour chapter changed", "AbortError");
 	if (!r.ok || typeof v.id !== "string") throw new Error(v.error || "startFailed");
 	handed = { id: v.id, setup };
 	// It is one of their pieces now, unfinished until its revision ends.

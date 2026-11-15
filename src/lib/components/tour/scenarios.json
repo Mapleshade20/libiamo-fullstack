@@ -1,0 +1,291 @@
+{
+	"en": [
+		{
+			"id": "ao3-fic",
+			"kind": "exchange",
+			"place": "ao3",
+			"site": "AO3",
+			"minutes": 10,
+			"title": "Comment on a fic you loved",
+			"line": "The author asked readers which scene stayed with them.",
+			"state": "new",
+			"publishedAt": 1788350400000,
+			"introduction": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+			"situationLang": "en",
+			"situation": {
+				"kind": "ao3",
+				"work": "Long Way Home",
+				"author": "mossfur_writes",
+				"chapter": "Chapter 24: The Moonstone",
+				"excerpt": "Bluestar did not look back at the camp. The moor was silver under a moon that had not been there an hour ago, and the cold came up through her paws like an old argument she had never finished. She thought of Oakheart, and then she made herself stop thinking of him, and walked on.",
+				"note": "That's the end! Thank you for sticking with this for two years. If you have a second, tell me which scene stayed with you, I read every comment."
+			},
+			"scene": {
+				"you": "A reader who followed the fic for two years",
+				"people": [
+					{
+						"name": "mossfur_writes",
+						"who": "the author"
+					},
+					{
+						"name": "lichenpaw",
+						"who": "another reader"
+					}
+				],
+				"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"]
+			}
+		},
+		{
+			"id": "reddit-practice",
+			"kind": "exchange",
+			"place": "reddit",
+			"site": "Reddit",
+			"minutes": 12,
+			"title": "Answer a question in r/languagelearning",
+			"line": "Someone asks how you practise writing every day.",
+			"state": "new",
+			"publishedAt": 1789041600000,
+			"situationLang": "en",
+			"situation": {
+				"kind": "reddit",
+				"sub": "languagelearning",
+				"title": "How do you actually practise writing? Not apps, real writing.",
+				"author": "u/quietfern",
+				"body": "I can read pretty well at this point (B2-ish) but whenever I try to write a comment or an email it takes forever and still sounds stiff. What do you actually do every day? Journals? Discord? I'd love specifics.",
+				"comments": [
+					{
+						"author": "u/tallgrass_42",
+						"body": "Honestly, replying to things I care about. Fandom comments got me further than any textbook."
+					}
+				]
+			},
+			"scene": {
+				"you": "A Redditor who writes in English every day",
+				"people": [
+					{
+						"name": "u/quietfern",
+						"who": "asked the question"
+					},
+					{
+						"name": "u/tallgrass_42",
+						"who": "already answered"
+					}
+				],
+				"goals": ["Share what you actually do", "Be specific enough that someone could try it"]
+			}
+		}
+	],
+	"es": [
+		{
+			"id": "ao3-fic",
+			"kind": "exchange",
+			"place": "ao3",
+			"site": "AO3",
+			"minutes": 10,
+			"title": "Comenta un fic que te encantó",
+			"line": "La autora preguntó qué escena se les quedó grabada.",
+			"state": "new",
+			"publishedAt": 1788350400000,
+			"introduction": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+			"situationLang": "es",
+			"situation": {
+				"kind": "ao3",
+				"work": "El largo camino",
+				"author": "lunadepapel",
+				"chapter": "Capítulo 24: La piedra lunar",
+				"excerpt": "Estrella Azul no miró atrás. El páramo brillaba bajo una luna que una hora antes no estaba, y el frío le subía por las patas como una discusión que nunca terminó.",
+				"note": "¡Fin! Gracias por acompañarme dos años. Si tienen un momento, díganme qué escena se les quedó grabada: leo todos los comentarios."
+			},
+			"scene": {
+				"you": "A reader who followed the fic for two years",
+				"people": [
+					{
+						"name": "mossfur_writes",
+						"who": "the author"
+					},
+					{
+						"name": "lichenpaw",
+						"who": "another reader"
+					}
+				],
+				"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"]
+			}
+		},
+		{
+			"id": "reddit-practice",
+			"kind": "exchange",
+			"place": "reddit",
+			"site": "Reddit",
+			"minutes": 12,
+			"title": "Responde una pregunta en r/languagelearning",
+			"line": "Alguien pregunta cómo practicas la escritura cada día.",
+			"state": "new",
+			"publishedAt": 1789041600000,
+			"situationLang": "es",
+			"situation": {
+				"kind": "reddit",
+				"sub": "languagelearning",
+				"title": "¿Cómo practicáis la escritura de verdad?",
+				"author": "u/helecho_quieto",
+				"body": "Leo bastante bien (B2) pero escribir un correo me cuesta muchísimo y suena rígido. ¿Qué hacéis cada día? Me encantarían detalles concretos.",
+				"comments": []
+			},
+			"scene": {
+				"you": "A Redditor who writes in English every day",
+				"people": [
+					{
+						"name": "u/quietfern",
+						"who": "asked the question"
+					},
+					{
+						"name": "u/tallgrass_42",
+						"who": "already answered"
+					}
+				],
+				"goals": ["Share what you actually do", "Be specific enough that someone could try it"]
+			}
+		}
+	],
+	"fr": [
+		{
+			"id": "ao3-fic",
+			"kind": "exchange",
+			"place": "ao3",
+			"site": "AO3",
+			"minutes": 10,
+			"title": "Commente une fic que tu as adorée",
+			"line": "L'autrice demande quelle scène vous a marqués.",
+			"state": "new",
+			"publishedAt": 1788350400000,
+			"introduction": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+			"situationLang": "fr",
+			"situation": {
+				"kind": "ao3",
+				"work": "Le long chemin",
+				"author": "plume_de_lune",
+				"chapter": "Chapitre 24 : La Pierre de Lune",
+				"excerpt": "Étoile Bleue ne se retourna pas. La lande était argentée sous une lune qui n'était pas là une heure plus tôt, et le froid lui montait dans les pattes comme une vieille dispute jamais finie.",
+				"note": "C'est fini ! Merci de m'avoir suivie pendant deux ans. Si vous avez une seconde, dites-moi quelle scène vous a marqués, je lis tous les commentaires."
+			},
+			"scene": {
+				"you": "A reader who followed the fic for two years",
+				"people": [
+					{
+						"name": "mossfur_writes",
+						"who": "the author"
+					},
+					{
+						"name": "lichenpaw",
+						"who": "another reader"
+					}
+				],
+				"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"]
+			}
+		},
+		{
+			"id": "reddit-practice",
+			"kind": "exchange",
+			"place": "reddit",
+			"site": "Reddit",
+			"minutes": 12,
+			"title": "Réponds à une question sur r/languagelearning",
+			"line": "Quelqu'un demande comment tu t'entraînes à écrire chaque jour.",
+			"state": "new",
+			"publishedAt": 1789041600000,
+			"situationLang": "fr",
+			"situation": {
+				"kind": "reddit",
+				"sub": "languagelearning",
+				"title": "Comment vous entraînez-vous vraiment à écrire ?",
+				"author": "u/fougere_calme",
+				"body": "Je lis plutôt bien (B2) mais écrire un mail me prend une éternité et ça sonne raide. Vous faites quoi, concrètement, chaque jour ?",
+				"comments": []
+			},
+			"scene": {
+				"you": "A Redditor who writes in English every day",
+				"people": [
+					{
+						"name": "u/quietfern",
+						"who": "asked the question"
+					},
+					{
+						"name": "u/tallgrass_42",
+						"who": "already answered"
+					}
+				],
+				"goals": ["Share what you actually do", "Be specific enough that someone could try it"]
+			}
+		}
+	],
+	"ja": [
+		{
+			"id": "ao3-fic",
+			"kind": "exchange",
+			"place": "ao3",
+			"site": "AO3",
+			"minutes": 10,
+			"title": "好きだった二次創作に感想を書く",
+			"line": "作者が、どの場面が心に残ったかを読者に聞いている。",
+			"state": "new",
+			"publishedAt": 1788350400000,
+			"introduction": "Warriors is a series of novels about clans of wild cats. Bluestar, a clan leader, once loved Oakheart of a rival clan; this fic retells her last journey to the Moonstone, where leaders meet the spirits of their ancestors.",
+			"situationLang": "ja",
+			"situation": {
+				"kind": "ao3",
+				"work": "帰り道",
+				"author": "tsukiyo_kaku",
+				"chapter": "第24章 月の石",
+				"excerpt": "ブルースターは野営地を振り返らなかった。一時間前にはなかった月の下で荒野は銀色に光り、冷たさが、決着のつかなかった口論のように足の裏から這い上がってきた。",
+				"note": "完結です！二年間ありがとうございました。もしよければ、どの場面が心に残ったか教えてください。コメントは全部読んでいます。"
+			},
+			"scene": {
+				"you": "A reader who followed the fic for two years",
+				"people": [
+					{
+						"name": "mossfur_writes",
+						"who": "the author"
+					},
+					{
+						"name": "lichenpaw",
+						"who": "another reader"
+					}
+				],
+				"goals": ["Tell the author which scene stayed with you", "Say why, so it means something to them"]
+			}
+		},
+		{
+			"id": "reddit-practice",
+			"kind": "exchange",
+			"place": "reddit",
+			"site": "Reddit",
+			"minutes": 12,
+			"title": "r/languagelearning の質問に答える",
+			"line": "毎日どうやって書く練習をしているか聞かれている。",
+			"state": "new",
+			"publishedAt": 1789041600000,
+			"situationLang": "ja",
+			"situation": {
+				"kind": "reddit",
+				"sub": "languagelearning",
+				"title": "みんな実際どうやって書く練習してる？",
+				"author": "u/shizuka_shida",
+				"body": "読むのはそこそこできる（B2くらい）けど、メールやコメントを書くとすごく時間がかかって不自然になる。毎日具体的に何をしてる？",
+				"comments": []
+			},
+			"scene": {
+				"you": "A Redditor who writes in English every day",
+				"people": [
+					{
+						"name": "u/quietfern",
+						"who": "asked the question"
+					},
+					{
+						"name": "u/tallgrass_42",
+						"who": "already answered"
+					}
+				],
+				"goals": ["Share what you actually do", "Be specific enough that someone could try it"]
+			}
+		}
+	]
+}

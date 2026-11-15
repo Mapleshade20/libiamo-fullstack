@@ -58,14 +58,15 @@ export type PlaceView = {
 
 export const placeOf = query(PlaceQuery, async ({ scenarioId, lang }): Promise<PlaceView | null> => {
 	const u = learner();
-	const s = await settingFor(scenarioId, lang);
-	if (!s) return null;
 	// The open piece of this scenario, or the latest one whose exchange is over (the after page reads it too).
 	const [row] = await db
-		.select({ id: exchange.id, pieceId: exchange.pieceId })
+		.select({ id: exchange.id, pieceId: exchange.pieceId, language: piece.language })
 		.from(exchange)
 		.innerJoin(piece, eq(piece.id, exchange.pieceId))
 		.where(and(eq(exchange.userId, u.id), eq(exchange.scenarioId, scenarioId), inArray(piece.state, ["writing", "revising"])));
+	// An unfinished scenario keeps the language it was begun in, even after the account switches languages.
+	const s = await settingFor(scenarioId, row?.language ?? lang);
+	if (!s) return null;
 	let persisted: PersistedExchange | null = null;
 	let latestReplyId: number | null = null;
 	if (row) {

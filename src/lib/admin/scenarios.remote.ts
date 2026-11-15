@@ -69,14 +69,20 @@ export const deleteOne = command(z.string().max(60), async (id) => {
 	await scenarioList().refresh();
 });
 
-export const remake = command(z.object({ scenarioId: z.string().max(60), sourceId: z.string().uuid() }), async ({ scenarioId, sourceId }) => {
-	admin();
-	await remakeSource(sourceId);
-	await scenarioOne(scenarioId).refresh();
-});
+export const remake = command(
+	z.object({ scenarioId: z.string().max(60), sourceId: z.uuid(), generation: z.uuid() }),
+	async ({ scenarioId, sourceId, generation }) => {
+		admin();
+		await remakeSource(sourceId, generation);
+		await scenarioOne(scenarioId).refresh();
+	},
+);
 
-export const confirm = command(z.object({ scenarioId: z.string().max(60), sourceId: z.string().uuid() }), async ({ scenarioId, sourceId }) => {
-	admin();
-	await confirmSource(sourceId);
-	await Promise.all([scenarioOne(scenarioId).refresh(), scenarioList().refresh(), waiting().refresh()]);
-});
+export const confirm = command(
+	z.object({ scenarioId: z.string().max(60), sourceId: z.uuid(), generation: z.uuid() }),
+	async ({ scenarioId, sourceId, generation }) => {
+		admin();
+		await confirmSource(sourceId, generation);
+		await Promise.all([scenarioOne(scenarioId).refresh(), scenarioList().refresh(), waiting().refresh()]);
+	},
+);

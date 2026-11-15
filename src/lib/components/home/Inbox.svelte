@@ -25,20 +25,21 @@ import { absorbInto, collapseToDot, tossInto } from "./announcement-motion";
  */
 let { mark }: { mark: () => HTMLElement | undefined } = $props();
 
-type Announcement = NonNullable<typeof notices.current>[number];
+type Announcement = NonNullable<NonNullable<typeof notices>["current"]>[number];
 type Item = { key: string; ann?: Announcement; reply?: UnreadInboxItem };
-const unread = unreadReplies();
-const notices = announcements();
+const unread = $derived(sandboxed() ? null : unreadReplies());
+const notices = $derived(sandboxed() ? null : announcements());
 // Acknowledged here, gone at once (the query catches up after).
 let gone = $state<number[]>([]);
 const items = $derived<Item[]>([
-	...(sandboxed() ? [] : (notices.current ?? [])).filter((a) => !a.read && !gone.includes(a.id)).map((a) => ({ key: `a${a.id}`, ann: a })),
-	...(sandboxed() ? [] : (unread.current?.items ?? [])).map((r) => ({ key: `r${r.exchangeId}`, reply: r })),
+	...(notices?.current ?? []).filter((a) => !a.read && !gone.includes(a.id)).map((a) => ({ key: `a${a.id}`, ann: a })),
+	...(unread?.current?.items ?? []).map((r) => ({ key: `r${r.exchangeId}`, reply: r })),
 ]);
 $effect(() => {
-	const due = unread.current?.nextDueAt;
+	const query = unread;
+	const due = query?.current?.nextDueAt;
 	if (!due) return;
-	const t = setTimeout(() => unread.refresh(), Math.max(2000, Date.parse(due) - Date.now() + 1000));
+	const t = setTimeout(() => query.refresh(), Math.max(2000, Date.parse(due) - Date.now() + 1000));
 	return () => clearTimeout(t);
 });
 /** "5 min", "3 hr", "2 days": how long ago the newest reply came, in the interface's language. */

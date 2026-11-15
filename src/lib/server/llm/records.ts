@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { and, lt, not, sql } from "drizzle-orm";
+import { and, eq, lt, not, sql } from "drizzle-orm";
 import { db } from "#lib/server/db/index.ts";
-import { llmCall, llmPrompt, sessionCase } from "#lib/server/db/schema.ts";
+import { llmCall, llmPrompt, sessionCase, user } from "#lib/server/db/schema.ts";
 import type { CallRecord, Recorder } from "./caller.ts";
 
 /*
@@ -13,36 +13,48 @@ export type RecordScope = { userId: string | null; pieceId?: string | null; keep
 
 export function recorder(scope: RecordScope): Recorder {
 	return (r) => {
-		write(scope, r).catch((e) => console.error("llm_call write failed:", e));
+		writeRecord(scope, r).catch((e) => console.error("llm_call write failed:", e));
 	};
 }
 
-async function write(scope: RecordScope, r: CallRecord) {
-	const system = r.messages[0]?.role === "system" ? r.messages[0].content : null;
-	const promptHash = system ? createHash("sha256").update(system).digest("hex").slice(0, 32) : null;
-	if (system && promptHash && scope.keepText) await db.insert(llmPrompt).values({ hash: promptHash, text: system }).onConflictDoNothing();
-	await db.insert(llmCall).values({
-		userId: scope.userId,
-		pieceId: scope.pieceId ?? null,
-		stepSeq: r.step,
-		purpose: r.purpose,
-		tag: r.tag,
-		provider: r.provider,
-		model: r.model,
-		effort: r.effort,
-		state: r.state,
-		background: r.background,
-		promptHash,
-		messages: scope.keepText ? (system ? r.messages.slice(1) : r.messages) : null,
-		output: scope.keepText ? (r.output ?? null) : null,
-		error: r.error ?? null,
-		promptTokens: r.usage?.input ?? null,
-		completionTokens: r.usage?.output ?? null,
-		reasoningTokens: r.usage?.reasoning ?? null,
-		cacheRead: r.usage?.cacheRead ?? null,
-		cacheWrite: r.usage?.cacheWrite ?? null,
-		costUsd: r.costUsd ?? null,
-		latencyMs: r.ms ?? null,
+export async function writeRecord(scope: RecordScope, r: CallRecord) {
+	await db.transaction(async (tx) => {
+		// Privacy can change while a model is answering, or while a revision stays in memory.
+		const owner = scope.userId ? (await tx.select({ keep: user.helpImprove }).from(user).where(eq(user.id, scope.userId)).for("share"))[0] : null;
+		if (scope.userId && !owner) return;
+		const keepText = owner ? owner.keep : scope.keepText;
+		const system = r.messages[0]?.role === "system" ? r.messages[0].content : null;
+		const promptHash =
+			system && keepText
+				? createHash("sha256")
+						.update(JSON.stringify([scope.userId, system]))
+						.digest("hex")
+						.slice(0, 32)
+				: null;
+		if (system && promptHash) await tx.insert(llmPrompt).values({ hash: promptHash, userId: scope.userId, text: system }).onConflictDoNothing();
+		await tx.insert(llmCall).values({
+			userId: scope.userId,
+			pieceId: scope.pieceId ?? null,
+			stepSeq: r.step,
+			purpose: r.purpose,
+			tag: r.tag,
+			provider: r.provider,
+			model: r.model,
+			effort: r.effort,
+			state: r.state,
+			background: r.background,
+			promptHash,
+			messages: keepText ? (system ? r.messages.slice(1) : r.messages) : null,
+			output: keepText ? (r.output ?? null) : null,
+			error: keepText ? (r.error ?? null) : null,
+			promptTokens: r.usage?.input ?? null,
+			completionTokens: r.usage?.output ?? null,
+			reasoningTokens: r.usage?.reasoning ?? null,
+			cacheRead: r.usage?.cacheRead ?? null,
+			cacheWrite: r.usage?.cacheWrite ?? null,
+			costUsd: r.costUsd ?? null,
+			latencyMs: r.ms ?? null,
+		});
 	});
 }
 
@@ -58,5 +70,6 @@ export async function pruneCalls(now = new Date()) {
 		.delete(llmCall)
 		.where(and(lt(llmCall.createdAt, before), not(held)))
 		.returning({ id: llmCall.id });
+	await db.delete(llmPrompt).where(sql`not exists (select 1 from ${llmCall} where ${llmCall.promptHash} = ${llmPrompt.hash})`);
 	return gone.length;
 }

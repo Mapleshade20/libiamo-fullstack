@@ -15,41 +15,43 @@ let { children }: { children: Snippet } = $props();
 </script>
 
 <!-- The tour remounts the pages when it starts, ends or changes chapter, so they read its stand-in data afresh. -->
-{#key director.epoch}
-	<Sidebar />
-	<div class="page">
-		<header class="top">
-			<button
-				type="button"
-				class="menu-btn"
-				id="menu-btn"
-				aria-label={tx("sideOpen")}
-				aria-expanded={shell.drawer}
-				onclick={() => shell.setDrawer(true)}
-			>
-				<Menu class="size-[18px] text-muted-foreground" aria-hidden="true" />
-				<span class="wordmark">Libiamo</span>
-			</button>
-			<span class="grow"></span>
-			{#if shell.viewable}
+{#if !director.switching}
+	{#key director.epoch}
+		<Sidebar />
+		<div class="page">
+			<header class="top">
 				<button
 					type="button"
-					class="view-btn"
-					aria-pressed={shell.viewing}
-					use:tip={tx(shell.viewing ? "viewBack" : "viewScene")}
-					onclick={(e) => {
-						e.stopPropagation();
-						shell.viewing = !shell.viewing;
-					}}
+					class="menu-btn"
+					id="menu-btn"
+					aria-label={tx("sideOpen")}
+					aria-expanded={shell.drawer}
+					onclick={() => shell.setDrawer(true)}
 				>
-					<Image class="size-[18px]" aria-hidden="true" />
+					<Menu class="size-[18px] text-muted-foreground" aria-hidden="true" />
+					<span class="wordmark">Libiamo</span>
 				</button>
-			{/if}
-			<div class="week" class:away={shell.viewing}><Week /></div>
-		</header>
-		{@render children()}
-	</div>
-{/key}
+				<span class="grow"></span>
+				{#if shell.viewable}
+					<button
+						type="button"
+						class="view-btn"
+						aria-pressed={shell.viewing}
+						use:tip={tx(shell.viewing ? "viewBack" : "viewScene")}
+						onclick={(e) => {
+							e.stopPropagation();
+							shell.viewing = !shell.viewing;
+						}}
+					>
+						<Image class="size-[18px]" aria-hidden="true" />
+					</button>
+				{/if}
+				<div class="week" class:away={shell.viewing}><Week /></div>
+			</header>
+			{@render children()}
+		</div>
+	{/key}
+{/if}
 
 <style>
 .page {

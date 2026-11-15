@@ -7,6 +7,7 @@ import { autogrow } from "#lib/components/common/motion.ts";
 import Situation from "#lib/components/scenario/Situation.svelte";
 import EmptyState from "#lib/components/shell/EmptyState.svelte";
 import { sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
+import { tourScenario } from "#lib/components/tour/scenarios.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { tx } from "#lib/i18n/tx.ts";
 import { notesNow } from "#lib/notebook/notebook.svelte.ts";
@@ -26,7 +27,7 @@ import { page } from "$app/state";
  * is kept on the server as it is typed, and the piece takes it when it is created.
  */
 const where = $derived({ id: page.params.id ?? "", lang: app.lang });
-const scenario = $derived(await scenarioView(where));
+const scenario = $derived(sandboxed() ? tourScenario(where.id, where.lang) : await scenarioView(where));
 const s = $derived(scenario?.situation);
 const sim = $derived(scenario?.scene);
 const st = $derived(scenario ? siteOf(scenario.site) : undefined);

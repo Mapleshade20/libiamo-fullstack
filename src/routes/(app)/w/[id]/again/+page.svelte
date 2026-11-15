@@ -2,7 +2,7 @@
 import ArrowLeft from "@lucide/svelte/icons/arrow-left";
 import Check from "@lucide/svelte/icons/check";
 import Circle from "@lucide/svelte/icons/circle";
-import { tick } from "svelte";
+import { onDestroy, tick } from "svelte";
 import { fly } from "svelte/transition";
 import { app } from "#lib/account/app.svelte.ts";
 import { Collector } from "#lib/components/collect/collector.svelte.ts";
@@ -33,6 +33,7 @@ const scenario = $derived(w?.scenarioId ? await scenarioView({ id: w.scenarioId,
 const s = $derived(scenario?.situation);
 // svelte-ignore state_referenced_locally
 const collector = new Collector({ lang: app.lang, native: app.prefs.native, feedback: app.prefs.feedback });
+onDestroy(() => collector.dispose());
 let text = $state("");
 let done = $state(false);
 let area: HTMLTextAreaElement | undefined = $state();

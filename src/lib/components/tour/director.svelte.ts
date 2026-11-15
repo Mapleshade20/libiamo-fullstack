@@ -1,4 +1,4 @@
-import { tick } from "svelte";
+import { settled, tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
 import { t } from "#lib/i18n/index.svelte.ts";
 import { pacing } from "#lib/session/clock.ts";
@@ -29,6 +29,8 @@ class Director {
 	on = $state(false);
 	/** Bumped when the tour starts, ends or changes chapter: the app's pages remount under it, reading the sandbox afresh. */
 	epoch = $state(0);
+	/** Unmount the old page before replacing its backing state, not while its async reads are rebasing. */
+	switching = $state(false);
 	chapter = $state(0);
 	chapters: Chapter[] = [];
 	paused = $state(false);
@@ -47,6 +49,7 @@ class Director {
 	ring = $state<{ x: number; y: number; n: number } | null>(null);
 	recording = false;
 	tape: Tape | null = null;
+	private playback: Tape = [];
 	/** What the starter undoes when the tour ends (a language swapped in for it). */
 	onEnd: (() => void) | null = null;
 	private run = 0;
@@ -62,6 +65,7 @@ class Director {
 	async start(chapters: Chapter[], tape: Tape, opts: { record?: boolean; at?: number } = {}) {
 		this.chapters = chapters;
 		this.recording = !!opts.record;
+		this.playback = tape;
 		if (this.recording) this.tape = recordTape();
 		else playTape(tape);
 		document.documentElement.classList.add("touring");
@@ -75,6 +79,10 @@ class Director {
 	async end() {
 		this.run++;
 		this.release();
+		this.switching = true;
+		await tick();
+		// Leave a focused tour page while its sandbox is still in force; do not remount it on real data.
+		if (page.url.pathname !== "/" || page.url.search) await goto("/", { replace: true });
 		stopTape();
 		leaveSandbox();
 		this.onEnd?.();
@@ -89,8 +97,8 @@ class Director {
 		this.keys = null;
 		this.cursor.shown = false;
 		this.epoch++;
-		if (page.url.pathname !== "/" || page.url.search) await goto("/", { replace: true });
-		await tick();
+		this.switching = false;
+		await settled();
 		document.getElementById("draft")?.focus({ preventScroll: true });
 	}
 	/** Plays chapter `i` from its start, then the ones after it. */
@@ -101,7 +109,14 @@ class Director {
 		pacing.paused = false;
 		for (let n = i; n < this.chapters.length; n++) {
 			if (run !== this.run) return;
+			// A chapter's seed must not update the previous chapter's awaited derives before it unmounts.
+			// Besides mixing states, that triggers sveltejs/svelte#18895 when the pending batch is rebased.
+			this.switching = true;
+			await tick();
+			if (run !== this.run) return;
 			const c = this.chapters[n];
+			// Each chapter can be replayed independently, including back/next after consuming its tape.
+			if (!this.recording) playTape(this.playback);
 			this.chapter = n;
 			this.caption = null;
 			this.focus = null;
@@ -112,7 +127,9 @@ class Director {
 			enterSandbox(c.seed());
 			this.epoch++;
 			if (page.url.pathname !== c.start) await goto(c.start);
-			await tick();
+			if (run !== this.run) return;
+			this.switching = false;
+			await settled();
 			await sleep(450);
 			try {
 				await c.run(this);
@@ -415,6 +432,7 @@ class Director {
 	/** Goes to a page as a link would. */
 	async go(path: string) {
 		await goto(path);
+		await settled();
 		await this.wait(500);
 	}
 }

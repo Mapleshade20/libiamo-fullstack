@@ -1,3 +1,4 @@
+import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { keepCollected, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import { answered, needKey, stopOf } from "#lib/llm/stops.ts";
 import { removeNotes } from "#lib/notebook/notebook.remote.ts";
@@ -25,6 +26,14 @@ export type Kept = {
 type Setup = { lang: string; native: string; feedback: string; place?: string };
 
 export class Collector {
+	private currentChapter = captureTourState();
+	private disposed = false;
+	private active = () => !this.disposed && this.currentChapter();
+	dispose() {
+		this.disposed = true;
+		for (const timer of this.timers.values()) clearTimeout(timer);
+		this.timers.clear();
+	}
 	kept = $state<Kept[]>([]);
 	private batch = `${Date.now()}`;
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -33,6 +42,7 @@ export class Collector {
 	private readings = new Map<string, string>();
 	constructor(private setup: Setup) {}
 	private forget(ids: (string | undefined)[]) {
+		if (!this.active()) return;
 		const gone = ids.filter((x): x is string => !!x);
 		if (gone.length && !sandboxed()) removeNotes(gone).catch(() => {});
 	}
@@ -64,6 +74,7 @@ export class Collector {
 		this.fill(block, passage);
 	}
 	private async fill(block: string, passage: string) {
+		if (!this.active()) return;
 		const todo = this.kept.filter((k) => k.key.startsWith(`${block}:`) && !k.phrase);
 		if (!todo.length) return;
 		const sent = todo.map((k, i) => ({ n: i + 1, text: k.marked, key: k.key, sentence: k.sentence }));
@@ -86,6 +97,7 @@ export class Collector {
 				readingId?: string;
 				items: { n: number; id?: string; phrase: string; meaning: string; register: string; why: string; example: string }[];
 			};
+			if (!this.active()) return;
 			if (readingId) this.readings.set(block, readingId);
 			const stale: (string | undefined)[] = [];
 			for (const s of sent) {
@@ -110,6 +122,7 @@ export class Collector {
 			}
 			this.forget(stale);
 		} catch (e) {
+			if (!this.active()) return;
 			const k = stopOf(e);
 			if (k !== "error") this.halt = { kind: k, retry: () => this.retry(block, passage) };
 			for (const s of sent) {
@@ -121,7 +134,7 @@ export class Collector {
 	}
 	/** The tour's phrases go to its sandbox (the server kept the learner's as they were filled in). */
 	private store() {
-		if (!sandboxed()) return;
+		if (!this.active() || !sandboxed()) return;
 		keepCollected(
 			this.batch,
 			this.kept

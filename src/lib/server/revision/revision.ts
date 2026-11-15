@@ -449,18 +449,25 @@ export class RevisionSession {
 			});
 			det = { pass1: ready.then((x) => x.pass1), pass2: ready.then((x) => x.pass2), rewrite: ready.then((x) => x.rewrite) };
 		}
-		if (known.pass1) det.pass1 = Promise.resolve({ findings: known.pass1 });
+		if (known.pass1) {
+			// This new detection may still reject its pass-1 branch even though its saved result is reused.
+			det.pass1.catch(noop);
+			det.pass1 = Promise.resolve({ findings: known.pass1 });
+		}
 		this.det = det;
 		// Every one of them is watched here, so none rejects unobserved; only the current detection's results are kept.
 		const current = () => this.det === det;
+		const failed = () => {
+			if (current()) this.det = undefined;
+		};
 		det.rewrite.then((rewrite) => current() && this.remember({ rewrite }), noop);
-		det.pass1.then((p) => current() && this.remember({ pass1: p.findings }), noop);
+		det.pass1.then((p) => current() && this.remember({ pass1: p.findings }), failed);
 		det.pass2.then((p) => {
 			if (!current()) return;
 			this.analysis = p.analysis;
 			this.base = p.base;
 			this.remember({ pass2: { analysis: p.analysis, landed: this.landed } });
-		}, noop);
+		}, failed);
 	}
 
 	/** How each turn landed, with the reply that shows it, for the page's "how it went". */
@@ -621,11 +628,19 @@ export class RevisionSession {
 				: known?.args === args
 					? Promise.resolve(known.text)
 					: readBack(this.d, this.pass1Text, this.ai.for("read-back"), 0).then((c) => c.text.trim());
-		this.rb.then((text) => this.p1args === args && !this.ex && !this.input.translation && this.remember({ readBack: { args, text } }), noop);
+		const rb = this.rb;
+		rb.then(
+			(text) => this.p1args === args && !this.ex && !this.input.translation && this.remember({ readBack: { args, text } }),
+			() => {
+				if (this.rb === rb) this.rb = undefined;
+			},
+		);
 	}
 
 	/** The reader's read-back, and the plan as it stands before the learner says whether it was right. */
 	async overview() {
+		this.start();
+		if (!this.rb && this.p1args) this.askReadBack(this.p1args);
 		if (this.ex || this.input.translation) {
 			const p2 = await this.det!.pass2;
 			this.base = p2.base;
@@ -638,6 +653,7 @@ export class RevisionSession {
 	}
 
 	async overviewReply(said: string | null) {
+		this.start();
 		const p2 = await this.det!.pass2;
 		if (this.ex || this.input.translation) return { reply: "", ...this.plan(p2.analysis, null) };
 		// Without an outline (the call failed) the analysis's own flat map stands in.

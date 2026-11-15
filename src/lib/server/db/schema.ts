@@ -254,7 +254,7 @@ export const scenario = pgTable(
 );
 
 /* A translation's source in one learner language: the text learners translate, made and checked at publish (§6.4) or
-   confirmed by an admin, with the names and terms it gives. `original_hash` says which original it was made from. */
+   confirmed by an admin, with the names and terms it gives. `input_hash` fingerprints the full version and work used to generate it. */
 export const scenarioSource = pgTable(
 	"scenario_source",
 	{
@@ -272,7 +272,8 @@ export const scenarioSource = pgTable(
 		glossary: jsonb("glossary").notNull().default([]),
 		state: text("state").notNull().default("pending"),
 		notes: jsonb("notes"),
-		originalHash: text("original_hash"),
+		inputHash: text("input_hash"),
+		generation: uuid("generation").notNull().default(sql`uuidv7()`),
 		madeAt: at("made_at"),
 	},
 	(t) => [
@@ -444,6 +445,8 @@ export const piece = pgTable(
 		kind: text("kind").notNull(),
 		scenarioId: text("scenario_id").references(() => scenario.id, { onDelete: "set null" }),
 		sourceId: uuid("source_id").references(() => scenarioSource.id, { onDelete: "set null" }),
+		/** The complete translation assignment when the learner first saved, not mutable content-table joins. */
+		assignment: jsonb("assignment"),
 		place: text("place").notNull().default(""),
 		title: text("title").notNull().default(""),
 		text: text("text").notNull(),
@@ -483,6 +486,7 @@ export const piece = pgTable(
 		check("piece_posted_check", sql`${t.posted} is null or ${oneOf(t.posted, POSTED)}`),
 		check("piece_finished_check", sql`(${t.state} = 'finished') = (${t.finishedAt} is not null)`),
 		index("piece_user_idx").on(t.userId, t.language, t.updatedAt),
+		index("piece_notes_retry_idx").on(t.notesRequestedAt).where(sql`${t.notesRequestedAt} is not null`),
 		uniqueIndex("piece_open_scenario_unique")
 			.on(t.userId, t.scenarioId)
 			.where(sql`${t.scenarioId} is not null and ${t.state} in ('writing', 'revising')`),
@@ -742,6 +746,7 @@ export const reviewLog = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		rating: integer("rating").notNull(),
 		verdict: text("verdict"),
+		requestId: uuid("request_id").unique(),
 		elapsedSeconds: integer("elapsed_seconds").notNull(),
 		prev: jsonb("prev").notNull(),
 		next: jsonb("next").notNull(),
@@ -755,6 +760,17 @@ export const reviewLog = pgTable(
 );
 
 // --- Calls (§5.7) -----------------------------------------------------------------------------------------------------
+
+// Prompts can contain learner text. Deduplication is per owner, never a way around deletion or retention.
+export const llmPrompt = pgTable(
+	"llm_prompt",
+	{
+		hash: text("hash").primaryKey(),
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		text: text("text").notNull(),
+	},
+	(t) => [index("llm_prompt_user_idx").on(t.userId)],
+);
 
 /* Every model call, written after the fact. The numbers always; `messages` and `output` only while the learner helps
    improve Libiamo. A call on the environment's key (the gate) has no piece and may have no learner. */
@@ -773,7 +789,7 @@ export const llmCall = pgTable(
 		state: text("state").notNull(),
 		background: boolean("background").default(false).notNull(),
 		/** The system prompt, stored once in `llm_prompt`. */
-		promptHash: text("prompt_hash"),
+		promptHash: text("prompt_hash").references(() => llmPrompt.hash),
 		messages: jsonb("messages"),
 		output: text("output"),
 		error: text("error"),
@@ -790,6 +806,8 @@ export const llmCall = pgTable(
 		check("llm_call_state_check", oneOf(t.state, CALL_STATES)),
 		index("llm_call_piece_idx").on(t.pieceId),
 		index("llm_call_created_idx").on(t.createdAt),
+		index("llm_call_user_created_idx").on(t.userId, t.createdAt),
+		index("llm_call_prompt_idx").on(t.promptHash),
 	],
 );
 
@@ -812,8 +830,3 @@ export const sessionCase = pgTable(
 	},
 	(t) => [check("session_case_status_check", oneOf(t.status, CASE_STATUSES)), index("session_case_piece_idx").on(t.pieceId)],
 );
-
-export const llmPrompt = pgTable("llm_prompt", {
-	hash: text("hash").primaryKey(),
-	text: text("text").notNull(),
-});

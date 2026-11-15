@@ -272,10 +272,30 @@ export async function dueOf(u: Learner, language: string, now = new Date()): Pro
  * A rating, written with its log. A card that leaves the sitting and leaves nothing to review in its language clears
  * the reviews: today's half. Returns where the card is now and what each rating would do from there.
  */
-export async function rateNote(u: Learner, id: string, rating: RatingName, verdict: Verdict | null, elapsedSeconds: number, now = new Date()) {
+export async function rateNote(
+	u: Learner,
+	id: string,
+	rating: RatingName,
+	verdict: Verdict | null,
+	elapsedSeconds: number,
+	now = new Date(),
+	requestId?: string,
+) {
 	return db.transaction(async (tx) => {
 		const [row] = await tx.select().from(note).where(mine(u.id, id)).for("update");
 		if (!row) error(404, "No such entry.");
+		if (requestId) {
+			const [saved] = await tx
+				.select()
+				.from(reviewLog)
+				.where(and(eq(reviewLog.requestId, requestId), eq(reviewLog.noteId, id), eq(reviewLog.userId, u.id)));
+			if (saved) {
+				// Another device may have rated it since this request committed. Return the current card,
+				// never roll the browser back to a historical queue/outcomes on an idempotent retry.
+				const after = row.fsrs as StoredCard;
+				return { queue: queueKind(after), outcomes: preview(after, now), cleared: await queueEmpty(tx, u.id, row.language, now) };
+			}
+		}
 		const before = row.fsrs as StoredCard;
 		// The page rates without waiting; a card is never asked before learn ahead lets it in.
 		if (availableAt(before) > now.getTime() + 60_000) error(409, "Not due yet.");
@@ -285,6 +305,7 @@ export async function rateNote(u: Learner, id: string, rating: RatingName, verdi
 			.set({ fsrs: after, due: new Date(after.dueAt) })
 			.where(eq(note.id, id));
 		await tx.insert(reviewLog).values({
+			requestId,
 			noteId: id,
 			userId: u.id,
 			rating: ["again", "hard", "good", "easy"].indexOf(rating) + 1,

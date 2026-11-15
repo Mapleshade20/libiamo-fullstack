@@ -19,6 +19,7 @@ const CHAT_TIMEOUT_MS = 10_000;
 
 /** Throws a `LimitError` when nothing could be asked or read. */
 export async function decide(ai: Caller, state: Record<string, unknown>, questions: Record<string, Question>, opts: DecideOptions): Promise<Answers> {
+	ai = await ai.resolved();
 	const route = ai.route;
 	if (!route) throw new LimitError("nokey");
 	const api = ai.init.decision ? PROVIDERS[route.provider].decisions?.api : undefined;

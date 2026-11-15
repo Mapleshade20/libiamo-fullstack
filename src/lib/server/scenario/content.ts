@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { z } from "zod";
 import { NAME_KINDS, NAME_STATUSES, PLACES, SCENARIO_KINDS, SCENARIO_STATUSES, SOURCE_STATES, URGENCIES } from "#lib/constants.ts";
-import { versionsSchema } from "#lib/scenario/versions.ts";
+import { type TranslationVersion, versionsSchema } from "#lib/scenario/versions.ts";
+import { sourceIdentity } from "#lib/server/translation/identity.ts";
 import type * as schema from "../db/schema.ts";
 import { issue, issueScenario, nameRendering, scenario, scenarioSource, work } from "../db/schema.ts";
 
@@ -119,8 +121,29 @@ export async function importContent(db: Db, input: unknown) {
 				.insert(scenario)
 				.values({ id: s.id, ...set })
 				.onConflictDoUpdate({ target: scenario.id, set });
+			if (s.kind === "translation") {
+				for (const [language, v] of Object.entries(versions)) {
+					const hash = sourceIdentity(v as TranslationVersion, s.workId ?? null);
+					await tx
+						.update(scenarioSource)
+						.set({ state: "pending", notes: null, inputHash: hash, generation: randomUUID() })
+						.where(
+							sql`${scenarioSource.scenarioId} = ${s.id} and ${scenarioSource.language} = ${language} and ${scenarioSource.inputHash} is distinct from ${hash}`,
+						);
+				}
+			}
 			for (const src of s.sources) {
-				const row = { title: src.title, text: src.text, glossary: src.glossary, state: src.state, madeAt: new Date() };
+				const v = versions[src.language] as TranslationVersion | undefined;
+				if (s.kind !== "translation" || !v) throw new Error(`${s.id}: source has no translation version`);
+				const row = {
+					title: src.title,
+					text: src.text,
+					glossary: src.glossary,
+					state: src.state,
+					madeAt: new Date(),
+					inputHash: sourceIdentity(v, s.workId ?? null),
+					generation: randomUUID(),
+				};
 				await tx
 					.insert(scenarioSource)
 					.values({ scenarioId: s.id, language: src.language, native: src.native, ...row })

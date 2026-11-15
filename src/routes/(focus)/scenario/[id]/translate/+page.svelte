@@ -54,7 +54,7 @@ let area: HTMLTextAreaElement | undefined = $state();
 let all = $state(false);
 
 const native = $derived(nameOf(s?.sourceLang ?? app.prefs.native));
-const target = $derived(nameOf(app.lang));
+const target = $derived(nameOf(data?.language ?? app.lang));
 
 function track() {
 	if (!area) return;
@@ -68,11 +68,15 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 function flush() {
 	clearTimeout(timer);
 	const now = text;
-	const where = { id, lang: app.lang };
+	if (!data) return chain;
+	const where = { id, lang: data.language, ...data.binding };
 	chain = chain.then(async (pieceId) => {
 		if (now === saved && pieceId) return pieceId;
-		const r = await saveDraft({ ...where, text: now }).catch(() => null);
-		if (!r) return pieceId;
+		const r = await saveDraft({ ...where, text: now }).catch(() => {
+			toast(tx("auSomethingWrong"));
+			return null;
+		});
+		if (!r?.pieceId) return null;
 		saved = now;
 		return r.pieceId ?? pieceId;
 	});
@@ -100,7 +104,7 @@ let leaving = $state(false);
 async function done() {
 	if (!scenario || !text.trim() || leaving) return;
 	leaving = true;
-	const pieceId = (await flush()) ?? data?.pieceId;
+	const pieceId = await flush();
 	// The server hands the revision the source and the original from the piece.
 	const started = pieceId
 		? await startPiece({
@@ -108,7 +112,7 @@ async function done() {
 				pieceId,
 				learner: app.prefs.native,
 				feedback: app.prefs.feedback as Setup["feedback"],
-				lang: app.lang,
+				lang: data?.language ?? app.lang,
 			} as unknown as Setup).catch(() => null)
 		: null;
 	if (!started) {

@@ -4,7 +4,7 @@ import Highlighter from "@lucide/svelte/icons/highlighter";
 import Link2 from "@lucide/svelte/icons/link-2";
 import NotebookPen from "@lucide/svelte/icons/notebook-pen";
 import PenLine from "@lucide/svelte/icons/pen-line";
-import { onMount, tick } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 import { app } from "#lib/account/app.svelte.ts";
 import LimitNotice from "#lib/components/common/LimitNotice.svelte";
 import { autogrow, reducedMotion, shake } from "#lib/components/common/motion.ts";
@@ -13,6 +13,7 @@ import Reveal from "#lib/components/common/Reveal.svelte";
 import SegmentedControl from "#lib/components/common/SegmentedControl.svelte";
 import { tip } from "#lib/components/common/tip.ts";
 import { toast } from "#lib/components/shell/toast.svelte.ts";
+import { captureTourState } from "#lib/components/tour/lifetime.ts";
 import { keepReading, sandboxed } from "#lib/components/tour/sandbox.svelte.ts";
 import Button from "#lib/components/ui/button/button.svelte";
 import { endonym, nameOf, tx } from "#lib/i18n/tx.ts";
@@ -124,7 +125,14 @@ const gateCopy = $derived.by(() => {
 	};
 });
 
+const currentChapter = captureTourState();
+let disposed = false;
+onDestroy(() => {
+	disposed = true;
+});
+const active = () => !disposed && currentChapter();
 async function start() {
+	if (!active()) return;
 	if (checking) return;
 	if (!draft.text.trim()) {
 		area?.focus();
@@ -161,6 +169,7 @@ async function start() {
 	} catch {
 		g = null; // The door never keeps anyone out by failing.
 	}
+	if (!active()) return;
 	checking = false;
 	if (g && g.verdict !== "ok") {
 		gate = { g, text: draft.text };
@@ -186,11 +195,13 @@ function act(k: string) {
 // The box is emptied for the next thing, as a sent message leaves it. Collecting reads its handoff once; writing
 // becomes a piece first, and its page opens on it.
 async function go(lang: string) {
+	if (!active()) return;
 	const text = draft.text;
 	gate = null;
 	if (collect) {
 		checking = true;
 		const id = sandboxed() ? "tour" : await startReading({ passage: text, lang: lang as never }).catch(() => null);
+		if (!active()) return;
 		checking = false;
 		if (!id) return toast(tx("startFailed"));
 		if (sandboxed()) keepReading(id, text, lang);
@@ -208,6 +219,7 @@ async function go(lang: string) {
 		feedback: app.prefs.feedback as "native" | "target",
 		lang,
 	}).catch(() => null);
+	if (!active()) return;
 	checking = false;
 	if (!id) return toast(tx("startFailed"));
 	draft.text = "";
